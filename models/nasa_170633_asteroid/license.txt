@@ -1,0 +1,8 @@
+Model Information:
+* title:	Antarctic Meteorite Sample GRO 17063,3
+* source:	https://sketchfab.com/3d-models/antarctic-meteorite-sample-gro-170633-b2560d7e94634874af49a5421d4be648
+* author:	NASA Astromaterials 3D (https://sketchfab.com/Astromaterials3D)
+
+Model License:
+* license type:	CC0-1.0 (http://creativecommons.org/publicdomain/zero/1.0/)
+* requirements:	Credit is not mandatory. Commercial use is allowed.

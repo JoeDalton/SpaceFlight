@@ -1,0 +1,11 @@
+Model Information:
+* title:	Wandering Asteroids Of Andromeda
+* source:	https://sketchfab.com/3d-models/wandering-asteroids-of-andromeda-6a8e84e0fdea43628b8b3ab85b130281
+* author:	ARCTIC  WOLVES™ (https://sketchfab.com/arctic.wolves)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Wandering Asteroids Of Andromeda" (https://sketchfab.com/3d-models/wandering-asteroids-of-andromeda-6a8e84e0fdea43628b8b3ab85b130281) by ARCTIC  WOLVES™ (https://sketchfab.com/arctic.wolves) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

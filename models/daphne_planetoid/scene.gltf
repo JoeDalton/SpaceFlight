@@ -1,0 +1,399 @@
+{
+  "accessors": [
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 21742,
+      "max": [
+        128.85848999023438,
+        76.28707885742188,
+        100.4314193725586
+      ],
+      "min": [
+        -105.36968994140625,
+        -92.07124328613281,
+        -96.52561950683594
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 260904,
+      "componentType": 5126,
+      "count": 21742,
+      "max": [
+        0.9999383091926575,
+        0.999620795249939,
+        0.9989439845085144
+      ],
+      "min": [
+        -0.9999383091926575,
+        -0.999620795249939,
+        -0.9989441633224487
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 21742,
+      "max": [
+        0.9985899925231934,
+        0.9994999766349792
+      ],
+      "min": [
+        0.0005000000237487257,
+        0.0005000000237487257
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 60000,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 521808,
+      "componentType": 5126,
+      "count": 5700,
+      "max": [
+        128.02708435058594,
+        75.28539276123047,
+        99.61831665039063
+      ],
+      "min": [
+        -103.78047943115234,
+        -91.75956726074219,
+        -96.72916412353516
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 590208,
+      "componentType": 5126,
+      "count": 5700,
+      "max": [
+        0.9950867295265198,
+        0.9994795322418213,
+        0.9998441934585571
+      ],
+      "min": [
+        -0.9999755620956421,
+        -0.9993150234222412,
+        -0.9999464750289917
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 5700,
+      "max": [
+        0.9845600724220276,
+        0.9647053480148315,
+        0.9894511699676514,
+        1.0
+      ],
+      "min": [
+        -0.9941121339797974,
+        -0.9999212026596069,
+        -0.9907752871513367,
+        1.0
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 173936,
+      "componentType": 5126,
+      "count": 5700,
+      "max": [
+        0.999500036239624,
+        0.9990774393081665
+      ],
+      "min": [
+        0.0005000000237487257,
+        0.0005000000237487257
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 240000,
+      "componentType": 5125,
+      "count": 31902,
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "SebastianSosnowski (https://sketchfab.com/SebastianSosnowski)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/daphne-planetoid-d7dd7ff088b04813ae26798a67d11c58",
+      "title": "Daphne planetoid"
+    },
+    "generator": "Sketchfab-12.66.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 367608,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 219536,
+      "byteOffset": 367608,
+      "byteStride": 8,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 658608,
+      "byteOffset": 587144,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 91200,
+      "byteOffset": 1245752,
+      "byteStride": 16,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 1336952,
+      "uri": "scene.bin"
+    }
+  ],
+  "images": [
+    {
+      "uri": "textures/material_1_baseColor.jpeg"
+    },
+    {
+      "uri": "textures/material_1_metallicRoughness.png"
+    },
+    {
+      "uri": "textures/material_1_normal.png"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "material",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.07815172394660573,
+          0.07815172394660573,
+          0.07815172394660573,
+          1.0
+        ],
+        "metallicFactor": 0.2692376678887815,
+        "roughnessFactor": 0.9076558500386092
+      }
+    },
+    {
+      "doubleSided": true,
+      "name": "material_1",
+      "normalTexture": {
+        "index": 2
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0,
+        "metallicRoughnessTexture": {
+          "index": 1
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Daphe_LP_Debris_2_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "Daphne_LP_1_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 5,
+            "POSITION": 4,
+            "TANGENT": 6,
+            "TEXCOORD_0": 7
+          },
+          "indices": 8,
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Sketchfab_model"
+    },
+    {
+      "children": [
+        2
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "8631da903bdc453fa53a5e2819ba4f6b.fbx"
+    },
+    {
+      "children": [
+        3,
+        5
+      ],
+      "name": "RootNode"
+    },
+    {
+      "children": [
+        4
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Daphe_LP_Debris"
+    },
+    {
+      "mesh": 0,
+      "name": "Daphe_LP_Debris_2_0"
+    },
+    {
+      "children": [
+        6
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Daphne_LP"
+    },
+    {
+      "mesh": 1,
+      "name": "Daphne_LP_1_0"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
+    }
+  ]
+}

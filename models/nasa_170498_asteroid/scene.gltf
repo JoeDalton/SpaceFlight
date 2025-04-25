@@ -1,0 +1,190 @@
+{
+  "accessors": [
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 51129,
+      "max": [
+        0.009600999765098095,
+        0.0159939993172884,
+        0.015192000195384026
+      ],
+      "min": [
+        -0.009732999838888645,
+        -0.015969999134540558,
+        -0.015213999897241592
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 613548,
+      "componentType": 5126,
+      "count": 51129,
+      "max": [
+        0.9999715685844421,
+        0.9990465641021729,
+        0.9999411106109619
+      ],
+      "min": [
+        -0.9999909400939941,
+        -0.9997647404670715,
+        -0.9999998807907104
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 51129,
+      "max": [
+        0.8752790093421936,
+        0.9998610019683838
+      ],
+      "min": [
+        7.000000096013537e-06,
+        2.9999999242136255e-05
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 300000,
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "NASA Astromaterials 3D (https://sketchfab.com/Astromaterials3D)",
+      "license": "CC0-1.0 (http://creativecommons.org/publicdomain/zero/1.0/)",
+      "source": "https://sketchfab.com/3d-models/antarctic-meteorite-sample-gro-170498-f84d417d88c54abc9bf439953e031cd4",
+      "title": "Antarctic Meteorite Sample GRO 17049,8"
+    },
+    "generator": "Sketchfab-13.74.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 1200000,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 409032,
+      "byteOffset": 1200000,
+      "byteStride": 8,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1227096,
+      "byteOffset": 1609032,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 2836128,
+      "uri": "scene.bin"
+    }
+  ],
+  "images": [
+    {
+      "uri": "textures/material_1_baseColor.jpeg"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "material_1",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Object_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Sketchfab_model"
+    },
+    {
+      "children": [
+        2
+      ],
+      "name": "GRO17049-8_SFM_Web-Resolution-Model_Coordinate-Registered.obj.cleaner.materialmerger.gles"
+    },
+    {
+      "mesh": 0,
+      "name": "Object_2"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    }
+  ]
+}
