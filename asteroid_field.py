@@ -75,9 +75,9 @@ class AsteroidField:
             partial_x_dot_previous = self.state_dot_previous,
         )      
 
-    def initialize_tasks(self):
+    def initialize_move(self):
         """
-        Initializes the integrator step task. Must be done after the
+        Initializes the asteroids move task. Must be done after the
         integrator's task initialization.
         """
         # Set update task for the asteroids' states

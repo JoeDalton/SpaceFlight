@@ -4,7 +4,7 @@ from panda3d.core import DirectionalLight, AmbientLight, Vec4, load_prc_file_dat
 from hud import HUD
 from cockpit_view import CockpitView
 from asteroid_field import AsteroidField
-from player import PlayerInput
+from player import Player
 from integrator import Integrator
 from skybox import Skybox
 
@@ -27,7 +27,7 @@ class MyApp(ShowBase):
 
         self.integrator = Integrator(self)
 
-        self.player = PlayerInput(self)
+        self.player = Player(self, ship_name="a-wing")
 
         self.hud = HUD(self)
         self.cockpit_view = CockpitView(self)
@@ -51,12 +51,13 @@ class MyApp(ShowBase):
         # render.set_light(alnp)
 
 
-        self.oobe()
+        # self.oobe()
         # self.toggle_wireframe()
 
         # Initailaize all tasks in the correct order
         self.integrator.initialize_tasks() # Must come before all physics
-        self.asteroid_field.initialize_tasks()
+        self.asteroid_field.initialize_move()
+        self.player.initialize_move()
 
 
 app = MyApp()

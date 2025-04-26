@@ -1,16 +1,13 @@
 import numpy as np
 from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d
-from direct.task import Task
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import TextNode
 
 
 class HUD:
     """
-    Defines the Heads-up display for KUI
-
     Creates an overlay of text displaying important
-    flight parameters on screen.
+    simulation parameters on screen.
     """
 
     def __init__(self, app: ShowBase):
@@ -40,18 +37,21 @@ class HUD:
 
     def hud_update_task(self, task):
         """
-        A task that gets the relevant informations from the dataflow
+        A task that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
         """
         frame_rate = ClockObject.getGlobalClock().getAverageFrameRate()
-        pos = self.app.camera.get_pos()   # in world coordinates
-        hpr = self.app.camera.get_hpr()   # in world coordinates
 
         self.hud.setText(
-            f"Position = {pos}\n"
-            f"Orientation = {hpr}\n"
+            # f"Cam Position = {self.app.camera.get_pos()}\n"
+            # f"Cam Orientation = {self.app.camera.get_hpr()}\n"
+            f"Player Position = {self.app.player.ship.state[0:3]}\n"
+            f"Player Orientation = {self.app.player.ship.state[3:7]}\n"
+            f"Player Speed = {np.linalg.norm(self.app.player.ship.state[7:10])}\n"
+            f"Player Rot. rate = {self.app.player.ship.omega}\n"
+            f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
         )
 
         self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
 
-        return Task.cont
+        return task.cont
