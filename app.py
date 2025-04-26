@@ -5,6 +5,7 @@ from hud import HUD
 from cockpit_view import CockpitView
 from asteroid_field import AsteroidField
 from player import Player
+from integrator import Integrator
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -18,6 +19,8 @@ from player import Player
 class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
+
+        self.integrator = Integrator(self)
 
         self.player = Player(self)
 
@@ -43,8 +46,12 @@ class MyApp(ShowBase):
         # render.set_light(alnp)
 
 
-        # self.oobe()
+        self.oobe()
         # self.toggle_wireframe()
+
+        # Initailaize all tasks in the correct order
+        self.integrator.initialize_tasks() # Must come before all physics
+        self.asteroid_field.initialize_tasks()
 
 
 app = MyApp()
