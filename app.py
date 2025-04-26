@@ -6,6 +6,7 @@ from cockpit_view import CockpitView
 from asteroid_field import AsteroidField
 from player import Player
 from integrator import Integrator
+from skybox import Skybox
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -16,9 +17,13 @@ from integrator import Integrator
 #     pbr-tonemap true
 # """)
 
+# load_prc_file_data("", "notify-level-loader debug")
+
 class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
+
+        self.skybox = Skybox(self)
 
         self.integrator = Integrator(self)
 
