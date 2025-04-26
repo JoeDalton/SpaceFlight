@@ -24,6 +24,7 @@ class Player:
         # Anchor elements to self.node
         self.model.anchor_model(self.node)
         self.app.camera.reparentTo(self.node)
+        self.app.skybox.skybox.reparentTo(self.node)
 
     def initialize_move(self):
         """
@@ -51,7 +52,7 @@ class Player:
         self.node.setQuat(Quat(*ship_quat))
 
 
-
-        self.app.skybox.skybox.setPos(*ship_pos)
+        # TODO: skybox behaviour is weird as fuck
+        # self.app.skybox.skybox.setPos(*ship_pos)
 
         return task.cont

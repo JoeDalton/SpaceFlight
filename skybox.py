@@ -7,7 +7,7 @@ class Skybox:
         self.skybox = self.app.loader.loadModel(f"models/skyboxes/sky_{name}.bam")
         self.skybox.setBin('background', 1)
         self.skybox.setDepthWrite(0) 
-        self.skybox.reparentTo(self.app.render)
+        # self.skybox.reparentTo(self.app.render)
     #     # self.skybox.set_scale(500)
     #     # self.skybox.set_compass()
     #     # self.skybox.set_bin('background', 0)
