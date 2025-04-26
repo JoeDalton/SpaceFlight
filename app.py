@@ -30,7 +30,6 @@ class MyApp(ShowBase):
         self.player = Player(self, ship_name="a-wing")
 
         self.hud = HUD(self)
-        self.cockpit_view = CockpitView(self)
 
         self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=500)
 

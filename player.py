@@ -2,7 +2,7 @@ import numpy as np
 import quaternion
 
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Quat
+from panda3d.core import Quat, NodePath
 
 from ship import SimpleShipPhysics
 from cockpit_view import CockpitView
@@ -13,9 +13,17 @@ class Player:
 
     def __init__(self, app: ShowBase, ship_name: str):
         self.app = app
+        # Create a dummy node to attach models
+        self.node = NodePath("player_node")
+        self.node.reparentTo(self.app.render)
+
         self.ship = SimpleShipPhysics(app=self.app, ship_name=ship_name)
         self.model = CockpitView(app=self.app, ship_name=ship_name)
         self.input_system = Joystick(self.app)
+
+        # Anchor elements to self.node
+        self.model.anchor_model(self.node)
+        self.app.camera.reparentTo(self.node)
 
     def initialize_move(self):
         """
@@ -39,8 +47,11 @@ class Player:
         ship_pos = self.ship.state[0:3]
         ship_quat = self.ship.state[3:7]
 
-        self.app.camera.setPos(*ship_pos)
-        self.app.camera.setQuat(Quat(*ship_quat))
+        self.node.setPos(*ship_pos)
+        self.node.setQuat(Quat(*ship_quat))
+
+
+
         self.app.skybox.skybox.setPos(*ship_pos)
 
         return task.cont
