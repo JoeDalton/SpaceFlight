@@ -5,7 +5,7 @@ from direct.gui.OnscreenText import OnscreenText
 STICK_DEAD_ZONE = 0.02
 THROTTLE_DEAD_ZONE = 0.02
 
-class Player:
+class PlayerInput:
     def __init__(self, app: ShowBase):
         self.app = app
 
@@ -43,11 +43,6 @@ class Player:
         self.app.accept("flight_stick0-trigger", self.action, extraArgs=["Trigger"])
         self.app.accept("flight_stick0-trigger-up", self.actionUp)
 
-        # self.environment = self.app.loader.loadModel("environment")
-        # self.environment.reparentTo(self.app.render)
-
-        # disable pandas default mouse-camera controls so we can handle the camera
-        # movements by ourself
         self.app.disableMouse()
         self.reset()
 

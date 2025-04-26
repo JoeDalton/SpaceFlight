@@ -1,0 +1,8 @@
+mass_kg: 500
+max_thrust_n: 50000
+max_speed_mps: 500
+max_pitch_rate_degps: 90
+max_yaw_rate_degps: 40
+max_roll_rate_degps: 180
+drag_coefficient: 0.05
+reference_surface_m2: 10

@@ -13,7 +13,7 @@ class CockpitView:
         self.ship = ship
         
         if self.ship == "a-wing":
-            self.model = app.loader.load_model("models/a-wing_cockpit/scene.gltf")
+            self.model = app.loader.load_model("models/ships/a-wing/cockpit/scene.gltf")
             self.offset = np.array([0.0, 1.0, 0.2])
             self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) 
         

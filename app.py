@@ -4,7 +4,7 @@ from panda3d.core import DirectionalLight, AmbientLight, Vec4, load_prc_file_dat
 from hud import HUD
 from cockpit_view import CockpitView
 from asteroid_field import AsteroidField
-from player import Player
+from player import PlayerInput
 from integrator import Integrator
 from skybox import Skybox
 
@@ -27,7 +27,7 @@ class MyApp(ShowBase):
 
         self.integrator = Integrator(self)
 
-        self.player = Player(self)
+        self.player = PlayerInput(self)
 
         self.hud = HUD(self)
         self.cockpit_view = CockpitView(self)

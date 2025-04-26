@@ -27,8 +27,8 @@ class AsteroidField:
         
         # Load 3D models
         asteroid_models = [
-            self.app.loader.load_model("models/toutatis_asteroid/scene.gltf"),
-            self.app.loader.load_model("models/54509_asteroid/scene.gltf"),
+            self.app.loader.load_model("models/asteroids/toutatis_asteroid/scene.gltf"),
+            self.app.loader.load_model("models/asteroids/54509_asteroid/scene.gltf"),
         ]
 
         # Prepare integration
