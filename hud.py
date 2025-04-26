@@ -48,7 +48,7 @@ class HUD:
             f"Player Position = {self.app.player.ship.state[0:3]}\n"
             f"Player Orientation = {self.app.player.ship.state[3:7]}\n"
             f"Player Speed = {np.linalg.norm(self.app.player.ship.state[7:10])}\n"
-            f"Player Rot. rate = {self.app.player.ship.omega}\n"
+            f"Player Rot. rate = {self.app.player.ship.pqr}\n"
             f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
         )
 

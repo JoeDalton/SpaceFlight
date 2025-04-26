@@ -2,8 +2,6 @@ import numpy as np
 import quaternion
 
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import InputDevice
-from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import Quat
 
 from ship import SimpleShipPhysics
@@ -34,12 +32,13 @@ class Player:
         The cockpit is linked to the camera, so it should move
         without being told to.
         """
-        throttle, roll, pitch, yaw = self.input_system.get_inputs()
-        self.ship.set_inputs(throttle, roll, pitch, yaw)
+        throttle, yaw, pitch, roll = self.input_system.get_inputs()
+        self.ship.set_inputs(throttle=throttle, yaw=yaw, pitch=pitch, roll=roll)
         self.ship.move_ship()
 
         ship_pos = self.ship.state[0:3]
         ship_quat = self.ship.state[3:7]
+
         self.app.camera.setPos(*ship_pos)
         self.app.camera.setQuat(Quat(*ship_quat))
         self.app.skybox.skybox.setPos(*ship_pos)

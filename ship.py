@@ -39,7 +39,7 @@ class SimpleShipPhysics:
         self.state[3:7] = ini_orientation
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
-        self.omega = np.zeros(3)
+        self.pqr = np.zeros(3)
         self.scalar_thrust = 0
 
         # Load configuration
@@ -63,16 +63,18 @@ class SimpleShipPhysics:
             partial_x_dot_previous = self.state_dot_previous,
         ) 
 
-    def set_inputs(self, throttle: float, roll: float, pitch: float, yaw: float):
+    def set_inputs(self, throttle: float, yaw: float, pitch: float, roll: float):
         """
         Sets the scalar thrust and rotational rates of the ship
+
+        Panda3d seems to use the yaw-pich-roll convention
         """
         self.scalar_thrust = throttle * self.max_thrust_n
-        self.omega = np.array(
+        self.pqr = np.array(
             [
                 pitch * self.max_pitch_rate_radps,
-                roll * self.max_roll_rate_radps,
                 yaw * self.max_yaw_rate_radps,
+                roll * self.max_roll_rate_radps,
             ]
         )
 
@@ -96,8 +98,9 @@ class SimpleShipPhysics:
         self.state_dot[0:3] = speed
         # Compute derivative of orientation
         quat = np.quaternion(*self.state[3:7])
-        quat_omega = np.quaternion(0, *self.omega)
-        quat_dot = 0.5 * quat_omega * quat
+        quat_pqr = np.quaternion(0, *self.pqr)
+        # Formula for pqr in body axes
+        quat_dot = 0.5 * quat * quat_pqr
         self.state_dot[3:7] = quaternion.as_float_array(quat_dot)
 
         # Compute derivative of speed:

@@ -91,6 +91,7 @@ class AsteroidField:
         for ast_idx in range(self.n_asteroids):
             quat = np.quaternion(*self.state[4*ast_idx:4*(ast_idx+1)])
             quat_omega = np.quaternion(0, *self.omegas[3*ast_idx:3*(ast_idx+1)])
+            # Formula for omega in world axes
             quat_dot = 0.5 * quat_omega * quat
             self.state_dot[4*ast_idx:4*(ast_idx+1)] = quaternion.as_float_array(quat_dot)
         
