@@ -5,7 +5,6 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat, NodePath
 
 
-
 class CockpitView:
     def __init__(self, app: ShowBase, ship_name: str="a-wing"):
         self.app = app

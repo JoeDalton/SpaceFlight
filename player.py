@@ -8,6 +8,7 @@ from ship import SimpleShipPhysics
 from cockpit_view import CockpitView
 from input_system import Joystick
 
+CAMERA_ANGLE_INCREMENT = 10.0
 
 class Player:
 
@@ -50,6 +51,10 @@ class Player:
 
         self.node.setPos(*ship_pos)
         self.node.setQuat(Quat(*ship_quat))
+
+        # Update camera angle relative to node
+        self.app.camera.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
+        self.app.camera.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
 
 
         # TODO: skybox behaviour is weird as fuck

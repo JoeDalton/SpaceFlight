@@ -67,14 +67,14 @@ class SimpleShipPhysics:
         """
         Sets the scalar thrust and rotational rates of the ship
 
-        Panda3d seems to use the yaw-pich-roll convention
+        Panda3d seems to use the pitch-roll-yaw convention
         """
         self.scalar_thrust = throttle * self.max_thrust_n
         self.pqr = np.array(
             [
                 pitch * self.max_pitch_rate_radps,
-                yaw * self.max_yaw_rate_radps,
                 roll * self.max_roll_rate_radps,
+                yaw * self.max_yaw_rate_radps,
             ]
         )
 

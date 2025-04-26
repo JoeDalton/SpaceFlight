@@ -4,10 +4,9 @@ import quaternion
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import InputDevice
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import Quat
 
-STICK_DEAD_ZONE = 0.02
-THROTTLE_DEAD_ZONE = 0.02
+STICK_DEAD_ZONE = 0.04
+THROTTLE_DEAD_ZONE = 0.04
 
 class Joystick:
     def __init__(self, app: ShowBase):
@@ -30,16 +29,29 @@ class Joystick:
         if devices:
             self.connect(devices[0])
 
+        # Keep track of previous button states
+        self.previous_button_states = [False] * len(self.flightStick.buttons)
+        # Polling task to create events for unnamed buttons
+        self.app.taskMgr.add(self.poll_buttons_task, "PollButtonsTask")
+
         # Accept device dis-/connection events
         self.app.accept("connect-device", self.connect)
         self.app.accept("disconnect-device", self.disconnect)
 
         self.app.accept("escape", exit)
-        self.app.accept("flight_stick0-start", exit)
+        self.app.accept("stick-start", exit)
 
         # Accept button events of the first connected flight stick
-        self.app.accept("flight_stick0-trigger", self.action, extraArgs=["Trigger"])
-        self.app.accept("flight_stick0-trigger-up", self.actionUp)
+        self.app.accept("stick-trigger", self.action, extraArgs=["Trigger"])
+        self.app.accept("stick-trigger-up", self.actionUp)
+
+        # Accept button events on the thumb hat
+        # to change head orientation 
+        self.view_offset = np.zeros(2)
+        self.app.accept("stick-button18", self.view_up)
+        self.app.accept("stick-button17", self.view_down)
+        self.app.accept("stick-button16", self.view_right)
+        self.app.accept("stick-button15", self.view_left)
 
         self.app.disableMouse()
 
@@ -53,8 +65,8 @@ class Joystick:
             self.flightStick = device
 
             # Enable this device to ShowBase so that we can receive events.
-            # We set up the events with a prefix of "flight_stick0-".
-            self.app.attachInputDevice(device, prefix="flight_stick0")
+            # We set up the events with a prefix of "stick-".
+            self.app.attachInputDevice(device, prefix="stick")
 
             # Hide the warning that we have no devices.
             self.lblWarning.hide()
@@ -88,6 +100,18 @@ class Joystick:
         # Hide the label showing which button is pressed.
         self.lblAction.hide()
 
+    def view_up(self):
+        self.view_offset[0] +=1
+
+    def view_down(self):
+        self.view_offset[0] -=1
+
+    def view_right(self):
+        self.view_offset[1] -=1
+
+    def view_left(self):
+        self.view_offset[1] +=1
+
     def get_inputs(self):
         """
         Reads the flightstick's axes values to inform the player object
@@ -114,4 +138,21 @@ class Joystick:
         if abs(roll) < STICK_DEAD_ZONE:
             roll = 0
 
-        return throttle, roll, pitch, yaw
+        return throttle, yaw, pitch, roll
+
+    def poll_buttons_task(self, task):
+        if not self.flightStick:
+            return task.cont
+
+        for i, button in enumerate(self.flightStick.buttons):
+            is_pressed = button.pressed
+            was_pressed = self.previous_button_states[i]
+
+            if is_pressed and not was_pressed:
+                self.app.messenger.send(f"stick-button{i}")
+            elif not is_pressed and was_pressed:
+                self.app.messenger.send(f"stick-button{i}-up")
+
+            self.previous_button_states[i] = is_pressed
+
+        return task.cont
