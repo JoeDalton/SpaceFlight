@@ -54,10 +54,10 @@ class MyApp(ShowBase):
         # self.oobe()
         # self.toggle_wireframe()
 
-        # Initailaize all tasks in the correct order
+        # Initialize all tasks in the correct order
         self.integrator.initialize_tasks() # Must come before all physics
-        self.asteroid_field.initialize_move()
         self.player.initialize_move()
+        self.asteroid_field.initialize_move()
 
 
 app = MyApp()
