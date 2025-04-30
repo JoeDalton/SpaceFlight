@@ -25,7 +25,7 @@ class Player:
         # Anchor elements to self.node
         self.model.anchor_model(self.node)
         self.app.camera.reparentTo(self.node)
-        self.app.skybox.skybox.reparentTo(self.node)
+        # self.app.skybox.skybox.reparentTo(self.node)
 
     def initialize_move(self):
         """
@@ -55,9 +55,5 @@ class Player:
         # Update camera angle relative to node
         self.app.camera.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
         self.app.camera.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
-
-
-        # TODO: skybox behaviour is weird as fuck
-        # self.app.skybox.skybox.setPos(*ship_pos)
 
         return task.cont

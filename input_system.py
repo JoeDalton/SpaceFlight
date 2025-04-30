@@ -5,7 +5,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import InputDevice
 from direct.gui.OnscreenText import OnscreenText
 
-STICK_DEAD_ZONE = 0.04
+STICK_DEAD_ZONE = 0.08
 THROTTLE_DEAD_ZONE = 0.04
 
 class Joystick:

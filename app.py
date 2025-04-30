@@ -7,6 +7,7 @@ from asteroid_field import AsteroidField
 from player import Player
 from integrator import Integrator
 from skybox import Skybox
+from trihedron import Trihedron
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -23,18 +24,19 @@ class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
 
+        # self.skybox = Skybox(self, name="test")
         self.skybox = Skybox(self)
 
-        self.integrator = Integrator(self)
+        self.integrator = Integrator(self, max_state_size=20000)
 
         self.player = Player(self, ship_name="a-wing")
 
         self.hud = HUD(self)
 
-        self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=500)
+        self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=5000)
 
-        # self.environment = loader.loadModel("environment")
-        # self.environment.reparentTo(render)
+        # self.sky_trihedron = Trihedron(self, self.skybox)
+
 
         # Directional light
         # dlight = DirectionalLight("dlight")

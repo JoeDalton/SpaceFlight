@@ -50,8 +50,8 @@ class AsteroidField:
             # instance.show_bounds()
 
             # Set scale
-            scale = np.ones(3) * (np.random.rand() * 5 + 1)
-            instance.setScale(*scale)
+            scale = np.random.rand() * 100 + 1
+            instance.setScale(scale)
 
             # Set initial orientation
             temp = np.random.rand(4)
@@ -60,7 +60,7 @@ class AsteroidField:
             self.state[4*ast_idx:4*(ast_idx+1)] = quat_array.copy()
 
             # Set rotational rate
-            omega = np.deg2rad(np.random.rand(3) * 20 - 5)
+            omega = 200 * np.deg2rad(np.random.rand(3) - 0.5) / scale
             self.omegas[3*ast_idx:3*(ast_idx+1)] = omega.copy()
 
             # Store the new instance
