@@ -1,6 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.interval.IntervalGlobal import LerpPosInterval
 from panda3d.core import CardMaker, TransparencyAttrib, LVector3
+from direct.showbase.ShowBaseGlobal import ClockObject
 
 from direct.gui.OnscreenText import OnscreenText
 
@@ -19,17 +20,28 @@ class LaserCannon():
         # Cannon configuration
         self.cannon_positions = self.parent_ship.conf["cannon_positions"]
         self.n_cannon = len(self.cannon_positions)
-        self.next_cannon_idx = 0
-
+        
         # Laser configuration
-        self.laser_range = self.parent_ship.conf["laser_range"]
+        self.range = self.parent_ship.conf["laser_range"]
+        self.fire_delay = 1.0 / self.parent_ship.conf["laser_fire_rate"]
         color = self.parent_ship.conf["laser_color"]
 
+        # Initialize laser model
         self.laser_texture = self.app.loader.loadTexture(f"models/lasers/laser_{color}.png")
+
+        # Initialize cannon
+        self.next_cannon_idx = 0
+        self.global_clock = ClockObject.getGlobalClock()
+        self.last_fire_time = self.global_clock.getFrameTime()
 
         self.message = OnscreenText(text="", pos=(0, 0.85), scale=0.07, fg=(1, 0, 0, 1))
 
     def fire(self):
+        # Fire at prescribed rate
+        current_time = self.global_clock.getFrameTime()
+        if current_time - self.last_fire_time < self.fire_delay:
+            return
+
         # Create flat quad
         cm = CardMaker("laser")
         cm.set_frame(-1.15, 1.15, -1.01, 1.01)
@@ -52,8 +64,8 @@ class LaserCannon():
             rotate_single_vector(q_ship, relative_start_position)
         )
         start_pos = LVector3(*absolute_start_position)
-        end_pos = start_pos + ship_dir * self.laser_range
-        duration = self.laser_range / LASER_SPEED
+        end_pos = start_pos + ship_dir * self.range
+        duration = self.range / LASER_SPEED
         
         # Don't rely on scene lighting since it emits its own light
         laser_np.set_light_off()
@@ -70,3 +82,4 @@ class LaserCannon():
 
         # Prepare next laser shot
         self.next_cannon_idx = (self.next_cannon_idx + 1) % self.n_cannon
+        self.last_fire_time = current_time

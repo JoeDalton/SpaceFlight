@@ -9,4 +9,5 @@ reference_surface_m2: 100
 
 laser_range: 800
 laser_color: red
+laser_fire_rate: 10
 cannon_positions: [[-1, 0, 0], [1, 0, 0]]
