@@ -5,7 +5,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import InputDevice
 from direct.gui.OnscreenText import OnscreenText
 
-STICK_DEAD_ZONE = 0.08
+STICK_DEAD_ZONE = 0.15
 THROTTLE_DEAD_ZONE = 0.04
 
 class Joystick:
@@ -139,14 +139,20 @@ class Joystick:
         yaw = self.flightStick.findAxis(InputDevice.Axis.yaw).value
         if abs(yaw) < STICK_DEAD_ZONE:
             yaw = 0
+        else:
+            yaw = yaw - np.sign(yaw) * STICK_DEAD_ZONE
 
         pitch = self.flightStick.findAxis(InputDevice.Axis.pitch).value
         if abs(pitch) < STICK_DEAD_ZONE:
             pitch= 0
+        else:
+            pitch = pitch - np.sign(pitch) * STICK_DEAD_ZONE
 
         roll = self.flightStick.findAxis(InputDevice.Axis.roll).value
         if abs(roll) < STICK_DEAD_ZONE:
             roll = 0
+        else:
+            roll = roll - np.sign(roll) * STICK_DEAD_ZONE
 
         return throttle, yaw, pitch, roll
 
