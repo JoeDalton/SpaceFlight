@@ -8,7 +8,7 @@ from ship import SimpleShipPhysics
 from cockpit_view import CockpitView
 from input_system import Joystick
 
-CAMERA_ANGLE_INCREMENT = 10.0
+CAMERA_ANGLE_INCREMENT = 2.0
 
 class Player:
 

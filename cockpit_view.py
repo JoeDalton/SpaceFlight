@@ -1,8 +1,9 @@
 import numpy as np
-import quaternion
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat, NodePath
+
+from utils import rotate_single_vector
 
 
 class CockpitView:
@@ -24,7 +25,7 @@ class CockpitView:
         self.model.reparent_to(node)
         # self.model.show_bounds()
 
-        model_pos = - quaternion.rotate_vectors(
+        model_pos = -rotate_single_vector(
             self.orientation, self.offset
         )
         self.model.setPos(model_pos[0], model_pos[1], model_pos[2])

@@ -42,8 +42,13 @@ class Joystick:
         self.app.accept("stick-start", exit)
 
         # Accept button events of the first connected flight stick
-        self.app.accept("stick-trigger", self.action, extraArgs=["Trigger"])
-        self.app.accept("stick-trigger-up", self.actionUp)
+        self.app.accept("stick-button2", self.action, extraArgs=["Missiles"])
+        self.app.accept("stick-button2-repeat", self.actionRepeat, extraArgs=["Missiles"])
+        self.app.accept("stick-button2-up", self.actionUp)
+        
+        self.app.accept("stick-button1", self.action, extraArgs=["Trigger"])
+        self.app.accept("stick-button1-repeat", self.actionRepeat, extraArgs=["Trigger"])
+        self.app.accept("stick-button1-up", self.actionUp)
 
         # Accept button events on the thumb hat
         # to change head orientation 
@@ -52,6 +57,10 @@ class Joystick:
         self.app.accept("stick-button17", self.view_down)
         self.app.accept("stick-button16", self.view_right)
         self.app.accept("stick-button15", self.view_left)
+        self.app.accept("stick-button18-repeat", self.view_up)
+        self.app.accept("stick-button17-repeat", self.view_down)
+        self.app.accept("stick-button16-repeat", self.view_right)
+        self.app.accept("stick-button15-repeat", self.view_left)
 
         self.app.disableMouse()
 
@@ -93,7 +102,12 @@ class Joystick:
 
     def action(self, button):
         # Just show which button has been pressed.
-        self.lblAction.text = "Pressed %s" % button
+        self.lblAction.text = "Pressed once %s" % button
+        self.lblAction.show()
+        
+    def actionRepeat(self, button):
+        # Just show which button has been pressed.
+        self.lblAction.text = "Pressed continuously %s" % button
         self.lblAction.show()
 
     def actionUp(self):
@@ -101,16 +115,16 @@ class Joystick:
         self.lblAction.hide()
 
     def view_up(self):
-        self.view_offset[0] +=1
+        self.view_offset[0] += 1
 
     def view_down(self):
-        self.view_offset[0] -=1
+        self.view_offset[0] -= 1
 
     def view_right(self):
-        self.view_offset[1] -=1
+        self.view_offset[1] -= 1
 
     def view_left(self):
-        self.view_offset[1] +=1
+        self.view_offset[1] += 1
 
     def get_inputs(self):
         """
@@ -152,7 +166,10 @@ class Joystick:
                 self.app.messenger.send(f"stick-button{i}")
             elif not is_pressed and was_pressed:
                 self.app.messenger.send(f"stick-button{i}-up")
+            elif is_pressed and was_pressed:
+                self.app.messenger.send(f"stick-button{i}-repeat")
 
             self.previous_button_states[i] = is_pressed
 
         return task.cont
+    

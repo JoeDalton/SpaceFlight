@@ -5,6 +5,9 @@ import yaml
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat
 
+from utils import rotate_single_vector
+from laser_cannon import LaserCannon
+
 RHO = 1 # A fictive "air" density" for atmospheric-like flight feeling
 
 class SimpleShipPhysics:
@@ -45,14 +48,14 @@ class SimpleShipPhysics:
         # Load configuration
         filepath = f"models/ships/{ship_name}/configuration.yaml"
         with open(filepath, "r") as f:
-            conf = yaml.safe_load(f)
-        self.mass_kg = conf["mass_kg"]
-        self.max_thrust_n = conf["max_thrust_n"]
-        self.max_speed_mps = conf["max_speed_mps"]
-        self.max_pitch_rate_radps = np.deg2rad(conf["max_pitch_rate_degps"])
-        self.max_yaw_rate_radps = np.deg2rad(conf["max_yaw_rate_degps"])
-        self.max_roll_rate_radps = np.deg2rad(conf["max_roll_rate_degps"])
-        self.drag_factor = 0.5 * RHO * conf["reference_surface_m2"] * conf["drag_coefficient"]
+            self.conf = yaml.safe_load(f)
+        self.mass_kg = self.conf["mass_kg"]
+        self.max_thrust_n = self.conf["max_thrust_n"]
+        self.max_speed_mps = self.conf["max_speed_mps"]
+        self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
+        self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
+        self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
+        self.drag_factor = 0.5 * RHO * self.conf["reference_surface_m2"] * self.conf["drag_coefficient"]
 
         # Prepare first integration step
         self.compute_derivatives()
@@ -62,6 +65,10 @@ class SimpleShipPhysics:
             partial_x_dot = self.state_dot,
             partial_x_dot_previous = self.state_dot_previous,
         ) 
+
+        # Initialize cannons
+        self.laser_cannon = LaserCannon(app=self.app, parent_ship=self)
+
 
     def set_inputs(self, throttle: float, yaw: float, pitch: float, roll: float):
         """
@@ -108,7 +115,7 @@ class SimpleShipPhysics:
         speed_norm = np.linalg.norm(speed)
         drag = - self.drag_factor * speed_norm * speed
         thrust_body = np.array([0.0, self.scalar_thrust, 0.0])
-        thrust = quaternion.rotate_vectors(
+        thrust = rotate_single_vector(
             quat, thrust_body
         )
         acceleration = (thrust + drag) / self.mass_kg
@@ -118,17 +125,27 @@ class SimpleShipPhysics:
         """
         Gets the new ship's state, then prepare the next
         integration step.
+        
+        Since there is no lift model, the velocity is always aligned
+        with the nose of the ship
         """
         # Get state
         self.state = self.app.integrator.get_state_variables(
             first_idx = self.integrator_idx,
             n_var = 10,
         )
-        # Clip speed vector
+        # Clip speed norm
         speed = self.state[7:10]
         speed_norm = np.linalg.norm(speed)
         if speed_norm > self.max_speed_mps:
-            speed = speed * self.max_speed_mps / speed_norm
+            speed_norm = self.max_speed_mps
+        # Reorient speed in ship direction
+        quat = np.quaternion(*self.state[3:7])
+        speed_body = np.array([0.0, speed_norm, 0.0])
+        speed = rotate_single_vector(
+            quat, speed_body
+        )
+        self.state[7:10] = speed.copy()
 
         # Prepare next integration step
         self.compute_derivatives()

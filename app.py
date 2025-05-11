@@ -1,6 +1,10 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import DirectionalLight, AmbientLight, Vec4, load_prc_file_data
 
+from panda3d.core import CollisionTraverser, CollisionHandlerEvent
+
+
+
 from hud import HUD
 from cockpit_view import CockpitView
 from asteroid_field import AsteroidField
@@ -24,20 +28,26 @@ class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
 
-        # self.skybox = Skybox(self, name="test")
-        self.skybox = Skybox(self)
+        """
+        Initialize Collision system
+        """
+        self.traverser = CollisionTraverser()
+        self.traverser.showCollisions(self.render)
+        self.handler = CollisionHandlerEvent()
+        self.handler.addInPattern('%fn-into-%in')
+        self.taskMgr.add(self.collision_task, "collisionTask")
 
+        """
+        Initialize integrator
+        """
         self.integrator = Integrator(self, max_state_size=20000)
 
-        self.player = Player(self, ship_name="a-wing")
-
-        self.hud = HUD(self)
-
+        """
+        Build scene
+        """
+        # self.skybox = Skybox(self, name="test")
+        self.skybox = Skybox(self)
         self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=5000)
-
-        # self.sky_trihedron = Trihedron(self, self.skybox)
-
-
         # Directional light
         # dlight = DirectionalLight("dlight")
         # dlight.set_color(Vec4(1.0, 1.0, 0.9, 1))
@@ -51,14 +61,29 @@ class MyApp(ShowBase):
         # alnp = render.attach_new_node(alight)
         # render.set_light(alnp)
 
+        """
+        Initialize player and ship        
+        """
+        self.player = Player(self, ship_name="a-wing")
 
+        """
+        Debug options
+        """
         # self.oobe()
         # self.toggle_wireframe()
+        self.hud = HUD(self)
 
-        # Initialize all tasks in the correct order
+        """
+        Initialize all tasks in the correct order
+        """
         self.integrator.initialize_tasks() # Must come before all physics
         self.player.initialize_move()
         self.asteroid_field.initialize_move()
+
+    def collision_task(self, task):
+        self.traverser.traverse(self.render)
+        return task.cont
+
 
 
 app = MyApp()

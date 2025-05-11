@@ -6,3 +6,7 @@ max_yaw_rate_degps: 40
 max_roll_rate_degps: 180
 drag_coefficient: 0.05
 reference_surface_m2: 100
+
+laser_range: 800
+laser_color: red
+cannon_positions: [[-1, 0, 0], [1, 0, 0]]
