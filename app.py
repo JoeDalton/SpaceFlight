@@ -1,5 +1,5 @@
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import DirectionalLight, AmbientLight, Vec4, load_prc_file_data
+from panda3d.core import load_prc_file_data
 
 from panda3d.core import CollisionTraverser, CollisionHandlerEvent
 
@@ -12,6 +12,7 @@ from player import Player
 from integrator import Integrator
 from skybox import Skybox
 from trihedron import Trihedron
+from lighting import Lighting
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -48,18 +49,7 @@ class MyApp(ShowBase):
         # self.skybox = Skybox(self, name="test")
         self.skybox = Skybox(self)
         self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=5000)
-        # Directional light
-        # dlight = DirectionalLight("dlight")
-        # dlight.set_color(Vec4(1.0, 1.0, 0.9, 1))
-        # dlnp = render.attach_new_node(dlight)
-        # dlnp.set_hpr(-30, -60, 0)
-        # render.set_light(dlnp)
-
-        # # Ambient light
-        # alight = AmbientLight("alight")
-        # alight.set_color(Vec4(0.2, 0.2, 0.25, 1))
-        # alnp = render.attach_new_node(alight)
-        # render.set_light(alnp)
+        self.lighting = Lighting(self)
 
         """
         Initialize player and ship        
@@ -71,7 +61,7 @@ class MyApp(ShowBase):
         """
         # self.oobe()
         # self.toggle_wireframe()
-        self.hud = HUD(self)
+        # self.hud = HUD(self)
         # trihedron = Trihedron(app = self, parent=self.player.ship.node, scale = 1)
 
 
