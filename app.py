@@ -65,13 +65,15 @@ class MyApp(ShowBase):
         Initialize player and ship        
         """
         self.player = Player(self, ship_name="a-wing")
-
+        
         """
         Debug options
         """
         # self.oobe()
         # self.toggle_wireframe()
         self.hud = HUD(self)
+        # trihedron = Trihedron(app = self, parent=self.player.ship.node, scale = 1)
+
 
         """
         Initialize all tasks in the correct order
