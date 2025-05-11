@@ -46,6 +46,7 @@ class MyApp(ShowBase):
         """
         Build scene
         """
+        self.set_background_color(0, 0, 0)
         # self.skybox = Skybox(self, name="test")
         self.skybox = Skybox(self)
         self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=5000)
@@ -61,7 +62,7 @@ class MyApp(ShowBase):
         """
         # self.oobe()
         # self.toggle_wireframe()
-        # self.hud = HUD(self)
+        self.hud = HUD(self)
         # trihedron = Trihedron(app = self, parent=self.player.ship.node, scale = 1)
 
 

@@ -16,3 +16,8 @@ class Lighting():
         alight.set_color(Vec4(0.1, 0.2, 0.4, 1))
         alnp = app.render.attach_new_node(alight)
         app.render.set_light(alnp)
+
+        # # Use a 512x512 resolution shadow map
+        # dlight.setShadowCaster(True, 512, 512)
+        # # Enable the shader generator for the receiving nodes
+        # app.render.setShaderAuto()

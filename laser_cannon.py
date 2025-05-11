@@ -10,8 +10,7 @@ import numpy as np
 from utils import rotate_single_vector
 from trihedron import Trihedron
 
-# LASER_SPEED = 1000 # TODO: to add to ship speed
-LASER_SPEED = 500 # TODO: to add to ship speed
+LASER_SPEED = 1000 # TODO: to add to ship speed
 SQT2_S = np.sqrt(2.0)/2.0
 
 class LaserCannon():
@@ -30,12 +29,14 @@ class LaserCannon():
         color = self.parent_ship.conf["laser_color"]
 
         # Initialize laser model
+        laser_intensity = 1.0
+        self.light_attenuation = (1, 0.05, 0)
         if color == "red":
-            self.light_color = (0.05, 0, 0, 1)
+            self.light_color = (laser_intensity, 0, 0, 1)
         elif color == "green":
-            self.light_color = (0, 0.05, 0, 1)
+            self.light_color = (0, laser_intensity, 0, 1)
         elif color == "blue":
-            self.light_color = (0, 0, 0.5, 1)
+            self.light_color = (0, 0, laser_intensity, 1)
         else:
             raise ValueError
         self.laser_texture = self.app.loader.loadTexture(f"models/lasers/laser_{color}.png")
@@ -76,6 +77,7 @@ class LaserCannon():
         start_pos = LVector3(*absolute_start_position)
         end_pos = start_pos + ship_dir * self.range
         duration = self.range / LASER_SPEED
+        light_duration = duration / 3
         
         # Don't rely on scene lighting since it emits its own light
         laser_np.set_light_off()
@@ -86,14 +88,15 @@ class LaserCannon():
         # Make it disappear at the end of range
         self.app.doMethodLater(duration, lambda t: laser_np.remove_node(), "RemoveLaser")
 
-        # # Add light source on laser
-        # plight = PointLight('plight')
-        # plight.setColor(self.light_color)
-        # plnp = laser_np.attachNewNode(plight)
-        # plnp.setPos(0, 0, 0)
-        # self.app.render.setLight(plnp)
-        # # self.app.doMethodLater(duration / 5.0, lambda t: plnp.remove_node(), "RemoveLaserLight")
-        # self.app.doMethodLater(1.0, lambda t: plnp.remove_node(), "RemoveLaserLight")
+        # Add light source on laser
+        plight = PointLight('plight')
+        plight.setColor(self.light_color)
+        plight.set_attenuation(self.light_attenuation)
+        plnp = laser_np.attachNewNode(plight)
+        plnp.setPos(0, 0, 0)
+        self.app.render.setLight(plnp)
+        self.app.doMethodLater(light_duration, lambda t: self.app.render.clear_light(plnp), "RemoveLaserLight")
+        self.app.doMethodLater(light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight")
 
 
         # Prepare next laser shot
