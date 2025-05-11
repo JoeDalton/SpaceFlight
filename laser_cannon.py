@@ -1,6 +1,6 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.interval.IntervalGlobal import LerpPosInterval
-from panda3d.core import CardMaker, TransparencyAttrib, LVector3, Quat
+from panda3d.core import CardMaker, TransparencyAttrib, LVector3, Quat, PointLight
 from direct.showbase.ShowBaseGlobal import ClockObject
 
 from direct.gui.OnscreenText import OnscreenText
@@ -10,6 +10,7 @@ import numpy as np
 from utils import rotate_single_vector
 from trihedron import Trihedron
 
+# LASER_SPEED = 1000 # TODO: to add to ship speed
 LASER_SPEED = 500 # TODO: to add to ship speed
 SQT2_S = np.sqrt(2.0)/2.0
 
@@ -29,14 +30,20 @@ class LaserCannon():
         color = self.parent_ship.conf["laser_color"]
 
         # Initialize laser model
+        if color == "red":
+            self.light_color = (0.05, 0, 0, 1)
+        elif color == "green":
+            self.light_color = (0, 0.05, 0, 1)
+        elif color == "blue":
+            self.light_color = (0, 0, 0.5, 1)
+        else:
+            raise ValueError
         self.laser_texture = self.app.loader.loadTexture(f"models/lasers/laser_{color}.png")
 
         # Initialize cannon
         self.next_cannon_idx = 0
         self.global_clock = ClockObject.getGlobalClock()
         self.last_fire_time = self.global_clock.getFrameTime()
-
-        self.message = OnscreenText(text="", pos=(0, 0.85), scale=0.07, fg=(1, 0, 0, 1))
 
     def fire(self):
         # Fire at prescribed rate
@@ -46,7 +53,7 @@ class LaserCannon():
 
         # Create flat quad
         cm = CardMaker("laser")
-        cm.set_frame(-1.0, 1.0, -2.0, 2.0)
+        cm.set_frame(-0.5, 0.5, -4.0, 4.0)
         laser_np = self.app.render.attach_new_node(cm.generate())
         laser_np.set_texture(self.laser_texture)
         laser_np.set_two_sided(True)
@@ -79,9 +86,15 @@ class LaserCannon():
         # Make it disappear at the end of range
         self.app.doMethodLater(duration, lambda t: laser_np.remove_node(), "RemoveLaser")
 
-        # TODO: Debug
-        self.message.setText("Shoot!")
-        self.app.doMethodLater(0.3, lambda t: self.message.setText(''), "RemoveLaser")
+        # # Add light source on laser
+        # plight = PointLight('plight')
+        # plight.setColor(self.light_color)
+        # plnp = laser_np.attachNewNode(plight)
+        # plnp.setPos(0, 0, 0)
+        # self.app.render.setLight(plnp)
+        # # self.app.doMethodLater(duration / 5.0, lambda t: plnp.remove_node(), "RemoveLaserLight")
+        # self.app.doMethodLater(1.0, lambda t: plnp.remove_node(), "RemoveLaserLight")
+
 
         # Prepare next laser shot
         self.next_cannon_idx = (self.next_cannon_idx + 1) % self.n_cannon
