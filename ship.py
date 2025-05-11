@@ -3,14 +3,14 @@ import quaternion
 import yaml
 
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Quat
+from panda3d.core import Quat, NodePath
 
 from utils import rotate_single_vector
 from laser_cannon import LaserCannon
 
 RHO = 1 # A fictive "air" density" for atmospheric-like flight feeling
 
-class SimpleShipPhysics:
+class Ship:
     """
     A SimpleShip has 10 state variables
     - position (3)
@@ -34,17 +34,6 @@ class SimpleShipPhysics:
     ):
         self.app = app
 
-        assert not lift_model # TODO: more "realistic" flight model
-
-        # Setup state vector
-        self.state = np.zeros(10) # position (3), orientation (4), speed (3)
-        self.state[:3] = ini_position
-        self.state[3:7] = ini_orientation
-        self.state_dot = np.zeros(10)
-        self.state_dot_previous = np.zeros(10)
-        self.pqr = np.zeros(3)
-        self.scalar_thrust = 0
-
         # Load configuration
         filepath = f"models/ships/{ship_name}/configuration.yaml"
         with open(filepath, "r") as f:
@@ -56,6 +45,27 @@ class SimpleShipPhysics:
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
         self.drag_factor = 0.5 * RHO * self.conf["reference_surface_m2"] * self.conf["drag_coefficient"]
+
+        # Create a dummy node to attach models
+        self.node = NodePath("player_node")
+        self.node.reparentTo(self.app.render)
+
+        # Setup state vector
+        self.state = np.zeros(10) # position (3), orientation (4), speed (3)
+        self.state[:3] = ini_position
+        self.state[3:7] = ini_orientation
+        self.state_dot = np.zeros(10)
+        self.state_dot_previous = np.zeros(10)
+        self.pqr = np.zeros(3)
+        self.scalar_thrust = 0
+
+        # Assign physics
+        if not lift_model:
+            self.compute_derivatives = self.compute_derivatives_simple_physics
+            self.move_ship = self.move_ship_simple_physics
+        else:
+            # TODO: more "realistic" flight model
+            raise NotImplementedError
 
         # Prepare first integration step
         self.compute_derivatives()
@@ -85,7 +95,7 @@ class SimpleShipPhysics:
             ]
         )
 
-    def compute_derivatives(self):
+    def compute_derivatives_simple_physics(self):
         """
         This is the flight model for the ships
 
@@ -121,7 +131,7 @@ class SimpleShipPhysics:
         acceleration = (thrust + drag) / self.mass_kg
         self.state_dot[7:10] = acceleration
 
-    def move_ship(self):
+    def move_ship_simple_physics(self):
         """
         Gets the new ship's state, then prepare the next
         integration step.
@@ -148,7 +158,7 @@ class SimpleShipPhysics:
         self.state[7:10] = speed.copy()
 
         # Prepare next integration step
-        self.compute_derivatives()
+        self.compute_derivatives_simple_physics()
         self.integrator_idx = self.app.integrator.set_state_variables(
             partial_x = self.state,
             partial_x_dot = self.state_dot,

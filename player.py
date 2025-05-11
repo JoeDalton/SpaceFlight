@@ -4,7 +4,7 @@ import quaternion
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat, NodePath
 
-from ship import SimpleShipPhysics
+from ship import Ship
 from cockpit_view import CockpitView
 from input_system import Joystick
 
@@ -14,18 +14,14 @@ class Player:
 
     def __init__(self, app: ShowBase, ship_name: str):
         self.app = app
-        # Create a dummy node to attach models
-        self.node = NodePath("player_node")
-        self.node.reparentTo(self.app.render)
 
-        self.ship = SimpleShipPhysics(app=self.app, ship_name=ship_name)
+        self.ship = Ship(app=self.app, ship_name=ship_name)
         self.model = CockpitView(app=self.app, ship_name=ship_name)
         self.input_system = Joystick(self.app)
 
-        # Anchor elements to self.node
-        self.model.anchor_model(self.node)
-        self.app.camera.reparentTo(self.node)
-        # self.app.skybox.skybox.reparentTo(self.node)
+        # Anchor elements to self.ship.node
+        self.model.anchor_model(self.ship.node)
+        self.app.camera.reparentTo(self.ship.node)
 
     def initialize_move(self):
         """
@@ -49,8 +45,8 @@ class Player:
         ship_pos = self.ship.state[0:3]
         ship_quat = self.ship.state[3:7]
 
-        self.node.setPos(*ship_pos)
-        self.node.setQuat(Quat(*ship_quat))
+        self.ship.node.setPos(*ship_pos)
+        self.ship.node.setQuat(Quat(*ship_quat))
 
         # Update camera angle relative to node
         self.app.camera.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
