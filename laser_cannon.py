@@ -1,6 +1,6 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.interval.IntervalGlobal import LerpPosInterval
-from panda3d.core import CardMaker, TransparencyAttrib, LVector3
+from panda3d.core import CardMaker, TransparencyAttrib, LVector3, Quat
 from direct.showbase.ShowBaseGlobal import ClockObject
 
 from direct.gui.OnscreenText import OnscreenText
@@ -8,8 +8,10 @@ from direct.gui.OnscreenText import OnscreenText
 import quaternion
 import numpy as np
 from utils import rotate_single_vector
+from trihedron import Trihedron
 
-LASER_SPEED = 1000
+LASER_SPEED = 500 # TODO: to add to ship speed
+SQT2_S = np.sqrt(2.0)/2.0
 
 class LaserCannon():
     
@@ -44,18 +46,19 @@ class LaserCannon():
 
         # Create flat quad
         cm = CardMaker("laser")
-        cm.set_frame(-1.15, 1.15, -1.01, 1.01)
+        cm.set_frame(-1.0, 1.0, -2.0, 2.0)
         laser_np = self.app.render.attach_new_node(cm.generate())
         laser_np.set_texture(self.laser_texture)
+        laser_np.set_two_sided(True)
         laser_np.set_transparency(TransparencyAttrib.MAlpha)
-        # laser_np.set_billboard_axis()
-
+        
         # Start position and orientation relative to the ship
         ship_pos = self.parent_ship.node.get_pos(self.app.render)
         ship_quat = self.parent_ship.node.get_quat(self.app.render)
         q_ship = np.quaternion(*ship_quat)
+        q_laser = q_ship * np.quaternion(SQT2_S, SQT2_S, 0, 0)
         ship_dir = ship_quat.get_forward()
-        # laser_np.set_quat(ship_quat)
+        laser_np.set_quat(Quat(*quaternion.as_float_array(q_laser)))
 
         # Compute start and end positions
         relative_start_position = np.array(self.cannon_positions[self.next_cannon_idx])
