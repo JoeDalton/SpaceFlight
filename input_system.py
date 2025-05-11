@@ -9,8 +9,9 @@ STICK_DEAD_ZONE = 0.08
 THROTTLE_DEAD_ZONE = 0.04
 
 class Joystick:
-    def __init__(self, app: ShowBase):
+    def __init__(self, app: ShowBase, player):
         self.app = app
+        self.player = player
 
         self.lblWarning = OnscreenText(
             text = "No devices found",
@@ -41,14 +42,9 @@ class Joystick:
         self.app.accept("escape", exit)
         self.app.accept("stick-start", exit)
 
-        # Accept button events of the first connected flight stick
-        self.app.accept("stick-button2", self.action, extraArgs=["Missiles"])
-        self.app.accept("stick-button2-repeat", self.actionRepeat, extraArgs=["Missiles"])
-        self.app.accept("stick-button2-up", self.actionUp)
-        
-        self.app.accept("stick-button1", self.action, extraArgs=["Trigger"])
-        self.app.accept("stick-button1-repeat", self.actionRepeat, extraArgs=["Trigger"])
-        self.app.accept("stick-button1-up", self.actionUp)
+        # Accept trigger event to fire lasers
+        self.app.accept("stick-button1", self.player.ship.laser_cannon.fire)
+        self.app.accept("stick-button1-repeat", self.player.ship.laser_cannon.fire)
 
         # Accept button events on the thumb hat
         # to change head orientation 
@@ -163,11 +159,11 @@ class Joystick:
             was_pressed = self.previous_button_states[i]
 
             if is_pressed and not was_pressed:
-                self.app.messenger.send(f"stick-button{i}")
+                self.app.messenger.send(f"stick-button{i+1}")
             elif not is_pressed and was_pressed:
-                self.app.messenger.send(f"stick-button{i}-up")
+                self.app.messenger.send(f"stick-button{i+1}-up")
             elif is_pressed and was_pressed:
-                self.app.messenger.send(f"stick-button{i}-repeat")
+                self.app.messenger.send(f"stick-button{i+1}-repeat")
 
             self.previous_button_states[i] = is_pressed
 

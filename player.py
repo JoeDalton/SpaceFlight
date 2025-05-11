@@ -17,7 +17,7 @@ class Player:
 
         self.ship = Ship(app=self.app, ship_name=ship_name)
         self.model = CockpitView(app=self.app, ship_name=ship_name)
-        self.input_system = Joystick(self.app)
+        self.input_system = Joystick(self.app, player=self)
 
         # Anchor elements to self.ship.node
         self.model.anchor_model(self.ship.node)
