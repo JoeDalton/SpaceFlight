@@ -1,14 +1,15 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.interval.IntervalGlobal import LerpPosInterval
-from panda3d.core import CardMaker, TransparencyAttrib, LVector3, Quat, PointLight
+from panda3d.core import CardMaker, TransparencyAttrib, LVector3, Quat, PointLight, NodePath
 from direct.showbase.ShowBaseGlobal import ClockObject
 
 from direct.gui.OnscreenText import OnscreenText
 
+from panda3d.core import AudioSound
+
+import random
 import quaternion
 import numpy as np
-from utils import rotate_single_vector
-from trihedron import Trihedron
 
 LASER_SPEED = 1000 # TODO: to add to ship speed
 SQT2_S = np.sqrt(2.0)/2.0
@@ -20,14 +21,26 @@ class LaserCannon():
         self.app = app
 
         # Cannon configuration
-        self.cannon_positions = self.parent_ship.conf["cannon_positions"]
-        self.n_cannon = len(self.cannon_positions)
+        cannon_positions = self.parent_ship.conf["cannon_positions"]
+        self.n_cannon = len(cannon_positions)
+        self.cannon_nodes = []
+        for cannon_idx in range(self.n_cannon):
+            # Create a dummy node to attach models
+            node = NodePath("player_node")
+            node.reparentTo(self.parent_ship.node)
+            node.set_pos(*cannon_positions[cannon_idx])
+            self.cannon_nodes.append(node)
         
         # Laser configuration
         self.range = self.parent_ship.conf["laser_range"]
         self.fire_delay = 1.0 / self.parent_ship.conf["laser_fire_rate"]
         color = self.parent_ship.conf["laser_color"]
 
+        # Sound initialization
+        sound_file = self.parent_ship.conf["laser_sound"]
+        if sound_file != "none":
+            self.sound_pool = [self.app.audio3d.loadSfx(sound_file) for _ in range(20)]
+            
         # Initialize laser model
         laser_intensity = 1.0
         self.light_attenuation = (1, 0.05, 0)
@@ -42,7 +55,7 @@ class LaserCannon():
         self.laser_texture = self.app.loader.loadTexture(f"models/lasers/laser_{color}.png")
 
         # Initialize cannon
-        self.next_cannon_idx = 0
+        self.current_next_cannon_idx = 0
         self.global_clock = ClockObject.getGlobalClock()
         self.last_fire_time = self.global_clock.getFrameTime()
 
@@ -61,7 +74,6 @@ class LaserCannon():
         laser_np.set_transparency(TransparencyAttrib.MAlpha)
         
         # Start position and orientation relative to the ship
-        ship_pos = self.parent_ship.node.get_pos(self.app.render)
         ship_quat = self.parent_ship.node.get_quat(self.app.render)
         q_ship = np.quaternion(*ship_quat)
         q_laser = q_ship * np.quaternion(SQT2_S, SQT2_S, 0, 0)
@@ -69,17 +81,12 @@ class LaserCannon():
         laser_np.set_quat(Quat(*quaternion.as_float_array(q_laser)))
 
         # Compute start and end positions
-        relative_start_position = np.array(self.cannon_positions[self.next_cannon_idx])
-        absolute_start_position = (
-            np.array([*ship_pos]) +
-            rotate_single_vector(q_ship, relative_start_position)
-        )
-        start_pos = LVector3(*absolute_start_position)
+        start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(self.app.render)
         end_pos = start_pos + ship_dir * self.range
         duration = self.range / LASER_SPEED
         light_duration = duration / 3
         
-        # Don't rely on scene lighting since it emits its own light
+        # Don't rely on scene lighting since lasers emit their own light
         laser_np.set_light_off()
 
         # Preset movement
@@ -98,7 +105,19 @@ class LaserCannon():
         self.app.doMethodLater(light_duration, lambda t: self.app.render.clear_light(plnp), "RemoveLaserLight")
         self.app.doMethodLater(light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight")
 
+        # Add sound to laser shot (empty list if no sound)
+        for sound in self.sound_pool:
+            # Using a pool to avoid reloading resources
+            # Must use a non-currently-playing sound, otherwise it will restart
+            if sound.status() != AudioSound.PLAYING:
+                # Randomize the pitch of the sound to get a more realistic feeling
+                sound.setPlayRate(random.uniform(0.9, 1.1))
+                # Attach sound the cannon currently firing
+                self.app.audio3d.attachSoundToObject(sound, self.cannon_nodes[self.current_next_cannon_idx])
+                sound.play()
+                break
+
 
         # Prepare next laser shot
-        self.next_cannon_idx = (self.next_cannon_idx + 1) % self.n_cannon
+        self.current_next_cannon_idx = (self.current_next_cannon_idx + 1) % self.n_cannon
         self.last_fire_time = current_time

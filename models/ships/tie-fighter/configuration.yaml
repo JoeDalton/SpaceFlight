@@ -1,4 +1,4 @@
-# A-wing
+# TIE-fighter
 mass_kg: 500
 max_thrust_n: 500000
 max_speed_mps: 500
@@ -9,7 +9,7 @@ drag_coefficient: 0.05
 reference_surface_m2: 100
 
 laser_range: 800
-laser_color: red
+laser_color: green
 laser_fire_rate: 10
-cannon_positions: [[-3, 5, -1], [3, 5, -1]]
-laser_sound: sounds/XWING_BLASTER.mp3
+cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
+laser_sound: sounds/TIE_BLASTER.mp3

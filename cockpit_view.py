@@ -14,6 +14,10 @@ class CockpitView:
         if self.ship_name == "a-wing":
             self.model = self.app.loader.load_model("models/ships/a-wing/cockpit/scene.gltf")
             self.offset = np.array([0.0, 1.0, 0.2])
+            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0)
+        elif self.ship_name == "tie-fighter":
+            self.model = self.app.loader.load_model("models/ships/tie-fighter/cockpit/scene.gltf")
+            self.offset = np.array([0.0, 0.5, 0.1])
             self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) 
         else:
             raise NotImplementedError(ship_name)
