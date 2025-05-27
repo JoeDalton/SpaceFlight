@@ -60,7 +60,7 @@ class AsteroidField:
             self.state[4*ast_idx:4*(ast_idx+1)] = quat_array.copy()
 
             # Set rotational rate
-            omega = 200 * np.deg2rad(np.random.rand(3) - 0.5) / scale
+            omega = 5000 * np.deg2rad(np.random.rand(3) - 0.5) / (scale**2)
             self.omegas[3*ast_idx:3*(ast_idx+1)] = omega.copy()
 
             # Store the new instance

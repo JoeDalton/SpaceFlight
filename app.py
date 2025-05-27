@@ -47,20 +47,21 @@ class MyApp(ShowBase):
         """
         Initialize integrator
         """
-        self.integrator = Integrator(self, max_state_size=20000)
+        self.integrator = Integrator(self, max_state_size=2000)
 
         """
         Build scene
         """
         self.set_background_color(0, 0, 0)
+        self.lighting = Lighting(self)
+
         # self.skybox = Skybox(self, name="test")
         self.skybox = Skybox(self)
         self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=5000)
-        self.lighting = Lighting(self)
         # self.venator_model = self.loader.load_model("models/ships/cis_dreadnaught/scene.gltf")
         # self.venator_model.reparent_to(self.render)
-        # self.venator_model.set_pos(300, -300, 50)
-        # self.venator_model.set_scale(200, 200, 200)
+        # self.venator_model.set_pos(1000, -1000, 50)
+        # self.venator_model.set_scale(1000, 1000, 1000)
 
         """
         Initialize player and ship        
@@ -81,7 +82,7 @@ class MyApp(ShowBase):
         """
         self.integrator.initialize_tasks() # Must come before all physics
         self.player.initialize_move()
-        # self.asteroid_field.initialize_move()
+        self.asteroid_field.initialize_move()
 
     def collision_task(self, task):
         self.traverser.traverse(self.render)
