@@ -13,12 +13,14 @@ class CockpitView:
         
         if self.ship_name == "a-wing":
             self.model = self.app.loader.load_model("models/ships/a-wing/cockpit/scene.gltf")
-            self.offset = np.array([0.0, 1.0, 0.2])
-            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0)
+            self.offset = np.array([0.0, 0.8, -0.2])
+            # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
+            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
         elif self.ship_name == "tie-fighter":
             self.model = self.app.loader.load_model("models/ships/tie-fighter/cockpit/scene.gltf")
-            self.offset = np.array([0.0, 0.5, 0.1])
-            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) 
+            self.offset = np.array([0.0, 0.9, -0.2])
+            # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
+            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
         else:
             raise NotImplementedError(ship_name)
         
@@ -29,9 +31,6 @@ class CockpitView:
         self.model.reparent_to(node)
         # self.model.show_bounds()
 
-        model_pos = -rotate_single_vector(
-            self.orientation, self.offset
-        )
-        self.model.setPos(model_pos[0], model_pos[1], model_pos[2])
+        self.model.setPos(*self.offset)
         self.model.setQuat(Quat(self.orientation.w, self.orientation.x, self.orientation.y, self.orientation.z))
  
