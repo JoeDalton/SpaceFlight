@@ -1,10 +1,10 @@
 # TIE-fighter
 mass_kg: 500
-max_thrust_n: 500000
-max_speed_mps: 500
-max_pitch_rate_degps: 45
+max_thrust_n: 800000
+max_speed_mps: 2000
+max_pitch_rate_degps: 60
 max_yaw_rate_degps: 30
-max_roll_rate_degps: 100
+max_roll_rate_degps: 150
 drag_coefficient: 0.05
 reference_surface_m2: 100
 
