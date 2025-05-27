@@ -49,12 +49,12 @@ class Joystick:
         # Accept button events on the thumb hat
         # to change head orientation 
         self.view_offset = np.zeros(2)
-        self.app.accept("stick-button19", self.view_up)
-        self.app.accept("stick-button18", self.view_down)
+        self.app.accept("stick-button19", self.view_down)
+        self.app.accept("stick-button18", self.view_up)
         self.app.accept("stick-button17", self.view_right)
         self.app.accept("stick-button16", self.view_left)
-        self.app.accept("stick-button19-repeat", self.view_up)
-        self.app.accept("stick-button18-repeat", self.view_down)
+        self.app.accept("stick-button19-repeat", self.view_down)
+        self.app.accept("stick-button18-repeat", self.view_up)
         self.app.accept("stick-button17-repeat", self.view_right)
         self.app.accept("stick-button16-repeat", self.view_left)
 
