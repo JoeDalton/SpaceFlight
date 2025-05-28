@@ -1,0 +1,11 @@
+Model Information:
+* title:	Barringer Meteorite Crater
+* source:	https://sketchfab.com/3d-models/barringer-meteorite-crater-db1db2d013f742af8dd12a9f95d05c90
+* author:	origalde (https://sketchfab.com/origalde)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Barringer Meteorite Crater" (https://sketchfab.com/3d-models/barringer-meteorite-crater-db1db2d013f742af8dd12a9f95d05c90) by origalde (https://sketchfab.com/origalde) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

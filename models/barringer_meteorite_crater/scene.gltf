@@ -1,0 +1,764 @@
+{
+  "accessors": [
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        7.841579914093018,
+        7.841579914093018,
+        1.6196099519729614
+      ],
+      "min": [
+        -8.0,
+        -8.0,
+        0.32940998673439026
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 122412,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        0.6588847041130066,
+        0.7703949809074402,
+        1.0
+      ],
+      "min": [
+        -0.705066442489624,
+        -0.7810555100440979,
+        0.5658285021781921
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 81608,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 163216,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 60000,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 244824,
+      "componentType": 5126,
+      "count": 295,
+      "max": [
+        0.9366400241851807,
+        0.4410400092601776,
+        0.07312999665737152
+      ],
+      "min": [
+        -0.2910900115966797,
+        -0.22741000354290009,
+        -0.09272000193595886
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 248364,
+      "componentType": 5126,
+      "count": 295,
+      "max": [
+        0.9943565726280212,
+        0.9998049736022949,
+        1.0
+      ],
+      "min": [
+        -0.9943565726280212,
+        -0.9950875043869019,
+        0.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 244824,
+      "componentType": 5126,
+      "count": 295,
+      "max": [
+        0.9990000128746033,
+        0.9990000128746033
+      ],
+      "min": [
+        0.0010000000474974513,
+        0.0010000000474974513
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 240000,
+      "componentType": 5125,
+      "count": 441,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 251904,
+      "componentType": 5126,
+      "count": 380,
+      "max": [
+        67.67252349853516,
+        19.772289276123047,
+        5.084630012512207
+      ],
+      "min": [
+        -68.39070129394531,
+        -10.784059524536133,
+        -3.6361100673675537
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 256464,
+      "componentType": 5126,
+      "count": 380,
+      "max": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "min": [
+        -1.0,
+        -1.0,
+        -0.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 247184,
+      "componentType": 5126,
+      "count": 380,
+      "max": [
+        0.9950000047683716,
+        0.9950000047683716
+      ],
+      "min": [
+        0.004999999888241291,
+        0.004999999888241291
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 241764,
+      "componentType": 5125,
+      "count": 570,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 261024,
+      "componentType": 5126,
+      "count": 5656,
+      "max": [
+        7.841579914093018,
+        7.841579914093018,
+        1.3176499605178833
+      ],
+      "min": [
+        -8.0,
+        -8.0,
+        -0.7941499948501587
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 328896,
+      "componentType": 5126,
+      "count": 5656,
+      "max": [
+        1.0,
+        1.0,
+        0.0
+      ],
+      "min": [
+        -1.0,
+        -1.0,
+        0.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 5656,
+      "max": [
+        1.0,
+        1.0,
+        8.897933003026992e-05,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0,
+        -5.2970954129705206e-05,
+        -1.0
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 250224,
+      "componentType": 5126,
+      "count": 5656,
+      "max": [
+        1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 295472,
+      "componentType": 5126,
+      "count": 5656,
+      "max": [
+        1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 340720,
+      "componentType": 5126,
+      "count": 5656,
+      "max": [
+        1.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 244044,
+      "componentType": 5125,
+      "count": 31200,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 396768,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        7.841579914093018,
+        7.841579914093018,
+        -0.7941499948501587
+      ],
+      "min": [
+        -8.0,
+        -8.0,
+        -0.7941499948501587
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 519180,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "min": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 385968,
+      "componentType": 5126,
+      "count": 10201,
+      "max": [
+        0.9901000261306763,
+        0.9901000261306763
+      ],
+      "min": [
+        0.0,
+        0.0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 368844,
+      "componentType": 5125,
+      "count": 60000,
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "origalde (https://sketchfab.com/origalde)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/barringer-meteorite-crater-db1db2d013f742af8dd12a9f95d05c90",
+      "title": "Barringer Meteorite Crater"
+    },
+    "generator": "Sketchfab-15.25.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 608844,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 467576,
+      "byteOffset": 608844,
+      "byteStride": 8,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 641592,
+      "byteOffset": 1076420,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 90496,
+      "byteOffset": 1718012,
+      "byteStride": 16,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 1808508,
+      "uri": "scene.bin"
+    }
+  ],
+  "images": [
+    {
+      "uri": "textures/Couche_sdimentaire_baseColor.jpeg"
+    },
+    {
+      "uri": "textures/Couche_sdimentaire_normal.png"
+    },
+    {
+      "uri": "textures/Vhicule_baseColor.jpeg"
+    },
+    {
+      "uri": "textures/Batiment_baseColor.png"
+    },
+    {
+      "uri": "textures/color_baseColor.jpeg"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "Root",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.005,
+          0.005,
+          0.005,
+          1.0
+        ],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      }
+    },
+    {
+      "doubleSided": true,
+      "name": "Couche_sdimentaire",
+      "normalTexture": {
+        "index": 1,
+        "scale": 0.20000000298023224
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      }
+    },
+    {
+      "doubleSided": true,
+      "name": "Vhicule",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 2
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      }
+    },
+    {
+      "doubleSided": true,
+      "name": "Batiment",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 3
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      }
+    },
+    {
+      "name": "color",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 4
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Crat��re Barringer_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 0,
+            "TEXCOORD_0": 2,
+            "TEXCOORD_1": 3,
+            "TEXCOORD_2": 4
+          },
+          "indices": 5,
+          "material": 4,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "Batiment_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 7,
+            "POSITION": 6,
+            "TEXCOORD_0": 8
+          },
+          "indices": 9,
+          "material": 3,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "V��hicule_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 11,
+            "POSITION": 10,
+            "TEXCOORD_0": 12
+          },
+          "indices": 13,
+          "material": 2,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "Couche s��dimentaire_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 15,
+            "POSITION": 14,
+            "TANGENT": 16,
+            "TEXCOORD_0": 17,
+            "TEXCOORD_1": 18,
+            "TEXCOORD_2": 19
+          },
+          "indices": 20,
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "Fond_0",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 22,
+            "POSITION": 21,
+            "TEXCOORD_0": 23
+          },
+          "indices": 24,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "matrix": [
+        0.7031506896018982,
+        -1.2539414870659578e-16,
+        -0.7110408544540405,
+        0.0,
+        -0.7110408544540405,
+        3.169430793711897e-16,
+        -0.7031506896018982,
+        0.0,
+        3.1353046303604095e-16,
+        1.0,
+        1.3369837369469324e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "name": "Sketchfab_model"
+    },
+    {
+      "children": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12
+      ],
+      "name": "Root"
+    },
+    {
+      "children": [
+        3
+      ],
+      "name": "Crat��re Barringer"
+    },
+    {
+      "mesh": 0,
+      "name": "Crat��re Barringer_0"
+    },
+    {
+      "children": [
+        5
+      ],
+      "matrix": [
+        0.5367200000000001,
+        0.0,
+        -0.8437600000000001,
+        0.0,
+        -0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.8437600000000001,
+        0.0,
+        0.5367200000000001,
+        0.0,
+        9.85899,
+        -0.0,
+        7.194419999999999,
+        1.0
+      ],
+      "name": "Sun"
+    },
+    {
+      "name": "Sun"
+    },
+    {
+      "children": [
+        7
+      ],
+      "matrix": [
+        0.98284,
+        0.18448000000000003,
+        0.0,
+        0.0,
+        -0.18448000000000003,
+        0.98284,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.8386700000000001,
+        5.18981,
+        1.4393699999999998,
+        1.0
+      ],
+      "name": "Batiment"
+    },
+    {
+      "mesh": 1,
+      "name": "Batiment_0"
+    },
+    {
+      "children": [
+        9
+      ],
+      "matrix": [
+        0.014530000000000003,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.014530000000000003,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.009890000000000003,
+        0.0,
+        0.6900300000000001,
+        5.63062,
+        1.38072,
+        1.0
+      ],
+      "name": "V��hicule"
+    },
+    {
+      "mesh": 2,
+      "name": "V��hicule_0"
+    },
+    {
+      "children": [
+        11
+      ],
+      "name": "Couche s��dimentaire"
+    },
+    {
+      "mesh": 3,
+      "name": "Couche s��dimentaire_0"
+    },
+    {
+      "children": [
+        13
+      ],
+      "name": "Fond"
+    },
+    {
+      "mesh": 4,
+      "name": "Fond_0"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    },
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 33071,
+      "wrapT": 33071
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Sketchfab_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
+    },
+    {
+      "sampler": 0,
+      "source": 3
+    },
+    {
+      "sampler": 1,
+      "source": 4
+    }
+  ]
+}
