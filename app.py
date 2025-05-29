@@ -35,8 +35,8 @@ class MyApp(ShowBase):
         Initialize sound system
         """
         self.audio3d = Audio3DManager.Audio3DManager(self.sfxManagerList[0], self.camera)
-        # music = self.loader.loadMusic("sounds/Koyaanisqatsi.mp3")
-        music = self.loader.loadMusic("sounds/westworld.mp3")
+        # music = self.loader.loadMusic("sounds/music_Koyaanisqatsi.mp3")
+        music = self.loader.loadMusic("sounds/music_westworld.mp3")
         music.setLoop(True)
         music.setVolume(0.8)
         
