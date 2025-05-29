@@ -11,7 +11,7 @@ import random
 import quaternion
 import numpy as np
 
-LASER_SPEED = 1000 # TODO: to add to ship speed
+LASER_SPEED = 1000.0
 SQT2_S = np.sqrt(2.0)/2.0
 
 class LaserCannon():
@@ -32,7 +32,7 @@ class LaserCannon():
             self.cannon_nodes.append(node)
         
         # Laser configuration
-        self.range = self.parent_ship.conf["laser_range"]
+        self.life_time = self.parent_ship.conf["laser_life_time"]
         self.fire_delay = 1.0 / self.parent_ship.conf["laser_fire_rate"]
         color = self.parent_ship.conf["laser_color"]
 
@@ -81,10 +81,12 @@ class LaserCannon():
         laser_np.set_quat(Quat(*quaternion.as_float_array(q_laser)))
 
         # Compute start and end positions
+        my_speed = LASER_SPEED * np.array(ship_dir) + self.parent_ship.speed
+        my_range = my_speed * self.life_time
         start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(self.app.render)
-        end_pos = start_pos + ship_dir * self.range
-        duration = self.range / LASER_SPEED
-        light_duration = duration / 3
+        end_pos = start_pos + LVector3(*my_range)
+        duration = self.life_time
+        light_duration = duration / 2
         
         # Don't rely on scene lighting since lasers emit their own light
         laser_np.set_light_off()

@@ -149,13 +149,18 @@ class Ship:
         speed_norm = np.linalg.norm(speed)
         if speed_norm > self.max_speed_mps:
             speed_norm = self.max_speed_mps
+        
+        # Normalize ship orientation
+        self.orientation = self.state[3:7].copy()
+        self.orientation /= np.linalg.norm(self.orientation)
+        self.state[3:7] = self.orientation.copy()
         # Reorient speed in ship direction
-        quat = np.quaternion(*self.state[3:7])
+        quat = np.quaternion(*self.orientation)
         speed_body = np.array([0.0, speed_norm, 0.0])
-        speed = rotate_single_vector(
+        self.speed = rotate_single_vector(
             quat, speed_body
         )
-        self.state[7:10] = speed.copy()
+        self.state[7:10] = self.speed.copy()
 
         # Prepare next integration step
         self.compute_derivatives_simple_physics()

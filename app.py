@@ -5,6 +5,7 @@ from panda3d.core import CollisionTraverser, CollisionHandlerEvent
 
 from direct.showbase import Audio3DManager
 
+import numpy as np
 
 from hud import HUD
 from cockpit_view import CockpitView
@@ -34,6 +35,11 @@ class MyApp(ShowBase):
         Initialize sound system
         """
         self.audio3d = Audio3DManager.Audio3DManager(self.sfxManagerList[0], self.camera)
+        # music = self.loader.loadMusic("sounds/Koyaanisqatsi.mp3")
+        music = self.loader.loadMusic("sounds/westworld.mp3")
+        music.setLoop(True)
+        music.setVolume(0.8)
+        
 
         """
         Initialize Collision system
@@ -47,7 +53,7 @@ class MyApp(ShowBase):
         """
         Initialize integrator
         """
-        self.integrator = Integrator(self, max_state_size=2000)
+        self.integrator = Integrator(self, max_state_size=5000)
 
         """
         Build scene
@@ -57,18 +63,30 @@ class MyApp(ShowBase):
 
         # self.skybox = Skybox(self, name="test")
         self.skybox = Skybox(self)
-        self.asteroid_field = AsteroidField(self, n_asteroids=300, field_size=5000)
-        # self.venator_model = self.loader.load_model("models/ships/cis_dreadnaught/scene.gltf")
-        # self.venator_model.reparent_to(self.render)
-        # self.venator_model.set_pos(1000, -1000, 50)
-        # self.venator_model.set_scale(1000, 1000, 1000)
+        
+        # Asteroid field
+        self.static_asteroid_field = AsteroidField(self, n_asteroids=2000, field_size=15000, is_moving=False)
+        self.big_static_asteroid_field = AsteroidField(self, n_asteroids=20, scale_factor=10, field_size=15000, is_moving=False)
+        self.rotating_asteroid_field = AsteroidField(self, n_asteroids=1000, field_size=15000)
+
+        # Drydock
+        self.drydock = self.loader.load_model("models/star_trek_space_drydock/scene.gltf")
+        self.drydock.reparent_to(self.render)
+        self.drydock.set_pos(0, 8000, 50)
+        self.drydock.set_scale(100, 100, 100)
+
+
+        # # test asset
+        # self.test_asset = self.loader.load_model("models/venator-class_star_destroyer/scene.gltf")
+        # self.test_asset.reparent_to(self.render)
+        # self.test_asset.set_pos(0, 1000, 50)
+        # self.test_asset.set_scale(1000, 1000, 1000)
 
         """
         Initialize player and ship        
         """
-        # self.player = Player(self, ship_name="a-wing")
-        self.player = Player(self, ship_name="tie-fighter")
-        
+        self.player = Player(self, ship_name="a-wing", ini_position=np.array([0, -9000, 0]))
+        # self.player = Player(self, ship_name="tie-fighter")
         """
         Debug options
         """
@@ -82,7 +100,12 @@ class MyApp(ShowBase):
         """
         self.integrator.initialize_tasks() # Must come before all physics
         self.player.initialize_move()
-        self.asteroid_field.initialize_move()
+        self.rotating_asteroid_field.initialize_move()
+
+        """
+        Launch music
+        """
+        music.play()
 
     def collision_task(self, task):
         self.traverser.traverse(self.render)

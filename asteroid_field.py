@@ -20,7 +20,7 @@ class AsteroidField:
     The shapes, positions, rotations and scales are randomly chosen
     for each asteroid.
     """
-    def __init__(self, app: ShowBase, n_asteroids: int=40, field_size: float=200):
+    def __init__(self, app: ShowBase, n_asteroids: int=40, field_size: float=200, scale_factor: float = 1.0, is_moving: bool = True):
         self.app = app
         self.n_asteroids = n_asteroids
         self.asteroids =[]
@@ -32,10 +32,12 @@ class AsteroidField:
         ]
 
         # Prepare integration
-        self.state = np.zeros(4*self.n_asteroids)
-        self.state_dot = np.zeros(4*self.n_asteroids)
-        self.state_dot_previous = np.zeros(4*self.n_asteroids)
-        self.omegas = np.zeros(3*self.n_asteroids)
+        self.is_moving = is_moving
+        if self.is_moving:
+            self.state = np.zeros(4*self.n_asteroids)
+            self.state_dot = np.zeros(4*self.n_asteroids)
+            self.state_dot_previous = np.zeros(4*self.n_asteroids)
+            self.omegas = np.zeros(3*self.n_asteroids)
 
         # Initialize instances of asteroids
         for ast_idx in range(self.n_asteroids):
@@ -50,30 +52,33 @@ class AsteroidField:
             # instance.show_bounds()
 
             # Set scale
-            scale = np.random.rand() * 100 + 1
+            scale = (np.random.rand() * 100 + 1) * scale_factor
             instance.setScale(scale)
 
             # Set initial orientation
             temp = np.random.rand(4)
             quat_array = temp / np.linalg.norm(temp) + 0.2
             instance.setQuat(Quat(*quat_array))
-            self.state[4*ast_idx:4*(ast_idx+1)] = quat_array.copy()
+            if self.is_moving:
+                self.state[4*ast_idx:4*(ast_idx+1)] = quat_array.copy()
 
             # Set rotational rate
-            omega = 5000 * np.deg2rad(np.random.rand(3) - 0.5) / (scale**2)
-            self.omegas[3*ast_idx:3*(ast_idx+1)] = omega.copy()
+            if self.is_moving:
+                omega = 5000 * np.deg2rad(np.random.rand(3) - 0.5) / (scale**1.5)
+                self.omegas[3*ast_idx:3*(ast_idx+1)] = omega.copy()
 
             # Store the new instance
             self.asteroids.append(instance)
 
         # Prepare first integration step
-        self.compute_derivatives()
-        self.state_dot_previous = self.state_dot.copy()
-        self.integrator_idx = self.app.integrator.set_state_variables(
-            partial_x = self.state,
-            partial_x_dot = self.state_dot,
-            partial_x_dot_previous = self.state_dot_previous,
-        )      
+        if self.is_moving:
+            self.compute_derivatives()
+            self.state_dot_previous = self.state_dot.copy()
+            self.integrator_idx = self.app.integrator.set_state_variables(
+                partial_x = self.state,
+                partial_x_dot = self.state_dot,
+                partial_x_dot_previous = self.state_dot_previous,
+            )      
 
     def initialize_move(self):
         """

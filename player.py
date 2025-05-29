@@ -12,10 +12,15 @@ CAMERA_ANGLE_INCREMENT = 2.0
 
 class Player:
 
-    def __init__(self, app: ShowBase, ship_name: str):
+    def __init__(
+            self, app: ShowBase,
+            ship_name: str, 
+            ini_position: np.ndarray = np.zeros(3),
+            ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
+        ):
         self.app = app
 
-        self.ship = Ship(app=self.app, ship_name=ship_name)
+        self.ship = Ship(app=self.app, ship_name=ship_name, ini_position=ini_position, ini_orientation=ini_orientation)
         self.model = CockpitView(app=self.app, ship_name=ship_name)
         self.input_system = Joystick(self.app, player=self)
 
