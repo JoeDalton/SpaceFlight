@@ -1,2 +1,3 @@
 *.pyc
 music_*.mp3
+.space_venv
