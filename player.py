@@ -6,7 +6,7 @@ from panda3d.core import Quat, NodePath
 
 from ship import Ship
 from cockpit_view import CockpitView
-from input_system import Joystick
+from input_system import Joystick, Keyboard
 
 CAMERA_ANGLE_INCREMENT = 2.0
 
@@ -17,12 +17,18 @@ class Player:
             ship_name: str, 
             ini_position: np.ndarray = np.zeros(3),
             ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
+            input_system: str="joystick",
         ):
         self.app = app
 
         self.ship = Ship(app=self.app, ship_name=ship_name, ini_position=ini_position, ini_orientation=ini_orientation)
         self.model = CockpitView(app=self.app, ship_name=ship_name)
-        self.input_system = Joystick(self.app, player=self)
+        if input_system =="joystick":
+            self.input_system = Joystick(self.app, player=self)
+        elif input_system =="keyboard":
+            self.input_system = Keyboard(self.app, player=self)
+        else:
+            raise NotImplementedError
 
         # Anchor elements to self.ship.node
         self.model.anchor_model(self.ship.node)
@@ -43,8 +49,8 @@ class Player:
         The cockpit is linked to the camera, so it should move
         without being told to.
         """
-        throttle, yaw, pitch, roll = self.input_system.get_inputs()
-        self.ship.set_inputs(throttle=throttle, yaw=yaw, pitch=pitch, roll=roll)
+        throttle, yaw_rate, pitch_rate, roll_rate = self.input_system.get_inputs()
+        self.ship.set_inputs(throttle=throttle, yaw_rate=yaw_rate, pitch_rate=pitch_rate, roll_rate=roll_rate)
         self.ship.move_ship()
 
         ship_pos = self.ship.state[0:3]

@@ -80,7 +80,7 @@ class Ship:
         self.laser_cannon = LaserCannon(app=self.app, parent_ship=self)
 
 
-    def set_inputs(self, throttle: float, yaw: float, pitch: float, roll: float):
+    def set_inputs(self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float):
         """
         Sets the scalar thrust and rotational rates of the ship
 
@@ -89,9 +89,9 @@ class Ship:
         self.scalar_thrust = throttle * self.max_thrust_n
         self.pqr = np.array(
             [
-                pitch * self.max_pitch_rate_radps,
-                roll * self.max_roll_rate_radps,
-                yaw * self.max_yaw_rate_radps,
+                pitch_rate * self.max_pitch_rate_radps,
+                roll_rate * self.max_roll_rate_radps,
+                yaw_rate * self.max_yaw_rate_radps,
             ]
         )
 

@@ -4,14 +4,155 @@ import quaternion
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import InputDevice
 from direct.gui.OnscreenText import OnscreenText
+from direct.showbase.ShowBaseGlobal import globalClock
+
+from utils import low_pass_filter_first_order
 
 STICK_DEAD_ZONE = 0.15
 THROTTLE_DEAD_ZONE = 0.04
 
-class Joystick:
+class InputSystem:
     def __init__(self, app: ShowBase, player):
         self.app = app
         self.player = player
+        self.view_offset = np.zeros(2)
+
+    def action(self, button):
+        # Just show which button has been pressed.
+        self.lblAction.text = "Pressed once %s" % button
+        self.lblAction.show()
+        
+    def actionRepeat(self, button):
+        # Just show which button has been pressed.
+        self.lblAction.text = "Pressed continuously %s" % button
+        self.lblAction.show()
+
+    def actionUp(self):
+        # Hide the label showing which button is pressed.
+        self.lblAction.hide()
+
+    def view_up(self):
+        self.view_offset[0] += 1
+
+    def view_down(self):
+        self.view_offset[0] -= 1
+
+    def view_right(self):
+        self.view_offset[1] -= 1
+
+    def view_left(self):
+        self.view_offset[1] += 1
+
+    @staticmethod
+    def smooth_button(
+        value: float,           # current raw input: 1.0 if pressed, 0.0 if not
+        previous: float,        # previous smoothed output
+        rise_time: float=0.5,   # seconds to reach ~63% when pressed
+        fall_time:float=0.1,   # seconds to decay when released
+    ):
+        """
+        Returns a smoothed value in [0, 1] based on button presses.
+        
+        Snappy feel:
+            rise_time=0.1
+            fall_time=0.05
+
+        Mid feel:
+            rise_time=0.5
+            fall_time=0.1
+
+        Sluggish feel:
+            rise_time=1.0
+            fall_time=0.2
+        """
+        dt = globalClock.getDt()
+        return low_pass_filter_first_order(value=value, previous=previous, dt=dt, rise_time=rise_time, fall_time=fall_time)
+
+
+class Keyboard(InputSystem):
+    def __init__(self, app: ShowBase, player):
+        super().__init__(app=app, player=player)
+
+        # Accept trigger event to fire lasers
+        self.app.accept("space", self.player.ship.laser_cannon.fire)
+        self.app.accept("space-repeat", self.player.ship.laser_cannon.fire)
+
+        self.throttle = 0.0
+        self.yaw_rate = 0.0
+        self.pitch_rate = 0.0
+        self.roll_rate = 0.0
+        self.yaw_rate_smoothed = 0.0
+        self.pitch_rate_smoothed = 0.0
+        self.roll_rate_smoothed = 0.0
+
+        self.app.accept("z", self.count_pitch_down, [0.05])
+        self.app.accept("s", self.count_pitch_up, [0.05])
+        self.app.accept("e", self.count_yaw_down, [0.05])
+        self.app.accept("a", self.count_yaw_up, [0.05])
+        self.app.accept("q", self.count_roll_down, [0.05])
+        self.app.accept("d", self.count_roll_up, [0.05])
+        self.app.accept("arrow_down", self.count_throttle_down)
+        self.app.accept("arrow_up", self.count_throttle_up)
+
+        self.app.accept("z-repeat", self.count_pitch_down, [0.3])
+        self.app.accept("s-repeat", self.count_pitch_up, [0.3])
+        self.app.accept("e-repeat", self.count_yaw_down, [0.3])
+        self.app.accept("a-repeat", self.count_yaw_up, [0.3])
+        self.app.accept("q-repeat", self.count_roll_down, [0.3])
+        self.app.accept("d-repeat", self.count_roll_up, [0.3])
+        self.app.accept("arrow_down-repeat", self.count_throttle_down)
+        self.app.accept("arrow_up-repeat", self.count_throttle_up)
+
+    def count_pitch_down(self, value: float):
+        self.pitch_rate -= value
+    def count_pitch_up(self, value: float):
+        self.pitch_rate += value
+    def count_yaw_down(self, value: float):
+        self.yaw_rate -= value
+    def count_yaw_up(self, value: float):
+        self.yaw_rate += value
+    def count_roll_down(self, value: float):
+        self.roll_rate -= value
+    def count_roll_up(self, value: float):
+        self.roll_rate += value
+    def count_throttle_down(self):
+        self.throttle -= 0.1
+    def count_throttle_up(self):
+        self.throttle += 0.1
+
+
+    def get_inputs(self):
+        """
+        Reads the flightstick's axes values to inform the player object
+
+        returns throttle, roll, pitch, yaw
+        """
+        dt = globalClock.getDt()
+        # Get average command of yaw pitch roll since last frame
+        self.yaw_rate /= dt
+        self.pitch_rate /= dt
+        self.roll_rate /= dt
+        
+        # Low pass filter for axes
+        self.yaw_rate_smoothed = InputSystem.smooth_button(value = self.yaw_rate, previous=self.yaw_rate_smoothed)
+        self.pitch_rate_smoothed = InputSystem.smooth_button(value = self.pitch_rate, previous=self.pitch_rate_smoothed)
+        self.roll_rate_smoothed = InputSystem.smooth_button(value = self.roll_rate, previous=self.roll_rate_smoothed)
+
+        # Bound results
+        self.throttle = max(min(self.throttle, 1.0), 0.0)
+        self.yaw_rate_smoothed = max(min(self.yaw_rate_smoothed, 1.0), -1.0)
+        self.pitch_rate_smoothed = max(min(self.pitch_rate_smoothed, 1.0), -1.0)
+        self.roll_rate_smoothed = max(min(self.roll_rate_smoothed, 1.0), -1.0)
+        
+        # Reset commands
+        self.yaw_rate = 0.0
+        self.pitch_rate = 0.0
+        self.roll_rate = 0.0
+        return self.throttle, self.yaw_rate_smoothed, self.pitch_rate_smoothed, self.roll_rate_smoothed
+
+class Joystick(InputSystem):
+    def __init__(self, app: ShowBase, player):
+        super().__init__(app=app, player=player)
 
         self.lblWarning = OnscreenText(
             text = "No devices found",
@@ -47,8 +188,7 @@ class Joystick:
         self.app.accept("stick-button1-repeat", self.player.ship.laser_cannon.fire)
 
         # Accept button events on the thumb hat
-        # to change head orientation 
-        self.view_offset = np.zeros(2)
+        # to change head orientation
         self.app.accept("stick-button19", self.view_down)
         self.app.accept("stick-button18", self.view_up)
         self.app.accept("stick-button17", self.view_right)
@@ -96,37 +236,13 @@ class Joystick:
             # No devices.  Show the warning.
             self.lblWarning.show()
 
-    def action(self, button):
-        # Just show which button has been pressed.
-        self.lblAction.text = "Pressed once %s" % button
-        self.lblAction.show()
-        
-    def actionRepeat(self, button):
-        # Just show which button has been pressed.
-        self.lblAction.text = "Pressed continuously %s" % button
-        self.lblAction.show()
 
-    def actionUp(self):
-        # Hide the label showing which button is pressed.
-        self.lblAction.hide()
-
-    def view_up(self):
-        self.view_offset[0] += 1
-
-    def view_down(self):
-        self.view_offset[0] -= 1
-
-    def view_right(self):
-        self.view_offset[1] -= 1
-
-    def view_left(self):
-        self.view_offset[1] += 1
 
     def get_inputs(self):
         """
         Reads the flightstick's axes values to inform the player object
 
-        returns throttle, roll, pitch, yaw
+        returns throttle, yaw_rate, pitch_rate, roll_rate
         """
         
         if not self.flightStick:
@@ -136,25 +252,25 @@ class Joystick:
         if abs(throttle) < THROTTLE_DEAD_ZONE:
             throttle = 0
 
-        yaw = self.flightStick.findAxis(InputDevice.Axis.yaw).value
-        if abs(yaw) < STICK_DEAD_ZONE:
-            yaw = 0
+        yaw_rate = self.flightStick.findAxis(InputDevice.Axis.yaw).value
+        if abs(yaw_rate) < STICK_DEAD_ZONE:
+            yaw_rate = 0
         else:
-            yaw = yaw - np.sign(yaw) * STICK_DEAD_ZONE
+            yaw_rate = yaw_rate - np.sign(yaw_rate) * STICK_DEAD_ZONE
 
-        pitch = self.flightStick.findAxis(InputDevice.Axis.pitch).value
-        if abs(pitch) < STICK_DEAD_ZONE:
-            pitch= 0
+        pitch_rate = self.flightStick.findAxis(InputDevice.Axis.pitch).value
+        if abs(pitch_rate) < STICK_DEAD_ZONE:
+            pitch_rate= 0
         else:
-            pitch = pitch - np.sign(pitch) * STICK_DEAD_ZONE
+            pitch_rate = pitch_rate - np.sign(pitch_rate) * STICK_DEAD_ZONE
 
-        roll = self.flightStick.findAxis(InputDevice.Axis.roll).value
-        if abs(roll) < STICK_DEAD_ZONE:
-            roll = 0
+        roll_rate = self.flightStick.findAxis(InputDevice.Axis.roll).value
+        if abs(roll_rate) < STICK_DEAD_ZONE:
+            roll_rate = 0
         else:
-            roll = roll - np.sign(roll) * STICK_DEAD_ZONE
+            roll_rate = roll_rate - np.sign(roll_rate) * STICK_DEAD_ZONE
 
-        return throttle, yaw, pitch, roll
+        return throttle, yaw_rate, pitch_rate, roll_rate
 
     def poll_buttons_task(self, task):
         if not self.flightStick:
