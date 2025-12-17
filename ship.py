@@ -62,7 +62,7 @@ class Ship:
         # Assign physics
         if not lift_model:
             self.compute_derivatives = self.compute_derivatives_simple_physics
-            self.move_ship = self.move_ship_simple_physics
+            self.move_ship_physics = self.move_ship_simple_physics
         else:
             # TODO: more "realistic" flight model
             raise NotImplementedError
@@ -163,10 +163,27 @@ class Ship:
         self.state[7:10] = self.speed.copy()
 
         # Prepare next integration step
-        self.compute_derivatives_simple_physics()
+        self.compute_derivatives()
         self.integrator_idx = self.app.integrator.set_state_variables(
             partial_x = self.state,
             partial_x_dot = self.state_dot,
             partial_x_dot_previous = self.state_dot_previous,
         )
     
+    def move_ship(self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float):
+        """
+        Moves the ship given throttle and turn rates
+
+        :param throttle: _description_
+        :param yaw_rate: _description_
+        :param pitch_rate: _description_
+        :param roll_rate: _description_
+        """
+        self.set_inputs(throttle=throttle, yaw_rate=yaw_rate, pitch_rate=pitch_rate, roll_rate=roll_rate)
+        self.move_ship_physics()
+
+        ship_pos = self.state[0:3]
+        ship_quat = self.state[3:7]
+
+        self.node.setPos(*ship_pos)
+        self.node.setQuat(Quat(*ship_quat))

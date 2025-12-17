@@ -82,3 +82,4 @@ class AutoPilot():
         self.roll_rate = low_pass_filter_first_order(value=roll_rate_command, previous=self.roll_rate, dt=dt, rise_time=self.filter_time, fall_time=self.filter_time)
         
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
+    

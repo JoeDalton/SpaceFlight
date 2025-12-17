@@ -3,11 +3,9 @@ import numpy as np
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat, NodePath
 
-from utils import rotate_single_vector
 
-
-class CockpitView:
-    def __init__(self, app: ShowBase, ship_name: str="a-wing"):
+class ShipModel:
+    def __init__(self, app: ShowBase, ship_name: str="a-wing", is_cockpit=True):
         self.app = app
         self.ship_name = ship_name
         

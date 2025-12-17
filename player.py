@@ -5,7 +5,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat, NodePath
 
 from ship import Ship
-from cockpit_view import CockpitView
+from ship_model import ShipModel
 from input_system import Joystick, Keyboard
 
 CAMERA_ANGLE_INCREMENT = 2.0
@@ -13,7 +13,8 @@ CAMERA_ANGLE_INCREMENT = 2.0
 class Player:
 
     def __init__(
-            self, app: ShowBase,
+            self,
+            app: ShowBase,
             ship_name: str, 
             ini_position: np.ndarray = np.zeros(3),
             ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
@@ -22,7 +23,7 @@ class Player:
         self.app = app
 
         self.ship = Ship(app=self.app, ship_name=ship_name, ini_position=ini_position, ini_orientation=ini_orientation)
-        self.model = CockpitView(app=self.app, ship_name=ship_name)
+        self.model = ShipModel(app=self.app, ship_name=ship_name, is_cockpit=True)
         if input_system =="joystick":
             self.input_system = Joystick(self.app, player=self)
         elif input_system =="keyboard":
@@ -50,14 +51,7 @@ class Player:
         without being told to.
         """
         throttle, yaw_rate, pitch_rate, roll_rate = self.input_system.get_inputs()
-        self.ship.set_inputs(throttle=throttle, yaw_rate=yaw_rate, pitch_rate=pitch_rate, roll_rate=roll_rate)
-        self.ship.move_ship()
-
-        ship_pos = self.ship.state[0:3]
-        ship_quat = self.ship.state[3:7]
-
-        self.ship.node.setPos(*ship_pos)
-        self.ship.node.setQuat(Quat(*ship_quat))
+        self.ship.move_ship(throttle=throttle, yaw_rate=yaw_rate, pitch_rate=pitch_rate, roll_rate=roll_rate)
 
         # Update camera angle relative to node
         self.app.camera.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
