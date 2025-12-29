@@ -1,5 +1,6 @@
 import quaternion
 import numpy as np
+from typing import Union
 
 def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
     """
@@ -24,8 +25,8 @@ def safe_angle_rad(angle_rad: float) -> float:
     return angle_rad
 
 def low_pass_filter_first_order(
-        value: float,           # current raw input: 1.0 if pressed, 0.0 if not
-        previous: float,        # previous smoothed output
+        value: Union[float, np.ndarray],           # current raw input: 1.0 if pressed, 0.0 if not
+        previous: Union[float, np.ndarray],        # previous smoothed output
         dt: float,              # Time since last call
         rise_time: float,   # seconds to reach ~63% when pressed
         fall_time:float,   # seconds to decay when released
@@ -34,12 +35,18 @@ def low_pass_filter_first_order(
         First order low pass filter with a possibility for distinct fall and rise
         characteristic times 
         """
+        if dt == 0.0:
+            return value
 
         # Choose response speed depending on press/release
-        tau = rise_time if value > previous else fall_time
-
-        if tau <= 0.0 or dt == 0.0:
-            return value
+        if (isinstance(value, float) and isinstance(previous, float)):
+            tau = rise_time if value > previous else fall_time
+            if tau <= 0.0:
+                return value
+        elif isinstance(value, np.ndarray) and isinstance(previous, np.ndarray):
+            tau = np.where((value > previous), rise_time, fall_time)
+            if (tau<=0).any():
+                return value
 
         alpha = dt / (tau + dt)
         return previous + (value - previous) * alpha
