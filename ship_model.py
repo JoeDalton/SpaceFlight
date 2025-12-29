@@ -10,15 +10,25 @@ class ShipModel:
         self.ship_name = ship_name
         
         if self.ship_name == "a-wing":
-            self.model = self.app.loader.load_model("models/ships/a-wing/cockpit/scene.gltf")
-            self.offset = np.array([0.0, 0.8, -0.2])
-            # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
-            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
+            if is_cockpit:
+                self.model = self.app.loader.load_model("models/ships/a-wing/cockpit/scene.gltf")
+                self.offset = np.array([0.0, 0.8, -0.2])
+                # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
+                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
+            else:
+                raise NotImplementedError
         elif self.ship_name == "tie-fighter":
-            self.model = self.app.loader.load_model("models/ships/tie-fighter/cockpit/scene.gltf")
-            self.offset = np.array([0.0, 0.9, -0.2])
-            # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
-            self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
+            if is_cockpit:
+                self.model = self.app.loader.load_model("models/ships/tie-fighter/cockpit/scene.gltf")
+                self.offset = np.array([0.0, 0.9, -0.2])
+                # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
+                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
+            else:
+                self.model = self.app.loader.load_model("models/star_wars_tie_interceptor/scene.gltf")
+                self.offset = np.array([0.0, 0.0, 0.0])
+                # self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(0.0, 1.0, 0.0, 0.0) # Windows ?
+                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
+            
         else:
             raise NotImplementedError(ship_name)
         
