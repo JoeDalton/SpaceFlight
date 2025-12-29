@@ -16,6 +16,7 @@ class InputSystem:
         self.app = app
         self.player = player
         self.view_offset = np.zeros(2)
+        self.app.disableMouse()
 
     def action(self, button):
         # Just show which button has been pressed.
@@ -197,8 +198,6 @@ class Joystick(InputSystem):
         self.app.accept("stick-button18-repeat", self.view_up)
         self.app.accept("stick-button17-repeat", self.view_right)
         self.app.accept("stick-button16-repeat", self.view_left)
-
-        self.app.disableMouse()
 
     def connect(self, device):
         """Event handler that is called when a device is discovered."""
