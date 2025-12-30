@@ -53,7 +53,7 @@ class HUD:
             f"Player Speed = {np.linalg.norm(self.app.player.ship.state[7:10]):.1f}m/s\n"
             # f"Player Rot. rate = {np.rad2deg(self.app.player.ship.pqr)}\n"
             # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
-            f"Time = {globalClock.getFrameTime()}\n"
+            f"Time = {globalClock.getFrameTime():.0f}\n"
             f"Bot mode = {self.app.bot.mode}\n"
             f"Bot angle to target = {self.app.bot.autopilot.angle_to_target_deg:.1f}°\n"
             # f"Bot target_x = {self.app.bot.autopilot.target_x}\n"
@@ -122,6 +122,19 @@ class TargetHUD:
         )
 
         app.taskMgr.add(self.target_hud_update_task, "target_hud_update_task")
+
+        # Make sure the targeting HUD is rendered above other UI things
+        self.square.setDepthTest(False)
+        self.square.setDepthWrite(False)
+        self.square.setBin("fixed", 10)
+
+        self.distance_label.setDepthTest(False)
+        self.distance_label.setDepthWrite(False)
+        self.distance_label.setBin("fixed", 10)
+
+        self.name_label.setDepthTest(False)
+        self.name_label.setDepthWrite(False)
+        self.name_label.setBin("fixed", 10)
 
     def set_target(self, target, target_name:str=""):
         self.target = target
