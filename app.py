@@ -115,7 +115,7 @@ class MyApp(ShowBase):
         Add target HUD
         """
         target_hud = TargetHUD(app=self)
-        target_hud.set_target(target = self.bot.ship)
+        target_hud.set_target(target=self.bot.ship, target_name=self.bot.name)
 
         """
         Initialize all tasks in the correct order

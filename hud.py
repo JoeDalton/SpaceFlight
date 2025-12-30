@@ -5,8 +5,8 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import TextNode, Vec3, Point2, Point3, NodePath, CardMaker, TransparencyAttrib
 from direct.gui.DirectGui import DirectFrame, DirectLabel
 
-EDGE_DEFAULT = 0.94
-EDGE_LOW = 0.88
+EDGE_HORIZONTAL = 0.94
+EDGE_VERTICAL = 0.88
 class HUD:
     """
     Creates an overlay of text displaying important
@@ -103,7 +103,7 @@ class TargetHUD:
         self.square.reparentTo(self.aspect)
 
         # Define distance label
-        self.label = DirectLabel(
+        self.distance_label = DirectLabel(
             text="",
             scale=0.04,
             pos=(0, 0, -0.06),
@@ -111,11 +111,21 @@ class TargetHUD:
             frameColor=(0, 0, 0, 0),
             text_fg=(1, 1, 1, 1)
         )
+        # Define name label
+        self.name_label = DirectLabel(
+            text="",
+            scale=0.02,
+            pos=(0, 0, 0.04),
+            parent=self.aspect,
+            frameColor=(0, 0, 0, 0),
+            text_fg=(1, 1, 1, 1)
+        )
 
         app.taskMgr.add(self.target_hud_update_task, "target_hud_update_task")
 
-    def set_target(self, target):
+    def set_target(self, target, target_name:str=""):
         self.target = target
+        self.name_label["text"] = target_name
 
     def target_hud_update_task(self, task):
         cam = self.app.cam
@@ -146,20 +156,20 @@ class TargetHUD:
                 indic_x *= two_norm_inv
                 indic_z *= two_norm_inv
             else:
-                indic_x = EDGE_DEFAULT
+                indic_x = EDGE_HORIZONTAL
                 indic_z = 0.0         
             # TODO: This does not work as I want it. the indicator changes edges 3 times
             # in one loop, when it should change only once.
             # To be investigated, although it's not absolutely critical
 
         # Clamp to edges of screen
-        indic_x = max(min(indic_x, EDGE_DEFAULT), -EDGE_DEFAULT)
-        indic_z = max(min(indic_z, EDGE_DEFAULT), -EDGE_LOW)
+        indic_x = max(min(indic_x, EDGE_HORIZONTAL), -EDGE_HORIZONTAL)
+        indic_z = max(min(indic_z, EDGE_VERTICAL), -EDGE_VERTICAL)
 
         self.root.setPos(indic_x, 0, indic_z)
 
         # Find distance and write it below the box
         distance = (world_pos - self.app.camera.getPos(self.app.render)).length()
-        self.label["text"] = f"{int(distance)} m"
+        self.distance_label["text"] = f"{int(distance/10)*10} m"
 
         return task.cont
