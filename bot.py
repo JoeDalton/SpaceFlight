@@ -16,15 +16,17 @@ class Bot:
     def __init__(
             self,
             app: ShowBase,
-            ship_name: str, 
+            name: str,
+            ship_type: str,
             ini_position: np.ndarray = np.zeros(3),
             ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ):
         self.app = app
-        self.name = ship_name
-        self.ship = Ship(app=self.app, ship_name=ship_name, ini_position=ini_position, ini_orientation=ini_orientation)
-        self.model = ShipModel(app=self.app, ship_name=ship_name, is_cockpit=False)
+        self.name = name
+        self.ship = Ship(app=self.app, ship_type=ship_type, ini_position=ini_position, ini_orientation=ini_orientation)
+        self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=False)
         self.autopilot = AutoPilot(ship = self.ship)
+        self.app.available_targets.append({self.ship: self.name})
 
         # Anchor elements to self.ship.node
         self.model.anchor_model(self.ship.node)

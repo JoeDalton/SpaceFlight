@@ -27,7 +27,7 @@ class Ship:
     def __init__(
             self, 
             app: ShowBase, 
-            ship_name: str, 
+            ship_type: str, 
             ini_position: np.ndarray = np.zeros(3),
             ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
             lift_model: bool=False
@@ -35,7 +35,7 @@ class Ship:
         self.app = app
 
         # Load configuration
-        filepath = f"models/ships/{ship_name}/configuration.yaml"
+        filepath = f"models/ships/{ship_type}/configuration.yaml"
         with open(filepath, "r") as f:
             self.conf = yaml.safe_load(f)
         self.mass_kg = self.conf["mass_kg"]
@@ -51,6 +51,8 @@ class Ship:
         self.node.reparentTo(self.app.render)
 
         # Setup state vector
+        self.position = ini_position.copy()
+        self.orientation = ini_orientation.copy()
         self.state = np.zeros(10) # position (3), orientation (4), speed (3)
         self.state[:3] = ini_position
         self.state[3:7] = ini_orientation

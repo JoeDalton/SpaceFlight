@@ -85,44 +85,49 @@ class MyApp(ShowBase):
         """
         Initialize player and ship        
         """
-        self.player = Player(self, ship_name="a-wing", ini_position=np.array([0, -300, 0]))
+        self.available_targets = [{None: ""}]
+        self.player = Player(self, ship_type="a-wing", ini_position=np.array([0, -300, 0]))
         # self.player = Player(self, ship_name="tie-fighter")
 
         """
-        Initialize dummy bot
+        Initialize dummy bots
         """
-        self.bot = Bot(app=self, ship_name="tie-fighter", ini_position=np.array([0, 0, 0]))
-        self.bot.set_mode("idle")
-        # wp_distance = 60
-        # bot_waypoints = [
-        #     np.array([0, wp_distance, 0]),
-        #     np.array([0, wp_distance, wp_distance]),
-        #     np.array([0, 0, wp_distance]),
-        #     np.array([wp_distance, 0, wp_distance]),
-        #     np.array([wp_distance, 0, 0]),
-        # ]
-        # self.bot.initialize_waypoints(waypoints=bot_waypoints)
+        self.bot1 = Bot(app=self, name="tie_1", ship_type="tie-fighter", ini_position=np.array([0, 0, -20]))
+        self.bot1.set_mode("idle")
+        
+        self.bot2 = Bot(app=self, name="tie_2", ship_type="tie-fighter", ini_position=np.array([0, 0, 0]))
+        self.bot2.set_mode("loop")
+        wp_distance = 60
+        bot_waypoints = [
+            np.array([0, wp_distance, 0]),
+            np.array([0, wp_distance, wp_distance]),
+            np.array([0, 0, wp_distance]),
+            np.array([wp_distance, 0, wp_distance]),
+            np.array([wp_distance, 0, 0]),
+        ]
+        self.bot2.initialize_waypoints(waypoints=bot_waypoints)
         """
         Debug options
         """
         # self.oobe()
         # self.toggle_wireframe()
-        self.hud = HUD(self)
+        HUD(self)
         # trihedron = Trihedron(app = self, parent=self.player.ship.node, scale = 1)
-        trihedron = Trihedron(app = self, parent=self.bot.ship.node, scale = 1)
+        Trihedron(app = self, parent=self.bot1.ship.node, scale = 1)
+        Trihedron(app = self, parent=self.bot2.ship.node, scale = 1)
 
         """
         Add target HUD
         """
-        target_hud = TargetHUD(app=self)
-        target_hud.set_target(target=self.bot.ship, target_name=self.bot.name)
+        TargetHUD(app=self)
 
         """
         Initialize all tasks in the correct order
         """
         self.integrator.initialize_tasks() # Must come before all physics
         self.player.initialize_move()
-        self.bot.initialize_move()
+        self.bot1.initialize_move()
+        self.bot2.initialize_move()
         self.rotating_asteroid_field.initialize_move()
         self.big_rotating_asteroid_field.initialize_move()
 

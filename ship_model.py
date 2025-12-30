@@ -5,11 +5,11 @@ from panda3d.core import Quat, NodePath
 
 
 class ShipModel:
-    def __init__(self, app: ShowBase, ship_name: str="a-wing", is_cockpit=True):
+    def __init__(self, app: ShowBase, ship_type: str="a-wing", is_cockpit=True):
         self.app = app
-        self.ship_name = ship_name
+        self.ship_type = ship_type
         
-        if self.ship_name == "a-wing":
+        if self.ship_type == "a-wing":
             if is_cockpit:
                 self.model = self.app.loader.load_model("models/ships/a-wing/cockpit/scene.gltf")
                 self.offset = np.array([0.0, 0.8, -0.2])
@@ -17,7 +17,7 @@ class ShipModel:
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
             else:
                 raise NotImplementedError
-        elif self.ship_name == "tie-fighter":
+        elif self.ship_type == "tie-fighter":
             if is_cockpit:
                 self.model = self.app.loader.load_model("models/ships/tie-fighter/cockpit/scene.gltf")
                 self.offset = np.array([0.0, 0.9, -0.2])
@@ -30,7 +30,7 @@ class ShipModel:
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(np.sqrt(2)/2, -np.sqrt(2)/2, 0.0, 0.0) # Linux ?
             
         else:
-            raise NotImplementedError(ship_name)
+            raise NotImplementedError(ship_type)
         
     def anchor_model(self, node: NodePath):
         """

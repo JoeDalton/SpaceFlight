@@ -16,14 +16,14 @@ class Player:
     def __init__(
             self,
             app: ShowBase,
-            ship_name: str, 
+            ship_type: str, 
             ini_position: np.ndarray = np.zeros(3),
             ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ):
         self.app = app
-        self.name = ship_name
-        self.ship = Ship(app=self.app, ship_name=ship_name, ini_position=ini_position, ini_orientation=ini_orientation)
-        self.model = ShipModel(app=self.app, ship_name=ship_name, is_cockpit=True)
+        self.name = "player"
+        self.ship = Ship(app=self.app, ship_type=ship_type, ini_position=ini_position, ini_orientation=ini_orientation)
+        self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=True)
         self.input_system = input_system_factory(app=self.app, player=self)
         self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)
 

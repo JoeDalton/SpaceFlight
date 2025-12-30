@@ -54,8 +54,8 @@ class HUD:
             # f"Player Rot. rate = {np.rad2deg(self.app.player.ship.pqr)}\n"
             # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
             f"Time = {globalClock.getFrameTime():.0f}\n"
-            f"Bot mode = {self.app.bot.mode}\n"
-            f"Bot angle to target = {self.app.bot.autopilot.angle_to_target_deg:.1f}°\n"
+            f"Bot mode = {self.app.bot2.mode}\n"
+            f"Bot angle to target = {self.app.bot2.autopilot.angle_to_target_deg:.1f}°\n"
             # f"Bot target_x = {self.app.bot.autopilot.target_x}\n"
             # f"Bot target_y = {self.app.bot.autopilot.target_y}\n"
             # f"Bot target_z = {self.app.bot.autopilot.target_z}\n"
@@ -68,13 +68,12 @@ class HUD:
             # f"yaw_rate = {self.app.bot.autopilot.yaw_rate}\n"
             # f"pitch_rate = {self.app.bot.autopilot.pitch_rate}\n"
             # f"roll_rate = {self.app.bot.autopilot.roll_rate}\n"
-            f"Bot throttle = {self.app.bot.autopilot.throttle:.4f}\n"
+            f"Bot throttle = {self.app.bot2.autopilot.throttle:.4f}\n"
             #f"Next waypoint idx = {self.app.bot.next_waypoint_idx}\n"
-            f"Bot Speed = {np.linalg.norm(self.app.bot.ship.state[7:10]):.1f}m/s\n"
+            f"Bot Speed = {np.linalg.norm(self.app.bot2.ship.state[7:10]):.1f}m/s\n"
             #f"Distance to waypoint = {self.app.bot.distance_to_waypoint:.1f}m\n"
             #f"Next waypoint = {self.app.bot.waypoints[min(len(self.app.bot.waypoints)-1, self.app.bot.next_waypoint_idx)]}\n"
             # f"Bot position = {self.app.bot.ship.state[:3]}\n"
-
         )
 
         self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
@@ -85,6 +84,8 @@ class TargetHUD:
     def __init__(self, app: ShowBase):
 
         self.app = app
+        self.target_idx = 0
+        self.target = None
 
         # Prepare target indicator atachment and aspect ratio correction
         self.root = NodePath("targetHudRoot")
@@ -136,53 +137,69 @@ class TargetHUD:
         self.name_label.setDepthWrite(False)
         self.name_label.setBin("fixed", 10)
 
+        self.app.accept(self.app.key_bindings["switch_target"], self.switch_target)
+
+    def target_hud_update_task(self, task):
+        if self.target is None:
+            self.distance_label.hide()
+            self.name_label.hide()
+            self.square.hide()
+        else:
+            self.distance_label.show()
+            self.name_label.show()
+            self.square.show()
+
+            cam = self.app.cam
+            lens = self.app.camLens
+
+            aspect = self.app.getAspectRatio()
+            self.aspect.setScale(1, 1, aspect)
+
+            # World position of target
+            target_pos = self.target.state[:3]
+            world_pos = Point3(*target_pos)
+
+            # Convert to camera space
+            cam_space_pos = cam.getRelativePoint(self.app.render, world_pos)
+            screen_pos = Point2()
+            lens.project(cam_space_pos, screen_pos)
+
+            # Default case: target is ahead, just take the projection
+            indic_x = screen_pos.x
+            indic_z = screen_pos.y
+            if cam_space_pos.y <= 0:
+                # Target is behind, so the projection could fall inside the screen,
+                # but we want the indicator to stay clamped to the edges of the screen
+                norm = np.sqrt(indic_x**2 + indic_z**2)
+                if norm > 1e-5:
+                    two_norm_inv = 2 / norm
+                    indic_x *= two_norm_inv
+                    indic_z *= two_norm_inv
+                else:
+                    indic_x = EDGE_HORIZONTAL
+                    indic_z = 0.0
+                # TODO: This does not work as I want it. the indicator changes edges 3 times
+                # in one loop, when it should change only once.
+                # To be investigated, although it's not absolutely critical
+
+            # Clamp to edges of screen
+            indic_x = max(min(indic_x, EDGE_HORIZONTAL), -EDGE_HORIZONTAL)
+            indic_z = max(min(indic_z, EDGE_VERTICAL), -EDGE_VERTICAL)
+
+            self.root.setPos(indic_x, 0, indic_z)
+
+            # Find distance and write it below the box
+            distance = (world_pos - self.app.camera.getPos(self.app.render)).length()
+            self.distance_label["text"] = f"{int(distance/10)*10} m"
+
+        return task.cont
+    
+    def switch_target(self):
+        self.target_idx = (self.target_idx+1)%len(self.app.available_targets)
+        target_dict = self.app.available_targets[self.target_idx]
+        target, target_name = list(target_dict.items())[0]
+        self.set_target(target=target, target_name=target_name)
+
     def set_target(self, target, target_name:str=""):
         self.target = target
         self.name_label["text"] = target_name
-
-    def target_hud_update_task(self, task):
-        cam = self.app.cam
-        lens = self.app.camLens
-
-        aspect = self.app.getAspectRatio()
-        self.aspect.setScale(1, 1, aspect)
-
-        # World position of target
-        target_pos = self.target.state[:3]
-        world_pos = Point3(*target_pos)
-
-        # Convert to camera space
-        cam_space_pos = cam.getRelativePoint(self.app.render, world_pos)
-        screen_pos = Point2()
-        lens.project(cam_space_pos, screen_pos)
-
-        
-        # Default case: target is ahead, just take the projection
-        indic_x = screen_pos.x
-        indic_z = screen_pos.y
-        if cam_space_pos.y <= 0:
-            # Target is behind, so the projection could fall inside the screen,
-            # but we want the indicator to stay clamped to the edges of the screen
-            norm = np.sqrt(indic_x**2 + indic_z**2)
-            if norm > 1e-5:
-                two_norm_inv = 2 / norm
-                indic_x *= two_norm_inv
-                indic_z *= two_norm_inv
-            else:
-                indic_x = EDGE_HORIZONTAL
-                indic_z = 0.0         
-            # TODO: This does not work as I want it. the indicator changes edges 3 times
-            # in one loop, when it should change only once.
-            # To be investigated, although it's not absolutely critical
-
-        # Clamp to edges of screen
-        indic_x = max(min(indic_x, EDGE_HORIZONTAL), -EDGE_HORIZONTAL)
-        indic_z = max(min(indic_z, EDGE_VERTICAL), -EDGE_VERTICAL)
-
-        self.root.setPos(indic_x, 0, indic_z)
-
-        # Find distance and write it below the box
-        distance = (world_pos - self.app.camera.getPos(self.app.render)).length()
-        self.distance_label["text"] = f"{int(distance/10)*10} m"
-
-        return task.cont
