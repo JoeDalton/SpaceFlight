@@ -85,7 +85,7 @@ class MyApp(ShowBase):
         """
         Initialize player and ship        
         """
-        self.player = Player(self, ship_name="a-wing", ini_position=np.array([0, -300, 0]), input_system="keyboard")
+        self.player = Player(self, ship_name="a-wing", ini_position=np.array([0, -300, 0]))
         # self.player = Player(self, ship_name="tie-fighter")
 
         """

@@ -8,8 +8,24 @@ from direct.showbase.ShowBaseGlobal import globalClock
 
 from utils import low_pass_filter_first_order
 
+import yaml
+
 STICK_DEAD_ZONE = 0.15
 THROTTLE_DEAD_ZONE = 0.04
+
+def input_system_factory(app: ShowBase, player):
+    filepath = f"key_bindings.yaml"
+    with open(filepath, "r") as f:
+        app.key_bindings = yaml.safe_load(f)
+
+    input_type = app.key_bindings["input_type"]
+    if input_type =="joystick":
+        return Joystick(app=app, player=player)
+    elif input_type =="keyboard":
+        return Keyboard(app=app, player=player)
+    else:
+        raise NotImplementedError
+
 
 class InputSystem:
     def __init__(self, app: ShowBase, player):
@@ -74,9 +90,9 @@ class Keyboard(InputSystem):
     def __init__(self, app: ShowBase, player):
         super().__init__(app=app, player=player)
 
-        # Accept trigger event to fire lasers
-        self.app.accept("space", self.player.ship.laser_cannon.fire)
-        self.app.accept("space-repeat", self.player.ship.laser_cannon.fire)
+        
+        # Game UI
+        self.app.accept("escape", exit)
 
         self.throttle = 0.0
         self.yaw_rate = 0.0
@@ -86,24 +102,29 @@ class Keyboard(InputSystem):
         self.pitch_rate_smoothed = 0.0
         self.roll_rate_smoothed = 0.0
 
-        self.app.accept("z", self.count_pitch_down, [0.05])
-        self.app.accept("s", self.count_pitch_up, [0.05])
-        self.app.accept("e", self.count_yaw_down, [0.05])
-        self.app.accept("a", self.count_yaw_up, [0.05])
-        self.app.accept("q", self.count_roll_down, [0.05])
-        self.app.accept("d", self.count_roll_up, [0.05])
-        self.app.accept("arrow_down", self.count_throttle_down)
-        self.app.accept("arrow_up", self.count_throttle_up)
+        # Flight controls
+        self.app.accept(self.app.key_bindings["pitch_down"], self.count_pitch_down, [0.05])
+        self.app.accept(self.app.key_bindings["pitch_up"], self.count_pitch_up, [0.05])
+        self.app.accept(self.app.key_bindings["yaw_right"], self.count_yaw_down, [0.05])
+        self.app.accept(self.app.key_bindings["yaw_left"], self.count_yaw_up, [0.05])
+        self.app.accept(self.app.key_bindings["roll_left"], self.count_roll_down, [0.05])
+        self.app.accept(self.app.key_bindings["roll_right"], self.count_roll_up, [0.05])
+        self.app.accept(self.app.key_bindings["throttle_down"], self.count_throttle_down)
+        self.app.accept(self.app.key_bindings["throttle_up"], self.count_throttle_up)
 
-        self.app.accept("z-repeat", self.count_pitch_down, [0.3])
-        self.app.accept("s-repeat", self.count_pitch_up, [0.3])
-        self.app.accept("e-repeat", self.count_yaw_down, [0.3])
-        self.app.accept("a-repeat", self.count_yaw_up, [0.3])
-        self.app.accept("q-repeat", self.count_roll_down, [0.3])
-        self.app.accept("d-repeat", self.count_roll_up, [0.3])
-        self.app.accept("arrow_down-repeat", self.count_throttle_down)
-        self.app.accept("arrow_up-repeat", self.count_throttle_up)
+        self.app.accept(f"{self.app.key_bindings["pitch_down"]}-repeat", self.count_pitch_down, [0.3])
+        self.app.accept(f"{self.app.key_bindings["pitch_up"]}-repeat", self.count_pitch_up, [0.3])
+        self.app.accept(f"{self.app.key_bindings["yaw_right"]}-repeat", self.count_yaw_down, [0.3])
+        self.app.accept(f"{self.app.key_bindings["yaw_left"]}-repeat", self.count_yaw_up, [0.3])
+        self.app.accept(f"{self.app.key_bindings["roll_left"]}-repeat", self.count_roll_down, [0.3])
+        self.app.accept(f"{self.app.key_bindings["roll_right"]}-repeat", self.count_roll_up, [0.3])
+        self.app.accept(f"{self.app.key_bindings["throttle_down"]}-repeat", self.count_throttle_down)
+        self.app.accept(f"{self.app.key_bindings["throttle_up"]}-repeat", self.count_throttle_up)
 
+        # Fire lasers
+        self.app.accept(self.app.key_bindings["fire_primary"], self.player.ship.laser_cannon.fire)
+        self.app.accept(f"{self.app.key_bindings["fire_primary"]}-repeat", self.player.ship.laser_cannon.fire)
+        
     def count_pitch_down(self, value: float):
         self.pitch_rate -= value
     def count_pitch_up(self, value: float):
@@ -181,7 +202,6 @@ class Joystick(InputSystem):
         self.app.accept("connect-device", self.connect)
         self.app.accept("disconnect-device", self.disconnect)
 
-        self.app.accept("escape", exit)
         self.app.accept("stick-start", exit)
 
         # Accept trigger event to fire lasers
