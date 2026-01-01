@@ -15,6 +15,7 @@ from skybox import Skybox
 from trihedron import Trihedron
 from lighting import Lighting
 from bot import Bot
+from dust_clouds import SpeedDust
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -86,8 +87,8 @@ class MyApp(ShowBase):
         Initialize player and ship        
         """
         self.available_targets = [{None: ""}]
-        self.player = Player(self, ship_type="a-wing", ini_position=np.array([0, -300, 0]))
-        # self.player = Player(self, ship_name="tie-fighter")
+        # self.player = Player(self, ship_type="a-wing", ini_position=np.array([0, -300, 0]))
+        self.player = Player(self, ship_type="tie-fighter")
 
         """
         Initialize dummy bots
@@ -97,7 +98,7 @@ class MyApp(ShowBase):
         
         self.bot2 = Bot(app=self, name="tie_2", ship_type="tie-fighter", ini_position=np.array([0, 0, 0]))
         self.bot2.set_mode("loop")
-        wp_distance = 60
+        wp_distance = 100
         bot_waypoints = [
             np.array([0, wp_distance, 0]),
             np.array([0, wp_distance, wp_distance]),
@@ -115,6 +116,11 @@ class MyApp(ShowBase):
         # trihedron = Trihedron(app = self, parent=self.player.ship.node, scale = 1)
         Trihedron(app = self, parent=self.bot1.ship.node, scale = 1)
         Trihedron(app = self, parent=self.bot2.ship.node, scale = 1)
+
+        """
+        Speed dust
+        """
+        SpeedDust(app=self, colors=["orange", "pink", "yellow", "white"])
 
         """
         Add target HUD

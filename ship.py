@@ -27,9 +27,10 @@ class Ship:
     def __init__(
             self, 
             app: ShowBase, 
-            ship_type: str, 
+            ship_type: str,
             ini_position: np.ndarray = np.zeros(3),
             ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
+            ini_speed: np.ndarray = np.zeros(3),
             lift_model: bool=False
     ):
         self.app = app
@@ -53,6 +54,7 @@ class Ship:
         # Setup state vector
         self.position = ini_position.copy()
         self.orientation = ini_orientation.copy()
+        self.speed = ini_speed.copy()
         self.state = np.zeros(10) # position (3), orientation (4), speed (3)
         self.state[:3] = ini_position
         self.state[3:7] = ini_orientation
