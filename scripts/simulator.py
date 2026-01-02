@@ -8,12 +8,12 @@ from panda3d.core import (  # AntialiasAttrib,; load_prc_file_data,
 
 from space_flight.bot import Bot
 from space_flight.dust_clouds import SpeedDust
-from space_flight.ui.hud import HUD, TargetHUD
 from space_flight.integrator import Integrator
 from space_flight.lighting import Lighting
 from space_flight.player import Player
-from space_flight.trihedron import Trihedron
 from space_flight.scenes.scenes import scene_factory
+from space_flight.trihedron import Trihedron
+from space_flight.ui.hud import HUD, TargetHUD
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -67,13 +67,12 @@ class MyApp(ShowBase):
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 
-
         """
         Initialize player and ship
         """
         self.available_targets = [{None: ""}]
         self.player = Player(
-        self, ship_type="a-wing", ini_position=np.array([0, -300, 0])
+            self, ship_type="a-wing", ini_position=np.array([0, -300, 0])
         )
         # self.player = Player(self, ship_type="tie-fighter")
 
@@ -104,7 +103,7 @@ class MyApp(ShowBase):
             np.array([wp_distance, 0, 0]),
         ]
         self.bot2.initialize_waypoints(waypoints=bot_waypoints)
-        
+
         """
         Debug options
         """

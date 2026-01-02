@@ -1,32 +1,35 @@
 from direct.showbase.ShowBase import ShowBase
 
-
 from space_flight import DATAFILES_PATH
 from space_flight.scenes.asteroid_field import AsteroidField
-from space_flight.scenes.skybox import Skybox
 from space_flight.scenes.planet_2d import Planet2D
+from space_flight.scenes.skybox import Skybox
 
 # TODO migrate lighting in here !
 
-def scene_factory(app: ShowBase, scene_name:str):
+
+def scene_factory(app: ShowBase, scene_name: str):
     if scene_name == "asteroids":
         return SceneAsteroids(app=app)
     elif scene_name == "lava_planet":
         return SceneLavaPlanet(app=app)
 
+
 class Scene:
     def __init__(
-            self,
-            app: ShowBase,
+        self,
+        app: ShowBase,
     ):
         self.app = app
 
     def inititalize_move(self):
         pass
+
+
 class SceneAsteroids(Scene):
     def __init__(
-            self,
-            app: ShowBase,
+        self,
+        app: ShowBase,
     ):
         super().__init__(app=app)
 
@@ -38,7 +41,11 @@ class SceneAsteroids(Scene):
             app=self.app, n_asteroids=2000, field_size=15000, is_moving=False
         )
         self.big_rotating_asteroid_field = AsteroidField(
-            app=self.app, n_asteroids=20, scale_factor=10, field_size=15000, is_moving=True
+            app=self.app,
+            n_asteroids=20,
+            scale_factor=10,
+            field_size=15000,
+            is_moving=True,
         )
         self.rotating_asteroid_field = AsteroidField(
             app=self.app, n_asteroids=500, field_size=15000, is_moving=True
@@ -83,8 +90,8 @@ class SceneAsteroids(Scene):
 
 class SceneLavaPlanet(Scene):
     def __init__(
-            self,
-            app: ShowBase,
+        self,
+        app: ShowBase,
     ):
         super().__init__(app=app)
 
@@ -93,7 +100,11 @@ class SceneLavaPlanet(Scene):
             app=self.app, n_asteroids=500, field_size=15000, is_moving=False
         )
         self.big_rotating_asteroid_field = AsteroidField(
-            app=self.app, n_asteroids=3, scale_factor=10, field_size=15000, is_moving=True
+            app=self.app,
+            n_asteroids=3,
+            scale_factor=10,
+            field_size=15000,
+            is_moving=True,
         )
         self.rotating_asteroid_field = AsteroidField(
             app=self.app, n_asteroids=100, field_size=15000, is_moving=True
