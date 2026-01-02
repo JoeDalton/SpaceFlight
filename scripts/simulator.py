@@ -100,10 +100,10 @@ class MyApp(ShowBase):
         Initialize player and ship
         """
         self.available_targets = [{None: ""}]
-        # self.player = Player(
-        # self, ship_type="a-wing", ini_position=np.array([0, -300, 0])
-        # )
-        self.player = Player(self, ship_type="tie-fighter")
+        self.player = Player(
+        self, ship_type="a-wing", ini_position=np.array([0, -300, 0])
+        )
+        # self.player = Player(self, ship_type="tie-fighter")
 
         """
         Initialize dummy bots

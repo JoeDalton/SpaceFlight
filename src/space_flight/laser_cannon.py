@@ -132,7 +132,7 @@ class LaserCannon:
             if sound.status() != AudioSound.PLAYING:
                 # Randomize the pitch of the sound to get a more realistic feeling
                 sound.setPlayRate(random.uniform(0.9, 1.1))
-                # Attach sound the cannon currently firing
+                # Attach sound to the cannon currently firing
                 self.app.audio3d.attachSoundToObject(
                     sound, self.cannon_nodes[self.current_next_cannon_idx]
                 )

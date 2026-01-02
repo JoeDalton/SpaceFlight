@@ -1,6 +1,6 @@
 from direct.showbase.DirectObject import DirectObject
 from direct.showbase.ShowBase import ShowBase
-from pandac.PandaModules import TexGenAttrib, TextureStage
+from panda3d.core import TexGenAttrib, TextureStage
 
 """
 Create skyboxes with Spacescape
@@ -9,7 +9,7 @@ Rename files from right1-back6 to 0-5, then invert files 2 and 3 (top and bottom
 
 """
 
-skybox_name = "purple"
+skybox_name = "test"
 
 
 class SkySphere(DirectObject):
@@ -44,5 +44,5 @@ class SkySphere(DirectObject):
 
 
 base = ShowBase()
-SS = SkySphere()
+my_sky_sphere = SkySphere(base=base)
 base.run()
