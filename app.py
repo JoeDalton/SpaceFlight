@@ -1,7 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import load_prc_file_data
 
-from panda3d.core import CollisionTraverser, CollisionHandlerEvent
+from panda3d.core import CollisionTraverser, CollisionHandlerEvent, AntialiasAttrib
 
 from direct.showbase import Audio3DManager
 
@@ -141,6 +141,10 @@ class MyApp(ShowBase):
         Launch music
         """
         # music.play()
+
+        
+        # self.render.setShaderAuto()
+        # self.render.setAntialias(AntialiasAttrib.MAuto)
 
     def collision_task(self, task):
         self.traverser.traverse(self.render)
