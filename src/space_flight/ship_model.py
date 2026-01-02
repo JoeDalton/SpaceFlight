@@ -4,7 +4,6 @@ from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH
 
-
 class ShipModel:
     def __init__(self, app: ShowBase, ship_type: str = "a-wing", is_cockpit=True):
         self.app = app
@@ -18,7 +17,7 @@ class ShipModel:
                 self.offset = np.array([0.0, 0.8, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )  # Linux ?
+                )
             else:
                 raise NotImplementedError
         elif self.ship_type == "tie-fighter":
@@ -29,7 +28,7 @@ class ShipModel:
                 self.offset = np.array([0.0, 0.9, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )  # Linux ?
+                )
             else:
                 self.model = self.app.loader.load_model(
                     DATAFILES_PATH / "models/star_wars_tie_interceptor/scene.gltf"
@@ -37,7 +36,7 @@ class ShipModel:
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )  # Linux ?
+                )
 
         else:
             raise NotImplementedError(ship_type)

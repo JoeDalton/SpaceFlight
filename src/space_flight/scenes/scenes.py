@@ -1,11 +1,11 @@
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH
+from space_flight.dust_clouds import SpeedDust
+from space_flight.lighting import Lighting
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.planet_2d import Planet2D
 from space_flight.scenes.skybox import Skybox
-
-# TODO migrate lighting in here !
 
 
 def scene_factory(app: ShowBase, scene_name: str):
@@ -35,6 +35,12 @@ class SceneAsteroids(Scene):
 
         # Skybox
         self.skybox = Skybox(app=self.app)
+
+        # Lights
+        self.lighting = Lighting(app=self.app)
+
+        # Speed dust effect
+        SpeedDust(app=self.app, colors=["blue", "green", "pink", "white"])
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
@@ -94,6 +100,16 @@ class SceneLavaPlanet(Scene):
         app: ShowBase,
     ):
         super().__init__(app=app)
+
+        # Lights
+        self.lighting = Lighting(
+            app=self.app,
+            directional_direction=[0,0,0],
+            ambient_color=[0.4, 0.2, 0.1, 1],
+        )
+
+        # Speed dust effect
+        SpeedDust(app=self.app, colors=["orange", "pink", "yellow", "white"])
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(

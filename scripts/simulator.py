@@ -7,9 +7,7 @@ from panda3d.core import (  # AntialiasAttrib,; load_prc_file_data,
 )
 
 from space_flight.bot import Bot
-from space_flight.dust_clouds import SpeedDust
 from space_flight.integrator import Integrator
-from space_flight.lighting import Lighting
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
 from space_flight.trihedron import Trihedron
@@ -26,6 +24,8 @@ from space_flight.ui.hud import HUD, TargetHUD
 
 # load_prc_file_data("", "notify-level-loader debug")
 
+
+# TODO: Fix jittering by keeping player at (0,0,0) and moving everything around instead.
 
 class MyApp(ShowBase):
     def __init__(self):
@@ -60,9 +60,9 @@ class MyApp(ShowBase):
 
         """
         Build scene
+        `asteroids` or `lava_planet`
         """
         self.set_background_color(0, 0, 0)
-        self.lighting = Lighting(self)
         self.scene = scene_factory(app=self, scene_name="lava_planet")
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
@@ -109,11 +109,6 @@ class MyApp(ShowBase):
         """
         Trihedron(app=self, parent=self.bot1.ship.node, scale=1)
         Trihedron(app=self, parent=self.bot2.ship.node, scale=1)
-
-        """
-        Speed dust effect
-        """
-        SpeedDust(app=self, colors=["orange", "pink", "yellow", "white"])
 
         """
         HUD
