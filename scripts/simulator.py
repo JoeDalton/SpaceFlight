@@ -6,16 +6,14 @@ from panda3d.core import (  # AntialiasAttrib,; load_prc_file_data,
     CollisionTraverser,
 )
 
-from space_flight import DATAFILES_PATH
-from space_flight.asteroid_field import AsteroidField
 from space_flight.bot import Bot
 from space_flight.dust_clouds import SpeedDust
-from space_flight.hud import HUD, TargetHUD
+from space_flight.ui.hud import HUD, TargetHUD
 from space_flight.integrator import Integrator
 from space_flight.lighting import Lighting
 from space_flight.player import Player
-from space_flight.skybox import Skybox
 from space_flight.trihedron import Trihedron
+from space_flight.scenes.scenes import SceneAsteroids
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -65,36 +63,10 @@ class MyApp(ShowBase):
         """
         self.set_background_color(0, 0, 0)
         self.lighting = Lighting(self)
+        self.scene = SceneAsteroids(app=self)
+        # self.oobe()  # DEBUG
+        # self.toggle_wireframe()  # DEBUG
 
-        # self.skybox = Skybox(self, name="test")
-        self.skybox = Skybox(self)
-
-        # Asteroid field
-        self.static_asteroid_field = AsteroidField(
-            self, n_asteroids=2000, field_size=15000, is_moving=False
-        )
-        self.big_rotating_asteroid_field = AsteroidField(
-            self, n_asteroids=20, scale_factor=10, field_size=15000, is_moving=True
-        )
-        self.rotating_asteroid_field = AsteroidField(
-            self, n_asteroids=500, field_size=15000
-        )
-
-        # Drydock
-        self.drydock = self.loader.load_model(
-            DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
-        )
-        self.drydock.reparent_to(self.render)
-        self.drydock.set_pos(0, 8000, 50)
-        self.drydock.set_scale(100, 100, 100)
-
-        # # test asset
-        # self.test_asset = self.loader.load_model(
-        # DATAFILES_PATH / "models/venator-class_star_destroyer/scene.gltf"
-        # )
-        # self.test_asset.reparent_to(self.render)
-        # self.test_asset.set_pos(0, 1000, 50)
-        # self.test_asset.set_scale(1000, 1000, 1000)
 
         """
         Initialize player and ship
@@ -132,24 +104,22 @@ class MyApp(ShowBase):
             np.array([wp_distance, 0, 0]),
         ]
         self.bot2.initialize_waypoints(waypoints=bot_waypoints)
+        
         """
         Debug options
         """
-        # self.oobe()
-        # self.toggle_wireframe()
-        HUD(self)
-        # trihedron = Trihedron(app = self, parent=self.player.ship.node, scale = 1)
         Trihedron(app=self, parent=self.bot1.ship.node, scale=1)
         Trihedron(app=self, parent=self.bot2.ship.node, scale=1)
 
         """
-        Speed dust
+        Speed dust effect
         """
         SpeedDust(app=self, colors=["orange", "pink", "yellow", "white"])
 
         """
-        Add target HUD
+        HUD
         """
+        HUD(self)
         TargetHUD(app=self)
 
         """
@@ -159,8 +129,7 @@ class MyApp(ShowBase):
         self.player.initialize_move()
         self.bot1.initialize_move()
         self.bot2.initialize_move()
-        self.rotating_asteroid_field.initialize_move()
-        self.big_rotating_asteroid_field.initialize_move()
+        self.scene.inititalize_move()
 
         """
         Launch music

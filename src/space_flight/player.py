@@ -1,8 +1,8 @@
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
-from space_flight.input_system import input_system_factory
-from space_flight.rear_view_mirror import RearViewMirror
+from space_flight.ui.input_system import input_system_factory
+from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.ship import Ship
 from space_flight.ship_model import ShipModel
 
