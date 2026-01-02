@@ -1,0 +1,117 @@
+[tool.poetry]
+name = "space_flight"
+version = "0.0.0"
+description = "An arcade space flight simulator"
+authors = ["Joe Dalton"]
+license = ""
+readme = "README.md"
+include = ["src/space_flight/_version.py", "resources","scripts"]
+
+
+[tool.poetry.dependencies]
+python = ">=3.13,<3.15"
+black = "^23.11.0"
+pyarrow = "^21.0.0"
+numpy = "^2.3.5"
+scipy = "^1.13.1"
+numpy-quaternion = "^2024.0.13"
+Panda3D = "^1.10.15"
+simple-pid = "^2.0.1"
+
+[tool.poetry.group.dev.dependencies]
+cruft = "^2.15.0"
+invoke = "^2.2.0"
+tox = "^4.11.4"
+black = "^23.11.0"
+flake8 = "^6.1.0"
+pep8-naming = "^0.13.3"
+flake8-eradicate = "^1.5.0"
+mkdocs-material = "^9.4.14"
+mkdocstrings-python = {extras = ["python"], version = "^1.7.5"}
+mkdocs-gen-files = "^0.5.0"
+mkdocs-section-index = "^0.3.8"
+twine = "^4.0.2"
+pre-commit = "^3.5.0"
+openpyxl = "^3.1.5"
+nptdms = "^1.10.0"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+
+# [[tool.poetry.source]]
+# name = "joe"
+# url = "http://tata.titi.toto.tata"
+# priority = "supplemental"
+
+
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+bump = false
+style = "pep440"
+pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
+format-jinja = """
+    {%- if distance == 0 and dirty -%}# 
+      {{ serialize_pep440(base, stage, revision, metadata=["dirty"]) }}
+    {%- elif distance == 0 and not dirty -%}
+        {{ serialize_pep440(base, stage, revision) }}
+    {%- elif branch == "master" and dirty -%}
+        {{ serialize_pep440(bump_version(base), stage, revision, dev=distance, metadata=["dirty"]) }}
+    {%- elif branch == "master" and not dirty -%}
+        {{ serialize_pep440(bump_version(base), stage, revision, dev=distance) }}
+    {%- elif branch != "master" and dirty -%}
+        {{ serialize_pep440(bump_version(base), stage, revision, dev=distance, metadata=[commit, "dirty"]) }}
+    {%- elif branch != "master" and not dirty -%}
+        {{ serialize_pep440(bump_version(base), stage, revision, dev=distance, metadata=[commit]) }}
+    {%- endif -%}
+"""
+
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.poetry.scripts]
+space_flight = 'space_flight.cli:simulator'
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+line_length = 88
+profile = "black"
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = "E203,E701"
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    envlist = 
+        py310
+        py311
+        py312
+        py313
+
+    [testenv]
+    allowlist_externals = poetry
+    commands_pre = poetry install --only test
+    commands = pytest tests/ --clean
+"""
+
+[tool.poetry-dynamic-versioning.substitution]
+folders = [
+  { path = "src/space_flight"}
+]
+
+[tool.poetry-dynamic-versioning.files."src/space_flight/_version.py"]
+persistent-substitution = true
+initial-content = """
+  # These version placeholders will be replaced later during substitution.
+  __version__ = "0.0.0"
+  __version_tuple__ = (0, 0, 0)
+"""

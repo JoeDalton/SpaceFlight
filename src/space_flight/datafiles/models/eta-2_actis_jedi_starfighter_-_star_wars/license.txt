@@ -1,0 +1,11 @@
+Model Information:
+* title:	Eta-2 Actis (Jedi Starfighter) - Star Wars
+* source:	https://sketchfab.com/3d-models/eta-2-actis-jedi-starfighter-star-wars-00f12d7a839842c783bb745d39302308
+* author:	Quiznos323 (https://sketchfab.com/quiznos323)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Eta-2 Actis (Jedi Starfighter) - Star Wars" (https://sketchfab.com/3d-models/eta-2-actis-jedi-starfighter-star-wars-00f12d7a839842c783bb745d39302308) by Quiznos323 (https://sketchfab.com/quiznos323) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)

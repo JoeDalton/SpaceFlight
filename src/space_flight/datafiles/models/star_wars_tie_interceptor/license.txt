@@ -1,0 +1,11 @@
+Model Information:
+* title:	Star Wars Tie Interceptor
+* source:	https://sketchfab.com/3d-models/star-wars-tie-interceptor-27af6a0dbbec45fc8c497aa691f3042a
+* author:	LarsH. (https://sketchfab.com/LarsH.)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Star Wars Tie Interceptor" (https://sketchfab.com/3d-models/star-wars-tie-interceptor-27af6a0dbbec45fc8c497aa691f3042a) by LarsH. (https://sketchfab.com/LarsH.) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

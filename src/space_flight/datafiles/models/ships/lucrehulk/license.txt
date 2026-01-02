@@ -1,0 +1,11 @@
+Model Information:
+* title:	Lucrehulk
+* source:	https://sketchfab.com/3d-models/lucrehulk-8bb11e0ad31e4b23b1783e10242c5115
+* author:	Professor E12^2 (https://sketchfab.com/profanity2009)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Lucrehulk" (https://sketchfab.com/3d-models/lucrehulk-8bb11e0ad31e4b23b1783e10242c5115) by Professor E12^2 (https://sketchfab.com/profanity2009) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -1,0 +1,21 @@
+site_name: sensoracquisition
+
+theme:
+  name: "material"
+
+plugins:
+- search
+- literate-nav:
+    nav_file: Summary.md
+- section-index
+- mkdocstrings:
+    default_handler: python
+    handlers:
+      python:
+        rendering:
+          show_signature_annotations: true
+          show_source: true
+          show_submodules: true
+- gen-files:
+    scripts:
+    - scripts/gen_ref_pages.py

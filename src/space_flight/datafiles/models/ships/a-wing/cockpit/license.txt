@@ -1,0 +1,11 @@
+Model Information:
+* title:	A-Wing Cockpit
+* source:	https://sketchfab.com/3d-models/a-wing-cockpit-3dfc0b74dcd14c10a9f7c007f85bac1b
+* author:	MichaelEGA (https://sketchfab.com/MichaelEGA)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "A-Wing Cockpit" (https://sketchfab.com/3d-models/a-wing-cockpit-3dfc0b74dcd14c10a9f7c007f85bac1b) by MichaelEGA (https://sketchfab.com/MichaelEGA) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

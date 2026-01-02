@@ -1,0 +1,11 @@
+Model Information:
+* title:	Green Squadron X-Wing
+* source:	https://sketchfab.com/3d-models/green-squadron-x-wing-1d06c93a34374dc68b536df9e2449929
+* author:	greensquadron (https://sketchfab.com/greensquadron)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Green Squadron X-Wing" (https://sketchfab.com/3d-models/green-squadron-x-wing-1d06c93a34374dc68b536df9e2449929) by greensquadron (https://sketchfab.com/greensquadron) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
