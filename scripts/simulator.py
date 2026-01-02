@@ -13,7 +13,7 @@ from space_flight.integrator import Integrator
 from space_flight.lighting import Lighting
 from space_flight.player import Player
 from space_flight.trihedron import Trihedron
-from space_flight.scenes.scenes import SceneAsteroids
+from space_flight.scenes.scenes import scene_factory
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -63,7 +63,7 @@ class MyApp(ShowBase):
         """
         self.set_background_color(0, 0, 0)
         self.lighting = Lighting(self)
-        self.scene = SceneAsteroids(app=self)
+        self.scene = scene_factory(app=self, scene_name="lava_planet")
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 

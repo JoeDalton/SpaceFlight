@@ -159,6 +159,9 @@ class Ship:
         if speed_norm > self.max_speed_mps:
             speed_norm = self.max_speed_mps
 
+        # Record position
+        self.position = self.state[:3]
+
         # Normalize ship orientation
         self.orientation = self.state[3:7].copy()
         self.orientation /= np.linalg.norm(self.orientation)

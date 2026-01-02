@@ -4,13 +4,31 @@ from direct.showbase.ShowBase import ShowBase
 from space_flight import DATAFILES_PATH
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.skybox import Skybox
+from space_flight.scenes.planet_2d import Planet2D
 
-class SceneAsteroids:
+# TODO migrate lighting in here !
+
+def scene_factory(app: ShowBase, scene_name:str):
+    if scene_name == "asteroids":
+        return SceneAsteroids(app=app)
+    elif scene_name == "lava_planet":
+        return SceneLavaPlanet(app=app)
+
+class Scene:
     def __init__(
             self,
             app: ShowBase,
     ):
         self.app = app
+
+    def inititalize_move(self):
+        pass
+class SceneAsteroids(Scene):
+    def __init__(
+            self,
+            app: ShowBase,
+    ):
+        super().__init__(app=app)
 
         # Skybox
         self.skybox = Skybox(app=self.app)
@@ -42,8 +60,6 @@ class SceneAsteroids:
         # self.planet.set_pos(0, 8000, 50)
         # self.planet.set_scale(100, 100, 100)
 
-        # 2D Planet
-
         # Terrain
         # self.terrain = self.loader.load_model(
         #     DATAFILES_PATH / "models/barringer_meteorite_crater/scene.gltf"
@@ -63,3 +79,25 @@ class SceneAsteroids:
     def inititalize_move(self):
         self.rotating_asteroid_field.initialize_move()
         self.big_rotating_asteroid_field.initialize_move()
+
+
+class SceneLavaPlanet(Scene):
+    def __init__(
+            self,
+            app: ShowBase,
+    ):
+        super().__init__(app=app)
+
+        # Asteroid field
+        self.static_asteroid_field = AsteroidField(
+            app=self.app, n_asteroids=500, field_size=15000, is_moving=False
+        )
+        self.big_rotating_asteroid_field = AsteroidField(
+            app=self.app, n_asteroids=3, scale_factor=10, field_size=15000, is_moving=True
+        )
+        self.rotating_asteroid_field = AsteroidField(
+            app=self.app, n_asteroids=100, field_size=15000, is_moving=True
+        )
+
+        # Planet
+        self.planet = Planet2D(app=self.app, type="lava")
