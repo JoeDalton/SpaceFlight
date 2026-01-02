@@ -16,7 +16,7 @@ class AutoPilot():
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.roll_rate = 0.0
-        self.throttle = 0.01
+        self.throttle = 0.0
         self.throttle_rate = 0.0
 
         self.angle_to_target_deg = 0.0
@@ -33,13 +33,13 @@ class AutoPilot():
         self.roll_rate_command = 0.0
         self.throttle_command = 0.0
 
-    def set_on(self, current_normalized_yaw: float=0.0, current_normalized_pitch: float=0.0, current_normalized_roll: float=0.0):
+    def set_on(self, current_normalized_yaw_rate_command: float=0.0, current_normalized_pitch_rate_command: float=0.0, current_normalized_roll_rate_command: float=0.0):
         """
         Sets the Auto pilot on
         """
-        self.pid_yaw.set_auto_mode(True, last_output=current_normalized_yaw)
-        self.pid_pitch.set_auto_mode(True, last_output=current_normalized_pitch)
-        self.pid_roll.set_auto_mode(True, last_output=current_normalized_roll)
+        self.pid_yaw.set_auto_mode(True, last_output=current_normalized_yaw_rate_command)
+        self.pid_pitch.set_auto_mode(True, last_output=current_normalized_pitch_rate_command)
+        self.pid_roll.set_auto_mode(True, last_output=current_normalized_roll_rate_command)
 
     def set_off(self):
         """
