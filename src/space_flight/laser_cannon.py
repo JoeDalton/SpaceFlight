@@ -1,4 +1,5 @@
 import random
+from typing import Tuple
 
 import numpy as np
 import quaternion
@@ -8,6 +9,8 @@ from direct.showbase.ShowBaseGlobal import ClockObject
 from panda3d.core import (
     AudioSound,
     CardMaker,
+    CollisionNode,
+    CollisionSphere,
     LVector3,
     NodePath,
     PointLight,
@@ -15,10 +18,12 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import DATAFILES_PATH
+from space_flight import ALL_INTO_BIT, DATAFILES_PATH
 
 LASER_SPEED = 1000.0
+# LASER_SPEED = 10
 SQT2_S = np.sqrt(2.0) / 2.0
+LIGHT_ATTENUATION = (1, 0.05, 0)
 
 
 class LaserCannon:
@@ -38,6 +43,7 @@ class LaserCannon:
             self.cannon_nodes.append(node)
 
         # Laser configuration
+        self.shot_power = self.parent_ship.conf["shot_power"]
         self.life_time = self.parent_ship.conf["laser_life_time"]
         self.fire_delay = 1.0 / self.parent_ship.conf["laser_fire_rate"]
         color = self.parent_ship.conf["laser_color"]
@@ -47,9 +53,8 @@ class LaserCannon:
         if sound_file != "none":
             self.sound_pool = [self.app.audio3d.loadSfx(sound_file) for _ in range(20)]
 
-        # Initialize laser model
+        # Prepare laser model
         laser_intensity = 1.0
-        self.light_attenuation = (1, 0.05, 0)
         if color == "red":
             self.light_color = (laser_intensity, 0, 0, 1)
         elif color == "green":
@@ -73,56 +78,27 @@ class LaserCannon:
         if current_time - self.last_fire_time < self.fire_delay:
             return
 
-        # Create flat quad
-        cm = CardMaker("laser")
-        cm.set_frame(-0.5, 0.5, -4.0, 4.0)
-        laser_np = self.app.render.attach_new_node(cm.generate())
-        laser_np.set_texture(self.laser_texture)
-        laser_np.set_two_sided(True)
-        laser_np.set_transparency(TransparencyAttrib.MAlpha)
-
         # Start position and orientation relative to the ship
         ship_quat = self.parent_ship.node.get_quat(self.app.render)
         q_ship = np.quaternion(*ship_quat)
         q_laser = q_ship * np.quaternion(SQT2_S, SQT2_S, 0, 0)
         ship_dir = ship_quat.get_forward()
-        laser_np.set_quat(Quat(*quaternion.as_float_array(q_laser)))
 
         # Compute start and end positions
-        my_speed = LASER_SPEED * np.array(ship_dir) + self.parent_ship.speed
-        my_range = my_speed * self.life_time
+        speed = LASER_SPEED * np.array(ship_dir) + self.parent_ship.speed
         start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
             self.app.render
         )
-        end_pos = start_pos + LVector3(*my_range)
-        duration = self.life_time
-        light_duration = duration / 2
 
-        # Don't rely on scene lighting since lasers emit their own light
-        laser_np.set_light_off()
-
-        # Preset movement
-        laser_np.set_pos(start_pos)
-        LerpPosInterval(laser_np, duration, end_pos).start()
-        # Make it disappear at the end of range
-        self.app.doMethodLater(
-            duration, lambda t: laser_np.remove_node(), "RemoveLaser"
-        )
-
-        # Add light source on laser
-        plight = PointLight("plight")
-        plight.setColor(self.light_color)
-        plight.set_attenuation(self.light_attenuation)
-        plnp = laser_np.attachNewNode(plight)
-        plnp.setPos(0, 0, 0)
-        self.app.render.setLight(plnp)
-        self.app.doMethodLater(
-            light_duration,
-            lambda t: self.app.render.clear_light(plnp),
-            "RemoveLaserLight",
-        )
-        self.app.doMethodLater(
-            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight"
+        _ = LaserShot(
+            app=self.app,
+            texture=self.laser_texture,
+            power=self.shot_power,
+            life_time=self.life_time,
+            light_color=self.light_color,
+            speed=speed,
+            start_pos=start_pos,
+            quat=q_laser,
         )
 
         # Add sound to laser shot (empty list if no sound)
@@ -144,3 +120,69 @@ class LaserCannon:
             self.current_next_cannon_idx + 1
         ) % self.n_cannon
         self.last_fire_time = current_time
+
+
+class LaserShot:
+    def __init__(
+        self,
+        app,
+        texture,
+        power: float,
+        life_time: float,
+        light_color: Tuple,
+        speed: np.ndarray,
+        start_pos,
+        quat,
+    ):
+        self.app = app
+
+        # Create flat quad
+        cm = CardMaker("laser")
+        cm.set_frame(-0.5, 0.5, -4.0, 4.0)
+        self.shot = self.app.render.attach_new_node(cm.generate())
+        self.shot.set_texture(texture)
+        self.shot.set_two_sided(True)
+        self.shot.set_transparency(TransparencyAttrib.MAlpha)
+
+        self.shot.set_quat(Quat(*quaternion.as_float_array(quat)))
+
+        my_range = speed * life_time
+
+        end_pos = start_pos + LVector3(*my_range)
+        light_duration = life_time / 2
+
+        # Don't rely on scene lighting since lasers emit their own light
+        self.shot.set_light_off()
+
+        # Preset movement
+        self.shot.set_pos(start_pos)
+        LerpPosInterval(self.shot, life_time, end_pos).start()
+        # Make it disappear at the end of range
+        self.app.doMethodLater(
+            life_time, lambda t: self.shot.remove_node(), "RemoveLaser"
+        )
+
+        # Add light source on laser
+        plight = PointLight("plight")
+        plight.setColor(light_color)
+        plight.set_attenuation(LIGHT_ATTENUATION)
+        plnp = self.shot.attachNewNode(plight)
+        plnp.setPos(0, 0, 0)
+        self.app.render.setLight(plnp)
+        self.app.doMethodLater(
+            light_duration,
+            lambda t: self.app.render.clear_light(plnp),
+            "RemoveLaserLight",
+        )
+        self.app.doMethodLater(
+            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight"
+        )
+
+        # Initialize collision
+        laser_cnode = CollisionNode("laser")
+        laser_cnode.addSolid(CollisionSphere(0, 0, 0, 1))
+        laser_cnode.setFromCollideMask(ALL_INTO_BIT)
+        laser_cnode.setIntoCollideMask(0)
+        laser_np = self.shot.attachNewNode(laser_cnode)
+        self.app.traverser.addCollider(laser_np, self.app.handler)
+        laser_np.show()

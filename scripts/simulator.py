@@ -27,6 +27,7 @@ from space_flight.ui.hud import HUD, TargetHUD
 
 # TODO: Fix jittering by keeping player at (0,0,0) and moving everything around instead.
 
+
 class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
@@ -72,7 +73,7 @@ class MyApp(ShowBase):
         """
         self.available_targets = [{None: ""}]
         self.player = Player(
-            self, ship_type="a-wing", ini_position=np.array([0, -300, 0])
+            self, ship_type="a-wing", ini_position=np.array([0, -100, 0])
         )
         # self.player = Player(self, ship_type="tie-fighter")
 
@@ -83,7 +84,7 @@ class MyApp(ShowBase):
             app=self,
             name="tie_1",
             ship_type="tie-fighter",
-            ini_position=np.array([0, 0, -20]),
+            ini_position=np.array([0, 0, 0]),
         )
         self.bot1.set_mode("idle")
 
@@ -91,7 +92,7 @@ class MyApp(ShowBase):
             app=self,
             name="tie_2",
             ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 0]),
+            ini_position=np.array([0, 0, 20]),
         )
         self.bot2.set_mode("loop")
         wp_distance = 100

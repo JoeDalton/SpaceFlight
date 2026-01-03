@@ -4,6 +4,7 @@ from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH
 
+
 class ShipModel:
     def __init__(self, app: ShowBase, ship_type: str = "a-wing", is_cockpit=True):
         self.app = app

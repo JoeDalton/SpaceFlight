@@ -104,7 +104,7 @@ class SceneLavaPlanet(Scene):
         # Lights
         self.lighting = Lighting(
             app=self.app,
-            directional_direction=[0,0,0],
+            directional_direction=[0, 0, 0],
             ambient_color=[0.4, 0.2, 0.1, 1],
         )
 
