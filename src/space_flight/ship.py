@@ -42,7 +42,7 @@ class Ship:
             self.conf = yaml.safe_load(f)
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
-        self.max_speed_mps = self.conf["max_speed_mps"]
+        self.max_speed_mps = self.conf["max_speed_mps"] # TODO: from thrust and drag
         self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])

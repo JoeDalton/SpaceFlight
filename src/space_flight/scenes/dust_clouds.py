@@ -7,6 +7,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CardMaker, NodePath, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
+MIN_DUST_ALPHA = 0.2
 
 
 class SpeedDust:
@@ -42,6 +43,7 @@ class SpeedDust:
             self.particles.append(particle)
 
         self.root = root
+        self.max_speed = self.app.player.ship.max_speed_mps
 
         self.app.taskMgr.add(self.update_task, "speedDustUpdate")
 
@@ -65,6 +67,8 @@ class SpeedDust:
     def update_task(self, task):
         dt = globalClock.getDt()
         speed = np.linalg.norm(self.app.player.ship.speed)
+        alpha = MIN_DUST_ALPHA + speed * (1.0 - MIN_DUST_ALPHA) / self.max_speed
+        self.root.setAlphaScale(alpha)
         for particle in self.particles:
             particle.setY(particle.getY() - speed * dt)
             if particle.getY() < 0:

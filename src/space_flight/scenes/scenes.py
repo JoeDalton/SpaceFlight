@@ -1,7 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH
-from space_flight.dust_clouds import SpeedDust
+from space_flight.scenes.dust_clouds import SpeedDust
 from space_flight.lighting import Lighting
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.planet_2d import Planet2D

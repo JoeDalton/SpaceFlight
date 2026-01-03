@@ -56,15 +56,6 @@ class MyApp(ShowBase):
         self.integrator = Integrator(self, max_state_size=5000)
 
         """
-        Build scene
-        `asteroids` or `lava_planet`
-        """
-        self.set_background_color(0, 0, 0)
-        self.scene = scene_factory(app=self, scene_name="lava_planet")
-        self.oobe()  # DEBUG
-        # self.toggle_wireframe()  # DEBUG
-
-        """
         Initialize player and ship
         """
         self.available_targets = [{None: ""}]
@@ -74,6 +65,17 @@ class MyApp(ShowBase):
         # self.player = Player(
         #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
         # )
+
+        """
+        Build scene
+        `asteroids` or `lava_planet`
+        """
+        self.set_background_color(0, 0, 0)
+        self.scene = scene_factory(app=self, scene_name="lava_planet")
+        # self.oobe()  # DEBUG
+        # self.toggle_wireframe()  # DEBUG
+
+        
 
         """
         Initialize dummy bots
