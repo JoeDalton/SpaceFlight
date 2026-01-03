@@ -61,7 +61,7 @@ class MyApp(ShowBase):
         """
         self.set_background_color(0, 0, 0)
         self.scene = scene_factory(app=self, scene_name="lava_planet")
-        # self.oobe()  # DEBUG
+        self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 
         """
@@ -69,9 +69,11 @@ class MyApp(ShowBase):
         """
         self.available_targets = [{None: ""}]
         self.player = Player(
-            self, ship_type="a-wing", ini_position=np.array([0, -100, 0])
+           self, ship_type="a-wing", ini_position=np.array([0, -500, 0])
         )
-        # self.player = Player(self, ship_type="tie-fighter")
+        # self.player = Player(
+        #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
+        # )
 
         """
         Initialize dummy bots

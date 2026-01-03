@@ -20,8 +20,7 @@ from panda3d.core import (
 
 from space_flight import ALL_BIT, DATAFILES_PATH
 
-LASER_SPEED = 1000.0
-# LASER_SPEED = 10
+LASER_SPEED_MPS = 1000.0
 SQT2_S = np.sqrt(2.0) / 2.0
 LIGHT_ATTENUATION = (1, 0.05, 0)
 
@@ -44,7 +43,8 @@ class LaserCannon:
 
         # Laser configuration
         self.shot_power = self.parent_ship.conf["shot_power"]
-        self.life_time = self.parent_ship.conf["laser_life_time"]
+        self.laser_base_range_m = self.parent_ship.conf["laser_base_range_m"]
+        self.life_time_s = self.laser_base_range_m / LASER_SPEED_MPS
         self.fire_delay = 1.0 / self.parent_ship.conf["laser_fire_rate"]
         color = self.parent_ship.conf["laser_color"]
 
@@ -85,16 +85,19 @@ class LaserCannon:
         ship_dir = ship_quat.get_forward()
 
         # Compute start and end positions
-        speed = LASER_SPEED * np.array(ship_dir) + self.parent_ship.speed
+        speed = LASER_SPEED_MPS * np.array(ship_dir) + self.parent_ship.speed
         start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
             self.app.render
         )
+
+        # TODO : shoot slightly inward so that the shots cross at mid range
+        # TODO : Add random spread ? (Very small)
 
         _ = LaserShot(
             app=self.app,
             texture=self.laser_texture,
             power=self.shot_power,
-            life_time=self.life_time,
+            life_time_s=self.life_time_s,
             light_color=self.light_color,
             speed=speed,
             start_pos=start_pos,
@@ -128,13 +131,14 @@ class LaserShot:
         app,
         texture,
         power: float,
-        life_time: float,
+        life_time_s: float,
         light_color: Tuple,
         speed: np.ndarray,
         start_pos,
         quat,
     ):
         self.app = app
+        self.power = power
 
         # Create flat quad
         cm = CardMaker("laser")
@@ -146,20 +150,20 @@ class LaserShot:
 
         self.shot.set_quat(Quat(*quaternion.as_float_array(quat)))
 
-        my_range = speed * life_time
+        my_range = speed * life_time_s
 
         end_pos = start_pos + LVector3(*my_range)
-        light_duration = life_time / 2
+        light_duration = life_time_s / 2
 
         # Don't rely on scene lighting since lasers emit their own light
         self.shot.set_light_off()
 
         # Preset movement
         self.shot.set_pos(start_pos)
-        LerpPosInterval(self.shot, life_time, end_pos).start()
+        LerpPosInterval(self.shot, life_time_s, end_pos).start()
         # Make it disappear at the end of range
         self.app.doMethodLater(
-            life_time, lambda t: self.shot.remove_node(), "RemoveLaser"
+            life_time_s, lambda t: self.shot.remove_node(), "RemoveLaser"
         )
 
         # Add light source on laser
@@ -184,5 +188,7 @@ class LaserShot:
         laser_cnode.setFromCollideMask(ALL_BIT)
         laser_cnode.setIntoCollideMask(0)
         laser_np = self.shot.attachNewNode(laser_cnode)
-        self.app.collision_system.traverser.addCollider(laser_np, self.app.collision_system.handler)
+        self.app.collision_system.traverser.addCollider(
+            laser_np, self.app.collision_system.handler
+        )
         laser_np.show()

@@ -11,9 +11,9 @@ reference_surface_m2: 10
 health: 20.0
 shield: 10.0
 shield_regen_rate: 0.1
-hit_box_radius_m: 2.0
+hit_box_radius_m: 4.5
 
-laser_life_time: 1.5
+laser_base_range_m: 1500
 laser_color: green
 laser_fire_rate: 10
 cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
