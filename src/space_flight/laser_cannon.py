@@ -18,7 +18,7 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import ALL_INTO_BIT, DATAFILES_PATH
+from space_flight import ALL_BIT, DATAFILES_PATH
 
 LASER_SPEED = 1000.0
 # LASER_SPEED = 10
@@ -181,8 +181,8 @@ class LaserShot:
         # Initialize collision
         laser_cnode = CollisionNode("laser")
         laser_cnode.addSolid(CollisionSphere(0, 0, 0, 1))
-        laser_cnode.setFromCollideMask(ALL_INTO_BIT)
+        laser_cnode.setFromCollideMask(ALL_BIT)
         laser_cnode.setIntoCollideMask(0)
         laser_np = self.shot.attachNewNode(laser_cnode)
-        self.app.traverser.addCollider(laser_np, self.app.handler)
+        self.app.collision_system.traverser.addCollider(laser_np, self.app.collision_system.handler)
         laser_np.show()

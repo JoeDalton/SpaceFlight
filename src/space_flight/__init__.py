@@ -10,9 +10,9 @@ DATAFILES_PATH = Path(__file__).parent / "datafiles"
 CONFIGURATION_PATH = Path(__file__).parent / "configuration"
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "tests/fixtures"
 
-TERRAIN_INTO_BIT = 0b0010
-SHIP_INTO_BIT = 0b0001
-ALL_INTO_BIT = 0b0011
+TERRAIN_BIT = 0b0010
+SHIP_BIT = 0b0001
+ALL_BIT = 0b0011
 
 
 LOGGER = logging.getLogger()

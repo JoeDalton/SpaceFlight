@@ -1,17 +1,17 @@
 import numpy as np
 from direct.showbase import Audio3DManager
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import (  # AntialiasAttrib,; load_prc_file_data,
-    CollisionHandlerEvent,
-    CollisionTraverser,
-)
 
 from space_flight.bot import Bot
+from space_flight.collisions import CollisionSystem
 from space_flight.integrator import Integrator
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
 from space_flight.trihedron import Trihedron
 from space_flight.ui.hud import HUD, TargetHUD
+
+# from panda3d.core import (AntialiasAttrib,; load_prc_file_data)
+
 
 # load_prc_file_data("", """
 #     gl-version 3 2
@@ -48,11 +48,7 @@ class MyApp(ShowBase):
         """
         Initialize Collision system
         """
-        self.traverser = CollisionTraverser()
-        self.traverser.showCollisions(self.render)
-        self.handler = CollisionHandlerEvent()
-        self.handler.addInPattern("%fn-into-%in")
-        self.taskMgr.add(self.collision_task, "collisionTask")
+        self.collision_system = CollisionSystem(app=self)
 
         """
         Initialize integrator
@@ -133,10 +129,6 @@ class MyApp(ShowBase):
 
         # self.render.setShaderAuto()
         # self.render.setAntialias(AntialiasAttrib.MAuto)
-
-    def collision_task(self, task):
-        self.traverser.traverse(self.render)
-        return task.cont
 
 
 app = MyApp()

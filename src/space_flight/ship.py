@@ -2,9 +2,9 @@ import numpy as np
 import quaternion
 import yaml
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import NodePath, Quat
+from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, SHIP_BIT
 from space_flight.laser_cannon import LaserCannon
 from space_flight.utils import rotate_single_vector
 
@@ -53,6 +53,11 @@ class Ship:
             * self.conf["drag_coefficient"]
         )
 
+        # Setup health and shield
+        self.health = self.conf["health"]
+        self.shield = self.conf["shield"]
+        self.shield_regen_rate = self.conf["shield_regen_rate"]
+
         # Create a dummy node to attach models
         self.node = NodePath("player_node")
         self.node.reparentTo(self.app.render)
@@ -88,6 +93,15 @@ class Ship:
 
         # Initialize cannons
         self.laser_cannon = LaserCannon(app=self.app, parent_ship=self)
+
+        # Initialize collisions
+        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
+        target_cnode = CollisionNode("ship")
+        target_cnode.addSolid(CollisionSphere(0, 0, 0, self.hit_box_radius_m))
+        target_cnode.setFromCollideMask(0)
+        target_cnode.setIntoCollideMask(SHIP_BIT)
+        ship_np = self.node.attachNewNode(target_cnode)
+        ship_np.show()
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
