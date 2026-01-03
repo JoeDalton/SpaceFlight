@@ -1,12 +1,15 @@
 import numpy as np
 import quaternion
+from typing import Any
 import yaml
 from direct.showbase.ShowBase import ShowBase
+from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
-from space_flight import DATAFILES_PATH, SHIP_BIT
+from space_flight import DATAFILES_PATH, SHIP_BIT, GenericBot
 from space_flight.laser_cannon import LaserCannon
 from space_flight.utils import rotate_single_vector
+from space_flight.ship_model import ShipModel
 
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 
@@ -28,13 +31,16 @@ class Ship:
     def __init__(
         self,
         app: ShowBase,
+        parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_speed: np.ndarray = np.zeros(3),
         lift_model: bool = False,
+        is_cockpit: bool = True,
     ):
         self.app = app
+        self.parent = parent
 
         # Load configuration
         filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
@@ -54,8 +60,10 @@ class Ship:
         )
 
         # Setup health and shield
-        self.health = self.conf["health"]
-        self.shield = self.conf["shield"]
+        self.max_health = self.conf["health"]
+        self.max_shield = self.conf["shield"]
+        self.health = self.max_health
+        self.shield = self.max_shield
         self.shield_regen_rate = self.conf["shield_regen_rate"]
 
         # Create a dummy node to attach models
@@ -103,6 +111,13 @@ class Ship:
         self.ship_np = self.node.attachNewNode(self.target_cnode)
         self.ship_np.setPythonTag("owner", self)
         self.ship_np.show()
+
+        # Handle ship health and shield
+        self.app.taskMgr.add(self.ship_handle_health, "ship_handle_health")
+
+        # Create render
+        self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=is_cockpit)
+        
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -232,3 +247,27 @@ class Ship:
             health_damage = damage - self.shield
             self.health -= health_damage
             self.shield = 0.0
+
+    def ship_handle_health(self, task):
+        """
+        Monitors the ships health and shield
+
+        # TODO Properly destroy the ship and all its children
+        # when its health goes to zero
+
+        # Not that way. Must be done at a higher level.
+
+        :param task: _description_
+        """
+        dt = globalClock.getDt()
+        self.shield = min(
+            max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
+        )
+        self.health = min(self.health, self.max_health)
+        if self.health <= 0.0:
+            print("Killed !")
+            #if isinstance(self.parent, GenericBot):
+            #    print("Kill !")
+            #    del self
+                
+        return task.cont

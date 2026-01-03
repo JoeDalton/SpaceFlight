@@ -21,16 +21,17 @@ class Player:
         self.name = "player"
         self.ship = Ship(
             app=self.app,
+            parent=self,
             ship_type=ship_type,
             ini_position=ini_position,
             ini_orientation=ini_orientation,
+            is_cockpit=True,
         )
-        self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=True)
         self.input_system = input_system_factory(app=self.app, player=self)
         self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)
 
         # Anchor elements to self.ship.node
-        self.model.anchor_model(self.ship.node)
+        self.ship.model.anchor_model(self.ship.node)
         self.app.camera.reparentTo(self.ship.node)
 
     def initialize_move(self):

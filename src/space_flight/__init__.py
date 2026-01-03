@@ -25,3 +25,9 @@ LOGGER.addHandler(handler)
 
 LOGGER.info("Importing space_flight library")
 # LOGGER.info(f"Importing space_flight {_version.__version__}")
+
+class GenericBot:
+    """
+    A dummy class for isinstance testing without import loops
+    """
+    pass

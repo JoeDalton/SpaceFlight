@@ -6,12 +6,11 @@ from direct.showbase.ShowBaseGlobal import globalClock
 
 from space_flight.ai import AutoPilot
 from space_flight.ship import Ship
-from space_flight.ship_model import ShipModel
+from space_flight import GenericBot
 
 WAYPOINT_MEETING_TOLERANCE = 10
 
-
-class Bot:
+class Bot(GenericBot):
     def __init__(
         self,
         app: ShowBase,
@@ -24,16 +23,17 @@ class Bot:
         self.name = name
         self.ship = Ship(
             app=self.app,
+            parent=self,
             ship_type=ship_type,
             ini_position=ini_position,
             ini_orientation=ini_orientation,
+            is_cockpit=False,
         )
-        self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=False)
         self.autopilot = AutoPilot(ship=self.ship)
         self.app.available_targets.append({self.ship: self.name})
 
         # Anchor elements to self.ship.node
-        self.model.anchor_model(self.ship.node)
+        self.ship.model.anchor_model(self.ship.node)
 
     def initialize_move(self):
         """
