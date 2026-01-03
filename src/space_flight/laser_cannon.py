@@ -183,12 +183,13 @@ class LaserShot:
         )
 
         # Initialize collision
-        laser_cnode = CollisionNode("laser")
-        laser_cnode.addSolid(CollisionSphere(0, 0, 0, 1))
-        laser_cnode.setFromCollideMask(ALL_BIT)
-        laser_cnode.setIntoCollideMask(0)
-        laser_np = self.shot.attachNewNode(laser_cnode)
+        self.laser_cnode = CollisionNode("laser")
+        self.laser_cnode.addSolid(CollisionSphere(0, 0, 0, 1))
+        self.laser_cnode.setFromCollideMask(ALL_BIT)
+        self.laser_cnode.setIntoCollideMask(0)
+        self.laser_np = self.shot.attachNewNode(self.laser_cnode)
         self.app.collision_system.traverser.addCollider(
-            laser_np, self.app.collision_system.handler
+            self.laser_np, self.app.collision_system.handler
         )
-        laser_np.show()
+        self.laser_np.setPythonTag("owner", self)
+        self.laser_np.show()

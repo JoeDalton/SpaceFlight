@@ -7,6 +7,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CardMaker, NodePath, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
+
 MIN_DUST_ALPHA = 0.2
 
 

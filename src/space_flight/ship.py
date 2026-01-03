@@ -42,7 +42,7 @@ class Ship:
             self.conf = yaml.safe_load(f)
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
-        self.max_speed_mps = self.conf["max_speed_mps"] # TODO: from thrust and drag
+        self.max_speed_mps = self.conf["max_speed_mps"]  # TODO: from thrust and drag
         self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
@@ -96,12 +96,13 @@ class Ship:
 
         # Initialize collisions
         self.hit_box_radius_m = self.conf["hit_box_radius_m"]
-        target_cnode = CollisionNode("ship")
-        target_cnode.addSolid(CollisionSphere(0, 0, 0, self.hit_box_radius_m))
-        target_cnode.setFromCollideMask(0)
-        target_cnode.setIntoCollideMask(SHIP_BIT)
-        ship_np = self.node.attachNewNode(target_cnode)
-        ship_np.show()
+        self.target_cnode = CollisionNode("ship")
+        self.target_cnode.addSolid(CollisionSphere(0, 0, 0, self.hit_box_radius_m))
+        self.target_cnode.setFromCollideMask(0)
+        self.target_cnode.setIntoCollideMask(SHIP_BIT)
+        self.ship_np = self.node.attachNewNode(self.target_cnode)
+        self.ship_np.setPythonTag("owner", self)
+        self.ship_np.show()
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -218,3 +219,16 @@ class Ship:
 
         self.node.setPos(*ship_pos)
         self.node.setQuat(Quat(*ship_quat))
+
+    def count_hit(self, damage: float):
+        """
+        Take damage from hits
+
+        :param damage: The amount of damage to take
+        """
+        if self.shield - damage >= 0.0:
+            self.shield -= damage
+        else:
+            health_damage = damage - self.shield
+            self.health -= health_damage
+            self.shield = 0.0
