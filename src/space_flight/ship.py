@@ -255,7 +255,10 @@ class Ship:
         # TODO Properly destroy the ship and all its children
         # when its health goes to zero
 
-        # Not that way. Must be done at a higher level.
+        # Not that way ? Should be done at a higher level to garbage collect everything
+        # The tasks must be destroyed, the bot and its ai and their calculations must be
+        # destroyed. Also remove it from the integrator, is that possible ?
+
 
         :param task: _description_
         """
@@ -264,10 +267,8 @@ class Ship:
             max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
         )
         self.health = min(self.health, self.max_health)
-        if self.health <= 0.0:
-            print("Killed !")
-            #if isinstance(self.parent, GenericBot):
-            #    print("Kill !")
-            #    del self
+        if self.health <= 0.0 and isinstance(self.parent, GenericBot):
+            self.node.removeNode()
+
                 
         return task.cont

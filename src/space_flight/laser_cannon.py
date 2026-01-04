@@ -20,7 +20,8 @@ from panda3d.core import (
 
 from space_flight import ALL_BIT, DATAFILES_PATH
 
-LASER_SPEED_MPS = 1000.0
+#LASER_SPEED_MPS = 1000.0
+LASER_SPEED_MPS = 30.0
 SQT2_S = np.sqrt(2.0) / 2.0
 LIGHT_ATTENUATION = (1, 0.05, 0)
 

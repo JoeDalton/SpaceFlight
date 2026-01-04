@@ -11,7 +11,7 @@ class CollisionSystem:
         self.handler.addInPattern("%fn-into-%in")
         self.app.taskMgr.add(self.collision_task, "collisionTask")
 
-        self.app.accept("laser-into-ship", self.laser_into_destructable)
+        self.app.accept("laser-into-ship", self.laser_into_destructible)
 
         # Debug
         self.collision_info = OnscreenText(text="", fg=(1, 1, 1, 1), scale=0.15)
@@ -21,7 +21,7 @@ class CollisionSystem:
         self.traverser.traverse(self.app.render)
         return task.cont
 
-    def laser_into_destructable(self, entry):
+    def laser_into_destructible(self, entry):
         """
         Handle the case where a laser hits a dstructable object:
         Damage the destructable object and remove the laser.
@@ -33,16 +33,21 @@ class CollisionSystem:
         :param entry: Panda3d's description of the collision
         """
         laser = entry.from_node_path.python_tags["owner"]
-        destructable = entry.into_node_path.python_tags["owner"]
+        destructible = entry.into_node_path.python_tags["owner"]
 
-        destructable.count_hit(damage=laser.power)
-        if destructable.health > 0:
-            self.collision_info.text = f"{destructable.health}"
+        # Apply damage to the destructible object
+        destructible.count_hit(damage=laser.power)
+
+        # Delete laser
+        laser.shot.removeNode()
+        # self.taskMgr.remove("move_shell") # TODO remove task for laser
+        del laser
+
+        if destructible.health > 0:
+            self.collision_info.text = f"{destructible.health}"
         else:
             self.collision_info.text="Already killed"
         self.collision_info.show()
         self.app.doMethodLater(
             0.25, lambda t: self.collision_info.hide(), "Remove collision info"
         )
-        # self.shell.removeNode()
-        # self.taskMgr.remove("move_shell")
