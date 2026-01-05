@@ -1,6 +1,5 @@
 import random
 from typing import Tuple
-
 import numpy as np
 import quaternion
 from direct.interval.IntervalGlobal import LerpPosInterval
@@ -20,8 +19,12 @@ from panda3d.core import (
 
 from space_flight import ALL_BIT, DATAFILES_PATH
 
-#LASER_SPEED_MPS = 1000.0
-LASER_SPEED_MPS = 30.0
+import logging
+DEBUG_DELETION = True
+LOGGER = logging.getLogger()
+
+LASER_SPEED_MPS = 1000.0
+# LASER_SPEED_MPS = 30.0
 SQT2_S = np.sqrt(2.0) / 2.0
 LIGHT_ATTENUATION = (1, 0.05, 0)
 
@@ -125,6 +128,20 @@ class LaserCannon:
         ) % self.n_cannon
         self.last_fire_time = current_time
 
+    def clean(self):
+        for node in self.cannon_nodes:
+            node.remove_node()
+        self.cannon_nodes = []
+        self.sound_pool = []
+        self.parent_ship = None
+        self.laser_texture = None
+        if DEBUG_DELETION:
+            LOGGER.info("Cleaned laser cannon")
+
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info("Deleted laser cannon")
+
 
 class LaserShot:
     def __init__(
@@ -162,10 +179,6 @@ class LaserShot:
         # Preset movement
         self.shot.set_pos(start_pos)
         LerpPosInterval(self.shot, life_time_s, end_pos).start()
-        # Make it disappear at the end of range
-        self.app.doMethodLater(
-            life_time_s, lambda t: self.shot.remove_node(), "RemoveLaser"
-        )
 
         # Add light source on laser
         plight = PointLight("plight")
@@ -179,9 +192,6 @@ class LaserShot:
             lambda t: self.app.render.clear_light(plnp),
             "RemoveLaserLight",
         )
-        self.app.doMethodLater(
-            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight"
-        )
 
         # Initialize collision
         self.laser_cnode = CollisionNode("laser")
@@ -194,3 +204,21 @@ class LaserShot:
         )
         self.laser_np.setPythonTag("owner", self)
         self.laser_np.show()
+
+        # Clean laser at the end of its life
+        # Make it disappear at the end of range
+        self.app.doMethodLater(
+            life_time_s,
+            lambda t: self.laser_np.setPythonTag("owner", None),
+            "DeleteLaserOwner",
+        )
+        self.app.doMethodLater(
+            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight"
+        )
+        self.app.doMethodLater(
+            life_time_s, lambda t: self.shot.remove_node(), "RemoveLaser"
+        )
+
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info("Deleted laser")
