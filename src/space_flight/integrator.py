@@ -17,7 +17,6 @@ class Integrator:
         self.dt_previous = None
         self.next_idx = 0
         self.max_state_size = max_state_size
-        self.counter = 0
         self.initialize_tasks()
 
     def initialize_tasks(self):
@@ -75,8 +74,6 @@ class Integrator:
         For any new state variable at runtime, just set the previous
         derivative with the current derivative to get an AB1 initialization
         of that variable.
-
-        To avoid weird oscillations, also do an AB1 step every 100 steps
         """
         # Get the timespan of the current step
         dt = self.app.clock.dt
@@ -85,14 +82,9 @@ class Integrator:
         if self.dt_previous is None:
             self.x_new = self.x + dt * self.x_dot
         else:
-            if self.counter >= 100:
-                self.counter = 0
-                self.x_new = self.x + dt * self.x_dot
-            else:
-                self.x_new = self.x + 0.5 * dt / self.dt_previous * (
-                    (2 * self.dt_previous + dt) * self.x_dot - dt * self.x_dot_previous
-                )
-                self.counter += 1
+            self.x_new = self.x + 0.5 * dt / self.dt_previous * (
+                (2 * self.dt_previous + dt) * self.x_dot - dt * self.x_dot_previous
+            )
 
         # Prepare the next step by wiping the inputs
         # We don't set x_dot_previous to x_dot because the number of state variables
