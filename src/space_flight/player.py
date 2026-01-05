@@ -1,8 +1,9 @@
+from typing import Callable
+
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight.ship import Ship
-from space_flight.ship_model import ShipModel
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
 
@@ -19,6 +20,7 @@ class Player:
     ):
         self.app = app
         self.name = "player"
+        self.tasks = []
         self.ship = Ship(
             app=self.app,
             parent=self,
@@ -30,8 +32,7 @@ class Player:
         self.input_system = input_system_factory(app=self.app, player=self)
         self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)
 
-        # Anchor elements to self.ship.node
-        self.ship.model.anchor_model(self.ship.node)
+        # Anchor camera to player ship node
         self.app.camera.reparentTo(self.ship.node)
 
         # Initialize targetting list

@@ -45,7 +45,7 @@ class ShipModel:
 
     def anchor_model(self, node: NodePath):
         """
-        Anchors the 3D model of the cockpit to the player node
+        Anchors the 3D model of the cockpit to the ship node
         """
         self.model.reparent_to(node)
         # self.model.show_bounds()

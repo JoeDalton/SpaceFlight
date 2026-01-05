@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import quaternion
 from typing import Any
@@ -8,9 +10,12 @@ from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
 from space_flight import DATAFILES_PATH, SHIP_BIT, GenericBot
 from space_flight.laser_cannon import LaserCannon
-from space_flight.utils import rotate_single_vector
 from space_flight.ship_model import ShipModel
+from space_flight.utils import rotate_single_vector
 
+import logging
+DEBUG_DELETION = True
+LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 
 
@@ -41,6 +46,7 @@ class Ship:
     ):
         self.app = app
         self.parent = parent
+        self.is_dead = False
 
         # Load configuration
         filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
@@ -67,7 +73,7 @@ class Ship:
         self.shield_regen_rate = self.conf["shield_regen_rate"]
 
         # Create a dummy node to attach models
-        self.node = NodePath("player_node")
+        self.node = NodePath("ship_node")
         self.node.reparentTo(self.app.render)
 
         # Setup state vector
@@ -117,7 +123,7 @@ class Ship:
 
         # Create render
         self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=is_cockpit)
-        
+        self.model.anchor_model(self.node)
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float

@@ -8,6 +8,9 @@ from space_flight.ai import AutoPilot
 from space_flight.ship import Ship
 from space_flight import GenericBot
 
+import logging
+DEBUG_DELETION = True
+LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
 
 class Bot(GenericBot):
@@ -29,6 +32,7 @@ class Bot(GenericBot):
             ini_orientation=ini_orientation,
             is_cockpit=False,
         )
+        # self.set_mode("idle")
         self.autopilot = AutoPilot(ship=self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
 
