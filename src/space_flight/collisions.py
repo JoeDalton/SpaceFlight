@@ -9,7 +9,7 @@ class CollisionSystem:
         self.traverser.showCollisions(self.app.render)
         self.handler = CollisionHandlerEvent()
         self.handler.addInPattern("%fn-into-%in")
-        self.app.taskMgr.add(self.collision_task, "collisionTask")
+        self.app.taskMgr.add(self.collision_task, "collider")
 
         self.app.accept("laser-into-ship", self.laser_into_destructible)
 
@@ -40,14 +40,3 @@ class CollisionSystem:
 
         # Delete laser
         laser.shot.removeNode()
-        # self.taskMgr.remove("move_shell") # TODO remove task for laser
-        del laser
-
-        if destructible.health > 0:
-            self.collision_info.text = f"{destructible.health}"
-        else:
-            self.collision_info.text = "Already killed"
-        self.collision_info.show()
-        self.app.doMethodLater(
-            0.25, lambda t: self.collision_info.hide(), "Remove collision info"
-        )

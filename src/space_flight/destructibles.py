@@ -30,6 +30,7 @@ class Destructible:
         """
         for task in self.tasks:
             self.app.taskMgr.remove(task)
+        self.tasks = []
 
     def clean(self):
         """
@@ -54,6 +55,7 @@ class Destructibles:
     """
 
     def __init__(self, app):
+        # For some reason the task does not appear in the task manager but still runs...
         self.app = app
         self.alive_objects: List[Destructible] = []
         self.app.taskMgr.add(self.handle_deaths_task, "Handle deaths")
@@ -61,6 +63,7 @@ class Destructibles:
     def handle_deaths_task(self, task):
         """
         Check the health of all destructible and kill them if necessary
+        TODO Very expensive !!
         """
         still_alive_objects: List[Destructible] = []
         newly_dead_objects: List[Destructible] = []
