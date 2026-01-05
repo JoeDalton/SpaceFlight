@@ -58,7 +58,6 @@ class MyApp(ShowBase):
         """
         Initialize player and ship
         """
-        self.available_targets = [{None: ""}]
         self.player = Player(
             self, ship_type="a-wing", ini_position=np.array([0, -10, 0])
         )

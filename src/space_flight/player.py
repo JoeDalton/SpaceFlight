@@ -34,6 +34,12 @@ class Player:
         self.ship.model.anchor_model(self.ship.node)
         self.app.camera.reparentTo(self.ship.node)
 
+        # Initialize targetting list
+        self.available_targets = [{None: ""}]
+
+        # Initialize movment task
+        # self.initialize_move()
+
     def initialize_move(self):
         """
         Initializes the player move task. Must be done after the
@@ -62,3 +68,26 @@ class Player:
         self.app.camera.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
 
         return task.cont
+
+    def add_task(self, method: Callable, task_name: str):
+        """
+        Add a task linked to this object
+
+        :param method: the method to be called by the task
+        :param task_name: The name of the task
+        """
+        self.tasks.append(self.app.taskMgr.add(method, task_name))
+
+    def add_target(self, target, name:str):
+        self.available_targets.append({target: name})
+        
+    def remove_target(self, target_to_remove):
+        for target_idx in range(len(self.available_targets)):
+            target_dict = self.available_targets[target_idx]
+            target, _ = list(target_dict.items())[0]
+            if target == target_to_remove:
+                idx_to_remove = target_idx
+                break
+        self.available_targets.pop(idx_to_remove)
+        
+

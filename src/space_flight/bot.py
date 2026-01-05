@@ -30,7 +30,7 @@ class Bot(GenericBot):
             is_cockpit=False,
         )
         self.autopilot = AutoPilot(ship=self.ship)
-        self.app.available_targets.append({self.ship: self.name})
+        self.app.player.add_target(target=self.ship, name=self.name)
 
         # Anchor elements to self.ship.node
         self.ship.model.anchor_model(self.ship.node)

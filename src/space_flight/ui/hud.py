@@ -163,6 +163,12 @@ class TargetHUD:
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
+        elif self.target.is_dead:
+            self.target = None
+            self.target_idx = 0
+            self.distance_label.hide()
+            self.name_label.hide()
+            self.square.hide()
         else:
             self.distance_label.show()
             self.name_label.show()
@@ -214,8 +220,8 @@ class TargetHUD:
         return task.cont
 
     def switch_target(self):
-        self.target_idx = (self.target_idx + 1) % len(self.app.available_targets)
-        target_dict = self.app.available_targets[self.target_idx]
+        self.target_idx = (self.target_idx + 1) % len(self.app.player.available_targets)
+        target_dict = self.app.player.available_targets[self.target_idx]
         target, target_name = list(target_dict.items())[0]
         self.set_target(target=target, target_name=target_name)
 
