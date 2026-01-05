@@ -1,19 +1,18 @@
+import logging
 from typing import Any
 
 import numpy as np
 import quaternion
-from typing import Any
 import yaml
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
-from space_flight import DATAFILES_PATH, SHIP_BIT, GenericBot
+from space_flight import DATAFILES_PATH, SHIP_BIT
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
 from space_flight.utils import rotate_single_vector
 
-import logging
 DEBUG_DELETION = True
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -119,7 +118,9 @@ class Ship:
         self.ship_np.show()
 
         # Handle ship health and shield
-        self.app.taskMgr.add(self.ship_handle_health, "ship_handle_health")
+        self.parent.add_task(
+            method=self.ship_handle_health, task_name="ship_handle_health"
+        )
 
         # Create render
         self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=is_cockpit)
@@ -258,14 +259,6 @@ class Ship:
         """
         Monitors the ships health and shield
 
-        # TODO Properly destroy the ship and all its children
-        # when its health goes to zero
-
-        # Not that way ? Should be done at a higher level to garbage collect everything
-        # The tasks must be destroyed, the bot and its ai and their calculations must be
-        # destroyed. Also remove it from the integrator, is that possible ?
-
-
         :param task: _description_
         """
         dt = globalClock.getDt()
@@ -273,8 +266,22 @@ class Ship:
             max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
         )
         self.health = min(self.health, self.max_health)
-        if self.health <= 0.0 and isinstance(self.parent, GenericBot):
-            self.node.removeNode()
 
-                
         return task.cont
+
+    def clean(self):
+        self.laser_cannon.clean()
+        self.laser_cannon = None
+        self.ship_np.setPythonTag("owner", None)
+        self.ship_np.remove_node()
+        self.ship_np = None
+        self.node.remove_node()
+        self.node = None
+        self.is_dead = True
+        self.parent = None
+        if DEBUG_DELETION:
+            LOGGER.info("Cleaned ship")
+
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info("Deleted ship")

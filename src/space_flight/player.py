@@ -79,9 +79,9 @@ class Player:
         """
         self.tasks.append(self.app.taskMgr.add(method, task_name))
 
-    def add_target(self, target, name:str):
+    def add_target(self, target, name: str):
         self.available_targets.append({target: name})
-        
+
     def remove_target(self, target_to_remove):
         for target_idx in range(len(self.available_targets)):
             target_dict = self.available_targets[target_idx]
@@ -90,5 +90,3 @@ class Player:
                 idx_to_remove = target_idx
                 break
         self.available_targets.pop(idx_to_remove)
-        
-

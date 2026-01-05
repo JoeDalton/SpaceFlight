@@ -46,7 +46,7 @@ class CollisionSystem:
         if destructible.health > 0:
             self.collision_info.text = f"{destructible.health}"
         else:
-            self.collision_info.text="Already killed"
+            self.collision_info.text = "Already killed"
         self.collision_info.show()
         self.app.doMethodLater(
             0.25, lambda t: self.collision_info.hide(), "Remove collision info"

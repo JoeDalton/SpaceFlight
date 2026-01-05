@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 import numpy as np
@@ -7,14 +8,13 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from space_flight.ai import AutoPilot
 from space_flight.destructibles import Destructible
 from space_flight.ship import Ship
-from space_flight import GenericBot
 
-import logging
 DEBUG_DELETION = True
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
 
-class Bot(GenericBot):
+
+class Bot(Destructible):
     def __init__(
         self,
         app: ShowBase,
@@ -23,7 +23,7 @@ class Bot(GenericBot):
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
     ):
-        self.app = app
+        super().__init__(app=app)
         self.name = name
         self.ship = Ship(
             app=self.app,
@@ -44,7 +44,7 @@ class Bot(GenericBot):
         Initializes the player move task. Must be done after the
         integrator task init
         """
-        self.app.taskMgr.add(self.move_bot_task, "move_bot_task")
+        self.add_task(method=self.move_bot_task, task_name="move_bot_task")
 
     def move_bot_task(self, task):
         """
@@ -155,3 +155,29 @@ class Bot(GenericBot):
             direction = waypoint_direction / self.distance_to_waypoint
 
         return direction, self.distance_to_waypoint
+
+    def get_health(self) -> float:
+        """
+        Find the health of the bot
+
+        :return: The health of the bot
+        """
+        return self.ship.health
+
+    def clean(self):
+        """
+        Remove every child
+        """
+        self.app.player.remove_target(target_to_remove=self.ship)
+        self.autopilot.clean()
+        self.autopilot = None
+        self.ship.clean()
+        self.ship = None
+        if DEBUG_DELETION:
+            LOGGER.info(f"Cleaned bot {self.name}")
+
+    def __del__(self):
+        # This never happens if "bot is defined, even as a local variable,
+        # in the app's init. Try with a "spawn" method ?
+        if DEBUG_DELETION:
+            LOGGER.info(f"Deleted bot {self.name}")

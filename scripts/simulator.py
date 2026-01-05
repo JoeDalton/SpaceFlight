@@ -63,7 +63,7 @@ class MyApp(ShowBase):
         Initialize player and ship
         """
         self.player = Player(
-            self, ship_type="a-wing", ini_position=np.array([0, -10, 0])
+            self, ship_type="a-wing", ini_position=np.array([0, -40, 0])
         )
         # self.player = Player(
         #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
@@ -89,7 +89,7 @@ class MyApp(ShowBase):
         )
         bot1.ship.health = 1.1
         bot1.ship.shield = 0.0
-        bot1.ship.shield_regen_rate=0.0
+        bot1.ship.shield_regen_rate = 0.0
 
         self.bot2 = Bot(
             app=self,
@@ -111,7 +111,7 @@ class MyApp(ShowBase):
         """
         Debug options
         """
-        #Trihedron(app=self, parent=bot1.ship.node, scale=1)
+        # Trihedron(app=self, parent=bot1.ship.node, scale=1)
         Trihedron(app=self, parent=self.bot2.ship.node, scale=1)
 
         """

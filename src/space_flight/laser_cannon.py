@@ -1,5 +1,7 @@
+import logging
 import random
 from typing import Tuple
+
 import numpy as np
 import quaternion
 from direct.interval.IntervalGlobal import LerpPosInterval
@@ -19,7 +21,6 @@ from panda3d.core import (
 
 from space_flight import ALL_BIT, DATAFILES_PATH
 
-import logging
 DEBUG_DELETION = True
 LOGGER = logging.getLogger()
 
