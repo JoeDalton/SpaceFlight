@@ -7,6 +7,9 @@ from space_flight.utils import (
     rotate_single_vector,
     safe_angle_rad,
 )
+import logging
+DEBUG_DELETION = True
+LOGGER = logging.getLogger()
 
 ROLL_TOLERANCE = 1e-2
 
@@ -233,3 +236,12 @@ class AutoPilot:
             throttle_rate += 10 * throttle_factor
 
         return throttle_rate
+
+    def clean(self):
+        self.ship = None
+        if DEBUG_DELETION:
+            LOGGER.info(f"Cleaned autopilot")
+        
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info(f"Deleted autopilot")
