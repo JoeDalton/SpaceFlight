@@ -51,7 +51,9 @@ class MyApp(ShowBase):
         self.collision_system = CollisionSystem(app=self)
 
         """
-        Initialize integrator
+        Initialize integrator.
+        Must come before the physic objects : (Player, bots, moving scene...)
+        TODO: Priorities for task to dumb-proof
         """
         self.integrator = Integrator(self, max_state_size=5000)
 
@@ -117,11 +119,11 @@ class MyApp(ShowBase):
         """
         Initialize all tasks in the correct order
         """
-        self.integrator.initialize_tasks()  # Must come before all physics
-        self.player.initialize_move()
-        self.bot1.initialize_move()
-        self.bot2.initialize_move()
-        self.scene.inititalize_move()
+        #self.integrator.initialize_tasks()
+        #self.player.initialize_move()
+        #bot1.initialize_move()
+        #self.bot2.initialize_move()
+        #self.scene.inititalize_move()
 
         """
         Launch music
