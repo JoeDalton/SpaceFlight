@@ -182,8 +182,6 @@ class Bot(Destructible):
             LOGGER.info(f"Cleaned bot {self.name}")
 
     def __del__(self):
-        # This never happens if "bot is defined, even as a local variable,
-        # in the app's init. Try with a "spawn" method ?
         if DEBUG_DELETION:
             LOGGER.info(f"Deleted bot {self.name}")
 

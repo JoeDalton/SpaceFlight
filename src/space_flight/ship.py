@@ -1,4 +1,6 @@
+import gc
 import logging
+import sys
 from typing import Any
 
 import numpy as np
@@ -193,8 +195,7 @@ class Ship:
         # Clip speed norm
         speed = self.state[7:10]
         speed_norm = np.linalg.norm(speed)
-        if speed_norm > self.max_speed_mps:
-            speed_norm = self.max_speed_mps
+        speed_norm = min(speed_norm, self.max_speed_mps)
 
         # Record position
         self.position = self.state[:3]
@@ -279,9 +280,17 @@ class Ship:
         self.node = None
         self.is_dead = True
         self.parent = None
+
         if DEBUG_DELETION:
             LOGGER.info("Cleaned ship")
+            LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
+            LOGGER.info(f"ship references {gc.get_referrers(self)}")
+            LOGGER.info(self.app.taskMgr.getAllTasks)
 
     def __del__(self):
         if DEBUG_DELETION:
+            # TODO: apparently this never happens. There must be some references hidden
+            # somewhere but I can't find them. Bot deletes fine, though. Children,
+            # including panda3d objects are properly deleted, I believe, so this
+            # should not have too much of a memory impact. It's still enraging, though..
             LOGGER.info("Deleted ship")

@@ -46,7 +46,7 @@ class Player:
         Initializes the player move task. Must be done after the
         integrator task init
         """
-        self.app.taskMgr.add(self.move_player_task, "move_player_task")
+        self.add_task(method=self.move_player_task, task_name="move_player_task")
 
     def move_player_task(self, task):
         """

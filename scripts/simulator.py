@@ -80,7 +80,7 @@ class MyApp(ShowBase):
         """
         Initialize dummy bots
         """
-        _ = spawn_bot(
+        spawn_bot(
             app=self,
             name="tie_1",
             ship_type="tie-fighter",
