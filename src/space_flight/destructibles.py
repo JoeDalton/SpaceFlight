@@ -1,7 +1,7 @@
 import logging
 from typing import Callable, List
 
-DEBUG_DELETION = True
+from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 
 

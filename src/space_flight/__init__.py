@@ -14,6 +14,7 @@ TERRAIN_BIT = 0b0010
 SHIP_BIT = 0b0001
 ALL_BIT = 0b0011
 
+DEBUG_DELETION = False
 
 LOGGER = logging.getLogger()
 LOGGER.handlers = []

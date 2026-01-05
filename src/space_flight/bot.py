@@ -9,8 +9,8 @@ from space_flight.ai import AutoPilot
 from space_flight.destructibles import Destructible
 from space_flight.ship import Ship
 from space_flight.trihedron import Trihedron
+from space_flight import DEBUG_DELETION
 
-DEBUG_DELETION = True
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
 

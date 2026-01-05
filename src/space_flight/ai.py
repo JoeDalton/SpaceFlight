@@ -10,7 +10,7 @@ from space_flight.utils import (
     safe_angle_rad,
 )
 
-DEBUG_DELETION = True
+from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 
 ROLL_TOLERANCE = 1e-2

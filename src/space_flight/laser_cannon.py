@@ -21,7 +21,7 @@ from panda3d.core import (
 
 from space_flight import ALL_BIT, DATAFILES_PATH
 
-DEBUG_DELETION = True
+from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 
 LASER_SPEED_MPS = 1000.0

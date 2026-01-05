@@ -15,7 +15,7 @@ from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
 from space_flight.utils import rotate_single_vector
 
-DEBUG_DELETION = True
+from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 
