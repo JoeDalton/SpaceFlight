@@ -10,12 +10,11 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
-from space_flight import DATAFILES_PATH, SHIP_BIT
+from space_flight import DATAFILES_PATH, DEBUG_COLLISION, DEBUG_DELETION, SHIP_BIT
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
 from space_flight.utils import rotate_single_vector
 
-from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 
@@ -117,7 +116,8 @@ class Ship:
         self.target_cnode.setIntoCollideMask(SHIP_BIT)
         self.ship_np = self.node.attachNewNode(self.target_cnode)
         self.ship_np.setPythonTag("owner", self)
-        self.ship_np.show()
+        if DEBUG_COLLISION:
+            self.ship_np.show()
 
         # Handle ship health and shield
         self.parent.add_task(

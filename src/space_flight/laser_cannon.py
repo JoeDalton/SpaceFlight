@@ -19,9 +19,8 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import ALL_BIT, DATAFILES_PATH
+from space_flight import ALL_BIT, DATAFILES_PATH, DEBUG_COLLISION, DEBUG_DELETION
 
-from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 
 LASER_SPEED_MPS = 1000.0
@@ -204,7 +203,8 @@ class LaserShot:
             self.laser_np, self.app.collision_system.handler
         )
         self.laser_np.setPythonTag("owner", self)
-        self.laser_np.show()
+        if DEBUG_COLLISION:
+            self.laser_np.show()
 
         # Clean laser at the end of its life
         # Make it disappear at the end of range

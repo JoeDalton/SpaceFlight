@@ -1,12 +1,15 @@
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import CollisionHandlerEvent, CollisionTraverser
 
+from space_flight import DEBUG_COLLISION
+
 
 class CollisionSystem:
     def __init__(self, app):
         self.app = app
         self.traverser = CollisionTraverser()
-        self.traverser.showCollisions(self.app.render)
+        if DEBUG_COLLISION:
+            self.traverser.showCollisions(self.app.render)
         self.handler = CollisionHandlerEvent()
         self.handler.addInPattern("%fn-into-%in")
         self.app.taskMgr.add(self.collision_task, "collider")

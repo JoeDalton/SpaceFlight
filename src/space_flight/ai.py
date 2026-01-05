@@ -4,13 +4,13 @@ import numpy as np
 from direct.showbase.ShowBaseGlobal import globalClock
 from simple_pid import PID
 
+from space_flight import DEBUG_DELETION
 from space_flight.utils import (
     low_pass_filter_first_order,
     rotate_single_vector,
     safe_angle_rad,
 )
 
-from space_flight import DEBUG_DELETION
 LOGGER = logging.getLogger()
 
 ROLL_TOLERANCE = 1e-2
