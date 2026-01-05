@@ -18,11 +18,13 @@ class Integrator:
         self.next_idx = 0
         self.max_state_size = max_state_size
         self.counter = 0
+        self.initialize_tasks()
 
     def initialize_tasks(self):
         """
         Initializes the integrator step task. Must be done at the end of the
         all modules' initialization, but before the physics tasks initializations.
+        TODO: priorities to dumb-proof this
         """
         self.app.taskMgr.add(self.step, "integrator_step")
 

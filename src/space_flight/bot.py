@@ -36,8 +36,7 @@ class Bot(GenericBot):
         self.autopilot = AutoPilot(ship=self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
 
-        # Anchor elements to self.ship.node
-        self.ship.model.anchor_model(self.ship.node)
+        self.initialize_move()
 
     def initialize_move(self):
         """

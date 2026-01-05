@@ -88,6 +88,7 @@ class SceneAsteroids(Scene):
         # self.test_asset.reparent_to(self.render)
         # self.test_asset.set_pos(0, 1000, 50)
         # self.test_asset.set_scale(1000, 1000, 1000)
+        self.inititalize_move()
 
     def inititalize_move(self):
         self.rotating_asteroid_field.initialize_move()
@@ -128,3 +129,9 @@ class SceneLavaPlanet(Scene):
 
         # Planet
         self.planet = Planet2D(app=self.app, type="lava")
+
+        self.inititalize_move()
+
+    def inititalize_move(self):
+        self.rotating_asteroid_field.initialize_move()
+        self.big_rotating_asteroid_field.initialize_move()

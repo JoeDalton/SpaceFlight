@@ -38,8 +38,8 @@ class Player:
         # Initialize targetting list
         self.available_targets = [{None: ""}]
 
-        # Initialize movment task
-        # self.initialize_move()
+        # Initialize movement task
+        self.initialize_move()
 
     def initialize_move(self):
         """
