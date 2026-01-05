@@ -2,13 +2,12 @@ import numpy as np
 from direct.showbase import Audio3DManager
 from direct.showbase.ShowBase import ShowBase
 
-from space_flight.bot import Bot
+from space_flight.bot import spawn_bot
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
 from space_flight.integrator import Integrator
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
-from space_flight.trihedron import Trihedron
 from space_flight.ui.hud import HUD, TargetHUD
 
 # from panda3d.core import (AntialiasAttrib,; load_prc_file_data)
@@ -63,7 +62,7 @@ class MyApp(ShowBase):
         Initialize player and ship
         """
         self.player = Player(
-            self, ship_type="a-wing", ini_position=np.array([0, -40, 0])
+            self, ship_type="a-wing", ini_position=np.array([0, -60, 0])
         )
         # self.player = Player(
         #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
@@ -81,38 +80,30 @@ class MyApp(ShowBase):
         """
         Initialize dummy bots
         """
-        bot1 = Bot(
+        _ = spawn_bot(
             app=self,
             name="tie_1",
             ship_type="tie-fighter",
             ini_position=np.array([0, 0, 0]),
         )
-        bot1.ship.health = 1.1
-        bot1.ship.shield = 0.0
-        bot1.ship.shield_regen_rate = 0.0
 
-        self.bot2 = Bot(
-            app=self,
-            name="tie_2",
-            ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 20]),
-        )
-        self.bot2.set_mode("loop")
         wp_distance = 100
-        bot_waypoints = [
+        bot2_waypoints = [
             np.array([0, wp_distance, 0]),
             np.array([0, wp_distance, wp_distance]),
             np.array([0, 0, wp_distance]),
             np.array([wp_distance, 0, wp_distance]),
             np.array([wp_distance, 0, 0]),
         ]
-        self.bot2.initialize_waypoints(waypoints=bot_waypoints)
-
-        """
-        Debug options
-        """
-        # Trihedron(app=self, parent=bot1.ship.node, scale=1)
-        Trihedron(app=self, parent=self.bot2.ship.node, scale=1)
+        self.bot2 = spawn_bot(
+            app=self,
+            name="tie_2",
+            ship_type="tie-fighter",
+            ini_position=np.array([0, 0, 20]),
+            has_debug_trihedron=True,
+            mode="loop",
+            mode_dict={"waypoints": bot2_waypoints},
+        )
 
         """
         HUD

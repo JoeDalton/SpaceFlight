@@ -8,6 +8,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from space_flight.ai import AutoPilot
 from space_flight.destructibles import Destructible
 from space_flight.ship import Ship
+from space_flight.trihedron import Trihedron
 
 DEBUG_DELETION = True
 LOGGER = logging.getLogger()
@@ -33,7 +34,7 @@ class Bot(Destructible):
             ini_orientation=ini_orientation,
             is_cockpit=False,
         )
-        # self.set_mode("idle")
+        self.set_mode("idle")
         self.autopilot = AutoPilot(ship=self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
 
@@ -77,14 +78,18 @@ class Bot(Destructible):
         self.next_waypoint_idx = 0
         self.distance_to_waypoint = 0.0
 
-    def set_mode(self, mode: str):
+    def set_mode(self, mode: str, mode_dict: dict = {}):
         """
         Sets the bot mode
         """
+        # Set mode
         if mode in ["idle", "demo", "loop", "waypoints"]:
             self.mode = mode
         else:
             raise NotImplementedError(f"Bot mode {mode}")
+        # Set mode parameters
+        if mode in ["loop", "waypoints"]:
+            self.initialize_waypoints(waypoints=mode_dict["waypoints"])
 
     def get_direction(self):
         """
@@ -181,3 +186,31 @@ class Bot(Destructible):
         # in the app's init. Try with a "spawn" method ?
         if DEBUG_DELETION:
             LOGGER.info(f"Deleted bot {self.name}")
+
+
+def spawn_bot(
+    app: ShowBase,
+    name: str,
+    ship_type: str,
+    ini_position: np.ndarray = np.zeros(3),
+    ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
+    has_debug_trihedron: bool = False,
+    mode: str = "idle",
+    mode_dict: dict = {},
+) -> Bot:
+    bot = Bot(
+        app=app,
+        name=name,
+        ship_type=ship_type,
+        ini_position=ini_position,
+        ini_orientation=ini_orientation,
+    )
+    bot.set_mode(mode, mode_dict=mode_dict)
+    if has_debug_trihedron:
+        Trihedron(app=app, parent=bot.ship.node, scale=1)
+
+    # DEBUG
+    bot.ship.health = 1.1
+    bot.ship.shield = 0.0
+    bot.ship.shield_regen_rate = 0.0
+    return bot
