@@ -4,6 +4,7 @@ from direct.showbase.ShowBase import ShowBase
 
 from space_flight.bot import Bot
 from space_flight.collisions import CollisionSystem
+from space_flight.destructibles import Destructibles
 from space_flight.integrator import Integrator
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
@@ -46,8 +47,9 @@ class MyApp(ShowBase):
         # music.setVolume(0.8)
 
         """
-        Initialize Collision system
+        Initialize Collision system and Destructibles
         """
+        self.destructibles = Destructibles(app=self)
         self.collision_system = CollisionSystem(app=self)
 
         """
@@ -79,13 +81,15 @@ class MyApp(ShowBase):
         """
         Initialize dummy bots
         """
-        self.bot1 = Bot(
+        bot1 = Bot(
             app=self,
             name="tie_1",
             ship_type="tie-fighter",
             ini_position=np.array([0, 0, 0]),
         )
-        self.bot1.set_mode("idle")
+        bot1.ship.health = 1.1
+        bot1.ship.shield = 0.0
+        bot1.ship.shield_regen_rate=0.0
 
         self.bot2 = Bot(
             app=self,
@@ -107,7 +111,7 @@ class MyApp(ShowBase):
         """
         Debug options
         """
-        Trihedron(app=self, parent=self.bot1.ship.node, scale=1)
+        #Trihedron(app=self, parent=bot1.ship.node, scale=1)
         Trihedron(app=self, parent=self.bot2.ship.node, scale=1)
 
         """
@@ -115,15 +119,6 @@ class MyApp(ShowBase):
         """
         HUD(self)
         TargetHUD(app=self)
-
-        """
-        Initialize all tasks in the correct order
-        """
-        #self.integrator.initialize_tasks()
-        #self.player.initialize_move()
-        #bot1.initialize_move()
-        #self.bot2.initialize_move()
-        #self.scene.inititalize_move()
 
         """
         Launch music

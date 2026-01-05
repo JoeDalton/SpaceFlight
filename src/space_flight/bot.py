@@ -5,6 +5,7 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 
 from space_flight.ai import AutoPilot
+from space_flight.destructibles import Destructible
 from space_flight.ship import Ship
 from space_flight import GenericBot
 
