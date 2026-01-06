@@ -73,36 +73,36 @@ class MyApp(ShowBase):
         `asteroids` or `lava_planet`
         """
         self.set_background_color(0, 0, 0)
-        self.scene = scene_factory(app=self, scene_name="lava_planet")
+        self.scene = scene_factory(app=self, scene_name="debug_collisions")
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 
         """
         Initialize dummy bots
         """
-        # spawn_bot(
-        #     app=self,
-        #     name="tie_1",
-        #     ship_type="tie-fighter",
-        #     ini_position=np.array([0, 0, 0]),
-        # )
-
-        wp_distance = 150
-        bot2_waypoints = [
-            np.array([0, wp_distance, 0]),
-            np.array([0, wp_distance, wp_distance]),
-            np.array([0, 0, wp_distance]),
-            np.array([wp_distance, 0, wp_distance]),
-            np.array([wp_distance, 0, 0]),
-        ]
-        self.bot2 = spawn_bot(
+        spawn_bot(
             app=self,
-            name="tie_2",
+            name="tie_1",
             ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 20]),
-            has_debug_trihedron=True,
+            ini_position=np.array([0, -50, 0]),
         )
-        self.bot2.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
+
+        # wp_distance = 150
+        # bot2_waypoints = [
+        #     np.array([0, wp_distance, 0]),
+        #     np.array([0, wp_distance, wp_distance]),
+        #     np.array([0, 0, wp_distance]),
+        #     np.array([wp_distance, 0, wp_distance]),
+        #     np.array([wp_distance, 0, 0]),
+        # ]
+        # self.bot2 = spawn_bot(
+        #     app=self,
+        #     name="tie_2",
+        #     ship_type="tie-fighter",
+        #     ini_position=np.array([0, 0, 20]),
+        #     has_debug_trihedron=True,
+        # )
+        # self.bot2.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
         """
         HUD

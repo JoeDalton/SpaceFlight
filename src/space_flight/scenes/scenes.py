@@ -13,6 +13,10 @@ def scene_factory(app: ShowBase, scene_name: str):
         return SceneAsteroids(app=app)
     elif scene_name == "lava_planet":
         return SceneLavaPlanet(app=app)
+    elif scene_name == "debug_collisions":
+        return SceneDebug(app=app)
+    else:
+        raise NotImplementedError(f"Unknown scene {scene_name}")
 
 
 class Scene:
@@ -135,3 +139,33 @@ class SceneLavaPlanet(Scene):
     def inititalize_move(self):
         self.rotating_asteroid_field.initialize_move()
         self.big_rotating_asteroid_field.initialize_move()
+
+class SceneDebug(Scene):
+    def __init__(
+        self,
+        app: ShowBase,
+    ):
+        super().__init__(app=app)
+
+        # Skybox
+        self.skybox = Skybox(app=self.app)
+
+        # Lights
+        self.lighting = Lighting(app=self.app)
+
+        # Speed dust effect
+        # SpeedDust(app=self.app, colors=["blue", "green", "pink", "white"])
+
+        # Asteroid field
+        self.static_asteroid_field = AsteroidField(
+            app=self.app, n_asteroids=1, field_size=1, is_moving=False,
+            scale_factor=1.0,
+        )
+        # self.rotating_asteroid_field = AsteroidField(
+        #     app=self.app, n_asteroids=2, field_size=100, is_moving=True
+        # )
+        # self.inititalize_move()
+
+    def inititalize_move(self):
+        self.rotating_asteroid_field.initialize_move()
+

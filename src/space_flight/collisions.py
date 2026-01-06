@@ -41,6 +41,8 @@ class CollisionSystem:
 
         :param entry: Panda3d's description of the collision
         """
+        if DEBUG_COLLISION:
+            LOGGER.info("ship into destructible")
         laser = entry.from_node_path.python_tags["owner"]
         destructible = entry.into_node_path.python_tags["owner"]
 
@@ -68,7 +70,7 @@ class CollisionSystem:
 
     def ship_into_terrain(self, entry):
         """
-        TODO
+        TODO Never happens. Why ?
 
         :param entry: Panda3d's description of the collision
         """
@@ -77,7 +79,7 @@ class CollisionSystem:
 
     def ship_into_ship(self, entry):
         """
-        TODO
+        TODO Never happens. Why ?
 
         :param entry: Panda3d's description of the collision
         """

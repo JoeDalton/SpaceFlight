@@ -127,13 +127,13 @@ class Ship:
 
         # Intermediary: Ships trigger collisions when they are found by TERRAIN_BIT
         # and look for intersections with SHIP_BIT
-        self.target_cnode.setFromCollideMask(TERRAIN_BIT)
-        self.target_cnode.setIntoCollideMask(SHIP_BIT)
+        # self.target_cnode.setFromCollideMask(TERRAIN_BIT)
+        # self.target_cnode.setIntoCollideMask(SHIP_BIT)
 
         # Final ?: Ships trigger collisions when they are found by anything
         # (terrain or ship) and look for intersections with SHIP_BIT
-        # self.target_cnode.setFromCollideMask(ALL_BIT)
-        # self.target_cnode.setIntoCollideMask(SHIP_BIT)
+        self.target_cnode.setFromCollideMask(ALL_BIT)
+        self.target_cnode.setIntoCollideMask(ALL_BIT)
 
         self.ship_np = self.node.attachNewNode(self.target_cnode)
         self.ship_np.setPythonTag("owner", self)
