@@ -22,7 +22,8 @@ ROLL_TOLERANCE = 1e-2
 
 # TODO: Navigator parameters ?
 WAYPOINT_MEETING_TOLERANCE_M = 10
-DISTANCE_TOLERANCE_M = 1
+MIX_DISTANCE_TOLERANCE_M = 1e-2
+TARGET_DISTANCE_TOLERANCE_M = 1
 CHASE_DISTANCE_M = 80.0
 EVADE_TIME_S = 1.0
 LEAD_TIME_S = 1.0
@@ -246,7 +247,7 @@ class AutoPilot:
             throttle_rate -= 3 * throttle_factor
         elif angle_to_target_deg > 120:
             throttle_rate -= 4 * throttle_factor
-        # Increase throttle if the target is too far
+        # Increase throttle if the target is too far, TODO the opposite if <0
         if reference_distance_m > 10:
             throttle_rate += 0.5 * throttle_factor
         elif reference_distance_m > 100:
@@ -270,6 +271,8 @@ class AutoPilot:
 
 class AutoNavigator:
     """
+    A class to bundle the tactician's wishes and outputs a direction
+    to point to and a reference distance
     TODO
     Determines the direction vector that the AutoPilot should aim for by computing the
     behaviour forces and using the weights from the AutoTactician
@@ -294,20 +297,57 @@ class AutoNavigator:
         self.distance_to_waypoint = 0.0
         self.has_waypoint_loop = is_loop
 
-    def navigate(self) -> Tuple[np.ndarray, float]:
+    def navigate(self, tactician_thoughts: List[dict] = []) -> Tuple[np.ndarray, float]:
         """
-        Bundle the tactician's wishes and outputs a direction
+        Bundles the tactician's wishes and outputs a direction
         to point to and a reference distance
 
         :return: The direction to point to and its reference distance
         """
-        # TODO: the bundle:
-        # - What to do with multiple targets
-        # - How to choose the right reference distance
-        # - Mix all behaviours according to weights
+        # # Temporary: follow waypoints (or idle if no waypoints)
+        # return self.follow_waypoints()
 
-        # Temporary: follow waypoints (or idle if no waypoints)
-        return self.follow_waypoints()
+        # Handle the case where the tactician has no thoughts
+        if len(tactician_thoughts) == 0:
+            return NO_DIRECTION
+
+        # Loop over the tactician's thoughts
+        temp_direction = np.zeros(3)
+        max_weight = 0
+        reference_distance_m = 0.0
+        for thought in tactician_thoughts:
+            # Compute the direction and distance for this thought
+            action = thought["action"]
+            weight = thought["weight"]
+            if action == "follow_waypoints":
+                direction, distance_m = self.follow_waypoints()
+            elif action == "chase_target":
+                target = thought["target"]
+                direction, distance_m = self.chase_target(target=target)
+            elif action == "evade_target":
+                target = thought["target"]
+                direction, distance_m = self.evade_target(target=target)
+            elif action == "flee_from_target":
+                target = thought["target"]
+                direction, distance_m = self.flee_from_target(target=target)
+            else:
+                raise NotImplementedError(
+                    f"Action {action} not supported by the navigator"
+                )
+            # Update direction and distance
+            temp_direction += direction * weight
+            if weight > max_weight:
+                reference_distance_m = distance_m
+
+        # Find whether the bot is going somewhere
+        direction_norm = np.linalg.norm(direction)
+        if direction_norm < MIX_DISTANCE_TOLERANCE_M:
+            # LOGGER.info("Navigator: direction mix has a too low norm")
+            return NO_DIRECTION
+
+        # Normalize direction and return
+        direction = direction / direction_norm
+        return direction, reference_distance_m
 
     def follow_waypoints(self) -> Tuple[np.ndarray, float]:
         """
@@ -372,7 +412,7 @@ class AutoNavigator:
         # Compute direction to point to
         target_future_direction = target_future_position - self.ship.position
         target_future_distance_m = np.linalg.norm(target_future_direction)
-        if target_future_distance_m < DISTANCE_TOLERANCE_M:
+        if target_future_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             target_future_direction = np.zeros(3)
         else:
             target_future_direction /= target_future_distance_m
@@ -414,7 +454,7 @@ class AutoNavigator:
         # Compute direction to point to
         target_past_direction = target_past_position - self.ship.position
         target_past_distance_m = np.linalg.norm(target_past_direction)
-        if target_past_distance_m < DISTANCE_TOLERANCE_M:
+        if target_past_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             target_past_direction = np.zeros(3)
         else:
             target_past_direction /= target_past_distance_m
@@ -424,7 +464,7 @@ class AutoNavigator:
         )
         return target_past_position, reference_distance_m
 
-    def flee_target(self, target=None) -> Tuple[np.ndarray, float]:
+    def flee_from_target(self, target=None) -> Tuple[np.ndarray, float]:
         """
         Get as far away from the target as possible.
         TODO: use boost if possible ?
@@ -443,7 +483,7 @@ class AutoNavigator:
 
         target_current_direction = target_current_position - self.ship.position
         target_current_distance_m = np.linalg.norm(target_current_direction)
-        if target_current_distance_m < DISTANCE_TOLERANCE_M:
+        if target_current_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             target_current_direction = np.zeros(3)
         else:
             target_current_direction /= target_current_distance_m
@@ -479,7 +519,49 @@ class AutoTactician:
         self.ship = ship
 
     def think(self):
-        pass
+        """
+        Example of result
+
+        behaviours = [
+            {
+                "action": "flee",
+                "target": <some asteroid that's too close>,
+                "weight": 10,
+            },
+            {
+                "action": "evade",
+                "target": <a menacing enemy ship>,
+                "weight": 5,
+            },
+            {
+                "action": "follow_waypoints", # Only one of those please
+                "weight": 1,
+            },
+            {
+                "action": "chase",
+                "target": <a vulnerable enemy>, # Or a leader to follow
+                "weight": 1,
+            },
+        ]
+
+        Then:
+        - The navigator uses the distance associated with the most weighted behaviour
+        - The navigator makes a weighted average of all behaviour directions. If
+            the average is null, return NO_DIRECTION
+
+        TODO: For the flee problem, use a global array of all collidable objects ?
+        Or use the collision system of panda3d ?
+        Aaaaaaaaaaaaaaaaaaah, paniiiiiiic !!!
+
+        """
+        my_thoughts = [
+            {
+                "action": "follow_waypoints",
+                "weight": 1,
+            },
+        ]
+
+        return my_thoughts
 
     def clean(self):
         self.ship = None

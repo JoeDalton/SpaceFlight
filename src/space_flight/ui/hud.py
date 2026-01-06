@@ -67,8 +67,8 @@ class HUD:
             # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
             f"Time = {globalClock.getFrameTime():.0f}\n"
         )
-        try: 
-            bot_text = (    
+        try:
+            bot_text = (
                 "Bot angle to target = "
                 f"{self.app.bot2.pilot.angle_to_target_deg:.1f}°\n"
                 # f"Bot target_x = {self.app.bot.pilot.target_x}\n"
@@ -93,7 +93,7 @@ class HUD:
                 # f"Bot position = {self.app.bot.ship.state[:3]}\n"
             )
         except AttributeError:
-            bot_text=""
+            bot_text = ""
         hud_text = player_text + bot_text
 
         self.hud.setText(hud_text)

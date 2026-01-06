@@ -57,11 +57,11 @@ class Bot(Destructible):
         - The pilot steers the ship and adjusts the throttle to follow its aim
         - The ship moves according to the games physics
         """
-        # target_direction, reference_distance_m = self.get_direction() # Old,TB removed
+        thoughts = self.tactician.think()
 
-        self.tactician.think()
-
-        target_direction, reference_distance_m = self.navigator.navigate()
+        target_direction, reference_distance_m = self.navigator.navigate(
+            tactician_thoughts=thoughts
+        )
 
         throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
             target_direction=target_direction, reference_distance_m=reference_distance_m
