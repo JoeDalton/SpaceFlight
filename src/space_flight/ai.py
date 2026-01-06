@@ -239,23 +239,9 @@ class AutoPilot:
         throttle_rate = 0.0
         throttle_factor = 0.05
         # Decrease throttle if the target is at too much of an angle
-        if angle_to_target_deg > 30:
-            throttle_rate -= throttle_factor
-        elif angle_to_target_deg > 60:
-            throttle_rate -= 2 * throttle_factor
-        elif angle_to_target_deg > 90:
-            throttle_rate -= 3 * throttle_factor
-        elif angle_to_target_deg > 120:
-            throttle_rate -= 4 * throttle_factor
-        # Increase throttle if the target is too far, TODO the opposite if <0
-        if reference_distance_m > 10:
-            throttle_rate += 0.5 * throttle_factor
-        elif reference_distance_m > 100:
-            throttle_rate += 1.5 * throttle_factor
-        elif reference_distance_m > 200:
-            throttle_rate += 5 * throttle_factor
-        elif reference_distance_m > 400:
-            throttle_rate += 10 * throttle_factor
+        throttle_rate -= throttle_factor * 0.03 * angle_to_target_deg
+        # Increase throttle if the target is too far and lower it if negative distance
+        throttle_rate += throttle_factor * 0.02 * reference_distance_m
 
         return throttle_rate
 
@@ -282,7 +268,7 @@ class AutoNavigator:
         self.ship = ship
         self.waypoints = []
         self.next_waypoint_idx = 0
-        self.distance_to_waypoint = 0.0
+        self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
 
     def set_waypoints(self, waypoints: List[np.ndarray], is_loop: bool = False):
@@ -294,7 +280,7 @@ class AutoNavigator:
         assert len(waypoints) >= 1
         self.waypoints = waypoints
         self.next_waypoint_idx = 0
-        self.distance_to_waypoint = 0.0
+        self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = is_loop
 
     def navigate(self, tactician_thoughts: List[dict] = []) -> Tuple[np.ndarray, float]:
@@ -371,17 +357,17 @@ class AutoNavigator:
         next_waypoint = self.waypoints[self.next_waypoint_idx]
         waypoint_direction = next_waypoint - self.ship.position
         # Keep the distance as an attribute for debugging
-        self.distance_to_waypoint = np.linalg.norm(waypoint_direction)
+        self.distance_to_waypoint_m = np.linalg.norm(waypoint_direction)
 
         # Handle the case where the next waypoint has been met already
-        if self.distance_to_waypoint < WAYPOINT_MEETING_TOLERANCE_M:
+        if self.distance_to_waypoint_m < WAYPOINT_MEETING_TOLERANCE_M:
             # Do nothing this turn and target the next waypoint next time
             self.next_waypoint_idx += 1
             return NO_DIRECTION
 
         # Go to the next waypoint
-        direction = waypoint_direction / self.distance_to_waypoint
-        return direction, self.distance_to_waypoint
+        direction = waypoint_direction / self.distance_to_waypoint_m
+        return direction, self.distance_to_waypoint_m
 
     def chase_target(self, target=None) -> Tuple[np.ndarray, float]:
         """

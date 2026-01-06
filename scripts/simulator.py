@@ -62,7 +62,7 @@ class MyApp(ShowBase):
         Initialize player and ship
         """
         self.player = Player(
-            self, ship_type="a-wing", ini_position=np.array([0, -60, 0])
+            self, ship_type="a-wing", ini_position=np.array([0, -200, 0])
         )
         # self.player = Player(
         #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
@@ -80,14 +80,14 @@ class MyApp(ShowBase):
         """
         Initialize dummy bots
         """
-        spawn_bot(
-            app=self,
-            name="tie_1",
-            ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 0]),
-        )
+        # spawn_bot(
+        #     app=self,
+        #     name="tie_1",
+        #     ship_type="tie-fighter",
+        #     ini_position=np.array([0, 0, 0]),
+        # )
 
-        wp_distance = 100
+        wp_distance = 150
         bot2_waypoints = [
             np.array([0, wp_distance, 0]),
             np.array([0, wp_distance, wp_distance]),
