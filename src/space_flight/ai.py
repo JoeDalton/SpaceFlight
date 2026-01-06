@@ -1,4 +1,5 @@
 import logging
+from typing import List, Tuple
 
 import numpy as np
 from direct.showbase.ShowBaseGlobal import globalClock
@@ -13,10 +14,16 @@ from space_flight.utils import (
 
 LOGGER = logging.getLogger()
 
+
+NO_DIRECTION = np.zeros(3), 0.0
+
+# TODO: Pilot parameters ?
 ROLL_TOLERANCE = 1e-2
 
 # TODO: Navigator parameters ?
+WAYPOINT_MEETING_TOLERANCE_M = 10
 DISTANCE_TOLERANCE_M = 1
+CHASE_DISTANCE_M = 80.0
 EVADE_TIME_S = 1.0
 LEAD_TIME_S = 1.0
 
@@ -106,7 +113,7 @@ class AutoPilot:
         self.pid_pitch.set_auto_mode(False)
         self.pid_roll.set_auto_mode(False)
 
-    def __call__(
+    def pilot(
         self,
         target_direction: np.ndarray = np.zeros(3),
         reference_distance_m: float = 0.0,
@@ -270,16 +277,88 @@ class AutoNavigator:
 
     def __init__(self, ship):
         self.ship = ship
+        self.waypoints = []
+        self.next_waypoint_idx = 0
+        self.distance_to_waypoint = 0.0
+        self.has_waypoint_loop = False
 
-    def chase_target(self, target):
+    def set_waypoints(self, waypoints: List[np.ndarray], is_loop: bool = False):
+        """
+        Initializes waypoints for a trajectory or a loop
+
+        :param waypoints: A list of waypoint coordinates
+        """
+        assert len(waypoints) >= 1
+        self.waypoints = waypoints
+        self.next_waypoint_idx = 0
+        self.distance_to_waypoint = 0.0
+        self.has_waypoint_loop = is_loop
+
+    def navigate(self) -> Tuple[np.ndarray, float]:
+        """
+        Bundle the tactician's wishes and outputs a direction
+        to point to and a reference distance
+
+        :return: The direction to point to and its reference distance
+        """
+        # TODO: the bundle:
+        # - What to do with multiple targets
+        # - How to choose the right reference distance
+        # - Mix all behaviours according to weights
+
+        # Temporary: follow waypoints (or idle if no waypoints)
+        return self.follow_waypoints()
+
+    def follow_waypoints(self) -> Tuple[np.ndarray, float]:
+        """
+        Goes to the next available waypoint
+
+        :return: The direction to point to and its reference distance
+        """
+        # Handle the case where waypoints have already been visited
+        if self.next_waypoint_idx == len(self.waypoints):
+            if self.has_waypoint_loop:
+                # Start the loop again
+                self.next_waypoint_idx = 0
+            else:
+                # It's not a loop.
+                # Empty list and return no direction
+                self.waypoints = []
+                self.next_waypoint_idx = 0
+                return NO_DIRECTION
+
+        # Find next waypoint
+        next_waypoint = self.waypoints[self.next_waypoint_idx]
+        waypoint_direction = next_waypoint - self.ship.position
+        # Keep the distance as an attribute for debugging
+        self.distance_to_waypoint = np.linalg.norm(waypoint_direction)
+
+        # Handle the case where the next waypoint has been met already
+        if self.distance_to_waypoint < WAYPOINT_MEETING_TOLERANCE_M:
+            # Do nothing this turn and target the next waypoint next time
+            self.next_waypoint_idx += 1
+            return NO_DIRECTION
+
+        # Go to the next waypoint
+        direction = waypoint_direction / self.distance_to_waypoint
+        return direction, self.distance_to_waypoint
+
+    def chase_target(self, target=None) -> Tuple[np.ndarray, float]:
         """
         Chases a target by pointing towards the position it will hold LEAD_TIME_S later
         should its speed remain constant.
         The reference distance is the distance to the target itself.
 
+        Can also be used to follow a formation leader.
+
         :param target: A target object with a position attribute and an optional
                 speed attribute
+        :return: The direction to point to and its reference distance
         """
+        # Case where there is no target
+        if target is None:
+            return NO_DIRECTION
+
         # Find the future position of the target
         target_current_position = target.position
         try:
@@ -289,6 +368,7 @@ class AutoNavigator:
         target_future_position = (
             target_current_position + target_current_speed * LEAD_TIME_S
         )
+
         # Compute direction to point to
         target_future_direction = target_future_position - self.ship.position
         target_future_distance_m = np.linalg.norm(target_future_direction)
@@ -296,13 +376,17 @@ class AutoNavigator:
             target_future_direction = np.zeros(3)
         else:
             target_future_direction /= target_future_distance_m
-        # Find reference distance
-        reference_distance_m = np.linalg.norm(
-            target_current_position - self.ship.position
+
+        # Find reference distance. It's the distance to the target minus the distance
+        # that should be left behind the bot and the target
+        reference_distance_m = max(
+            0.0,
+            np.linalg.norm(target_current_position - self.ship.position)
+            - CHASE_DISTANCE_M,
         )
         return target_future_position, reference_distance_m
 
-    def evade_target(self, target):
+    def evade_target(self, target=None) -> Tuple[np.ndarray, float]:
         """
         Passes behind a target by pointing towards the position it would have
         held one second earlier were its speed constant.
@@ -311,14 +395,19 @@ class AutoNavigator:
 
         :param target: A target object with a position attribute and an optional
                 speed attribute
+        :return: The direction to point to and its reference distance
         """
+        # Case where there is no target
+        if target is None:
+            return NO_DIRECTION
+
         # Find the past position of the target
         target_current_position = target.position
         try:
             target_current_speed = target.speed
         except AttributeError:
             # Immobile target, nothing to evade from
-            return np.zeros(3), 0.0
+            return NO_DIRECTION
         target_past_position = (
             target_current_position - target_current_speed * EVADE_TIME_S
         )
@@ -335,13 +424,20 @@ class AutoNavigator:
         )
         return target_past_position, reference_distance_m
 
-    def flee_target(self, target):
+    def flee_target(self, target=None) -> Tuple[np.ndarray, float]:
         """
         Get as far away from the target as possible.
         TODO: use boost if possible ?
-        
+
+        Can also be used to avoid a collision
+
         :param target: A target object with a position attribute
+        :return: The direction to point to and its reference distance
         """
+        # Case where there is no target
+        if target is None:
+            return NO_DIRECTION
+
         # Find the target's direction
         target_current_position = target.position
 
@@ -381,6 +477,9 @@ class AutoTactician:
 
     def __init__(self, ship):
         self.ship = ship
+
+    def think(self):
+        pass
 
     def clean(self):
         self.ship = None
