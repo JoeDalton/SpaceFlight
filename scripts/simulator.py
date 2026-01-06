@@ -101,9 +101,8 @@ class MyApp(ShowBase):
             ship_type="tie-fighter",
             ini_position=np.array([0, 0, 20]),
             has_debug_trihedron=True,
-            mode="loop",
-            mode_dict={"waypoints": bot2_waypoints},
         )
+        self.bot2.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
         """
         HUD

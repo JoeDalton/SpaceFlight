@@ -237,6 +237,7 @@ class Ship:
         )
         self.move_ship_physics()
 
+        # TODO position and orientation => Attributes ?
         ship_pos = self.state[0:3]
         ship_quat = self.state[3:7]
 
