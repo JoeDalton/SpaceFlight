@@ -38,6 +38,11 @@ class Bot(Destructible):
         self.autopilot = AutoPilot(ship=self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
 
+        # DEBUG
+        self.ship.health = 1.1
+        self.ship.shield = 0.0
+        self.ship.shield_regen_rate = 0.0
+
         self.initialize_move()
 
     def initialize_move(self):

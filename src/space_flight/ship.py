@@ -293,4 +293,5 @@ class Ship:
             # somewhere but I can't find them. Bot deletes fine, though. Children,
             # including panda3d objects are properly deleted, I believe, so this
             # should not have too much of a memory impact. It's still enraging, though..
+            LOGGER.info(self.app.taskMgr.getAllTasks)
             LOGGER.info("Deleted ship")

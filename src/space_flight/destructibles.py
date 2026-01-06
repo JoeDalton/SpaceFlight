@@ -64,7 +64,7 @@ class Destructibles:
     def handle_deaths_task(self, task):
         """
         Check the health of all destructible and kill them if necessary
-        TODO Very expensive !!
+        TODO Expensive, by spike
         """
         still_alive_objects: List[Destructible] = []
         newly_dead_objects: List[Destructible] = []
