@@ -1,7 +1,11 @@
+import logging
+
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import CollisionHandlerEvent, CollisionTraverser
 
 from space_flight import DEBUG_COLLISION
+
+LOGGER = logging.getLogger()
 
 
 class CollisionSystem:
@@ -15,6 +19,9 @@ class CollisionSystem:
         self.app.taskMgr.add(self.collision_task, "collider")
 
         self.app.accept("laser-into-ship", self.laser_into_destructible)
+        self.app.accept("laser-into-terrain", self.laser_into_terrain)
+        self.app.accept("ship-into-terrain", self.ship_into_terrain)
+        self.app.accept("ship-into-ship", self.ship_into_ship)
 
         # Debug
         self.collision_info = OnscreenText(text="", fg=(1, 1, 1, 1), scale=0.15)
@@ -26,11 +33,10 @@ class CollisionSystem:
 
     def laser_into_destructible(self, entry):
         """
-        Handle the case where a laser hits a dstructable object:
+        Handle the case where a laser hits a destructable object:
         Damage the destructable object and remove the laser.
 
         TODO: Ignore self hits... Needs UIDs ?
-        TODO: Delete the laser and all its children. Needs UIDs ?
         TODO: Add a hit sprite
 
         :param entry: Panda3d's description of the collision
@@ -43,3 +49,37 @@ class CollisionSystem:
 
         # Delete laser
         laser.shot.removeNode()
+
+    def laser_into_terrain(self, entry):
+        """
+        Handle the case where a laser hits a terrain object:
+        Remove the laser.
+
+        TODO: Add a hit sprite
+
+        :param entry: Panda3d's description of the collision
+        """
+        if DEBUG_COLLISION:
+            LOGGER.info("laser into terrain")
+        laser = entry.from_node_path.python_tags["owner"]
+
+        # Delete laser
+        laser.shot.removeNode()
+
+    def ship_into_terrain(self, entry):
+        """
+        TODO
+
+        :param entry: Panda3d's description of the collision
+        """
+        if DEBUG_COLLISION:
+            LOGGER.info("ship into terrain")
+
+    def ship_into_ship(self, entry):
+        """
+        TODO
+
+        :param entry: Panda3d's description of the collision
+        """
+        if DEBUG_COLLISION:
+            LOGGER.info("ship into ship")

@@ -197,6 +197,7 @@ class LaserShot:
         # TODO Use segments instead. This does not work with low FPS
         self.laser_cnode = CollisionNode("laser")
         self.laser_cnode.addSolid(CollisionSphere(0, 0, 0, 1))
+        # Lasers triger collisions when found by all objects
         self.laser_cnode.setFromCollideMask(ALL_BIT)
         self.laser_cnode.setIntoCollideMask(0)
         self.laser_np = self.shot.attachNewNode(self.laser_cnode)

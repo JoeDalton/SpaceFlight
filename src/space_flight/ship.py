@@ -10,7 +10,14 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
-from space_flight import DATAFILES_PATH, DEBUG_COLLISION, DEBUG_DELETION, SHIP_BIT
+from space_flight import (
+    ALL_BIT,
+    DATAFILES_PATH,
+    DEBUG_COLLISION,
+    DEBUG_DELETION,
+    SHIP_BIT,
+    TERRAIN_BIT,
+)
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
 from space_flight.utils import rotate_single_vector
@@ -112,8 +119,22 @@ class Ship:
         self.hit_box_radius_m = self.conf["hit_box_radius_m"]
         self.target_cnode = CollisionNode("ship")
         self.target_cnode.addSolid(CollisionSphere(0, 0, 0, self.hit_box_radius_m))
-        self.target_cnode.setFromCollideMask(0)
+
+        # Old :
+        # Ships never trigger collisions, but they look for intersections with SHIP_BIT
+        # self.target_cnode.setFromCollideMask(0)
+        # self.target_cnode.setIntoCollideMask(SHIP_BIT)
+
+        # Intermediary: Ships trigger collisions when they are found by TERRAIN_BIT
+        # and look for intersections with SHIP_BIT
+        self.target_cnode.setFromCollideMask(TERRAIN_BIT)
         self.target_cnode.setIntoCollideMask(SHIP_BIT)
+
+        # Final ?: Ships trigger collisions when they are found by anything
+        # (terrain or ship) and look for intersections with SHIP_BIT
+        # self.target_cnode.setFromCollideMask(ALL_BIT)
+        # self.target_cnode.setIntoCollideMask(SHIP_BIT)
+
         self.ship_np = self.node.attachNewNode(self.target_cnode)
         self.ship_np.setPythonTag("owner", self)
         if DEBUG_COLLISION:

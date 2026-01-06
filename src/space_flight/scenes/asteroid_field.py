@@ -3,9 +3,9 @@ import random
 import numpy as np
 import quaternion
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Quat
+from panda3d.core import CollisionNode, CollisionSphere, Quat
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, DEBUG_COLLISION, TERRAIN_BIT
 
 random.seed(1)
 np.random.seed(1)
@@ -22,6 +22,8 @@ class AsteroidField:
 
     The shapes, positions, rotations and scales are randomly chosen
     for each asteroid.
+
+    TODO: if I want asteroids to be destructible, I may need to isolate them :(
     """
 
     def __init__(
@@ -81,6 +83,21 @@ class AsteroidField:
             if self.is_moving:
                 omega = 5000 * np.deg2rad(np.random.rand(3) - 0.5) / (scale**1.5)
                 self.omegas[3 * ast_idx : 3 * (ast_idx + 1)] = omega.copy()
+
+            # Initialize collisions
+            hit_box_radius_m = scale
+            target_cnode = CollisionNode("terrain")
+            target_cnode.addSolid(CollisionSphere(0, 0, 0, hit_box_radius_m))
+
+            # Asteroids never trigger collisions,
+            # but they look for intersections with TERRAIN_BIT
+            target_cnode.setFromCollideMask(0)
+            target_cnode.setIntoCollideMask(TERRAIN_BIT)
+
+            asteroid_np = instance.attachNewNode(target_cnode)
+            # asteroid_np.setPythonTag("owner", self)
+            if DEBUG_COLLISION:
+                asteroid_np.show()
 
             # Store the new instance
             self.asteroids.append(instance)
