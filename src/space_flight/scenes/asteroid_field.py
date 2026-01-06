@@ -85,16 +85,18 @@ class AsteroidField:
                 self.omegas[3 * ast_idx : 3 * (ast_idx + 1)] = omega.copy()
 
             # Initialize collisions
-            hit_box_radius_m = scale
-            target_cnode = CollisionNode("terrain")
-            target_cnode.addSolid(CollisionSphere(0, 0, 0, hit_box_radius_m))
+            # Do something better with the type of asteroid. Use a simplified mesh,
+            # for example.
+            hit_box_radius_m = 1.2
+            ast_cnode = CollisionNode("terrain")
+            ast_cnode.addSolid(CollisionSphere(0, 0, 0, hit_box_radius_m))
 
             # Asteroids never trigger collisions,
             # but they look for intersections with TERRAIN_BIT
-            target_cnode.setFromCollideMask(0)
-            target_cnode.setIntoCollideMask(TERRAIN_BIT)
+            ast_cnode.setFromCollideMask(0)
+            ast_cnode.setIntoCollideMask(TERRAIN_BIT)
 
-            asteroid_np = instance.attachNewNode(target_cnode)
+            asteroid_np = instance.attachNewNode(ast_cnode)
             # asteroid_np.setPythonTag("owner", self)
             if DEBUG_COLLISION:
                 asteroid_np.show()
