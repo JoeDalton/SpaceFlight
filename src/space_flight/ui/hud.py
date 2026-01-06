@@ -55,7 +55,7 @@ class HUD:
         """
         frame_rate = ClockObject.getGlobalClock().getAverageFrameRate()
 
-        self.hud.setText(
+        player_text = (
             ""
             # f"Cam Position = {self.app.camera.get_pos()}\n"
             # f"Cam Orientation = {self.app.camera.get_hpr()}\n"
@@ -66,30 +66,37 @@ class HUD:
             # f"Player Rot. rate = {np.rad2deg(self.app.player.ship.pqr)}\n"
             # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
             f"Time = {globalClock.getFrameTime():.0f}\n"
-            f"Bot mode = {self.app.bot2.mode}\n"
-            "Bot angle to target = "
-            f"{self.app.bot2.pilot.angle_to_target_deg:.1f}°\n"
-            # f"Bot target_x = {self.app.bot.pilot.target_x}\n"
-            # f"Bot target_y = {self.app.bot.pilot.target_y}\n"
-            # f"Bot target_z = {self.app.bot.pilot.target_z}\n"
-            # f"Yaw_error_deg = {self.app.bot.pilot.yaw_error}\n"
-            # f"Pitch_error_deg = {self.app.bot.pilot.pitch_error}\n"
-            # f"Roll_error_deg = {self.app.bot.pilot.roll_error}\n"
-            # f"yaw_rate_command = {self.app.bot.pilot.yaw_rate_command}\n"
-            # f"pitch_rate_command = {self.app.bot.pilot.pitch_rate_command}\n"
-            # f"roll_rate_command = {self.app.bot.pilot.roll_rate_command}\n"
-            # f"yaw_rate = {self.app.bot.pilot.yaw_rate}\n"
-            # f"pitch_rate = {self.app.bot.pilot.pitch_rate}\n"
-            # f"roll_rate = {self.app.bot.pilot.roll_rate}\n"
-            f"Bot throttle = {self.app.bot2.pilot.throttle:.4f}\n"
-            # f"Next waypoint idx = {self.app.bot.next_waypoint_idx}\n"
-            f"Bot Speed = {np.linalg.norm(self.app.bot2.ship.state[7:10]):.1f}m/s\n"
-            # f"Distance to waypoint = {self.app.bot.distance_to_waypoint:.1f}m\n"
-            # f"Next waypoint = "
-            # "{self.app.bot.waypoints[min(len(self.app.bot.waypoints)-1,
-            # self.app.bot.next_waypoint_idx)]}\n"
-            # f"Bot position = {self.app.bot.ship.state[:3]}\n"
         )
+        try: 
+            bot_text = (    
+                "Bot angle to target = "
+                f"{self.app.bot2.pilot.angle_to_target_deg:.1f}°\n"
+                # f"Bot target_x = {self.app.bot.pilot.target_x}\n"
+                # f"Bot target_y = {self.app.bot.pilot.target_y}\n"
+                # f"Bot target_z = {self.app.bot.pilot.target_z}\n"
+                # f"Yaw_error_deg = {self.app.bot.pilot.yaw_error}\n"
+                # f"Pitch_error_deg = {self.app.bot.pilot.pitch_error}\n"
+                # f"Roll_error_deg = {self.app.bot.pilot.roll_error}\n"
+                # f"yaw_rate_command = {self.app.bot.pilot.yaw_rate_command}\n"
+                # f"pitch_rate_command = {self.app.bot.pilot.pitch_rate_command}\n"
+                # f"roll_rate_command = {self.app.bot.pilot.roll_rate_command}\n"
+                # f"yaw_rate = {self.app.bot.pilot.yaw_rate}\n"
+                # f"pitch_rate = {self.app.bot.pilot.pitch_rate}\n"
+                # f"roll_rate = {self.app.bot.pilot.roll_rate}\n"
+                f"Bot throttle = {self.app.bot2.pilot.throttle:.4f}\n"
+                # f"Next waypoint idx = {self.app.bot.next_waypoint_idx}\n"
+                f"Bot Speed = {np.linalg.norm(self.app.bot2.ship.state[7:10]):.1f}m/s\n"
+                # f"Distance to waypoint = {self.app.bot.distance_to_waypoint:.1f}m\n"
+                # f"Next waypoint = "
+                # "{self.app.bot.waypoints[min(len(self.app.bot.waypoints)-1,
+                # self.app.bot.next_waypoint_idx)]}\n"
+                # f"Bot position = {self.app.bot.ship.state[:3]}\n"
+            )
+        except AttributeError:
+            bot_text=""
+        hud_text = player_text + bot_text
+
+        self.hud.setText(hud_text)
 
         self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
 
