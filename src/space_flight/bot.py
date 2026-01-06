@@ -1,12 +1,12 @@
 import logging
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai import AutoPilot
+from space_flight.ai import AutoPilot, AutoNavigator, AutoTactician
 from space_flight.destructibles import Destructible
 from space_flight.ship import Ship
 from space_flight.trihedron import Trihedron
@@ -34,14 +34,12 @@ class Bot(Destructible):
             ini_orientation=ini_orientation,
             is_cockpit=False,
         )
+        
         self.set_mode("idle")
-        self.autopilot = AutoPilot(ship=self.ship)
+        self.pilot = AutoPilot(ship=self.ship)
+        self.navigator = AutoNavigator(ship = self.ship)
+        self.tactician =AutoTactician(ship = self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
-
-        # DEBUG
-        self.ship.health = 1.1
-        self.ship.shield = 0.0
-        self.ship.shield_regen_rate = 0.0
 
         self.initialize_move()
 
@@ -61,7 +59,7 @@ class Bot(Destructible):
         without being told to.
         """
         target_direction, reference_distance_m = self.get_direction()
-        throttle, yaw_rate, pitch_rate, roll_rate = self.autopilot.pilot(
+        throttle, yaw_rate, pitch_rate, roll_rate = self.pilot(
             target_direction=target_direction, reference_distance_m=reference_distance_m
         )
         self.ship.move_ship(
@@ -96,7 +94,7 @@ class Bot(Destructible):
         if mode in ["loop", "waypoints"]:
             self.initialize_waypoints(waypoints=mode_dict["waypoints"])
 
-    def get_direction(self):
+    def get_direction(self) -> Tuple[np.ndarray, float]:
         """
         Gives the direction vector to aim for
 
@@ -111,14 +109,14 @@ class Bot(Destructible):
         elif self.mode == "waypoints":
             return self.get_direction_waypoints()
 
-    def get_direction_idle(self) -> np.ndarray:
+    def get_direction_idle(self) -> Tuple[np.ndarray, float]:
         """
         Gives the direction vector to aim for
         The bot does nothing
         """
         return np.zeros(3), 0.0
 
-    def get_direction_demo(self) -> np.ndarray:
+    def get_direction_demo(self) -> Tuple[np.ndarray, float]:
         """
         Gives the direction vector to aim for
         The bot moves a bit around itself
@@ -130,7 +128,7 @@ class Bot(Destructible):
         else:
             return np.array([1.0, 0.0, 0.0]), 0.0
 
-    def get_direction_loop(self) -> np.ndarray:
+    def get_direction_loop(self) -> Tuple[np.ndarray, float]:
         """
         _summary_
 
@@ -141,7 +139,7 @@ class Bot(Destructible):
             self.next_waypoint_idx = 0
         return self.get_direction_waypoints()
 
-    def get_direction_waypoints(self) -> np.ndarray:
+    def get_direction_waypoints(self) -> Tuple[np.ndarray, float]:
         """
         _summary_
 
@@ -179,8 +177,12 @@ class Bot(Destructible):
         Remove every child
         """
         self.app.player.remove_target(target_to_remove=self.ship)
-        self.autopilot.clean()
-        self.autopilot = None
+        self.pilot.clean()
+        self.pilot = None
+        self.navigator.clean()
+        self.navigator = None
+        self.tactician.clean()
+        self.tactician = None
         self.ship.clean()
         self.ship = None
         if DEBUG_DELETION:

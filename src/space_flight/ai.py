@@ -15,6 +15,11 @@ LOGGER = logging.getLogger()
 
 ROLL_TOLERANCE = 1e-2
 
+# TODO: Navigator parameters ?
+DISTANCE_TOLERANCE_M = 1
+EVADE_TIME_S = 1.0
+LEAD_TIME_S = 1.0
+
 
 class AutoPilot:
     def __init__(self, ship):
@@ -101,7 +106,7 @@ class AutoPilot:
         self.pid_pitch.set_auto_mode(False)
         self.pid_roll.set_auto_mode(False)
 
-    def pilot(
+    def __call__(
         self,
         target_direction: np.ndarray = np.zeros(3),
         reference_distance_m: float = 0.0,
@@ -112,6 +117,8 @@ class AutoPilot:
 
         TODO : take into account the speed vector instead of ship axes to account for
         nicer flight dynamics (sideslip, AoA) ?
+
+        TODO : Add pilot skill modifiers ?
         """
         dt = globalClock.getDt()
 
@@ -127,6 +134,8 @@ class AutoPilot:
             self.angle_to_target_deg = 0.0
         else:
             # Find ship axes
+            # TODO remove normalization since the autonavigator is supposed to give
+            # either a null or a unit direction
             target_direction = target_direction / target_direction_norm
             ship_quat = np.quaternion(*self.ship.orientation)
             ship_x = rotate_single_vector(ship_quat, np.array([1.0, 0.0, 0.0]))
@@ -212,6 +221,9 @@ class AutoPilot:
 
         TODO: Use 2nd order polynomials instead of if conditions
 
+        TODO: Not sure this is a good controller. Especially with reference distances
+        that are difficult to determine for boids
+
         :param angle_to_target_deg: _description_
         :param reference_distance_float_deg: _description_
         :return: _description_
@@ -247,3 +259,134 @@ class AutoPilot:
     def __del__(self):
         if DEBUG_DELETION:
             LOGGER.info("Deleted autopilot")
+
+
+class AutoNavigator:
+    """
+    TODO
+    Determines the direction vector that the AutoPilot should aim for by computing the
+    behaviour forces and using the weights from the AutoTactician
+    """
+
+    def __init__(self, ship):
+        self.ship = ship
+
+    def chase_target(self, target):
+        """
+        Chases a target by pointing towards the position it will hold LEAD_TIME_S later
+        should its speed remain constant.
+        The reference distance is the distance to the target itself.
+
+        :param target: A target object with a position attribute and an optional
+                speed attribute
+        """
+        # Find the future position of the target
+        target_current_position = target.position
+        try:
+            target_current_speed = target.speed
+        except AttributeError:
+            target_current_speed = np.zeros(3)
+        target_future_position = (
+            target_current_position + target_current_speed * LEAD_TIME_S
+        )
+        # Compute direction to point to
+        target_future_direction = target_future_position - self.ship.position
+        target_future_distance_m = np.linalg.norm(target_future_direction)
+        if target_future_distance_m < DISTANCE_TOLERANCE_M:
+            target_future_direction = np.zeros(3)
+        else:
+            target_future_direction /= target_future_distance_m
+        # Find reference distance
+        reference_distance_m = np.linalg.norm(
+            target_current_position - self.ship.position
+        )
+        return target_future_position, reference_distance_m
+
+    def evade_target(self, target):
+        """
+        Passes behind a target by pointing towards the position it would have
+        held one second earlier were its speed constant.
+
+        If its speed is zero, do nothing.
+
+        :param target: A target object with a position attribute and an optional
+                speed attribute
+        """
+        # Find the past position of the target
+        target_current_position = target.position
+        try:
+            target_current_speed = target.speed
+        except AttributeError:
+            # Immobile target, nothing to evade from
+            return np.zeros(3), 0.0
+        target_past_position = (
+            target_current_position - target_current_speed * EVADE_TIME_S
+        )
+        # Compute direction to point to
+        target_past_direction = target_past_position - self.ship.position
+        target_past_distance_m = np.linalg.norm(target_past_direction)
+        if target_past_distance_m < DISTANCE_TOLERANCE_M:
+            target_past_direction = np.zeros(3)
+        else:
+            target_past_direction /= target_past_distance_m
+        # Find reference distance
+        reference_distance_m = np.linalg.norm(
+            target_current_position - self.ship.position
+        )
+        return target_past_position, reference_distance_m
+
+    def flee_target(self, target):
+        """
+        Get as far away from the target as possible.
+        TODO: use boost if possible ?
+        
+        :param target: A target object with a position attribute
+        """
+        # Find the target's direction
+        target_current_position = target.position
+
+        target_current_direction = target_current_position - self.ship.position
+        target_current_distance_m = np.linalg.norm(target_current_direction)
+        if target_current_distance_m < DISTANCE_TOLERANCE_M:
+            target_current_direction = np.zeros(3)
+        else:
+            target_current_direction /= target_current_distance_m
+        # Find fleeing direction
+        fleeing_direction = -target_current_direction
+        # Find reference distance
+        reference_distance_m = 1e4
+
+        return fleeing_direction, reference_distance_m
+
+    def clean(self):
+        self.ship = None
+        if DEBUG_DELETION:
+            LOGGER.info("Cleaned autonavigator")
+
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info("Deleted autonavigator")
+
+
+class AutoTactician:
+    """
+    TODO
+    Finds the proper strategy for a bot:
+    - Select the most valuable target (enemy to kill, friend to escort,
+        patrol to do, should be scriptable ?)
+    - Weigh the behaviour forces
+    - The weights could depend on an aggressive/defensive/cowardly personnality
+    - They may depend on the situation and/or a scenario
+    """
+
+    def __init__(self, ship):
+        self.ship = ship
+
+    def clean(self):
+        self.ship = None
+        if DEBUG_DELETION:
+            LOGGER.info("Cleaned autotactician")
+
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info("Deleted autotactician")
