@@ -10,13 +10,11 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
-from space_flight import (
+from space_flight import (  # SHIP_BIT,; TERRAIN_BIT,
     ALL_BIT,
     DATAFILES_PATH,
     DEBUG_COLLISION,
     DEBUG_DELETION,
-    SHIP_BIT,
-    TERRAIN_BIT,
 )
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel

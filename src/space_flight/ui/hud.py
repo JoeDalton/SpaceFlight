@@ -86,7 +86,8 @@ class HUD:
                 f"Bot throttle = {self.app.bot2.pilot.throttle:.4f}\n"
                 # f"Next waypoint idx = {self.app.bot.next_waypoint_idx}\n"
                 f"Bot Speed = {np.linalg.norm(self.app.bot2.ship.state[7:10]):.1f}m/s\n"
-                f"Distance to waypoint = {self.app.bot2.navigator.distance_to_waypoint_m:.1f}m\n"
+                "Distance to waypoint = "
+                f"{self.app.bot2.navigator.distance_to_waypoint_m:.1f}m\n"
                 f"Next waypoint = {self.app.bot2.navigator.next_waypoint_idx}\n"
                 # f"Bot position = {self.app.bot2.ship.state[:3]}\n"
             )

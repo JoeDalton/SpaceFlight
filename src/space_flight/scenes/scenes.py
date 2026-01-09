@@ -140,6 +140,7 @@ class SceneLavaPlanet(Scene):
         self.rotating_asteroid_field.initialize_move()
         self.big_rotating_asteroid_field.initialize_move()
 
+
 class SceneDebug(Scene):
     def __init__(
         self,
@@ -158,7 +159,10 @@ class SceneDebug(Scene):
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
-            app=self.app, n_asteroids=1, field_size=1, is_moving=False,
+            app=self.app,
+            n_asteroids=1,
+            field_size=1,
+            is_moving=False,
             scale_factor=1.0,
         )
         # self.rotating_asteroid_field = AsteroidField(
@@ -168,4 +172,3 @@ class SceneDebug(Scene):
 
     def inititalize_move(self):
         self.rotating_asteroid_field.initialize_move()
-
