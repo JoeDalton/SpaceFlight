@@ -46,6 +46,14 @@ class CollisionSystem:
         laser = entry.from_node_path.python_tags["owner"]
         destructible = entry.into_node_path.python_tags["owner"]
 
+        # Check if the laser as encountered its own emitter => no "real" collision
+        try:
+            destructible_id = destructible.id
+        except AttributeError:
+            destructible_id = ""
+        if laser.origin_ship_id == destructible_id:
+            return
+
         # Apply damage to the destructible object
         destructible.count_hit(damage=laser.power)
 

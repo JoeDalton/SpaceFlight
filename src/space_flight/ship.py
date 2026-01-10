@@ -2,6 +2,7 @@ import gc
 import logging
 import sys
 from typing import Any
+import uuid
 
 import numpy as np
 import quaternion
@@ -52,6 +53,7 @@ class Ship:
         self.app = app
         self.parent = parent
         self.is_dead = False
+        self.id = uuid.uuid4()
 
         # Load configuration
         filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"

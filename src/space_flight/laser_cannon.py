@@ -99,6 +99,7 @@ class LaserCannon:
 
         _ = LaserShot(
             app=self.app,
+            origin_ship_id=self.parent_ship.id,
             texture=self.laser_texture,
             power=self.shot_power,
             life_time_s=self.life_time_s,
@@ -147,6 +148,7 @@ class LaserShot:
     def __init__(
         self,
         app,
+        origin_ship_id: str,
         texture,
         power: float,
         life_time_s: float,
@@ -157,6 +159,7 @@ class LaserShot:
     ):
         self.app = app
         self.power = power
+        self.origin_ship_id = origin_ship_id
 
         # Create flat quad
         cm = CardMaker("laser")
