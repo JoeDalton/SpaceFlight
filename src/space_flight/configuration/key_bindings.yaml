@@ -1,4 +1,4 @@
-input_type: keyboard
+input_type: joystick # keyboard
 
 # Keyboard bindings
 throttle_up: arrow_up

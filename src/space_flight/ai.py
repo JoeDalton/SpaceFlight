@@ -19,6 +19,10 @@ NO_DIRECTION = np.zeros(3), 0.0
 
 # TODO: Pilot parameters ?
 ROLL_TOLERANCE = 1e-2
+ANGLE_THROTTLE_EXPONENT = 0.5
+DISTANCE_FOR_MAX_THROTTLE = 2000
+MIN_THROTTLE = 0.0
+DISTANCE_THROTTLE_EXPONENT = 1.1
 
 # TODO: Navigator parameters ?
 WAYPOINT_MEETING_TOLERANCE_M = 10
@@ -26,7 +30,7 @@ MIX_DISTANCE_TOLERANCE_M = 1e-2
 TARGET_DISTANCE_TOLERANCE_M = 1
 CHASE_DISTANCE_M = 80.0
 EVADE_TIME_S = 1.0
-LEAD_TIME_S = 1.0
+LEAD_TIME_S = 0.1
 
 
 class AutoPilot:
@@ -130,16 +134,13 @@ class AutoPilot:
         """
         dt = globalClock.getDt()
 
-        # Update throttle
-        throttle_command = max(min(self.throttle + dt * self.throttle_rate, 1.0), 0.0)
-
         # Compute directions
         target_direction_norm = np.linalg.norm(target_direction)
         if target_direction_norm == 0.0:
             yaw_error = 0.0
             pitch_error = 0.0
             roll_error = 0.0
-            self.angle_to_target_deg = 0.0
+            cos_angle_to_target = 1.0
         else:
             # Find ship axes
             # TODO remove normalization since the autonavigator is supposed to give
@@ -169,12 +170,12 @@ class AutoPilot:
             self.pitch_error_deg = np.rad2deg(pitch_error)
             self.roll_error_deg = np.rad2deg(roll_error)
 
-            angle_to_target_rad = np.arccos(np.dot(ship_y, target_direction))
-            self.angle_to_target_deg = np.rad2deg(angle_to_target_rad)
+            cos_angle_to_target = np.dot(ship_y, target_direction)
+            self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Update throttle command
-        self.throttle_rate = AutoPilot.simple_throttle_controller(
-            angle_to_target_deg=self.angle_to_target_deg,
+        throttle_command = AutoPilot.simple_throttle_controller(
+            cos_angle_to_target=cos_angle_to_target,
             reference_distance_m=reference_distance_m,
         )
 
@@ -211,11 +212,14 @@ class AutoPilot:
             fall_time=self.filter_time,
         )
 
+        # Clamp throttle
+        self.throttle = max(min(self.throttle, 1.0), MIN_THROTTLE)
+
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
 
     @staticmethod
     def simple_throttle_controller(
-        angle_to_target_deg: float, reference_distance_m: float
+        cos_angle_to_target: float, reference_distance_m: float
     ) -> float:
         """
         I want the reference distance to go to zero and the angle to target to go to
@@ -227,23 +231,25 @@ class AutoPilot:
          - Increase if getting away while in the right direction, diminish otherwise
          - The opposite if getting closer => P(I)D controller with a twist ?
 
-        TODO: Use 2nd order polynomials instead of if conditions
+        TODO: Add a contribution on closing distance
 
-        TODO: Not sure this is a good controller. Especially with reference distances
-        that are difficult to determine for boids
-
-        :param angle_to_target_deg: _description_
+        :param cos_angle_to_target: _description_
         :param reference_distance_float_deg: _description_
         :return: _description_
         """
-        throttle_rate = 0.0
-        throttle_factor = 0.05
         # Decrease throttle if the target is at too much of an angle
-        throttle_rate -= throttle_factor * 0.03 * angle_to_target_deg
+        angle_contribution = max(0.0, cos_angle_to_target) ** ANGLE_THROTTLE_EXPONENT
         # Increase throttle if the target is too far and lower it if negative distance
-        throttle_rate += throttle_factor * 0.02 * reference_distance_m
+        distance_contribution = (
+            max(
+                min(reference_distance_m / DISTANCE_FOR_MAX_THROTTLE, 1.0), MIN_THROTTLE
+            )
+            ** DISTANCE_THROTTLE_EXPONENT
+        )
+        # Combine contributions
+        throttle_command = angle_contribution * distance_contribution
 
-        return throttle_rate
+        return throttle_command
 
     def clean(self):
         self.ship = None
@@ -318,7 +324,7 @@ class AutoNavigator:
                 direction, distance_m = self.flee_from_target(target=target)
             else:
                 raise NotImplementedError(
-                    f"Action {action} not supported by the navigator"
+                    f"Action `{action}` not supported by the navigator"
                 )
             # Update direction and distance
             temp_direction += direction * weight
@@ -510,12 +516,12 @@ class AutoTactician:
 
         behaviours = [
             {
-                "action": "flee",
+                "action": "flee_from_target",
                 "target": <some asteroid that's too close>,
                 "weight": 10,
             },
             {
-                "action": "evade",
+                "action": "evade_target",
                 "target": <a menacing enemy ship>,
                 "weight": 5,
             },
@@ -524,7 +530,7 @@ class AutoTactician:
                 "weight": 1,
             },
             {
-                "action": "chase",
+                "action": "chase_target",
                 "target": <a vulnerable enemy>, # Or a leader to follow
                 "weight": 1,
             },
@@ -540,12 +546,21 @@ class AutoTactician:
         Aaaaaaaaaaaaaaaaaaah, paniiiiiiic !!!
 
         """
-        my_thoughts = [
-            {
-                "action": "follow_waypoints",
-                "weight": 1,
-            },
-        ]
+        if self.ship.parent.name == "tie_2":
+            my_thoughts = [
+                {
+                    "action": "follow_waypoints",
+                    "weight": 1,
+                },
+            ]
+        else:
+            my_thoughts = [
+                {
+                    "action": "chase_target",
+                    "target": self.ship.app.bot2.ship,
+                    "weight": 1,
+                },
+            ]
 
         return my_thoughts
 

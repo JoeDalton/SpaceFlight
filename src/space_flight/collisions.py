@@ -42,7 +42,7 @@ class CollisionSystem:
         :param entry: Panda3d's description of the collision
         """
         if DEBUG_COLLISION:
-            LOGGER.info("ship into destructible")
+            LOGGER.info("laser into destructible")
         laser = entry.from_node_path.python_tags["owner"]
         destructible = entry.into_node_path.python_tags["owner"]
 
