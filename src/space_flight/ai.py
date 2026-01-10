@@ -174,10 +174,19 @@ class AutoPilot:
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Update throttle command
-        throttle_command = AutoPilot.simple_throttle_controller(
-            cos_angle_to_target=cos_angle_to_target,
-            reference_distance_m=reference_distance_m,
+        # Decrease throttle if the target is at too much of an angle
+        angle_contribution = max(0.0, cos_angle_to_target) ** ANGLE_THROTTLE_EXPONENT
+        # Increase throttle if the target is too far and lower it if negative distance
+        distance_contribution = (
+            max(
+                min(reference_distance_m / DISTANCE_FOR_MAX_THROTTLE, 1.0), MIN_THROTTLE
+            )
+            ** DISTANCE_THROTTLE_EXPONENT
         )
+        # TODO: add a contribution of closing velocity ?
+        velocity_contribution = 1.0
+        # Combine contributions
+        throttle_command = angle_contribution * distance_contribution * velocity_contribution
 
         # Update PID commands for turn rates
         yaw_rate_command = self.pid_yaw(yaw_error)
@@ -216,40 +225,6 @@ class AutoPilot:
         self.throttle = max(min(self.throttle, 1.0), MIN_THROTTLE)
 
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
-
-    @staticmethod
-    def simple_throttle_controller(
-        cos_angle_to_target: float, reference_distance_m: float
-    ) -> float:
-        """
-        I want the reference distance to go to zero and the angle to target to go to
-        zero.
-        First, decrease throttle for too high angles, especially if it's been too long
-        => PI controller
-        Second, we want a reference distance to go to zero
-        =>
-         - Increase if getting away while in the right direction, diminish otherwise
-         - The opposite if getting closer => P(I)D controller with a twist ?
-
-        TODO: Add a contribution on closing distance
-
-        :param cos_angle_to_target: _description_
-        :param reference_distance_float_deg: _description_
-        :return: _description_
-        """
-        # Decrease throttle if the target is at too much of an angle
-        angle_contribution = max(0.0, cos_angle_to_target) ** ANGLE_THROTTLE_EXPONENT
-        # Increase throttle if the target is too far and lower it if negative distance
-        distance_contribution = (
-            max(
-                min(reference_distance_m / DISTANCE_FOR_MAX_THROTTLE, 1.0), MIN_THROTTLE
-            )
-            ** DISTANCE_THROTTLE_EXPONENT
-        )
-        # Combine contributions
-        throttle_command = angle_contribution * distance_contribution
-
-        return throttle_command
 
     def clean(self):
         self.ship = None
