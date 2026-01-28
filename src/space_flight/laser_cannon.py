@@ -190,11 +190,6 @@ class LaserShot:
         plnp = self.shot.attachNewNode(plight)
         plnp.setPos(0, 0, 0)
         self.app.render.setLight(plnp)
-        self.app.doMethodLater(
-            light_duration,
-            lambda t: self.app.render.clear_light(plnp),
-            "RemoveLaserLight",
-        )
 
         # Initialize collision
         # TODO Use segments instead. This does not work with low FPS
@@ -219,7 +214,12 @@ class LaserShot:
             "DeleteLaserOwner",
         )
         self.app.doMethodLater(
-            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight"
+            light_duration,
+            lambda t: self.app.render.clear_light(plnp),
+            "RemoveLaserLight1",
+        )
+        self.app.doMethodLater(
+            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight2"
         )
         self.app.doMethodLater(
             life_time_s, lambda t: self.shot.remove_node(), "RemoveLaser"

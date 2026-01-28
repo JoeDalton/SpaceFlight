@@ -36,7 +36,6 @@ class CollisionSystem:
         Handle the case where a laser hits a destructable object:
         Damage the destructable object and remove the laser.
 
-        TODO: Ignore self hits... Needs UIDs ?
         TODO: Add a hit sprite
 
         :param entry: Panda3d's description of the collision
@@ -45,6 +44,12 @@ class CollisionSystem:
             LOGGER.info("laser into destructible")
         laser = entry.from_node_path.python_tags["owner"]
         destructible = entry.into_node_path.python_tags["owner"]
+
+        if laser is None:
+            LOGGER.info(
+                "laser juuuuust out of range and being removed while it hits. Ignoring."
+            )
+            return
 
         # Check if the laser as encountered its own emitter => no "real" collision
         try:
@@ -72,6 +77,12 @@ class CollisionSystem:
         if DEBUG_COLLISION:
             LOGGER.info("laser into terrain")
         laser = entry.from_node_path.python_tags["owner"]
+
+        if laser is None:
+            LOGGER.info(
+                "laser juuuuust out of range and being removed while it hits. Ignoring."
+            )
+            return
 
         # Delete laser
         laser.shot.removeNode()

@@ -112,7 +112,7 @@ class MyApp(ShowBase):
             ini_position=np.array([0, -50, 0]),
             has_debug_trihedron=True,
         )
-        
+
         """
         HUD
         """

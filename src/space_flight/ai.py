@@ -186,7 +186,9 @@ class AutoPilot:
         # TODO: add a contribution of closing velocity ?
         velocity_contribution = 1.0
         # Combine contributions
-        throttle_command = angle_contribution * distance_contribution * velocity_contribution
+        throttle_command = (
+            angle_contribution * distance_contribution * velocity_contribution
+        )
 
         # Update PID commands for turn rates
         yaw_rate_command = self.pid_yaw(yaw_error)
