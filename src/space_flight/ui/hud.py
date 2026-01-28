@@ -69,8 +69,8 @@ class HUD:
         )
         try:
             bot_text = (
-                "Bot angle to target = "
-                f"{self.app.bot2.pilot.angle_to_target_deg:.1f}°\n"
+                "Lead Bot angle to target = "
+                f"{self.app.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
                 # f"Bot target_x = {self.app.bot.pilot.target_x}\n"
                 # f"Bot target_y = {self.app.bot.pilot.target_y}\n"
                 # f"Bot target_z = {self.app.bot.pilot.target_z}\n"
@@ -83,13 +83,21 @@ class HUD:
                 # f"yaw_rate = {self.app.bot.pilot.yaw_rate}\n"
                 # f"pitch_rate = {self.app.bot.pilot.pitch_rate}\n"
                 # f"roll_rate = {self.app.bot.pilot.roll_rate}\n"
-                f"Bot throttle = {self.app.bot2.pilot.throttle:.4f}\n"
+                "Lead Bot throttle = "
+                f"{self.app.lead_bot.pilot.throttle:.4f}\n"
                 # f"Next waypoint idx = {self.app.bot.next_waypoint_idx}\n"
-                f"Bot Speed = {np.linalg.norm(self.app.bot2.ship.state[7:10]):.1f}m/s\n"
-                "Distance to waypoint = "
-                f"{self.app.bot2.navigator.distance_to_waypoint_m:.1f}m\n"
-                f"Next waypoint = {self.app.bot2.navigator.next_waypoint_idx}\n"
+                "Lead Bot Speed = "
+                f"{np.linalg.norm(self.app.lead_bot.ship.state[7:10]):.1f}m/s\n"
+                # "Lead Bot distance to waypoint = "
+                # f"{self.app.lead_bot.navigator.distance_to_waypoint_m:.1f}m\n"
                 # f"Bot position = {self.app.bot2.ship.state[:3]}\n"
+                "\n"
+                "Chase Bot angle to target = "
+                f"{self.app.chase_bot.pilot.angle_to_target_deg:.1f}°\n"
+                "Chase Bot throttle = "
+                f"{self.app.chase_bot.pilot.throttle:.4f}\n"
+                "Chase Bot Speed = "
+                f"{np.linalg.norm(self.app.chase_bot.ship.state[7:10]):.1f}m/s\n"
             )
         except AttributeError:
             bot_text = ""

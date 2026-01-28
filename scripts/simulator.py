@@ -73,7 +73,7 @@ class MyApp(ShowBase):
         `asteroids` or `lava_planet` or `debug_collisions`
         """
         self.set_background_color(0, 0, 0)
-        self.scene = scene_factory(app=self, scene_name="asteroids")
+        self.scene = scene_factory(app=self, scene_name="lava_planet")
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 
@@ -81,7 +81,7 @@ class MyApp(ShowBase):
         Initialize dummy bots
         """
 
-        wp_distance = 150
+        wp_distance = 300
         bot2_waypoints = [
             np.array([0, 0, 0]),
             np.array([0, wp_distance, 0]),
@@ -96,20 +96,28 @@ class MyApp(ShowBase):
             np.array([-wp_distance, 0, -wp_distance]),
             np.array([-wp_distance, 0, 0]),
         ]
-        self.bot2 = spawn_bot(
+        self.lead_bot = spawn_bot(
             app=self,
-            name="tie_2",
+            name="lead",
             ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 20]),
+            ini_position=np.array([0, 0, 0]),
             has_debug_trihedron=True,
         )
-        self.bot2.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
+        self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        spawn_bot(
+        self.chase_bot = spawn_bot(
             app=self,
-            name="tie_1",
+            name="chase",
             ship_type="tie-fighter",
             ini_position=np.array([0, -50, 0]),
+            has_debug_trihedron=True,
+        )
+
+        self.prey_bot = spawn_bot(
+            app=self,
+            name="prey",
+            ship_type="tie-fighter",
+            ini_position=np.array([0, -20, 0]),
             has_debug_trihedron=True,
         )
 

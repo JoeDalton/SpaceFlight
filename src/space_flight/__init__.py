@@ -15,7 +15,7 @@ SHIP_BIT = 0b0001
 ALL_BIT = 0b0011
 
 DEBUG_DELETION = False
-DEBUG_COLLISION = True
+DEBUG_COLLISION = False
 
 LOGGER = logging.getLogger()
 LOGGER.handlers = []

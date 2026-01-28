@@ -14,8 +14,8 @@ WAYPOINT_MEETING_TOLERANCE_M = 10
 MIX_DISTANCE_TOLERANCE_M = 1e-2
 TARGET_DISTANCE_TOLERANCE_M = 1
 CHASE_DISTANCE_M = 80.0
-EVADE_TIME_S = 1.0
-LEAD_TIME_S = 0.0
+EVADE_TIME_S = 5.0
+LEAD_TIME_S = 0.5
 
 
 class AutoNavigator:
@@ -173,7 +173,7 @@ class AutoNavigator:
             np.linalg.norm(target_current_position - self.ship.position)
             - CHASE_DISTANCE_M,
         )
-        return target_future_position, reference_distance_m
+        return target_future_direction, reference_distance_m
 
     def evade_target(self, target=None) -> Tuple[np.ndarray, float]:
         """
@@ -181,6 +181,8 @@ class AutoNavigator:
         held one second earlier were its speed constant.
 
         If its speed is zero, do nothing.
+
+        TODO: This behaviour is _too_ effective, chasing a prey is not fun...
 
         :param target: A target object with a position attribute and an optional
                 speed attribute
@@ -211,7 +213,7 @@ class AutoNavigator:
         reference_distance_m = np.linalg.norm(
             target_current_position - self.ship.position
         )
-        return target_past_position, reference_distance_m
+        return target_past_direction, reference_distance_m
 
     def flee_from_target(self, target=None) -> Tuple[np.ndarray, float]:
         """

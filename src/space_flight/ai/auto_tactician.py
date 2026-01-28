@@ -55,7 +55,15 @@ class AutoTactician:
         Aaaaaaaaaaaaaaaaaaah, paniiiiiiic !!!
 
         """
-        if self.ship.parent.name == "tie_2":
+        if self.ship.parent.name == "prey":
+            my_thoughts = [
+                {
+                    "action": "evade_target",
+                    "target": self.ship.app.player.ship,
+                    "weight": 1,
+                },
+            ]
+        elif self.ship.parent.name == "lead":
             my_thoughts = [
                 {
                     "action": "follow_waypoints",
@@ -66,7 +74,7 @@ class AutoTactician:
             my_thoughts = [
                 {
                     "action": "chase_target",
-                    "target": self.ship.app.bot2.ship,
+                    "target": self.ship.app.lead_bot.ship,
                     "weight": 1,
                 },
             ]
