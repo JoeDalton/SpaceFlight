@@ -39,7 +39,6 @@ class ShipModel:
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
                 self.model.setScale(5.0, 5.0, 5.0)
-
         else:
             raise NotImplementedError(ship_type)
 
