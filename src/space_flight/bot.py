@@ -23,6 +23,7 @@ class Bot(Destructible):
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
+        team: int = 0,
     ):
         super().__init__(app=app)
         self.name = name
@@ -33,14 +34,19 @@ class Bot(Destructible):
             ini_position=ini_position,
             ini_orientation=ini_orientation,
             is_cockpit=False,
+            team=team,
         )
 
         self.pilot = AutoPilot(ship=self.ship)
         self.navigator = AutoNavigator(ship=self.ship)
         self.tactician = AutoTactician(ship=self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
+        self.team = team
 
         self.initialize_move()
+
+        # Add self to the interacting actors
+        self.app.interactions.add_actor(self.ship)
 
     def initialize_move(self):
         """
@@ -88,7 +94,9 @@ class Bot(Destructible):
         """
         Remove every child
         """
+        # TODO: use Interactions and eliminate player targets
         self.app.player.remove_target(target_to_remove=self.ship)
+        self.app.interactions.remove_actor(self.ship)
         self.pilot.clean()
         self.pilot = None
         self.navigator.clean()
@@ -112,6 +120,7 @@ def spawn_bot(
     ini_position: np.ndarray = np.zeros(3),
     ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
     has_debug_trihedron: bool = False,
+    team: int = 0,
 ) -> Bot:
     bot = Bot(
         app=app,
@@ -119,6 +128,7 @@ def spawn_bot(
         ship_type=ship_type,
         ini_position=ini_position,
         ini_orientation=ini_orientation,
+        team=team,
     )
     if has_debug_trihedron:
         Trihedron(app=app, parent=bot.ship.node, scale=1)

@@ -28,6 +28,7 @@ class Player:
             ini_position=ini_position,
             ini_orientation=ini_orientation,
             is_cockpit=True,
+            team=1,
         )
         self.input_system = input_system_factory(app=self.app, player=self)
         self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)
@@ -36,10 +37,13 @@ class Player:
         self.app.camera.reparentTo(self.ship.node)
 
         # Initialize targetting list
-        self.available_targets = [{None: ""}]
+        self.available_targets = [{None: ""}]  # TODO remove
 
         # Initialize movement task
         self.initialize_move()
+
+        # Add self to the interacting actors
+        self.app.interactions.add_actor(self.ship)
 
     def initialize_move(self):
         """
@@ -80,9 +84,20 @@ class Player:
         self.tasks.append(self.app.taskMgr.add(method, task_name))
 
     def add_target(self, target, name: str):
+        """
+        TODO: use Interactions for targets and remove
+
+        :param target: _description_
+        :param name: _description_
+        """
         self.available_targets.append({target: name})
 
     def remove_target(self, target_to_remove):
+        """
+        TODO: use Interactions for targets and remove
+
+        :param target_to_remove: _description_
+        """
         for target_idx in range(len(self.available_targets)):
             target_dict = self.available_targets[target_idx]
             target, _ = list(target_dict.items())[0]

@@ -2,6 +2,7 @@ import numpy as np
 from direct.showbase import Audio3DManager
 from direct.showbase.ShowBase import ShowBase
 
+from space_flight.ai.interactions import Interactions
 from space_flight.bot import spawn_bot
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
@@ -52,6 +53,11 @@ class MyApp(ShowBase):
         self.collision_system = CollisionSystem(app=self)
 
         """
+        Initialize interaction compute between ships
+        """
+        self.interactions = Interactions(app=self)
+
+        """
         Initialize integrator.
         Must come before the physic objects : (Player, bots, moving scene...)
         TODO: Priorities for task to dumb-proof
@@ -74,14 +80,12 @@ class MyApp(ShowBase):
         """
         self.set_background_color(0, 0, 0)
         self.scene = scene_factory(app=self, scene_name="lava_planet")
-        # self.oobe()  # DEBUG
-        # self.toggle_wireframe()  # DEBUG
 
         """
         Initialize dummy bots
         """
 
-        wp_distance = 300
+        wp_distance = 1000
         bot2_waypoints = [
             np.array([0, 0, 0]),
             np.array([0, wp_distance, 0]),
@@ -102,6 +106,7 @@ class MyApp(ShowBase):
             ship_type="tie-fighter",
             ini_position=np.array([0, 0, 0]),
             has_debug_trihedron=True,
+            team=2,
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
@@ -111,15 +116,41 @@ class MyApp(ShowBase):
             ship_type="tie-fighter",
             ini_position=np.array([0, -50, 0]),
             has_debug_trihedron=True,
+            team=1,
         )
 
-        self.prey_bot = spawn_bot(
+        spawn_bot(
             app=self,
             name="prey",
             ship_type="tie-fighter",
             ini_position=np.array([0, -20, 0]),
             has_debug_trihedron=True,
+            team=2,
         )
+
+        for _ in range(10):
+            spawn_bot(
+                app=self,
+                name="prey",
+                ship_type="tie-fighter",
+                ini_position=np.random.uniform(-500, 500, 3),
+                has_debug_trihedron=True,
+                team=1,
+            )
+            spawn_bot(
+                app=self,
+                name="prey",
+                ship_type="tie-fighter",
+                ini_position=np.random.uniform(-500, 500, 3),
+                has_debug_trihedron=True,
+                team=2,
+            )
+
+        """
+        DEBUG
+        """
+        # self.oobe()  # DEBUG
+        # self.toggle_wireframe()  # DEBUG
 
         """
         HUD

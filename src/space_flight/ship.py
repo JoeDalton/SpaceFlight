@@ -49,11 +49,13 @@ class Ship:
         ini_speed: np.ndarray = np.zeros(3),
         lift_model: bool = False,
         is_cockpit: bool = True,
+        team: int = 0,
     ):
         self.app = app
         self.parent = parent
         self.is_dead = False
         self.id = uuid.uuid4()
+        self.team = team
 
         # Load configuration
         filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"

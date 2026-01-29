@@ -112,6 +112,8 @@ class HUD:
 
 class TargetHUD:
     def __init__(self, app: ShowBase):
+        # TODO use Interactions instead of a player target list.
+        # Allow filtering on team
         self.app = app
         self.target_idx = 0
         self.target = None
@@ -155,6 +157,7 @@ class TargetHUD:
             text_fg=(1, 1, 1, 1),
         )
 
+        # TODO: This should be in "input_system"
         app.taskMgr.add(self.target_hud_update_task, "target_hud_update_task")
 
         # Make sure the targeting HUD is rendered above other UI things
@@ -170,6 +173,7 @@ class TargetHUD:
         self.name_label.setDepthWrite(False)
         self.name_label.setBin("fixed", 10)
 
+        # TODO: This should be in "input_system"
         self.app.accept(self.app.key_bindings["switch_target"], self.switch_target)
 
     def target_hud_update_task(self, task):
