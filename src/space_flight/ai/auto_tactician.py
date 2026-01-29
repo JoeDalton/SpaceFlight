@@ -13,6 +13,7 @@ RELATIVE_VELOCITY_WEIGHT = 0.0
 REFERENCE_DISTANCE_M = 500
 REFERENCE_VELOCITY_MPS = 1000
 SCORE_THRESHOLD_FOR_ACTION = 0.1
+SHOOTING_THRESHOLD = 3.0
 
 
 class AutoTactician:
@@ -79,6 +80,8 @@ class AutoTactician:
 
         TODO: closing velocity does not seem very interesting, retrospectively. Is it?
 
+        TODO: avoid friendly fire ?
+
         """
         my_thoughts = [
             {
@@ -121,29 +124,32 @@ class AutoTactician:
         )
 
         # Only one: Cheaper !
-        # try:
-        #     chasing_idx = np.nanargmax(chasing_scores)
-        #     if chasing_scores[chasing_idx] > SCORE_THRESHOLD_FOR_ACTION:
-        #         my_thoughts.append(
-        #             {
-        #                 "action": "chase_target",
-        #                 "target": self.app.interactions.actors[chasing_idx],
-        #                 "weight": self.chase_weight,
-        #             },
-        #         )
-        # except ValueError:
-        #     pass
-
-        # Everyone: more organic ?
-        for chasing_idx in range(self.app.interactions.n_actors):
+        try:
+            chasing_idx = np.nanargmax(chasing_scores)
             if chasing_scores[chasing_idx] > SCORE_THRESHOLD_FOR_ACTION:
                 my_thoughts.append(
                     {
                         "action": "chase_target",
                         "target": self.app.interactions.actors[chasing_idx],
-                        "weight": self.chase_weight * chasing_scores[chasing_idx],
+                        "weight": self.chase_weight,
                     },
                 )
+                if chasing_scores[chasing_idx] > SHOOTING_THRESHOLD:
+                    # Target is close enough for distance and angle. Let's shoot it !
+                    self.ship.laser_cannon.fire()
+        except ValueError:
+            pass
+
+        # Everyone: more organic ?
+        # for chasing_idx in range(self.app.interactions.n_actors):
+        #     if chasing_scores[chasing_idx] > SCORE_THRESHOLD_FOR_ACTION:
+        #         my_thoughts.append(
+        #             {
+        #                 "action": "chase_target",
+        #                 "target": self.app.interactions.actors[chasing_idx],
+        #                 "weight": self.chase_weight * chasing_scores[chasing_idx],
+        #             },
+        #         )
 
         # Compute evading scores
         evading_scores = (
@@ -156,34 +162,29 @@ class AutoTactician:
             )
         )
         # Only one: Cheaper !
-        # try:
-        #     evading_idx = np.nanargmax(evading_scores)
-        #     if evading_scores[evading_idx] > SCORE_THRESHOLD_FOR_ACTION:
-        #         my_thoughts.append(
-        #             {
-        #                 "action": "evade_target",
-        #                 "target": self.app.interactions.actors[evading_idx],
-        #                 "weight": self.chase_weight,
-        #             },
-        #         )
-        # except ValueError:
-        #     pass
-
-        # Everyone : more organic ?
-        for evading_idx in range(self.app.interactions.n_actors):
+        try:
+            evading_idx = np.nanargmax(evading_scores)
             if evading_scores[evading_idx] > SCORE_THRESHOLD_FOR_ACTION:
                 my_thoughts.append(
                     {
                         "action": "evade_target",
                         "target": self.app.interactions.actors[evading_idx],
-                        "weight": self.chase_weight * evading_scores[evading_idx],
+                        "weight": self.chase_weight,
                     },
                 )
-
-        # my_thoughts = self.placeholder_think()
-        # DEBUG
-        if self.ship.parent.name == "lead_2":
+        except ValueError:
             pass
+
+        # Everyone : more organic ?
+        # for evading_idx in range(self.app.interactions.n_actors):
+        #     if evading_scores[evading_idx] > SCORE_THRESHOLD_FOR_ACTION:
+        #         my_thoughts.append(
+        #             {
+        #                 "action": "evade_target",
+        #                 "target": self.app.interactions.actors[evading_idx],
+        #                 "weight": self.chase_weight * evading_scores[evading_idx],
+        #             },
+        #         )
         return my_thoughts
 
     def clean(self):

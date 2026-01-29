@@ -122,12 +122,12 @@ class MyApp(ShowBase):
             team=1,
         )
 
-        for _ in range(0):
+        for _ in range(3):
             spawn_bot(
                 app=self,
                 name="team_1",
                 ship_type="tie-fighter",
-                ini_position=np.random.uniform(-500, 500, 3) + np.array([0, 600, 0]),
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
                 has_debug_trihedron=True,
                 team=1,
             )
@@ -135,7 +135,7 @@ class MyApp(ShowBase):
                 app=self,
                 name="team_2",
                 ship_type="tie-fighter",
-                ini_position=np.random.uniform(-500, 500, 3) + np.array([0, 600, 0]),
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
                 has_debug_trihedron=True,
                 team=2,
             )

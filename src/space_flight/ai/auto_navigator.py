@@ -209,7 +209,7 @@ class AutoNavigator:
         else:
             target_past_direction /= target_past_distance_m
         # Find reference distance
-        reference_distance_m = np.linalg.norm(
+        reference_distance_m = 1 / np.linalg.norm(
             target_current_position - self.ship.position
         )
         return target_past_direction, reference_distance_m
