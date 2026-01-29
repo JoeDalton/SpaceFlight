@@ -127,7 +127,6 @@ class AutoTactician:
             )
         )
 
-        # Only one: Cheaper !
         try:
             chasing_idx = np.nanargmax(chasing_scores)
             if chasing_scores[chasing_idx] > SCORE_THRESHOLD_FOR_ACTION:
@@ -147,17 +146,6 @@ class AutoTactician:
         except ValueError:
             pass
 
-        # Everyone: more organic ?
-        # for chasing_idx in range(self.app.interactions.n_actors):
-        #     if chasing_scores[chasing_idx] > SCORE_THRESHOLD_FOR_ACTION:
-        #         my_thoughts.append(
-        #             {
-        #                 "action": "chase_target",
-        #                 "target": self.app.interactions.actors[chasing_idx],
-        #                 "weight": self.chase_weight * chasing_scores[chasing_idx],
-        #             },
-        #         )
-
         # Compute evading scores
         # TODO More threatening if the actor is pointing towards us,
         # not really if it's behind... It can be pre-computed for everyone
@@ -170,7 +158,6 @@ class AutoTactician:
                 # + closing_velocity_score * RELATIVE_VELOCITY_WEIGHT
             )
         )
-        # Only one: Cheaper !
         try:
             evading_idx = np.nanargmax(evading_scores)
             if evading_scores[evading_idx] > SCORE_THRESHOLD_FOR_ACTION:
@@ -184,16 +171,6 @@ class AutoTactician:
         except ValueError:
             pass
 
-        # Everyone : more organic ?
-        # for evading_idx in range(self.app.interactions.n_actors):
-        #     if evading_scores[evading_idx] > SCORE_THRESHOLD_FOR_ACTION:
-        #         my_thoughts.append(
-        #             {
-        #                 "action": "evade_target",
-        #                 "target": self.app.interactions.actors[evading_idx],
-        #                 "weight": self.chase_weight * evading_scores[evading_idx],
-        #             },
-        #         )
         return my_thoughts
 
     def clean(self):

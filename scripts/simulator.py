@@ -122,7 +122,7 @@ class MyApp(ShowBase):
         #     team=1,
         # )
 
-        for _ in range(0):
+        for _ in range(5):
             spawn_bot(
                 app=self,
                 name="team_1",
@@ -131,7 +131,7 @@ class MyApp(ShowBase):
                 has_debug_trihedron=True,
                 team=1,
             )
-        for _ in range(0):
+        for _ in range(5):
             spawn_bot(
                 app=self,
                 name="team_2",
