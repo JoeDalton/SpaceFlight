@@ -17,10 +17,16 @@ class Player:
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
+        is_neutral: bool = False,
     ):
         self.app = app
         self.name = "player"
         self.tasks = []
+        if is_neutral:
+            team = 0
+        else:
+            team = 1
+
         self.ship = Ship(
             app=self.app,
             parent=self,
@@ -28,7 +34,7 @@ class Player:
             ini_position=ini_position,
             ini_orientation=ini_orientation,
             is_cockpit=True,
-            team=1,
+            team=team,
         )
         self.input_system = input_system_factory(app=self.app, player=self)
         self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)

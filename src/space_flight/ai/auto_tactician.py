@@ -16,8 +16,21 @@ class AutoTactician:
     - They may depend on the situation and/or a scenario
     """
 
-    def __init__(self, ship):
+    def __init__(
+        self,
+        app,
+        ship,
+        chase_weight: float = 1.0,
+        evade_weight: float = 1.0,
+        flee_weight: float = 0.0,
+        patrol_weight: float = 0.2,
+    ):
+        self.app = app
         self.ship = ship
+        self.chase_weight = chase_weight
+        self.evade_weight = evade_weight
+        self.flee_weight = flee_weight
+        self.patrol_weight = patrol_weight
 
     def think(self):
         """

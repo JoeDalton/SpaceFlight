@@ -68,7 +68,10 @@ class MyApp(ShowBase):
         Initialize player and ship
         """
         self.player = Player(
-            self, ship_type="a-wing", ini_position=np.array([0, -200, 0])
+            self,
+            ship_type="a-wing",
+            ini_position=np.array([0, -200, 0]),
+            is_neutral=True,
         )
         # self.player = Player(
         #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
@@ -102,7 +105,7 @@ class MyApp(ShowBase):
         ]
         self.lead_bot = spawn_bot(
             app=self,
-            name="lead",
+            name="lead_2",
             ship_type="tie-fighter",
             ini_position=np.array([0, 0, 0]),
             has_debug_trihedron=True,
@@ -112,36 +115,27 @@ class MyApp(ShowBase):
 
         self.chase_bot = spawn_bot(
             app=self,
-            name="chase",
+            name="chase_1",
             ship_type="tie-fighter",
             ini_position=np.array([0, -50, 0]),
             has_debug_trihedron=True,
             team=1,
         )
 
-        spawn_bot(
-            app=self,
-            name="prey",
-            ship_type="tie-fighter",
-            ini_position=np.array([0, -20, 0]),
-            has_debug_trihedron=True,
-            team=2,
-        )
-
-        for _ in range(10):
+        for _ in range(0):
             spawn_bot(
                 app=self,
-                name="prey",
+                name="team_1",
                 ship_type="tie-fighter",
-                ini_position=np.random.uniform(-500, 500, 3),
+                ini_position=np.random.uniform(-500, 500, 3) + np.array([0, 600, 0]),
                 has_debug_trihedron=True,
                 team=1,
             )
             spawn_bot(
                 app=self,
-                name="prey",
+                name="team_2",
                 ship_type="tie-fighter",
-                ini_position=np.random.uniform(-500, 500, 3),
+                ini_position=np.random.uniform(-500, 500, 3) + np.array([0, 600, 0]),
                 has_debug_trihedron=True,
                 team=2,
             )

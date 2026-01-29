@@ -76,14 +76,7 @@ class Interactions:
         :param actor: The actor to remove
         """
 
-        # Find the actor's index in the list
-        actor_index = -1
-        for idx in range(self.n_actors):
-            if self.actors[idx] == actor:
-                actor_index = idx
-                break
-        if actor_index == -1:
-            raise ValueError(f"Actor {actor.name} is not in the actors' list")
+        actor_index = self.get_actor_index(actor)
 
         # Remove actor from the list
         self.actors.pop(actor_index)
@@ -99,6 +92,22 @@ class Interactions:
         self.rel_velocities = np.delete(
             np.delete(self.rel_velocities, actor_index, axis=0), actor_index, axis=1
         )
+
+    def get_actor_index(self, actor) -> int:
+        """
+        Finds the actor's index in the list of actors
+
+        :param actor: The actor to look up
+        :return: Its index
+        """
+        actor_index = -1
+        for idx in range(self.n_actors):
+            if self.actors[idx] == actor:
+                actor_index = idx
+                break
+        if actor_index == -1:
+            raise ValueError(f"Actor {actor.name} is not in the actors' list")
+        return actor_index
 
     def interaction_update_task(self, task):
         """
@@ -153,8 +162,4 @@ class Interactions:
                     self.directions[idx_target, idx_source, :] = -direction
                     self.distances[idx_target, idx_source] = distance
                     self.rel_velocities[idx_target, idx_source, :] = -rel_velocity
-
-        print(self.directions)
-        print(np.shape(self.directions))
-        print()
         return task.cont

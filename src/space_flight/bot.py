@@ -39,7 +39,7 @@ class Bot(Destructible):
 
         self.pilot = AutoPilot(ship=self.ship)
         self.navigator = AutoNavigator(ship=self.ship)
-        self.tactician = AutoTactician(ship=self.ship)
+        self.tactician = AutoTactician(app=self.app, ship=self.ship)
         self.app.player.add_target(target=self.ship, name=self.name)
         self.team = team
 
