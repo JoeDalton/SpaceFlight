@@ -13,7 +13,8 @@ RELATIVE_VELOCITY_WEIGHT = 0.0
 REFERENCE_DISTANCE_M = 500
 REFERENCE_VELOCITY_MPS = 1000
 SCORE_THRESHOLD_FOR_ACTION = 0.1
-SHOOTING_THRESHOLD = 3.0
+SHOOTING_MAX_DISTANCE = 500
+SHOOTING_MIN_COS_ANGLE = 0.96
 
 
 class AutoTactician:
@@ -80,6 +81,9 @@ class AutoTactician:
 
         TODO: closing velocity does not seem very interesting, retrospectively. Is it?
 
+        TODO: Bots should chase for farther, and perhaps ignore the angle at
+        long distance. ATM, when on the side, they don't see me...
+
         TODO: avoid friendly fire ?
 
         """
@@ -134,7 +138,10 @@ class AutoTactician:
                         "weight": self.chase_weight,
                     },
                 )
-                if chasing_scores[chasing_idx] > SHOOTING_THRESHOLD:
+                if (
+                    distances[chasing_idx] < SHOOTING_MAX_DISTANCE
+                    and cos_alignments[chasing_idx] > SHOOTING_MIN_COS_ANGLE
+                ):
                     # Target is close enough for distance and angle. Let's shoot it !
                     self.ship.laser_cannon.fire()
         except ValueError:
@@ -152,6 +159,8 @@ class AutoTactician:
         #         )
 
         # Compute evading scores
+        # TODO More threatening if the actor is pointing towards us,
+        # not really if it's behind... It can be pre-computed for everyone
         evading_scores = (
             hostile_mask
             * behind_mask

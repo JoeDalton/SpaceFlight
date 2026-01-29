@@ -113,16 +113,16 @@ class MyApp(ShowBase):
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        self.chase_bot = spawn_bot(
-            app=self,
-            name="chase_1",
-            ship_type="tie-fighter",
-            ini_position=np.array([0, -50, 0]),
-            has_debug_trihedron=True,
-            team=1,
-        )
+        # self.chase_bot = spawn_bot(
+        #     app=self,
+        #     name="chase_1",
+        #     ship_type="tie-fighter",
+        #     ini_position=np.array([0, -50, 0]),
+        #     has_debug_trihedron=True,
+        #     team=1,
+        # )
 
-        for _ in range(3):
+        for _ in range(0):
             spawn_bot(
                 app=self,
                 name="team_1",
@@ -131,6 +131,7 @@ class MyApp(ShowBase):
                 has_debug_trihedron=True,
                 team=1,
             )
+        for _ in range(0):
             spawn_bot(
                 app=self,
                 name="team_2",
