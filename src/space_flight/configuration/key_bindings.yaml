@@ -12,5 +12,6 @@ yaw_right: e
 switch_target: tab
 toggle_mirror: alt
 fire_primary: space
+boost: b
 
 # TODO: Joystick and/or gamepad bindings

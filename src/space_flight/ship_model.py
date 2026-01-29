@@ -32,7 +32,7 @@ class ShipModel:
                 )
             else:
                 self.model = self.app.loader.load_model(
-                    DATAFILES_PATH / "models/star_wars_tie_interceptor/scene.gltf"
+                    DATAFILES_PATH / "models/ships/tie-fighter/interceptor/scene.gltf"
                 )
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(

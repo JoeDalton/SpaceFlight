@@ -10,6 +10,7 @@ from space_flight.utils import low_pass_filter_first_order
 
 STICK_DEAD_ZONE = 0.15
 THROTTLE_DEAD_ZONE = 0.04
+THROTTLE_BOOST_VALUE = 10.0
 
 
 def input_system_factory(app: ShowBase, player):
@@ -32,6 +33,7 @@ class InputSystem:
         self.player = player
         self.view_offset = np.zeros(2)
         self.app.disableMouse()
+        self.is_boost = False
 
     def action(self, button):
         # Just show which button has been pressed.
@@ -58,6 +60,12 @@ class InputSystem:
 
     def view_left(self):
         self.view_offset[1] += 1
+
+    def activate_boost(self):
+        self.is_boost = True
+
+    def deactivate_boost(self):
+        self.is_boost = False
 
     @staticmethod
     def smooth_button(
@@ -158,6 +166,10 @@ class Keyboard(InputSystem):
             self.player.ship.laser_cannon.fire,
         )
 
+        # Accept boost toggle
+        self.app.accept(self.app.key_bindings["boost"], self.activate_boost)
+        self.app.accept(f"{self.app.key_bindings['boost']}-up", self.deactivate_boost)
+
     def count_pitch_down(self, value: float):
         self.pitch_rate -= value
 
@@ -215,8 +227,14 @@ class Keyboard(InputSystem):
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.roll_rate = 0.0
+
+        # Boost usage
+        if self.is_boost:
+            throttle = THROTTLE_BOOST_VALUE
+        else:
+            throttle = self.throttle
         return (
-            self.throttle,
+            throttle,
             self.yaw_rate_smoothed,
             self.pitch_rate_smoothed,
             self.roll_rate_smoothed,
@@ -265,6 +283,10 @@ class Joystick(InputSystem):
         self.app.accept("stick-button18-repeat", self.view_up)
         self.app.accept("stick-button17-repeat", self.view_right)
         self.app.accept("stick-button16-repeat", self.view_left)
+
+        # Accept boost toggle
+        self.app.accept("stick-button8", self.activate_boost)
+        self.app.accept("stick-button8-up", self.deactivate_boost)
 
     def connect(self, device):
         """Event handler that is called when a device is discovered."""
@@ -315,9 +337,12 @@ class Joystick(InputSystem):
         if not self.flightStick:
             return 0.0, 0.0, 0.0, 0.0
 
-        throttle = 1 - self.flightStick.findAxis(InputDevice.Axis.throttle).value
-        if abs(throttle) < THROTTLE_DEAD_ZONE:
-            throttle = 0
+        if self.is_boost:
+            throttle = THROTTLE_BOOST_VALUE
+        else:
+            throttle = 1 - self.flightStick.findAxis(InputDevice.Axis.throttle).value
+            if abs(throttle) < THROTTLE_DEAD_ZONE:
+                throttle = 0
 
         yaw_rate = self.flightStick.findAxis(InputDevice.Axis.yaw).value
         if abs(yaw_rate) < STICK_DEAD_ZONE:
