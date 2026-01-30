@@ -1,11 +1,11 @@
 import numpy as np
-from direct.showbase import Audio3DManager
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight.ai.interactions import Interactions
 from space_flight.bot import spawn_bot
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
+from space_flight.fx.sfx import SFX
 from space_flight.integrator import Integrator
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
@@ -36,9 +36,7 @@ class MyApp(ShowBase):
         """
         Initialize sound system
         """
-        self.audio3d = Audio3DManager.Audio3DManager(
-            self.sfxManagerList[0], self.camera
-        )
+        self.sfx = SFX(app=self)
         # music = self.loader.loadMusic(
         # DATAFILES_PATH / "sounds/music_Koyaanisqatsi.mp3"
         # )
@@ -71,7 +69,7 @@ class MyApp(ShowBase):
             self,
             ship_type="a-wing",
             ini_position=np.array([0, -200, 0]),
-            is_neutral=False,
+            is_neutral=True,
         )
         # self.player = Player(
         #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
@@ -82,64 +80,64 @@ class MyApp(ShowBase):
         `asteroids` or `lava_planet` or `debug_collisions`
         """
         self.set_background_color(0, 0, 0)
-        self.scene = scene_factory(app=self, scene_name="lava_planet")
+        self.scene = scene_factory(app=self, scene_name="asteroids")
 
         """
         Initialize dummy bots
         """
 
-        wp_distance = 1000
-        bot2_waypoints = [
-            np.array([0, 0, 0]),
-            np.array([0, wp_distance, 0]),
-            np.array([0, wp_distance, wp_distance]),
-            np.array([0, 0, wp_distance]),
-            np.array([wp_distance, 0, wp_distance]),
-            np.array([wp_distance, 0, 0]),
-            np.array([0, 0, 0]),
-            np.array([0, -wp_distance, 0]),
-            np.array([0, -wp_distance, -wp_distance]),
-            np.array([0, 0, -wp_distance]),
-            np.array([-wp_distance, 0, -wp_distance]),
-            np.array([-wp_distance, 0, 0]),
-        ]
-        self.lead_bot = spawn_bot(
-            app=self,
-            name="lead_2",
-            ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 0]),
-            has_debug_trihedron=True,
-            team=2,
-        )
-        self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
-
-        # self.chase_bot = spawn_bot(
+        # wp_distance = 1000
+        # bot2_waypoints = [
+        #     np.array([0, 0, 0]),
+        #     np.array([0, wp_distance, 0]),
+        #     np.array([0, wp_distance, wp_distance]),
+        #     np.array([0, 0, wp_distance]),
+        #     np.array([wp_distance, 0, wp_distance]),
+        #     np.array([wp_distance, 0, 0]),
+        #     np.array([0, 0, 0]),
+        #     np.array([0, -wp_distance, 0]),
+        #     np.array([0, -wp_distance, -wp_distance]),
+        #     np.array([0, 0, -wp_distance]),
+        #     np.array([-wp_distance, 0, -wp_distance]),
+        #     np.array([-wp_distance, 0, 0]),
+        # ]
+        # self.lead_bot = spawn_bot(
         #     app=self,
-        #     name="chase_1",
+        #     name="lead_2",
         #     ship_type="tie-fighter",
-        #     ini_position=np.array([0, -50, 0]),
+        #     ini_position=np.array([0, 0, 0]),
         #     has_debug_trihedron=True,
-        #     team=1,
+        #     team=2,
         # )
+        # self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        for _ in range(5):
-            spawn_bot(
-                app=self,
-                name="team_1",
-                ship_type="tie-fighter",
-                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-                has_debug_trihedron=True,
-                team=1,
-            )
-        for _ in range(5):
-            spawn_bot(
-                app=self,
-                name="team_2",
-                ship_type="tie-fighter",
-                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-                has_debug_trihedron=True,
-                team=2,
-            )
+        self.chase_bot = spawn_bot(
+            app=self,
+            name="chase_1",
+            ship_type="tie-fighter",
+            ini_position=np.array([0, -50, 0]),
+            has_debug_trihedron=True,
+            team=1,
+        )
+
+        # for _ in range(5):
+        #     spawn_bot(
+        #         app=self,
+        #         name="team_1",
+        #         ship_type="a-wing",
+        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+        #         has_debug_trihedron=True,
+        #         team=1,
+        #     )
+        # for _ in range(5):
+        #     spawn_bot(
+        #         app=self,
+        #         name="team_2",
+        #         ship_type="tie-fighter",
+        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+        #         has_debug_trihedron=True,
+        #         team=2,
+        #     )
 
         """
         DEBUG

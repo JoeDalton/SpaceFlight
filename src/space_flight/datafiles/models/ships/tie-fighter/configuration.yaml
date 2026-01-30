@@ -17,5 +17,5 @@ laser_base_range_m: 1500
 laser_color: green
 laser_fire_rate: 10
 cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
-laser_sound: sounds/TIE_BLASTER.mp3
+laser_sound: sounds/weapons/TIE_BLASTER.mp3
 shot_power: 1.0

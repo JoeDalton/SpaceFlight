@@ -33,8 +33,8 @@ class CollisionSystem:
 
     def laser_into_destructible(self, entry):
         """
-        Handle the case where a laser hits a destructable object:
-        Damage the destructable object and remove the laser.
+        Handle the case where a laser hits a destructible object:
+        Damage the destructible object and remove the laser.
 
         TODO: Add a hit sprite
 
@@ -65,6 +65,17 @@ class CollisionSystem:
         # Delete laser
         laser.shot.removeNode()
 
+        # Apply hit effect depending on player or bot
+        if destructible_id == self.app.player.ship.id:
+            pass  # TODO
+        else:
+            # TODO: Option to mute bots shooting on bots ?
+            # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
+            # normal = entry.getSurfaceNormal(entry.getIntoNodePath())
+            self.app.sfx.distant_impact_hit(
+                hit_pos=entry.into_node_path.parent.getPos(), impact_type="target"
+            )
+
     def laser_into_terrain(self, entry):
         """
         Handle the case where a laser hits a terrain object:
@@ -83,6 +94,10 @@ class CollisionSystem:
                 "laser juuuuust out of range and being removed while it hits. Ignoring."
             )
             return
+
+        self.app.sfx.distant_impact_hit(
+            hit_pos=entry.into_node_path.parent.getPos(), impact_type="terrain"
+        )
 
         # Delete laser
         laser.shot.removeNode()

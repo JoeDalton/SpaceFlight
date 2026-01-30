@@ -54,7 +54,9 @@ class LaserCannon:
         # Sound initialization
         sound_file = DATAFILES_PATH / self.parent_ship.conf["laser_sound"]
         if sound_file != "none":
-            self.sound_pool = [self.app.audio3d.loadSfx(sound_file) for _ in range(20)]
+            self.sound_pool = [
+                self.app.sfx.audio3d.loadSfx(sound_file) for _ in range(20)
+            ]
 
         # Prepare laser model
         laser_intensity = 1.0
@@ -109,6 +111,7 @@ class LaserCannon:
         )
 
         # Add sound to laser shot (empty list if no sound)
+        # TODO move to SFX
         for sound in self.sound_pool:
             # Using a pool to avoid reloading resources
             # Must use a non-currently-playing sound, otherwise it will restart
@@ -116,7 +119,7 @@ class LaserCannon:
                 # Randomize the pitch of the sound to get a more realistic feeling
                 sound.setPlayRate(random.uniform(0.9, 1.1))
                 # Attach sound to the cannon currently firing
-                self.app.audio3d.attachSoundToObject(
+                self.app.sfx.audio3d.attachSoundToObject(
                     sound, self.cannon_nodes[self.current_next_cannon_idx]
                 )
                 sound.play()
