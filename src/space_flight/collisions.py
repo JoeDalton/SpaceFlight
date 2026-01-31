@@ -46,9 +46,11 @@ class CollisionSystem:
         destructible = entry.into_node_path.python_tags["owner"]
 
         if laser is None:
-            LOGGER.info(
-                "laser juuuuust out of range and being removed while it hits. Ignoring."
-            )
+            if DEBUG_COLLISION:
+                LOGGER.info(
+                    "laser juuuuust out of range and being removed while it hits. "
+                    "Ignoring."
+                )
             return
 
         # Check if the laser as encountered its own emitter => no "real" collision
@@ -90,9 +92,11 @@ class CollisionSystem:
         laser = entry.from_node_path.python_tags["owner"]
 
         if laser is None:
-            LOGGER.info(
-                "laser juuuuust out of range and being removed while it hits. Ignoring."
-            )
+            if DEBUG_COLLISION:
+                LOGGER.info(
+                    "laser juuuuust out of range and being removed while it hits. "
+                    "Ignoring."
+                )
             return
 
         self.app.sfx.distant_impact_hit(
