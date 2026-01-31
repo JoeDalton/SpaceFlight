@@ -20,7 +20,15 @@ class ShipModel:
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
             else:
-                raise NotImplementedError
+                # Test
+                self.model = self.app.loader.load_model(
+                    DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf"
+                )
+                self.offset = np.array([0.0, 0.8, -0.2])
+                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
+                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
+                )
+                # raise NotImplementedError
         elif self.ship_type == "tie-fighter":
             if is_cockpit:
                 self.model = self.app.loader.load_model(
