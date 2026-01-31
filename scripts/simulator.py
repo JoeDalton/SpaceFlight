@@ -86,41 +86,41 @@ class MyApp(ShowBase):
         Initialize dummy bots
         """
 
-        # wp_distance = 1000
-        # bot2_waypoints = [
-        #     np.array([0, 0, 0]),
-        #     np.array([0, wp_distance, 0]),
-        #     np.array([0, wp_distance, wp_distance]),
-        #     np.array([0, 0, wp_distance]),
-        #     np.array([wp_distance, 0, wp_distance]),
-        #     np.array([wp_distance, 0, 0]),
-        #     np.array([0, 0, 0]),
-        #     np.array([0, -wp_distance, 0]),
-        #     np.array([0, -wp_distance, -wp_distance]),
-        #     np.array([0, 0, -wp_distance]),
-        #     np.array([-wp_distance, 0, -wp_distance]),
-        #     np.array([-wp_distance, 0, 0]),
-        # ]
-        # self.lead_bot = spawn_bot(
-        #     app=self,
-        #     name="lead_2",
-        #     ship_type="tie-fighter",
-        #     ini_position=np.array([0, 0, 0]),
-        #     has_debug_trihedron=True,
-        #     team=2,
-        # )
-        # self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
+        wp_distance = 1000
+        bot2_waypoints = [
+            np.array([0, 0, 0]),
+            np.array([0, wp_distance, 0]),
+            np.array([0, wp_distance, wp_distance]),
+            np.array([0, 0, wp_distance]),
+            np.array([wp_distance, 0, wp_distance]),
+            np.array([wp_distance, 0, 0]),
+            np.array([0, 0, 0]),
+            np.array([0, -wp_distance, 0]),
+            np.array([0, -wp_distance, -wp_distance]),
+            np.array([0, 0, -wp_distance]),
+            np.array([-wp_distance, 0, -wp_distance]),
+            np.array([-wp_distance, 0, 0]),
+        ]
+        self.lead_bot = spawn_bot(
+            app=self,
+            name="lead_2",
+            ship_type="tie-fighter",
+            ini_position=np.array([0, 0, 0]),
+            has_debug_trihedron=True,
+            team=2,
+        )
+        self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
         self.chase_bot = spawn_bot(
             app=self,
             name="chase_1",
-            ship_type="tie-fighter",
+            ship_type="a-wing",
             ini_position=np.array([0, -50, 0]),
             has_debug_trihedron=True,
             team=1,
         )
 
-        # for _ in range(5):
+        # for _ in range(7):
         #     spawn_bot(
         #         app=self,
         #         name="team_1",
