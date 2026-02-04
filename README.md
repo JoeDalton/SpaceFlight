@@ -1,45 +1,33 @@
-# sensoracquisition
+# spaceflight
 
-https://github.com/Airthium/sensoracquisition
+https://github.com/JoeDalton/SpaceFlight
 
 ## Description
 
-A library to centralise the post-processing of raw sensor data
+An attempt at a space flight simulator
 
-
-# User 
-
-## Dependencies
-
-## Installation
-
-`pip install .`
-
-## Documentation
-
-To use the project:
-
-    from sensoracquisition import cli
-    cli.main()
 
 # Developer
 
 ## Installation
+Ensure you have python >= 3.12
 
-* Install poetry:
-    Avec le pip du système: 
-    ```
-    pip install pipx
-    pipx ensurepath
-    pipx install poetry
-    ```
-    * `pipx ensurepath` can tell you it failed at setting the path and that you should do it by hand, in that case, do it !
-* `poetry install`
-* poetry can handle your virtual environment :
+With the system's python 3 pip: 
+```
+pip install poetry
+python3 -m venv <your_prefered_virtual_environment_name>
+```
+Activate your new virtual environment
+```
+pip install invoke
+invoke develop
+```
 
-    `poetry shell`
-
-    Or you can use your own venv.
+## Running the game 
+In the projects directory, with the environment activated
+```
+python ./scripts/simulator.py
+```
 
 ## Development 
 * To run the tests:
