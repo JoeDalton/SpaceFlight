@@ -68,7 +68,7 @@ class AutoTactician:
     ):
         self.app = app
         self.ship = ship
-        self.intent = Intent.IDLE  # Currentt state
+        self.intent = Intent.IDLE  # Current state
         self.target_dict = {}  # Current target
         self.primary_target = None  # Assigned by squad tactics
         self.time_since_update = 0.0
