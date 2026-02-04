@@ -19,7 +19,8 @@ NO_DIRECTION = np.zeros(3), 0.0
 # TODO: Navigator parameters ?
 WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
-LEAD_TIME_S = 0.5
+INTERCEPT_LEAD_TIME_S = 1.5
+ATTACK_LEAD_TIME_S = 0.5
 
 
 class AutoNavigator:
@@ -65,7 +66,9 @@ class AutoNavigator:
         """
         Engages a target and tries to attack it
 
-        TODO: fine attack/reposition/chase logic
+        - By default, tries to intercept
+        - If attack conditions are met, launch attack run
+        - If breaking off conditions are met, reposition/extend
 
         :param target_dict: A dictionary with the target's direction, distance,
             alignment and relative velocity
@@ -87,7 +90,7 @@ class AutoNavigator:
                 LOGGER.info("Target has been destroyed since last intent update.")
             return NO_DIRECTION
 
-        # Get necessary info from interactions
+        # Get necessary info from interactions and pre compute target properties
         distance = self.app.interactions.distances[my_actor_index, target_actor_index]
         direction = self.app.interactions.directions[
             my_actor_index, target_actor_index, :
@@ -96,13 +99,131 @@ class AutoNavigator:
             my_actor_index, target_actor_index, :
         ]
         alignment = self.app.interactions.alignments[my_actor_index, target_actor_index]
-
-        # Use the old "chase target method" but using the interactions info
-        # Find the future position of the target
         target_current_position = self.ship.position + distance * direction
         target_current_speed = self.ship.speed + relative_speed
+
+        if self.check_reposition_conditions():
+            return self.reposition()
+
+        if self.check_extend_conditions():
+            return self.extend(direction=direction, distance=distance)
+
+        if self.check_attack_conditions():
+            return self.attack_target(
+                target_current_position=target_current_position,
+                target_current_speed=target_current_speed,
+                alignment=alignment,
+                distance=distance,
+            )
+
+        # Default behaviour
+        return self.intercept_target(
+            target_current_position=target_current_position,
+            target_current_speed=target_current_speed,
+        )
+
+    def check_attack_conditions(
+        self,
+        distance: float,
+        alignment: float,
+    ) -> bool:
+        """
+        TODO:
+        - distance and alignment are good
+        - lasers have enough energy
+        - Firing window will be long enough
+
+        :param distance: _description_
+        :param alignment: _description_
+        :return: _description_
+        """
+        return True
+
+    def check_extend_conditions(
+        self,
+    ) -> bool:
+        """
+        TODO: if it's been too long and the angle does not diminish
+
+        :return: _description_
+        """
+        return False
+
+    def check_reposition_conditions(
+        self,
+    ) -> bool:
+        """
+        TODO: if there is a risk to overshoot
+
+        :return: _description_
+        """
+        return False
+
+    def reposition(
+        self, direction: np.ndarray, distance: float
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Turn hard away from the target to avoid passing in front of it
+        Therefore, simply point in the opposite direction with the same distance
+
+        TODO: do something for immobile targets (turrets. They should not be evaded
+        the same way as ships)
+
+        :param target_dict: A dictionary with the target's direction and distance
+        :return: The direction to point to and its reference distance
+        """
+        return -direction, distance
+
+    def extend(self) -> Tuple[np.ndarray, float]:
+        """
+        Go straight ahead and accelerate to break the pattern
+
+        :return: The direction to point to and its reference distance
+        """
+        return np.zeros(3), INTERACT_MAX_DISTANCE_M
+
+    def attack_target(
+        self,
+        target_current_position: np.ndarray,
+        target_current_speed: np.ndarray,
+        alignment: float,
+        distance: float,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Intercepts the target with a reduced lead time and fire if angle is small enough
+
+        :param target_current_position: The absolute position of the target
+        :param target_current_speed: Its absolute speed
+        :param alignment: The cos of the angle to the target
+        :param distance: The distance to the target
+        :return: The direction to point to and its reference distance
+        """
+        # Decide whether to shoot
+        if distance < SHOOTING_MAX_DISTANCE_M and alignment > SHOOTING_MIN_COS_ANGLE:
+            self.ship.laser_cannon.fire()
+        return self.intercept_target(
+            target_current_position=target_current_position,
+            target_current_speed=target_current_speed,
+            lead_time_s=ATTACK_LEAD_TIME_S,
+        )
+
+    def intercept_target(
+        self,
+        target_current_position: np.ndarray,
+        target_current_speed: np.ndarray,
+        lead_time_s: float = INTERCEPT_LEAD_TIME_S,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Intercepts the target by flying to its future position
+
+        TODO: Should I do a lead pursuit or a lag pursuit ?
+
+        :param target_current_position: The absolute position of the target
+        :param target_current_speed: Its absolute speed
+        :return: The direction to point to and its reference distance
+        """
         target_future_position = (
-            target_current_position + target_current_speed * LEAD_TIME_S
+            target_current_position + target_current_speed * lead_time_s
         )
 
         # Compute direction to point to
@@ -120,11 +241,6 @@ class AutoNavigator:
             np.linalg.norm(target_current_position - self.ship.position)
             - CHASE_DISTANCE_M,
         )
-
-        # Decide whether to shoot
-        if distance < SHOOTING_MAX_DISTANCE_M and alignment > SHOOTING_MIN_COS_ANGLE:
-            self.ship.laser_cannon.fire()
-
         return target_future_direction, reference_distance_m
 
     # %% ==== EVADE ====
