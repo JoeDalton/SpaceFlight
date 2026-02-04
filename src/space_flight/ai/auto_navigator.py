@@ -78,9 +78,14 @@ class AutoNavigator:
 
         # Identify self and target in interactions
         my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
-        target_actor_index = self.app.interactions.get_actor_index_from_id(
-            target_dict["target_id"]
-        )
+        try:
+            target_actor_index = self.app.interactions.get_actor_index_from_id(
+                target_dict["target_id"]
+            )
+        except ValueError:
+            if self.debug:
+                LOGGER.info("Target has been destroyed since last intent update.")
+            return NO_DIRECTION
 
         # Get necessary info from interactions
         distance = self.app.interactions.distances[my_actor_index, target_actor_index]
@@ -132,6 +137,8 @@ class AutoNavigator:
 
         TODO: do something for immobile targets (turrets. They should not be evaded
         the same way as ships)
+
+        TODO: add randomness to avoid locking in circles
 
         :param target_dict: A dictionary with the target's direction and distance
         :return: The direction to point to and its reference distance

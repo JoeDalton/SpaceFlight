@@ -24,6 +24,7 @@ class Bot(Destructible):
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         team: int = 0,
+        debug_tactician: bool = False,
     ):
         super().__init__(app=app)
         self.name = name
@@ -38,8 +39,10 @@ class Bot(Destructible):
         )
 
         self.pilot = AutoPilot(ship=self.ship)
-        self.navigator = AutoNavigator(app=self.app, ship=self.ship, debug=True)
-        self.tactician = AutoTactician(app=self.app, ship=self.ship, debug=True)
+        self.navigator = AutoNavigator(app=self.app, ship=self.ship, debug=False)
+        self.tactician = AutoTactician(
+            app=self.app, ship=self.ship, debug=debug_tactician
+        )
         self.app.player.add_target(target=self.ship, name=self.name)
         self.team = team
 
@@ -95,6 +98,10 @@ class Bot(Destructible):
         Remove every child
         """
         # TODO: use Interactions and eliminate player targets
+
+        if DEBUG_DELETION:
+            LOGGER.info(f"Cleaning bot {self.name}")
+            LOGGER.info(f"Bot tasks {self.tasks}")
         self.app.player.remove_target(target_to_remove=self.ship)
         self.app.interactions.remove_actor(self.ship)
         self.pilot.clean()
@@ -107,6 +114,7 @@ class Bot(Destructible):
         self.ship = None
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaned bot {self.name}")
+            LOGGER.info(f"Bot tasks {self.tasks}")
 
     def __del__(self):
         if DEBUG_DELETION:
@@ -121,6 +129,7 @@ def spawn_bot(
     ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
     has_debug_trihedron: bool = False,
     team: int = 0,
+    debug_tactician: bool = False,
 ) -> Bot:
     bot = Bot(
         app=app,
@@ -129,8 +138,14 @@ def spawn_bot(
         ini_position=ini_position,
         ini_orientation=ini_orientation,
         team=team,
+        debug_tactician=debug_tactician,
     )
     if has_debug_trihedron:
         Trihedron(app=app, parent=bot.ship.node, scale=1)
+
+    # # Debug
+    # bot.ship.health = 1.1
+    # bot.ship.shield = 0.0
+    # bot.ship.shield_regen_rate = 0.0
 
     return bot

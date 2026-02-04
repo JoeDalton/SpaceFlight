@@ -69,7 +69,7 @@ class MyApp(ShowBase):
             self,
             ship_type="a-wing",
             ini_position=np.array([0, -200, 0]),
-            is_neutral=False,
+            is_neutral=True,
         )
 
         """
@@ -83,7 +83,7 @@ class MyApp(ShowBase):
         Initialize dummy bots
         """
 
-        wp_distance = 1000
+        wp_distance = 300
         bot2_waypoints = [
             np.array([0, 0, 0]),
             np.array([0, wp_distance, 0]),
@@ -105,36 +105,37 @@ class MyApp(ShowBase):
             ini_position=np.array([0, 0, 0]),
             has_debug_trihedron=True,
             team=2,
+            debug_tactician=True,
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        # self.chase_bot = spawn_bot(
-        #     app=self,
-        #     name="chase_1",
-        #     ship_type="a-wing",
-        #     ini_position=np.array([0, -50, 0]),
-        #     has_debug_trihedron=True,
-        #     team=1,
-        # )
+        self.chase_bot = spawn_bot(
+            app=self,
+            name="chase_1",
+            ship_type="a-wing",
+            ini_position=np.array([0, -50, 0]),
+            has_debug_trihedron=True,
+            team=1,
+        )
 
-        # for _ in range(7):
-        #     spawn_bot(
-        #         app=self,
-        #         name="team_1",
-        #         ship_type="a-wing",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=1,
-        #     )
-        # for _ in range(5):
-        #     spawn_bot(
-        #         app=self,
-        #         name="team_2",
-        #         ship_type="tie-fighter",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=2,
-        #     )
+        for _ in range(7):
+            spawn_bot(
+                app=self,
+                name="team_1",
+                ship_type="a-wing",
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+                has_debug_trihedron=True,
+                team=1,
+            )
+        for _ in range(5):
+            spawn_bot(
+                app=self,
+                name="team_2",
+                ship_type="tie-fighter",
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+                has_debug_trihedron=True,
+                team=2,
+            )
 
         """
         DEBUG
