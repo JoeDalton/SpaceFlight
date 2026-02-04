@@ -6,6 +6,7 @@ import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.ai import REFERENCE_DISTANCE_M
+from space_flight.utils import get_time_step
 
 LOGGER = logging.getLogger()
 
@@ -93,7 +94,7 @@ class AutoTactician:
         """
         Evaluates the intent of the bot at the correct frequency
         """
-        dt = self.app.clock.dt
+        dt = get_time_step()
         self.time_since_update += dt
         self.time_since_commitment += dt
         if (

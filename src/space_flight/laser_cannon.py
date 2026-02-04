@@ -6,7 +6,6 @@ import numpy as np
 import quaternion
 from direct.interval.IntervalGlobal import LerpPosInterval
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase.ShowBaseGlobal import ClockObject
 from panda3d.core import (
     AudioSound,
     CardMaker,
@@ -20,6 +19,7 @@ from panda3d.core import (
 )
 
 from space_flight import ALL_BIT, DATAFILES_PATH, DEBUG_COLLISION, DEBUG_DELETION
+from space_flight.utils import get_current_time
 
 LOGGER = logging.getLogger()
 
@@ -74,12 +74,11 @@ class LaserCannon:
 
         # Initialize cannon
         self.current_next_cannon_idx = 0
-        self.global_clock = ClockObject.getGlobalClock()
-        self.last_fire_time = self.global_clock.getFrameTime()
+        self.last_fire_time = get_current_time()
 
     def fire(self):
         # Fire at prescribed rate
-        current_time = self.global_clock.getFrameTime()
+        current_time = get_current_time()
         if current_time - self.last_fire_time < self.fire_delay:
             return
 

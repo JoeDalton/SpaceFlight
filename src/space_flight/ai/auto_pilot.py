@@ -1,11 +1,15 @@
 import logging
 
 import numpy as np
-from direct.showbase.ShowBaseGlobal import globalClock
 from simple_pid import PID
 
 from space_flight import DEBUG_DELETION
-from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
+from space_flight.utils import (
+    get_current_time,
+    get_time_step,
+    low_pass_filter_first_order,
+    safe_angle_rad,
+)
 
 LOGGER = logging.getLogger()
 
@@ -28,7 +32,7 @@ class AutoPilot:
             starting_output=0.0,
             sample_time=0.1,
             error_map=safe_angle_rad,
-            time_fn=globalClock.getFrameTime,
+            time_fn=get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.pid_pitch = PID(
@@ -39,7 +43,7 @@ class AutoPilot:
             starting_output=0.0,
             sample_time=0.1,
             error_map=safe_angle_rad,
-            time_fn=globalClock.getFrameTime,
+            time_fn=get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.pid_roll = PID(
@@ -50,7 +54,7 @@ class AutoPilot:
             starting_output=0.0,
             sample_time=0.1,
             error_map=safe_angle_rad,
-            time_fn=globalClock.getFrameTime,
+            time_fn=get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.filter_time = 0.5
@@ -116,7 +120,7 @@ class AutoPilot:
 
         TODO : Add pilot skill modifiers ?
         """
-        dt = globalClock.getDt()
+        dt = get_time_step()
 
         # Compute directions
         target_direction_norm = np.linalg.norm(target_direction)

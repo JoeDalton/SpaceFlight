@@ -2,11 +2,10 @@ import numpy as np
 import yaml
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import InputDevice
 
 from space_flight import CONFIGURATION_PATH
-from space_flight.utils import low_pass_filter_first_order
+from space_flight.utils import get_time_step, low_pass_filter_first_order
 
 DEFAULT_STICK_DEAD_ZONE = 0.15
 DEFAULT_THROTTLE_DEAD_ZONE = 0.04
@@ -89,7 +88,7 @@ class InputSystem:
             rise_time=1.0
             fall_time=0.2
         """
-        dt = globalClock.getDt()
+        dt = get_time_step()
         return low_pass_filter_first_order(
             value=value,
             previous=previous,
@@ -200,7 +199,7 @@ class Keyboard(InputSystem):
 
         returns throttle, roll, pitch, yaw
         """
-        dt = globalClock.getDt()
+        dt = get_time_step()
         # Get average command of yaw pitch roll since last frame
         self.yaw_rate /= dt
         self.pitch_rate /= dt

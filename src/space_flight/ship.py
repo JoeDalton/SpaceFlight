@@ -8,7 +8,6 @@ import numpy as np
 import quaternion
 import yaml
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
 
 from space_flight import (  # SHIP_BIT,; TERRAIN_BIT,
@@ -19,7 +18,7 @@ from space_flight import (  # SHIP_BIT,; TERRAIN_BIT,
 )
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
-from space_flight.utils import rotate_single_vector
+from space_flight.utils import get_time_step, rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -290,7 +289,7 @@ class Ship:
 
         :param task: _description_
         """
-        dt = globalClock.getDt()
+        dt = get_time_step()
         self.shield = min(
             max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
         )

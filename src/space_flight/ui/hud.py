@@ -1,7 +1,7 @@
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d, globalClock, render2d
+from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d, render2d
 from panda3d.core import (
     CardMaker,
     NodePath,
@@ -12,6 +12,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
+from space_flight.utils import get_current_time
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -65,7 +66,7 @@ class HUD:
             f"{np.linalg.norm(self.app.player.ship.state[7:10]):.1f}m/s\n"
             # f"Player Rot. rate = {np.rad2deg(self.app.player.ship.pqr)}\n"
             # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
-            f"Time = {globalClock.getFrameTime():.0f}\n"
+            f"Time = {get_current_time():.0f}\n"
         )
         try:
             bot_text = (

@@ -1,6 +1,8 @@
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
+from space_flight.utils import get_time_step
+
 
 class Integrator:
     def __init__(self, app: ShowBase, max_state_size: int = 2000):
@@ -76,7 +78,7 @@ class Integrator:
         of that variable.
         """
         # Get the timespan of the current step
-        dt = self.app.clock.dt
+        dt = get_time_step()
 
         # Integrate and populate x_new
         if self.dt_previous is None:
