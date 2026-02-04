@@ -24,7 +24,7 @@ class Bot(Destructible):
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         team: int = 0,
-        debug_tactician: bool = False,
+        debug_decisions: bool = False,
     ):
         super().__init__(app=app)
         self.name = name
@@ -39,9 +39,11 @@ class Bot(Destructible):
         )
 
         self.pilot = AutoPilot(ship=self.ship)
-        self.navigator = AutoNavigator(app=self.app, ship=self.ship, debug=False)
+        self.navigator = AutoNavigator(
+            app=self.app, ship=self.ship, debug=debug_decisions
+        )
         self.tactician = AutoTactician(
-            app=self.app, ship=self.ship, debug=debug_tactician
+            app=self.app, ship=self.ship, debug=debug_decisions
         )
         self.app.player.add_target(target=self.ship, name=self.name)
         self.team = team
@@ -129,7 +131,7 @@ def spawn_bot(
     ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
     has_debug_trihedron: bool = False,
     team: int = 0,
-    debug_tactician: bool = False,
+    debug_decisions: bool = False,
 ) -> Bot:
     bot = Bot(
         app=app,
@@ -138,7 +140,7 @@ def spawn_bot(
         ini_position=ini_position,
         ini_orientation=ini_orientation,
         team=team,
-        debug_tactician=debug_tactician,
+        debug_decisions=debug_decisions,
     )
     if has_debug_trihedron:
         Trihedron(app=app, parent=bot.ship.node, scale=1)

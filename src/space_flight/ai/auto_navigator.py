@@ -21,6 +21,7 @@ WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
 INTERCEPT_LEAD_TIME_S = 1.5
 ATTACK_LEAD_TIME_S = 0.5
+OVERSHOOT_TIME_LIMIT_S = 0.2
 
 
 class AutoNavigator:
@@ -39,6 +40,7 @@ class AutoNavigator:
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
         self.debug = debug
+        self.engage_phase = ""
 
     def navigate(self, intent: int, target_dict: dict):
         """
@@ -47,16 +49,21 @@ class AutoNavigator:
         :return: The direction to point to and its reference distance
         """
         if intent == Intent.IDLE:
+            self.engage_phase = ""
             return NO_DIRECTION
         elif intent == Intent.PATROL:
+            self.engage_phase = ""
             return self.follow_waypoints()
         elif intent == Intent.ENGAGE:
             return self.engage_target(target_dict)
         elif intent == Intent.EVADE:
+            self.engage_phase = ""
             return self.evade_target(target_dict)
         elif intent == Intent.REGROUP:
+            self.engage_phase = ""
             return self.regroup(target_dict)
         elif intent == Intent.DISENGAGE:
+            self.engage_phase = ""
             return self.disengage(target_dict)
         else:
             return ValueError(f"Unknown intent: {intent}")
@@ -102,13 +109,18 @@ class AutoNavigator:
         target_current_position = self.ship.position + distance * direction
         target_current_speed = self.ship.speed + relative_speed
 
-        if self.check_reposition_conditions():
-            return self.reposition()
+        if self.check_overshoot_risk(
+            direction=direction, relative_speed=relative_speed, distance=distance
+        ):
+            self.debug_engage_phase(phase="reposition")
+            return self.reposition(direction=direction, distance=distance)
 
         if self.check_extend_conditions():
-            return self.extend(direction=direction, distance=distance)
+            self.debug_engage_phase(phase="extend")
+            return self.extend()
 
         if self.check_attack_conditions():
+            self.debug_engage_phase(phase="attack")
             return self.attack_target(
                 target_current_position=target_current_position,
                 target_current_speed=target_current_speed,
@@ -117,15 +129,19 @@ class AutoNavigator:
             )
 
         # Default behaviour
+        self.debug_engage_phase(phase="intercept")
         return self.intercept_target(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
         )
 
+    def debug_engage_phase(self, phase):
+        if self.debug and phase != self.engage_phase:
+            self.engage_phase = phase
+            LOGGER.info(f"Navigator switched to engagement phase {phase}")
+
     def check_attack_conditions(
         self,
-        distance: float,
-        alignment: float,
     ) -> bool:
         """
         TODO:
@@ -149,15 +165,23 @@ class AutoNavigator:
         """
         return False
 
-    def check_reposition_conditions(
+    def check_overshoot_risk(
         self,
+        direction: np.ndarray,
+        relative_speed: np.ndarray,
+        distance: float,
     ) -> bool:
         """
-        TODO: if there is a risk to overshoot
+        Check if the current trajectory risks taking self farther than the target
 
-        :return: _description_
+        :param direction: The direction to the target
+        :param relative_speed: The relative speed of the target relative to self
+        :param distance: The distance to the target
+        :return: Whether self should reposition
         """
-        return False
+        closing_speed_mps = np.dot(direction, relative_speed)
+        overshoot_time_s = distance / closing_speed_mps
+        return overshoot_time_s < OVERSHOOT_TIME_LIMIT_S
 
     def reposition(
         self, direction: np.ndarray, distance: float
@@ -169,7 +193,8 @@ class AutoNavigator:
         TODO: do something for immobile targets (turrets. They should not be evaded
         the same way as ships)
 
-        :param target_dict: A dictionary with the target's direction and distance
+        :param direction: The direction to the target
+        :param distance: The distance to the target
         :return: The direction to point to and its reference distance
         """
         return -direction, distance

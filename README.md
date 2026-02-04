@@ -1,4 +1,4 @@
-# spaceflight
+# SpaceFlight
 
 https://github.com/JoeDalton/SpaceFlight
 
@@ -47,8 +47,7 @@ python ./scripts/simulator.py
     `invoke quality`
 
 * To deploy :
-  * `invoke deploy` deploys a version to our pypiserver - should preferrably be done by the CI
-  * `invoke deploydirty` deploys a version to /media/Commun/99_ECHANGE/Digital
+  * `invoke deploy` deploys a version to your pypiserver - should preferrably be done by the CI
 
 * To clean the build:
  

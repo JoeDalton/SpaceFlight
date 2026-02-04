@@ -108,7 +108,9 @@ class AutoTactician:
                 or target_dict["target_id"] != self.target_dict["target_id"]
             ):
                 if self.debug:
-                    LOGGER.info(f"Switched to intent {intent}, target {target_dict}")
+                    LOGGER.info(
+                        f"Tactician switched to intent {intent}, target {target_dict}"
+                    )
                 self.time_since_commitment = 0.0
                 self.intent = intent
                 self.target_dict = target_dict
