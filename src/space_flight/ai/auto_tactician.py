@@ -3,17 +3,14 @@ from enum import Enum, auto
 
 import numpy as np
 
-# from space_flight import DEBUG_DELETION, DISTANCE_TOLERANCE_M
+from space_flight import DEBUG_DELETION
 from space_flight.ai import REFERENCE_DISTANCE_M
 
 LOGGER = logging.getLogger()
 
+
 # TODO make this probalistic to avoid everyone update at the same time
 INTENT_UPDATE_DELAY_S = 1.0
-
-ALIGNMENT_WEIGHT = 1.0
-RELATIVE_VELOCITY_WEIGHT = 0.0
-SCORE_THRESHOLD_FOR_ACTION = 0.1
 
 
 class Intent(Enum):
@@ -145,9 +142,11 @@ class AutoTactician:
         if best_prey["score"] >= self.thresholds["min_engagement_score"]:
             return Intent.ENGAGE, best_prey["target_idx"]
 
-        # TODO Check if bot has patrol orders
+        # Check if bot has patrol orders
+        if len(self.ship.parent.navigator.waypoints) != 0:
+            return Intent.PATROL
 
-        # Nothing to do for now. Regroup with friends
+        # Nothing specific to do for now. Regroup with friends
         friends_center = self.evaluate_team_center(team="friends")
         return Intent.REGROUP, friends_center
 
@@ -174,9 +173,10 @@ class AutoTactician:
         alignments = self.app.interactions.alignments[:, my_actor_index]
 
         # Distance contribution
-        distance_scores = np.clip(
-            a=REFERENCE_DISTANCE_M / distances, a_max=1.0, a_min=0.0
-        )
+        with np.errstate(divide="ignore", invalid="ignore"):  # Hide /0 warning
+            distance_scores = np.clip(
+                a=REFERENCE_DISTANCE_M / distances, a_max=1.0, a_min=0.0
+            )
 
         # Forwardness contribution (1 if forward, 0 if backward,0.5 at 90°)
         forward_scores = 0.5 + 0.5 * alignments
@@ -219,9 +219,10 @@ class AutoTactician:
         alignments = self.app.interactions.alignments[my_actor_index, :]
 
         # Distance contribution
-        distance_scores = np.clip(
-            a=REFERENCE_DISTANCE_M / distances, a_max=1.0, a_min=0.0
-        )
+        with np.errstate(divide="ignore", invalid="ignore"):  # Hide /0 warning
+            distance_scores = np.clip(
+                a=REFERENCE_DISTANCE_M / distances, a_max=1.0, a_min=0.0
+            )  # TODO get from previous calc in threats
 
         # Forwardness contribution (1 if forward, 0 if backward,0.5 at 90°)
         forward_scores = 0.5 + 0.5 * alignments
@@ -263,7 +264,7 @@ class AutoTactician:
         center = np.zeros(3)
         if team == "friends":
             for actor in self.app.interactions.actors:
-                if actor.team == my_team:
+                if actor.team == my_team and actor != self.ship:
                     center += actor.position
                     n_actor_in_team += 1
         elif team == "foes":
@@ -275,3 +276,12 @@ class AutoTactician:
             raise ValueError(f"Allowed teams: `friends` and `foes`. Current: {team}")
 
         return center / n_actor_in_team
+
+    def clean(self):
+        self.ship = None
+        if DEBUG_DELETION:
+            LOGGER.info("Cleaned autotactician")
+
+    def __del__(self):
+        if DEBUG_DELETION:
+            LOGGER.info("Deleted autotactician")
