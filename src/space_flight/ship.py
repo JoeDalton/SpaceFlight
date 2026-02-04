@@ -37,6 +37,7 @@ class Ship:
     or PNJ behaviour)
 
     "Forward" is on an object's Y axis in panda3d, so thrust is in +Y
+    X axis is to the right, Z axis is up
     """
 
     def __init__(
@@ -192,12 +193,18 @@ class Ship:
         quat_dot = 0.5 * quat * quat_pqr
         self.state_dot[3:7] = quaternion.as_float_array(quat_dot)
 
+        # Find and store ship directions
+        forward_body = np.array([0.0, 1.0, 0.0])
+        self.forward = rotate_single_vector(quat, forward_body)
+        right_body = np.array([1.0, 0.0, 0.0])
+        self.right = rotate_single_vector(quat, right_body)
+        up_body = np.array([0.0, 0.0, 1.0])
+        self.up = rotate_single_vector(quat, up_body)
+
         # Compute derivative of speed:
         # Drag is opposed to speed, thrust is aligned to ship direction
         speed_norm = np.linalg.norm(speed)
         drag = -self.drag_factor * speed_norm * speed
-        forward_body = np.array([0.0, 1.0, 0.0])
-        self.forward = rotate_single_vector(quat, forward_body)
         thrust = self.scalar_thrust * self.forward
         acceleration = (thrust + drag) / self.mass_kg
         self.state_dot[7:10] = acceleration

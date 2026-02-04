@@ -5,11 +5,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from simple_pid import PID
 
 from space_flight import DEBUG_DELETION
-from space_flight.utils import (
-    low_pass_filter_first_order,
-    rotate_single_vector,
-    safe_angle_rad,
-)
+from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
 
 LOGGER = logging.getLogger()
 
@@ -134,10 +130,9 @@ class AutoPilot:
             # TODO remove normalization since the autonavigator is supposed to give
             # either a null or a unit direction
             target_direction = target_direction / target_direction_norm
-            ship_quat = np.quaternion(*self.ship.orientation)
-            ship_x = rotate_single_vector(ship_quat, np.array([1.0, 0.0, 0.0]))
-            ship_y = rotate_single_vector(ship_quat, np.array([0.0, 1.0, 0.0]))
-            ship_z = rotate_single_vector(ship_quat, np.array([0.0, 0.0, 1.0]))
+            ship_x = self.ship.right
+            ship_y = self.ship.forward
+            ship_z = self.ship.up
             # Project target direction on ship axes
             target_x = np.dot(ship_x, target_direction)
             target_y = np.dot(ship_y, target_direction)
