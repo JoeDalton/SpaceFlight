@@ -69,18 +69,15 @@ class MyApp(ShowBase):
             self,
             ship_type="a-wing",
             ini_position=np.array([0, -200, 0]),
-            is_neutral=True,
+            is_neutral=False,
         )
-        # self.player = Player(
-        #     self, ship_type="tie-fighter", ini_position=np.array([0, -20, 0])
-        # )
 
         """
         Build scene
         `asteroids` or `lava_planet` or `debug_collisions`
         """
         self.set_background_color(0, 0, 0)
-        self.scene = scene_factory(app=self, scene_name="asteroids")
+        self.scene = scene_factory(app=self, scene_name="lava_planet")
 
         """
         Initialize dummy bots
@@ -111,14 +108,14 @@ class MyApp(ShowBase):
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        self.chase_bot = spawn_bot(
-            app=self,
-            name="chase_1",
-            ship_type="a-wing",
-            ini_position=np.array([0, -50, 0]),
-            has_debug_trihedron=True,
-            team=1,
-        )
+        # self.chase_bot = spawn_bot(
+        #     app=self,
+        #     name="chase_1",
+        #     ship_type="a-wing",
+        #     ini_position=np.array([0, -50, 0]),
+        #     has_debug_trihedron=True,
+        #     team=1,
+        # )
 
         # for _ in range(7):
         #     spawn_bot(

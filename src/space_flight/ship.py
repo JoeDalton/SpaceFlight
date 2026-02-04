@@ -172,8 +172,7 @@ class Ship:
         """
         This is the flight model for the ships
 
-        Since there is no lift model, the velocity is always aligned
-        with the nose of the ship
+        No lift model
 
         A SimpleShip has 10 state variables
         - position (3)
@@ -197,8 +196,9 @@ class Ship:
         # Drag is opposed to speed, thrust is aligned to ship direction
         speed_norm = np.linalg.norm(speed)
         drag = -self.drag_factor * speed_norm * speed
-        thrust_body = np.array([0.0, self.scalar_thrust, 0.0])
-        thrust = rotate_single_vector(quat, thrust_body)
+        forward_body = np.array([0.0, 1.0, 0.0])
+        self.forward = rotate_single_vector(quat, forward_body)
+        thrust = self.scalar_thrust * self.forward
         acceleration = (thrust + drag) / self.mass_kg
         self.state_dot[7:10] = acceleration
 
@@ -207,8 +207,7 @@ class Ship:
         Gets the new ship's state, then prepare the next
         integration step.
 
-        Since there is no lift model, the velocity is always aligned
-        with the nose of the ship
+        Since there is no lift model, we align the velocity with the nose of the ship
         """
         # Get state
         self.state = self.app.integrator.get_state_variables(
@@ -228,9 +227,7 @@ class Ship:
         self.orientation /= np.linalg.norm(self.orientation)
         self.state[3:7] = self.orientation.copy()
         # Reorient speed in ship direction
-        quat = np.quaternion(*self.orientation)
-        speed_body = np.array([0.0, speed_norm, 0.0])
-        self.speed = rotate_single_vector(quat, speed_body)
+        self.speed = self.forward * speed_norm
         self.state[7:10] = self.speed.copy()
 
         # Prepare next integration step
@@ -260,7 +257,7 @@ class Ship:
         )
         self.move_ship_physics()
 
-        # TODO position and orientation => Attributes ?
+        # TODO position and orientation => already attributes
         ship_pos = self.state[0:3]
         ship_quat = self.state[3:7]
 
