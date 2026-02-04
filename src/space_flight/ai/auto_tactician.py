@@ -289,6 +289,10 @@ class AutoTactician:
         else:
             raise ValueError(f"Allowed teams: `friends` and `foes`. Current: {team}")
 
+        # No division if there is no one in the team
+        if n_actor_in_team == 0:
+            return {"position": center}
+
         return {"position": center / n_actor_in_team}
 
     def clean(self):
