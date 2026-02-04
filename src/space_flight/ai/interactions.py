@@ -3,9 +3,7 @@ from typing import List
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
-from space_flight import DISTANCE_TOLERANCE_M
-
-INTERACT_MAX_DISTANCE_M = 2000.0
+from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
 
 """
 Teams are defined as :
@@ -156,7 +154,7 @@ class Interactions:
                         target_actor.position - source_actor.position
                     )
                     distance = np.linalg.norm(direction)
-                    if distance > DISTANCE_TOLERANCE_M:
+                    if distance > TARGET_DISTANCE_TOLERANCE_M:
                         direction /= distance
                     else:
                         direction = np.zeros(3)

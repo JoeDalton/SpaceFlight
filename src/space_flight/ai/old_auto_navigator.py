@@ -3,7 +3,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from space_flight import DEBUG_DELETION, DISTANCE_TOLERANCE_M
+from space_flight import DEBUG_DELETION
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
 
 LOGGER = logging.getLogger()
 
@@ -11,7 +12,6 @@ NO_DIRECTION = np.zeros(3), 0.0
 
 # TODO: Navigator parameters ?
 WAYPOINT_MEETING_TOLERANCE_M = 10
-TARGET_DISTANCE_TOLERANCE_M = 1
 CHASE_DISTANCE_M = 80.0
 EVADE_TIME_S = 5.0
 LEAD_TIME_S = 0.5
@@ -89,7 +89,7 @@ class AutoNavigator:
 
         # Find whether the bot is going somewhere
         direction_norm = np.linalg.norm(direction)
-        if direction_norm < DISTANCE_TOLERANCE_M:
+        if direction_norm < TARGET_DISTANCE_TOLERANCE_M:
             # LOGGER.info("Navigator: direction mix has a too low norm")
             return NO_DIRECTION
 

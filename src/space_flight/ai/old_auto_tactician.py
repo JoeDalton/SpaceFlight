@@ -3,7 +3,8 @@ from typing import List
 
 import numpy as np
 
-from space_flight import DEBUG_DELETION, DISTANCE_TOLERANCE_M
+from space_flight import DEBUG_DELETION
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
 from space_flight.utils import rotate_single_vector
 
 LOGGER = logging.getLogger()
@@ -101,7 +102,7 @@ class AutoTactician:
 
         # Find if actors are hostile
         # TODO: create an ad-hoc interaction matrix instead
-        hostile_mask = distances > DISTANCE_TOLERANCE_M
+        hostile_mask = distances > TARGET_DISTANCE_TOLERANCE_M
 
         # Find if actors are forward or behind
         ship_quat = np.quaternion(*self.ship.orientation)
