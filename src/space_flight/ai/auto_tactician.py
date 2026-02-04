@@ -107,6 +107,7 @@ class AutoTactician:
                 self.time_since_commitment = 0.0
                 self.intent = intent
                 self.target = target
+        return self.intent, self.target
 
     def update_intent(self):
         """
