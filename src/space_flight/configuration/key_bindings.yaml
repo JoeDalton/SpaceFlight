@@ -15,3 +15,5 @@ fire_primary: space
 boost: b
 
 # TODO: Joystick and/or gamepad bindings
+stick_dead_zone: 0.25
+throttle_dead_zone: 0.04

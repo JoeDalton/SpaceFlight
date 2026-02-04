@@ -8,8 +8,8 @@ from panda3d.core import InputDevice
 from space_flight import CONFIGURATION_PATH
 from space_flight.utils import low_pass_filter_first_order
 
-STICK_DEAD_ZONE = 0.15
-THROTTLE_DEAD_ZONE = 0.04
+DEFAULT_STICK_DEAD_ZONE = 0.15
+DEFAULT_THROTTLE_DEAD_ZONE = 0.04
 THROTTLE_BOOST_VALUE = 10.0
 
 
@@ -242,6 +242,7 @@ class Keyboard(InputSystem):
 
 
 class Joystick(InputSystem):
+    # TODO add a joystick center and deadzone calibration utility
     def __init__(self, app: ShowBase, player):
         super().__init__(app=app, player=player)
 
@@ -287,6 +288,14 @@ class Joystick(InputSystem):
         # Accept boost toggle
         self.app.accept("stick-button8", self.activate_boost)
         self.app.accept("stick-button8-up", self.deactivate_boost)
+
+        # Register joystick dead zone
+        self.stick_dead_zone = self.app.key_bindings.get(
+            "stick_dead_zone", DEFAULT_STICK_DEAD_ZONE
+        )
+        self.throttle_dead_zone = self.app.key_bindings.get(
+            "throttle_dead_zone", DEFAULT_THROTTLE_DEAD_ZONE
+        )
 
     def connect(self, device):
         """Event handler that is called when a device is discovered."""
@@ -341,26 +350,26 @@ class Joystick(InputSystem):
             throttle = THROTTLE_BOOST_VALUE
         else:
             throttle = 1 - self.flightStick.findAxis(InputDevice.Axis.throttle).value
-            if abs(throttle) < THROTTLE_DEAD_ZONE:
+            if abs(throttle) < self.throttle_dead_zone:
                 throttle = 0
 
         yaw_rate = self.flightStick.findAxis(InputDevice.Axis.yaw).value
-        if abs(yaw_rate) < STICK_DEAD_ZONE:
+        if abs(yaw_rate) < self.stick_dead_zone:
             yaw_rate = 0
         else:
-            yaw_rate = yaw_rate - np.sign(yaw_rate) * STICK_DEAD_ZONE
+            yaw_rate = yaw_rate - np.sign(yaw_rate) * self.stick_dead_zone
 
         pitch_rate = self.flightStick.findAxis(InputDevice.Axis.pitch).value
-        if abs(pitch_rate) < STICK_DEAD_ZONE:
+        if abs(pitch_rate) < self.stick_dead_zone:
             pitch_rate = 0
         else:
-            pitch_rate = pitch_rate - np.sign(pitch_rate) * STICK_DEAD_ZONE
+            pitch_rate = pitch_rate - np.sign(pitch_rate) * self.stick_dead_zone
 
         roll_rate = self.flightStick.findAxis(InputDevice.Axis.roll).value
-        if abs(roll_rate) < STICK_DEAD_ZONE:
+        if abs(roll_rate) < self.stick_dead_zone:
             roll_rate = 0
         else:
-            roll_rate = roll_rate - np.sign(roll_rate) * STICK_DEAD_ZONE
+            roll_rate = roll_rate - np.sign(roll_rate) * self.stick_dead_zone
 
         return throttle, yaw_rate, pitch_rate, roll_rate
 
