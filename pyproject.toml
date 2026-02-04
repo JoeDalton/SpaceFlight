@@ -10,19 +10,20 @@ include = ["src/space_flight/_version.py", "resources","scripts"]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.15"
-black = "^23.11.0"
+black = "^24.10.0"
 pyarrow = "^21.0.0"
 numpy = "^2.3.5"
 scipy = "^1.13.1"
 numpy-quaternion = "^2024.0.13"
 Panda3D = "^1.10.15"
 simple-pid = "^2.0.1"
+virtualenv = "^20.36.1"
+urllib3 = "^2.6.0"
 
 [tool.poetry.group.dev.dependencies]
 cruft = "^2.15.0"
 invoke = "^2.2.0"
 tox = "^4.11.4"
-black = "^23.11.0"
 flake8 = "^6.1.0"
 pep8-naming = "^0.13.3"
 flake8-eradicate = "^1.5.0"
