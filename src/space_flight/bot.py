@@ -4,10 +4,9 @@ import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DEBUG_DELETION
+from space_flight.ai.auto_navigator import AutoNavigator
 from space_flight.ai.auto_pilot import AutoPilot
-from space_flight.ai.auto_tactician import AutoTactician as NewTact
-from space_flight.ai.old_auto_navigator import AutoNavigator
-from space_flight.ai.old_auto_tactician import AutoTactician
+from space_flight.ai.auto_tactician import AutoTactician
 from space_flight.destructibles import Destructible
 from space_flight.ship import Ship
 from space_flight.trihedron import Trihedron
@@ -39,9 +38,8 @@ class Bot(Destructible):
         )
 
         self.pilot = AutoPilot(ship=self.ship)
-        self.navigator = AutoNavigator(ship=self.ship)
-        self.tactician = AutoTactician(app=self.app, ship=self.ship)
-        self.new_tactician = NewTact(app=self.app, ship=self.ship, debug=True)
+        self.navigator = AutoNavigator(app=self.app, ship=self.ship, debug=True)
+        self.tactician = AutoTactician(app=self.app, ship=self.ship, debug=True)
         self.app.player.add_target(target=self.ship, name=self.name)
         self.team = team
 
@@ -67,11 +65,10 @@ class Bot(Destructible):
         - The pilot steers the ship and adjusts the throttle to follow its aim
         - The ship moves according to the games physics
         """
-        thoughts = self.tactician.think()
-        _ = self.new_tactician.think()
+        intent, target_dict = self.tactician.think()
 
         target_direction, reference_distance_m = self.navigator.navigate(
-            tactician_thoughts=thoughts
+            intent=intent, target_dict=target_dict
         )
 
         throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(

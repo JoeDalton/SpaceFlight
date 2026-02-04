@@ -82,7 +82,7 @@ class Interactions:
         :param actor: The actor to remove
         """
 
-        actor_index = self.get_actor_index(actor)
+        actor_index = self.get_actor_index_from_id(actor.id)
 
         # Remove actor from the list
         self.actors.pop(actor_index)
@@ -105,7 +105,7 @@ class Interactions:
             np.delete(self.rel_velocities, actor_index, axis=0), actor_index, axis=1
         )
 
-    def get_actor_index(self, actor) -> int:
+    def get_actor_index_from_id(self, actor_id: int) -> int:
         """
         Finds the actor's index in the list of actors
 
@@ -114,11 +114,11 @@ class Interactions:
         """
         actor_index = -1
         for idx in range(self.n_actors):
-            if self.actors[idx] == actor:
+            if self.actors[idx].id == actor_id:
                 actor_index = idx
                 break
         if actor_index == -1:
-            raise ValueError(f"Actor {actor.name} is not in the actors' list")
+            raise ValueError(f"Actor {actor_id} is not in the actors' list")
         return actor_index
 
     def interaction_update_task(self, task):
@@ -130,6 +130,7 @@ class Interactions:
             - proportional to distance between actors
             - inversely proportional to their closing speed
             - A bubble of a few seconds max
+        TODO: add an "engagement" array to update these very frequently ?
         """
         # Double loop over every actor, in the upper triangular quadrant
         for idx_source in range(1, self.n_actors):

@@ -1,5 +1,6 @@
 import logging
 from enum import Enum, auto
+from typing import Tuple
 
 import numpy as np
 
@@ -15,7 +16,7 @@ INTENT_UPDATE_DELAY_S = 1.0
 
 class Intent(Enum):
     """
-    Definition of the possile states
+    Definition of the possile intent states
     """
 
     ENGAGE = auto()
@@ -28,7 +29,7 @@ class Intent(Enum):
 
 class AutoTactician:
     """
-    A Finite State Machine to define the intents of the bots
+    A very basic Finite State Machine to define the intents of the bots
     """
 
     def __init__(
@@ -66,8 +67,8 @@ class AutoTactician:
     ):
         self.app = app
         self.ship = ship
-        self.intent = Intent.IDLE  # Current state
-        self.target = None  # Current target
+        self.intent = Intent.IDLE  # Currentt state
+        self.target_dict = {}  # Current target
         self.primary_target = None  # Assigned by squad tactics
         self.time_since_update = 0.0
         self.time_since_commitment = 1000.0
@@ -95,21 +96,24 @@ class AutoTactician:
         dt = self.app.clock.dt
         self.time_since_update += dt
         self.time_since_commitment += dt
-        if self.time_since_update >= INTENT_UPDATE_DELAY_S:
-            # TODO: Move commitment time check here after debug for better perf
+        if (
+            self.time_since_update >= INTENT_UPDATE_DELAY_S
+            and self.time_since_commitment >= self.commitment_times[self.intent]
+        ):
             self.time_since_update = 0.0
-            intent, target = self.update_intent()
-            if self.time_since_commitment >= self.commitment_times[self.intent] and (
-                intent != self.intent or target != self.target
+            intent, target_dict = self.update_intent()
+            if (
+                intent != self.intent
+                or target_dict["target_id"] != self.target_dict["target_id"]
             ):
                 if self.debug:
-                    LOGGER.info(f"Switched to intent {intent}, target {target}")
+                    LOGGER.info(f"Switched to intent {intent}, target {target_dict}")
                 self.time_since_commitment = 0.0
                 self.intent = intent
-                self.target = target
-        return self.intent, self.target
+                self.target_dict = target_dict
+        return self.intent, self.target_dict
 
-    def update_intent(self):
+    def update_intent(self) -> Tuple[int, dict]:
         """
         Evaluates the tactic situation around the bot.
 
@@ -124,32 +128,33 @@ class AutoTactician:
         Finally, evaluates the intent of the bot with priorites
         """
         # Find current actor index of self
-        my_actor_index = self.app.interactions.get_actor_index(self.ship)
+        my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
 
         # Check if bot is threatened
-        highest_threat = self.evaluate_threats(my_actor_index)
-        print(highest_threat["score"])
-        if highest_threat["score"] >= self.thresholds["max_threat_score"]:
-            return Intent.EVADE, highest_threat["target_idx"]
+        highest_threat_dict = self.evaluate_threats(my_actor_index)
+        if highest_threat_dict["score"] >= self.thresholds["max_threat_score"]:
+            return Intent.EVADE, highest_threat_dict
 
         # Check if the bot's ship is in good enough shape to continue fighting
         fighting_shape = self.evaluate_fighting_shape()
         if fighting_shape <= self.thresholds["min_fighting_shape"]:
-            foes_center = self.evaluate_team_center(team="foes")
-            return Intent.DISENGAGE, foes_center
+            foes_center_dict = self.evaluate_team_center(team="foes")
+            foes_center_dict["target_id"] = Intent.DISENGAGE
+            return Intent.DISENGAGE, foes_center_dict
 
         # Check if bot has a good enough target to engage
-        best_prey = self.evaluate_preys(my_actor_index)
-        if best_prey["score"] >= self.thresholds["min_engagement_score"]:
-            return Intent.ENGAGE, best_prey["target_idx"]
+        best_prey_dict = self.evaluate_preys(my_actor_index)
+        if best_prey_dict["score"] >= self.thresholds["min_engagement_score"]:
+            return Intent.ENGAGE, best_prey_dict
 
         # Check if bot has patrol orders
         if len(self.ship.parent.navigator.waypoints) != 0:
-            return Intent.PATROL
+            return Intent.PATROL, {"target_id": Intent.PATROL}
 
         # Nothing specific to do for now. Regroup with friends
-        friends_center = self.evaluate_team_center(team="friends")
-        return Intent.REGROUP, friends_center
+        friends_center_dict = self.evaluate_team_center(team="friends")
+        friends_center_dict["target_id"] = Intent.REGROUP
+        return Intent.REGROUP, friends_center_dict
 
     def evaluate_fighting_shape(self) -> float:
         """
@@ -170,6 +175,7 @@ class AutoTactician:
 
         interact_mask = self.app.interactions.interact[my_actor_index, :]
         distances = self.app.interactions.distances[my_actor_index, :]
+
         # Is target aligned towards me ?
         alignments = self.app.interactions.alignments[:, my_actor_index]
 
@@ -196,10 +202,12 @@ class AutoTactician:
         max_threat_score_idx = np.nanargmax(threat_scores)
         max_threat_score = threat_scores[max_threat_score_idx]
 
-        return {
+        highest_threat_dict = {
             "score": max_threat_score,
-            "target_idx": max_threat_score_idx,
+            "target_id": self.app.interactions.actors[max_threat_score_idx].id,
         }
+
+        return highest_threat_dict
 
     def evaluate_preys(self, my_actor_index: int) -> dict:
         """
@@ -254,7 +262,12 @@ class AutoTactician:
         max_prey_score_idx = np.nanargmax(prey_scores)
         max_prey_score = prey_scores[max_prey_score_idx]
 
-        return {"score": max_prey_score, "target_idx": max_prey_score_idx}
+        best_prey_dict = {
+            "score": max_prey_score,
+            "target_id": self.app.interactions.actors[max_prey_score_idx].id,
+        }
+
+        return best_prey_dict
 
     def evaluate_team_center(self, team: str) -> np.ndarray:
         """
@@ -276,7 +289,7 @@ class AutoTactician:
         else:
             raise ValueError(f"Allowed teams: `friends` and `foes`. Current: {team}")
 
-        return center / n_actor_in_team
+        return {"position": center / n_actor_in_team}
 
     def clean(self):
         self.ship = None
