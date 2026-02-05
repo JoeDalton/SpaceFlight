@@ -4,25 +4,31 @@ from typing import List, Tuple
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai import (
-    INTERACT_MAX_DISTANCE_M,
-    SHOOTING_MAX_DISTANCE_M,
-    SHOOTING_MIN_COS_ANGLE,
-    TARGET_DISTANCE_TOLERANCE_M,
-)
+from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
 from space_flight.ai.auto_tactician import Intent
+from space_flight.utils import get_current_time
 
 LOGGER = logging.getLogger()
 
 NO_DIRECTION = np.zeros(3), 0.0
 
-# TODO: Navigator parameters ?
+# TODO: Navigator personality parameters ?
 WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
-INTERCEPT_LEAD_TIME_S = 1.5
-ATTACK_LEAD_TIME_S = 0.5
 OVERSHOOT_TIME_LIMIT_S = 1.5
+# Extension
+MINIMUM_EXTENSION_DURATION_S = 0.5
+# Interception
+INTERCEPT_LEAD_TIME_S = 1.5
+MAXIMUM_INTERCEPT_DURATION_S = 10.0
+MINIMUM_COS_ANGLE_IN_INTERCEPT_PHASE = np.cos(np.deg2rad(30))
+# Attack
+ATTACK_LEAD_TIME_S = 1.0
+MAXIMUM_ATTACK_DURATION_S = 5.0
+MINIMUM_COS_ANGLE_IN_ATTACK_PHASE = np.cos(np.deg2rad(20))
 MINIMUM_FIRING_WINDOW_TIME_S = 1.0
+SHOOTING_MAX_DISTANCE_M = 500
+SHOOTING_MIN_COS_ANGLE = np.cos(np.deg2rad(10))
 
 
 class AutoNavigator:
@@ -41,11 +47,13 @@ class AutoNavigator:
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
         self.debug = debug
-        self.engage_phase = ""
+        self.behaviour = "idle"
+        self.behaviour_duration_s = 0.0
+        self.last_update_time = get_current_time()
 
     def navigate(self, intent: int, target_dict: dict):
         """
-        Turns the tactician's intent into
+        Turns the tactician's intent into explicit directions
 
         :return: The direction to point to and its reference distance
         """
@@ -56,6 +64,7 @@ class AutoNavigator:
             self.engage_phase = ""
             return self.follow_waypoints()
         elif intent == Intent.ENGAGE:
+            # Exact behaviour is defined and recorded inside engage_target
             return self.engage_target(target_dict)
         elif intent == Intent.EVADE:
             self.engage_phase = ""
@@ -68,6 +77,29 @@ class AutoNavigator:
             return self.disengage(target_dict)
         else:
             return ValueError(f"Unknown intent: {intent}")
+
+    def record_behaviour(self, behaviour: str):
+        """
+        Record which behaviour is currently running and for how long.
+
+        TODO: Somehow manage to commit to a behaviour for a certain time ?
+
+        :param behaviour: A str describing the behaviour currently in play
+        """
+        current_time = get_current_time()
+        if behaviour == self.behaviour:
+            # Increment time since last navigator update
+            self.behaviour_duration_s += current_time - self.last_update_time
+        else:
+            # Reset counter and record new behaviour
+            self.behaviour_duration_s = 0.0
+            self.behaviour = behaviour
+            if self.debug:
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name} switched "
+                    f"to behaviour {behaviour}"
+                )
+        self.last_update_time = current_time
 
     # %% ==== ENGAGE ====
     def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
@@ -84,7 +116,10 @@ class AutoNavigator:
         """
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
-            LOGGER.warning(f"{self} told to engage but there's no attached target")
+            LOGGER.warning(
+                f"Navigator {self.ship.parent.name} told to engage "
+                "but there's no attached target"
+            )
             return NO_DIRECTION
 
         # Identify self and target in interactions
@@ -95,7 +130,10 @@ class AutoNavigator:
             )
         except ValueError:
             if self.debug:
-                LOGGER.info("Target has been destroyed since last intent update.")
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Target has been destroyed since last intent update."
+                )
             return NO_DIRECTION
 
         # Get necessary info from interactions and pre compute target properties
@@ -113,33 +151,27 @@ class AutoNavigator:
         if self.check_overshoot_risk(
             direction=direction, relative_speed=relative_speed, distance=distance
         ):
-            self.debug_engage_phase(phase="reposition")
+            self.record_behaviour(behaviour="reposition")
             return self.reposition(direction=direction, distance=distance)
 
-        if self.check_extend_conditions():
-            self.debug_engage_phase(phase="extend")
+        if self.check_extend_conditions(alignment=alignment):
+            self.record_behaviour(behaviour="extend")
             return self.extend()
 
         if self.check_attack_conditions():
-            self.debug_engage_phase(phase="attack")
+            self.record_behaviour(behaviour="attack")
             return self.attack_target(
                 target_current_position=target_current_position,
                 target_current_speed=target_current_speed,
                 alignment=alignment,
                 distance=distance,
             )
-
         # Default behaviour
-        self.debug_engage_phase(phase="intercept")
+        self.record_behaviour(behaviour="intercept")
         return self.intercept_target(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
         )
-
-    def debug_engage_phase(self, phase):
-        if self.debug and phase != self.engage_phase:
-            self.engage_phase = phase
-            LOGGER.info(f"Navigator switched to engagement phase {phase}")
 
     def check_attack_conditions(
         self,
@@ -150,21 +182,57 @@ class AutoNavigator:
         - lasers have enough energy
         - Firing window will be long enough
 
-        :param distance: _description_
-        :param alignment: _description_
+        :param distance: The distance to the target
+        :param alignment: The cos of the angle to target
         :return: _description_
         """
         return True
 
-    def check_extend_conditions(
-        self,
-    ) -> bool:
+    def check_extend_conditions(self, alignment: float) -> bool:
         """
-        TODO: if it's been too long and the angle does not diminish
+        Check whether the current engagement behaviour has expired.
+        - Has it been too long ?
+        - Is the angle to target too big ?
+        - Has previous extend behaviour been long enough ?
 
-        :return: _description_
+        :param alignment: The cos of the angle to target
+        :return: Whether to extend the trajectory
         """
+        # TODO
         return False
+        if (
+            self.behaviour == "intercept"
+            and self.behaviour_duration_s >= MAXIMUM_INTERCEPT_DURATION_S
+            and alignment < MINIMUM_COS_ANGLE_IN_INTERCEPT_PHASE
+        ):
+            if self.debug:
+                angle_deg = np.rad2deg(np.arccos(alignment))
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Intercept took too long with unsatisfying angle "
+                    f"({angle_deg} deg). Extending trajectory."
+                )
+            return True
+        elif (
+            self.behaviour == "attack"
+            and self.behaviour_duration_s >= MAXIMUM_ATTACK_DURATION_S
+            and alignment < MINIMUM_COS_ANGLE_IN_ATTACK_PHASE
+        ):
+            if self.debug:
+                angle_deg = np.rad2deg(np.arccos(alignment))
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Attack took too long with unsatisfying angle "
+                    f"({angle_deg} deg). Extending trajectory."
+                )
+            return True
+        elif (
+            self.behaviour == "extend"
+            and self.behaviour_duration_s < MINIMUM_EXTENSION_DURATION_S
+        ):
+            return True
+        else:
+            return False
 
     def check_overshoot_risk(
         self,
@@ -291,7 +359,10 @@ class AutoNavigator:
         """
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
-            LOGGER.warning(f"{self} told to evade but there's no attached target")
+            LOGGER.warning(
+                f"Navigator {self.ship.parent.name} told to evade but "
+                "there's no attached target"
+            )
             return NO_DIRECTION
 
         # Identify self and target in interactions
