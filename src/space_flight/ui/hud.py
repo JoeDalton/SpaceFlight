@@ -1,7 +1,7 @@
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d, render2d
+from direct.showbase.ShowBaseGlobal import aspect2d, render2d
 from panda3d.core import (
     CardMaker,
     NodePath,
@@ -12,7 +12,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
-from space_flight.utils import get_current_time
+from space_flight.utils import get_average_frame_rate, get_current_time
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -54,7 +54,7 @@ class HUD:
         A task that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
         """
-        frame_rate = ClockObject.getGlobalClock().getAverageFrameRate()
+        frame_rate = get_average_frame_rate()
 
         player_text = (
             ""

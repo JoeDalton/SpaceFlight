@@ -79,6 +79,17 @@ def get_time_step() -> float:
     return ClockObject.getGlobalClock().getDt()
 
 
+def get_average_frame_rate() -> float:
+    """
+    Gets the average frame rate
+
+    TODO: Take pauses/start menu into account
+
+    :return: The average frame rate
+    """
+    return ClockObject.getGlobalClock().getAverageFrameRate()
+
+
 def smooth_step_down(
     x: Union[float, np.ndarray], x_step: float, slope: float
 ) -> Union[float, np.ndarray]:
