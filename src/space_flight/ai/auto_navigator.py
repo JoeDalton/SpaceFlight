@@ -21,7 +21,8 @@ WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
 INTERCEPT_LEAD_TIME_S = 1.5
 ATTACK_LEAD_TIME_S = 0.5
-OVERSHOOT_TIME_LIMIT_S = 0.2
+OVERSHOOT_TIME_LIMIT_S = 1.5
+MINIMUM_FIRING_WINDOW_TIME_S = 1.0
 
 
 class AutoNavigator:
@@ -179,9 +180,13 @@ class AutoNavigator:
         :param distance: The distance to the target
         :return: Whether self should reposition
         """
-        closing_speed_mps = np.dot(direction, relative_speed)
-        overshoot_time_s = distance / closing_speed_mps
-        return overshoot_time_s < OVERSHOOT_TIME_LIMIT_S
+        closing_speed_mps = -np.dot(direction, relative_speed)
+        if closing_speed_mps <= 0:
+            # Target pulling away, no risk of overshoot
+            return False
+        overshoot_time_prediction_s = distance / closing_speed_mps
+
+        return overshoot_time_prediction_s < OVERSHOOT_TIME_LIMIT_S
 
     def reposition(
         self, direction: np.ndarray, distance: float
@@ -309,6 +314,7 @@ class AutoNavigator:
         return direction, 2 * distance
 
     # %% ==== REGROUP ====
+
     def regroup(self, target_dict={}) -> Tuple[np.ndarray, float]:
         """
         Regroups with allies. If none are left, go to the center of the world
@@ -326,6 +332,7 @@ class AutoNavigator:
         return target_relative_position / target_distance, target_distance
 
     # %% ==== DISENGAGE ====
+
     def disengage(self, target_dict={}) -> Tuple[np.ndarray, float]:
         """
         Flees from the danger zone, defined as the center of gravity of all foes
