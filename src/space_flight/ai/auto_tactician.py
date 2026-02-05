@@ -59,7 +59,7 @@ class AutoTactician:
             ):
                 if self.debug:
                     LOGGER.info(
-                        f"Tactician {self.ship.parent.name} switched to intent"
+                        f"Tactician {self.ship.parent.name} switched to intent "
                         f"{intent}, target {target_dict}"
                     )
                 self.time_since_commitment = 0.0
