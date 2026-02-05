@@ -5,14 +5,15 @@ from typing import Tuple
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai import REFERENCE_DISTANCE_M
-from space_flight.utils import get_time_step
+from space_flight.utils import get_time_step, smooth_step_down
 
 LOGGER = logging.getLogger()
 
 
 # TODO make this probalistic to avoid everyone update at the same time
-INTENT_UPDATE_DELAY_S = 1.0
+INTENT_UPDATE_DELAY_S = 0.5
+
+# TODO better thresholds. Optimize ?
 
 
 class Intent(Enum):
@@ -50,19 +51,8 @@ class AutoTactician:
             "min_engagement_score": 0.5,
             "primary_target_engagement_multiplier": 5.0,
             "max_threat_score": 0.97,
-        },
-        weights: dict = {
-            "engage": {
-                "distance": 0.2,
-                "forward": 1.0,
-                "health": 0.0,  # TODO
-                "ally_threat": 0.0,  # TODO
-                "primary_target": 0.0,  # TODO
-            },
-            "evade": {
-                "distance": 0.1,
-                "forward": 1.0,
-            },
+            "engagement_cutoff_distance": 1300.0,
+            "evading_cutoff_distance": 1300.0,
         },
         debug: bool = False,
     ):
@@ -80,14 +70,6 @@ class AutoTactician:
         self.commitment_times = commitment_times
         self.thresholds = thresholds
 
-        # Count selection weights
-        self.weights = weights
-        self.weights["engage"]["inv_total"] = 1.0 / np.sum(
-            list(self.weights["engage"].values())
-        )
-        self.weights["evade"]["inv_total"] = 1.0 / np.sum(
-            list(self.weights["evade"].values())
-        )
         self.debug = debug
 
     def think(self):
@@ -109,7 +91,8 @@ class AutoTactician:
             ):
                 if self.debug:
                     LOGGER.info(
-                        f"Tactician switched to intent {intent}, target {target_dict}"
+                        f"Tactician {self.ship.parent.name} switched to intent"
+                        f"{intent}, target {target_dict}"
                     )
                 self.time_since_commitment = 0.0
                 self.intent = intent
@@ -183,23 +166,17 @@ class AutoTactician:
         alignments = self.app.interactions.alignments[:, my_actor_index]
 
         # Distance contribution
-        with np.errstate(divide="ignore", invalid="ignore"):  # Hide /0 warning
-            distance_scores = np.clip(
-                a=REFERENCE_DISTANCE_M / distances, a_max=1.0, a_min=0.0
-            )
+        distance_scores = smooth_step_down(
+            x=distances,
+            x_step=self.thresholds["engagement_cutoff_distance"],
+            slope=0.01,
+        )
 
-        # Forwardness contribution (1 if forward, 0 if backward,0.5 at 90°)
+        # Forwardness contribution (1 if forward of threat, 0 if backward,0.5 at 90°)
         forward_scores = 0.5 + 0.5 * alignments
 
         # Assemble all contributions
-        threat_scores = (
-            interact_mask
-            * (
-                distance_scores * self.weights["evade"]["distance"]
-                + forward_scores * self.weights["evade"]["forward"]
-            )
-            * self.weights["evade"]["inv_total"]
-        )
+        threat_scores = interact_mask * distance_scores * forward_scores
 
         # Select highest scoring prey
         max_threat_score_idx = np.nanargmax(threat_scores)
@@ -231,12 +208,11 @@ class AutoTactician:
         alignments = self.app.interactions.alignments[my_actor_index, :]
 
         # Distance contribution
-        with np.errstate(divide="ignore", invalid="ignore"):  # Hide /0 warning
-            distance_scores = np.clip(
-                a=REFERENCE_DISTANCE_M / distances, a_max=1.0, a_min=0.0
-            )  # TODO get from previous calc in threats
+        distance_scores = smooth_step_down(
+            x=distances, x_step=self.thresholds["evading_cutoff_distance"], slope=0.01
+        )
 
-        # Forwardness contribution (1 if forward, 0 if backward,0.5 at 90°)
+        # Forwardness contribution (1 if prey is forward, 0 if backward,0.5 at 90°)
         forward_scores = 0.5 + 0.5 * alignments
 
         # Health status contribution TODO
@@ -251,14 +227,11 @@ class AutoTactician:
         # Assemble all contributions
         prey_scores = (
             interact_mask
-            * (
-                distance_scores * self.weights["engage"]["distance"]
-                + forward_scores * self.weights["engage"]["forward"]
-                + health_scores * self.weights["engage"]["health"]
-                + ally_threatening_scores * self.weights["engage"]["ally_threat"]
-                + primary_target_scores * self.weights["engage"]["primary_target"]
-            )
-            * self.weights["engage"]["inv_total"]
+            * distance_scores
+            * forward_scores
+            * health_scores
+            * ally_threatening_scores
+            * primary_target_scores
         )
 
         # Select highest scoring prey
