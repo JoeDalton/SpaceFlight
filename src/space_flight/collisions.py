@@ -40,8 +40,6 @@ class CollisionSystem:
 
         :param entry: Panda3d's description of the collision
         """
-        if DEBUG_COLLISION:
-            LOGGER.info("laser into destructible")
         laser = entry.from_node_path.python_tags["owner"]
         destructible = entry.into_node_path.python_tags["owner"]
 
@@ -60,6 +58,9 @@ class CollisionSystem:
             destructible_id = ""
         if laser.origin_ship_id == destructible_id:
             return
+
+        if DEBUG_COLLISION:
+            LOGGER.info("laser into destructible")
 
         # Apply damage to the destructible object
         destructible.count_hit(damage=laser.power)

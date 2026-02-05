@@ -4,33 +4,19 @@ from typing import List, Tuple
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
+from space_flight.ai import (
+    INTERACT_MAX_DISTANCE_M,
+    TARGET_DISTANCE_TOLERANCE_M,
+    Personality,
+)
 from space_flight.ai.auto_tactician import Intent
 from space_flight.utils import get_current_time
 
 LOGGER = logging.getLogger()
 
 NO_DIRECTION = np.zeros(3), 0.0
-
-# TODO: Navigator personality parameters ?
 WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
-OVERSHOOT_TIME_LIMIT_S = 1.5
-# Extension
-MINIMUM_EXTENSION_DURATION_S = 0.5
-# Interception
-INTERCEPT_LEAD_TIME_S = 1.5
-MAXIMUM_INTERCEPT_DURATION_S = 10.0
-MINIMUM_COS_ANGLE_IN_INTERCEPT_PHASE = np.cos(np.deg2rad(30))
-# Attack
-ATTACK_LEAD_TIME_S = 0.5
-MAXIMUM_ATTACK_DURATION_S = 5.0
-MINIMUM_COS_ANGLE_IN_ATTACK_PHASE = np.cos(np.deg2rad(20))
-MINIMUM_FIRING_WINDOW_TIME_S = 0.5
-MAX_ATTACK_DISTANCE_M = 800
-MAX_FIRING_DISTANCE_M = 600
-MAX_FIRING_ANGLE_RAD = np.deg2rad(5)
-MIN_FIRING_COS_ANGLE = np.cos(MAX_FIRING_ANGLE_RAD)
 
 
 class AutoNavigator:
@@ -41,13 +27,16 @@ class AutoNavigator:
     Outputs a direction to point to and a reference distance
     """
 
-    def __init__(self, app, ship, debug: bool = False):
+    def __init__(
+        self, app, ship, personality: dict = Personality.DEFAULT, debug: bool = False
+    ):
         self.app = app
         self.ship = ship
         self.waypoints = []
         self.next_waypoint_idx = 0
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
+        self.personality = personality
         self.debug = debug
         self.behaviour = "idle"
         self.behaviour_duration_s = 0.0
@@ -177,6 +166,7 @@ class AutoNavigator:
         return self.intercept_target(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
+            lead_time_s=self.personality["navigator"]["intercept"]["lead_time_s"],
         )
 
     def check_attack_conditions(
@@ -199,8 +189,11 @@ class AutoNavigator:
         :return: Whether to begin an attack run
         """
         return (
-            (distance <= MAX_ATTACK_DISTANCE_M)
-            and (alignment >= MINIMUM_COS_ANGLE_IN_ATTACK_PHASE)
+            (distance <= self.personality["navigator"]["attack"]["maximum_distance_m"])
+            and (
+                alignment
+                >= self.personality["navigator"]["attack"]["minimum_cos_angle"]
+            )
             and True  # Lasers TODO
             and (
                 self.compute_firing_window_length(
@@ -208,7 +201,7 @@ class AutoNavigator:
                     relative_speed=relative_speed,
                     distance=distance,
                 )
-                >= MINIMUM_FIRING_WINDOW_TIME_S
+                >= self.personality["navigator"]["fire"]["minimimum_window_duration_s"]
             )
         )
 
@@ -227,7 +220,11 @@ class AutoNavigator:
         :param distance: The distance to the target
         :return: The estimated shooting window length
         """
-        firing_window_width_m = 2 * distance * np.tan(MAX_FIRING_ANGLE_RAD)
+        firing_window_width_m = (
+            2
+            * distance
+            * np.tan(self.personality["navigator"]["fire"]["maximum_angle_rad"])
+        )
         lateral_relative_speed_mps = np.linalg.norm(np.cross(relative_speed, direction))
         if lateral_relative_speed_mps < 0.1:
             # Nearly no lateral movement, all the time in the world to shoot
@@ -246,8 +243,14 @@ class AutoNavigator:
         """
         if (
             self.behaviour == "intercept"
-            and self.behaviour_duration_s >= MAXIMUM_INTERCEPT_DURATION_S
-            and alignment < MINIMUM_COS_ANGLE_IN_INTERCEPT_PHASE
+            and (
+                self.behaviour_duration_s
+                >= self.personality["navigator"]["intercept"]["maximum_duration_s"]
+            )
+            and (
+                alignment
+                < self.personality["navigator"]["intercept"]["minimum_cos_angle"]
+            )
         ):
             if self.debug:
                 angle_deg = np.rad2deg(np.arccos(alignment))
@@ -259,8 +262,13 @@ class AutoNavigator:
             return True
         elif (
             self.behaviour == "attack"
-            and self.behaviour_duration_s >= MAXIMUM_ATTACK_DURATION_S
-            and alignment < MINIMUM_COS_ANGLE_IN_ATTACK_PHASE
+            and (
+                self.behaviour_duration_s
+                >= self.personality["navigator"]["attack"]["maximum_duration_s"]
+            )
+            and (
+                alignment < self.personality["navigator"]["attack"]["minimum_cos_angle"]
+            )
         ):
             if self.debug:
                 angle_deg = np.rad2deg(np.arccos(alignment))
@@ -272,7 +280,8 @@ class AutoNavigator:
             return True
         elif (
             self.behaviour == "extend"
-            and self.behaviour_duration_s < MINIMUM_EXTENSION_DURATION_S
+            and self.behaviour_duration_s
+            < self.personality["navigator"]["extend"]["maximum_duration_s"]
         ):
             return True
         else:
@@ -298,7 +307,10 @@ class AutoNavigator:
             return False
         overshoot_time_prediction_s = distance / closing_speed_mps
 
-        return overshoot_time_prediction_s < OVERSHOOT_TIME_LIMIT_S
+        return (
+            overshoot_time_prediction_s
+            < self.personality["navigator"]["reposition"]["minimum_time_to_overshoot_s"]
+        )
 
     def reposition(
         self, direction: np.ndarray, distance: float
@@ -343,11 +355,16 @@ class AutoNavigator:
         target_future_direction, reference_distance_m = self.intercept_target(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
-            lead_time_s=ATTACK_LEAD_TIME_S,
+            lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
         # Decide whether to shoot
         firing_alignment = np.dot(target_future_direction, self.ship.forward)
-        if distance < MAX_FIRING_DISTANCE_M and firing_alignment > MIN_FIRING_COS_ANGLE:
+        if (
+            distance < self.personality["navigator"]["fire"]["maximum_distance_m"]
+        ) and (
+            firing_alignment
+            > self.personality["navigator"]["fire"]["minimum_cos_angle"]
+        ):
             self.ship.laser_cannon.fire()
 
         return target_future_direction, reference_distance_m
@@ -356,7 +373,7 @@ class AutoNavigator:
         self,
         target_current_position: np.ndarray,
         target_current_speed: np.ndarray,
-        lead_time_s: float = INTERCEPT_LEAD_TIME_S,
+        lead_time_s: float,
     ) -> Tuple[np.ndarray, float]:
         """
         Intercepts the target by flying to its future position

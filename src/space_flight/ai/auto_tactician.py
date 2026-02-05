@@ -1,10 +1,10 @@
 import logging
-from enum import Enum, auto
 from typing import Tuple
 
 import numpy as np
 
 from space_flight import DEBUG_DELETION
+from space_flight.ai import Intent, Personality
 from space_flight.utils import get_time_step, smooth_step_down
 
 LOGGER = logging.getLogger()
@@ -12,21 +12,6 @@ LOGGER = logging.getLogger()
 
 # TODO make this probalistic to avoid everyone update at the same time
 INTENT_UPDATE_DELAY_S = 0.5
-
-# TODO better personality. Optimize ?
-
-
-class Intent(Enum):
-    """
-    Definition of the possile intent states
-    """
-
-    ENGAGE = auto()
-    EVADE = auto()
-    DISENGAGE = auto()
-    REGROUP = auto()
-    PATROL = auto()
-    IDLE = auto()
 
 
 class AutoTactician:
@@ -38,24 +23,7 @@ class AutoTactician:
         self,
         app,
         ship,
-        commitment_times: dict = {
-            Intent.ENGAGE: 3.0,
-            Intent.EVADE: 1.0,
-            Intent.DISENGAGE: 5.0,
-            Intent.REGROUP: 3.0,
-            Intent.PATROL: 3.0,
-            Intent.IDLE: 0.1,
-        },
-        personality: dict = {
-            "min_fighting_shape": 2,
-            "min_engagement_score": 0.5,
-            "primary_target_engagement_multiplier": 5.0,
-            "max_threat_score": 0.98,
-            "hunter_cutoff_distance": 1300.0,
-            "hunter_angular_focus": 0.7,
-            "prey_cutoff_distance": 1300.0,
-            "prey_angular_focus": 1.0,
-        },
+        personality: dict = Personality.DEFAULT,
         debug: bool = False,
     ):
         self.app = app
@@ -69,7 +37,6 @@ class AutoTactician:
         # - commitment times (hysteresis)
         # - transition thresholds (aggresivity/recklessness)
         # - behaviour biases
-        self.commitment_times = commitment_times
         self.personality = personality
 
         self.debug = debug
@@ -81,15 +48,14 @@ class AutoTactician:
         dt = get_time_step()
         self.time_since_update += dt
         self.time_since_commitment += dt
-        if (
-            self.time_since_update >= INTENT_UPDATE_DELAY_S
-            and self.time_since_commitment >= self.commitment_times[self.intent]
+        if (self.time_since_update >= INTENT_UPDATE_DELAY_S) and (
+            self.time_since_commitment
+            >= self.personality["tactician"]["commitment_times"][self.intent]
         ):
             self.time_since_update = 0.0
             intent, target_dict = self.update_intent()
-            if (
-                intent != self.intent
-                or target_dict["target_id"] != self.target_dict["target_id"]
+            if (intent != self.intent) or (
+                target_dict["target_id"] != self.target_dict["target_id"]
             ):
                 if self.debug:
                     LOGGER.info(
@@ -120,19 +86,25 @@ class AutoTactician:
 
         # Check if bot is threatened
         highest_threat_dict = self.evaluate_threats(my_actor_index)
-        if highest_threat_dict["score"] >= self.personality["max_threat_score"]:
+        if (
+            highest_threat_dict["score"]
+            >= self.personality["tactician"]["max_threat_score"]
+        ):
             return Intent.EVADE, highest_threat_dict
 
         # Check if the bot's ship is in good enough shape to continue fighting
         fighting_shape = self.evaluate_fighting_shape()
-        if fighting_shape <= self.personality["min_fighting_shape"]:
+        if fighting_shape <= self.personality["tactician"]["min_fighting_shape"]:
             foes_center_dict = self.evaluate_team_center(team="foes")
             foes_center_dict["target_id"] = Intent.DISENGAGE
             return Intent.DISENGAGE, foes_center_dict
 
         # Check if bot has a good enough target to engage
         best_prey_dict = self.evaluate_preys(my_actor_index)
-        if best_prey_dict["score"] >= self.personality["min_engagement_score"]:
+        if (
+            best_prey_dict["score"]
+            >= self.personality["tactician"]["min_engagement_score"]
+        ):
             return Intent.ENGAGE, best_prey_dict
 
         # Check if bot has patrol orders
@@ -170,7 +142,7 @@ class AutoTactician:
         # Distance contribution
         distance_scores = smooth_step_down(
             x=distances,
-            x_step=self.personality["prey_cutoff_distance"],
+            x_step=self.personality["tactician"]["prey_cutoff_distance"],
             slope=0.01,
         )
 
@@ -213,7 +185,9 @@ class AutoTactician:
 
         # Distance contribution
         distance_scores = smooth_step_down(
-            x=distances, x_step=self.personality["hunter_cutoff_distance"], slope=0.01
+            x=distances,
+            x_step=self.personality["tactician"]["hunter_cutoff_distance"],
+            slope=0.01,
         )
 
         # Forwardness contribution
@@ -263,9 +237,9 @@ class AutoTactician:
         :return: The array of scores
         """
         if is_hunter:
-            focus_factor = self.personality["hunter_angular_focus"]
+            focus_factor = self.personality["tactician"]["hunter_angular_focus"]
         else:
-            focus_factor = self.personality["prey_angular_focus"]
+            focus_factor = self.personality["tactician"]["prey_angular_focus"]
         # Base forwardness contribution
         # (1 if prey is forward, 0 if backward, 0.5 at 90°)
         base = 0.5 + 0.5 * alignments

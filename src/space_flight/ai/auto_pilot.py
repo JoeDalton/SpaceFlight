@@ -4,6 +4,7 @@ import numpy as np
 from simple_pid import PID
 
 from space_flight import DEBUG_DELETION
+from space_flight.ai import Personality
 from space_flight.utils import (
     get_current_time,
     get_time_step,
@@ -13,17 +14,14 @@ from space_flight.utils import (
 
 LOGGER = logging.getLogger()
 
-# TODO: Pilot parameters ?
 ROLL_TOLERANCE = 1e-2
-ANGLE_THROTTLE_EXPONENT = 0.5
 DISTANCE_FOR_MAX_THROTTLE = 2000
-MIN_THROTTLE = 0.05
-DISTANCE_THROTTLE_EXPONENT = 1.1
 
 
 class AutoPilot:
-    def __init__(self, ship):
+    def __init__(self, ship, personality: dict = Personality.DEFAULT):
         self.ship = ship
+        self.personality = personality
         self.pid_yaw = PID(
             Kp=1.0,
             Ki=0.0,
@@ -162,13 +160,17 @@ class AutoPilot:
 
         # Update throttle command
         # Decrease throttle if the target is at too much of an angle
-        angle_contribution = max(0.0, cos_angle_to_target) ** ANGLE_THROTTLE_EXPONENT
+        angle_contribution = (
+            max(0.0, cos_angle_to_target)
+            ** self.personality["pilot"]["angle_throttle_exponent"]
+        )
         # Increase throttle if the target is too far and lower it if negative distance
         distance_contribution = (
             max(
-                min(reference_distance_m / DISTANCE_FOR_MAX_THROTTLE, 1.0), MIN_THROTTLE
+                min(reference_distance_m / DISTANCE_FOR_MAX_THROTTLE, 1.0),
+                self.personality["pilot"]["minimum_throttle"],
             )
-            ** DISTANCE_THROTTLE_EXPONENT
+            ** self.personality["pilot"]["distance_throttle_exponent"]
         )
         # TODO: add a contribution of closing velocity ?
         velocity_contribution = 1.0
@@ -211,7 +213,9 @@ class AutoPilot:
         )
 
         # Clamp throttle
-        self.throttle = max(min(self.throttle, 1.0), MIN_THROTTLE)
+        self.throttle = max(
+            min(self.throttle, 1.0), self.personality["pilot"]["minimum_throttle"]
+        )
 
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
 

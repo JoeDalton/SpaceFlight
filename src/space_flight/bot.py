@@ -95,6 +95,16 @@ class Bot(Destructible):
         """
         return self.ship.health
 
+    def set_personality(self, personality: dict):
+        """
+        Sets a personality to the bot via its tactician, navigator and pilot parameters
+
+        :param personality: A personality dictionary
+        """
+        self.tactician.personality = personality
+        self.navigator.personality = personality
+        self.pilot.personality = personality
+
     def clean(self):
         """
         Remove every child
