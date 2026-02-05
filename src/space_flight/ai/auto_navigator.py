@@ -23,13 +23,13 @@ INTERCEPT_LEAD_TIME_S = 1.5
 MAXIMUM_INTERCEPT_DURATION_S = 10.0
 MINIMUM_COS_ANGLE_IN_INTERCEPT_PHASE = np.cos(np.deg2rad(30))
 # Attack
-ATTACK_LEAD_TIME_S = 1.0
+ATTACK_LEAD_TIME_S = 0.5
 MAXIMUM_ATTACK_DURATION_S = 5.0
 MINIMUM_COS_ANGLE_IN_ATTACK_PHASE = np.cos(np.deg2rad(20))
 MINIMUM_FIRING_WINDOW_TIME_S = 0.5
 MAX_ATTACK_DISTANCE_M = 800
 MAX_FIRING_DISTANCE_M = 600
-MAX_FIRING_ANGLE_RAD = np.deg2rad(10)
+MAX_FIRING_ANGLE_RAD = np.deg2rad(5)
 MIN_FIRING_COS_ANGLE = np.cos(MAX_FIRING_ANGLE_RAD)
 
 
@@ -170,7 +170,6 @@ class AutoNavigator:
             return self.attack_target(
                 target_current_position=target_current_position,
                 target_current_speed=target_current_speed,
-                alignment=alignment,
                 distance=distance,
             )
         # Default behaviour
@@ -245,8 +244,6 @@ class AutoNavigator:
         :param alignment: The cos of the angle to target
         :return: Whether to extend the trajectory
         """
-        # TODO
-        return False
         if (
             self.behaviour == "intercept"
             and self.behaviour_duration_s >= MAXIMUM_INTERCEPT_DURATION_S
@@ -331,7 +328,6 @@ class AutoNavigator:
         self,
         target_current_position: np.ndarray,
         target_current_speed: np.ndarray,
-        alignment: float,
         distance: float,
     ) -> Tuple[np.ndarray, float]:
         """
@@ -339,18 +335,22 @@ class AutoNavigator:
 
         :param target_current_position: The absolute position of the target
         :param target_current_speed: Its absolute speed
-        :param alignment: The cos of the angle to the target
         :param distance: The distance to the target
         :return: The direction to point to and its reference distance
         """
-        # Decide whether to shoot
-        if distance < MAX_FIRING_DISTANCE_M and alignment > MIN_FIRING_COS_ANGLE:
-            self.ship.laser_cannon.fire()
-        return self.intercept_target(
+
+        # Got slightly ahead of the target
+        target_future_direction, reference_distance_m = self.intercept_target(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
             lead_time_s=ATTACK_LEAD_TIME_S,
         )
+        # Decide whether to shoot
+        firing_alignment = np.dot(target_future_direction, self.ship.forward)
+        if distance < MAX_FIRING_DISTANCE_M and firing_alignment > MIN_FIRING_COS_ANGLE:
+            self.ship.laser_cannon.fire()
+
+        return target_future_direction, reference_distance_m
 
     def intercept_target(
         self,
