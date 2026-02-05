@@ -26,9 +26,11 @@ MINIMUM_COS_ANGLE_IN_INTERCEPT_PHASE = np.cos(np.deg2rad(30))
 ATTACK_LEAD_TIME_S = 1.0
 MAXIMUM_ATTACK_DURATION_S = 5.0
 MINIMUM_COS_ANGLE_IN_ATTACK_PHASE = np.cos(np.deg2rad(20))
-MINIMUM_FIRING_WINDOW_TIME_S = 1.0
-SHOOTING_MAX_DISTANCE_M = 500
-SHOOTING_MIN_COS_ANGLE = np.cos(np.deg2rad(10))
+MINIMUM_FIRING_WINDOW_TIME_S = 0.5
+MAX_ATTACK_DISTANCE_M = 800
+MAX_FIRING_DISTANCE_M = 600
+MAX_FIRING_ANGLE_RAD = np.deg2rad(10)
+MIN_FIRING_COS_ANGLE = np.cos(MAX_FIRING_ANGLE_RAD)
 
 
 class AutoNavigator:
@@ -158,7 +160,12 @@ class AutoNavigator:
             self.record_behaviour(behaviour="extend")
             return self.extend()
 
-        if self.check_attack_conditions():
+        if self.check_attack_conditions(
+            direction=direction,
+            relative_speed=relative_speed,
+            distance=distance,
+            alignment=alignment,
+        ):
             self.record_behaviour(behaviour="attack")
             return self.attack_target(
                 target_current_position=target_current_position,
@@ -175,18 +182,58 @@ class AutoNavigator:
 
     def check_attack_conditions(
         self,
+        direction: np.ndarray,
+        relative_speed: np.ndarray,
+        distance: float,
+        alignment: float,
     ) -> bool:
         """
-        TODO:
-        - distance and alignment are good
-        - lasers have enough energy
+        - distance is good
+        - alignment is good
+        - lasers have enough energy #TODO
         - Firing window will be long enough
 
+        :param direction: The direction to the target
+        :param relative_speed: The relative speed of the target relative to self
         :param distance: The distance to the target
         :param alignment: The cos of the angle to target
-        :return: _description_
+        :return: Whether to begin an attack run
         """
-        return True
+        return (
+            (distance <= MAX_ATTACK_DISTANCE_M)
+            and (alignment >= MINIMUM_COS_ANGLE_IN_ATTACK_PHASE)
+            and True  # Lasers TODO
+            and (
+                self.compute_firing_window_length(
+                    direction=direction,
+                    relative_speed=relative_speed,
+                    distance=distance,
+                )
+                >= MINIMUM_FIRING_WINDOW_TIME_S
+            )
+        )
+
+    def compute_firing_window_length(
+        self,
+        direction: np.ndarray,
+        relative_speed: np.ndarray,
+        distance: float,
+    ) -> float:
+        """
+        Computes an estimation of the firing window length based on lateral relative
+        speed of target, its distance and the angular width of a shooting window
+
+        :param direction: The direction to the target
+        :param relative_speed: The relative speed of the target relative to self
+        :param distance: The distance to the target
+        :return: The estimated shooting window length
+        """
+        firing_window_width_m = 2 * distance * np.tan(MAX_FIRING_ANGLE_RAD)
+        lateral_relative_speed_mps = np.linalg.norm(np.cross(relative_speed, direction))
+        if lateral_relative_speed_mps < 0.1:
+            # Nearly no lateral movement, all the time in the world to shoot
+            return 1e6
+        return firing_window_width_m / lateral_relative_speed_mps
 
     def check_extend_conditions(self, alignment: float) -> bool:
         """
@@ -297,7 +344,7 @@ class AutoNavigator:
         :return: The direction to point to and its reference distance
         """
         # Decide whether to shoot
-        if distance < SHOOTING_MAX_DISTANCE_M and alignment > SHOOTING_MIN_COS_ANGLE:
+        if distance < MAX_FIRING_DISTANCE_M and alignment > MIN_FIRING_COS_ANGLE:
             self.ship.laser_cannon.fire()
         return self.intercept_target(
             target_current_position=target_current_position,
