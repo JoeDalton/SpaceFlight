@@ -1,7 +1,14 @@
 import logging
 
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import CollisionHandlerEvent, CollisionTraverser
+from panda3d.core import (
+    CollisionHandlerEvent,
+    CollisionNode,
+    CollisionSegment,
+    CollisionSphere,
+    CollisionTraverser,
+    NodePath,
+)
 
 from space_flight import DEBUG_COLLISION
 
@@ -124,3 +131,87 @@ class CollisionSystem:
         """
         if DEBUG_COLLISION:
             LOGGER.info("ship into ship")
+
+
+def attach_collision_sphere(
+    app,
+    name: str,
+    radius: float,
+    from_mask_bit,
+    into_mask_bit,
+    parent_node,
+    parent_object,
+    relative_position=[0, 0, 0],
+) -> NodePath:
+    """
+    Attach a collision sphere to an existing node.
+    This does not work well with lasers and low FPS. Could work for missiles, though ?
+
+    # TODO: use this for ships/asteroids
+
+    :param app: The panda3d app
+    :param name: The name of the collision sphere
+    :param radius: Its radius
+    :param from_mask_bit: Its from_mask_bit
+    :param into_mask_bit: Its into_mask_bit
+    :param parent_node: Its parent_node
+    :param parent_object: Its parent_object
+    :param relative_position: Its position relative to the origin of its parent node
+    :return: The node path to the collision sphere
+    """
+    cnode = CollisionNode(name)
+    cnode.addSolid(
+        CollisionSphere(
+            relative_position[0], relative_position[1], relative_position[2], radius
+        )
+    )
+    # Define masks
+    cnode.setFromCollideMask(from_mask_bit)
+    cnode.setIntoCollideMask(into_mask_bit)
+    # Attach to parent node and objct
+    node_path = parent_node.attachNewNode(cnode)
+    node_path.setPythonTag("owner", parent_object)
+    # Register in collosion handler
+    app.collision_system.traverser.addCollider(node_path, app.collision_system.handler)
+
+    if DEBUG_COLLISION:
+        node_path.show()
+    return node_path
+
+
+def attach_collision_segment(
+    app,
+    name: str,
+    from_mask_bit,
+    into_mask_bit,
+    parent_node,
+    parent_object,
+    relative_start_position,
+    relative_end_position,
+) -> NodePath:
+    """
+    Attach a collision segment to an existing node.
+
+    :param app: The panda3d app
+    :param name: The name of the collision sphere
+    :param from_mask_bit: Its from_mask_bit
+    :param into_mask_bit: Its into_mask_bit
+    :param parent_node: Its parent_node
+    :param parent_object: Its parent_object
+    :param relative_position: Its position relative to the origin of its parent node
+    :return: The node path to the collision sphere
+    """
+    cnode = CollisionNode(name)
+    cnode.addSolid(CollisionSegment(relative_start_position, relative_end_position))
+    # Define masks
+    cnode.setFromCollideMask(from_mask_bit)
+    cnode.setIntoCollideMask(into_mask_bit)
+    # Attach to parent node and objct
+    node_path = parent_node.attachNewNode(cnode)
+    node_path.setPythonTag("owner", parent_object)
+    # Register in collosion handler
+    app.collision_system.traverser.addCollider(node_path, app.collision_system.handler)
+
+    if DEBUG_COLLISION:
+        node_path.show()
+    return node_path

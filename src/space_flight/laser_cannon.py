@@ -9,8 +9,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AudioSound,
     CardMaker,
-    CollisionNode,
-    CollisionSphere,
+    LPoint3,
     LVector3,
     NodePath,
     PointLight,
@@ -18,8 +17,9 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import ALL_BIT, DATAFILES_PATH, DEBUG_COLLISION, DEBUG_DELETION
-from space_flight.utils import get_current_time
+from space_flight import ALL_BIT, DATAFILES_PATH, DEBUG_DELETION
+from space_flight.collisions import attach_collision_segment
+from space_flight.utils import get_average_frame_rate, get_current_time
 
 LOGGER = logging.getLogger()
 
@@ -192,20 +192,24 @@ class LaserShot:
         plnp.setPos(0, 0, 0)
         self.app.render.setLight(plnp)
 
-        # Initialize collision
-        # TODO Use segments instead. This does not work with low FPS
-        self.laser_cnode = CollisionNode("laser")
-        self.laser_cnode.addSolid(CollisionSphere(0, 0, 0, 1))
-        # Lasers triger collisions when found by all objects
-        self.laser_cnode.setFromCollideMask(ALL_BIT)
-        self.laser_cnode.setIntoCollideMask(0)
-        self.laser_np = self.shot.attachNewNode(self.laser_cnode)
-        self.app.collision_system.traverser.addCollider(
-            self.laser_np, self.app.collision_system.handler
+        # Initialize collision segment
+        # The length of the segment is the typical frame time
+        # multiplied by the laser speed to cover the space spanned by the laser
+        # between two frames
+        dt = 1 / get_average_frame_rate()
+        relative_start_position = np.zeros(3)
+        length = np.linalg.norm(speed) * dt * np.array([0.0, 0.0, 1.0])
+        relative_end_position = relative_start_position + length
+        self.laser_np = attach_collision_segment(
+            app=self.app,
+            name="laser",
+            from_mask_bit=ALL_BIT,
+            into_mask_bit=0,
+            parent_node=self.shot,
+            parent_object=self,
+            relative_start_position=LPoint3(*relative_start_position),
+            relative_end_position=LPoint3(*relative_end_position),
         )
-        self.laser_np.setPythonTag("owner", self)
-        if DEBUG_COLLISION:
-            self.laser_np.show()
 
         # Clean laser at the end of its life
         # Make it disappear at the end of range
