@@ -10,10 +10,6 @@ DATAFILES_PATH = Path(__file__).parent / "datafiles"
 CONFIGURATION_PATH = Path(__file__).parent / "configuration"
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "tests/fixtures"
 
-TERRAIN_BIT = 0b0010
-SHIP_BIT = 0b0001
-ALL_BIT = 0b0011
-
 DEBUG_DELETION = False
 DEBUG_COLLISION = False
 

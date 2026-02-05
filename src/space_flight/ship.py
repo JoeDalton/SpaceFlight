@@ -8,14 +8,10 @@ import numpy as np
 import quaternion
 import yaml
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import CollisionNode, CollisionSphere, NodePath, Quat
+from panda3d.core import NodePath, Quat
 
-from space_flight import (  # SHIP_BIT,; TERRAIN_BIT,
-    ALL_BIT,
-    DATAFILES_PATH,
-    DEBUG_COLLISION,
-    DEBUG_DELETION,
-)
+from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight.collisions import attach_collision_sphere
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
 from space_flight.utils import get_time_step, rotate_single_vector
@@ -118,29 +114,14 @@ class Ship:
         self.laser_cannon = LaserCannon(app=self.app, parent_ship=self)
 
         # Initialize collisions
-        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
-        self.target_cnode = CollisionNode("ship")
-        self.target_cnode.addSolid(CollisionSphere(0, 0, 0, self.hit_box_radius_m))
-
-        # Old :
-        # Ships never trigger collisions, but they look for intersections with SHIP_BIT
-        # self.target_cnode.setFromCollideMask(0)
-        # self.target_cnode.setIntoCollideMask(SHIP_BIT)
-
-        # Intermediary: Ships trigger collisions when they are found by TERRAIN_BIT
-        # and look for intersections with SHIP_BIT
-        # self.target_cnode.setFromCollideMask(TERRAIN_BIT)
-        # self.target_cnode.setIntoCollideMask(SHIP_BIT)
-
-        # Final ?: Ships trigger collisions when they are found by anything
-        # (terrain or ship) and look for intersections with SHIP_BIT
-        self.target_cnode.setFromCollideMask(ALL_BIT)
-        self.target_cnode.setIntoCollideMask(ALL_BIT)
-
-        self.ship_np = self.node.attachNewNode(self.target_cnode)
-        self.ship_np.setPythonTag("owner", self)
-        if DEBUG_COLLISION:
-            self.ship_np.show()
+        self.collision_sphere_np = attach_collision_sphere(
+            app=self.app,
+            name="ship",
+            radius=self.conf["hit_box_radius_m"],
+            collider_type="destructible",
+            parent_node=self.node,
+            parent_object=self,
+        )
 
         # Handle ship health and shield
         self.parent.add_task(
@@ -300,9 +281,9 @@ class Ship:
     def clean(self):
         self.laser_cannon.clean()
         self.laser_cannon = None
-        self.ship_np.setPythonTag("owner", None)
-        self.ship_np.remove_node()
-        self.ship_np = None
+        self.collision_sphere_np.setPythonTag("owner", None)
+        self.collision_sphere_np.remove_node()
+        self.collision_sphere_np = None
         self.node.remove_node()
         self.node = None
         self.is_dead = True

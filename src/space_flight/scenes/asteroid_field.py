@@ -3,9 +3,10 @@ import random
 import numpy as np
 import quaternion
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import CollisionNode, CollisionSphere, Quat
+from panda3d.core import Quat
 
-from space_flight import DATAFILES_PATH, DEBUG_COLLISION, TERRAIN_BIT
+from space_flight import DATAFILES_PATH
+from space_flight.collisions import attach_collision_sphere
 
 random.seed(1)
 np.random.seed(1)
@@ -85,21 +86,15 @@ class AsteroidField:
                 self.omegas[3 * ast_idx : 3 * (ast_idx + 1)] = omega.copy()
 
             # Initialize collisions
-            # Do something better with the type of asteroid. Use a simplified mesh,
-            # for example.
             hit_box_radius_m = 1.2
-            ast_cnode = CollisionNode("terrain")
-            ast_cnode.addSolid(CollisionSphere(0, 0, 0, hit_box_radius_m))
-
-            # Asteroids never trigger collisions,
-            # but they look for intersections with TERRAIN_BIT
-            ast_cnode.setFromCollideMask(0)
-            ast_cnode.setIntoCollideMask(TERRAIN_BIT)
-
-            asteroid_np = instance.attachNewNode(ast_cnode)
-            # asteroid_np.setPythonTag("owner", self)
-            if DEBUG_COLLISION:
-                asteroid_np.show()
+            self.collision_sphere_np = attach_collision_sphere(
+                app=self.app,
+                name="terrain",
+                radius=hit_box_radius_m,
+                collider_type="terrain",
+                parent_node=instance,
+                parent_object=self,
+            )
 
             # Store the new instance
             self.asteroids.append(instance)

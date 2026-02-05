@@ -17,7 +17,7 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import ALL_BIT, DATAFILES_PATH, DEBUG_DELETION
+from space_flight import DATAFILES_PATH, DEBUG_DELETION
 from space_flight.collisions import attach_collision_segment
 from space_flight.utils import get_average_frame_rate, get_current_time
 
@@ -203,8 +203,7 @@ class LaserShot:
         self.laser_np = attach_collision_segment(
             app=self.app,
             name="laser",
-            from_mask_bit=ALL_BIT,
-            into_mask_bit=0,
+            collider_type="laser",
             parent_node=self.shot,
             parent_object=self,
             relative_start_position=LPoint3(*relative_start_position),

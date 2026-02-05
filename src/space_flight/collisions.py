@@ -1,7 +1,9 @@
 import logging
+from typing import Tuple
 
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import (
+    BitMask32,
     CollisionHandlerEvent,
     CollisionNode,
     CollisionSegment,
@@ -13,6 +15,59 @@ from panda3d.core import (
 from space_flight import DEBUG_COLLISION
 
 LOGGER = logging.getLogger()
+
+
+class CollisionLayers:
+    LASER = BitMask32.bit(0)
+    SENSOR = BitMask32.bit(0)
+    DESTRUCTIBLE = BitMask32.bit(2)
+    ENVIRONMENT = BitMask32.bit(3)
+
+    # Lasers hit environment and destructibles
+    # Nothing hits them
+    LASER_FROM = DESTRUCTIBLE | ENVIRONMENT
+    LASER_INTO = BitMask32.allOff()
+
+    # Same for sensors
+    SENSOR_FROM = DESTRUCTIBLE | ENVIRONMENT
+    SENSOR_INTO = BitMask32.allOff()
+
+    # Destructibles hit environment and other destructibles.
+    # They are only hit by lasers, sensors and other destructibles
+    DESTRUCTIBLE_FROM = DESTRUCTIBLE | ENVIRONMENT
+    DESTRUCTIBLE_INTO = LASER | SENSOR | DESTRUCTIBLE
+
+    # Terrain cannot hit anything
+    # It is hit by lasers, sensors and destructibles
+    TERRAIN_FROM = BitMask32.allOff()
+    TERRAIN_INTO = LASER | SENSOR | DESTRUCTIBLE
+
+    @staticmethod
+    def define_collision_masks(collider_type: str) -> Tuple[BitMask32]:
+        """
+        Defines the from and into values of collider given its type
+
+        :param collider_type: The type of collider
+        :return: Its from and into mask bits, and whether to add said collider to
+            the collision handler
+        """
+        add_to_collision_handler = True
+        if collider_type == "laser":
+            from_mask_bit = CollisionLayers.LASER_FROM
+            into_mask_bit = CollisionLayers.LASER_INTO
+        elif collider_type == "sensor":
+            from_mask_bit = CollisionLayers.SENSOR_FROM
+            into_mask_bit = CollisionLayers.SENSOR_INTO
+        elif collider_type == "destructible":
+            from_mask_bit = CollisionLayers.DESTRUCTIBLE_FROM
+            into_mask_bit = CollisionLayers.DESTRUCTIBLE_INTO
+        elif collider_type == "terrain":
+            from_mask_bit = CollisionLayers.TERRAIN_FROM
+            into_mask_bit = CollisionLayers.TERRAIN_INTO
+            add_to_collision_handler = False
+        else:
+            raise ValueError(f"Unknown collider type {collider_type}")
+        return from_mask_bit, into_mask_bit, add_to_collision_handler
 
 
 class CollisionSystem:
@@ -137,8 +192,7 @@ def attach_collision_sphere(
     app,
     name: str,
     radius: float,
-    from_mask_bit,
-    into_mask_bit,
+    collider_type: str,
     parent_node,
     parent_object,
     relative_position=[0, 0, 0],
@@ -152,13 +206,18 @@ def attach_collision_sphere(
     :param app: The panda3d app
     :param name: The name of the collision sphere
     :param radius: Its radius
-    :param from_mask_bit: Its from_mask_bit
-    :param into_mask_bit: Its into_mask_bit
+    :param collider_type: The nature of the collider, defines from and into bitmasks
     :param parent_node: Its parent_node
     :param parent_object: Its parent_object
     :param relative_position: Its position relative to the origin of its parent node
     :return: The node path to the collision sphere
     """
+    (
+        from_mask_bit,
+        into_mask_bit,
+        add_to_collision_handler,
+    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
+
     cnode = CollisionNode(name)
     cnode.addSolid(
         CollisionSphere(
@@ -172,7 +231,10 @@ def attach_collision_sphere(
     node_path = parent_node.attachNewNode(cnode)
     node_path.setPythonTag("owner", parent_object)
     # Register in collosion handler
-    app.collision_system.traverser.addCollider(node_path, app.collision_system.handler)
+    if add_to_collision_handler:
+        app.collision_system.traverser.addCollider(
+            node_path, app.collision_system.handler
+        )
 
     if DEBUG_COLLISION:
         node_path.show()
@@ -182,8 +244,7 @@ def attach_collision_sphere(
 def attach_collision_segment(
     app,
     name: str,
-    from_mask_bit,
-    into_mask_bit,
+    collider_type: str,
     parent_node,
     parent_object,
     relative_start_position,
@@ -194,13 +255,18 @@ def attach_collision_segment(
 
     :param app: The panda3d app
     :param name: The name of the collision sphere
-    :param from_mask_bit: Its from_mask_bit
-    :param into_mask_bit: Its into_mask_bit
+    :param collider_type: The nature of the collider, defines from and into bitmasks
     :param parent_node: Its parent_node
     :param parent_object: Its parent_object
     :param relative_position: Its position relative to the origin of its parent node
     :return: The node path to the collision sphere
     """
+    (
+        from_mask_bit,
+        into_mask_bit,
+        add_to_collision_handler,
+    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
+
     cnode = CollisionNode(name)
     cnode.addSolid(CollisionSegment(relative_start_position, relative_end_position))
     # Define masks
@@ -210,7 +276,10 @@ def attach_collision_segment(
     node_path = parent_node.attachNewNode(cnode)
     node_path.setPythonTag("owner", parent_object)
     # Register in collosion handler
-    app.collision_system.traverser.addCollider(node_path, app.collision_system.handler)
+    if add_to_collision_handler:
+        app.collision_system.traverser.addCollider(
+            node_path, app.collision_system.handler
+        )
 
     if DEBUG_COLLISION:
         node_path.show()
