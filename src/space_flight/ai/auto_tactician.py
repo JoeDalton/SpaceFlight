@@ -13,7 +13,7 @@ LOGGER = logging.getLogger()
 # TODO make this probalistic to avoid everyone update at the same time
 INTENT_UPDATE_DELAY_S = 0.5
 
-# TODO better thresholds. Optimize ?
+# TODO better personality. Optimize ?
 
 
 class Intent(Enum):
@@ -46,13 +46,15 @@ class AutoTactician:
             Intent.PATROL: 3.0,
             Intent.IDLE: 0.1,
         },
-        thresholds: dict = {
+        personality: dict = {
             "min_fighting_shape": 2,
             "min_engagement_score": 0.5,
             "primary_target_engagement_multiplier": 5.0,
-            "max_threat_score": 0.97,
-            "engagement_cutoff_distance": 1300.0,
-            "evading_cutoff_distance": 1300.0,
+            "max_threat_score": 0.98,
+            "hunter_cutoff_distance": 1300.0,
+            "hunter_angular_focus": 0.7,
+            "prey_cutoff_distance": 1300.0,
+            "prey_angular_focus": 1.0,
         },
         debug: bool = False,
     ):
@@ -68,7 +70,7 @@ class AutoTactician:
         # - transition thresholds (aggresivity/recklessness)
         # - behaviour biases
         self.commitment_times = commitment_times
-        self.thresholds = thresholds
+        self.personality = personality
 
         self.debug = debug
 
@@ -118,19 +120,19 @@ class AutoTactician:
 
         # Check if bot is threatened
         highest_threat_dict = self.evaluate_threats(my_actor_index)
-        if highest_threat_dict["score"] >= self.thresholds["max_threat_score"]:
+        if highest_threat_dict["score"] >= self.personality["max_threat_score"]:
             return Intent.EVADE, highest_threat_dict
 
         # Check if the bot's ship is in good enough shape to continue fighting
         fighting_shape = self.evaluate_fighting_shape()
-        if fighting_shape <= self.thresholds["min_fighting_shape"]:
+        if fighting_shape <= self.personality["min_fighting_shape"]:
             foes_center_dict = self.evaluate_team_center(team="foes")
             foes_center_dict["target_id"] = Intent.DISENGAGE
             return Intent.DISENGAGE, foes_center_dict
 
         # Check if bot has a good enough target to engage
         best_prey_dict = self.evaluate_preys(my_actor_index)
-        if best_prey_dict["score"] >= self.thresholds["min_engagement_score"]:
+        if best_prey_dict["score"] >= self.personality["min_engagement_score"]:
             return Intent.ENGAGE, best_prey_dict
 
         # Check if bot has patrol orders
@@ -168,12 +170,14 @@ class AutoTactician:
         # Distance contribution
         distance_scores = smooth_step_down(
             x=distances,
-            x_step=self.thresholds["engagement_cutoff_distance"],
+            x_step=self.personality["prey_cutoff_distance"],
             slope=0.01,
         )
 
-        # Forwardness contribution (1 if forward of threat, 0 if backward,0.5 at 90°)
-        forward_scores = 0.5 + 0.5 * alignments
+        # Forwardness contribution
+        forward_scores = self.compute_alignment_score(
+            alignments=alignments, is_hunter=False
+        )
 
         # Assemble all contributions
         threat_scores = interact_mask * distance_scores * forward_scores
@@ -209,11 +213,13 @@ class AutoTactician:
 
         # Distance contribution
         distance_scores = smooth_step_down(
-            x=distances, x_step=self.thresholds["evading_cutoff_distance"], slope=0.01
+            x=distances, x_step=self.personality["hunter_cutoff_distance"], slope=0.01
         )
 
-        # Forwardness contribution (1 if prey is forward, 0 if backward,0.5 at 90°)
-        forward_scores = 0.5 + 0.5 * alignments
+        # Forwardness contribution
+        forward_scores = self.compute_alignment_score(
+            alignments=alignments, is_hunter=True
+        )
 
         # Health status contribution TODO
         health_scores = 1.0
@@ -244,6 +250,28 @@ class AutoTactician:
         }
 
         return best_prey_dict
+
+    def compute_alignment_score(
+        self, alignments: np.ndarray, is_hunter: bool
+    ) -> np.ndarray:
+        """
+        Computes a prey/threat score based on the cos of the angle between the forward
+        direction of the hunter and the hunter-prey vector
+
+        :param alignments: The array of cos angles
+        :param is_hunter: If true, use the hunter values. Else use the prey values
+        :return: The array of scores
+        """
+        if is_hunter:
+            focus_factor = self.personality["hunter_angular_focus"]
+        else:
+            focus_factor = self.personality["prey_angular_focus"]
+        # Base forwardness contribution
+        # (1 if prey is forward, 0 if backward, 0.5 at 90°)
+        base = 0.5 + 0.5 * alignments
+        # The more focused, the less angled target are scored
+        forward_scores = 1 + (base - 1) * focus_factor
+        return forward_scores
 
     def evaluate_team_center(self, team: str) -> np.ndarray:
         """
