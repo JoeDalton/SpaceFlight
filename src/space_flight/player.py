@@ -12,8 +12,8 @@ from space_flight.utils import rotate_single_vector
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
 COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
-HEAD_ROTATION_POSITION_FACTOR = 50.0
-HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR = 0.0
+HEAD_ROTATION_POSITION_FACTOR_DEGPM = 500.0
+HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD = 1.0
 
 
 class Player:
@@ -155,15 +155,16 @@ class Player:
         self.head_jolt.setPos(*self.head_position_m)
 
         # Add head rotation proportional to position
-        # pitch = - self.head_position_m[2] * HEAD_ROTATION_POSITION_FACTOR
-        # roll = - self.head_position_m[0] * HEAD_ROTATION_POSITION_FACTOR
+        pitch_deg = self.head_position_m[2] * HEAD_ROTATION_POSITION_FACTOR_DEGPM
+        roll_deg = -self.head_position_m[0] * HEAD_ROTATION_POSITION_FACTOR_DEGPM
 
-        # Add head rotation proportional to ship rotation rate
-        # TODO
+        # Add head rotation proportional and opposite to ship roll rate
+        roll_rate_radps = self.ship.pqr[1]
+        roll_deg -= roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
 
         # Set head angular position
-        # self.head_jolt.setP(roll)
-        # self.head_jolt.setR(pitch)
+        self.head_jolt.setP(pitch_deg)
+        self.head_jolt.setR(roll_deg)
 
         # Pilot turning their head TODO smoother system
         self.head_pivot.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
