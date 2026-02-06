@@ -281,7 +281,7 @@ class AutoNavigator:
         elif (
             self.behaviour == "extend"
             and self.behaviour_duration_s
-            < self.personality["navigator"]["extend"]["maximum_duration_s"]
+            < self.personality["navigator"]["extend"]["minimum_duration_s"]
         ):
             return True
         else:
