@@ -1,5 +1,5 @@
-import glob
 import random
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -38,30 +38,33 @@ class SFX:
 
         # Lasers hitting player
         self.player_hit_sound_pool = self.build_sound_pool(
-            pattern=str(DATAFILES_PATH / "sounds/impacts/laser_on_player/*.wav"),
+            directory=DATAFILES_PATH / "sounds/impacts/laser_on_player",
+            pattern="*.wav",
             is_3d=True,
         )
 
         # Lasers hitting targets in the distance
         self.distant_target_hit_sound_pool = self.build_sound_pool(
-            str(DATAFILES_PATH / "sounds/impacts/laser_distant_on_target/*.wav"),
+            directory=DATAFILES_PATH / "sounds/impacts/laser_distant_on_target",
+            pattern="*.wav",
             is_3d=False,
         )
 
         # Lasers hitting terrain
         self.terrain_hit_sound_pool = self.build_sound_pool(
-            str(DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock/*.wav"),
+            directory=DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock",
+            pattern="*.wav",
             is_3d=False,
         )
 
-    def build_sound_pool(self, pattern: str, is_3d: bool) -> List[str]:
+    def build_sound_pool(self, directory: Path, pattern: str, is_3d: bool) -> List[str]:
         """
         Builds a sound pool from a glob pattern
 
         :param pattern: The glob pattern to find the sound files
         :return: a sound pool
         """
-        sound_files = glob.glob(pattern)
+        sound_files = list(directory.glob(pattern))
         sound_pool = []
         for _ in range(SOUND_POOL_LENGTH):
             sound_file = random.choice(sound_files)
