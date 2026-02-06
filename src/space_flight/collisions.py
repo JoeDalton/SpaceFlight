@@ -123,21 +123,19 @@ class CollisionSystem:
             LOGGER.info("laser into destructible")
 
         # Apply damage to the destructible object
-        destructible.count_hit(damage=laser.power)
+        normal = entry.getSurfaceNormal(entry.getIntoNodePath())
+        destructible.take_hit(damage=laser.power, normal_body_vector=normal)
 
         # Delete laser
         laser.shot.removeNode()
 
         # Apply hit effect depending on player or bot
         if destructible_id == self.app.player.ship.id:
-            # TODO add camera wiggle opposite the normal
-            # normal = entry.getSurfaceNormal(entry.getIntoNodePath())
             relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
             self.app.sfx.impact_hit_on_player(relative_hit_point=relative_hit_point)
         else:
             # TODO: Mute bots shooting on bots ?
             # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-            # normal = entry.getSurfaceNormal(entry.getIntoNodePath())
             # TODO: Add a hit sprite
             self.app.sfx.distant_impact_hit(
                 hit_pos=entry.into_node_path.parent.getPos(), impact_type="target"

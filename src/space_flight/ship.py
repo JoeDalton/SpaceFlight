@@ -18,6 +18,8 @@ from space_flight.utils import get_time_step, rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
+DAMAGE_TO_FORCE_FACTOR = 100000.0
+DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 
 
 class Ship:
@@ -62,6 +64,7 @@ class Ship:
         self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
+        self.additional_force_n = np.zeros(3)  # For collisions, hits, gravity, etc.
         self.drag_factor = (
             0.5
             * RHO
@@ -191,25 +194,27 @@ class Ship:
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
-        thrust = self.scalar_thrust * self.forward
+        thrust_n = self.scalar_thrust * self.forward
 
         if FLIGHT_MODEL == "arcade":
             # Drag is opposed to speed
             speed_norm = np.linalg.norm(speed)
-            drag = -self.drag_factor * speed_norm * speed
+            drag_n = -self.drag_factor * speed_norm * speed
             # No lift
-            lift = np.zeros(3)
+            lift_n = np.zeros(3)
         elif FLIGHT_MODEL == "airplane":
             speed_norm = np.linalg.norm(speed)
             if np.isnan(speed_norm) or (speed_norm <= 1e-4):
                 # No lift or drag without speed
-                drag = np.zeros(3)
-                lift = np.zeros(3)
+                drag_n = np.zeros(3)
+                lift_n = np.zeros(3)
             else:
                 # Drag is opposed to speed
-                drag = -self.drag_factor * speed_norm * speed
-                # Lift is (approximately) upwards and proportional to angle of attack
-                # And (approximately) lateral and proportional to side-slip angle
+                drag_n = -self.drag_factor * speed_norm * speed
+                # Lift is perpendicular to ship side and airflow
+                # and proportional to angle of attack
+                # + And perpendicular to ship up and airflow
+                # and proportional to side-slip angle
                 airflow_speed_body = -rotate_single_vector(quat.conjugate(), speed)
                 airflow_direction_body = airflow_speed_body / speed_norm
                 angle_of_attack_deg = -np.rad2deg(
@@ -231,20 +236,19 @@ class Ship:
                         airflow_direction_body,
                     )
                 )
-                lift = rotate_single_vector(quat, lift_body)
-                print()
-                print(f"{airflow_speed_body=}")
-                print(f"{angle_of_attack_deg=}")
-                print(f"{side_slip_angle_deg=}")
+                # Turn lift in world coordinates
+                lift_n = rotate_single_vector(quat, lift_body)
         elif FLIGHT_MODEL == "space":
             # No lift or drag
-            drag = np.zeros(3)
-            lift = np.zeros(3)
+            drag_n = np.zeros(3)
+            lift_n = np.zeros(3)
         else:
             raise NotImplementedError(f"Unknown flight model {FLIGHT_MODEL}")
-        # Assemble
-        acceleration = (thrust + drag + lift) / self.mass_kg
-        self.state_dot[7:10] = acceleration
+        # Assemble thrust, lift, drag and accidental forces
+        acceleration_mps2 = (
+            thrust_n + drag_n + lift_n + self.additional_force_n
+        ) / self.mass_kg
+        self.state_dot[7:10] = acceleration_mps2
 
     def move_ship_physics(self):
         """
@@ -310,18 +314,45 @@ class Ship:
         self.node.setPos(*ship_pos)
         self.node.setQuat(Quat(*ship_quat))
 
-    def count_hit(self, damage: float):
+    def take_hit(self, damage: float, normal_body_vector: np.ndarray):
         """
         Take damage from hits and jolt from the impact TODO
 
         :param damage: The amount of damage to take
+        :param normal_body_vector: The collision normal in body coordinates
         """
+        # Apply damage to health and shield
         if self.shield - damage >= 0.0:
             self.shield -= damage
         else:
             health_damage = damage - self.shield
             self.health -= health_damage
             self.shield = 0.0
+
+        # Apply momentum change
+        hit_force_body_n = (
+            -DAMAGE_TO_FORCE_FACTOR * damage * np.array([*normal_body_vector])
+        )
+        quat = np.quaternion(*self.state[3:7])
+        hit_force_world_n = rotate_single_vector(quat, hit_force_body_n)
+        self.additional_force_n += hit_force_world_n
+        # Remove this additional force later on
+        self.app.doMethodLater(
+            DAMAGE_FORCE_APPLICATION_DURATION_S,
+            self.remove_hit_force,
+            "Reset_damage_force",
+            extraArgs=[hit_force_world_n],
+            appendTask=True,
+        )
+
+    def remove_hit_force(self, hit_force_world_n: np.ndarray, task):
+        """
+        A method to remove a hit force from the additional forces
+
+        :param hit_force_world_n: The force to remove
+        """
+        self.additional_force_n -= hit_force_world_n
+        return task.done
 
     def ship_handle_health(self, task):
         """
