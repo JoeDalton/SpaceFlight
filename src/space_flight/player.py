@@ -126,8 +126,8 @@ class Player:
         self.head_acceleration_mps2 = np.zeros(3)  # Initialization
         self.head_velocity_mps = np.zeros(3)  # Initialization
         self.head_position_m = np.zeros(3)
-        self.head_spring_coefficient_npm = 50.0
-        self.head_damping_ratio = 1.0  # Optimal damping
+        self.head_spring_coefficient_npm = 25.0
+        self.head_damping_ratio = 0.5  # Suboptimal damping
         self.head_inv_mass_pkg = 0.2
         self.head_damping_coefficient_nspm = (  # TODO: check
             2
