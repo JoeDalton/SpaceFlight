@@ -3,11 +3,17 @@ from typing import Callable
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
+from space_flight.integrator import first_order_euler_step
 from space_flight.ship import Ship
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
+from space_flight.utils import rotate_single_vector
 
+# Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
+COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
+HEAD_ROTATION_POSITION_FACTOR = 50.0
+HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR = 0.0
 
 
 class Player:
@@ -40,7 +46,7 @@ class Player:
         self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)
 
         # Anchor camera to player ship node
-        self.app.camera.reparentTo(self.ship.node)
+        self.initialize_camera()
 
         # Initialize targetting list
         self.available_targets = [{None: ""}]  # TODO remove
@@ -74,9 +80,8 @@ class Player:
             roll_rate=roll_rate,
         )
 
-        # Update camera angle relative to node
-        self.app.camera.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
-        self.app.camera.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
+        # Move camera relative to the ship node
+        self.move_camera()
 
         return task.cont
 
@@ -111,3 +116,97 @@ class Player:
                 idx_to_remove = target_idx
                 break
         self.available_targets.pop(idx_to_remove)
+
+    def initialize_camera(self):
+        """
+        Initialize the node structure to hold the camera
+        """
+        # Get jolted by hits, ship acceleration, etc.
+        self.head_jolt = self.ship.node.attachNewNode("head_jolt")
+        self.head_acceleration_mps2 = np.zeros(3)  # Initialization
+        self.head_velocity_mps = np.zeros(3)  # Initialization
+        self.head_position_m = np.zeros(3)
+        self.head_spring_coefficient_npm = 5.0
+        self.head_damping_ratio = 1.0  # Optimal damping
+        self.head_inv_mass_pkg = 0.2
+        self.head_damping_coefficient_nspm = (  # TODO: check
+            2
+            * self.head_damping_ratio
+            * np.sqrt(self.head_spring_coefficient_npm / self.head_inv_mass_pkg)
+        )
+
+        # Turn head voluntarily
+        self.head_pivot = self.head_jolt.attachNewNode("head_pivot")
+        # Attach camera to head
+        self.app.camera.reparentTo(self.head_pivot)
+
+    def move_camera(self):
+        """
+        Animate camera with:
+        - Ship accelerations and taking hits
+        - Ship having rotational speed
+        - Pilot resisting accelerations
+        - Pilot turning their head
+        """
+
+        # Ship accelerating and taking hits
+        self.compute_head_acceleration()
+        self.compute_head_position()
+        self.head_jolt.setPos(*self.head_position_m)
+
+        # Add head rotation proportional to position
+        # pitch = - self.head_position_m[2] * HEAD_ROTATION_POSITION_FACTOR
+        # roll = - self.head_position_m[0] * HEAD_ROTATION_POSITION_FACTOR
+
+        # Add head rotation proportional to ship rotation rate
+        # TODO
+
+        # Set head angular position
+        # self.head_jolt.setP(roll)
+        # self.head_jolt.setR(pitch)
+
+        # Pilot turning their head TODO smoother system
+        self.head_pivot.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
+        self.head_pivot.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
+
+    def compute_head_acceleration(self):
+        """
+        Compute head acceleration given ship movements and pilot neck strength
+        with a simple damped spring system
+        """
+        # Take ship acceleration into account
+        ship_acceleration_world_mps2 = self.ship.state_dot[7:10]
+        quat = np.quaternion(*self.ship.state[3:7])
+        ship_acceleration_body_mps2 = rotate_single_vector(
+            -quat, ship_acceleration_world_mps2
+        )
+        # Scale down, because real world accelerations are biiiig
+        ship_acceleration_body_mps2 *= COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH
+
+        # Compute the pilot's neck spring force
+        spring_force_n = -self.head_spring_coefficient_npm * self.head_position_m
+        # Compute the pilot's neck damping force
+        damping_force_n = -self.head_damping_coefficient_nspm * self.head_velocity_mps
+
+        # Assemble head acceleration
+        self.head_acceleration_mps2 = (
+            -ship_acceleration_body_mps2  # inertial pseudo force
+            + (spring_force_n + damping_force_n) * self.head_inv_mass_pkg
+        )
+
+    def compute_head_position(self):
+        """
+        A simple explicit first order Euler scheme to integrate the head's trajectory
+        """
+        previous_state = np.zeros(6)
+        state_derivative = np.zeros(6)
+        previous_state[0:3] = self.head_position_m.copy()
+        previous_state[3:6] = self.head_velocity_mps.copy()
+        state_derivative[0:3] = self.head_velocity_mps.copy()
+        state_derivative[3:6] = self.head_acceleration_mps2.copy()
+
+        new_state = first_order_euler_step(
+            state_derivative=state_derivative, state=previous_state
+        )
+        self.head_position_m = new_state[0:3]
+        self.head_velocity_mps = new_state[3:6]

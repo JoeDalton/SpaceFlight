@@ -8,6 +8,7 @@ MIRROR_FOV = 30
 
 
 class RearViewMirror:
+    # TODO: integrate in 3D cockpit
     def __init__(self, app, player_node):
         self.app = app
 

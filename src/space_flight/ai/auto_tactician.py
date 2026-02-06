@@ -10,7 +10,7 @@ from space_flight.utils import get_time_step, smooth_step_down
 LOGGER = logging.getLogger()
 
 
-# TODO make this probalistic to avoid everyone update at the same time
+# TODO make this probabilistic to avoid everyone update at the same time
 INTENT_UPDATE_DELAY_S = 0.5
 
 

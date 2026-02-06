@@ -98,3 +98,18 @@ class Integrator:
         self.x_dot_previous = np.zeros(self.max_state_size)
 
         return task.cont
+
+
+def first_order_euler_step(
+    state_derivative: np.ndarray, state: np.ndarray
+) -> np.ndarray:
+    """
+    A simple explicit first order integrator for low-precision movements
+
+    :param state_derivative: The state vector's derivative
+    :param state: The state vector
+    :return: The state vector one step further
+    """
+    # Get the timespan of the current step
+    dt = get_time_step()
+    return state + state_derivative * dt
