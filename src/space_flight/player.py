@@ -126,7 +126,7 @@ class Player:
         self.head_acceleration_mps2 = np.zeros(3)  # Initialization
         self.head_velocity_mps = np.zeros(3)  # Initialization
         self.head_position_m = np.zeros(3)
-        self.head_spring_coefficient_npm = 5.0
+        self.head_spring_coefficient_npm = 50.0
         self.head_damping_ratio = 1.0  # Optimal damping
         self.head_inv_mass_pkg = 0.2
         self.head_damping_coefficient_nspm = (  # TODO: check
@@ -154,17 +154,11 @@ class Player:
         self.compute_head_position()
         self.head_jolt.setPos(*self.head_position_m)
 
-        # Add head rotation proportional to position
-        pitch_deg = self.head_position_m[2] * HEAD_ROTATION_POSITION_FACTOR_DEGPM
-        roll_deg = -self.head_position_m[0] * HEAD_ROTATION_POSITION_FACTOR_DEGPM
-
-        # Add head rotation proportional and opposite to ship roll rate
+        # Set head angular position proportional and opposite to ship roll rate
         roll_rate_radps = self.ship.pqr[1]
-        roll_deg -= roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
-
-        # Set head angular position
-        self.head_jolt.setP(pitch_deg)
-        self.head_jolt.setR(roll_deg)
+        self.head_jolt.setR(
+            roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
+        )
 
         # Pilot turning their head TODO smoother system
         self.head_pivot.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
