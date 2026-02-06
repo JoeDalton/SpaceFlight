@@ -98,8 +98,6 @@ class CollisionSystem:
         Handle the case where a laser hits a destructible object:
         Damage the destructible object and remove the laser.
 
-        TODO: Add a hit sprite
-
         :param entry: Panda3d's description of the collision
         """
         laser = entry.from_node_path.python_tags["owner"]
@@ -132,11 +130,15 @@ class CollisionSystem:
 
         # Apply hit effect depending on player or bot
         if destructible_id == self.app.player.ship.id:
-            pass  # TODO
+            # TODO add camera wiggle opposite the normal
+            # normal = entry.getSurfaceNormal(entry.getIntoNodePath())
+            relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
+            self.app.sfx.impact_hit_on_player(relative_hit_point=relative_hit_point)
         else:
-            # TODO: Option to mute bots shooting on bots ?
+            # TODO: Mute bots shooting on bots ?
             # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
             # normal = entry.getSurfaceNormal(entry.getIntoNodePath())
+            # TODO: Add a hit sprite
             self.app.sfx.distant_impact_hit(
                 hit_pos=entry.into_node_path.parent.getPos(), impact_type="target"
             )

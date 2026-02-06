@@ -69,7 +69,7 @@ class MyApp(ShowBase):
             self,
             ship_type="a-wing",
             ini_position=np.array([0, -200, 0]),
-            is_neutral=True,
+            is_neutral=False,
         )
 
         """
