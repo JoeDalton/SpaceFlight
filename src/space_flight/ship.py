@@ -138,6 +138,25 @@ class Ship:
         self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=is_cockpit)
         self.model.anchor_model(self.node)
 
+        # Initialize engine sound for bot ships
+        if self.parent.name != "player":
+            self.sound = self.app.sfx.get_3d_sound(
+                str(DATAFILES_PATH / "sounds/engines/tie_fighter/tie_scream_med.wav")
+            )
+            self.sound.setLoop(True)
+            self.sound.setVolume(10.0)
+            self.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
+
+            # Automatic velocity tracking
+            self.app.sfx.audio3d.setSoundVelocityAuto(self.node)
+
+            # TODO Doppler does not seem to work great
+            self.app.doMethodLater(
+                0.5,
+                lambda t: self.sound.play(),
+                "Play engine_sound",
+            )
+
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):

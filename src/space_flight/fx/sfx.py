@@ -33,6 +33,11 @@ class SFX:
         self.audio3d = Audio3DManager.Audio3DManager(
             self.app.sfxManagerList[0], self.app.camera
         )
+        self.audio3d.setDopplerFactor(10.0)
+        self.audio3d.setDistanceFactor(0.1)
+        self.audio3d.attachListener(self.app.camera)
+        self.audio3d.setListenerVelocityAuto()
+        self.app.taskMgr.add(self.update_task, "AudioUpdate")
 
         # Load sounds
 
@@ -69,11 +74,20 @@ class SFX:
         for _ in range(SOUND_POOL_LENGTH):
             sound_file = random.choice(sound_files)
             if is_3d:
-                sound = self.audio3d.loadSfx(sound_file)
+                sound = self.get_3d_sound(sound_file)
             else:
                 sound = self.app.loader.loadSfx(sound_file)
             sound_pool.append(sound)
         return sound_pool
+
+    def get_3d_sound(self, sound_file: str) -> object:
+        """
+        Loads a 3D sound
+
+        :param sound_file: The sound file to load
+        :return: the 3d sound object
+        """
+        return self.audio3d.loadSfx(sound_file)
 
     def distant_impact_hit(self, hit_pos: np.ndarray, impact_type: str):
         """
@@ -144,3 +158,7 @@ class SFX:
                 sound.setVolume(multiplier)
                 sound.play()
                 break
+
+    def update_task(self, task):
+        self.audio3d.update()
+        return task.cont

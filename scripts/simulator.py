@@ -69,7 +69,7 @@ class MyApp(ShowBase):
             self,
             ship_type="a-wing",
             ini_position=np.array([0, -200, 0]),
-            is_neutral=False,
+            is_neutral=True,
         )
 
         """
@@ -105,7 +105,7 @@ class MyApp(ShowBase):
             ini_position=np.array([0, 0, 0]),
             has_debug_trihedron=True,
             team=2,
-            debug_decisions=True,
+            debug_decisions=False,
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
