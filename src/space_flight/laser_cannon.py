@@ -23,7 +23,7 @@ from space_flight.utils import get_average_frame_rate, get_current_time
 
 LOGGER = logging.getLogger()
 
-LASER_SPEED_MPS = 1000.0
+LASER_SPEED_MPS = 2000.0
 SQT2_S = np.sqrt(2.0) / 2.0
 LIGHT_ATTENUATION = (1, 0.05, 0)
 
