@@ -10,7 +10,7 @@ import yaml
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import NodePath, Quat
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
 from space_flight.collisions import attach_collision_sphere
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
@@ -43,7 +43,6 @@ class Ship:
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_speed: np.ndarray = np.zeros(3),
-        lift_model: bool = False,
         is_cockpit: bool = True,
         team: int = 0,
     ):
@@ -69,6 +68,18 @@ class Ship:
             * self.conf["reference_surface_m2"]
             * self.conf["drag_coefficient"]
         )
+        self.lift_factor = (
+            0.5
+            * RHO
+            * self.conf["reference_surface_m2"]
+            * self.conf["lift_coefficient_slope_pdeg"]
+        )
+        self.lateral_lift_factor = (
+            0.5
+            * RHO
+            * self.conf["reference_surface_m2"]
+            * self.conf["lateral_lift_coefficient_slope_pdeg"]
+        )
 
         # Setup health and shield
         self.max_health = self.conf["health"]
@@ -92,14 +103,6 @@ class Ship:
         self.state_dot_previous = np.zeros(10)
         self.pqr = np.zeros(3)
         self.scalar_thrust = 0
-
-        # Assign physics
-        if not lift_model:
-            self.compute_derivatives = self.compute_derivatives_simple_physics
-            self.move_ship_physics = self.move_ship_simple_physics
-        else:
-            # TODO: more "realistic" flight model
-            raise NotImplementedError
 
         # Prepare first integration step
         self.compute_derivatives()
@@ -149,13 +152,18 @@ class Ship:
             ]
         )
 
-    def compute_derivatives_simple_physics(self):
+    def compute_derivatives(self):
         """
         This is the flight model for the ships
 
-        No lift model
+        Depends on the FLIGHT_MODEL global variable
+        - "arcade": airplane-like flight with drag, velocity always aligned with forward
+        - "airplane": airplane-like flight with lift, drag, AoA, sideslip
+        - "space": Thrust is all you have, if you dare !
 
-        A SimpleShip has 10 state variables
+        Rotation rates are assumed to be perfectly-controlled inputs
+
+        A Ship has 10 state variables
         - position (3)
         - orientation (4)
         - linear speed (3)
@@ -181,20 +189,67 @@ class Ship:
         up_body = np.array([0.0, 0.0, 1.0])
         self.up = rotate_single_vector(quat, up_body)
 
-        # Compute derivative of speed:
-        # Drag is opposed to speed, thrust is aligned to ship direction
-        speed_norm = np.linalg.norm(speed)
-        drag = -self.drag_factor * speed_norm * speed
+        # Compute derivative of speed with forces:
+        # Thrust is aligned with ship direction
         thrust = self.scalar_thrust * self.forward
-        acceleration = (thrust + drag) / self.mass_kg
+
+        if FLIGHT_MODEL == "arcade":
+            # Drag is opposed to speed
+            speed_norm = np.linalg.norm(speed)
+            drag = -self.drag_factor * speed_norm * speed
+            # No lift
+            lift = np.zeros(3)
+        elif FLIGHT_MODEL == "airplane":
+            speed_norm = np.linalg.norm(speed)
+            if np.isnan(speed_norm) or (speed_norm <= 1e-4):
+                # No lift or drag without speed
+                drag = np.zeros(3)
+                lift = np.zeros(3)
+            else:
+                # Drag is opposed to speed
+                drag = -self.drag_factor * speed_norm * speed
+                # Lift is (approximately) upwards and proportional to angle of attack
+                # And (approximately) lateral and proportional to side-slip angle
+                airflow_speed_body = -rotate_single_vector(quat.conjugate(), speed)
+                airflow_direction_body = airflow_speed_body / speed_norm
+                angle_of_attack_deg = -np.rad2deg(
+                    np.arctan2(-airflow_speed_body[2], -airflow_speed_body[1])
+                )
+                side_slip_angle_deg = np.rad2deg(
+                    np.arcsin(airflow_speed_body[0] / speed_norm)
+                )
+                lift_body = (
+                    self.lift_factor
+                    * speed_norm**2
+                    * angle_of_attack_deg
+                    * np.cross(airflow_direction_body, right_body)
+                    + self.lateral_lift_factor
+                    * speed_norm**2
+                    * side_slip_angle_deg
+                    * np.cross(
+                        up_body,
+                        airflow_direction_body,
+                    )
+                )
+                lift = rotate_single_vector(quat, lift_body)
+                print()
+                print(f"{airflow_speed_body=}")
+                print(f"{angle_of_attack_deg=}")
+                print(f"{side_slip_angle_deg=}")
+        elif FLIGHT_MODEL == "space":
+            # No lift or drag
+            drag = np.zeros(3)
+            lift = np.zeros(3)
+        else:
+            raise NotImplementedError(f"Unknown flight model {FLIGHT_MODEL}")
+        # Assemble
+        acceleration = (thrust + drag + lift) / self.mass_kg
         self.state_dot[7:10] = acceleration
 
-    def move_ship_simple_physics(self):
+    def move_ship_physics(self):
         """
         Gets the new ship's state, then prepare the next
         integration step.
-
-        Since there is no lift model, we align the velocity with the nose of the ship
         """
         # Get state
         self.state = self.app.integrator.get_state_variables(
@@ -202,20 +257,24 @@ class Ship:
             n_var=10,
         )
         # Clip speed norm
-        speed = self.state[7:10]
-        speed_norm = np.linalg.norm(speed)
-        speed_norm = min(speed_norm, self.max_speed_mps)
+        self.speed = self.state[7:10]
+        speed_norm = np.linalg.norm(self.speed)
 
         # Record position
         self.position = self.state[:3]
 
-        # Normalize ship orientation
-        self.orientation = self.state[3:7].copy()
-        self.orientation /= np.linalg.norm(self.orientation)
-        self.state[3:7] = self.orientation.copy()
-        # Reorient speed in ship direction
-        self.speed = self.forward * speed_norm
-        self.state[7:10] = self.speed.copy()
+        if FLIGHT_MODEL == "arcade":
+            # Clip speed norm
+            speed_norm = min(speed_norm, self.max_speed_mps)
+            # Since there is no lift model,
+            # we align the velocity with the nose of the ship
+            # Normalize ship orientation
+            self.orientation = self.state[3:7].copy()
+            self.orientation /= np.linalg.norm(self.orientation)
+            self.state[3:7] = self.orientation.copy()
+            # Reorient speed in ship direction
+            self.speed = self.forward * speed_norm
+            self.state[7:10] = self.speed.copy()
 
         # Prepare next integration step
         self.compute_derivatives()
@@ -253,7 +312,7 @@ class Ship:
 
     def count_hit(self, damage: float):
         """
-        Take damage from hits
+        Take damage from hits and jolt from the impact TODO
 
         :param damage: The amount of damage to take
         """

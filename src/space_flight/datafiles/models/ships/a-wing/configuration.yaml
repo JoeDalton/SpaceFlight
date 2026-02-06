@@ -1,11 +1,13 @@
 # A-wing
-mass_kg: 20
+mass_kg: 500
 max_thrust_n: 60000
 max_speed_mps: 1500
 max_pitch_rate_degps: 60
 max_yaw_rate_degps: 30
 max_roll_rate_degps: 150
 drag_coefficient: 0.1
+lift_coefficient_slope_pdeg: 0.1
+lateral_lift_coefficient_slope_pdeg: 0.05
 reference_surface_m2: 10
 
 health: 20.0
