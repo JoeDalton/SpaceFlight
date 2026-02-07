@@ -15,6 +15,8 @@ COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_ROTATION_POSITION_FACTOR_DEGPM = 500.0
 HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD = 1.0
 
+# TODO head should move more for impacts
+
 
 class Player:
     def __init__(
@@ -129,7 +131,7 @@ class Player:
         self.head_spring_coefficient_npm = 25.0
         self.head_damping_ratio = 0.5  # Suboptimal damping
         self.head_inv_mass_pkg = 0.2
-        self.head_damping_coefficient_nspm = (  # TODO: check
+        self.head_damping_coefficient_nspm = (
             2
             * self.head_damping_ratio
             * np.sqrt(self.head_spring_coefficient_npm / self.head_inv_mass_pkg)

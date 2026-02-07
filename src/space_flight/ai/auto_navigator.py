@@ -10,13 +10,15 @@ from space_flight.ai import (
     Personality,
 )
 from space_flight.ai.auto_tactician import Intent
-from space_flight.utils import get_current_time
+from space_flight.utils import get_current_time, smooth_step_down, smooth_step_up
 
 LOGGER = logging.getLogger()
 
 NO_DIRECTION = np.zeros(3), 0.0
 WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
+
+ENGAGE_STRATEGY = "cap_blend"  # or "old_switch"
 
 
 class AutoNavigator:
@@ -40,7 +42,16 @@ class AutoNavigator:
         self.debug = debug
         self.behaviour = "idle"
         self.behaviour_duration_s = 0.0
+        self.time_in_spiral_s = 0.0
         self.last_update_time = get_current_time()
+
+        # DEBUG: choose an engaging strategy
+        if ENGAGE_STRATEGY == "cap_blend":
+            self.engage_target = self.engage_target_cap_blend
+        elif ENGAGE_STRATEGY == "old_switch":
+            self.engage_target = self.engage_target_old_switch
+        else:
+            raise NotImplementedError(f"Unknown engage strategy {ENGAGE_STRATEGY}")
 
     def navigate(self, intent: int, target_dict: dict):
         """
@@ -56,6 +67,7 @@ class AutoNavigator:
             return self.follow_waypoints()
         elif intent == Intent.ENGAGE:
             # Exact behaviour is defined and recorded inside engage_target
+            # TODO reset spiral time if new order ? May not be necessary
             return self.engage_target(target_dict)
         elif intent == Intent.EVADE:
             self.engage_phase = ""
@@ -92,14 +104,17 @@ class AutoNavigator:
                 )
         self.last_update_time = current_time
 
-    # %% ==== ENGAGE ====
-    def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
+    # %% ==== ENGAGE CAP_BLEND ====
+    def engage_target_cap_blend(
+        self, target_dict: dict = {}
+    ) -> Tuple[np.ndarray, float]:
         """
         Engages a target and tries to attack it
 
-        - By default, tries to intercept
-        - If attack conditions are met, launch attack run
-        - If breaking off conditions are met, reposition/extend
+        Blends:
+        - A Constant Angle Pursuit for long distance approach
+        - Lead pursuit for hitting with lasers
+        - Lag pursuit for too close range (+ Waiting for energy TODO)
 
         :param target_dict: A dictionary with the target's direction, distance,
             alignment and relative velocity
@@ -128,248 +143,143 @@ class AutoNavigator:
             return NO_DIRECTION
 
         # Get necessary info from interactions and pre compute target properties
-        distance = self.app.interactions.distances[my_actor_index, target_actor_index]
+        distance_m = self.app.interactions.distances[my_actor_index, target_actor_index]
         direction = self.app.interactions.directions[
             my_actor_index, target_actor_index, :
         ]
-        relative_speed = self.app.interactions.rel_velocities[
+        relative_speed_vector = self.app.interactions.rel_velocities[
             my_actor_index, target_actor_index, :
         ]
-        alignment = self.app.interactions.alignments[my_actor_index, target_actor_index]
-        target_current_position = self.ship.position + distance * direction
-        target_current_speed = self.ship.speed + relative_speed
+        longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
+        # Check if we risk passing ahead of the target
         if self.check_overshoot_risk(
-            direction=direction, relative_speed=relative_speed, distance=distance
+            closing_speed_mps=-longitudinal_speed_scalar_mps, distance_m=distance_m
         ):
             self.record_behaviour(behaviour="reposition")
-            return self.reposition(direction=direction, distance=distance)
+            return self.reposition(direction=direction, distance_m=distance_m)
 
-        if self.check_extend_conditions(alignment=alignment):
+        # Check if we need to extend the trajectory to avoid a spiral of death
+        longitudinal_speed_vector = longitudinal_speed_scalar_mps * direction
+        lateral_speed_vector = relative_speed_vector - longitudinal_speed_vector
+        lateral_speed_scalar_mps = np.linalg.norm(lateral_speed_vector)
+
+        if self.check_extend_conditions(
+            closing_speed_mps=-longitudinal_speed_scalar_mps,
+            lateral_speed_scalar_mps=lateral_speed_scalar_mps,
+        ):
             self.record_behaviour(behaviour="extend")
             return self.extend()
 
-        if self.check_attack_conditions(
+        # Free to pursue target
+        target_current_position = self.ship.position + distance_m * direction
+        target_current_speed = self.ship.speed + relative_speed_vector
+
+        # Compute CAP contribution
+        cap_direction = self.compute_constant_angle_pursuit(
             direction=direction,
-            relative_speed=relative_speed,
-            distance=distance,
-            alignment=alignment,
-        ):
-            self.record_behaviour(behaviour="attack")
-            return self.attack_target(
-                target_current_position=target_current_position,
-                target_current_speed=target_current_speed,
-                distance=distance,
-            )
-        # Default behaviour
-        self.record_behaviour(behaviour="intercept")
-        return self.intercept_target(
-            target_current_position=target_current_position,
-            target_current_speed=target_current_speed,
-            lead_time_s=self.personality["navigator"]["intercept"]["lead_time_s"],
+            distance_m=distance_m,
+            lateral_speed_vector=lateral_speed_vector,
         )
-
-    def check_attack_conditions(
-        self,
-        direction: np.ndarray,
-        relative_speed: np.ndarray,
-        distance: float,
-        alignment: float,
-    ) -> bool:
-        """
-        - distance is good
-        - alignment is good
-        - lasers have enough energy #TODO
-        - Firing window will be long enough
-
-        :param direction: The direction to the target
-        :param relative_speed: The relative speed of the target relative to self
-        :param distance: The distance to the target
-        :param alignment: The cos of the angle to target
-        :return: Whether to begin an attack run
-        """
-        return (
-            (distance <= self.personality["navigator"]["attack"]["maximum_distance_m"])
-            and (
-                alignment
-                >= self.personality["navigator"]["attack"]["minimum_cos_angle"]
-            )
-            and True  # Lasers TODO
-            and (
-                self.compute_firing_window_length(
-                    direction=direction,
-                    relative_speed=relative_speed,
-                    distance=distance,
-                )
-                >= self.personality["navigator"]["fire"]["minimimum_window_duration_s"]
-            )
-        )
-
-    def compute_firing_window_length(
-        self,
-        direction: np.ndarray,
-        relative_speed: np.ndarray,
-        distance: float,
-    ) -> float:
-        """
-        Computes an estimation of the firing window length based on lateral relative
-        speed of target, its distance and the angular width of a shooting window
-
-        :param direction: The direction to the target
-        :param relative_speed: The relative speed of the target relative to self
-        :param distance: The distance to the target
-        :return: The estimated shooting window length
-        """
-        firing_window_width_m = (
-            2
-            * distance
-            * np.tan(self.personality["navigator"]["fire"]["maximum_angle_rad"])
-        )
-        lateral_relative_speed_mps = np.linalg.norm(np.cross(relative_speed, direction))
-        if lateral_relative_speed_mps < 0.1:
-            # Nearly no lateral movement, all the time in the world to shoot
-            return 1e6
-        return firing_window_width_m / lateral_relative_speed_mps
-
-    def check_extend_conditions(self, alignment: float) -> bool:
-        """
-        Check whether the current engagement behaviour has expired.
-        - Has it been too long ?
-        - Is the angle to target too big ?
-        - Has previous extend behaviour been long enough ?
-
-        :param alignment: The cos of the angle to target
-        :return: Whether to extend the trajectory
-        """
-        if (
-            self.behaviour == "intercept"
-            and (
-                self.behaviour_duration_s
-                >= self.personality["navigator"]["intercept"]["maximum_duration_s"]
-            )
-            and (
-                alignment
-                < self.personality["navigator"]["intercept"]["minimum_cos_angle"]
-            )
-        ):
-            if self.debug:
-                angle_deg = np.rad2deg(np.arccos(alignment))
-                LOGGER.info(
-                    f"Navigator {self.ship.parent.name}: "
-                    "Intercept took too long with unsatisfying angle "
-                    f"({angle_deg} deg). Extending trajectory."
-                )
-            return True
-        elif (
-            self.behaviour == "attack"
-            and (
-                self.behaviour_duration_s
-                >= self.personality["navigator"]["attack"]["maximum_duration_s"]
-            )
-            and (
-                alignment < self.personality["navigator"]["attack"]["minimum_cos_angle"]
-            )
-        ):
-            if self.debug:
-                angle_deg = np.rad2deg(np.arccos(alignment))
-                LOGGER.info(
-                    f"Navigator {self.ship.parent.name}: "
-                    "Attack took too long with unsatisfying angle "
-                    f"({angle_deg} deg). Extending trajectory."
-                )
-            return True
-        elif (
-            self.behaviour == "extend"
-            and self.behaviour_duration_s
-            < self.personality["navigator"]["extend"]["minimum_duration_s"]
-        ):
-            return True
-        else:
-            return False
-
-    def check_overshoot_risk(
-        self,
-        direction: np.ndarray,
-        relative_speed: np.ndarray,
-        distance: float,
-    ) -> bool:
-        """
-        Check if the current trajectory risks taking self farther than the target
-
-        :param direction: The direction to the target
-        :param relative_speed: The relative speed of the target relative to self
-        :param distance: The distance to the target
-        :return: Whether self should reposition
-        """
-        closing_speed_mps = -np.dot(direction, relative_speed)
-        if closing_speed_mps <= 0:
-            # Target pulling away, no risk of overshoot
-            return False
-        overshoot_time_prediction_s = distance / closing_speed_mps
-
-        return (
-            overshoot_time_prediction_s
-            < self.personality["navigator"]["reposition"]["minimum_time_to_overshoot_s"]
-        )
-
-    def reposition(
-        self, direction: np.ndarray, distance: float
-    ) -> Tuple[np.ndarray, float]:
-        """
-        Turn hard away from the target to avoid passing in front of it
-        Therefore, simply point in the opposite direction with the same distance
-
-        TODO: do something for immobile targets (turrets. They should not be evaded
-        the same way as ships)
-
-        :param direction: The direction to the target
-        :param distance: The distance to the target
-        :return: The direction to point to and its reference distance
-        """
-        return -direction, distance
-
-    def extend(self) -> Tuple[np.ndarray, float]:
-        """
-        Go straight ahead and accelerate to break the pattern
-
-        :return: The direction to point to and its reference distance
-        """
-        return np.zeros(3), INTERACT_MAX_DISTANCE_M
-
-    def attack_target(
-        self,
-        target_current_position: np.ndarray,
-        target_current_speed: np.ndarray,
-        distance: float,
-    ) -> Tuple[np.ndarray, float]:
-        """
-        Intercepts the target with a reduced lead time and fire if angle is small enough
-
-        :param target_current_position: The absolute position of the target
-        :param target_current_speed: Its absolute speed
-        :param distance: The distance to the target
-        :return: The direction to point to and its reference distance
-        """
-
-        # Got slightly ahead of the target
-        target_future_direction, reference_distance_m = self.intercept_target(
+        # Compute lead pursuit contribution
+        lead_direction = self.compute_lead_pursuit(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
             lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
+        # Compute lag_pursuit contribution
+        lag_direction = self.compute_lead_pursuit(
+            target_current_position=target_current_position,
+            target_current_speed=target_current_speed,
+            lead_time_s=self.personality["navigator"]["attack"]["lag_time_s"],
+        )
+        # Compute weigths of pursuit strategies
+        cap_weight, lead_weight, lag_weight = self.compute_engage_weights(
+            distance_m=distance_m
+        )
+        aim_vector = (
+            self.personality["navigator"]["attack"]["cap_bias"]
+            * cap_direction
+            * cap_weight
+            + self.personality["navigator"]["attack"]["lead_bias"]
+            * lead_direction
+            * lead_weight
+            + self.personality["navigator"]["attack"]["lag_bias"]
+            * lag_direction
+            * lag_weight
+        )
+        aim_vector_norm = np.linalg.norm(aim_vector)
+        if aim_vector_norm < 1e-5:
+            aim_vector = np.zeros(3)
+        else:
+            aim_vector /= aim_vector_norm
+
         # Decide whether to shoot
-        firing_alignment = np.dot(target_future_direction, self.ship.forward)
+        firing_alignment = np.dot(lead_direction, self.ship.forward)
         if (
-            distance < self.personality["navigator"]["fire"]["maximum_distance_m"]
+            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
         ) and (
             firing_alignment
             > self.personality["navigator"]["fire"]["minimum_cos_angle"]
         ):
             self.ship.laser_cannon.fire()
 
-        return target_future_direction, reference_distance_m
+        return aim_vector, distance_m - CHASE_DISTANCE_M
 
-    def intercept_target(
+    def compute_engage_weights(self, distance_m: float):
+        """
+        Compute weights of the pursuit strategies as a function of
+        distance to target.
+        They are overlapping slopes
+
+        :param distance_m: The distance to the prey
+        """
+        cap_weight = smooth_step_up(
+            x=distance_m,
+            x_step=self.personality["navigator"]["attack"]["cap_cutoff_distance_m"],
+            slope=self.personality["navigator"]["attack"]["cap_lead_cutoff_slope"],
+        )
+        lead_weight = smooth_step_up(
+            x=distance_m,
+            x_step=self.personality["navigator"]["attack"][
+                "lead_low_cutoff_distance_m"
+            ],
+            slope=self.personality["navigator"]["attack"]["lead_lag_cutoff_slope"],
+        ) * smooth_step_down(
+            x=distance_m,
+            x_step=self.personality["navigator"]["attack"][
+                "lead_high_cutoff_distance_m"
+            ],
+            slope=self.personality["navigator"]["attack"]["cap_lead_cutoff_slope"],
+        )
+        lag_weight = smooth_step_down(
+            x=distance_m,
+            x_step=self.personality["navigator"]["attack"]["lag_cutoff_distance_m"],
+            slope=self.personality["navigator"]["attack"]["lead_lag_cutoff_slope"],
+        )
+        return cap_weight, lead_weight, lag_weight
+
+    def compute_constant_angle_pursuit(
+        self, direction: np.ndarray, distance_m: float, lateral_speed_vector: np.ndarray
+    ) -> np.ndarray:
+        """
+        Constant Angle Pursuit (CAP)
+        Bring lateral velocity to zero
+        Good for closing in from a long distance
+        Also good for missiles until the end
+
+        :param direction: The direction of the target
+        :param distance_m: Its distance from self
+        :param lateral_speed_vector: Its relative velocity on the lateral plane
+        """
+        # TODO Dynamic CAP strength, should vary with distance/closing_speed
+        cap_strength_s = 1.0  # Or =1/omega_max_radps
+        desired_vector = direction * distance_m - cap_strength_s * lateral_speed_vector
+        desired_vector_norm = np.linalg.norm(desired_vector)
+        # Norm can't be zero if distance != 0
+        return desired_vector / desired_vector_norm
+
+    def compute_lead_pursuit(
         self,
         target_current_position: np.ndarray,
         target_current_speed: np.ndarray,
@@ -377,8 +287,8 @@ class AutoNavigator:
     ) -> Tuple[np.ndarray, float]:
         """
         Intercepts the target by flying to its future position
-
-        TODO: Should I do a lead pursuit or a lag pursuit ?
+        If the lead time is null, it's pure pursuit
+        If the lead time is negative, it's a lag pursuit
 
         :param target_current_position: The absolute position of the target
         :param target_current_speed: Its absolute speed
@@ -396,14 +306,91 @@ class AutoNavigator:
         else:
             target_future_direction /= target_future_distance_m
 
-        # Find reference distance. It's the distance to the target minus the distance
-        # that should be left behind the bot and the target
-        reference_distance_m = max(
-            0.0,
-            np.linalg.norm(target_current_position - self.ship.position)
-            - CHASE_DISTANCE_M,
+        return target_future_direction
+
+    def check_extend_conditions(
+        self,
+        closing_speed_mps: float,
+        lateral_speed_scalar_mps: float,
+    ) -> bool:
+        """
+        Checks if the closing velocity is too low and the lateral velocity is too
+        high for too long
+
+        :param closing_speed_mps: How fast the target is closing in
+        :param lateral_speed_scalar_mps: How fast the target is zooming sideways
+        :return: Whether self should extend
+        """
+        if (
+            closing_speed_mps
+            < self.personality["navigator"]["extend"]["minimum_closing_speed_mps"]
+        ) and (
+            lateral_speed_scalar_mps
+            > self.personality["navigator"]["extend"]["maximal_lateral_speed_mps"]
+        ):
+            # Velocity condition met
+            # Register time in spiral
+            current_time = get_current_time()
+            self.time_in_spiral_s += current_time - self.last_update_time
+            # Result depends on time condition
+            return (
+                self.time_in_spiral_s
+                > self.personality["navigator"]["extend"]["maximal_time_in_spiral_s"]
+            )
+        else:
+            # Velocity condition not met, not in spiral
+            # Reset time in spiral
+            self.time_in_spiral_s = 0.0
+            return False
+
+    def check_overshoot_risk(
+        self,
+        closing_speed_mps: float,
+        distance_m: float,
+    ) -> bool:
+        """
+        Checks if the current trajectory risks taking self farther than the target
+
+        :param closing_speed_mps: How fast the target is closing in
+            (positive for closing, negative for pulling away)
+        :param distance_m: The distance to the target
+        :return: Whether self should reposition
+        """
+        if closing_speed_mps <= 0:
+            # Target pulling away, no risk of overshoot
+            return False
+        overshoot_time_prediction_s = distance_m / closing_speed_mps
+
+        return (
+            overshoot_time_prediction_s
+            < self.personality["navigator"]["reposition"]["minimum_time_to_overshoot_s"]
         )
-        return target_future_direction, reference_distance_m
+
+    def reposition(
+        self, direction: np.ndarray, distance_m: float
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Turn hard away from the target to avoid passing in front of it
+        Therefore, simply point in the opposite direction with the same distance
+
+        TODO: do something for immobile targets (turrets. They should not be evaded
+        the same way as ships)
+
+        :param direction: The direction to the target
+        :param distance_m: The distance to the target
+        :return: The direction to point to and its reference distance
+        """
+        # By definition, not in spiral => reset time in spiral
+        self.time_in_spiral_s = 0.0
+        return -direction, distance_m
+
+    def extend(self) -> Tuple[np.ndarray, float]:
+        """
+        Go straight ahead and accelerate to break the pattern
+
+        :return: The direction to point to and its reference distance
+        """
+        return np.zeros(3), INTERACT_MAX_DISTANCE_M
 
     # %% ==== EVADE ====
 
@@ -542,3 +529,318 @@ class AutoNavigator:
     def __del__(self):
         if DEBUG_DELETION:
             LOGGER.info("Deleted autonavigator")
+
+    # %% ==== ENGAGE OLD SWITCH ====
+    def engage_target_old_switch(
+        self, target_dict: dict = {}
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Engages a target and tries to attack it
+
+        - By default, tries to intercept
+        - If attack conditions are met, launch attack run
+        - If breaking off conditions are met, reposition/extend
+
+        :param target_dict: A dictionary with the target's direction, distance,
+            alignment and relative velocity
+        :return: The direction to point to and its reference distance
+        """
+        # Case where there is no target (Should not happen, but you never know...)
+        if target_dict == {}:
+            LOGGER.warning(
+                f"Navigator {self.ship.parent.name} told to engage "
+                "but there's no attached target"
+            )
+            return NO_DIRECTION
+
+        # Identify self and target in interactions
+        my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
+        try:
+            target_actor_index = self.app.interactions.get_actor_index_from_id(
+                target_dict["target_id"]
+            )
+        except ValueError:
+            if self.debug:
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Target has been destroyed since last intent update."
+                )
+            return NO_DIRECTION
+
+        # Get necessary info from interactions and pre compute target properties
+        distance = self.app.interactions.distances[my_actor_index, target_actor_index]
+        direction = self.app.interactions.directions[
+            my_actor_index, target_actor_index, :
+        ]
+        relative_speed = self.app.interactions.rel_velocities[
+            my_actor_index, target_actor_index, :
+        ]
+        alignment = self.app.interactions.alignments[my_actor_index, target_actor_index]
+        target_current_position = self.ship.position + distance * direction
+        target_current_speed = self.ship.speed + relative_speed
+
+        if self.check_overshoot_risk_old(
+            direction=direction, relative_speed=relative_speed, distance=distance
+        ):
+            self.record_behaviour(behaviour="reposition")
+            return self.reposition_old(direction=direction, distance=distance)
+
+        if self.check_extend_conditions_old(alignment=alignment):
+            self.record_behaviour(behaviour="extend")
+            return self.extend_old()
+
+        if self.check_attack_conditions_old(
+            direction=direction,
+            relative_speed=relative_speed,
+            distance=distance,
+            alignment=alignment,
+        ):
+            self.record_behaviour(behaviour="attack")
+            return self.attack_target_old(
+                target_current_position=target_current_position,
+                target_current_speed=target_current_speed,
+                distance=distance,
+            )
+        # Default behaviour
+        self.record_behaviour(behaviour="intercept")
+        return self.intercept_target_old(
+            target_current_position=target_current_position,
+            target_current_speed=target_current_speed,
+            lead_time_s=self.personality["navigator"]["intercept"]["lead_time_s"],
+        )
+
+    def check_attack_conditions_old(
+        self,
+        direction: np.ndarray,
+        relative_speed: np.ndarray,
+        distance: float,
+        alignment: float,
+    ) -> bool:
+        """
+        - distance is good
+        - alignment is good
+        - lasers have enough energy #TODO
+        - Firing window will be long enough
+
+        :param direction: The direction to the target
+        :param relative_speed: The relative speed of the target relative to self
+        :param distance: The distance to the target
+        :param alignment: The cos of the angle to target
+        :return: Whether to begin an attack run
+        """
+        return (
+            (distance <= self.personality["navigator"]["attack"]["maximum_distance_m"])
+            and (
+                alignment
+                >= self.personality["navigator"]["attack"]["minimum_cos_angle"]
+            )
+            and True  # Lasers TODO
+            and (
+                self.compute_firing_window_length(
+                    direction=direction,
+                    relative_speed=relative_speed,
+                    distance=distance,
+                )
+                >= self.personality["navigator"]["fire"]["minimimum_window_duration_s"]
+            )
+        )
+
+    def compute_firing_window_length_old(
+        self,
+        direction: np.ndarray,
+        relative_speed: np.ndarray,
+        distance: float,
+    ) -> float:
+        """
+        Computes an estimation of the firing window length based on lateral relative
+        speed of target, its distance and the angular width of a shooting window
+
+        :param direction: The direction to the target
+        :param relative_speed: The relative speed of the target relative to self
+        :param distance: The distance to the target
+        :return: The estimated shooting window length
+        """
+        firing_window_width_m = (
+            2
+            * distance
+            * np.tan(self.personality["navigator"]["fire"]["maximum_angle_rad"])
+        )
+        lateral_relative_speed_mps = np.linalg.norm(np.cross(relative_speed, direction))
+        if lateral_relative_speed_mps < 0.1:
+            # Nearly no lateral movement, all the time in the world to shoot
+            return 1e6
+        return firing_window_width_m / lateral_relative_speed_mps
+
+    def check_extend_conditions_old(self, alignment: float) -> bool:
+        """
+        Check whether the current engagement behaviour has expired.
+        - Has it been too long ?
+        - Is the angle to target too big ?
+        - Has previous extend behaviour been long enough ?
+
+        :param alignment: The cos of the angle to target
+        :return: Whether to extend the trajectory
+        """
+        if (
+            self.behaviour == "intercept"
+            and (
+                self.behaviour_duration_s
+                >= self.personality["navigator"]["intercept"]["maximum_duration_s"]
+            )
+            and (
+                alignment
+                < self.personality["navigator"]["intercept"]["minimum_cos_angle"]
+            )
+        ):
+            if self.debug:
+                angle_deg = np.rad2deg(np.arccos(alignment))
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Intercept took too long with unsatisfying angle "
+                    f"({angle_deg} deg). Extending trajectory."
+                )
+            return True
+        elif (
+            self.behaviour == "attack"
+            and (
+                self.behaviour_duration_s
+                >= self.personality["navigator"]["attack"]["maximum_duration_s"]
+            )
+            and (
+                alignment < self.personality["navigator"]["attack"]["minimum_cos_angle"]
+            )
+        ):
+            if self.debug:
+                angle_deg = np.rad2deg(np.arccos(alignment))
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Attack took too long with unsatisfying angle "
+                    f"({angle_deg} deg). Extending trajectory."
+                )
+            return True
+        elif (
+            self.behaviour == "extend"
+            and self.behaviour_duration_s
+            < self.personality["navigator"]["extend"]["minimum_duration_s"]
+        ):
+            return True
+        else:
+            return False
+
+    def check_overshoot_risk_old(
+        self,
+        direction: np.ndarray,
+        relative_speed: np.ndarray,
+        distance: float,
+    ) -> bool:
+        """
+        Check if the current trajectory risks taking self farther than the target
+
+        :param direction: The direction to the target
+        :param relative_speed: The relative speed of the target relative to self
+        :param distance: The distance to the target
+        :return: Whether self should reposition
+        """
+        closing_speed_mps = -np.dot(direction, relative_speed)
+        if closing_speed_mps <= 0:
+            # Target pulling away, no risk of overshoot
+            return False
+        overshoot_time_prediction_s = distance / closing_speed_mps
+
+        return (
+            overshoot_time_prediction_s
+            < self.personality["navigator"]["reposition"]["minimum_time_to_overshoot_s"]
+        )
+
+    def reposition_old(
+        self, direction: np.ndarray, distance: float
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Turn hard away from the target to avoid passing in front of it
+        Therefore, simply point in the opposite direction with the same distance
+
+        TODO: do something for immobile targets (turrets. They should not be evaded
+        the same way as ships)
+
+        :param direction: The direction to the target
+        :param distance: The distance to the target
+        :return: The direction to point to and its reference distance
+        """
+        return -direction, distance
+
+    def extend_old(self) -> Tuple[np.ndarray, float]:
+        """
+        Go straight ahead and accelerate to break the pattern
+
+        :return: The direction to point to and its reference distance
+        """
+        return np.zeros(3), INTERACT_MAX_DISTANCE_M
+
+    def attack_target_old(
+        self,
+        target_current_position: np.ndarray,
+        target_current_speed: np.ndarray,
+        distance: float,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Intercepts the target with a reduced lead time and fire if angle is small enough
+
+        :param target_current_position: The absolute position of the target
+        :param target_current_speed: Its absolute speed
+        :param distance: The distance to the target
+        :return: The direction to point to and its reference distance
+        """
+
+        # Got slightly ahead of the target
+        target_future_direction, reference_distance_m = self.intercept_target(
+            target_current_position=target_current_position,
+            target_current_speed=target_current_speed,
+            lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
+        )
+        # Decide whether to shoot
+        firing_alignment = np.dot(target_future_direction, self.ship.forward)
+        if (
+            distance < self.personality["navigator"]["fire"]["maximum_distance_m"]
+        ) and (
+            firing_alignment
+            > self.personality["navigator"]["fire"]["minimum_cos_angle"]
+        ):
+            self.ship.laser_cannon.fire()
+
+        return target_future_direction, reference_distance_m
+
+    def intercept_target_old(
+        self,
+        target_current_position: np.ndarray,
+        target_current_speed: np.ndarray,
+        lead_time_s: float,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Intercepts the target by flying to its future position
+
+        TODO: Should I do a lead pursuit or a lag pursuit ?
+
+        :param target_current_position: The absolute position of the target
+        :param target_current_speed: Its absolute speed
+        :return: The direction to point to and its reference distance
+        """
+        target_future_position = (
+            target_current_position + target_current_speed * lead_time_s
+        )
+
+        # Compute direction to point to
+        target_future_direction = target_future_position - self.ship.position
+        target_future_distance_m = np.linalg.norm(target_future_direction)
+        if target_future_distance_m < TARGET_DISTANCE_TOLERANCE_M:
+            target_future_direction = np.zeros(3)
+        else:
+            target_future_direction /= target_future_distance_m
+
+        # Find reference distance. It's the distance to the target minus the distance
+        # that should be left behind the bot and the target
+        reference_distance_m = max(
+            0.0,
+            np.linalg.norm(target_current_position - self.ship.position)
+            - CHASE_DISTANCE_M,
+        )
+        return target_future_direction, reference_distance_m

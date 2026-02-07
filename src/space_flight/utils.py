@@ -98,7 +98,21 @@ def smooth_step_down(
 
     :param x: The values at which the function is evaluated
     :param x_step: The cutoff abscissa
-    :param slope: The descending slope at the abscissa
+    :param slope: The descending slope at the abscissa (>0)
     :return: f(x)
     """
     return 0.5 * (1.0 - np.tanh(0.5 * slope * (x - x_step)))
+
+
+def smooth_step_up(
+    x: Union[float, np.ndarray], x_step: float, slope: float
+) -> Union[float, np.ndarray]:
+    """
+    A smooth step up function of R => ]0,1[
+
+    :param x: The values at which the function is evaluated
+    :param x_step: The cutoff abscissa
+    :param slope: The ascending slope at the abscissa (>0)
+    :return: f(x)
+    """
+    return 1.0 - smooth_step_down(x=x, x_step=x_step, slope=slope)
