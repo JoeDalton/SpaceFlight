@@ -1,4 +1,6 @@
+import gc
 import logging
+import sys
 
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
@@ -127,6 +129,8 @@ class Bot(Destructible):
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaned bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
+            LOGGER.info(f"Bot nref = {sys.getrefcount(self)}")
+            LOGGER.info(f"Bot references {gc.get_referrers(self)}")
 
     def __del__(self):
         if DEBUG_DELETION:
