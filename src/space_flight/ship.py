@@ -393,6 +393,9 @@ class Ship:
         self.collision_sphere_np.setPythonTag("owner", None)
         self.collision_sphere_np.remove_node()
         self.collision_sphere_np = None
+        self.sound.stop()
+        self.app.sfx.audio3d.detachSound(self.sound)
+        self.sound = None
         self.node.remove_node()
         self.node = None
         self.is_dead = True
