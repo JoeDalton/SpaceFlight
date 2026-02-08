@@ -1,7 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH
-from space_flight.fx.dust_clouds import SpeedDust
+from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.lighting import Lighting
 from space_flight.scenes.planet_2d import Planet2D
@@ -44,7 +44,7 @@ class SceneAsteroids(Scene):
         self.lighting = Lighting(app=self.app)
 
         # Speed dust effect
-        SpeedDust(app=self.app, colors=["blue", "green", "pink", "white"])
+        SpeedDustCloud(app=self.app, colors=["blue", "green", "pink", "white"])
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
@@ -114,7 +114,7 @@ class SceneLavaPlanet(Scene):
         )
 
         # Speed dust effect
-        SpeedDust(app=self.app, colors=["orange", "pink", "yellow", "white"])
+        SpeedDustCloud(app=self.app, colors=["orange", "pink", "yellow", "white"])
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(

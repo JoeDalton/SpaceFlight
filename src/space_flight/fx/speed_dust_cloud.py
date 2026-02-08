@@ -11,7 +11,7 @@ from space_flight.utils import get_time_step
 MIN_DUST_ALPHA = 0.2
 
 
-class SpeedDust:
+class SpeedDustCloud:
     def __init__(
         self,
         app: ShowBase,
