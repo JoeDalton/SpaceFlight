@@ -28,31 +28,27 @@ class Effect(NodePath):
     ):
         self.start_pos = LPoint3(*position)
         self.initial_speed = speed
-        self.life_time_s = life_time_s
-        self.my_max_range_m = self.initial_speed * self.life_time_s
-
-        LerpFunc(
+        self.my_max_range_m = self.initial_speed * life_time_s
+        traj = LerpFunc(
             self.trajectory,
-            duration=self.life_time_s,
+            duration=life_time_s,
             fromData=0.0,
             toData=1.0,
         )
+        traj.start()
 
     def trajectory(self, t):
         """
         Parabolic decrease of velocity magnitude
         down to 0.5 of initial speed
 
-        # TODO does not seem to work.
-
-        :param t: _description_
+        :param t: Normalized time in the LerpFunc duration
         """
-        t_reduced = t / self.life_time_s
-        position_multiplier = t_reduced  # - (t_reduced**3)/6
-        current_pos = self.start_pos + position_multiplier * LVector3(*self.my_range_m)
-        # self.setPos(current_pos)
-        print(current_pos)
-        self.set_pos(self.start_pos)
+
+        position_multiplier = 0.8 * (t - (t**3) / 3)
+        advance = position_multiplier * self.my_max_range_m
+        current_pos = self.start_pos + LVector3(*advance)
+        self.setPos(current_pos)
 
 
 class EffectPool:

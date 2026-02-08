@@ -156,7 +156,6 @@ class ExplosionFire(Effect):
 
     def play(self, position: np.ndarray, scale: float, speed: np.ndarray):
         self.setScale(scale)
-        # self.setPos(*position)
         self.set_linear_decelerated_trajectory(
             life_time_s=TRAJECTORY_LIFE_TIME_S, position=position, speed=speed
         )
