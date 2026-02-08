@@ -158,17 +158,13 @@ class SceneDebug(Scene):
         # SpeedDust(app=self.app, colors=["blue", "green", "pink", "white"])
 
         # Asteroid field
-        self.static_asteroid_field = AsteroidField(
-            app=self.app,
-            n_asteroids=1,
-            field_size=1,
-            is_moving=False,
-            scale_factor=1.0,
-        )
+        # self.static_asteroid_field = AsteroidField(
+        #     app=self.app,
+        #     n_asteroids=1,
+        #     field_size=1,
+        #     is_moving=False,
+        #     scale_factor=1.0,
+        # )
         # self.rotating_asteroid_field = AsteroidField(
         #     app=self.app, n_asteroids=2, field_size=100, is_moving=True
         # )
-        # self.inititalize_move()
-
-    def inititalize_move(self):
-        self.rotating_asteroid_field.initialize_move()

@@ -45,6 +45,13 @@ class Destructible:
         """
         raise NotImplementedError
 
+    def play_death(self):
+        """
+        Plays the death animation of the destructible object,
+        to be done for each subclass
+        """
+        raise NotImplementedError
+
     def __del__(self):
         if DEBUG_DELETION:
             LOGGER.info(f"Destroyed destructible object: {self.name}")
@@ -80,6 +87,7 @@ class Destructibles:
         self.alive_objects = still_alive_objects
         # Handle the death of the newly dead objects
         for destructible in newly_dead_objects:
+            destructible.play_death()
             destructible.clear_tasks()
             destructible.clean()
             # TODO Call an explosion animation at the scale

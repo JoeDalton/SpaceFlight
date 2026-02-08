@@ -133,6 +133,8 @@ class Ship:
         self.parent.add_task(
             method=self.ship_handle_health, task_name="ship_handle_health"
         )
+        # Set explosion size for death animation
+        self.explosion_scale = self.conf["explosion_scale"]
 
         # Create render
         self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=is_cockpit)

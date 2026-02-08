@@ -10,6 +10,7 @@ from space_flight.ai.auto_navigator import AutoNavigator
 from space_flight.ai.auto_pilot import AutoPilot
 from space_flight.ai.auto_tactician import AutoTactician
 from space_flight.destructibles import Destructible
+from space_flight.fx import spawn_explosion
 from space_flight.ship import Ship
 from space_flight.trihedron import Trihedron
 
@@ -107,6 +108,20 @@ class Bot(Destructible):
         self.navigator.personality = personality
         self.pilot.personality = personality
 
+    def play_death(self):
+        """
+        Plays the death animation of the ship
+
+        Procedural explosion at the ship's last location
+        Associated sound #TODO
+        """
+        spawn_explosion(
+            app=self.app,
+            position=self.ship.position,
+            scale=self.ship.explosion_scale,
+            speed=self.ship.speed,
+        )
+
     def clean(self):
         """
         Remove every child
@@ -160,8 +175,8 @@ def spawn_bot(
         Trihedron(app=app, parent=bot.ship.node, scale=1)
 
     # # Debug
-    # bot.ship.health = 1.1
-    # bot.ship.shield = 0.0
-    # bot.ship.shield_regen_rate = 0.0
+    bot.ship.health = 1.1
+    bot.ship.shield = 0.0
+    bot.ship.shield_regen_rate = 0.0
 
     return bot

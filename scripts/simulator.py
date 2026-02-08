@@ -5,6 +5,7 @@ from space_flight.ai.interactions import Interactions
 from space_flight.bot import spawn_bot
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
+from space_flight.fx import load_explosion_effect_pools
 from space_flight.fx.sfx import SFX
 from space_flight.integrator import Integrator
 from space_flight.player import Player
@@ -43,6 +44,10 @@ class MyApp(ShowBase):
         # music = self.loader.loadMusic(DATAFILES_PATH / "sounds/music_westworld.mp3")
         # music.setLoop(True)
         # music.setVolume(0.8)
+        """
+        Initialize special effects
+        """
+        load_explosion_effect_pools(app=self)
 
         """
         Initialize Collision system and Destructibles
