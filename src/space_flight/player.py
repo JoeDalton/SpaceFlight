@@ -162,7 +162,7 @@ class Player:
             roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
         )
 
-        # Pilot turning their head TODO smoother system
+        # Pilot turning their head TODO smoother system, independent of framerate
         self.head_pivot.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
         self.head_pivot.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
 

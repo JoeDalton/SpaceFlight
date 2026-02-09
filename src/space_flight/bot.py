@@ -114,6 +114,7 @@ class Bot(Destructible):
 
         Procedural explosion at the ship's last location
         Associated sound #TODO
+        Model spinning before explosing ? TODO
         """
         spawn_explosion(
             app=self.app,
@@ -174,7 +175,7 @@ def spawn_bot(
     if has_debug_trihedron:
         Trihedron(app=app, parent=bot.ship.node, scale=1)
 
-    # # Debug
+    # Debug
     bot.ship.health = 1.1
     bot.ship.shield = 0.0
     bot.ship.shield_regen_rate = 0.0

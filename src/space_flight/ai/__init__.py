@@ -34,7 +34,7 @@ class Personality:
             "primary_target_engagement_multiplier": 5.0,
             "max_threat_score": 0.98,
             "hunter_cutoff_distance": 1300.0,
-            "hunter_angular_focus": 0.7,
+            "hunter_angular_focus": 0.3,
             "prey_cutoff_distance": 1300.0,
             "prey_angular_focus": 1.0,
             "commitment_times": {

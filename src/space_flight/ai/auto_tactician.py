@@ -76,9 +76,6 @@ class AutoTactician:
 
         TODO: include role/squad strategy biases
 
-        TODO: See if I can remove repeated computations
-        TODO: Idem to pass to the navigator
-
         Finally, evaluates the intent of the bot with priorites
         """
         # Find current actor index of self
@@ -173,9 +170,9 @@ class AutoTactician:
         Ideal prey is:
         - Not too far
         - Mostly forward
-        - Low on health -- TODO
+        - Low on health ? -- TODO
         - A primary target -- TODO
-        - Threatening an ally -- TODO
+        - Threatening a protected ally -- TODO
 
         TODO: Add a multiplier bonus for targets threatening an ally and primary target
         """

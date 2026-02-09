@@ -96,6 +96,7 @@ class LaserCannon:
 
         # TODO : shoot slightly inward so that the shots cross at mid range
         # TODO : Add random spread ? (Very small)
+        # TODO : Slight AutoAim when target lock
 
         _ = LaserShot(
             app=self.app,

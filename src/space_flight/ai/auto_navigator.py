@@ -86,6 +86,7 @@ class AutoNavigator:
         Record which behaviour is currently running and for how long.
 
         TODO: Somehow manage to commit to a behaviour for a certain time ?
+        TODO: Not necessary anymore ?
 
         :param behaviour: A str describing the behaviour currently in play
         """

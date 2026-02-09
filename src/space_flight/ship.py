@@ -320,24 +320,25 @@ class Ship:
         :param pitch_rate: _description_
         :param roll_rate: _description_
         """
+        # Register flight inputs
         self.set_inputs(
             throttle=throttle,
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,
             roll_rate=roll_rate,
         )
+        # Apply physics and integrate movement
         self.move_ship_physics()
 
-        # TODO position and orientation => already attributes
+        # Update render
         ship_pos = self.state[0:3]
         ship_quat = self.state[3:7]
-
         self.node.setPos(*ship_pos)
         self.node.setQuat(Quat(*ship_quat))
 
     def take_hit(self, damage: float, normal_body_vector: np.ndarray):
         """
-        Take damage from hits and jolt from the impact TODO
+        Take damage from hits and jolt from the impact
 
         :param damage: The amount of damage to take
         :param normal_body_vector: The collision normal in body coordinates
@@ -361,7 +362,7 @@ class Ship:
         self.app.doMethodLater(
             DAMAGE_FORCE_APPLICATION_DURATION_S,
             self.remove_hit_force,
-            "Reset_damage_force",
+            "remove_hit_force",
             extraArgs=[hit_force_world_n],
             appendTask=True,
         )
@@ -369,6 +370,7 @@ class Ship:
     def remove_hit_force(self, hit_force_world_n: np.ndarray, task):
         """
         A method to remove a hit force from the additional forces
+        once its application time has expired
 
         :param hit_force_world_n: The force to remove
         """
@@ -390,6 +392,10 @@ class Ship:
         return task.cont
 
     def clean(self):
+        """
+        Clean references before deleting the ship so that they can be properly
+        garbage collected
+        """
         self.laser_cannon.clean()
         self.laser_cannon = None
         self.collision_sphere_np.setPythonTag("owner", None)

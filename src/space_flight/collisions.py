@@ -171,7 +171,7 @@ class CollisionSystem:
 
     def ship_into_terrain(self, entry):
         """
-        TODO Never happens. Why ?
+        TODO
 
         :param entry: Panda3d's description of the collision
         """
@@ -180,7 +180,7 @@ class CollisionSystem:
 
     def ship_into_ship(self, entry):
         """
-        TODO Never happens. Why ?
+        TODO
 
         :param entry: Panda3d's description of the collision
         """
