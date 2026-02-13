@@ -73,8 +73,8 @@ class MyApp(ShowBase):
         self.player = Player(
             self,
             ship_type="a-wing",
-            ini_position=np.array([0, -200, 0]),
-            is_neutral=True,
+            ini_position=np.array([0, -200, 1]),
+            is_neutral=False,
         )
 
         """
@@ -106,11 +106,11 @@ class MyApp(ShowBase):
         self.lead_bot = spawn_bot(
             app=self,
             name="lead_2",
-            ship_type="tie-fighter",
-            ini_position=np.array([0, 0, 0]),
+            ship_type="tie-interceptor",
+            ini_position=np.array([0, -50, 2]),
             has_debug_trihedron=True,
             team=2,
-            debug_decisions=False,
+            debug_decisions=True,
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 

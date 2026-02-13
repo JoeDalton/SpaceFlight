@@ -134,6 +134,14 @@ class SceneLavaPlanet(Scene):
         # Planet
         self.planet = Planet2D(app=self.app, type="lava")
 
+        # Star destroyer
+        self.test_asset = self.app.loader.load_model(
+            DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
+        )
+        self.test_asset.reparent_to(self.app.render)
+        self.test_asset.set_pos(0, 1000, 50)
+        self.test_asset.set_scale(1)
+
         self.inititalize_move()
 
     def inititalize_move(self):

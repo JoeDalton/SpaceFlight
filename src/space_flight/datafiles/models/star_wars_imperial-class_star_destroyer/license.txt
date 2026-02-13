@@ -1,0 +1,8 @@
+Model Information:
+* title:	Star Wars; Imperial-Class Star Destroyer
+* source:	https://sketchfab.com/3d-models/star-wars-imperial-class-star-destroyer-fa18d537db4d4020a443c1802ec0f88e
+* author:	Heataker (https://sketchfab.com/Heataker)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
