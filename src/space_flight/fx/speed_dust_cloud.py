@@ -57,7 +57,7 @@ class SpeedDustCloud:
         particle.setPos(x, y, z)
         particle.setTexture(
             self.app.loader.loadTexture(
-                DATAFILES_PATH / f"models/dust/dust_{color}.png"
+                DATAFILES_PATH / f"sprites/dust/dust_{color}.png"
             )
         )
         particle.setScale(scaling, scaling, scaling)

@@ -26,7 +26,7 @@ class Planet2D:
         self.planet = root.attachNewNode(cm.generate())
         self.planet.setPos(position[0], position[1], position[2])
         self.planet.setTexture(
-            app.loader.loadTexture(DATAFILES_PATH / f"models/planets_2d/{type}.png")
+            app.loader.loadTexture(DATAFILES_PATH / f"sprites/planets_2d/{type}.png")
         )
         self.planet.setScale(scale, scale, scale)
 
