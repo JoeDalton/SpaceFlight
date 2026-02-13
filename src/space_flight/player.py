@@ -141,6 +141,8 @@ class Player:
         self.head_pivot = self.head_jolt.attachNewNode("head_pivot")
         # Attach camera to head
         self.app.camera.reparentTo(self.head_pivot)
+        # Allow near objects to be rendered
+        self.app.camLens.setNear(0.01)
 
     def move_camera(self):
         """

@@ -1,0 +1,11 @@
+Model Information:
+* title:	TIE bomber
+* source:	https://sketchfab.com/3d-models/tie-bomber-dab029b751bd4cc293b66e3cc013e3a0
+* author:	StarWars-Universe (https://sketchfab.com/SWU)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "TIE bomber" (https://sketchfab.com/3d-models/tie-bomber-dab029b751bd4cc293b66e3cc013e3a0) by StarWars-Universe (https://sketchfab.com/SWU) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
