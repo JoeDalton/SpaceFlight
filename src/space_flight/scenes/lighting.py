@@ -8,7 +8,7 @@ class Lighting:
     def __init__(
         self,
         app: ShowBase,
-        directional_color: List = [1.0, 1.0, 0.9, 1],
+        directional_color: List = [0.5, 0.5, 0.45, 1],
         directional_direction: List = [-30, -60, 0],
         ambient_color: List = [0.1, 0.2, 0.4, 1],
     ):

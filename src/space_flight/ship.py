@@ -18,7 +18,7 @@ from space_flight.utils import get_time_step, rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
-DAMAGE_TO_FORCE_FACTOR = 100000.0
+DAMAGE_TO_FORCE_FACTOR = 2000.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 
 
@@ -64,7 +64,8 @@ class Ship:
         self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
-        self.additional_force_n = np.zeros(3)  # For collisions, hits, gravity, etc.
+        self.additional_force_n = np.zeros(3)  # e.g. for gravity if applicable
+        self.impact_force_n = np.zeros(3)  # e.g. for collisions and laser hits
         self.drag_factor = (
             0.5
             * RHO
@@ -267,7 +268,7 @@ class Ship:
             raise NotImplementedError(f"Unknown flight model {FLIGHT_MODEL}")
         # Assemble thrust, lift, drag and accidental forces
         acceleration_mps2 = (
-            thrust_n + drag_n + lift_n + self.additional_force_n
+            thrust_n + drag_n + lift_n + self.additional_force_n + self.impact_force_n
         ) / self.mass_kg
         self.state_dot[7:10] = acceleration_mps2
 
@@ -357,7 +358,7 @@ class Ship:
         )
         quat = np.quaternion(*self.state[3:7])
         hit_force_world_n = rotate_single_vector(quat, hit_force_body_n)
-        self.additional_force_n += hit_force_world_n
+        self.impact_force_n += hit_force_world_n
         # Remove this additional force later on
         self.app.doMethodLater(
             DAMAGE_FORCE_APPLICATION_DURATION_S,
@@ -374,7 +375,7 @@ class Ship:
 
         :param hit_force_world_n: The force to remove
         """
-        self.additional_force_n -= hit_force_world_n
+        self.impact_force_n -= hit_force_world_n
         return task.done
 
     def ship_handle_health(self, task):

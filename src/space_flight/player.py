@@ -15,7 +15,7 @@ COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_ROTATION_POSITION_FACTOR_DEGPM = 500.0
 HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD = 1.0
 
-# TODO head should move more for impacts
+IMPACT_FEELING_FACTOR = 100
 
 
 class Player:
@@ -129,7 +129,7 @@ class Player:
         self.head_velocity_mps = np.zeros(3)  # Initialization
         self.head_position_m = np.zeros(3)
         self.head_spring_coefficient_npm = 25.0
-        self.head_damping_ratio = 0.5  # Suboptimal damping
+        self.head_damping_ratio = 0.8  # Slightly suboptimal damping
         self.head_inv_mass_pkg = 0.2
         self.head_damping_coefficient_nspm = (
             2
@@ -142,7 +142,7 @@ class Player:
         # Attach camera to head
         self.app.camera.reparentTo(self.head_pivot)
         # Allow near objects to be rendered
-        self.app.camLens.setNear(0.01)
+        # self.app.camLens.setNear(0.01)
 
     def move_camera(self):
         """
@@ -175,6 +175,11 @@ class Player:
         """
         # Take ship acceleration into account
         ship_acceleration_world_mps2 = self.ship.state_dot[7:10]
+        # Special treatment for impacts that should be more sensible
+        ship_acceleration_world_mps2 += (
+            (IMPACT_FEELING_FACTOR - 1) * self.ship.impact_force_n / self.ship.mass_kg
+        )
+
         quat = np.quaternion(*self.ship.state[3:7])
         ship_acceleration_body_mps2 = rotate_single_vector(
             -quat, ship_acceleration_world_mps2
