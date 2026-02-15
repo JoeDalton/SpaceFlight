@@ -165,10 +165,11 @@ class Ship:
     ):
         """
         Sets the scalar thrust and rotational rates of the ship
+        Square throttle so the velocity is easier to modulate
 
         Panda3d seems to use the pitch-roll-yaw convention
         """
-        self.scalar_thrust = throttle * self.max_thrust_n
+        self.scalar_thrust = throttle**2 * self.max_thrust_n
         self.pqr = np.array(
             [
                 pitch_rate * self.max_pitch_rate_radps,

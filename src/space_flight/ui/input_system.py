@@ -9,7 +9,7 @@ from space_flight.utils import get_time_step, low_pass_filter_first_order
 
 DEFAULT_STICK_DEAD_ZONE = 0.15
 DEFAULT_THROTTLE_DEAD_ZONE = 0.04
-THROTTLE_BOOST_VALUE = 10.0
+THROTTLE_BOOST_VALUE = 2.0
 
 
 def input_system_factory(app: ShowBase, player):
