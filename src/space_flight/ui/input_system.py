@@ -5,7 +5,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import InputDevice
 
 from space_flight import CONFIGURATION_PATH
-from space_flight.utils import get_time_step, low_pass_filter_first_order
+from space_flight.utils import low_pass_filter_first_order
 
 DEFAULT_STICK_DEAD_ZONE = 0.15
 DEFAULT_THROTTLE_DEAD_ZONE = 0.04
@@ -33,6 +33,8 @@ class InputSystem:
         self.view_offset = np.zeros(2)
         self.app.disableMouse()
         self.is_boost = False
+        # Game UI
+        self.app.accept("escape", self.app.game_time.toggle_pause)
 
     def action(self, button):
         # Just show which button has been pressed.
@@ -66,8 +68,8 @@ class InputSystem:
     def deactivate_boost(self):
         self.is_boost = False
 
-    @staticmethod
     def smooth_button(
+        self,
         value: float,  # current raw input: 1.0 if pressed, 0.0 if not
         previous: float,  # previous smoothed output
         rise_time: float = 0.5,  # seconds to reach ~63% when pressed
@@ -88,7 +90,7 @@ class InputSystem:
             rise_time=1.0
             fall_time=0.2
         """
-        dt = get_time_step()
+        dt = self.app.game_time.get_time_step()
         return low_pass_filter_first_order(
             value=value,
             previous=previous,
@@ -101,9 +103,6 @@ class InputSystem:
 class Keyboard(InputSystem):
     def __init__(self, app: ShowBase, player):
         super().__init__(app=app, player=player)
-
-        # Game UI
-        self.app.accept("escape", exit)
 
         self.throttle = 0.0
         self.yaw_rate = 0.0
@@ -199,20 +198,20 @@ class Keyboard(InputSystem):
 
         returns throttle, roll, pitch, yaw
         """
-        dt = get_time_step()
+        dt = self.app.game_time.get_time_step()
         # Get average command of yaw pitch roll since last frame
         self.yaw_rate /= dt
         self.pitch_rate /= dt
         self.roll_rate /= dt
 
         # Low pass filter for axes
-        self.yaw_rate_smoothed = InputSystem.smooth_button(
+        self.yaw_rate_smoothed = self.smooth_button(
             value=self.yaw_rate, previous=self.yaw_rate_smoothed
         )
-        self.pitch_rate_smoothed = InputSystem.smooth_button(
+        self.pitch_rate_smoothed = self.smooth_button(
             value=self.pitch_rate, previous=self.pitch_rate_smoothed
         )
-        self.roll_rate_smoothed = InputSystem.smooth_button(
+        self.roll_rate_smoothed = self.smooth_button(
             value=self.roll_rate, previous=self.roll_rate_smoothed
         )
 

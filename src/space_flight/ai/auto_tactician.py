@@ -5,7 +5,7 @@ import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.ai import Intent, Personality
-from space_flight.utils import get_time_step, smooth_step_down
+from space_flight.utils import smooth_step_down
 
 LOGGER = logging.getLogger()
 
@@ -45,7 +45,7 @@ class AutoTactician:
         """
         Evaluates the intent of the bot at the correct frequency
         """
-        dt = get_time_step()
+        dt = self.app.game_time.get_time_step()
         self.time_since_update += dt
         self.time_since_commitment += dt
         if (self.time_since_update >= INTENT_UPDATE_DELAY_S) and (

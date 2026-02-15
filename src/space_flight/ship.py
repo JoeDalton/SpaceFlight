@@ -14,7 +14,7 @@ from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
 from space_flight.collisions import attach_collision_sphere
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
-from space_flight.utils import get_time_step, rotate_single_vector
+from space_flight.utils import rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -385,7 +385,7 @@ class Ship:
 
         :param task: _description_
         """
-        dt = get_time_step()
+        dt = self.app.game_time.get_time_step()
         self.shield = min(
             max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
         )

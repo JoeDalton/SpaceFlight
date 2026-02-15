@@ -10,9 +10,10 @@ from space_flight.fx.sfx import SFX
 from space_flight.integrator import Integrator
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
+from space_flight.time_keeping import GameTimeManager, IntervalManager
 from space_flight.ui.hud import HUD, TargetHUD
 
-# from panda3d.core import (AntialiasAttrib,; load_prc_file_data)
+# from panda3d.core import AntialiasAttrib, load_prc_file_data
 
 
 # load_prc_file_data("", """
@@ -33,6 +34,11 @@ from space_flight.ui.hud import HUD, TargetHUD
 class MyApp(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
+        """
+        Initialize time keeping
+        """
+        self.game_time = GameTimeManager(app=self)
+        self.interval_manager = IntervalManager(app=self)
 
         """
         Initialize sound system
@@ -114,44 +120,44 @@ class MyApp(ShowBase):
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        # self.chase_bot = spawn_bot(
-        #     app=self,
-        #     name="chase_1",
-        #     ship_type="a-wing",
-        #     ini_position=np.array([0, -50, -10]),
-        #     has_debug_trihedron=True,
-        #     team=1,
-        #     debug_decisions=True,
-        # )
+        self.chase_bot = spawn_bot(
+            app=self,
+            name="chase_1",
+            ship_type="a-wing",
+            ini_position=np.array([0, -2000, -0]),
+            has_debug_trihedron=True,
+            team=1,
+            debug_decisions=True,
+        )
 
-        # self.scape_goat = spawn_bot(
-        #     app=self,
-        #     name="scape_goat",
-        #     ship_type="tie-fighter",
-        #     ini_position=np.array([0, -20, 0]),
-        #     has_debug_trihedron=True,
-        #     team=0,
-        #     debug_decisions=True,
-        # )
+        self.scape_goat = spawn_bot(
+            app=self,
+            name="scape_goat",
+            ship_type="x-wing",
+            ini_position=np.array([11.8, -200, 0]),
+            has_debug_trihedron=True,
+            team=0,
+            debug_decisions=True,
+        )
 
-        # for _ in range(7):
-        #     spawn_bot(
-        #         app=self,
-        #         name="team_1",
-        #         ship_type="a-wing",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=1,
-        #     )
-        # for _ in range(5):
-        #     spawn_bot(
-        #         app=self,
-        #         name="team_2",
-        #         ship_type="tie-fighter",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=2,
-        #     )
+        for _ in range(7):
+            spawn_bot(
+                app=self,
+                name="team_1",
+                ship_type="x-wing",
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+                has_debug_trihedron=True,
+                team=1,
+            )
+        for _ in range(5):
+            spawn_bot(
+                app=self,
+                name="team_2",
+                ship_type="tie-interceptor",
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+                has_debug_trihedron=True,
+                team=2,
+            )
 
         """
         DEBUG

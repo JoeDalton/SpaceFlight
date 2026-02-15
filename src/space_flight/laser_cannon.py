@@ -19,7 +19,6 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION
 from space_flight.collisions import attach_collision_segment
-from space_flight.utils import get_average_frame_rate, get_current_time
 
 LOGGER = logging.getLogger()
 
@@ -74,11 +73,11 @@ class LaserCannon:
 
         # Initialize cannon
         self.current_next_cannon_idx = 0
-        self.last_fire_time = get_current_time()
+        self.last_fire_time = self.app.game_time.get_current_time()
 
     def fire(self):
         # Fire at prescribed rate
-        current_time = get_current_time()
+        current_time = self.app.game_time.get_current_time()
         if current_time - self.last_fire_time < self.fire_delay:
             return
 
@@ -197,7 +196,7 @@ class LaserShot:
         # The length of the segment is the typical frame time
         # multiplied by the laser speed to cover the space spanned by the laser
         # between two frames
-        dt = 1 / get_average_frame_rate()
+        dt = 1 / self.app.game_time.get_average_frame_rate()
         relative_start_position = np.zeros(3)
         length = np.linalg.norm(speed) * dt * np.array([0.0, 0.0, 1.0])
         relative_end_position = relative_start_position + length

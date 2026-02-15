@@ -2,7 +2,6 @@ from typing import Union
 
 import numpy as np
 import quaternion
-from direct.showbase.ShowBaseGlobal import ClockObject
 
 
 def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
@@ -55,39 +54,6 @@ def low_pass_filter_first_order(
 
     alpha = dt / (tau + dt)
     return previous + (value - previous) * alpha
-
-
-def get_current_time() -> float:
-    """
-    Gets the time of the current frame
-
-    TODO: Take pauses/start menu into account
-
-    :return: The time stamp of the current frame
-    """
-    return ClockObject.getGlobalClock().getFrameTime()
-
-
-def get_time_step() -> float:
-    """
-    Gets the time elapsed since the last frame
-
-    TODO: Take pauses/start menu into account
-
-    :return: The time step
-    """
-    return ClockObject.getGlobalClock().getDt()
-
-
-def get_average_frame_rate() -> float:
-    """
-    Gets the average frame rate
-
-    TODO: Take pauses/start menu into account
-
-    :return: The average frame rate
-    """
-    return ClockObject.getGlobalClock().getAverageFrameRate()
 
 
 def smooth_step_down(

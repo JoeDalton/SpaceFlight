@@ -6,7 +6,6 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import CardMaker, NodePath, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
-from space_flight.utils import get_time_step
 
 MIN_DUST_ALPHA = 0.2
 
@@ -66,7 +65,7 @@ class SpeedDustCloud:
         particle.setY(particle.getY() + self.depth)
 
     def update_task(self, task):
-        dt = get_time_step()
+        dt = self.app.game_time.get_time_step()
         speed = np.linalg.norm(self.app.player.ship.speed)
         alpha = MIN_DUST_ALPHA + speed * (1.0 - MIN_DUST_ALPHA) / self.max_speed
         self.root.setAlphaScale(alpha)

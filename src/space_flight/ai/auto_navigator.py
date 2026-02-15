@@ -10,7 +10,7 @@ from space_flight.ai import (
     Personality,
 )
 from space_flight.ai.auto_tactician import Intent
-from space_flight.utils import get_current_time, smooth_step_down, smooth_step_up
+from space_flight.utils import smooth_step_down, smooth_step_up
 
 LOGGER = logging.getLogger()
 
@@ -43,7 +43,7 @@ class AutoNavigator:
         self.behaviour = "idle"
         self.behaviour_duration_s = 0.0
         self.time_in_spiral_s = 0.0
-        self.last_update_time = get_current_time()
+        self.last_update_time = self.app.game_time.get_current_time()
 
         # DEBUG: choose an engaging strategy
         if ENGAGE_STRATEGY == "cap_blend":
@@ -90,7 +90,7 @@ class AutoNavigator:
 
         :param behaviour: A str describing the behaviour currently in play
         """
-        current_time = get_current_time()
+        current_time = self.app.game_time.get_current_time()
         if behaviour == self.behaviour:
             # Increment time since last navigator update
             self.behaviour_duration_s += current_time - self.last_update_time
@@ -331,7 +331,7 @@ class AutoNavigator:
         ):
             # Velocity condition met
             # Register time in spiral
-            current_time = get_current_time()
+            current_time = self.app.game_time.get_current_time()
             self.time_in_spiral_s += current_time - self.last_update_time
             # Result depends on time condition
             return (

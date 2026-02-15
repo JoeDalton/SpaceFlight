@@ -12,7 +12,6 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
-from space_flight.utils import get_average_frame_rate, get_current_time
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -54,7 +53,7 @@ class HUD:
         A task that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
         """
-        frame_rate = get_average_frame_rate()
+        frame_rate = self.app.game_time.get_average_frame_rate()
 
         player_text = (
             ""
@@ -68,7 +67,7 @@ class HUD:
             f"Player shield = {self.app.player.ship.shield:.1f}\n"
             # f"Player Rot. rate = {np.rad2deg(self.app.player.ship.pqr)}\n"
             # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
-            f"Time = {get_current_time():.0f}\n"
+            f"Time = {self.app.game_time.get_current_time():.0f}\n"
         )
         try:
             bot_text = (

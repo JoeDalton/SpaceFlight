@@ -41,7 +41,7 @@ class Bot(Destructible):
             team=team,
         )
 
-        self.pilot = AutoPilot(ship=self.ship)
+        self.pilot = AutoPilot(app=self.app, ship=self.ship)
         self.navigator = AutoNavigator(
             app=self.app, ship=self.ship, debug=debug_decisions
         )
@@ -176,8 +176,8 @@ def spawn_bot(
         Trihedron(app=app, parent=bot.ship.node, scale=1)
 
     # Debug
-    bot.ship.health = 1.1
-    bot.ship.shield = 0.0
-    bot.ship.shield_regen_rate = 0.0
+    # bot.ship.health = 100000
+    # bot.ship.shield = 1000.0
+    # bot.ship.shield_regen_rate = 1000.0
 
     return bot

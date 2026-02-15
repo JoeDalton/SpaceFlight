@@ -5,12 +5,7 @@ from simple_pid import PID
 
 from space_flight import DEBUG_DELETION
 from space_flight.ai import Personality
-from space_flight.utils import (
-    get_current_time,
-    get_time_step,
-    low_pass_filter_first_order,
-    safe_angle_rad,
-)
+from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
 
 LOGGER = logging.getLogger()
 
@@ -19,7 +14,8 @@ DISTANCE_FOR_MAX_THROTTLE = 2000
 
 
 class AutoPilot:
-    def __init__(self, ship, personality: dict = Personality.DEFAULT):
+    def __init__(self, app, ship, personality: dict = Personality.DEFAULT):
+        self.app = app
         self.ship = ship
         self.personality = personality
         self.pid_yaw = PID(
@@ -30,7 +26,7 @@ class AutoPilot:
             starting_output=0.0,
             sample_time=0.1,
             error_map=safe_angle_rad,
-            time_fn=get_current_time,
+            time_fn=self.app.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.pid_pitch = PID(
@@ -41,7 +37,7 @@ class AutoPilot:
             starting_output=0.0,
             sample_time=0.1,
             error_map=safe_angle_rad,
-            time_fn=get_current_time,
+            time_fn=self.app.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.pid_roll = PID(
@@ -52,7 +48,7 @@ class AutoPilot:
             starting_output=0.0,
             sample_time=0.1,
             error_map=safe_angle_rad,
-            time_fn=get_current_time,
+            time_fn=self.app.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.filter_time = 0.5
@@ -118,7 +114,7 @@ class AutoPilot:
 
         TODO : Add pilot skill modifiers ?
         """
-        dt = get_time_step()
+        dt = self.app.game_time.get_time_step()
 
         # Compute directions
         target_direction_norm = np.linalg.norm(target_direction)
@@ -216,6 +212,9 @@ class AutoPilot:
         self.throttle = max(
             min(self.throttle, 1.0), self.personality["pilot"]["minimum_throttle"]
         )
+
+        # DEBUG
+        # self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate = 0, 0, 0, 0
 
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
 

@@ -3,7 +3,6 @@ from typing import Callable
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
-from space_flight.integrator import first_order_euler_step
 from space_flight.ship import Ship
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
@@ -209,7 +208,7 @@ class Player:
         state_derivative[0:3] = self.head_velocity_mps.copy()
         state_derivative[3:6] = self.head_acceleration_mps2.copy()
 
-        new_state = first_order_euler_step(
+        new_state = self.app.integrator.first_order_euler_step(
             state_derivative=state_derivative, state=previous_state
         )
         self.head_position_m = new_state[0:3]
