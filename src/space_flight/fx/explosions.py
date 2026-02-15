@@ -79,7 +79,7 @@ class ExplosionSmoke(Effect):
         self.set_linear_decelerated_trajectory(
             life_time_s=TRAJECTORY_LIFE_TIME_S, position=position, speed=speed
         )
-        Sequence(
+        sequence = Sequence(
             Wait(SMOKE_DELAY_S),
             Func(self.show),
             Parallel(
@@ -87,7 +87,8 @@ class ExplosionSmoke(Effect):
                 Sequence(self.appear_ival, self.fade_ival),
             ),
             Func(self.release),
-        ).start()
+        )
+        self.app.interval_manager.play_interval(sequence)
 
 
 class ExplosionFire(Effect):
@@ -159,11 +160,12 @@ class ExplosionFire(Effect):
         self.set_linear_decelerated_trajectory(
             life_time_s=TRAJECTORY_LIFE_TIME_S, position=position, speed=speed
         )
-        Sequence(
+        sequence = Sequence(
             Func(self.show),
             Parallel(
                 self.scale_ival,
                 Sequence(Wait(FIRE_FADE_DELAY_S), self.fade_ival),
             ),
             Func(self.release),
-        ).start()
+        )
+        self.app.interval_manager.play_interval(sequence)

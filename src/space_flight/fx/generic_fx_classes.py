@@ -35,7 +35,7 @@ class Effect(NodePath):
             fromData=0.0,
             toData=1.0,
         )
-        traj.start()
+        self.app.interval_manager.play_interval(traj)
 
     def trajectory(self, t):
         """

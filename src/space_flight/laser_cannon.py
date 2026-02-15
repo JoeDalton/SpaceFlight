@@ -182,7 +182,8 @@ class LaserShot:
 
         # Preset movement
         self.shot.set_pos(start_pos)
-        LerpPosInterval(self.shot, life_time_s, end_pos).start()
+        laser_movement_interval = LerpPosInterval(self.shot, life_time_s, end_pos)
+        self.app.interval_manager.play_interval(laser_movement_interval)
 
         # Add light source on laser
         plight = PointLight("plight")
