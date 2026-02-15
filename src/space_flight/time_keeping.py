@@ -1,3 +1,4 @@
+import uuid
 from enum import Enum, auto
 from typing import Callable
 
@@ -86,13 +87,17 @@ class GameTimeManager:
 
     def get_average_frame_rate(self) -> float:
         """
-        Gets the average frame rate
+        Gets the average frame rate.
+        Always return a strictly positive value to avoid diveide by zero errors
 
         TODO: Take pauses/start menu into account ?
 
         :return: The average frame rate
         """
-        return ClockObject.getGlobalClock().getAverageFrameRate()
+        average_frame_rate = max(
+            ClockObject.getGlobalClock().getAverageFrameRate(), 1e-5
+        )
+        return average_frame_rate
 
 
 class IntervalManager:
@@ -165,7 +170,8 @@ class DelayedMethodManager:
         :param method: The method itself
         :param extra_args: extra arguments for the method
         """
-        self.methods_to_run_dict[name] = {
+        uid = uuid.uuid4()
+        self.methods_to_run_dict[name + str(uid)] = {
             "delay_s": delay_s,
             "method": method,
             "extra_args": extra_args,

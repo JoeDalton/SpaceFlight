@@ -171,11 +171,6 @@ class MyApp(ShowBase):
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 
-        str_to_print = "feuer"
-        self.delayed_methods.do_method_later(
-            delay_s=3.0, name="exit", method=self.debug_func, extra_args=[str_to_print]
-        )
-
         """
         HUD
         """
@@ -194,10 +189,6 @@ class MyApp(ShowBase):
         Run game
         """
         self.game_time.state = GameStates.PLAYING
-
-    def debug_func(self, str_to_print):
-        print(self)
-        print(str_to_print)
 
 
 app = MyApp()

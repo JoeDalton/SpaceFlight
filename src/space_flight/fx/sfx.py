@@ -139,12 +139,11 @@ class SFX:
         dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)  # slightly to the right
         # Delete it in the near future
-        self.app.doMethodLater(
-            SFX_MAX_SOUND_DURATION_S,
-            lambda t: dummy_node.remove_node(),
-            "remove_player_hit_sound_node",
+        self.app.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="remove_player_hit_sound_node",
+            method=dummy_node.remove_node,
         )
-
         # Add sound to laser hit (empty list if no sound)
         for _ in range(SOUND_POOL_LENGTH):
             sound = random.choice(sound_pool)

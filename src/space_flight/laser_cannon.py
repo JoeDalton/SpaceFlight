@@ -213,21 +213,27 @@ class LaserShot:
 
         # Clean laser at the end of its life
         # Make it disappear at the end of range
-        self.app.doMethodLater(
-            life_time_s,
-            lambda t: self.laser_np.setPythonTag("owner", None),
-            "DeleteLaserOwner",
+        self.app.delayed_methods.do_method_later(
+            delay_s=light_duration,
+            name="RemoveLaserLight1",
+            method=self.app.render.clear_light,
+            extra_args=[plnp],
         )
-        self.app.doMethodLater(
-            light_duration,
-            lambda t: self.app.render.clear_light(plnp),
-            "RemoveLaserLight1",
+        self.app.delayed_methods.do_method_later(
+            delay_s=light_duration,
+            name="RemoveLaserLight2",
+            method=plnp.remove_node,
         )
-        self.app.doMethodLater(
-            light_duration, lambda t: plnp.remove_node(), "RemoveLaserLight2"
+        self.app.delayed_methods.do_method_later(
+            delay_s=life_time_s,
+            name="DeleteLaserOwner",
+            method=self.laser_np.setPythonTag,
+            extra_args=["owner", None],
         )
-        self.app.doMethodLater(
-            life_time_s, lambda t: self.shot.remove_node(), "RemoveLaser"
+        self.app.delayed_methods.do_method_later(
+            delay_s=life_time_s,
+            name="RemoveLaser",
+            method=self.shot.remove_node,
         )
 
     def __del__(self):

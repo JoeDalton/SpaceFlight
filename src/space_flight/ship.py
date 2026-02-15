@@ -154,10 +154,10 @@ class Ship:
             self.app.sfx.audio3d.setSoundVelocityAuto(self.node)
 
             # TODO Doppler does not seem to work great
-            self.app.doMethodLater(
-                0.5,
-                lambda t: self.sound.play(),
-                "Play engine_sound",
+            self.app.delayed_methods.do_method_later(
+                delay_s=0.5,
+                name="Play_engine_sound",
+                method=self.sound.play,
             )
 
     def set_inputs(
@@ -361,15 +361,14 @@ class Ship:
         hit_force_world_n = rotate_single_vector(quat, hit_force_body_n)
         self.impact_force_n += hit_force_world_n
         # Remove this additional force later on
-        self.app.doMethodLater(
-            DAMAGE_FORCE_APPLICATION_DURATION_S,
-            self.remove_hit_force,
-            "remove_hit_force",
-            extraArgs=[hit_force_world_n],
-            appendTask=True,
+        self.app.delayed_methods.do_method_later(
+            delay_s=DAMAGE_FORCE_APPLICATION_DURATION_S,
+            name="remove_hit_force",
+            method=self.remove_hit_force,
+            extra_args=[hit_force_world_n],
         )
 
-    def remove_hit_force(self, hit_force_world_n: np.ndarray, task):
+    def remove_hit_force(self, hit_force_world_n: np.ndarray):
         """
         A method to remove a hit force from the additional forces
         once its application time has expired
@@ -377,7 +376,6 @@ class Ship:
         :param hit_force_world_n: The force to remove
         """
         self.impact_force_n -= hit_force_world_n
-        return task.done
 
     def ship_handle_health(self, task):
         """
