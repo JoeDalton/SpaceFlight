@@ -10,7 +10,12 @@ from space_flight.fx.sfx import SFX
 from space_flight.integrator import Integrator
 from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
-from space_flight.time_keeping import GameTimeManager, IntervalManager
+from space_flight.time_keeping import (
+    DelayedMethodManager,
+    GameStates,
+    GameTimeManager,
+    IntervalManager,
+)
 from space_flight.ui.hud import HUD, TargetHUD
 
 # from panda3d.core import AntialiasAttrib, load_prc_file_data
@@ -39,6 +44,7 @@ class MyApp(ShowBase):
         """
         self.game_time = GameTimeManager(app=self)
         self.interval_manager = IntervalManager(app=self)
+        self.delayed_methods = DelayedMethodManager(app=self)
 
         """
         Initialize sound system
@@ -165,6 +171,11 @@ class MyApp(ShowBase):
         # self.oobe()  # DEBUG
         # self.toggle_wireframe()  # DEBUG
 
+        str_to_print = "feuer"
+        self.delayed_methods.do_method_later(
+            delay_s=3.0, name="exit", method=self.debug_func, extra_args=[str_to_print]
+        )
+
         """
         HUD
         """
@@ -178,6 +189,15 @@ class MyApp(ShowBase):
 
         # self.render.setShaderAuto()
         # self.render.setAntialias(AntialiasAttrib.MAuto)
+
+        """
+        Run game
+        """
+        self.game_time.state = GameStates.PLAYING
+
+    def debug_func(self, str_to_print):
+        print(self)
+        print(str_to_print)
 
 
 app = MyApp()

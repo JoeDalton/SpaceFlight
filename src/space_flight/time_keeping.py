@@ -1,6 +1,8 @@
 from enum import Enum, auto
+from typing import Callable
 
 from direct.interval.Interval import Interval
+from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject
 
 
@@ -20,8 +22,8 @@ class GameTimeManager:
     A class to store the game's state and handle the time
     """
 
-    def __init__(self, app):
-        self.state = GameStates.PLAYING
+    def __init__(self, app: ShowBase):
+        self.state = GameStates.PAUSED
         self.app = app
         self.time_in_pause_s = 0.0
         self.real_time_at_last_pause_s = 0.0
@@ -98,7 +100,7 @@ class IntervalManager:
     A class to handle the creation, destruction and pausing/resuming of time intervals
     """
 
-    def __init__(self, app):
+    def __init__(self, app: ShowBase):
         self.active_intervals: list[Interval] = []
         self.app = app
 
@@ -142,9 +144,48 @@ class IntervalManager:
             i.resume()
 
 
-class DelayedFunction:
+class DelayedMethodManager:
     """
     A class to mimic the doMethodLater feature of panda3d while allowing pauses
     """
 
-    pass
+    def __init__(self, app: ShowBase):
+        self.app = app
+        self.methods_to_run_dict = {}
+        self.app.taskMgr.add(self.update, "update_delayed_functions")
+
+    def do_method_later(
+        self, delay_s: float, name: str, method: Callable, extra_args: list = []
+    ):
+        """
+        Schedule a method to run at some time in the future
+
+        :param delay_s: The time to wait before running the method
+        :param name: The name of the method
+        :param method: The method itself
+        :param extra_args: extra arguments for the method
+        """
+        self.methods_to_run_dict[name] = {
+            "delay_s": delay_s,
+            "method": method,
+            "extra_args": extra_args,
+        }
+
+    def update(self, task):
+        """
+        Decrease timers for all registered methods and launch them if their timers
+        reach zero
+        """
+        if self.app.game_time.state == GameStates.PLAYING:
+            dt = self.app.game_time.get_time_step()
+            methods_to_pop = []
+            for name in self.methods_to_run_dict.keys():
+                self.methods_to_run_dict[name]["delay_s"] -= dt
+                if self.methods_to_run_dict[name]["delay_s"] <= 0.0:
+                    methods_to_pop.append(name)
+                    method = self.methods_to_run_dict[name]["method"]
+                    extra_args = self.methods_to_run_dict[name]["extra_args"]
+                    method(*extra_args)
+            for name in methods_to_pop:
+                self.methods_to_run_dict.pop(name)
+        return task.cont
