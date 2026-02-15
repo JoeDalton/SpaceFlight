@@ -1,4 +1,5 @@
 from typing import List
+from uuid import UUID
 
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
@@ -28,6 +29,7 @@ class Interactions:
         self.app: ShowBase = app
         self.actors: List = actors
         self.n_actors: int = len(self.actors)
+        self.actors_id_dict = {}
 
         self.directions: np.ndarray = np.zeros((self.n_actors, self.n_actors, 3))
         self.interact: np.ndarray = np.zeros((self.n_actors, self.n_actors), dtype=bool)
@@ -51,6 +53,11 @@ class Interactions:
 
         # Update the interaction matrix
         self.n_actors = len(self.actors)
+
+        # Update the actors id dictionary
+        # Appended index has the latest index
+        self.actors_id_dict[actor.id] = self.n_actors - 1
+
         # Save old values
         old_directions = self.directions.copy()
         old_rel_velocities = self.rel_velocities.copy()
@@ -104,20 +111,21 @@ class Interactions:
         self.rel_velocities = np.delete(
             np.delete(self.rel_velocities, actor_index, axis=0), actor_index, axis=1
         )
+        # Rebuild the actors id dictionary
+        self.actors_id_dict = {}
+        for idx in range(self.n_actors):
+            self.actors_id_dict[self.actors[idx].id] = idx
 
-    def get_actor_index_from_id(self, actor_id: int) -> int:
+    def get_actor_index_from_id(self, actor_id: UUID) -> int:
         """
         Finds the actor's index in the list of actors
 
         :param actor: The actor to look up
         :return: Its index
         """
-        actor_index = -1
-        for idx in range(self.n_actors):
-            if self.actors[idx].id == actor_id:
-                actor_index = idx
-                break
-        if actor_index == -1:
+        try:
+            actor_index = self.actors_id_dict[actor_id]
+        except KeyError:
             raise ValueError(f"Actor {actor_id} is not in the actors' list")
         return actor_index
 
@@ -134,9 +142,9 @@ class Interactions:
         """
         # Double loop over every actor, in the upper triangular quadrant
         for idx_source in range(1, self.n_actors):
+            source_actor = self.actors[idx_source]
             for idx_target in range(0, idx_source):
                 # Identify actors
-                source_actor = self.actors[idx_source]
                 target_actor = self.actors[idx_target]
 
                 # Find whether the two actors can interact based on teams
@@ -191,10 +199,10 @@ class Interactions:
 
         # Full double loop for alignments (source -> target and target -> source)
         for idx_source in range(self.n_actors):
+            source_forward = self.actors[idx_source].forward
             for idx_target in range(self.n_actors):
                 # Compute alignment only if there is an interaction
                 if self.interact[idx_source, idx_target] and (idx_source != idx_target):
-                    source_forward = self.actors[idx_source].forward
                     source_to_target_direction = self.directions[
                         idx_source, idx_target, :
                     ]

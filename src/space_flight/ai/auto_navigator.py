@@ -419,9 +419,17 @@ class AutoNavigator:
 
         # Identify self and target in interactions
         my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
-        target_actor_index = self.app.interactions.get_actor_index_from_id(
-            target_dict["target_id"]
-        )
+        try:
+            target_actor_index = self.app.interactions.get_actor_index_from_id(
+                target_dict["target_id"]
+            )
+        except ValueError:
+            if self.debug:
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Target has been destroyed since last intent update."
+                )
+            return NO_DIRECTION
 
         distance = self.app.interactions.distances[my_actor_index, target_actor_index]
 
