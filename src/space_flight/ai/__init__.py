@@ -85,7 +85,7 @@ class Personality:
         "pilot": {
             "angle_throttle_exponent": 0.5,
             "distance_throttle_exponent": 1.1,
-            "minimum_throttle": 0.05,
+            "minimum_throttle": 0.22,
         },
     }
 
