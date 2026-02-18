@@ -2,9 +2,11 @@ from typing import List
 from uuid import UUID
 
 import numpy as np
-from direct.showbase.ShowBase import ShowBase
 
 from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
+
+# from direct.showbase.ShowBase import ShowBase
+
 
 """
 Teams are defined as :
@@ -17,7 +19,7 @@ Foes in any team > 1
 class Interactions:
     def __init__(
         self,
-        app: ShowBase,
+        # app: ShowBase,
         actors: List = [],
     ):
         """
@@ -26,7 +28,7 @@ class Interactions:
         :param app: The game object
         :param actors: A list containing all actors, defaults to []
         """
-        self.app: ShowBase = app
+        # self.app: ShowBase = app
         self.actors: List = actors
         self.n_actors: int = len(self.actors)
         self.actors_id_dict = {}

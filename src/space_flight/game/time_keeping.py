@@ -1,21 +1,11 @@
 import uuid
-from enum import Enum, auto
 from typing import Callable
 
 from direct.interval.Interval import Interval
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject
 
-
-class GameStates(Enum):
-    """
-    Definition of the possile game states
-    """
-
-    # IDLE = auto()
-    # LOADING = auto()
-    PLAYING = auto()
-    PAUSED = auto()
+from space_flight.global_architecture import GameStates
 
 
 class GameTimeManager:
