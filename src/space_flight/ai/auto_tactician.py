@@ -21,12 +21,12 @@ class AutoTactician:
 
     def __init__(
         self,
-        app,
+        game,
         ship,
         personality: dict = Personality.DEFAULT,
         debug: bool = False,
     ):
-        self.app = app
+        self.game = game
         self.ship = ship
         self.intent = Intent.IDLE  # Current state
         self.target_dict = {}  # Current target
@@ -45,7 +45,7 @@ class AutoTactician:
         """
         Evaluates the intent of the bot at the correct frequency
         """
-        dt = self.app.game_time.get_time_step()
+        dt = self.game.game_time.get_time_step()
         self.time_since_update += dt
         self.time_since_commitment += dt
         if (self.time_since_update >= INTENT_UPDATE_DELAY_S) and (
@@ -79,7 +79,7 @@ class AutoTactician:
         Finally, evaluates the intent of the bot with priorites
         """
         # Find current actor index of self
-        my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
 
         # Check if bot is threatened
         highest_threat_dict = self.evaluate_threats(my_actor_index)
@@ -130,11 +130,11 @@ class AutoTactician:
         - Holds self in cone of fire
         """
 
-        interact_mask = self.app.interactions.interact[my_actor_index, :]
-        distances = self.app.interactions.distances[my_actor_index, :]
+        interact_mask = self.game.interactions.interact[my_actor_index, :]
+        distances = self.game.interactions.distances[my_actor_index, :]
 
         # Is target aligned towards me ?
-        alignments = self.app.interactions.alignments[:, my_actor_index]
+        alignments = self.game.interactions.alignments[:, my_actor_index]
 
         # Distance contribution
         distance_scores = smooth_step_down(
@@ -157,7 +157,7 @@ class AutoTactician:
 
         highest_threat_dict = {
             "score": max_threat_score,
-            "target_id": self.app.interactions.actors[max_threat_score_idx].id,
+            "target_id": self.game.interactions.actors[max_threat_score_idx].id,
         }
 
         return highest_threat_dict
@@ -176,9 +176,9 @@ class AutoTactician:
 
         TODO: Add a multiplier bonus for targets threatening an ally and primary target
         """
-        interact_mask = self.app.interactions.interact[my_actor_index, :]
-        distances = self.app.interactions.distances[my_actor_index, :]
-        alignments = self.app.interactions.alignments[my_actor_index, :]
+        interact_mask = self.game.interactions.interact[my_actor_index, :]
+        distances = self.game.interactions.distances[my_actor_index, :]
+        alignments = self.game.interactions.alignments[my_actor_index, :]
 
         # Distance contribution
         distance_scores = smooth_step_down(
@@ -217,7 +217,7 @@ class AutoTactician:
 
         best_prey_dict = {
             "score": max_prey_score,
-            "target_id": self.app.interactions.actors[max_prey_score_idx].id,
+            "target_id": self.game.interactions.actors[max_prey_score_idx].id,
         }
 
         return best_prey_dict
@@ -252,12 +252,12 @@ class AutoTactician:
         n_actor_in_team = 0
         center = np.zeros(3)
         if team == "friends":
-            for actor in self.app.interactions.actors:
+            for actor in self.game.interactions.actors:
                 if actor.team == my_team and actor != self.ship:
                     center += actor.position
                     n_actor_in_team += 1
         elif team == "foes":
-            for actor in self.app.interactions.actors:
+            for actor in self.game.interactions.actors:
                 if actor.team != my_team and actor.team != 0:
                     center += actor.position
                     n_actor_in_team += 1

@@ -3,7 +3,6 @@ from typing import List
 
 import numpy as np
 from direct.interval.IntervalGlobal import Func, LerpFunc, Parallel, Sequence, Wait
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import CardMaker, TransparencyAttrib, Vec4
 
 from space_flight.fx.generic_fx_classes import Effect, EffectPool
@@ -18,12 +17,12 @@ SMOKE_DELAY_S = 0.5
 class ExplosionSmoke(Effect):
     def __init__(
         self,
-        app: ShowBase,
+        game,
         parent_pool: EffectPool,
         texture_pool: List,
         n_layer: int = 12,
     ):
-        Effect.__init__(self, app=app, parent_pool=parent_pool)
+        Effect.__init__(self, game=game, parent_pool=parent_pool)
 
         self.layers = []
 
@@ -88,7 +87,7 @@ class ExplosionSmoke(Effect):
             ),
             Func(self.release),
         )
-        self.app.interval_manager.play_interval(sequence)
+        self.game.interval_manager.play_interval(sequence)
 
 
 class ExplosionFire(Effect):
@@ -100,12 +99,12 @@ class ExplosionFire(Effect):
 
     def __init__(
         self,
-        app: ShowBase,
+        game,
         parent_pool: EffectPool,
         texture_pool: List,
         n_layer: int = 12,
     ):
-        Effect.__init__(self, app=app, parent_pool=parent_pool)
+        Effect.__init__(self, game=game, parent_pool=parent_pool)
 
         self.layers = []
 
@@ -168,4 +167,4 @@ class ExplosionFire(Effect):
             ),
             Func(self.release),
         )
-        self.app.interval_manager.play_interval(sequence)
+        self.game.interval_manager.play_interval(sequence)

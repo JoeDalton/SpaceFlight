@@ -30,9 +30,9 @@ class AutoNavigator:
     """
 
     def __init__(
-        self, app, ship, personality: dict = Personality.DEFAULT, debug: bool = False
+        self, game, ship, personality: dict = Personality.DEFAULT, debug: bool = False
     ):
-        self.app = app
+        self.game = game
         self.ship = ship
         self.waypoints = []
         self.next_waypoint_idx = 0
@@ -43,7 +43,7 @@ class AutoNavigator:
         self.behaviour = "idle"
         self.behaviour_duration_s = 0.0
         self.time_in_spiral_s = 0.0
-        self.last_update_time = self.app.game_time.get_current_time()
+        self.last_update_time = self.game.game_time.get_current_time()
 
         # DEBUG: choose an engaging strategy
         if ENGAGE_STRATEGY == "cap_blend":
@@ -90,7 +90,7 @@ class AutoNavigator:
 
         :param behaviour: A str describing the behaviour currently in play
         """
-        current_time = self.app.game_time.get_current_time()
+        current_time = self.game.game_time.get_current_time()
         if behaviour == self.behaviour:
             # Increment time since last navigator update
             self.behaviour_duration_s += current_time - self.last_update_time
@@ -130,9 +130,9 @@ class AutoNavigator:
             return NO_DIRECTION
 
         # Identify self and target in interactions
-        my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
         try:
-            target_actor_index = self.app.interactions.get_actor_index_from_id(
+            target_actor_index = self.game.interactions.get_actor_index_from_id(
                 target_dict["target_id"]
             )
         except ValueError:
@@ -144,11 +144,13 @@ class AutoNavigator:
             return NO_DIRECTION
 
         # Get necessary info from interactions and pre compute target properties
-        distance_m = self.app.interactions.distances[my_actor_index, target_actor_index]
-        direction = self.app.interactions.directions[
+        distance_m = self.game.interactions.distances[
+            my_actor_index, target_actor_index
+        ]
+        direction = self.game.interactions.directions[
             my_actor_index, target_actor_index, :
         ]
-        relative_speed_vector = self.app.interactions.rel_velocities[
+        relative_speed_vector = self.game.interactions.rel_velocities[
             my_actor_index, target_actor_index, :
         ]
         longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
@@ -331,7 +333,7 @@ class AutoNavigator:
         ):
             # Velocity condition met
             # Register time in spiral
-            current_time = self.app.game_time.get_current_time()
+            current_time = self.game.game_time.get_current_time()
             self.time_in_spiral_s += current_time - self.last_update_time
             # Result depends on time condition
             return (
@@ -418,9 +420,9 @@ class AutoNavigator:
             return NO_DIRECTION
 
         # Identify self and target in interactions
-        my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
         try:
-            target_actor_index = self.app.interactions.get_actor_index_from_id(
+            target_actor_index = self.game.interactions.get_actor_index_from_id(
                 target_dict["target_id"]
             )
         except ValueError:
@@ -431,14 +433,14 @@ class AutoNavigator:
                 )
             return NO_DIRECTION
 
-        distance = self.app.interactions.distances[my_actor_index, target_actor_index]
+        distance = self.game.interactions.distances[my_actor_index, target_actor_index]
 
         # Case where the target is at zero distance (Should not happen once ship-ship
         # collisions are implemented)
         if distance < TARGET_DISTANCE_TOLERANCE_M:
             return NO_DIRECTION
 
-        direction = self.app.interactions.directions[
+        direction = self.game.interactions.directions[
             my_actor_index, target_actor_index, :
         ]
 
@@ -563,9 +565,9 @@ class AutoNavigator:
             return NO_DIRECTION
 
         # Identify self and target in interactions
-        my_actor_index = self.app.interactions.get_actor_index_from_id(self.ship.id)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
         try:
-            target_actor_index = self.app.interactions.get_actor_index_from_id(
+            target_actor_index = self.game.interactions.get_actor_index_from_id(
                 target_dict["target_id"]
             )
         except ValueError:
@@ -577,14 +579,16 @@ class AutoNavigator:
             return NO_DIRECTION
 
         # Get necessary info from interactions and pre compute target properties
-        distance = self.app.interactions.distances[my_actor_index, target_actor_index]
-        direction = self.app.interactions.directions[
+        distance = self.game.interactions.distances[my_actor_index, target_actor_index]
+        direction = self.game.interactions.directions[
             my_actor_index, target_actor_index, :
         ]
-        relative_speed = self.app.interactions.rel_velocities[
+        relative_speed = self.game.interactions.rel_velocities[
             my_actor_index, target_actor_index, :
         ]
-        alignment = self.app.interactions.alignments[my_actor_index, target_actor_index]
+        alignment = self.game.interactions.alignments[
+            my_actor_index, target_actor_index
+        ]
         target_current_position = self.ship.position + distance * direction
         target_current_speed = self.ship.speed + relative_speed
 

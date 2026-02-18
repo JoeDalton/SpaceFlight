@@ -3,7 +3,6 @@ import logging
 import sys
 
 import numpy as np
-from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DEBUG_DELETION
 from space_flight.ai.auto_navigator import AutoNavigator
@@ -21,7 +20,7 @@ WAYPOINT_MEETING_TOLERANCE = 10
 class Bot(Destructible):
     def __init__(
         self,
-        app: ShowBase,
+        game,
         name: str,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
@@ -29,10 +28,10 @@ class Bot(Destructible):
         team: int = 0,
         debug_decisions: bool = False,
     ):
-        super().__init__(app=app)
+        super().__init__(game=game)
         self.name = name
         self.ship = Ship(
-            app=self.app,
+            game=self.game,
             parent=self,
             ship_type=ship_type,
             ini_position=ini_position,
@@ -41,29 +40,23 @@ class Bot(Destructible):
             team=team,
         )
 
-        self.pilot = AutoPilot(app=self.app, ship=self.ship)
+        self.pilot = AutoPilot(game=self.game, ship=self.ship)
         self.navigator = AutoNavigator(
-            app=self.app, ship=self.ship, debug=debug_decisions
+            game=self.game, ship=self.ship, debug=debug_decisions
         )
         self.tactician = AutoTactician(
-            app=self.app, ship=self.ship, debug=debug_decisions
+            game=self.game, ship=self.ship, debug=debug_decisions
         )
-        self.app.player.add_target(target=self.ship, name=self.name)
+        # TODO remove
+        self.game.player.add_target(target=self.ship, name=self.name)
         self.team = team
 
-        self.initialize_move()
+        self.add_task(method=self.move_bot_task)
 
         # Add self to the interacting actors
-        self.app.interactions.add_actor(self.ship)
+        self.game.interactions.add_actor(self.ship)
 
-    def initialize_move(self):
-        """
-        Initializes the player move task. Must be done after the
-        integrator task init
-        """
-        self.add_task(method=self.move_bot_task, task_name="move_bot_task")
-
-    def move_bot_task(self, task):
+    def move_bot_task(self):
         """
         Find how the bot should move:
         - The tactician decides which targets to point and the weights
@@ -88,7 +81,6 @@ class Bot(Destructible):
             pitch_rate=pitch_rate,
             roll_rate=roll_rate,
         )
-        return task.cont
 
     def get_health(self) -> float:
         """
@@ -117,7 +109,7 @@ class Bot(Destructible):
         Model spinning before explosing ? TODO
         """
         spawn_explosion(
-            app=self.app,
+            game=self.game,
             position=self.ship.position,
             scale=self.ship.explosion_scale,
             speed=self.ship.speed,
@@ -132,8 +124,8 @@ class Bot(Destructible):
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaning bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
-        self.app.player.remove_target(target_to_remove=self.ship)
-        self.app.interactions.remove_actor(self.ship)
+        self.game.player.remove_target(target_to_remove=self.ship)
+        self.game.interactions.remove_actor(self.ship)
         self.pilot.clean()
         self.pilot = None
         self.navigator.clean()
@@ -154,7 +146,7 @@ class Bot(Destructible):
 
 
 def spawn_bot(
-    app: ShowBase,
+    game,
     name: str,
     ship_type: str,
     ini_position: np.ndarray = np.zeros(3),
@@ -164,7 +156,7 @@ def spawn_bot(
     debug_decisions: bool = False,
 ) -> Bot:
     bot = Bot(
-        app=app,
+        game=game,
         name=name,
         ship_type=ship_type,
         ini_position=ini_position,
@@ -173,11 +165,11 @@ def spawn_bot(
         debug_decisions=debug_decisions,
     )
     if has_debug_trihedron:
-        Trihedron(app=app, parent=bot.ship.node, scale=1)
+        Trihedron(game=game, parent=bot.ship.node, scale=1)
 
     # Debug
-    # bot.ship.health = 100000
-    # bot.ship.shield = 1000.0
-    # bot.ship.shield_regen_rate = 1000.0
+    bot.ship.health = 1.1
+    bot.ship.shield = 0.0
+    bot.ship.shield_regen_rate = 0.0
 
     return bot

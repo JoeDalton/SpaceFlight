@@ -70,25 +70,25 @@ class CollisionLayers:
 
 
 class CollisionSystem:
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, game):
+        self.game = game
         self.traverser = CollisionTraverser()
         if DEBUG_COLLISION:
-            self.traverser.showCollisions(self.app.render)
+            self.traverser.showCollisions(self.game.app.render)
         self.handler = CollisionHandlerEvent()
         self.handler.addInPattern("%fn-into-%in")
 
-        self.app.accept("laser-into-ship", self.laser_into_destructible)
-        self.app.accept("laser-into-terrain", self.laser_into_terrain)
-        self.app.accept("ship-into-terrain", self.ship_into_terrain)
-        self.app.accept("ship-into-ship", self.ship_into_ship)
+        self.game.app.accept("laser-into-ship", self.laser_into_destructible)
+        self.game.app.accept("laser-into-terrain", self.laser_into_terrain)
+        self.game.app.accept("ship-into-terrain", self.ship_into_terrain)
+        self.game.app.accept("ship-into-ship", self.ship_into_ship)
 
     def update_collisions(self):
         """
         Compute collisions via panda3d internal methods
         is tiggers the "%fn-into-%in" events
         """
-        self.traverser.traverse(self.app.render)
+        self.traverser.traverse(self.game.app.render)
 
     def laser_into_destructible(self, entry):
         """
@@ -127,14 +127,14 @@ class CollisionSystem:
         laser.shot.removeNode()
 
         # Apply hit effect depending on player or bot
-        if destructible_id == self.app.player.ship.id:
+        if destructible_id == self.game.player.ship.id:
             relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-            self.app.sfx.impact_hit_on_player(relative_hit_point=relative_hit_point)
+            self.game.sfx.impact_hit_on_player(relative_hit_point=relative_hit_point)
         else:
             # TODO: Mute bots shooting on bots ?
             # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
             # TODO: Add a hit sprite
-            self.app.sfx.distant_impact_hit(
+            self.game.sfx.distant_impact_hit(
                 hit_pos=entry.into_node_path.parent.getPos(), impact_type="target"
             )
 
@@ -159,7 +159,7 @@ class CollisionSystem:
                 )
             return
 
-        self.app.sfx.distant_impact_hit(
+        self.game.sfx.distant_impact_hit(
             hit_pos=entry.into_node_path.parent.getPos(), impact_type="terrain"
         )
 

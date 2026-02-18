@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Callable, List
 
 from space_flight import DEBUG_DELETION
@@ -11,27 +12,26 @@ class Destructible:
     A class for destructible objects in the simulation
     """
 
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, game):
+        self.game = game
         self.tasks = []
-        self.app.destructibles.alive_objects.append(self)
+        self.id = uuid.uuid4()
+        self.game.destructibles.alive_objects.append(self)
+        self.game.actor_methods[self.id] = []
 
-    def add_task(self, method: Callable, task_name: str):
+    def add_task(self, method: Callable):
         """
         Add a task linked to this object
 
-        :param method: the method to be called by the task
-        :param task_name: The name of the task
+        :param method: the method to be called
         """
-        self.tasks.append(self.app.taskMgr.add(method, task_name))
+        self.game.actor_methods[self.id].append(method)
 
     def clear_tasks(self):
         """
         Remove all tasks linked to this object
         """
-        for task in self.tasks:
-            self.app.taskMgr.remove(task)
-        self.tasks = []
+        self.game.actor_methods.pop(self.id)
 
     def clean(self):
         """

@@ -10,11 +10,11 @@ class Effect(NodePath):
     A generic class for effects
     """
 
-    def __init__(self, app, parent_pool):
+    def __init__(self, game, parent_pool):
         NodePath.__init__(self, "explosion_smoke")
-        self.app = app
+        self.game = game
         self.parent_pool = parent_pool
-        self.reparentTo(app.render)
+        self.reparentTo(game.app.render)
 
     def play(self):
         raise NotImplementedError
@@ -35,7 +35,7 @@ class Effect(NodePath):
             fromData=0.0,
             toData=1.0,
         )
-        self.app.interval_manager.play_interval(traj)
+        self.game.interval_manager.play_interval(traj)
 
     def trajectory(self, t):
         """
@@ -53,9 +53,9 @@ class Effect(NodePath):
 
 class EffectPool:
     def __init__(
-        self, app, texture_directory: Path, effect_class: Effect, initialize_size=20
+        self, game, texture_directory: Path, effect_class: Effect, initialize_size=20
     ):
-        self.app = app
+        self.game = game
         self.build_texture_pool(texture_directory)
         self.free = []
         self.used = []
@@ -63,7 +63,7 @@ class EffectPool:
 
         for _ in range(initialize_size):
             effect = effect_class(
-                app=app, parent_pool=self, texture_pool=self.texture_pool
+                game=game, parent_pool=self, texture_pool=self.texture_pool
             )
             self.free.append(effect)
 
@@ -73,7 +73,7 @@ class EffectPool:
         else:
             # Grow pool if it is exhausted
             effect = self.effect_class(
-                app=self.app, parent_pool=self, texture_pool=self.texture_pool
+                game=self.game, parent_pool=self, texture_pool=self.texture_pool
             )
         effect.play(position=position, scale=scale, speed=speed)
         self.used.append(effect)
@@ -89,4 +89,4 @@ class EffectPool:
         texture_files = list(texture_directory.glob(pattern))
         self.texture_pool = []
         for file in texture_files:
-            self.texture_pool.append(self.app.loader.loadTexture(file))
+            self.texture_pool.append(self.game.app.loader.loadTexture(file))

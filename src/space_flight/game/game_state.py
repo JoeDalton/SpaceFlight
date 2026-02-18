@@ -32,7 +32,7 @@ class GameState(BaseState):
         """
         Initialize sound system
         """
-        self.sfx = SFX(app=self.app)
+        self.sfx = SFX(game=self)
         # music = self.loader.loadMusic(
         # DATAFILES_PATH / "sounds/music_Koyaanisqatsi.mp3"
         # )
@@ -42,13 +42,13 @@ class GameState(BaseState):
         """
         Initialize special effects
         """
-        load_explosion_effect_pools(app=self.app)
+        load_explosion_effect_pools(game=self)
 
         """
         Initialize Collision system and Destructibles
         """
         self.destructibles = Destructibles()
-        self.collision_system = CollisionSystem(app=self.app)
+        self.collision_system = CollisionSystem(game=self)
 
         """
         Initialize interaction compute between ships
@@ -107,7 +107,7 @@ class GameState(BaseState):
             np.array([-wp_distance, 0, 0]),
         ]
         self.lead_bot = spawn_bot(
-            app=self.app,
+            game=self,
             name="lead_2",
             ship_type="tie-interceptor",
             ini_position=np.array([0, -50, 2]),
@@ -117,44 +117,44 @@ class GameState(BaseState):
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        # self.chase_bot = spawn_bot(
+        # # self.chase_bot = spawn_bot(
+        # #     app=self.app,
+        # #     name="chase_1",
+        # #     ship_type="a-wing",
+        # #     ini_position=np.array([0, -2000, -0]),
+        # #     has_debug_trihedron=True,
+        # #     team=1,
+        # #     debug_decisions=True,
+        # # )
+
+        # self.scape_goat = spawn_bot(
         #     app=self.app,
-        #     name="chase_1",
-        #     ship_type="a-wing",
-        #     ini_position=np.array([0, -2000, -0]),
+        #     name="scape_goat",
+        #     ship_type="x-wing",
+        #     ini_position=np.array([11.8, -200, 0]),
         #     has_debug_trihedron=True,
-        #     team=1,
+        #     team=0,
         #     debug_decisions=True,
         # )
 
-        self.scape_goat = spawn_bot(
-            app=self.app,
-            name="scape_goat",
-            ship_type="x-wing",
-            ini_position=np.array([11.8, -200, 0]),
-            has_debug_trihedron=True,
-            team=0,
-            debug_decisions=True,
-        )
-
-        for _ in range(7):
-            spawn_bot(
-                app=self.app,
-                name="team_1",
-                ship_type="x-wing",
-                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-                has_debug_trihedron=True,
-                team=1,
-            )
-        for _ in range(5):
-            spawn_bot(
-                app=self.app,
-                name="team_2",
-                ship_type="tie-interceptor",
-                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-                has_debug_trihedron=True,
-                team=2,
-            )
+        # for _ in range(7):
+        #     spawn_bot(
+        #         app=self.app,
+        #         name="team_1",
+        #         ship_type="x-wing",
+        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+        #         has_debug_trihedron=True,
+        #         team=1,
+        #     )
+        # for _ in range(5):
+        #     spawn_bot(
+        #         app=self.app,
+        #         name="team_2",
+        #         ship_type="tie-interceptor",
+        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+        #         has_debug_trihedron=True,
+        #         team=2,
+        #     )
 
         """
         DEBUG
@@ -165,8 +165,8 @@ class GameState(BaseState):
         """
         HUD
         """
-        HUD(self.app)
-        TargetHUD(app=self.app)
+        HUD(game=self)
+        TargetHUD(game=self)
 
         """
         Launch music

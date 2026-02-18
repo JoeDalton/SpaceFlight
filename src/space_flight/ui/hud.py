@@ -1,6 +1,5 @@
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
-from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import aspect2d, render2d
 from panda3d.core import (
     CardMaker,
@@ -23,8 +22,8 @@ class HUD:
     simulation parameters on screen.
     """
 
-    def __init__(self, app: ShowBase):
-        self.app = app
+    def __init__(self, game):
+        self.game = game
 
         self.hud = TextNode("HUD")
         self.hud.setSmallCaps(True)
@@ -33,7 +32,7 @@ class HUD:
         self.hud_textNodePath = aspect2d.attachNewNode(self.hud)
         self.hud_textNodePath.setScale(0.07)
 
-        self.hud_textNodePath.reparentTo(self.app.a2dTopLeft)
+        self.hud_textNodePath.reparentTo(self.game.app.a2dTopLeft)
         self.hud_textNodePath.setPos(0.05, 0, -0.1)
 
         self.fps_counter = TextNode("HUD")
@@ -43,36 +42,30 @@ class HUD:
         self.fps_textNodePath = aspect2d.attachNewNode(self.fps_counter)
         self.fps_textNodePath.setScale(0.07)
 
-        self.fps_textNodePath.reparentTo(self.app.a2dTopRight)
+        self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
         self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
-        app.taskMgr.add(self.hud_update_task, "hud_update_task")
+        game.app.taskMgr.add(self.hud_update_task, "hud_update_task")
 
     def hud_update_task(self, task):
         """
         A task that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
         """
-        frame_rate = self.app.game_time.get_average_frame_rate()
+        frame_rate = self.game.game_time.get_average_frame_rate()
 
         player_text = (
             ""
-            # f"Cam Position = {self.app.camera.get_pos()}\n"
-            # f"Cam Orientation = {self.app.camera.get_hpr()}\n"
-            # f"Player Position = {self.app.player.ship.state[0:3]}\n"
-            # f"Player Orientation = {self.app.player.ship.state[3:7]}\n"
             "Player Speed = "
-            f"{np.linalg.norm(self.app.player.ship.state[7:10]):.1f}m/s\n"
-            f"Player health = {self.app.player.ship.health:.1f}\n"
-            f"Player shield = {self.app.player.ship.shield:.1f}\n"
-            # f"Player Rot. rate = {np.rad2deg(self.app.player.ship.pqr)}\n"
-            # f"Player Thrust = {self.app.player.ship.scalar_thrust}\n"
-            f"Time = {self.app.game_time.get_current_time():.0f}\n"
+            f"{np.linalg.norm(self.game.player.ship.state[7:10]):.1f}m/s\n"
+            f"Player health = {self.game.player.ship.health:.1f}\n"
+            f"Player shield = {self.game.player.ship.shield:.1f}\n"
+            f"Time = {self.game.game_time.get_current_time():.0f}\n"
         )
         try:
             bot_text = (
                 "Lead Bot angle to target = "
-                f"{self.app.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
+                f"{self.game.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
                 # f"Bot target_x = {self.app.bot.pilot.target_x}\n"
                 # f"Bot target_y = {self.app.bot.pilot.target_y}\n"
                 # f"Bot target_z = {self.app.bot.pilot.target_z}\n"
@@ -86,24 +79,20 @@ class HUD:
                 # f"pitch_rate = {self.app.bot.pilot.pitch_rate}\n"
                 # f"roll_rate = {self.app.bot.pilot.roll_rate}\n"
                 "Lead Bot health = "
-                f"{self.app.lead_bot.ship.health:.1f}\n"
+                f"{self.game.lead_bot.ship.health:.1f}\n"
                 "Lead Bot shield = "
-                f"{self.app.lead_bot.ship.shield:.1f}\n"
+                f"{self.game.lead_bot.ship.shield:.1f}\n"
                 "Lead Bot throttle = "
-                f"{self.app.lead_bot.pilot.throttle:.4f}\n"
-                # f"Next waypoint idx = {self.app.bot.next_waypoint_idx}\n"
+                f"{self.game.lead_bot.pilot.throttle:.4f}\n"
                 "Lead Bot Speed = "
-                f"{np.linalg.norm(self.app.lead_bot.ship.state[7:10]):.1f}m/s\n"
-                # "Lead Bot distance to waypoint = "
-                # f"{self.app.lead_bot.navigator.distance_to_waypoint_m:.1f}m\n"
-                # f"Bot position = {self.app.bot2.ship.state[:3]}\n"
+                f"{np.linalg.norm(self.game.lead_bot.ship.state[7:10]):.1f}m/s\n"
                 "\n"
                 "Chase Bot angle to target = "
-                f"{self.app.chase_bot.pilot.angle_to_target_deg:.1f}°\n"
+                f"{self.game.chase_bot.pilot.angle_to_target_deg:.1f}°\n"
                 "Chase Bot throttle = "
-                f"{self.app.chase_bot.pilot.throttle:.4f}\n"
+                f"{self.game.chase_bot.pilot.throttle:.4f}\n"
                 "Chase Bot Speed = "
-                f"{np.linalg.norm(self.app.chase_bot.ship.state[7:10]):.1f}m/s\n"
+                f"{np.linalg.norm(self.game.chase_bot.ship.state[7:10]):.1f}m/s\n"
             )
         except AttributeError:
             bot_text = ""
@@ -117,10 +106,10 @@ class HUD:
 
 
 class TargetHUD:
-    def __init__(self, app: ShowBase):
+    def __init__(self, game):
         # TODO use Interactions instead of a player target list.
         # Allow filtering on team
-        self.app = app
+        self.game = game
         self.target_idx = 0
         self.target = None
 
@@ -137,7 +126,7 @@ class TargetHUD:
 
         self.square = NodePath(cm.generate())
         self.square.setTexture(
-            self.app.loader.loadTexture(
+            self.game.app.loader.loadTexture(
                 DATAFILES_PATH / "models/UI/target_indicator_white.png"
             )
         )
@@ -164,7 +153,7 @@ class TargetHUD:
         )
 
         # TODO: This should be in "input_system"
-        app.taskMgr.add(self.target_hud_update_task, "target_hud_update_task")
+        game.app.taskMgr.add(self.target_hud_update_task, "target_hud_update_task")
 
         # Make sure the targeting HUD is rendered above other UI things
         self.square.setDepthTest(False)
@@ -180,7 +169,9 @@ class TargetHUD:
         self.name_label.setBin("fixed", 10)
 
         # TODO: This should be in "input_system"
-        self.app.accept(self.app.key_bindings["switch_target"], self.switch_target)
+        self.game.app.accept(
+            self.game.key_bindings["switch_target"], self.switch_target
+        )
 
     def target_hud_update_task(self, task):
         if self.target is None:
@@ -198,10 +189,10 @@ class TargetHUD:
             self.name_label.show()
             self.square.show()
 
-            cam = self.app.cam
-            lens = self.app.camLens
+            cam = self.game.app.cam
+            lens = self.game.app.camLens
 
-            aspect = self.app.getAspectRatio()
+            aspect = self.game.app.getAspectRatio()
             self.aspect.setScale(1, 1, aspect)
 
             # World position of target
@@ -209,7 +200,7 @@ class TargetHUD:
             world_pos = Point3(*target_pos)
 
             # Convert to camera space
-            cam_space_pos = cam.getRelativePoint(self.app.render, world_pos)
+            cam_space_pos = cam.getRelativePoint(self.game.app.render, world_pos)
             screen_pos = Point2()
             lens.project(cam_space_pos, screen_pos)
 
@@ -238,14 +229,18 @@ class TargetHUD:
             self.root.setPos(indic_x, 0, indic_z)
 
             # Find distance and write it below the box
-            distance = (world_pos - self.app.camera.getPos(self.app.render)).length()
+            distance = (
+                world_pos - self.game.app.camera.getPos(self.game.app.render)
+            ).length()
             self.distance_label["text"] = f"{int(distance/10)*10} m"
 
         return task.cont
 
     def switch_target(self):
-        self.target_idx = (self.target_idx + 1) % len(self.app.player.available_targets)
-        target_dict = self.app.player.available_targets[self.target_idx]
+        self.target_idx = (self.target_idx + 1) % len(
+            self.game.player.available_targets
+        )
+        target_dict = self.game.player.available_targets[self.target_idx]
         target, target_name = list(target_dict.items())[0]
         self.set_target(target=target, target_name=target_name)
 

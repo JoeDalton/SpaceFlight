@@ -28,16 +28,16 @@ random.seed(1)
 
 
 class SFX:
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, game):
+        self.game = game
         self.audio3d = Audio3DManager.Audio3DManager(
-            self.app.sfxManagerList[0], self.app.camera
+            self.game.app.sfxManagerList[0], self.game.app.camera
         )
         self.audio3d.setDopplerFactor(10.0)
         self.audio3d.setDistanceFactor(0.1)
-        self.audio3d.attachListener(self.app.camera)
+        self.audio3d.attachListener(self.game.app.camera)
         self.audio3d.setListenerVelocityAuto()
-        self.app.taskMgr.add(self.update_task, "AudioUpdate")
+        self.game.app.taskMgr.add(self.update_task, "AudioUpdate")
 
         # Load sounds
 
@@ -76,7 +76,7 @@ class SFX:
             if is_3d:
                 sound = self.get_3d_sound(sound_file)
             else:
-                sound = self.app.loader.loadSfx(sound_file)
+                sound = self.game.app.loader.loadSfx(sound_file)
             sound_pool.append(sound)
         return sound_pool
 
@@ -100,7 +100,7 @@ class SFX:
 
         """
         # Set the volume according to the distance fromm the impact to the player
-        impact_distance = np.linalg.norm(hit_pos - self.app.player.ship.position)
+        impact_distance = np.linalg.norm(hit_pos - self.game.player.ship.position)
         # Ignore distant events
         if impact_distance > MAX_SOUND_DISTANCE_M:
             return
@@ -136,10 +136,10 @@ class SFX:
         multiplier = PLAYER_HIT_SOUND_MULTIPLIER
 
         # Create ad-hoc dummy node to place the sound
-        dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
+        dummy_node = self.game.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)  # slightly to the right
         # Delete it in the near future
-        self.app.delayed_methods.do_method_later(
+        self.game.delayed_methods.do_method_later(
             delay_s=SFX_MAX_SOUND_DURATION_S,
             name="remove_player_hit_sound_node",
             method=dummy_node.remove_node,
@@ -153,7 +153,7 @@ class SFX:
                 # Randomize the pitch of the sound to get a more realistic feeling
                 sound.setPlayRate(random.uniform(0.9, 1.1))
                 # Attach sound to the camera
-                self.app.sfx.audio3d.attachSoundToObject(sound, dummy_node)
+                self.audio3d.attachSoundToObject(sound, dummy_node)
                 sound.setVolume(multiplier)
                 sound.play()
                 break
