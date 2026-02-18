@@ -47,86 +47,9 @@ class SplashState(BaseState):
         ]
 
         self.progress_bar = ProgressBar(app=self.app, parent=self.splash, blurbs=blurbs)
-        # List of assets to load
-        self.assets_to_load = [
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-            ("model", "models/ship.bam"),
-            ("model", "models/station.bam"),
-            ("texture", "textures/space.png"),
-            ("texture", "textures/ui.png"),
-        ]
 
-        self.loaded_assets = {}
-        self.total_assets = len(self.assets_to_load)
-
-        # Start loading task
-        self.app.taskMgr.add(self.load_assets_task_placeholder, "load-assets-task")
-
-    def load_assets_task(self, task):
-        if not self.assets_to_load:
-            # Done loading
-            self.app.taskMgr.remove("load-assets-task")
-            self.on_loading_finished()
-            return task.done
-
-        asset_type, path = self.assets_to_load.pop(0)
-
-        if asset_type == "model":
-            self.loaded_assets[path] = self.app.loader.loadModel(path)
-
-        elif asset_type == "texture":
-            self.loaded_assets[path] = self.app.loader.loadTexture(path)
-
-        # Update progress
-        progress = (self.total_assets - len(self.assets_to_load)) / self.total_assets
-        self.progress_bar["value"] = progress * 100
-
-        return task.cont
-
-    def load_assets_task_placeholder(self, task):
-        # simulate delay without blocking
-        if not hasattr(task, "next_load_time"):
-            task.next_load_time = task.time + 0.01
-
-        if task.time < task.next_load_time:
-            return task.cont
-
-        if not self.assets_to_load:
-            self.app.taskMgr.remove("load-assets-task")
-            self.on_loading_finished()
-            return task.done
-
-        asset_type, path = self.assets_to_load.pop(0)
-
-        progress = (self.total_assets - len(self.assets_to_load)) / self.total_assets
-
-        self.progress_bar.update(value=progress)
-
-        task.next_load_time = task.time + 0.01
-        return task.cont
+        # Start loading assets
+        self.app.asset_manager.load_game_assets(app_state=self)
 
     def on_loading_finished(self):
         self.sequence = Sequence(self.splash.colorScaleInterval(0.5, (1, 1, 1, 0)))
@@ -144,7 +67,7 @@ class SplashState(BaseState):
         self.splash.destroy()
         old_win = self.app.win
         self.app.closeWindow(old_win)
-        sleep(0.5)  # TODO: cleaner version ? A clear cut between windows is nicer
+        sleep(0.3)  # TODO: cleaner version ? A clear cut between windows is nicer
         # than the flicker that happens without it
         props = WindowProperties()
         props.setUndecorated(False)

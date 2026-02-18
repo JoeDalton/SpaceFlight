@@ -1,5 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 
+from space_flight.fx.sfx import SFX
+from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.splash.splash_state import SplashState
 
 
@@ -22,6 +24,8 @@ class SpaceFlightSimulator(ShowBase):
         self.disableMouse()
 
         self.state_manager = StateManager(self)
+        self.asset_manager = AssetManager(app=self)
+        self.sfx = SFX(app=self)
 
         # Start with splash screen
         self.state_manager.change_state(SplashState)

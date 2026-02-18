@@ -28,39 +28,16 @@ random.seed(1)
 
 
 class SFX:
-    def __init__(self, game):
-        self.game = game
+    def __init__(self, app):
+        self.app = app
         self.audio3d = Audio3DManager.Audio3DManager(
-            self.game.app.sfxManagerList[0], self.game.app.camera
+            self.app.sfxManagerList[0], self.app.camera
         )
         self.audio3d.setDopplerFactor(10.0)
         self.audio3d.setDistanceFactor(0.1)
-        self.audio3d.attachListener(self.game.app.camera)
+        self.audio3d.attachListener(self.app.camera)
         self.audio3d.setListenerVelocityAuto()
-        self.game.app.taskMgr.add(self.update_task, "AudioUpdate")
-
-        # Load sounds
-
-        # Lasers hitting player
-        self.player_hit_sound_pool = self.build_sound_pool(
-            directory=DATAFILES_PATH / "sounds/impacts/laser_on_player",
-            pattern="*.wav",
-            is_3d=True,
-        )
-
-        # Lasers hitting targets in the distance
-        self.distant_target_hit_sound_pool = self.build_sound_pool(
-            directory=DATAFILES_PATH / "sounds/impacts/laser_distant_on_target",
-            pattern="*.wav",
-            is_3d=False,
-        )
-
-        # Lasers hitting terrain
-        self.terrain_hit_sound_pool = self.build_sound_pool(
-            directory=DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock",
-            pattern="*.wav",
-            is_3d=False,
-        )
+        self.app.taskMgr.add(self.update_task, "AudioUpdate")
 
     def build_sound_pool(self, directory: Path, pattern: str, is_3d: bool) -> List[str]:
         """
@@ -76,7 +53,7 @@ class SFX:
             if is_3d:
                 sound = self.get_3d_sound(sound_file)
             else:
-                sound = self.game.app.loader.loadSfx(sound_file)
+                sound = self.app.loader.loadSfx(sound_file)
             sound_pool.append(sound)
         return sound_pool
 
@@ -89,18 +66,32 @@ class SFX:
         """
         return self.audio3d.loadSfx(sound_file)
 
-    def distant_impact_hit(self, hit_pos: np.ndarray, impact_type: str):
+    def get_sounds_from_asset_manager(self):
+        self.player_hit_sound_pool = self.app.asset_manager.assets[
+            DATAFILES_PATH / "sounds/impacts/laser_on_player"
+        ]
+        self.distant_target_hit_sound_pool = self.app.asset_manager.assets[
+            DATAFILES_PATH / "sounds/impacts/laser_distant_on_target"
+        ]
+        self.terrain_hit_sound_pool = self.app.asset_manager.assets[
+            DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock"
+        ]
+
+    def distant_impact_hit(
+        self, player_ship_pos: np.ndarray, hit_pos: np.ndarray, impact_type: str
+    ):
         """
         Play an impact sound where the impact took place
 
         TODO: add pitch randmoness for variation ?
 
+        :param player_ship_pos: The location of the player
         :param hit_pos: The location of impact
         :param impact_type: The type of impact (target, terrain, etc.)
 
         """
         # Set the volume according to the distance fromm the impact to the player
-        impact_distance = np.linalg.norm(hit_pos - self.game.player.ship.position)
+        impact_distance = np.linalg.norm(hit_pos - player_ship_pos)
         # Ignore distant events
         if impact_distance > MAX_SOUND_DISTANCE_M:
             return
@@ -126,7 +117,7 @@ class SFX:
                 sound.play()
                 break
 
-    def impact_hit_on_player(self, relative_hit_point: np.ndarray):
+    def impact_hit_on_player(self, game, relative_hit_point: np.ndarray):
         """
         Play a random impact sound where the impact took place
 
@@ -136,10 +127,10 @@ class SFX:
         multiplier = PLAYER_HIT_SOUND_MULTIPLIER
 
         # Create ad-hoc dummy node to place the sound
-        dummy_node = self.game.app.camera.attachNewNode("player_hit_sound_node")
+        dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)  # slightly to the right
         # Delete it in the near future
-        self.game.delayed_methods.do_method_later(
+        game.delayed_methods.do_method_later(
             delay_s=SFX_MAX_SOUND_DURATION_S,
             name="remove_player_hit_sound_node",
             method=dummy_node.remove_node,

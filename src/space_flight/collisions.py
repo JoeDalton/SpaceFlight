@@ -129,13 +129,17 @@ class CollisionSystem:
         # Apply hit effect depending on player or bot
         if destructible_id == self.game.player.ship.id:
             relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-            self.game.sfx.impact_hit_on_player(relative_hit_point=relative_hit_point)
+            self.game.app.sfx.impact_hit_on_player(
+                game=self.game, relative_hit_point=relative_hit_point
+            )
         else:
             # TODO: Mute bots shooting on bots ?
             # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
             # TODO: Add a hit sprite
-            self.game.sfx.distant_impact_hit(
-                hit_pos=entry.into_node_path.parent.getPos(), impact_type="target"
+            self.game.app.sfx.distant_impact_hit(
+                player_ship_pos=self.game.player.ship.position,
+                hit_pos=entry.into_node_path.parent.getPos(),
+                impact_type="target",
             )
 
     def laser_into_terrain(self, entry):
@@ -159,8 +163,10 @@ class CollisionSystem:
                 )
             return
 
-        self.game.sfx.distant_impact_hit(
-            hit_pos=entry.into_node_path.parent.getPos(), impact_type="terrain"
+        self.game.app.sfx.distant_impact_hit(
+            player_ship_pos=self.game.player.ship.position,
+            hit_pos=entry.into_node_path.parent.getPos(),
+            impact_type="terrain",
         )
 
         # Delete laser

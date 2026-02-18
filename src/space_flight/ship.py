@@ -142,15 +142,15 @@ class Ship:
 
         # Initialize engine sound for bot ships
         if self.parent.name != "player":
-            self.sound = self.game.sfx.get_3d_sound(
+            self.sound = self.game.app.sfx.get_3d_sound(
                 str(DATAFILES_PATH / "sounds/engines/tie_fighter/tie_scream_med.wav")
             )
             self.sound.setLoop(True)
             self.sound.setVolume(10.0)
-            self.game.sfx.audio3d.attachSoundToObject(self.sound, self.node)
+            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
 
             # Automatic velocity tracking
-            self.game.sfx.audio3d.setSoundVelocityAuto(self.node)
+            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
 
             # TODO Doppler does not seem to work great
             self.game.delayed_methods.do_method_later(
@@ -397,7 +397,7 @@ class Ship:
         self.collision_sphere_np.remove_node()
         self.collision_sphere_np = None
         self.sound.stop()
-        self.game.sfx.audio3d.detachSound(self.sound)
+        self.game.app.sfx.audio3d.detachSound(self.sound)
         self.sound = None
         self.node.remove_node()
         self.node = None

@@ -5,7 +5,6 @@ from space_flight.bot import spawn_bot
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
 from space_flight.fx import load_explosion_effect_pools
-from space_flight.fx.sfx import SFX
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -32,7 +31,7 @@ class GameState(BaseState):
         """
         Initialize sound system
         """
-        self.sfx = SFX(game=self)
+        self.app.sfx.get_sounds_from_asset_manager()
         # music = self.loader.loadMusic(
         # DATAFILES_PATH / "sounds/music_Koyaanisqatsi.mp3"
         # )
@@ -117,44 +116,44 @@ class GameState(BaseState):
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        # # self.chase_bot = spawn_bot(
-        # #     app=self.app,
-        # #     name="chase_1",
-        # #     ship_type="a-wing",
-        # #     ini_position=np.array([0, -2000, -0]),
-        # #     has_debug_trihedron=True,
-        # #     team=1,
-        # #     debug_decisions=True,
-        # # )
+        self.chase_bot = spawn_bot(
+            game=self,
+            name="chase_1",
+            ship_type="a-wing",
+            ini_position=np.array([0, -2000, -0]),
+            has_debug_trihedron=True,
+            team=1,
+            debug_decisions=True,
+        )
 
-        # self.scape_goat = spawn_bot(
-        #     app=self.app,
-        #     name="scape_goat",
-        #     ship_type="x-wing",
-        #     ini_position=np.array([11.8, -200, 0]),
-        #     has_debug_trihedron=True,
-        #     team=0,
-        #     debug_decisions=True,
-        # )
+        self.scape_goat = spawn_bot(
+            game=self,
+            name="scape_goat",
+            ship_type="x-wing",
+            ini_position=np.array([11.8, -200, 0]),
+            has_debug_trihedron=True,
+            team=0,
+            debug_decisions=True,
+        )
 
-        # for _ in range(7):
-        #     spawn_bot(
-        #         app=self.app,
-        #         name="team_1",
-        #         ship_type="x-wing",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=1,
-        #     )
-        # for _ in range(5):
-        #     spawn_bot(
-        #         app=self.app,
-        #         name="team_2",
-        #         ship_type="tie-interceptor",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=2,
-        #     )
+        for _ in range(7):
+            spawn_bot(
+                game=self,
+                name="team_1",
+                ship_type="x-wing",
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+                has_debug_trihedron=True,
+                team=1,
+            )
+        for _ in range(5):
+            spawn_bot(
+                game=self,
+                name="team_2",
+                ship_type="tie-interceptor",
+                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+                has_debug_trihedron=True,
+                team=2,
+            )
 
         """
         DEBUG
@@ -198,10 +197,12 @@ class GameState(BaseState):
         # Find all collisions
         self.collision_system.update_collisions()
         # Compute interactions between actors
+        # TODO Could be parallelized from python 3.14 ?
         self.interactions.update_interactions()
         # Advance time
         self.integrator.step()
         # Run the update tasks of all actors
+        # TODO Could be parallelized from python 3.14 ?
         for method_list in self.actor_methods.values():
             for method in method_list:
                 method()

@@ -53,7 +53,7 @@ class LaserCannon:
         sound_file = DATAFILES_PATH / self.parent_ship.conf["laser_sound"]
         if sound_file != "none":
             self.sound_pool = [
-                self.game.sfx.audio3d.loadSfx(sound_file) for _ in range(20)
+                self.game.app.sfx.audio3d.loadSfx(sound_file) for _ in range(20)
             ]
 
         # Prepare laser model
@@ -117,7 +117,7 @@ class LaserCannon:
                 # Randomize the pitch of the sound to get a more realistic feeling
                 sound.setPlayRate(random.uniform(0.9, 1.1))
                 # Attach sound to the cannon currently firing
-                self.game.sfx.audio3d.attachSoundToObject(
+                self.game.app.sfx.audio3d.attachSoundToObject(
                     sound, self.cannon_nodes[self.current_next_cannon_idx]
                 )
                 sound.play()
