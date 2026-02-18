@@ -1,8 +1,8 @@
 import random
+import uuid
 
 import numpy as np
 import quaternion
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Quat
 
 from space_flight import DATAFILES_PATH
@@ -29,22 +29,23 @@ class AsteroidField:
 
     def __init__(
         self,
-        app: ShowBase,
+        game,
         n_asteroids: int = 40,
         field_size: float = 200,
         scale_factor: float = 1.0,
         is_moving: bool = True,
     ):
-        self.app = app
+        self.game = game
+        self.id = uuid.uuid4()
         self.n_asteroids = n_asteroids
         self.asteroids = []
 
         # Load 3D models
         asteroid_models = [
-            self.app.loader.load_model(
+            self.game.app.loader.load_model(
                 DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf"
             ),
-            self.app.loader.load_model(
+            self.game.app.loader.load_model(
                 DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf"
             ),
         ]
@@ -60,7 +61,7 @@ class AsteroidField:
         # Initialize instances of asteroids
         for ast_idx in range(self.n_asteroids):
             asteroid_model = random.choice(asteroid_models)
-            instance = self.app.render.attachNewNode("asteroid_instance")
+            instance = self.game.app.render.attachNewNode("asteroid_instance")
             asteroid_model.instanceTo(instance)
 
             # Set initial position
@@ -88,7 +89,7 @@ class AsteroidField:
             # Initialize collisions
             hit_box_radius_m = 1.2
             self.collision_sphere_np = attach_collision_sphere(
-                app=self.app,
+                game=self.game,
                 name="terrain",
                 radius=hit_box_radius_m,
                 collider_type="terrain",
@@ -103,19 +104,12 @@ class AsteroidField:
         if self.is_moving:
             self.compute_derivatives()
             self.state_dot_previous = self.state_dot.copy()
-            self.integrator_idx = self.app.integrator.set_state_variables(
+            self.integrator_idx = self.game.integrator.set_state_variables(
                 partial_x=self.state,
                 partial_x_dot=self.state_dot,
                 partial_x_dot_previous=self.state_dot_previous,
             )
-
-    def initialize_move(self):
-        """
-        Initializes the asteroids move task. Must be done after the
-        integrator's task initialization.
-        """
-        # Set update task for the asteroids' states
-        self.app.taskMgr.add(self.move_asteriods_task, "move_asteriods_task")
+            self.game.actor_methods[self.id] = [self.move_asteriods_task]
 
     def compute_derivatives(self):
         """
@@ -131,14 +125,14 @@ class AsteroidField:
                 quat_dot
             )
 
-    def move_asteriods_task(self, task):
+    def move_asteriods_task(self):
         """
         Gets the asteroids' states from the integrator and
         update rendered instances, then prepare the next
         integration step.
         """
         # Get states
-        self.state = self.app.integrator.get_state_variables(
+        self.state = self.game.integrator.get_state_variables(
             first_idx=self.integrator_idx,
             n_var=4 * self.n_asteroids,
         )
@@ -154,10 +148,8 @@ class AsteroidField:
 
         # Prepare next integration step
         self.compute_derivatives()
-        self.integrator_idx = self.app.integrator.set_state_variables(
+        self.integrator_idx = self.game.integrator.set_state_variables(
             partial_x=self.state,
             partial_x_dot=self.state_dot,
             partial_x_dot_previous=self.state_dot_previous,
         )
-
-        return task.cont

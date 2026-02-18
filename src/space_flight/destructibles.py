@@ -62,13 +62,10 @@ class Destructibles:
     A class to account for all destructible objects, and handle their deaths
     """
 
-    def __init__(self):  # , app):
-        # For some reason the task does not appear in the task manager but still runs...
-        # self.app = app
+    def __init__(self):
         self.alive_objects: List[Destructible] = []
-        self.app.taskMgr.add(self.handle_deaths_task, "Handle deaths")
 
-    def handle_deaths_task(self, task):
+    def handle_deaths(self):
         """
         Check the health of all destructible and kill them if necessary
         TODO Expensive ?
@@ -92,5 +89,3 @@ class Destructibles:
             destructible.clean()
         # Drop references to the dead objects
         newly_dead_objects = []
-
-        return task.cont

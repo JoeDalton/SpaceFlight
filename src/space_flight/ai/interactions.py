@@ -5,9 +5,6 @@ import numpy as np
 
 from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
 
-# from direct.showbase.ShowBase import ShowBase
-
-
 """
 Teams are defined as :
 Neutral bystanders in team 0
@@ -19,7 +16,6 @@ Foes in any team > 1
 class Interactions:
     def __init__(
         self,
-        # app: ShowBase,
         actors: List = [],
     ):
         """
@@ -28,7 +24,6 @@ class Interactions:
         :param app: The game object
         :param actors: A list containing all actors, defaults to []
         """
-        # self.app: ShowBase = app
         self.actors: List = actors
         self.n_actors: int = len(self.actors)
         self.actors_id_dict = {}
@@ -38,8 +33,6 @@ class Interactions:
         self.distances: np.ndarray = np.zeros((self.n_actors, self.n_actors))
         self.alignments: np.ndarray = np.zeros((self.n_actors, self.n_actors))
         self.rel_velocities: np.ndarray = np.zeros((self.n_actors, self.n_actors, 3))
-
-        self.app.taskMgr.add(self.interaction_update_task, "interactions_update")
 
     def add_actor(self, actor):
         """
@@ -131,7 +124,7 @@ class Interactions:
             raise ValueError(f"Actor {actor_id} is not in the actors' list")
         return actor_index
 
-    def interaction_update_task(self, task):
+    def update_interactions(self):
         """
         Computes the interaction between actors
 
@@ -210,5 +203,3 @@ class Interactions:
                     ]
                     alignment = np.dot(source_to_target_direction, source_forward)
                     self.alignments[idx_source, idx_target] = alignment
-
-        return task.cont

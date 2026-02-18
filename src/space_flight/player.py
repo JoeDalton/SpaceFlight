@@ -1,7 +1,7 @@
+import uuid
 from typing import Callable
 
 import numpy as np
-from direct.showbase.ShowBase import ShowBase
 
 from space_flight.ship import Ship
 from space_flight.ui.input_system import input_system_factory
@@ -20,22 +20,26 @@ IMPACT_FEELING_FACTOR = 100
 class Player:
     def __init__(
         self,
-        app: ShowBase,
+        game,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         is_neutral: bool = False,
     ):
-        self.app = app
+        self.game = game
         self.name = "player"
-        self.tasks = []
+        self.id = uuid.uuid4()
         if is_neutral:
             team = 0
         else:
             team = 1
 
+        # Add update mehods to the game's update methods list
+        self.game.actor_methods[self.id] = []
+        self.add_task(method=self.move_player)
+
         self.ship = Ship(
-            app=self.app,
+            game=self.game,
             parent=self,
             ship_type=ship_type,
             ini_position=ini_position,
@@ -43,8 +47,10 @@ class Player:
             is_cockpit=True,
             team=team,
         )
-        self.input_system = input_system_factory(app=self.app, player=self)
-        self.rear_view_mirror = RearViewMirror(app=self.app, player_node=self.ship.node)
+        self.input_system = input_system_factory(game=self.game, player=self)
+        self.rear_view_mirror = RearViewMirror(
+            game=self.game, player_node=self.ship.node
+        )
 
         # Anchor camera to player ship node
         self.initialize_camera()
@@ -52,20 +58,10 @@ class Player:
         # Initialize targetting list
         self.available_targets = [{None: ""}]  # TODO remove
 
-        # Initialize movement task
-        self.initialize_move()
-
         # Add self to the interacting actors
-        self.app.interactions.add_actor(self.ship)
+        self.game.interactions.add_actor(self.ship)
 
-    def initialize_move(self):
-        """
-        Initializes the player move task. Must be done after the
-        integrator task init
-        """
-        self.add_task(method=self.move_player_task, task_name="move_player_task")
-
-    def move_player_task(self, task):
+    def move_player(self):
         """
         Moves the camera and the skybox along with the player's
         position.
@@ -84,16 +80,13 @@ class Player:
         # Move camera relative to the ship node
         self.move_camera()
 
-        return task.cont
-
-    def add_task(self, method: Callable, task_name: str):
+    def add_task(self, method: Callable):
         """
         Add a task linked to this object
 
         :param method: the method to be called by the task
-        :param task_name: The name of the task
         """
-        self.tasks.append(self.app.taskMgr.add(method, task_name))
+        self.game.actor_methods[self.id].append(method)
 
     def add_target(self, target, name: str):
         """
@@ -139,9 +132,9 @@ class Player:
         # Turn head voluntarily
         self.head_pivot = self.head_jolt.attachNewNode("head_pivot")
         # Attach camera to head
-        self.app.camera.reparentTo(self.head_pivot)
+        self.game.app.camera.reparentTo(self.head_pivot)
         # Allow near objects to be rendered
-        # self.app.camLens.setNear(0.01)
+        # self.game.app.camLens.setNear(0.01)
 
     def move_camera(self):
         """
@@ -208,7 +201,7 @@ class Player:
         state_derivative[0:3] = self.head_velocity_mps.copy()
         state_derivative[3:6] = self.head_acceleration_mps2.copy()
 
-        new_state = self.app.integrator.first_order_euler_step(
+        new_state = self.game.integrator.first_order_euler_step(
             state_derivative=state_derivative, state=previous_state
         )
         self.head_position_m = new_state[0:3]

@@ -115,6 +115,7 @@ class SplashState(BaseState):
             return task.cont
 
         if not self.assets_to_load:
+            self.app.taskMgr.remove("load-assets-task")
             self.on_loading_finished()
             return task.done
 

@@ -7,7 +7,6 @@ from typing import Any
 import numpy as np
 import quaternion
 import yaml
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
@@ -39,7 +38,7 @@ class Ship:
 
     def __init__(
         self,
-        app: ShowBase,
+        game,
         parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
@@ -48,7 +47,7 @@ class Ship:
         is_cockpit: bool = True,
         team: int = 0,
     ):
-        self.app = app
+        self.game = game
         self.parent = parent
         self.is_dead = False
         self.id = uuid.uuid4()
@@ -94,7 +93,7 @@ class Ship:
 
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
-        self.node.reparentTo(self.app.render)
+        self.node.reparentTo(self.game.app.render)
 
         # Setup state vector
         self.position = ini_position.copy()
@@ -111,18 +110,18 @@ class Ship:
         # Prepare first integration step
         self.compute_derivatives()
         self.state_dot_previous = self.state_dot.copy()
-        self.integrator_idx = self.app.integrator.set_state_variables(
+        self.integrator_idx = self.game.integrator.set_state_variables(
             partial_x=self.state,
             partial_x_dot=self.state_dot,
             partial_x_dot_previous=self.state_dot_previous,
         )
 
         # Initialize cannons
-        self.laser_cannon = LaserCannon(app=self.app, parent_ship=self)
+        self.laser_cannon = LaserCannon(game=self.game, parent_ship=self)
 
         # Initialize collisions
         self.collision_sphere_np = attach_collision_sphere(
-            app=self.app,
+            game=self.game,
             name="ship",
             radius=self.conf["hit_box_radius_m"],
             collider_type="destructible",
@@ -131,14 +130,14 @@ class Ship:
         )
 
         # Handle ship health and shield
-        self.parent.add_task(
-            method=self.ship_handle_health, task_name="ship_handle_health"
-        )
+        self.parent.add_task(method=self.ship_handle_health)
         # Set explosion size for death animation
         self.explosion_scale = self.conf["explosion_scale"]
 
         # Create render
-        self.model = ShipModel(app=self.app, ship_type=ship_type, is_cockpit=is_cockpit)
+        self.model = ShipModel(
+            game=self.game, ship_type=ship_type, is_cockpit=is_cockpit
+        )
         self.model.anchor_model(self.node)
 
         # Initialize engine sound for bot ships
@@ -148,13 +147,13 @@ class Ship:
             )
             self.sound.setLoop(True)
             self.sound.setVolume(10.0)
-            self.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
+            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
 
             # Automatic velocity tracking
-            self.app.sfx.audio3d.setSoundVelocityAuto(self.node)
+            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
 
             # TODO Doppler does not seem to work great
-            self.app.delayed_methods.do_method_later(
+            self.game.delayed_methods.do_method_later(
                 delay_s=0.5,
                 name="Play_engine_sound",
                 method=self.sound.play,
@@ -279,7 +278,7 @@ class Ship:
         integration step.
         """
         # Get state
-        self.state = self.app.integrator.get_state_variables(
+        self.state = self.game.integrator.get_state_variables(
             first_idx=self.integrator_idx,
             n_var=10,
         )
@@ -305,7 +304,7 @@ class Ship:
 
         # Prepare next integration step
         self.compute_derivatives()
-        self.integrator_idx = self.app.integrator.set_state_variables(
+        self.integrator_idx = self.game.integrator.set_state_variables(
             partial_x=self.state,
             partial_x_dot=self.state_dot,
             partial_x_dot_previous=self.state_dot_previous,
@@ -361,7 +360,7 @@ class Ship:
         hit_force_world_n = rotate_single_vector(quat, hit_force_body_n)
         self.impact_force_n += hit_force_world_n
         # Remove this additional force later on
-        self.app.delayed_methods.do_method_later(
+        self.game.delayed_methods.do_method_later(
             delay_s=DAMAGE_FORCE_APPLICATION_DURATION_S,
             name="remove_hit_force",
             method=self.remove_hit_force,
@@ -377,19 +376,15 @@ class Ship:
         """
         self.impact_force_n -= hit_force_world_n
 
-    def ship_handle_health(self, task):
+    def ship_handle_health(self):
         """
         Monitors the ships health and shield
-
-        :param task: _description_
         """
-        dt = self.app.game_time.get_time_step()
+        dt = self.game.game_time.get_time_step()
         self.shield = min(
             max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
         )
         self.health = min(self.health, self.max_health)
-
-        return task.cont
 
     def clean(self):
         """
@@ -402,7 +397,7 @@ class Ship:
         self.collision_sphere_np.remove_node()
         self.collision_sphere_np = None
         self.sound.stop()
-        self.app.sfx.audio3d.detachSound(self.sound)
+        self.game.app.sfx.audio3d.detachSound(self.sound)
         self.sound = None
         self.node.remove_node()
         self.node = None
@@ -413,7 +408,7 @@ class Ship:
             LOGGER.info("Cleaned ship")
             LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
             LOGGER.info(f"ship references {gc.get_referrers(self)}")
-            LOGGER.info(self.app.taskMgr.getAllTasks)
+            LOGGER.info(self.game.app.taskMgr.getAllTasks)
 
     def __del__(self):
         if DEBUG_DELETION:
@@ -421,5 +416,5 @@ class Ship:
             # somewhere but I can't find them. Bot deletes fine, though. Children,
             # including panda3d objects are properly deleted, I believe, so this
             # should not have too much of a memory impact. It's still enraging, though..
-            LOGGER.info(self.app.taskMgr.getAllTasks)
+            LOGGER.info(self.game.app.taskMgr.getAllTasks)
             LOGGER.info("Deleted ship")

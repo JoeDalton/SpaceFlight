@@ -1,13 +1,12 @@
 from typing import List
 
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import AmbientLight, DirectionalLight, Vec4
 
 
 class Lighting:
     def __init__(
         self,
-        app: ShowBase,
+        game,
         directional_color: List = [0.5, 0.5, 0.45, 1],
         directional_direction: List = [-30, -60, 0],
         ambient_color: List = [0.1, 0.2, 0.4, 1],
@@ -22,13 +21,13 @@ class Lighting:
                 directional_color[3],
             )
         )
-        dlnp = app.render.attach_new_node(dlight)
+        dlnp = game.app.render.attach_new_node(dlight)
         dlnp.set_hpr(
             directional_direction[0],
             directional_direction[1],
             directional_direction[2],
         )
-        app.render.set_light(dlnp)
+        game.app.render.set_light(dlnp)
 
         # Ambient light
         alight = AmbientLight("alight")
@@ -40,8 +39,8 @@ class Lighting:
                 ambient_color[3],
             )
         )
-        alnp = app.render.attach_new_node(alight)
-        app.render.set_light(alnp)
+        alnp = game.app.render.attach_new_node(alight)
+        game.app.render.set_light(alnp)
 
         # # Use a 512x512 resolution shadow map
         # dlight.setShadowCaster(True, 512, 512)

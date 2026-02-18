@@ -1,7 +1,6 @@
 import logging
 from typing import Tuple
 
-from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import (
     BitMask32,
     CollisionHandlerEvent,
@@ -78,20 +77,18 @@ class CollisionSystem:
             self.traverser.showCollisions(self.app.render)
         self.handler = CollisionHandlerEvent()
         self.handler.addInPattern("%fn-into-%in")
-        self.app.taskMgr.add(self.collision_task, "collider")
 
         self.app.accept("laser-into-ship", self.laser_into_destructible)
         self.app.accept("laser-into-terrain", self.laser_into_terrain)
         self.app.accept("ship-into-terrain", self.ship_into_terrain)
         self.app.accept("ship-into-ship", self.ship_into_ship)
 
-        # Debug
-        self.collision_info = OnscreenText(text="", fg=(1, 1, 1, 1), scale=0.15)
-        self.collision_info.hide()
-
-    def collision_task(self, task):
+    def update_collisions(self):
+        """
+        Compute collisions via panda3d internal methods
+        is tiggers the "%fn-into-%in" events
+        """
         self.traverser.traverse(self.app.render)
-        return task.cont
 
     def laser_into_destructible(self, entry):
         """
@@ -189,7 +186,7 @@ class CollisionSystem:
 
 
 def attach_collision_sphere(
-    app,
+    game,
     name: str,
     radius: float,
     collider_type: str,
@@ -203,7 +200,7 @@ def attach_collision_sphere(
 
     # TODO: use this for ships/asteroids
 
-    :param app: The panda3d app
+    :param game: The game stage
     :param name: The name of the collision sphere
     :param radius: Its radius
     :param collider_type: The nature of the collider, defines from and into bitmasks
@@ -232,8 +229,8 @@ def attach_collision_sphere(
     node_path.setPythonTag("owner", parent_object)
     # Register in collosion handler
     if add_to_collision_handler:
-        app.collision_system.traverser.addCollider(
-            node_path, app.collision_system.handler
+        game.collision_system.traverser.addCollider(
+            node_path, game.collision_system.handler
         )
 
     if DEBUG_COLLISION:
@@ -242,7 +239,7 @@ def attach_collision_sphere(
 
 
 def attach_collision_segment(
-    app,
+    game,
     name: str,
     collider_type: str,
     parent_node,
@@ -253,7 +250,7 @@ def attach_collision_segment(
     """
     Attach a collision segment to an existing node.
 
-    :param app: The panda3d app
+    :param game: The game stage
     :param name: The name of the collision sphere
     :param collider_type: The nature of the collider, defines from and into bitmasks
     :param parent_node: Its parent_node
@@ -277,8 +274,8 @@ def attach_collision_segment(
     node_path.setPythonTag("owner", parent_object)
     # Register in collosion handler
     if add_to_collision_handler:
-        app.collision_system.traverser.addCollider(
-            node_path, app.collision_system.handler
+        game.collision_system.traverser.addCollider(
+            node_path, game.collision_system.handler
         )
 
     if DEBUG_COLLISION:

@@ -8,7 +8,6 @@ from space_flight.fx import load_explosion_effect_pools
 from space_flight.fx.sfx import SFX
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
-    GameStates,
     GameTimeManager,
     IntervalManager,
 )
@@ -21,12 +20,14 @@ from space_flight.ui.hud import HUD, TargetHUD
 
 class GameState(BaseState):
     def enter(self):
+        self.app.set_background_color(0, 0, 0)
         """
         Initialize time keeping
         """
-        self.game_time = GameTimeManager(app=self.app)
-        self.interval_manager = IntervalManager(app=self.app)
-        self.delayed_methods = DelayedMethodManager(app=self.app)
+        self.is_paused = True
+        self.game_time = GameTimeManager(game=self)
+        self.interval_manager = IntervalManager(game=self)
+        self.delayed_methods = DelayedMethodManager(game=self)
 
         """
         Initialize sound system
@@ -46,26 +47,34 @@ class GameState(BaseState):
         """
         Initialize Collision system and Destructibles
         """
-        self.destructibles = Destructibles(app=self.app)
+        self.destructibles = Destructibles()
         self.collision_system = CollisionSystem(app=self.app)
 
         """
         Initialize interaction compute between ships
         """
-        self.interactions = Interactions()  # app=self.app)
+        self.interactions = Interactions()
 
         """
         Initialize integrator.
-        Must come before the physic objects : (Player, bots, moving scene...)
-        TODO: Priorities for task to dumb-proof
+        The update must come before the physics computations :
+        (Player, bots, moving scene...)
         """
-        self.integrator = Integrator(self.app, max_state_size=5000)
+        self.integrator = Integrator(game=self, max_state_size=5000)
+
+        """
+        Initialize a dictionary to hold actors and their update methods
+        {
+            object_id: [method_to_run_1, method_to_run_2]
+        }
+        """
+        self.actor_methods = {}
 
         """
         Initialize player and ship
         """
         self.player = Player(
-            self.app,
+            game=self,
             ship_type="a-wing",
             ini_position=np.array([0, -200, 1]),
             is_neutral=False,
@@ -75,8 +84,8 @@ class GameState(BaseState):
         Build scene
         `asteroids` or `lava_planet` or `debug_collisions`
         """
-        self.set_background_color(0, 0, 0)
-        self.scene = scene_factory(app=self.app, scene_name="lava_planet")
+
+        self.scene = scene_factory(game=self, scene_name="lava_planet")
 
         """
         Initialize dummy bots
@@ -108,15 +117,15 @@ class GameState(BaseState):
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        self.chase_bot = spawn_bot(
-            app=self.app,
-            name="chase_1",
-            ship_type="a-wing",
-            ini_position=np.array([0, -2000, -0]),
-            has_debug_trihedron=True,
-            team=1,
-            debug_decisions=True,
-        )
+        # self.chase_bot = spawn_bot(
+        #     app=self.app,
+        #     name="chase_1",
+        #     ship_type="a-wing",
+        #     ini_position=np.array([0, -2000, -0]),
+        #     has_debug_trihedron=True,
+        #     team=1,
+        #     debug_decisions=True,
+        # )
 
         self.scape_goat = spawn_bot(
             app=self.app,
@@ -170,7 +179,34 @@ class GameState(BaseState):
         """
         Run game
         """
-        self.game_time.state = GameStates.PLAYING
+        self.app.taskMgr.add(self.update_game_world_task, "Update game world")
+        self.is_paused = False
+
+    def update_game_world_task(self, task):
+        """
+        Updates the game world when it is not paused
+        """
+        # Do nothing if paused
+        if self.is_paused:
+            # TODO pause menu
+            return task.cont
+
+        # Handle delayed methods
+        self.delayed_methods.update()
+        # Kill destructibles whose health has reached zero
+        self.destructibles.handle_deaths()
+        # Find all collisions
+        self.collision_system.update_collisions()
+        # Compute interactions between actors
+        self.interactions.update_interactions()
+        # Advance time
+        self.integrator.step()
+        # Run the update tasks of all actors
+        for method_list in self.actor_methods.values():
+            for method in method_list:
+                method()
+
+        return task.cont
 
     def exit(self):
         print("Cleaning up game state")

@@ -1,7 +1,6 @@
 import numpy as np
 import yaml
 from direct.gui.OnscreenText import OnscreenText
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import InputDevice
 
 from space_flight import CONFIGURATION_PATH
@@ -12,29 +11,29 @@ DEFAULT_THROTTLE_DEAD_ZONE = 0.04
 THROTTLE_BOOST_VALUE = 2.0
 
 
-def input_system_factory(app: ShowBase, player):
+def input_system_factory(game, player):
     filepath = CONFIGURATION_PATH / "key_bindings.yaml"
     with open(filepath, "r") as f:
-        app.key_bindings = yaml.safe_load(f)
+        game.key_bindings = yaml.safe_load(f)
 
-    input_type = app.key_bindings["input_type"]
+    input_type = game.key_bindings["input_type"]
     if input_type == "joystick":
-        return Joystick(app=app, player=player)
+        return Joystick(game=game, player=player)
     elif input_type == "keyboard":
-        return Keyboard(app=app, player=player)
+        return Keyboard(game=game, player=player)
     else:
         raise NotImplementedError
 
 
 class InputSystem:
-    def __init__(self, app: ShowBase, player):
-        self.app = app
+    def __init__(self, game, player):
+        self.game = game
         self.player = player
         self.view_offset = np.zeros(2)
-        self.app.disableMouse()
+        self.game.app.disableMouse()
         self.is_boost = False
         # Game UI
-        self.app.accept("escape", self.app.game_time.toggle_pause)
+        self.game.app.accept("escape", self.game.game_time.toggle_pause)
 
     def action(self, button):
         # Just show which button has been pressed.
@@ -90,7 +89,7 @@ class InputSystem:
             rise_time=1.0
             fall_time=0.2
         """
-        dt = self.app.game_time.get_time_step()
+        dt = self.game.game_time.get_time_step()
         return low_pass_filter_first_order(
             value=value,
             previous=previous,
@@ -101,8 +100,8 @@ class InputSystem:
 
 
 class Keyboard(InputSystem):
-    def __init__(self, app: ShowBase, player):
-        super().__init__(app=app, player=player)
+    def __init__(self, game, player):
+        super().__init__(game=game, player=player)
 
         self.throttle = 0.0
         self.yaw_rate = 0.0
@@ -113,60 +112,73 @@ class Keyboard(InputSystem):
         self.roll_rate_smoothed = 0.0
 
         # Flight controls
-        self.app.accept(
-            self.app.key_bindings["pitch_down"], self.count_pitch_down, [0.05]
+        self.game.app.accept(
+            self.game.key_bindings["pitch_down"], self.count_pitch_down, [0.05]
         )
-        self.app.accept(self.app.key_bindings["pitch_up"], self.count_pitch_up, [0.05])
-        self.app.accept(self.app.key_bindings["yaw_right"], self.count_yaw_down, [0.05])
-        self.app.accept(self.app.key_bindings["yaw_left"], self.count_yaw_up, [0.05])
-        self.app.accept(
-            self.app.key_bindings["roll_left"], self.count_roll_down, [0.05]
+        self.game.app.accept(
+            self.game.key_bindings["pitch_up"], self.count_pitch_up, [0.05]
         )
-        self.app.accept(self.app.key_bindings["roll_right"], self.count_roll_up, [0.05])
-        self.app.accept(
-            self.app.key_bindings["throttle_down"], self.count_throttle_down
+        self.game.app.accept(
+            self.game.key_bindings["yaw_right"], self.count_yaw_down, [0.05]
         )
-        self.app.accept(self.app.key_bindings["throttle_up"], self.count_throttle_up)
+        self.game.app.accept(
+            self.game.key_bindings["yaw_left"], self.count_yaw_up, [0.05]
+        )
+        self.game.app.accept(
+            self.game.key_bindings["roll_left"], self.count_roll_down, [0.05]
+        )
+        self.game.app.accept(
+            self.game.key_bindings["roll_right"], self.count_roll_up, [0.05]
+        )
+        self.game.app.accept(
+            self.game.key_bindings["throttle_down"], self.count_throttle_down
+        )
+        self.game.app.accept(
+            self.game.key_bindings["throttle_up"], self.count_throttle_up
+        )
 
-        self.app.accept(
-            f"{self.app.key_bindings['pitch_down']}-repeat",
+        self.game.app.accept(
+            f"{self.game.key_bindings['pitch_down']}-repeat",
             self.count_pitch_down,
             [0.3],
         )
-        self.app.accept(
-            f"{self.app.key_bindings['pitch_up']}-repeat", self.count_pitch_up, [0.3]
+        self.game.app.accept(
+            f"{self.game.key_bindings['pitch_up']}-repeat", self.count_pitch_up, [0.3]
         )
-        self.app.accept(
-            f"{self.app.key_bindings['yaw_right']}-repeat", self.count_yaw_down, [0.3]
+        self.game.app.accept(
+            f"{self.game.key_bindings['yaw_right']}-repeat", self.count_yaw_down, [0.3]
         )
-        self.app.accept(
-            f"{self.app.key_bindings['yaw_left']}-repeat", self.count_yaw_up, [0.3]
+        self.game.app.accept(
+            f"{self.game.key_bindings['yaw_left']}-repeat", self.count_yaw_up, [0.3]
         )
-        self.app.accept(
-            f"{self.app.key_bindings['roll_left']}-repeat", self.count_roll_down, [0.3]
+        self.game.app.accept(
+            f"{self.game.key_bindings['roll_left']}-repeat", self.count_roll_down, [0.3]
         )
-        self.app.accept(
-            f"{self.app.key_bindings['roll_right']}-repeat", self.count_roll_up, [0.3]
+        self.game.app.accept(
+            f"{self.game.key_bindings['roll_right']}-repeat", self.count_roll_up, [0.3]
         )
-        self.app.accept(
-            f"{self.app.key_bindings['throttle_down']}-repeat", self.count_throttle_down
+        self.game.app.accept(
+            f"{self.game.key_bindings['throttle_down']}-repeat",
+            self.count_throttle_down,
         )
-        self.app.accept(
-            f"{self.app.key_bindings['throttle_up']}-repeat", self.count_throttle_up
+        self.game.app.accept(
+            f"{self.game.key_bindings['throttle_up']}-repeat", self.count_throttle_up
         )
 
         # Fire lasers
-        self.app.accept(
-            self.app.key_bindings["fire_primary"], self.player.ship.laser_cannon.fire
+        self.game.app.accept(
+            self.game.key_bindings["fire_primary"], self.player.ship.laser_cannon.fire
         )
-        self.app.accept(
-            f"{self.app.key_bindings['fire_primary']}-repeat",
+        self.game.app.accept(
+            f"{self.game.key_bindings['fire_primary']}-repeat",
             self.player.ship.laser_cannon.fire,
         )
 
         # Accept boost toggle
-        self.app.accept(self.app.key_bindings["boost"], self.activate_boost)
-        self.app.accept(f"{self.app.key_bindings['boost']}-up", self.deactivate_boost)
+        self.game.app.accept(self.game.key_bindings["boost"], self.activate_boost)
+        self.game.app.accept(
+            f"{self.game.key_bindings['boost']}-up", self.deactivate_boost
+        )
 
     def count_pitch_down(self, value: float):
         self.pitch_rate -= value
@@ -198,7 +210,7 @@ class Keyboard(InputSystem):
 
         returns throttle, roll, pitch, yaw
         """
-        dt = self.app.game_time.get_time_step()
+        dt = self.game.game_time.get_time_step()
         # Get average command of yaw pitch roll since last frame
         self.yaw_rate /= dt
         self.pitch_rate /= dt
@@ -241,8 +253,8 @@ class Keyboard(InputSystem):
 
 class Joystick(InputSystem):
     # TODO add a joystick center and deadzone calibration utility
-    def __init__(self, app: ShowBase, player):
-        super().__init__(app=app, player=player)
+    def __init__(self, game, player):
+        super().__init__(game=game, player=player)
 
         self.lblWarning = OnscreenText(
             text="No devices found", fg=(1, 0, 0, 1), scale=0.25
@@ -253,45 +265,45 @@ class Joystick(InputSystem):
 
         # Is there a joystick connected?
         self.flightStick = None
-        devices = self.app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
+        devices = self.game.app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
         if devices:
             self.connect(devices[0])
 
         # Keep track of previous button states
         self.previous_button_states = [False] * len(self.flightStick.buttons)
         # Polling task to create events for unnamed buttons
-        self.app.taskMgr.add(self.poll_buttons_task, "PollButtonsTask")
+        self.game.app.taskMgr.add(self.poll_buttons_task, "PollButtonsTask")
 
         # Accept device dis-/connection events
-        self.app.accept("connect-device", self.connect)
-        self.app.accept("disconnect-device", self.disconnect)
+        self.game.app.accept("connect-device", self.connect)
+        self.game.app.accept("disconnect-device", self.disconnect)
 
-        self.app.accept("stick-start", exit)
+        self.game.app.accept("stick-start", exit)
 
         # Accept trigger event to fire lasers
-        self.app.accept("stick-button1", self.player.ship.laser_cannon.fire)
-        self.app.accept("stick-button1-repeat", self.player.ship.laser_cannon.fire)
+        self.game.app.accept("stick-button1", self.player.ship.laser_cannon.fire)
+        self.game.app.accept("stick-button1-repeat", self.player.ship.laser_cannon.fire)
 
         # Accept button events on the thumb hat
         # to change head orientation
-        self.app.accept("stick-button19", self.view_down)
-        self.app.accept("stick-button18", self.view_up)
-        self.app.accept("stick-button17", self.view_right)
-        self.app.accept("stick-button16", self.view_left)
-        self.app.accept("stick-button19-repeat", self.view_down)
-        self.app.accept("stick-button18-repeat", self.view_up)
-        self.app.accept("stick-button17-repeat", self.view_right)
-        self.app.accept("stick-button16-repeat", self.view_left)
+        self.game.app.accept("stick-button19", self.view_down)
+        self.game.app.accept("stick-button18", self.view_up)
+        self.game.app.accept("stick-button17", self.view_right)
+        self.game.app.accept("stick-button16", self.view_left)
+        self.game.app.accept("stick-button19-repeat", self.view_down)
+        self.game.app.accept("stick-button18-repeat", self.view_up)
+        self.game.app.accept("stick-button17-repeat", self.view_right)
+        self.game.app.accept("stick-button16-repeat", self.view_left)
 
         # Accept boost toggle
-        self.app.accept("stick-button8", self.activate_boost)
-        self.app.accept("stick-button8-up", self.deactivate_boost)
+        self.game.app.accept("stick-button8", self.activate_boost)
+        self.game.app.accept("stick-button8-up", self.deactivate_boost)
 
         # Register joystick dead zone
-        self.stick_dead_zone = self.app.key_bindings.get(
+        self.stick_dead_zone = self.game.key_bindings.get(
             "stick_dead_zone", DEFAULT_STICK_DEAD_ZONE
         )
-        self.throttle_dead_zone = self.app.key_bindings.get(
+        self.throttle_dead_zone = self.game.key_bindings.get(
             "throttle_dead_zone", DEFAULT_THROTTLE_DEAD_ZONE
         )
 
@@ -309,7 +321,7 @@ class Joystick(InputSystem):
 
             # Enable this device to ShowBase so that we can receive events.
             # We set up the events with a prefix of "stick-".
-            self.app.attachInputDevice(device, prefix="stick")
+            self.game.app.attachInputDevice(device, prefix="stick")
 
             # Hide the warning that we have no devices.
             self.lblWarning.hide()
@@ -323,7 +335,7 @@ class Joystick(InputSystem):
 
         # Tell ShowBase that the device is no longer needed.
         print("Disconnected %s" % (device))
-        self.app.detachInputDevice(device)
+        self.game.app.detachInputDevice(device)
         self.flightStick = None
 
         # Do we have any other gamepads?  Attach the first other gamepad.
@@ -380,11 +392,11 @@ class Joystick(InputSystem):
             was_pressed = self.previous_button_states[i]
 
             if is_pressed and not was_pressed:
-                self.app.messenger.send(f"stick-button{i+1}")
+                self.game.app.messenger.send(f"stick-button{i+1}")
             elif not is_pressed and was_pressed:
-                self.app.messenger.send(f"stick-button{i+1}-up")
+                self.game.app.messenger.send(f"stick-button{i+1}-up")
             elif is_pressed and was_pressed:
-                self.app.messenger.send(f"stick-button{i+1}-repeat")
+                self.game.app.messenger.send(f"stick-button{i+1}-repeat")
 
             self.previous_button_states[i] = is_pressed
 

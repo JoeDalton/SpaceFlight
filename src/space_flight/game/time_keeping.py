@@ -2,10 +2,7 @@ import uuid
 from typing import Callable
 
 from direct.interval.Interval import Interval
-from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject
-
-from space_flight.global_architecture import GameStates
 
 
 class GameTimeManager:
@@ -13,9 +10,8 @@ class GameTimeManager:
     A class to store the game's state and handle the time
     """
 
-    def __init__(self, app: ShowBase):
-        self.state = GameStates.PAUSED
-        self.app = app
+    def __init__(self, game):
+        self.game = game
         self.time_in_pause_s = 0.0
         self.real_time_at_last_pause_s = 0.0
         self.game_time_at_last_pause_s = 0.0
@@ -24,19 +20,17 @@ class GameTimeManager:
         """
         Pauses the game when it's playing and vice-versa
         """
-        if self.state == GameStates.PAUSED:
+        if self.game.is_paused:
             self._set_play()
-        elif self.state == GameStates.PLAYING:
-            self._set_pause()
         else:
-            pass
+            self._set_pause()
 
     def _set_play(self):
         """
         Passes the game's state to "PLAYING" and resumes the game's intervals
         """
-        self.state = GameStates.PLAYING
-        self.app.interval_manager.resume()
+        self.game.is_paused = False
+        self.game.interval_manager.resume()
         self.time_in_pause_s += (
             ClockObject.getGlobalClock().getFrameTime() - self.real_time_at_last_pause_s
         )
@@ -47,8 +41,8 @@ class GameTimeManager:
         """
         self.real_time_at_last_pause_s = ClockObject.getGlobalClock().getFrameTime()
         self.game_time_at_last_pause_s = self.get_current_time()
-        self.state = GameStates.PAUSED
-        self.app.interval_manager.pause()
+        self.game.is_paused = True
+        self.game.interval_manager.pause()
 
     def get_current_time(self) -> float:
         """
@@ -56,12 +50,11 @@ class GameTimeManager:
 
         :return: The time stamp of the current frame
         """
-        if self.state == GameStates.PLAYING:
-            time_s = ClockObject.getGlobalClock().getFrameTime() - self.time_in_pause_s
-        elif self.state == GameStates.PAUSED:
+        if self.game.is_paused:
             time_s = self.game_time_at_last_pause_s
         else:
-            print("Whaaaat ?")
+            time_s = ClockObject.getGlobalClock().getFrameTime() - self.time_in_pause_s
+
         return time_s
 
     def get_time_step(self) -> float:
@@ -70,10 +63,10 @@ class GameTimeManager:
 
         :return: The time step
         """
-        if self.state == GameStates.PLAYING:
-            return ClockObject.getGlobalClock().getDt()
-        else:
+        if self.game.is_paused:
             return 0.0
+        else:
+            return ClockObject.getGlobalClock().getDt()
 
     def get_average_frame_rate(self) -> float:
         """
@@ -95,9 +88,9 @@ class IntervalManager:
     A class to handle the creation, destruction and pausing/resuming of time intervals
     """
 
-    def __init__(self, app: ShowBase):
+    def __init__(self, game):
         self.active_intervals: list[Interval] = []
-        self.app = app
+        self.game = game
 
     def play_interval(self, interval: Interval):
         """
@@ -110,7 +103,7 @@ class IntervalManager:
         event_name = f"interval-done-{id(interval)}"
         interval.setDoneEvent(event_name)
 
-        self.app.acceptOnce(event_name, self._on_interval_done, [interval])
+        self.game.app.acceptOnce(event_name, self._on_interval_done, [interval])
 
         self.active_intervals.append(interval)
         interval.start()
@@ -144,10 +137,9 @@ class DelayedMethodManager:
     A class to mimic the doMethodLater feature of panda3d while allowing pauses
     """
 
-    def __init__(self, app: ShowBase):
-        self.app = app
+    def __init__(self, game):
+        self.game = game
         self.methods_to_run_dict = {}
-        self.app.taskMgr.add(self.update, "update_delayed_functions")
 
     def do_method_later(
         self, delay_s: float, name: str, method: Callable, extra_args: list = []
@@ -167,13 +159,13 @@ class DelayedMethodManager:
             "extra_args": extra_args,
         }
 
-    def update(self, task):
+    def update(self):
         """
         Decrease timers for all registered methods and launch them if their timers
         reach zero
         """
-        if self.app.game_time.state == GameStates.PLAYING:
-            dt = self.app.game_time.get_time_step()
+        if not self.game.is_paused:
+            dt = self.game.game_time.get_time_step()
             methods_to_pop = []
             for name in self.methods_to_run_dict.keys():
                 self.methods_to_run_dict[name]["delay_s"] -= dt
@@ -184,4 +176,3 @@ class DelayedMethodManager:
                     method(*extra_args)
             for name in methods_to_pop:
                 self.methods_to_run_dict.pop(name)
-        return task.cont

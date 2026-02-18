@@ -9,14 +9,14 @@ MIRROR_FOV = 30
 
 class RearViewMirror:
     # TODO: integrate in 3D cockpit
-    def __init__(self, app, player_node):
-        self.app = app
+    def __init__(self, game, player_node):
+        self.game = game
 
         mirror_tex = Texture()
         mirror_tex.setWrapU(Texture.WMClamp)
         mirror_tex.setWrapV(Texture.WMClamp)
 
-        self.mirror_buffer = self.app.win.makeTextureBuffer(
+        self.mirror_buffer = self.game.app.win.makeTextureBuffer(
             "RearViewBuffer",
             MIRROR_VERTICAL_RESOLUTION * MIRROR_ASPECT_RATIO,
             MIRROR_VERTICAL_RESOLUTION,
@@ -27,7 +27,7 @@ class RearViewMirror:
         mirror_cam = Camera("rear_view_cam")
         mirror_np = NodePath(mirror_cam)
 
-        mirror_cam.setLens(self.app.camLens.makeCopy())
+        mirror_cam.setLens(self.game.app.camLens.makeCopy())
         mirror_cam.getLens().setFov(MIRROR_FOV)  # Narrower = more realistic mirror
         mirror_cam.getLens().setAspectRatio(MIRROR_ASPECT_RATIO)
 
@@ -64,7 +64,9 @@ class RearViewMirror:
         self.mirror_buffer.setSort(-100)
         mirror_np.node().setCameraMask(BitMask32.bit(1))
 
-        self.app.accept(self.app.key_bindings["toggle_mirror"], self.toggle_mirror)
+        self.game.app.accept(
+            self.game.key_bindings["toggle_mirror"], self.toggle_mirror
+        )
 
     def toggle_mirror(self):
         """

@@ -1,15 +1,14 @@
 import numpy as np
-from direct.showbase.ShowBase import ShowBase
 
 
 class Integrator:
-    def __init__(self, app: ShowBase, max_state_size: int = 2000):
+    def __init__(self, game, max_state_size: int = 2000):
         """
         Initializes the app's integrator. Must be done first during app
         init so that the integrator is available for other objects to set their
         state variables.
         """
-        self.app = app
+        self.game = game
         self.x = np.zeros(max_state_size)
         self.x_new = np.zeros(max_state_size)
         self.x_dot = np.zeros(max_state_size)
@@ -17,15 +16,6 @@ class Integrator:
         self.dt_previous = None
         self.next_idx = 0
         self.max_state_size = max_state_size
-        self.initialize_tasks()
-
-    def initialize_tasks(self):
-        """
-        Initializes the integrator step task. Must be done at the end of the
-        all modules' initialization, but before the physics tasks initializations.
-        TODO: priorities to dumb-proof this
-        """
-        self.app.taskMgr.add(self.step, "integrator_step")
 
     def set_state_variables(
         self,
@@ -66,7 +56,7 @@ class Integrator:
         """
         return self.x_new[first_idx : first_idx + n_var].copy()
 
-    def step(self, task):
+    def step(self):
         """
         A 2nd order Admas-Bashforth integrator.
         For the first step, a 1st order forward Euler (=AB1) is used.
@@ -76,7 +66,7 @@ class Integrator:
         of that variable.
         """
         # Get the timespan of the current step
-        dt = self.app.game_time.get_time_step()
+        dt = self.game.game_time.get_time_step()
 
         # Integrate and populate x_new
         if (self.dt_previous is None) or (self.dt_previous == 0.0):
@@ -95,8 +85,6 @@ class Integrator:
         self.x_dot = np.zeros(self.max_state_size)
         self.x_dot_previous = np.zeros(self.max_state_size)
 
-        return task.cont
-
     def first_order_euler_step(
         self, state_derivative: np.ndarray, state: np.ndarray
     ) -> np.ndarray:
@@ -108,5 +96,5 @@ class Integrator:
         :return: The state vector one step further
         """
         # Get the timespan of the current step
-        dt = self.app.game_time.get_time_step()
+        dt = self.game.game_time.get_time_step()
         return state + state_derivative * dt
