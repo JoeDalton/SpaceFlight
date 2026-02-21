@@ -40,14 +40,14 @@ class AsteroidField:
         self.n_asteroids = n_asteroids
         self.asteroids = []
 
-        # Load 3D models
+        # Get 3D models from asset manager
         asteroid_models = [
-            self.game.app.loader.load_model(
+            self.game.app.asset_manager.assets[
                 DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf"
-            ),
-            self.game.app.loader.load_model(
+            ],
+            self.game.app.asset_manager.assets[
                 DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf"
-            ),
+            ],
         ]
 
         # Prepare integration

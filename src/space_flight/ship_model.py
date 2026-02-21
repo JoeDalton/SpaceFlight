@@ -5,26 +5,30 @@ from space_flight import DATAFILES_PATH
 
 
 class ShipModel:
-    def __init__(self, game, ship_type: str = "a-wing", is_cockpit=True):
+    def __init__(
+        self, game, parent_node: NodePath, ship_type: str = "a-wing", is_cockpit=True
+    ):
         self.game = game
         self.ship_type = ship_type
-
-        # Loading ships must be done during splash state
+        # Instantiate already-loaded models to a new node
+        self.model = self.game.app.render.attachNewNode("ship_model_instance")
 
         if self.ship_type == "a-wing":  # OK
             if is_cockpit:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.8, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
                 self.model.setScale(0.8)
             else:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
@@ -32,17 +36,19 @@ class ShipModel:
                 self.model.setScale(0.01)
         elif self.ship_type == "tie-interceptor":  # OK
             if is_cockpit:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.9, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
             else:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/tie-interceptor/exterior/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
@@ -50,17 +56,19 @@ class ShipModel:
                 self.model.setScale(4.1)
         elif self.ship_type == "tie-bomber":  # OK
             if is_cockpit:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0, 0.9, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
             else:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([1.5, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
@@ -68,17 +76,19 @@ class ShipModel:
                 self.model.setScale(1.0)
         elif self.ship_type == "y-wing":  # OK
             if is_cockpit:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0, 0.7, -0.5])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
             else:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
@@ -86,17 +96,19 @@ class ShipModel:
                 self.model.setScale(0.115)
         elif self.ship_type == "x-wing":  # NOK cockpit
             if is_cockpit:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0, 0.9, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
             else:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = (
                     np.quaternion(0.0, 0.0, 0.0, 1.0)
@@ -106,17 +118,19 @@ class ShipModel:
                 self.model.setScale(0.5)
         elif self.ship_type == "tie-fighter":  # NOK, model does not show
             if is_cockpit:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.9, -0.2])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
             else:
-                self.model = self.game.app.loader.load_model(
+                model = self.game.app.asset_manager.assets[
                     DATAFILES_PATH / "models/ships/tie-fighter/exterior/scene.gltf"
-                )
+                ]
+                model.instanceTo(self.model)
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
@@ -124,6 +138,8 @@ class ShipModel:
                 self.model.setScale(1000.0)
         else:
             raise NotImplementedError(ship_type)
+
+        self.anchor_model(parent_node)
 
     def anchor_model(self, node: NodePath):
         """

@@ -136,9 +136,11 @@ class Ship:
 
         # Create render
         self.model = ShipModel(
-            game=self.game, ship_type=ship_type, is_cockpit=is_cockpit
+            game=self.game,
+            parent_node=self.node,
+            ship_type=ship_type,
+            is_cockpit=is_cockpit,
         )
-        self.model.anchor_model(self.node)
 
         # Initialize engine sound for bot ships
         # TODO better
