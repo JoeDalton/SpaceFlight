@@ -53,6 +53,16 @@ class HUD:
         and updates the text displayed in the HUD.
         """
         frame_rate = self.game.game_time.get_average_frame_rate()
+        self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
+
+        # Count team members
+        n_team_1 = 0
+        n_team_2 = 0
+        for actor in self.game.interactions.actors:
+            if actor.team == 1:
+                n_team_1 += 1
+            elif actor.team == 2:
+                n_team_2 += 1
 
         player_text = (
             ""
@@ -61,23 +71,14 @@ class HUD:
             f"Player health = {self.game.player.ship.health:.1f}\n"
             f"Player shield = {self.game.player.ship.shield:.1f}\n"
             f"Time = {self.game.game_time.get_current_time():.0f}\n"
+            f"Team 1 strength = {n_team_1}\n"
+            f"Team 2 strength = {n_team_2}\n"
+            "\n"
         )
         try:
             bot_text = (
                 "Lead Bot angle to target = "
                 f"{self.game.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
-                # f"Bot target_x = {self.app.bot.pilot.target_x}\n"
-                # f"Bot target_y = {self.app.bot.pilot.target_y}\n"
-                # f"Bot target_z = {self.app.bot.pilot.target_z}\n"
-                # f"Yaw_error_deg = {self.app.bot.pilot.yaw_error}\n"
-                # f"Pitch_error_deg = {self.app.bot.pilot.pitch_error}\n"
-                # f"Roll_error_deg = {self.app.bot.pilot.roll_error}\n"
-                # f"yaw_rate_command = {self.app.bot.pilot.yaw_rate_command}\n"
-                # f"pitch_rate_command = {self.app.bot.pilot.pitch_rate_command}\n"
-                # f"roll_rate_command = {self.app.bot.pilot.roll_rate_command}\n"
-                # f"yaw_rate = {self.app.bot.pilot.yaw_rate}\n"
-                # f"pitch_rate = {self.app.bot.pilot.pitch_rate}\n"
-                # f"roll_rate = {self.app.bot.pilot.roll_rate}\n"
                 "Lead Bot health = "
                 f"{self.game.lead_bot.ship.health:.1f}\n"
                 "Lead Bot shield = "
@@ -87,20 +88,12 @@ class HUD:
                 "Lead Bot Speed = "
                 f"{np.linalg.norm(self.game.lead_bot.ship.state[7:10]):.1f}m/s\n"
                 "\n"
-                # "Chase Bot angle to target = "
-                # f"{self.game.chase_bot.pilot.angle_to_target_deg:.1f}°\n"
-                # "Chase Bot throttle = "
-                # f"{self.game.chase_bot.pilot.throttle:.4f}\n"
-                # "Chase Bot Speed = "
-                # f"{np.linalg.norm(self.game.chase_bot.ship.state[7:10]):.1f}m/s\n"
             )
         except AttributeError:
             bot_text = ""
         hud_text = player_text + bot_text
 
         self.hud.setText(hud_text)
-
-        self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
 
         return task.cont
 

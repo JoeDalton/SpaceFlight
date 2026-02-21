@@ -26,7 +26,7 @@ invoke develop
 ## Running the game 
 In the projects directory, with the environment activated
 ```
-python ./scripts/simulator.py
+python ./scripts/launcher.py
 ```
 
 ## Development 
