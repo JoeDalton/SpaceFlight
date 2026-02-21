@@ -75,7 +75,7 @@ class GameState(BaseState):
         self.player = Player(
             game=self,
             ship_type="a-wing",
-            ini_position=np.array([0, -200, 1]),
+            ini_position=np.array([0, 0, 0]),
             is_neutral=False,
         )
 
@@ -90,7 +90,7 @@ class GameState(BaseState):
         Initialize dummy bots
         """
 
-        wp_distance = 1000
+        wp_distance = 10000
         bot2_waypoints = [
             np.array([0, 0, 0]),
             np.array([0, wp_distance, 0]),
@@ -109,51 +109,51 @@ class GameState(BaseState):
             game=self,
             name="lead_2",
             ship_type="tie-interceptor",
-            ini_position=np.array([0, -50, 2]),
+            ini_position=np.array([0, -200, 2]),
             has_debug_trihedron=True,
             team=2,
             debug_decisions=True,
         )
         self.lead_bot.navigator.set_waypoints(waypoints=bot2_waypoints, is_loop=True)
 
-        self.chase_bot = spawn_bot(
-            game=self,
-            name="chase_1",
-            ship_type="a-wing",
-            ini_position=np.array([0, -2000, -0]),
-            has_debug_trihedron=True,
-            team=1,
-            debug_decisions=True,
-        )
+        # self.chase_bot = spawn_bot(
+        #     game=self,
+        #     name="chase_1",
+        #     ship_type="a-wing",
+        #     ini_position=np.array([0, -2000, -0]),
+        #     has_debug_trihedron=True,
+        #     team=1,
+        #     debug_decisions=True,
+        # )
 
-        self.scape_goat = spawn_bot(
-            game=self,
-            name="scape_goat",
-            ship_type="x-wing",
-            ini_position=np.array([11.8, -200, 0]),
-            has_debug_trihedron=True,
-            team=0,
-            debug_decisions=True,
-        )
+        # self.scape_goat = spawn_bot(
+        #     game=self,
+        #     name="scape_goat",
+        #     ship_type="x-wing",
+        #     ini_position=np.array([11.8, -200, 0]),
+        #     has_debug_trihedron=True,
+        #     team=0,
+        #     debug_decisions=True,
+        # )
 
-        for _ in range(7):
-            spawn_bot(
-                game=self,
-                name="team_1",
-                ship_type="x-wing",
-                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-                has_debug_trihedron=True,
-                team=1,
-            )
-        for _ in range(5):
-            spawn_bot(
-                game=self,
-                name="team_2",
-                ship_type="tie-interceptor",
-                ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-                has_debug_trihedron=True,
-                team=2,
-            )
+        # for _ in range(7):
+        #     spawn_bot(
+        #         game=self,
+        #         name="team_1",
+        #         ship_type="x-wing",
+        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+        #         has_debug_trihedron=True,
+        #         team=1,
+        #     )
+        # for _ in range(5):
+        #     spawn_bot(
+        #         game=self,
+        #         name="team_2",
+        #         ship_type="tie-interceptor",
+        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+        #         has_debug_trihedron=True,
+        #         team=2,
+        #     )
 
         """
         DEBUG

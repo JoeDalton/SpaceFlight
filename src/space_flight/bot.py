@@ -68,12 +68,11 @@ class Bot(Destructible):
         """
         intent, target_dict = self.tactician.think()
 
-        target_direction, reference_distance_m = self.navigator.navigate(
+        target_direction, desired_speed_mps = self.navigator.navigate(
             intent=intent, target_dict=target_dict
         )
-
         throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
-            target_direction=target_direction, reference_distance_m=reference_distance_m
+            target_direction=target_direction, desired_speed_mps=desired_speed_mps
         )
         self.ship.move_ship(
             throttle=throttle,
@@ -168,7 +167,7 @@ def spawn_bot(
         Trihedron(game=game, parent=bot.ship.node, scale=1)
 
     # Debug
-    bot.ship.health = 1.1
+    # bot.ship.health = 1.1
     bot.ship.shield = 0.0
     bot.ship.shield_regen_rate = 0.0
 

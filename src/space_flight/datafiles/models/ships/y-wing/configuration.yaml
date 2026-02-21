@@ -1,7 +1,6 @@
 # A-wing
 mass_kg: 500
 max_thrust_n: 60000
-max_speed_mps: 1500
 max_pitch_rate_degps: 60
 max_yaw_rate_degps: 30
 max_roll_rate_degps: 150

@@ -17,7 +17,7 @@ from space_flight.utils import rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
-DAMAGE_TO_FORCE_FACTOR = 2000.0
+DAMAGE_TO_FORCE_FACTOR = 100.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 
 
@@ -59,7 +59,6 @@ class Ship:
             self.conf = yaml.safe_load(f)
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
-        self.max_speed_mps = self.conf["max_speed_mps"]  # TODO: from thrust and drag
         self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
@@ -83,6 +82,7 @@ class Ship:
             * self.conf["reference_surface_m2"]
             * self.conf["lateral_lift_coefficient_slope_pdeg"]
         )
+        self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
 
         # Setup health and shield
         self.max_health = self.conf["health"]

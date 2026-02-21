@@ -4,7 +4,7 @@ import numpy as np
 from simple_pid import PID
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai import Personality
+from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS, Personality
 from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
 
 LOGGER = logging.getLogger()
@@ -19,59 +19,54 @@ class AutoPilot:
         self.ship = ship
         self.personality = personality
         self.pid_yaw = PID(
-            Kp=1.0,
-            Ki=0.0,
-            Kd=0.0,
+            Kp=self.personality["pilot"]["yaw_kp"],
+            Ki=self.personality["pilot"]["yaw_ki"],
+            Kd=self.personality["pilot"]["yaw_kd"],
             setpoint=0.0,
             starting_output=0.0,
-            sample_time=0.1,
+            sample_time=self.personality["pilot"]["sample_time_s"],
             error_map=safe_angle_rad,
             time_fn=self.game.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.pid_pitch = PID(
-            Kp=-1.0,
-            Ki=0.0,
-            Kd=0.0,
+            Kp=self.personality["pilot"]["pitch_kp"],
+            Ki=self.personality["pilot"]["pitch_ki"],
+            Kd=self.personality["pilot"]["pitch_kd"],
             setpoint=0.0,
             starting_output=0.0,
-            sample_time=0.1,
+            sample_time=self.personality["pilot"]["sample_time_s"],
             error_map=safe_angle_rad,
             time_fn=self.game.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
         self.pid_roll = PID(
-            Kp=-1.0,
-            Ki=0.0,
-            Kd=0.0,
+            Kp=self.personality["pilot"]["roll_kp"],
+            Ki=self.personality["pilot"]["roll_ki"],
+            Kd=self.personality["pilot"]["roll_kd"],
             setpoint=0.0,
             starting_output=0.0,
-            sample_time=0.1,
+            sample_time=self.personality["pilot"]["sample_time_s"],
             error_map=safe_angle_rad,
             time_fn=self.game.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
-        self.filter_time = 0.5
-
+        self.pid_throttle = PID(
+            Kp=self.personality["pilot"]["throttle_kp"],
+            Ki=self.personality["pilot"]["throttle_ki"],
+            Kd=self.personality["pilot"]["throttle_kd"],
+            setpoint=0.0,
+            starting_output=0.0,
+            sample_time=self.personality["pilot"]["sample_time_s"],
+            time_fn=self.game.game_time.get_current_time,
+            output_limits=(0.0, 1.0),
+        )
+        self.filter_time = self.personality["pilot"]["low_pass_filter_time_s"]
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.roll_rate = 0.0
         self.throttle = 0.0
-        self.throttle_rate = 0.0
-
         self.angle_to_target_deg = 0.0
-
-        # Debug
-        self.target_x = 0.0
-        self.target_y = 0.0
-        self.target_z = 0.0
-        self.yaw_error_deg = 0.0
-        self.pitch_error_deg = 0.0
-        self.roll_error_deg = 0.0
-        self.yaw_rate_command = 0.0
-        self.pitch_rate_command = 0.0
-        self.roll_rate_command = 0.0
-        self.throttle_command = 0.0
 
     def set_on(
         self,
@@ -103,16 +98,17 @@ class AutoPilot:
     def pilot(
         self,
         target_direction: np.ndarray = np.zeros(3),
-        reference_distance_m: float = 0.0,
+        desired_speed_mps: float = 0.0,
     ):
         """
         Given a target direction and the current orientation of the ship, compute the
-        yaw, pitch and roll rates that will be applied to the trajectory
+        yaw, pitch and roll rates that will be applied to the trajectory.
+        Given a desired ship speed, compute the necessary throttle.
 
         TODO : take into account the speed vector instead of ship axes to account for
         nicer flight dynamics (sideslip, AoA) ?
 
-        TODO : Add pilot skill modifiers ?
+        TODO : Add pilot skill modifiers ? Randomness ?
         """
         dt = self.game.game_time.get_time_step()
 
@@ -143,47 +139,19 @@ class AutoPilot:
             if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
                 roll_error = 0.0
 
-            # Debug output
-            self.target_x = target_x
-            self.target_y = target_y
-            self.target_z = target_z
-            self.yaw_error_deg = np.rad2deg(yaw_error)
-            self.pitch_error_deg = np.rad2deg(pitch_error)
-            self.roll_error_deg = np.rad2deg(roll_error)
-
             cos_angle_to_target = np.dot(ship_y, target_direction)
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
-        # Update throttle command
-        # Decrease throttle if the target is at too much of an angle
-        angle_contribution = (
-            max(0.0, cos_angle_to_target)
-            ** self.personality["pilot"]["angle_throttle_exponent"]
-        )
-        # Increase throttle if the target is too far and lower it if negative distance
-        distance_contribution = (
-            max(
-                min(reference_distance_m / DISTANCE_FOR_MAX_THROTTLE, 1.0),
-                self.personality["pilot"]["minimum_throttle"],
-            )
-            ** self.personality["pilot"]["distance_throttle_exponent"]
-        )
-        # TODO: add a contribution of closing velocity ?
-        velocity_contribution = 1.0
-        # Combine contributions
-        throttle_command = (
-            angle_contribution * distance_contribution * velocity_contribution
-        )
+        # Find velocity error
+        velocity_error = (
+            np.linalg.norm(self.ship.speed) - desired_speed_mps
+        ) / REFERENCE_ERROR_VELOCITY_MPS
 
-        # Update PID commands for turn rates
+        # Update PID commands
+        throttle_command = self.pid_throttle(velocity_error)
         yaw_rate_command = self.pid_yaw(yaw_error)
         pitch_rate_command = self.pid_pitch(pitch_error)
         roll_rate_command = self.pid_roll(roll_error)
-
-        # Debug
-        self.yaw_rate_command = yaw_rate_command
-        self.pitch_rate_command = pitch_rate_command
-        self.roll_rate_command = roll_rate_command
 
         # Low-pass filter on command to find "realistic" turn rates
         [

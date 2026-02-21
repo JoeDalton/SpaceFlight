@@ -3,9 +3,9 @@ from enum import Enum, auto
 import numpy as np
 
 TARGET_DISTANCE_TOLERANCE_M = 1.0
-INTERACT_MAX_DISTANCE_M = 2000.0
+INTERACT_MAX_DISTANCE_M = 10000.0
 
-REFERENCE_VELOCITY_MPS = 1000
+REFERENCE_ERROR_VELOCITY_MPS = 100
 
 
 class Intent(Enum):
@@ -47,6 +47,11 @@ class Personality:
             },
         },
         "navigator": {
+            "patrol": {"speed_mps": 100.0},
+            "idle": {"speed_mps": 0.0},
+            "regroup": {"speed_mps": 100.0},
+            "turning": {"speed_mps": 50.0},
+            "speeding": {"speed_mps": 2000.0},
             "fire": {
                 "minimimum_window_duration_s": 0.5,
                 "maximum_distance_m": 600,
@@ -68,6 +73,8 @@ class Personality:
                 "lag_cutoff_distance_m": 150.0,
                 "lead_lag_cutoff_slope": 0.02,
                 "cap_lead_cutoff_slope": 0.04,
+                "ideal_pursuit_distance_m": 200.0,
+                "pursuit_speed_distance_slope": 0.005,
             },
             "intercept": {
                 "lead_time_s": 1.5,
@@ -83,9 +90,21 @@ class Personality:
             "reposition": {"minimum_time_to_overshoot_s": 1.5},
         },
         "pilot": {
-            "angle_throttle_exponent": 0.5,
-            "distance_throttle_exponent": 1.1,
-            "minimum_throttle": 0.22,
+            "sample_time_s": 0.1,
+            "low_pass_filter_time_s": 0.5,
+            "minimum_throttle": 0.05,
+            "throttle_kp": 5.0,
+            "throttle_ki": 2.0,
+            "throttle_kd": 0.0,
+            "yaw_kp": 1.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -1.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
+            "roll_kp": -1.0,
+            "roll_ki": 0.0,
+            "roll_kd": 0.0,
         },
     }
 

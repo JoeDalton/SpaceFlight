@@ -1,6 +1,7 @@
 import logging
 
 from direct.showbase.ShowBase import ShowBase
+from panda3d.core import loadPrcFileData
 
 from space_flight.fx.sfx import SFX
 from space_flight.game.game_state import GameState
@@ -12,6 +13,9 @@ from space_flight.menus.pause_menu_state import PauseMenuState
 from space_flight.menus.splash_state import SplashState
 
 LOGGER = logging.getLogger()
+
+
+loadPrcFileData("", "notify-level-ffmpeg error")
 
 
 class StateManager:

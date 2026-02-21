@@ -14,11 +14,9 @@ from space_flight.utils import smooth_step_down, smooth_step_up
 
 LOGGER = logging.getLogger()
 
-NO_DIRECTION = np.zeros(3), 0.0
+NO_DIRECTION = np.zeros(3), 100.0
 WAYPOINT_MEETING_TOLERANCE_M = 50
 CHASE_DISTANCE_M = 80.0
-
-ENGAGE_STRATEGY = "cap_blend"  # or "old_switch"
 
 
 class AutoNavigator:
@@ -44,14 +42,6 @@ class AutoNavigator:
         self.behaviour_duration_s = 0.0
         self.time_in_spiral_s = 0.0
         self.last_update_time = self.game.game_time.get_current_time()
-
-        # DEBUG: choose an engaging strategy
-        if ENGAGE_STRATEGY == "cap_blend":
-            self.engage_target = self.engage_target_cap_blend
-        elif ENGAGE_STRATEGY == "old_switch":
-            self.engage_target = self.engage_target_old_switch
-        else:
-            raise NotImplementedError(f"Unknown engage strategy {ENGAGE_STRATEGY}")
 
     def navigate(self, intent: int, target_dict: dict):
         """
@@ -105,10 +95,8 @@ class AutoNavigator:
                 )
         self.last_update_time = current_time
 
-    # %% ==== ENGAGE CAP_BLEND ====
-    def engage_target_cap_blend(
-        self, target_dict: dict = {}
-    ) -> Tuple[np.ndarray, float]:
+    # %% ==== ENGAGE ====
+    def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Engages a target and tries to attack it
 
@@ -155,12 +143,16 @@ class AutoNavigator:
         ]
         longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
-        # Check if we risk passing ahead of the target
-        if self.check_overshoot_risk(
+        # Check if we risk passing ahead of the target or if we already passed it
+        alignment = self.game.interactions.alignments[
+            my_actor_index, target_actor_index
+        ]
+        target_is_behind = alignment <= 0
+        if target_is_behind or self.check_overshoot_risk(
             closing_speed_mps=-longitudinal_speed_scalar_mps, distance_m=distance_m
         ):
             self.record_behaviour(behaviour="reposition")
-            return self.reposition(direction=direction, distance_m=distance_m)
+            return self.reposition(direction=direction)
 
         # Check if we need to extend the trajectory to avoid a spiral of death
         longitudinal_speed_vector = longitudinal_speed_scalar_mps * direction
@@ -217,6 +209,14 @@ class AutoNavigator:
         else:
             aim_vector /= aim_vector_norm
 
+        # Compute desired speed
+        target_speed_mps = np.linalg.norm(target_current_speed)
+        pursuit_speed_mps = self.compute_pursuit_speed(
+            distance_m=distance_m,
+            target_speed_mps=target_speed_mps,
+            longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
+        )
+
         # Decide whether to shoot
         firing_alignment = np.dot(lead_direction, self.ship.forward)
         if (
@@ -227,7 +227,55 @@ class AutoNavigator:
         ):
             self.ship.laser_cannon.fire()
 
-        return aim_vector, distance_m - CHASE_DISTANCE_M
+        return aim_vector, pursuit_speed_mps
+
+    def compute_pursuit_speed(
+        self,
+        distance_m: float,
+        target_speed_mps: float,
+        longitudinal_speed_scalar_mps: float,
+    ) -> float:
+        """
+        Computes the desired speed in pursuit mode
+        It must be the same as the target speed if it is at the desired pursuit distance
+        It must increase if the target is too far and vice-versa
+        TODO : effect of closing speed ?
+
+        :param distance_m: Distance to target
+        :param target_speed_mps: Speed of target
+        :param longitudinal_speed_scalar_mps: relative speed in the target's direction
+        :return: The desired pursuit speed
+        """
+        desired_speed_mps = (
+            target_speed_mps + self.compute_target_distance_contribution(distance_m)
+        )
+        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.ship.max_speed_mps)
+        return desired_speed_mps
+
+    def compute_target_distance_contribution(self, distance_m: float) -> float:
+        """
+        Computes the contribution of target distance to pursuit speed
+        Far targets get high speed,
+
+        :param distance_m: Distance to target
+        :return: The distance contribution to pursuit speed
+        """
+        distance_contribution_mps = self.ship.max_speed_mps * (
+            0.5
+            - smooth_step_down(
+                x=distance_m,
+                x_step=self.personality["navigator"]["attack"][
+                    "ideal_pursuit_distance_m"
+                ],
+                slope=self.personality["navigator"]["attack"][
+                    "pursuit_speed_distance_slope"
+                ],
+            )
+        )
+        print()
+        print(f"{distance_m=:.1f}")
+        print(f"{distance_contribution_mps=:.1f}")
+        return distance_contribution_mps
 
     def compute_engage_weights(self, distance_m: float):
         """
@@ -370,7 +418,8 @@ class AutoNavigator:
         )
 
     def reposition(
-        self, direction: np.ndarray, distance_m: float
+        self,
+        direction: np.ndarray,
     ) -> Tuple[np.ndarray, float]:
         """
         Turn hard away from the target to avoid passing in front of it
@@ -380,12 +429,11 @@ class AutoNavigator:
         the same way as ships)
 
         :param direction: The direction to the target
-        :param distance_m: The distance to the target
         :return: The direction to point to and its reference distance
         """
         # By definition, not in spiral => reset time in spiral
         self.time_in_spiral_s = 0.0
-        return -direction, distance_m
+        return -direction, self.personality["navigator"]["turning"]["speed_mps"]
 
     def extend(self) -> Tuple[np.ndarray, float]:
         """
@@ -393,7 +441,7 @@ class AutoNavigator:
 
         :return: The direction to point to and its reference distance
         """
-        return np.zeros(3), INTERACT_MAX_DISTANCE_M
+        return np.zeros(3), self.personality["navigator"]["speeding"]["speed_mps"]
 
     # %% ==== EVADE ====
 
@@ -462,7 +510,10 @@ class AutoNavigator:
         if target_distance < TARGET_DISTANCE_TOLERANCE_M:
             return NO_DIRECTION
 
-        return target_relative_position / target_distance, target_distance
+        return (
+            target_relative_position / target_distance,
+            self.personality["navigator"]["regroup"]["speed_mps"],
+        )
 
     # %% ==== DISENGAGE ====
 
@@ -482,7 +533,7 @@ class AutoNavigator:
 
         fleeing_direction = -target_relative_position / target_distance
 
-        return fleeing_direction, INTERACT_MAX_DISTANCE_M
+        return fleeing_direction, self.personality["navigator"]["speeding"]["speed_mps"]
 
     # %% ==== PATROL ====
 
@@ -528,7 +579,7 @@ class AutoNavigator:
 
         # Go to the next waypoint
         direction = waypoint_direction / distance_to_waypoint_m
-        return direction, distance_to_waypoint_m
+        return direction, self.personality["navigator"]["patrol"]["speed_mps"]
 
     # %% ==== DELETING THE BOT ====
 

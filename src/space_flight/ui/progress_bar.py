@@ -61,7 +61,6 @@ class ProgressBar:
             ClockObject.getGlobalClock().getFrameTime() - self.last_blurb_update
             >= self.blurb_update_delay_s
         ):
-            print("updating_blurb")
             self.last_blurb_update = ClockObject.getGlobalClock().getFrameTime()
             blurb = random.choice(self.blurbs)
             self.blurb_label["text"] = blurb

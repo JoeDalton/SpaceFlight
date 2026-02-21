@@ -87,12 +87,12 @@ class HUD:
                 "Lead Bot Speed = "
                 f"{np.linalg.norm(self.game.lead_bot.ship.state[7:10]):.1f}m/s\n"
                 "\n"
-                "Chase Bot angle to target = "
-                f"{self.game.chase_bot.pilot.angle_to_target_deg:.1f}°\n"
-                "Chase Bot throttle = "
-                f"{self.game.chase_bot.pilot.throttle:.4f}\n"
-                "Chase Bot Speed = "
-                f"{np.linalg.norm(self.game.chase_bot.ship.state[7:10]):.1f}m/s\n"
+                # "Chase Bot angle to target = "
+                # f"{self.game.chase_bot.pilot.angle_to_target_deg:.1f}°\n"
+                # "Chase Bot throttle = "
+                # f"{self.game.chase_bot.pilot.throttle:.4f}\n"
+                # "Chase Bot Speed = "
+                # f"{np.linalg.norm(self.game.chase_bot.ship.state[7:10]):.1f}m/s\n"
             )
         except AttributeError:
             bot_text = ""
