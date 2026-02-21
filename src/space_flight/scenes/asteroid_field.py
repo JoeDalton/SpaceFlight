@@ -8,9 +8,6 @@ from panda3d.core import Quat
 from space_flight import DATAFILES_PATH
 from space_flight.collisions import attach_collision_sphere
 
-random.seed(1)
-np.random.seed(1)
-
 
 class AsteroidField:
     """

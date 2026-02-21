@@ -42,7 +42,7 @@ class SplashState(BaseState):
             "Loading proton torpedos",
             "Scanning derelict ship",
             "Fixing the Falcon's hyperdrive",
-            "Calibrating laser cannon",
+            "Calibrating laser cannons",
             "Clearing flight deck",
             "Scrambling interceptors",
             "Priming deflector shields",
