@@ -74,7 +74,7 @@ class Personality:
                 "lead_lag_cutoff_slope": 0.02,
                 "cap_lead_cutoff_slope": 0.04,
                 "ideal_pursuit_distance_m": 200.0,
-                "pursuit_speed_distance_slope": 0.005,
+                "pursuit_speed_distance_slope": 0.01,
             },
             "intercept": {
                 "lead_time_s": 1.5,

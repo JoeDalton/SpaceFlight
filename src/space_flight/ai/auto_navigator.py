@@ -272,9 +272,10 @@ class AutoNavigator:
                 ],
             )
         )
-        print()
-        print(f"{distance_m=:.1f}")
-        print(f"{distance_contribution_mps=:.1f}")
+        # DEBUG
+        # print()
+        # print(f"{distance_m=:.1f}")
+        # print(f"{distance_contribution_mps=:.1f}")
         return distance_contribution_mps
 
     def compute_engage_weights(self, distance_m: float):
