@@ -4,7 +4,6 @@ from typing import List
 
 import numpy as np
 from direct.showbase import Audio3DManager
-from panda3d.core import AudioSound
 
 from space_flight import DATAFILES_PATH
 
@@ -107,15 +106,10 @@ class SFX:
         else:
             raise NotImplementedError(f"No sound for impact type {impact_type}")
 
-        # Add sound to laser hit (empty list if no sound)
-        for _ in range(SOUND_POOL_LENGTH):
-            sound = random.choice(sound_pool)
-            # Using a pool to avoid reloading resources
-            # Must use a non-currently-playing sound, otherwise it will restart
-            if sound.status() != AudioSound.PLAYING:
-                sound.setVolume(volume * multiplier)
-                sound.play()
-                break
+        # Add sound to laser hit
+        sound = sound_pool.get_sound(randomize_pitch=False)
+        sound.setVolume(volume * multiplier)
+        sound.play()
 
     def impact_hit_on_player(self, game, relative_hit_point: np.ndarray):
         """
@@ -136,18 +130,23 @@ class SFX:
             method=dummy_node.remove_node,
         )
         # Add sound to laser hit (empty list if no sound)
-        for _ in range(SOUND_POOL_LENGTH):
-            sound = random.choice(sound_pool)
-            # Using a pool to avoid reloading resources
-            # Must use a non-currently-playing sound, otherwise it will restart
-            if sound.status() != AudioSound.PLAYING:
-                # Randomize the pitch of the sound to get a more realistic feeling
-                sound.setPlayRate(random.uniform(0.9, 1.1))
-                # Attach sound to the camera
-                self.audio3d.attachSoundToObject(sound, dummy_node)
-                sound.setVolume(multiplier)
-                sound.play()
-                break
+        # Add sound to laser hit
+        sound = sound_pool.get_sound(randomize_pitch=True)
+        # Attach sound to the camera
+        self.audio3d.attachSoundToObject(sound, dummy_node)
+        sound.setVolume(multiplier)
+        sound.play()
+
+    def cannon_fire(self, sound_pool, node):
+        """
+        Play the cannon firing sound at the cannon's location
+
+        :param sound_pool: The sound pool from which to draw the sound
+        :param node: The node to attach the sound to
+        """
+        sound = sound_pool.get_sound(randomize_pitch=True)
+        self.audio3d.attachSoundToObject(sound, node)
+        sound.play()
 
     def update_task(self, task):
         self.audio3d.update()

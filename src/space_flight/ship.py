@@ -141,6 +141,7 @@ class Ship:
         self.model.anchor_model(self.node)
 
         # Initialize engine sound for bot ships
+        # TODO better
         if self.parent.name != "player":
             self.sound = self.game.app.sfx.get_3d_sound(
                 str(DATAFILES_PATH / "sounds/engines/tie_fighter/tie_scream_med.wav")
