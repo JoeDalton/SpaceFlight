@@ -9,34 +9,6 @@ ASSETS_TO_LOAD = [
     ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
-    # ("model", "models/ship.bam"),
-    # ("model", "models/station.bam"),
-    # ("texture", "textures/space.png"),
-    # ("texture", "textures/ui.png"),
 ]
 SOUND_POOL_LENGTH = 20
 
@@ -69,8 +41,6 @@ class AssetManager:
 
         asset_type, path = self.assets_to_load.pop(0)
 
-        # path = Path("")
-
         if asset_type == "3d_sound":
             if path.is_dir():
                 self.assets[path] = self.build_sound_pool(
@@ -97,29 +67,6 @@ class AssetManager:
         # Update progress
         progress = (self.n_assets - len(self.assets_to_load)) / self.n_assets
         app_state.progress_bar.update(value=progress)
-        return task.cont
-
-    def load_assets_task_placeholder(self, app_state, task):
-        # simulate delay without blocking
-        if not hasattr(task, "next_load_time"):
-            task.next_load_time = task.time + 0.01
-
-        if task.time < task.next_load_time:
-            return task.cont
-
-        if not self.assets_to_load:
-            self.app.taskMgr.remove("load-assets-task")
-            app_state.on_loading_finished()
-            return task.done
-
-        asset_type, path = self.assets_to_load.pop(0)
-
-        progress = (self.n_assets - len(self.assets_to_load)) / self.n_assets
-
-        app_state.progress_bar.update(value=progress)
-
-        task.next_load_time = task.time + 0.01
-
         return task.cont
 
     def build_sound_pool(self, directory: Path, pattern: str, is_3d: bool) -> list:

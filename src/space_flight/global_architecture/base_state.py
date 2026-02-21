@@ -13,3 +13,15 @@ class BaseState:
         Called when leaving the state
         """
         raise NotImplementedError
+
+    def resume(self):
+        """
+        Called when leaving the state
+        """
+        raise NotImplementedError
+
+    def pause(self):
+        """
+        Called when leaving the state
+        """
+        raise NotImplementedError

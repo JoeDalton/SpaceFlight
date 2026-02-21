@@ -10,39 +10,28 @@ class GameTimeManager:
     A class to store the game's state and handle the time
     """
 
-    def __init__(self, game):
+    def __init__(self, game, pause_on_init: bool = True):
         self.game = game
         self.time_in_pause_s = 0.0
         self.real_time_at_last_pause_s = 0.0
         self.game_time_at_last_pause_s = 0.0
+        if pause_on_init:
+            self.pause()
 
-    def toggle_pause(self):
+    def resume(self):
         """
-        Pauses the game when it's playing and vice-versa
+        Store the time spent during the pause
         """
-        if self.game.is_paused:
-            self._set_play()
-        else:
-            self._set_pause()
-
-    def _set_play(self):
-        """
-        Passes the game's state to "PLAYING" and resumes the game's intervals
-        """
-        self.game.is_paused = False
-        self.game.interval_manager.resume()
         self.time_in_pause_s += (
             ClockObject.getGlobalClock().getFrameTime() - self.real_time_at_last_pause_s
         )
 
-    def _set_pause(self):
+    def pause(self):
         """
-        Passes the game's state to "PAUSED" and pauses the game's intervals
+        Store the real world and game world clocks at the time of the pause action
         """
         self.real_time_at_last_pause_s = ClockObject.getGlobalClock().getFrameTime()
         self.game_time_at_last_pause_s = self.get_current_time()
-        self.game.is_paused = True
-        self.game.interval_manager.pause()
 
     def get_current_time(self) -> float:
         """
@@ -88,9 +77,11 @@ class IntervalManager:
     A class to handle the creation, destruction and pausing/resuming of time intervals
     """
 
-    def __init__(self, game):
+    def __init__(self, game, pause_on_init: bool = True):
         self.active_intervals: list[Interval] = []
         self.game = game
+        if pause_on_init:
+            self.pause()
 
     def play_interval(self, interval: Interval):
         """
