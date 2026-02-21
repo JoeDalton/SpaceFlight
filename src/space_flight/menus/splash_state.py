@@ -33,6 +33,9 @@ class SplashState(BaseState):
         self.splash.setTransparency(TransparencyAttrib.MAlpha)
         self.splash.setColor(1, 1, 1, 1)
 
+        # Render the splash bar to avoid texture stretching in two visible steps
+        self.force_render()
+
         blurbs = [
             "Mustering crews",
             "Setting hyperspace coordinates",

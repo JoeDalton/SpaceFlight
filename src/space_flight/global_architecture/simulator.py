@@ -9,7 +9,7 @@ from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.pause_menu_state import PauseMenuState
-from space_flight.splash.splash_state import SplashState
+from space_flight.menus.splash_state import SplashState
 
 LOGGER = logging.getLogger()
 

@@ -25,3 +25,11 @@ class BaseState:
         Called when leaving the state
         """
         raise NotImplementedError
+
+    def force_render(self):
+        """
+        Forces panda3d to render to avoid being stuck on ugly scene
+        while the next one is loading
+        """
+        self.app.graphicsEngine.renderFrame()
+        self.app.graphicsEngine.renderFrame()

@@ -3,10 +3,15 @@ from direct.gui.DirectGui import DirectWaitBar
 from space_flight.game.game_state import GameState
 from space_flight.global_architecture.base_state import BaseState
 
-# TODO
-
 
 class LoadingState(BaseState):
+    """
+    A State to load the assets needed for a specific scene/scenario
+    and initialising the game
+
+    # TODO
+    """
+
     def __init__(self, app, level_path):
         super().__init__(app)
         self.level_path = level_path

@@ -40,3 +40,4 @@ class MainMenuState(BaseState):
         self.start_button.destroy()
         self.settings_button.destroy()
         self.quit_button.destroy()
+        self.force_render()

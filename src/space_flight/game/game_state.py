@@ -158,8 +158,10 @@ class GameState(BaseState):
         """
         DEBUG
         """
-        # self.app.oobe()  # DEBUG
-        # self.app.toggle_wireframe()  # DEBUG
+        # self.app.oobe()
+        # self.app.toggle_wireframe()
+        # self.app.setFrameRateMeter(True)
+        # self.app.setSceneGraphAnalyzerMeter(True)
 
         """
         HUD
