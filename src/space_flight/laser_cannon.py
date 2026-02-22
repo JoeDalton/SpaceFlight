@@ -61,9 +61,9 @@ class LaserCannon:
             self.light_color = (0, 0, laser_intensity, 1)
         else:
             raise ValueError
-        self.laser_texture = self.game.app.loader.loadTexture(
+        self.laser_texture = self.game.app.asset_manager.assets[
             DATAFILES_PATH / f"sprites/lasers/laser_{color}.png"
-        )
+        ]
 
         # Initialize cannon
         self.current_next_cannon_idx = 0
