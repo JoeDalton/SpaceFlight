@@ -3,6 +3,9 @@ from typing import Callable
 
 import numpy as np
 
+from space_flight.ai.auto_navigator import AutoNavigator
+from space_flight.ai.auto_pilot import AutoPilot
+from space_flight.ai.auto_tactician import AutoTactician
 from space_flight.ship import Ship
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
@@ -25,6 +28,7 @@ class Player:
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         is_neutral: bool = False,
+        has_ai: bool = False,
     ):
         self.game = game
         self.name = "player"
@@ -47,7 +51,16 @@ class Player:
             is_cockpit=True,
             team=team,
         )
+
+        # Initialize input system
+        self.has_ai = has_ai
+        if self.has_ai:
+            self.pilot = AutoPilot(game=self.game, ship=self.ship)
+            self.navigator = AutoNavigator(game=self.game, ship=self.ship, debug=True)
+            self.tactician = AutoTactician(game=self.game, ship=self.ship, debug=True)
         self.input_system = input_system_factory(game=self.game, player=self)
+
+        # Initialize rear view mirror
         self.rear_view_mirror = RearViewMirror(
             game=self.game, player_node=self.ship.node
         )
@@ -69,7 +82,16 @@ class Player:
         The cockpit is linked to the camera, so it should move
         without being told to.
         """
-        throttle, yaw_rate, pitch_rate, roll_rate = self.input_system.get_inputs()
+        if self.has_ai:
+            intent, target_dict = self.tactician.think()
+            target_direction, desired_speed_mps = self.navigator.navigate(
+                intent=intent, target_dict=target_dict
+            )
+            throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
+                target_direction=target_direction, desired_speed_mps=desired_speed_mps
+            )
+        else:
+            throttle, yaw_rate, pitch_rate, roll_rate = self.input_system.get_inputs()
         self.ship.move_ship(
             throttle=throttle,
             yaw_rate=yaw_rate,
