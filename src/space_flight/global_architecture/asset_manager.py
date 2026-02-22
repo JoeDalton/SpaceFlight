@@ -1,7 +1,7 @@
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH
-from space_flight.global_architecture.sound_pool import SoundPool
+from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
 ASSETS_TO_LOAD = [
     # Battle sounds
@@ -17,11 +17,13 @@ ASSETS_TO_LOAD = [
     ("texture", DATAFILES_PATH / "sprites/dust/dust_pink.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_white.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_yellow.png", ""),
-    # Explosion textures TODO
     # Laser textures
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_red.png", ""),
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_green.png", ""),
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_blue.png", ""),
+    # # Explosion effects
+    # ("effect", DATAFILES_PATH / "sprites/particles/explosion", "*.png"),
+    # ("effect", DATAFILES_PATH / "sprites/particles/black_smoke", "*.png"),
     # Asteroids # TODO use bam files for faster loading
     ("model", DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
@@ -73,19 +75,20 @@ class AssetManager:
         asset_type, path, pattern = self.assets_to_load.pop(0)
 
         if asset_type == "3d_sound":
-            sound_pool = SoundPool(app=self.app, path=path, pattern=pattern, is_3d=True)
-            self.assets[path] = sound_pool
+            self.assets[path] = SoundPool(
+                app=self.app, path=path, pattern=pattern, is_3d=True
+            )
         elif asset_type == "sound":
-            sound_pool = SoundPool(
+            self.assets[path] = SoundPool(
                 app=self.app, path=path, pattern=pattern, is_3d=False
             )
-            self.assets[path] = sound_pool
-
         elif asset_type == "model":
             self.assets[path] = self.app.loader.loadModel(path)
 
         elif asset_type == "texture":
-            self.assets[path] = self.app.loader.loadTexture(path)
+            self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
+        # elif asset_type == "effect":
+        #     self.assets[path] = EffectPool(app=self.app, path=path, pattern=pattern)
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
 
