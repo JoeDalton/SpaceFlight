@@ -10,13 +10,23 @@ ASSETS_TO_LOAD = [
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
     ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.mp3", ""),
     ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.mp3", ""),
+    # Dust textures
+    ("texture", DATAFILES_PATH / "sprites/dust/dust_blue.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/dust/dust_green.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/dust/dust_orange.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/dust/dust_pink.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/dust/dust_white.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/dust/dust_yellow.png", ""),
+    # Explosion textures TODO
     # Laser textures
-    ("texture", DATAFILES_PATH / "models/lasers/laser_red.png", ""),
-    ("texture", DATAFILES_PATH / "models/lasers/laser_green.png", ""),
-    ("texture", DATAFILES_PATH / "models/lasers/laser_blue.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/lasers/laser_red.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/lasers/laser_green.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/lasers/laser_blue.png", ""),
     # Asteroids # TODO use bam files for faster loading
     ("model", DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
+    # Skyboxes
+    ("model", DATAFILES_PATH / "models/skyboxes/sky_purple.bam", ""),
     # Ships # TODO use bam files for faster loading
     ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),

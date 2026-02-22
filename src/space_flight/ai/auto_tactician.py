@@ -10,8 +10,13 @@ from space_flight.utils import smooth_step_down
 LOGGER = logging.getLogger()
 
 
-# TODO make this probabilistic to avoid everyone update at the same time
+# TODO make this probabilistic to avoid everyone update at the same time ?
 INTENT_UPDATE_DELAY_S = 0.5
+
+# TODO Add an intent to go back to the fight area if too far
+
+# TODO (Where ?) Make the ships that disengaged and are sufficiently far disappear
+# from the scene
 
 
 class AutoTactician:

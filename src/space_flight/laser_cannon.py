@@ -62,7 +62,7 @@ class LaserCannon:
         else:
             raise ValueError
         self.laser_texture = self.game.app.loader.loadTexture(
-            DATAFILES_PATH / f"models/lasers/laser_{color}.png"
+            DATAFILES_PATH / f"sprites/lasers/laser_{color}.png"
         )
 
         # Initialize cannon
