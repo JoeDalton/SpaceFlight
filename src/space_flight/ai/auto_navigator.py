@@ -143,12 +143,27 @@ class AutoNavigator:
         ]
         longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
-        # Check if we risk passing ahead of the target or if we already passed it
-        alignment = self.game.interactions.alignments[
-            my_actor_index, target_actor_index
-        ]
-        target_is_behind = alignment <= 0
-        if target_is_behind or self.check_overshoot_risk(
+        # Compute lead pursuit direction necessary for firing solution
+        target_current_position = self.ship.position + distance_m * direction
+        target_current_speed = self.ship.speed + relative_speed_vector
+        lead_direction = self.compute_lead_pursuit(
+            target_current_position=target_current_position,
+            target_current_speed=target_current_speed,
+            lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
+        )
+
+        # Decide whether to shoot
+        firing_alignment = np.dot(lead_direction, self.ship.forward)
+        if (
+            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
+        ) and (
+            firing_alignment
+            > self.personality["navigator"]["fire"]["minimum_cos_angle"]
+        ):
+            self.ship.laser_cannon.fire()
+
+        # Check if we risk passing ahead of the target
+        if self.check_overshoot_risk(
             closing_speed_mps=-longitudinal_speed_scalar_mps, distance_m=distance_m
         ):
             self.record_behaviour(behaviour="reposition")
@@ -160,27 +175,20 @@ class AutoNavigator:
         lateral_speed_scalar_mps = np.linalg.norm(lateral_speed_vector)
 
         if self.check_extend_conditions(
-            closing_speed_mps=-longitudinal_speed_scalar_mps,
+            longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
             lateral_speed_scalar_mps=lateral_speed_scalar_mps,
         ):
             self.record_behaviour(behaviour="extend")
             return self.extend()
 
-        # Free to pursue target
-        target_current_position = self.ship.position + distance_m * direction
-        target_current_speed = self.ship.speed + relative_speed_vector
+        # Pursue target
+        self.record_behaviour(behaviour="pursuit")
 
         # Compute CAP contribution
         cap_direction = self.compute_constant_angle_pursuit(
             direction=direction,
             distance_m=distance_m,
             lateral_speed_vector=lateral_speed_vector,
-        )
-        # Compute lead pursuit contribution
-        lead_direction = self.compute_lead_pursuit(
-            target_current_position=target_current_position,
-            target_current_speed=target_current_speed,
-            lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
         # Compute lag_pursuit contribution
         lag_direction = self.compute_lead_pursuit(
@@ -216,16 +224,6 @@ class AutoNavigator:
             target_speed_mps=target_speed_mps,
             longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
         )
-
-        # Decide whether to shoot
-        firing_alignment = np.dot(lead_direction, self.ship.forward)
-        if (
-            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
-        ) and (
-            firing_alignment
-            > self.personality["navigator"]["fire"]["minimum_cos_angle"]
-        ):
-            self.ship.laser_cannon.fire()
 
         return aim_vector, pursuit_speed_mps
 
@@ -272,10 +270,6 @@ class AutoNavigator:
                 ],
             )
         )
-        # DEBUG
-        # print()
-        # print(f"{distance_m=:.1f}")
-        # print(f"{distance_contribution_mps=:.1f}")
         return distance_contribution_mps
 
     def compute_engage_weights(self, distance_m: float):
@@ -362,19 +356,20 @@ class AutoNavigator:
 
     def check_extend_conditions(
         self,
-        closing_speed_mps: float,
+        longitudinal_speed_scalar_mps: float,
         lateral_speed_scalar_mps: float,
     ) -> bool:
         """
         Checks if the closing velocity is too low and the lateral velocity is too
         high for too long
 
-        :param closing_speed_mps: How fast the target is closing in
+        :param longitudinal_speed_scalar_mps: How fast the target is going in
+            the self-target direction
         :param lateral_speed_scalar_mps: How fast the target is zooming sideways
         :return: Whether self should extend
         """
         if (
-            closing_speed_mps
+            np.abs(longitudinal_speed_scalar_mps)
             < self.personality["navigator"]["extend"]["minimum_closing_speed_mps"]
         ) and (
             lateral_speed_scalar_mps
@@ -389,6 +384,13 @@ class AutoNavigator:
                 self.time_in_spiral_s
                 > self.personality["navigator"]["extend"]["maximal_time_in_spiral_s"]
             )
+        elif (
+            self.behaviour == "extend"
+            and self.behaviour_duration_s
+            < self.personality["navigator"]["extend"]["minimum_duration_s"]
+        ):
+            # Extending for not enough time
+            return True
         else:
             # Velocity condition not met, not in spiral
             # Reset time in spiral

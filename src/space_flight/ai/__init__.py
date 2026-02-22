@@ -54,7 +54,7 @@ class Personality:
             "speeding": {"speed_mps": 2000.0},
             "fire": {
                 "minimimum_window_duration_s": 0.5,
-                "maximum_distance_m": 600,
+                "maximum_distance_m": 1000,
                 "maximum_angle_rad": np.deg2rad(5),
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
             },
@@ -82,12 +82,12 @@ class Personality:
                 "minimum_cos_angle": np.cos(np.deg2rad(30)),
             },
             "extend": {
-                "minimum_duration_s": 0.5,
+                "minimum_duration_s": 3.0,
                 "maximal_time_in_spiral_s": 5.0,
-                "minimum_closing_speed_mps": 20.0,
-                "maximal_lateral_speed_mps": 100.0,
+                "minimum_closing_speed_mps": 100.0,
+                "maximal_lateral_speed_mps": 50.0,
             },
-            "reposition": {"minimum_time_to_overshoot_s": 1.5},
+            "reposition": {"minimum_time_to_overshoot_s": 0.5},
         },
         "pilot": {
             "sample_time_s": 0.1,
