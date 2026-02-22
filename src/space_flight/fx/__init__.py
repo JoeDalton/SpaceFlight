@@ -6,13 +6,15 @@ from space_flight import DATAFILES_PATH
 from space_flight.fx.explosions import ExplosionFire, ExplosionSmoke
 from space_flight.fx.generic_fx_classes import EffectPool
 
+# TODO : Load with asset manager ?
+
 
 def load_explosion_effect_pools(game):
-    tex_dir = Path(DATAFILES_PATH / "sprites/smokeParticleAssets/Black smoke")
+    tex_dir = Path(DATAFILES_PATH / "sprites/particles/black_smoke")
     game.smoke_pool = EffectPool(
         game=game, texture_directory=tex_dir, effect_class=ExplosionSmoke
     )
-    tex_dir = Path(DATAFILES_PATH / "sprites/smokeParticleAssets/Explosion")
+    tex_dir = Path(DATAFILES_PATH / "sprites/particles/explosion")
     game.fire_pool = EffectPool(
         game=game, texture_directory=tex_dir, effect_class=ExplosionFire
     )

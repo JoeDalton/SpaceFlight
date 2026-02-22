@@ -9,6 +9,54 @@ LOGGER = logging.getLogger()
 SOUND_POOL_LENGTH = 100
 
 
+class TexturePool:
+    """
+    A class to hold textures ready to be displayed, using a pool to avoid
+    reloading resources
+    """
+
+    def __init__(self, app, path: Path, pattern: str):
+        if path.is_dir():
+            # path is a directory => Find all matching files
+            self.pool = build_texture_pool(app=app, directory=path, pattern=pattern)
+        else:
+            # Path is a single file
+            self.pool = [load_texture(app=app, texture_file=path)]
+
+    def get_texture(self) -> object:
+        """
+        Returns a random texture from the pool
+
+        :return: A texture object
+        """
+        return random.choice(self.pool)
+
+
+def build_texture_pool(app, directory: Path, pattern: str) -> list:
+    """
+    Builds a sound list from a glob pattern and loads a pool
+
+    :param pattern: The glob pattern to find the sound files
+    :return: a sound list
+    """
+    texture_files = list(directory.glob(pattern))
+    texture_pool = []
+    for texture_file in texture_files:
+        texture = load_texture(app, texture_file)
+        texture_pool.append(texture)
+    return texture_pool
+
+
+def load_texture(app, texture_file: str) -> object:
+    """
+    Loads a texture from file
+
+    :param texture_file: The texture file to load
+    :return: The texture object
+    """
+    return app.loader.loadTexture(texture_file)
+
+
 class SoundPool:
     """
     A class to hold sounds ready to be played, using a pool to avoid reloading resources
@@ -30,12 +78,12 @@ class SoundPool:
                     sound = load_generic_sound(app=app, sound_file=path)
                 self.pool.append(sound)
 
-    def get_sound(self, randomize_pitch: bool = False):
+    def get_sound(self, randomize_pitch: bool = False) -> object:
         """
-        Returns a sound object ready to be played
+        Returns a random sound object from the pool, ready to be played
 
-        :param randomize_pitch: whether the returned sound must have a randomized pitch
-        :return: a sound object, ready to be played
+        :param randomize_pitch: Whether the returned sound must have a randomized pitch
+        :return: A sound object, ready to be played
         """
         for sound in self.pool:
             # Must use a non-currently-playing sound, otherwise it will restart
@@ -71,7 +119,7 @@ def build_sound_pool(app, directory: Path, pattern: str, is_3d: bool) -> list:
 
 def load_3d_sound(app, sound_file: str) -> object:
     """
-    Loads a 3D sound
+    Loads a 3D sound from file
 
     :param sound_file: The sound file to load
     :return: The 3d sound object
@@ -81,7 +129,7 @@ def load_3d_sound(app, sound_file: str) -> object:
 
 def load_generic_sound(app, sound_file: str):
     """
-    Loads a non-3d sound
+    Loads a non-3d sound from file
 
     :param sound_file: The sound file to load
     :return: The sound object
