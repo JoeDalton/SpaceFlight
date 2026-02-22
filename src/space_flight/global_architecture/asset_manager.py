@@ -21,9 +21,9 @@ ASSETS_TO_LOAD = [
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_red.png", ""),
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_green.png", ""),
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_blue.png", ""),
-    # # Explosion effects
-    # ("effect", DATAFILES_PATH / "sprites/particles/explosion", "*.png"),
-    # ("effect", DATAFILES_PATH / "sprites/particles/black_smoke", "*.png"),
+    # Explosion textures
+    ("texture", DATAFILES_PATH / "sprites/particles/explosion", "*.png"),
+    ("texture", DATAFILES_PATH / "sprites/particles/black_smoke", "*.png"),
     # Asteroids # TODO use bam files for faster loading
     ("model", DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
@@ -87,8 +87,6 @@ class AssetManager:
 
         elif asset_type == "texture":
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
-        # elif asset_type == "effect":
-        #     self.assets[path] = EffectPool(app=self.app, path=path, pattern=pattern)
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
 

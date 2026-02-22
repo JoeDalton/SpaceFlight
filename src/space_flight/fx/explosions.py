@@ -1,11 +1,11 @@
 import random
-from typing import List
 
 import numpy as np
 from direct.interval.IntervalGlobal import Func, LerpFunc, Parallel, Sequence, Wait
 from panda3d.core import CardMaker, TransparencyAttrib, Vec4
 
 from space_flight.fx.generic_fx_classes import Effect, EffectPool
+from space_flight.global_architecture.asset_pools import TexturePool
 
 TRAJECTORY_LIFE_TIME_S = 5.0
 FIRE_EXPANSION_TIME_S = 2.0
@@ -19,7 +19,7 @@ class ExplosionSmoke(Effect):
         self,
         game,
         parent_pool: EffectPool,
-        texture_pool: List,
+        texture_pool: TexturePool,
         n_layer: int = 12,
     ):
         Effect.__init__(self, game=game, parent_pool=parent_pool)
@@ -31,7 +31,7 @@ class ExplosionSmoke(Effect):
             cm.setFrame(-1, 1, -1, 1)
             layer = self.attachNewNode(cm.generate())
 
-            texture = random.choice(texture_pool)
+            texture = texture_pool.get_texture()
             layer.setTexture(texture)
             layer.setTransparency(TransparencyAttrib.MAlpha)
             layer.setDepthWrite(False)
@@ -101,7 +101,7 @@ class ExplosionFire(Effect):
         self,
         game,
         parent_pool: EffectPool,
-        texture_pool: List,
+        texture_pool: TexturePool,
         n_layer: int = 12,
     ):
         Effect.__init__(self, game=game, parent_pool=parent_pool)
@@ -113,7 +113,7 @@ class ExplosionFire(Effect):
             cm.setFrame(-1, 1, -1, 1)
             layer = self.attachNewNode(cm.generate())
 
-            texture = random.choice(texture_pool)
+            texture = texture_pool.get_texture()
             layer.setTexture(texture)
             layer.setTransparency(TransparencyAttrib.MAlpha)
             layer.setDepthWrite(False)

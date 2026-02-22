@@ -52,11 +52,11 @@ class Effect(NodePath):
 
 
 class EffectPool:
-    def __init__(
-        self, game, texture_directory: Path, effect_class: Effect, initialize_size=20
-    ):
+    def __init__(self, game, path: Path, effect_class: Effect, initialize_size=20):
         self.game = game
-        self.build_texture_pool(texture_directory)
+        self.texture_pool = self.laser_texture = self.game.app.asset_manager.assets[
+            path
+        ]
         self.free = []
         self.used = []
         self.effect_class = effect_class
@@ -83,10 +83,3 @@ class EffectPool:
         if effect in self.used:
             self.used.remove(effect)
         self.free.append(effect)
-
-    def build_texture_pool(self, texture_directory: Path):
-        pattern = "*.png"
-        texture_files = list(texture_directory.glob(pattern))
-        self.texture_pool = []
-        for file in texture_files:
-            self.texture_pool.append(self.game.app.loader.loadTexture(file))

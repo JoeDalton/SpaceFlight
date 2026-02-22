@@ -11,13 +11,9 @@ from space_flight.fx.generic_fx_classes import EffectPool
 
 def load_explosion_effect_pools(game):
     tex_dir = Path(DATAFILES_PATH / "sprites/particles/black_smoke")
-    game.smoke_pool = EffectPool(
-        game=game, texture_directory=tex_dir, effect_class=ExplosionSmoke
-    )
+    game.smoke_pool = EffectPool(game=game, path=tex_dir, effect_class=ExplosionSmoke)
     tex_dir = Path(DATAFILES_PATH / "sprites/particles/explosion")
-    game.fire_pool = EffectPool(
-        game=game, texture_directory=tex_dir, effect_class=ExplosionFire
-    )
+    game.fire_pool = EffectPool(game=game, path=tex_dir, effect_class=ExplosionFire)
 
 
 def spawn_explosion(game, position: np.ndarray, scale: float, speed: np.ndarray):
