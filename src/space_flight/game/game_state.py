@@ -1,10 +1,8 @@
-import numpy as np
-
 from space_flight.ai.interactions import Interactions
-from space_flight.bot import spawn_bot
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
 from space_flight.fx import load_explosion_effect_pools
+from space_flight.game.levels.demo_level import build_demo_level
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -12,13 +10,48 @@ from space_flight.game.time_keeping import (
 )
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.integrator import Integrator
-from space_flight.player import Player
-from space_flight.scenes.scenes import scene_factory
 from space_flight.ui.hud import HUD, TargetHUD
 
 
 class GameState(BaseState):
     def enter(self):
+        self.initialize_game_structure()
+
+        build_demo_level(game=self)
+        """
+        DEBUG
+        """
+        # self.app.oobe()
+        # self.app.toggle_wireframe()
+        # self.app.setFrameRateMeter(True)
+        # self.app.setSceneGraphAnalyzerMeter(True)
+
+        """
+        HUD
+        """
+        HUD(game=self)
+        TargetHUD(game=self)
+
+        """
+        Graphics options
+        """
+        # self.app.render.setShaderAuto()
+        # self.app.render.setAntialias(AntialiasAttrib.MAuto)
+
+        """
+        Run game
+        """
+        self.app.taskMgr.add(self.update_game_world_task, "Update game world")
+
+        # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
+        # time step of the sim. Fix it properly !
+        self.app.taskMgr.doMethodLater(1.0, self.start, "start game")
+        # self.resume()
+
+    def initialize_game_structure(self):
+        """
+        Initializes all the necessary game objects
+        """
         self.app.set_background_color(0, 0, 0)
         """
         Initialize time keeping
@@ -32,12 +65,7 @@ class GameState(BaseState):
         Initialize sound system
         """
         self.app.sfx.get_sounds_from_asset_manager()
-        # music = self.loader.loadMusic(
-        # DATAFILES_PATH / "sounds/music_Koyaanisqatsi.mp3"
-        # )
-        # music = self.loader.loadMusic(DATAFILES_PATH / "sounds/music_westworld.mp3")
-        # music.setLoop(True)
-        # music.setVolume(0.8)
+
         """
         Initialize special effects
         """
@@ -70,117 +98,9 @@ class GameState(BaseState):
         self.actor_methods = {}
 
         """
-        Initialize player and ship
+        Initialize a list of objects to clean at game exit
         """
-        self.player = Player(
-            game=self,
-            ship_type="a-wing",
-            ini_position=np.array([0, 0, 0]),
-            is_neutral=False,
-            has_ai=True,
-        )
-
-        """
-        Build scene
-        `asteroids` or `lava_planet` or `debug_collisions`
-        """
-
-        self.scene = scene_factory(game=self, scene_name="asteroids")
-
-        """
-        Initialize dummy bots
-        """
-
-        wp_distance = 1000
-        waypoints = [
-            np.array([0, 0, 0]),
-            np.array([0, wp_distance, 0]),
-            np.array([0, wp_distance, wp_distance]),
-            np.array([0, 0, wp_distance]),
-            np.array([wp_distance, 0, wp_distance]),
-            np.array([wp_distance, 0, 0]),
-            np.array([0, 0, 0]),
-            np.array([0, -wp_distance, 0]),
-            np.array([0, -wp_distance, -wp_distance]),
-            np.array([0, 0, -wp_distance]),
-            np.array([-wp_distance, 0, -wp_distance]),
-            np.array([-wp_distance, 0, 0]),
-        ]
-        self.lead_bot = spawn_bot(
-            game=self,
-            name="lead_2",
-            ship_type="tie-interceptor",
-            ini_position=np.array([0, -200, 2]),
-            has_debug_trihedron=True,
-            team=2,
-            debug_decisions=True,
-        )
-        self.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-
-        # self.chase_bot = spawn_bot(
-        #     game=self,
-        #     name="chase_1",
-        #     ship_type="a-wing",
-        #     ini_position=np.array([0, -2000, -0]),
-        #     has_debug_trihedron=True,
-        #     team=1,
-        #     debug_decisions=True,
-        # )
-        # self.chase_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-
-        # for _ in range(5):
-        #     bot = spawn_bot(
-        #         game=self,
-        #         name="team_1",
-        #         ship_type="x-wing",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=1,
-        #     )
-        #     bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-
-        # for _ in range(5):
-        #     bot = spawn_bot(
-        #         game=self,
-        #         name="team_2",
-        #         ship_type="tie-interceptor",
-        #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-        #         has_debug_trihedron=True,
-        #         team=2,
-        #     )
-        #     bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-
-        """
-        DEBUG
-        """
-        # self.app.oobe()
-        # self.app.toggle_wireframe()
-        # self.app.setFrameRateMeter(True)
-        # self.app.setSceneGraphAnalyzerMeter(True)
-
-        """
-        HUD
-        """
-        HUD(game=self)
-        TargetHUD(game=self)
-
-        """
-        Launch music
-        """
-        # music.play()
-
-        # self.app.render.setShaderAuto()
-        # self.app.render.setAntialias(AntialiasAttrib.MAuto)
-
-        """
-        Run game
-        """
-        self.app.taskMgr.add(self.update_game_world_task, "Update game world")
-
-        # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
-        # time step of the sim. Fix it properly !
-        self.app.taskMgr.doMethodLater(1.0, self.start, "start game")
-        # self.resume()
+        self.game_objects = []
 
     def start(self, task):
         self.is_paused = False
@@ -232,5 +152,7 @@ class GameState(BaseState):
             self.game_time.resume()
 
     def exit(self):
-        # TODO: clear all nodes and game objects
+        # TODO: methods to clean everything
+        for object in self.game_objects:
+            object.clean()
         print("Cleaning up game state")

@@ -4,6 +4,8 @@ from direct.gui.DirectGui import DirectButton
 
 from space_flight.global_architecture.base_state import BaseState
 
+# TODO: overlay transparent-grey image between game and  menu buttons
+
 
 class PauseMenuState(BaseState):
     def enter(self):

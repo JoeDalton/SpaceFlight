@@ -5,6 +5,8 @@ from direct.gui.DirectGui import DirectButton
 from space_flight.game.game_state import GameState
 from space_flight.global_architecture.base_state import BaseState
 
+# TODO: Background image
+
 
 class MainMenuState(BaseState):
     def enter(self):
