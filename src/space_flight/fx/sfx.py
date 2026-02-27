@@ -64,15 +64,21 @@ class SFX:
         return self.audio3d.loadSfx(sound_file)
 
     def get_sounds_from_asset_manager(self):
-        self.player_hit_sound_pool = self.app.asset_manager.assets[
-            DATAFILES_PATH / "sounds/impacts/laser_on_player"
-        ]
-        self.distant_target_hit_sound_pool = self.app.asset_manager.assets[
-            DATAFILES_PATH / "sounds/impacts/laser_distant_on_target"
-        ]
-        self.terrain_hit_sound_pool = self.app.asset_manager.assets[
-            DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock"
-        ]
+        self.player_hit_sound_pool = self.app.asset_manager.get_asset(
+            asset_type="3d_sound",
+            path=DATAFILES_PATH / "sounds/impacts/laser_on_player",
+            pattern="*.wav",
+        )
+        self.distant_target_hit_sound_pool = self.app.asset_manager.get_asset(
+            asset_type="sound",
+            path=DATAFILES_PATH / "sounds/impacts/laser_distant_on_target",
+            pattern="*.wav",
+        )
+        self.terrain_hit_sound_pool = self.app.asset_manager.get_asset(
+            asset_type="sound",
+            path=DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock",
+            pattern="*.wav",
+        )
 
     def distant_impact_hit(
         self, player_ship_pos: np.ndarray, hit_pos: np.ndarray, impact_type: str

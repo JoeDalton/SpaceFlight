@@ -39,12 +39,14 @@ class AsteroidField:
 
         # Get 3D models from asset manager
         asteroid_models = [
-            self.game.app.asset_manager.assets[
-                DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf"
-            ],
-            self.game.app.asset_manager.assets[
-                DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf"
-            ],
+            self.game.app.asset_manager.get_asset(
+                asset_type="model",
+                path=DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf",
+            ),
+            self.game.app.asset_manager.get_asset(
+                asset_type="model",
+                path=DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf",
+            ),
         ]
 
         # Prepare integration

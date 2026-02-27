@@ -4,9 +4,10 @@ from space_flight import DATAFILES_PATH
 class Skybox:
     def __init__(self, game, name: str = "purple"):
         self.game = game
-        self.skybox = self.game.app.asset_manager.assets[
-            DATAFILES_PATH / f"models/skyboxes/sky_{name}.bam"
-        ]
+        self.skybox = self.game.app.asset_manager.get_asset(
+            asset_type="model",
+            path=DATAFILES_PATH / f"models/skyboxes/sky_{name}.bam",
+        )
         self.skybox.setBin("background", 1)
         self.skybox.setDepthWrite(0)
         self.skybox.reparentTo(self.game.root_node)

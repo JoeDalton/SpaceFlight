@@ -49,7 +49,10 @@ class LaserCannon:
 
         # Sound initialization
         sound_file = DATAFILES_PATH / self.parent_ship.conf["laser_sound"]
-        self.sound_pool = self.game.app.asset_manager.assets[sound_file]
+        self.sound_pool = self.game.app.asset_manager.get_asset(
+            asset_type="3d_sound",
+            path=sound_file,
+        )
 
         # Prepare laser model
         laser_intensity = 1.0
@@ -61,9 +64,10 @@ class LaserCannon:
             self.light_color = (0, 0, laser_intensity, 1)
         else:
             raise ValueError
-        self.laser_texture = self.game.app.asset_manager.assets[
-            DATAFILES_PATH / f"sprites/lasers/laser_{color}.png"
-        ].get_texture()
+        self.laser_texture = self.game.app.asset_manager.get_asset(
+            asset_type="texture",
+            path=DATAFILES_PATH / f"sprites/lasers/laser_{color}.png",
+        ).get_texture()
 
         # Initialize cannon
         self.current_next_cannon_idx = 0

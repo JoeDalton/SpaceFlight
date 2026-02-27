@@ -54,9 +54,11 @@ class Effect(NodePath):
 class EffectPool:
     def __init__(self, game, path: Path, effect_class: Effect, initialize_size=20):
         self.game = game
-        self.texture_pool = self.laser_texture = self.game.app.asset_manager.assets[
-            path
-        ]
+        self.texture_pool = self.game.app.asset_manager.get_asset(
+            asset_type="texture",
+            path=path,
+            pattern="*.png",
+        )
         self.free = []
         self.used = []
         self.effect_class = effect_class

@@ -56,9 +56,10 @@ class SpeedDustCloud:
         color = random.choice(self.colors)
         particle.setPos(x, y, z)
         particle.setTexture(
-            self.game.app.asset_manager.assets[
-                DATAFILES_PATH / f"sprites/dust/dust_{color}.png"
-            ].get_texture()
+            self.game.app.asset_manager.get_asset(
+                asset_type="texture",
+                path=DATAFILES_PATH / f"sprites/dust/dust_{color}.png",
+            ).get_texture()
         )
         particle.setScale(scaling, scaling, scaling)
 

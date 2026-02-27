@@ -1,9 +1,11 @@
+from pathlib import Path
+
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
-ASSETS_TO_LOAD = [
+COMMON_ASSETS_TO_LOAD = [
     # Battle sounds
     ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player", "*.wav"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target", "*.wav"),
@@ -45,19 +47,41 @@ ASSETS_TO_LOAD = [
 
 class AssetManager:
     """
-    A class to pre-load and store assets
-
-    TODO add something to load objects "on the fly"
-    if they were not loaded during init ?
+    A class to pre-load and store assets, with a possibility to load assets on the fly
     """
 
     def __init__(self, app: ShowBase):
         self.app = app
-        self.assets_to_load = ASSETS_TO_LOAD.copy()
-        self.n_assets = len(self.assets_to_load)
         self.assets = {}
 
-    def load_game_assets(self, app_state):
+    def get_asset(self, asset_type: str, path: Path, pattern: str = "") -> object:
+        """
+        Gets an asset from the dictionary of already-loaded assets or load it from file
+        and store it
+
+        :param asset_type: The type of asset
+        :param path: The path where the asset is found
+        :param pattern: The asset pattern if path is a directory
+        """
+        try:
+            # Assume the asset has already been loaded
+            asset = self.assets[path]
+        except KeyError:
+            # Load it, store it and return it
+            self.load_single_asset(asset_type=asset_type, path=path, pattern=pattern)
+            asset = self.assets[path]
+        return asset
+
+    def load_game_assets(self, app_state, assets_to_load: tuple = None):
+        """
+        Launches the load_assets task. By default, load the common assets
+
+        :param app_state: The app's state
+        """
+        if assets_to_load is None:
+            self.assets_to_load = COMMON_ASSETS_TO_LOAD.copy()
+        self.n_assets_to_load = len(self.assets_to_load)
+
         self.app.taskMgr.add(
             self.load_assets_task,
             "load-assets-task",
@@ -66,6 +90,11 @@ class AssetManager:
         )
 
     def load_assets_task(self, app_state, task):
+        """
+        The task to load assets at startup
+
+        :param app_state: The app's state
+        """
         if not self.assets_to_load:
             # Done loading
             self.app.taskMgr.remove("load-assets-task")
@@ -73,7 +102,23 @@ class AssetManager:
             return task.done
 
         asset_type, path, pattern = self.assets_to_load.pop(0)
+        self.load_single_asset(asset_type=asset_type, path=path, pattern=pattern)
 
+        # Update progress
+        progress = (
+            self.n_assets_to_load - len(self.assets_to_load)
+        ) / self.n_assets_to_load
+        app_state.progress_bar.update(value=progress)
+        return task.cont
+
+    def load_single_asset(self, asset_type: str, path: Path, pattern: str):
+        """
+        Loads an asset from file
+
+        :param asset_type: The type of asset
+        :param path: The path where the asset is found
+        :param pattern: The asset pattern if path is a directory
+        """
         if asset_type == "3d_sound":
             self.assets[path] = SoundPool(
                 app=self.app, path=path, pattern=pattern, is_3d=True
@@ -89,8 +134,3 @@ class AssetManager:
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
-
-        # Update progress
-        progress = (self.n_assets - len(self.assets_to_load)) / self.n_assets
-        app_state.progress_bar.update(value=progress)
-        return task.cont
