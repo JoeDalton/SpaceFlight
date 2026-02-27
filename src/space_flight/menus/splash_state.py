@@ -63,7 +63,7 @@ class SplashState(BaseState):
 
     def go_to_menu(self):
         self.app.ignore("splash-finished")
-        self.app.state_manager.change_state(MainMenuState)
+        self.app.state_manager.replace(MainMenuState)
 
     def exit(self):
         self.sequence.finish()

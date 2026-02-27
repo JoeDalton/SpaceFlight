@@ -15,6 +15,8 @@ from space_flight.ui.hud import HUD, TargetHUD
 
 class GameState(BaseState):
     def enter(self):
+        # TODO: Initialize game in a loading state stacked above self
+        # TODO: Handle input management in enter/pause/resume methods
         self.initialize_game_structure()
 
         build_demo_level(game=self)
@@ -46,7 +48,6 @@ class GameState(BaseState):
         # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
         # time step of the sim. Fix it properly !
         self.app.taskMgr.doMethodLater(0.1, self.start, "start game")
-        # self.resume()
 
     def initialize_game_structure(self):
         """
@@ -123,15 +124,16 @@ class GameState(BaseState):
 
         return task.cont
 
+    def set_pause(self):
+        self.app.state_manager.push(
+            state_class=self.app.state_manager.PAUSE_MENU_STATE,
+        )
+
     def pause(self):
         if not self.is_paused:
             self.is_paused = True
             self.interval_manager.pause()
             self.game_time.pause()
-            self.app.state_manager.change_state(
-                new_state_class=self.app.state_manager.PAUSE_MENU_STATE,
-                pause_current_state=True,
-            )
 
     def resume(self):
         if self.is_paused:

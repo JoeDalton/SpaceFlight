@@ -19,7 +19,6 @@ loadPrcFileData("", "notify-level-ffmpeg error")
 
 
 class StateManager:
-    # TODO: stacked state manager ? Better for nested menus ?
     SPLASH_STATE = SplashState
     MAIN_MENU_STATE = MainMenuState
     PAUSE_MENU_STATE = PauseMenuState
@@ -28,53 +27,61 @@ class StateManager:
 
     def __init__(self, app):
         self.app = app
+        self.stack: list[BaseState] = []
 
-        self.current_state: BaseState = None
-        self.saved_states: list[BaseState] = []
+    def push(self, state_class: BaseState):
+        """
+        Pauses the currently running state then
+        pushes a new state on top of the current stack.
 
-    def change_state(
-        self,
-        new_state_class: BaseState,
-        pause_current_state: bool = False,
-        resume_new_state: bool = False,
-    ):
-        if pause_current_state and self.current_state:
-            self.saved_states.append(self.current_state)
-        elif pause_current_state and not self.current_state:
-            LOGGER.warning("No current state to pause and save")
-        elif not pause_current_state and self.current_state:
-            self.current_state.exit()
-        else:
-            # Last case, nothing to do
-            pass
+        :param state_class: The new state class to enter
+        """
+        if self.stack:
+            self.stack[-1].pause()
+        state_instance = state_class(self.app)
+        self.stack.append(state_instance)
+        state_instance.enter()
 
-        if resume_new_state:
-            n_saved_states = len(self.saved_states)
-            if n_saved_states != 0:
-                next_state_idx = -1
-                # Find the index of the state to resume
-                for idx in range(n_saved_states):
-                    if isinstance(self.saved_states[idx], new_state_class):
-                        next_state_idx = idx
-                        break
-                if next_state_idx == -1:
-                    raise RuntimeError(
-                        "Can't resume state because there "
-                        "are no saved states of matching type"
-                    )
-                else:
-                    # Remove saved state from self.saved_states
-                    # and sets it as the current state
-                    self.current_state = self.saved_states.pop(next_state_idx)
-                    self.current_state.resume()
+    def pop(self: BaseState):
+        """
+        Exits the current state, removes it from the stack
+        and resumes the new top of the stack
+        """
+        if not self.stack:
+            LOGGER.warning("No current state to pop")
+            return
 
-            else:
-                raise RuntimeError(
-                    "Can't resume state because there are no saved states"
-                )
-        else:
-            self.current_state = new_state_class(self.app)
-            self.current_state.enter()
+        top = self.stack.pop()
+        top.exit()
+
+        if self.stack:
+            self.stack[-1].resume()
+
+    def replace(self, state_class: BaseState):
+        """
+        Replaces the current state by a new one. It takes it place in the stack.
+
+        :param state_class: _description_
+        """
+        self.pop()
+        self.push(state_class)
+
+    def get_current(self):
+        """
+        Returns the current state
+
+        :return: The current state
+        """
+        return self.stack[-1] if self.stack else None
+
+    def clear(self):
+        """
+        Clears the stack below the current state
+        """
+        if self.stack:
+            for state_idx in range(len(self.stack) - 1):
+                self.stack[state_idx].exit()
+            self.stack = [self.get_current()]
 
 
 class SpaceFlightSimulator(ShowBase):
@@ -87,4 +94,4 @@ class SpaceFlightSimulator(ShowBase):
         self.sfx = SFX(app=self)
 
         # Start with splash screen
-        self.state_manager.change_state(SplashState)
+        self.state_manager.push(SplashState)

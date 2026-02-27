@@ -30,7 +30,7 @@ class MainMenuState(BaseState):
         )
 
     def start_game(self):
-        self.app.state_manager.change_state(GameState)
+        self.app.state_manager.replace(GameState)
 
     def enter_settings(self):
         pass

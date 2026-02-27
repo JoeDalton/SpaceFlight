@@ -29,14 +29,11 @@ class PauseMenuState(BaseState):
         )
 
     def resume_game(self):
-        self.app.state_manager.change_state(
-            new_state_class=self.app.state_manager.GAME_STATE, resume_new_state=True
-        )
+        self.app.state_manager.pop()
 
     def return_to_main(self):
-        self.app.state_manager.change_state(
-            new_state_class=self.app.state_manager.MAIN_MENU_STATE
-        )
+        self.app.state_manager.clear()
+        self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
 
     def quit_game(self):
         sys.exit()

@@ -33,7 +33,7 @@ class InputSystem:
         self.game.app.disableMouse()
         self.is_boost = False
         # Game UI
-        self.game.app.accept("escape", self.game.pause)
+        self.game.app.accept("escape", self.game.set_pause)
 
     def action(self, button):
         # Just show which button has been pressed.
