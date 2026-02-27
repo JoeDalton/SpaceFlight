@@ -14,7 +14,7 @@ class Effect(NodePath):
         NodePath.__init__(self, "explosion_smoke")
         self.game = game
         self.parent_pool = parent_pool
-        self.reparentTo(game.app.render)
+        self.reparentTo(game.root_node)
 
     def play(self):
         raise NotImplementedError

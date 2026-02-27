@@ -93,7 +93,7 @@ class Ship:
 
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
-        self.node.reparentTo(self.game.app.render)
+        self.node.reparentTo(self.game.root_node)
 
         # Setup state vector
         self.position = ini_position.copy()

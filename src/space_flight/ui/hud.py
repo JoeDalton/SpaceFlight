@@ -193,7 +193,7 @@ class TargetHUD:
             world_pos = Point3(*target_pos)
 
             # Convert to camera space
-            cam_space_pos = cam.getRelativePoint(self.game.app.render, world_pos)
+            cam_space_pos = cam.getRelativePoint(self.game.root_node, world_pos)
             screen_pos = Point2()
             lens.project(cam_space_pos, screen_pos)
 
@@ -223,7 +223,7 @@ class TargetHUD:
 
             # Find distance and write it below the box
             distance = (
-                world_pos - self.game.app.camera.getPos(self.game.app.render)
+                world_pos - self.game.app.camera.getPos(self.game.root_node)
             ).length()
             self.distance_label["text"] = f"{int(distance/10)*10} m"
 

@@ -21,7 +21,7 @@ class Lighting:
                 directional_color[3],
             )
         )
-        dlnp = game.app.render.attach_new_node(dlight)
+        dlnp = game.root_node.attach_new_node(dlight)
         dlnp.set_hpr(
             directional_direction[0],
             directional_direction[1],
@@ -39,10 +39,10 @@ class Lighting:
                 ambient_color[3],
             )
         )
-        alnp = game.app.render.attach_new_node(alight)
+        alnp = game.root_node.attach_new_node(alight)
         game.app.render.set_light(alnp)
 
         # # Use a 512x512 resolution shadow map
         # dlight.setShadowCaster(True, 512, 512)
         # # Enable the shader generator for the receiving nodes
-        # app.render.setShaderAuto()
+        # game.app.render.setShaderAuto()

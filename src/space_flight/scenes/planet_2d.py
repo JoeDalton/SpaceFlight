@@ -18,7 +18,7 @@ class Planet2D:
         cm.setFrame(-1, 1, -1, 1)
 
         root = NodePath("planet_node")
-        root.reparentTo(game.app.render)
+        root.reparentTo(game.root_node)
         root.setTransparency(TransparencyAttrib.MAlpha)
         root.setLightOff()
 

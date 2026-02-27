@@ -76,7 +76,7 @@ class LaserCannon:
             return
 
         # Start position and orientation relative to the ship
-        ship_quat = self.parent_ship.node.get_quat(self.game.app.render)
+        ship_quat = self.parent_ship.node.get_quat(self.game.root_node)
         q_ship = np.quaternion(*ship_quat)
         q_laser = q_ship * np.quaternion(SQT2_S, SQT2_S, 0, 0)
         ship_dir = ship_quat.get_forward()
@@ -84,7 +84,7 @@ class LaserCannon:
         # Compute start and end positions
         speed = LASER_SPEED_MPS * np.array(ship_dir) + self.parent_ship.speed
         start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
-            self.game.app.render
+            self.game.root_node
         )
 
         # TODO : shoot slightly inward so that the shots cross at mid range
@@ -150,7 +150,7 @@ class LaserShot:
         # Create flat quad
         cm = CardMaker("laser")
         cm.set_frame(-0.5, 0.5, -4.0, 4.0)
-        self.shot = self.game.app.render.attach_new_node(cm.generate())
+        self.shot = self.game.root_node.attach_new_node(cm.generate())
         self.shot.set_texture(texture)
         self.shot.set_two_sided(True)
         self.shot.set_transparency(TransparencyAttrib.MAlpha)

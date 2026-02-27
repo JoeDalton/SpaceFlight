@@ -58,7 +58,7 @@ class AsteroidField:
         # Initialize instances of asteroids
         for ast_idx in range(self.n_asteroids):
             asteroid_model = random.choice(asteroid_models)
-            instance = self.game.app.render.attachNewNode("asteroid_instance")
+            instance = self.game.root_node.attachNewNode("asteroid_instance")
             asteroid_model.instanceTo(instance)
 
             # Set initial position

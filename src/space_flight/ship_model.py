@@ -11,7 +11,7 @@ class ShipModel:
         self.game = game
         self.ship_type = ship_type
         # Instantiate already-loaded models to a new node
-        self.model = self.game.app.render.attachNewNode("ship_model_instance")
+        self.model = self.game.root_node.attachNewNode("ship_model_instance")
 
         if self.ship_type == "a-wing":  # OK
             if is_cockpit:

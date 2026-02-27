@@ -65,33 +65,9 @@ class SceneAsteroids(Scene):
         self.drydock = self.game.app.loader.load_model(
             DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
         )
-        self.drydock.reparent_to(self.game.app.render)
+        self.drydock.reparent_to(self.game.root_node)
         self.drydock.set_pos(0, 8000, 50)
         self.drydock.set_scale(100, 100, 100)
-
-        # Planet
-        # self.planet = self.loader.load_model(
-        #     DATAFILES_PATH / "models/jupiter/scene.gltf"
-        # )
-        # self.planet.reparent_to(self.render)
-        # self.planet.set_pos(0, 8000, 50)
-        # self.planet.set_scale(100, 100, 100)
-
-        # Terrain
-        # self.terrain = self.loader.load_model(
-        #     DATAFILES_PATH / "models/barringer_meteorite_crater/scene.gltf"
-        # )
-        # self.terrain.reparent_to(self.render)
-        # self.terrain.set_pos(0, 8000, 0)
-        # self.terrain.set_scale(1000, 1000, 1000)
-
-        # # test asset
-        # self.test_asset = self.loader.load_model(
-        # DATAFILES_PATH / "models/venator-class_star_destroyer/scene.gltf"
-        # )
-        # self.test_asset.reparent_to(self.render)
-        # self.test_asset.set_pos(0, 1000, 50)
-        # self.test_asset.set_scale(1000, 1000, 1000)
 
 
 class SceneLavaPlanet(Scene):
@@ -133,7 +109,7 @@ class SceneLavaPlanet(Scene):
         self.test_asset = self.game.app.loader.load_model(
             DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
         )
-        self.test_asset.reparent_to(self.game.app.render)
+        self.test_asset.reparent_to(self.game.root_node)
         self.test_asset.set_pos(0, 1000, 50)
         self.test_asset.set_scale(1)
 

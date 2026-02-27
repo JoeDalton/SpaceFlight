@@ -9,7 +9,7 @@ class Skybox:
         ]
         self.skybox.setBin("background", 1)
         self.skybox.setDepthWrite(0)
-        self.skybox.reparentTo(self.game.app.render)
+        self.skybox.reparentTo(self.game.root_node)
         self.skybox.set_scale(50000)
         # TODO add to game "tasks" instead of panda3d
         self.game.app.taskMgr.add(self.move_skybox_task, "move_skybox_task")

@@ -41,11 +41,11 @@ class GameState(BaseState):
         """
         Run game
         """
-        self.app.taskMgr.add(self.update_game_world_task, "Update game world")
+        self.app.taskMgr.add(self.update_game_world_task, "update_game_world_task")
 
         # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
         # time step of the sim. Fix it properly !
-        self.app.taskMgr.doMethodLater(1.0, self.start, "start game")
+        self.app.taskMgr.doMethodLater(0.1, self.start, "start game")
         # self.resume()
 
     def initialize_game_structure(self):
@@ -53,53 +53,41 @@ class GameState(BaseState):
         Initializes all the necessary game objects
         """
         self.app.set_background_color(0, 0, 0)
-        """
-        Initialize time keeping
-        """
+
+        # Create a root node for the game
+        self.root_node = self.app.render.attachNewNode("game_root_node")
+
+        # Initialize time keeping
         self.is_paused = True
         self.game_time = GameTimeManager(game=self)
         self.interval_manager = IntervalManager(game=self)
         self.delayed_methods = DelayedMethodManager(game=self)
 
-        """
-        Initialize sound system
-        """
+        # Initialize sound system
         self.app.sfx.get_sounds_from_asset_manager()
 
-        """
-        Initialize special effects
-        """
+        # Initialize special effects
         load_explosion_effect_pools(game=self)
 
-        """
-        Initialize Collision system and Destructibles
-        """
+        # Initialize Collision system and Destructibles
         self.destructibles = Destructibles()
         self.collision_system = CollisionSystem(game=self)
 
-        """
-        Initialize interaction compute between ships
-        """
+        # Initialize interaction compute between ships
         self.interactions = Interactions()
 
-        """
-        Initialize integrator.
-        The update must come before the physics computations :
-        (Player, bots, moving scene...)
-        """
+        # Initialize integrator.
+        # The update must come before the physics computations :
+        # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
 
-        """
-        Initialize a dictionary to hold actors and their update methods
-        {
-            object_id: [method_to_run_1, method_to_run_2]
-        }
-        """
+        # Initialize a dictionary to hold actors and their update methods
+        # {
+        #     object_id: [method_to_run_1, method_to_run_2]
+        # }
         self.actor_methods = {}
 
-        """
-        Initialize a list of objects to clean at game exit
-        """
+        # Initialize a list of objects to clean at game exit
         self.game_objects = []
 
     def start(self, task):
@@ -152,7 +140,45 @@ class GameState(BaseState):
             self.game_time.resume()
 
     def exit(self):
-        # TODO: methods to clean everything
+        """
+        Clean every object in the game session, in reverse order of creation
+        """
+        # Stop the task that updates the world
+        self.app.taskMgr.remove("update_game_world_task")
+
+        # Remove actors
+        for actor in self.interactions.actors:
+            actor.clean()
+        self.interactions.actors = None
+
+        # Remove player
+        self.player.clean()
+        self.player = None
+
+        # Remove other game objects (mostly in the scene)
         for object in self.game_objects:
             object.clean()
-        print("Cleaning up game state")
+        self.game_objects = None
+
+        # Remove game structure
+        self.integrator.clean()
+        self.integrator = None
+        self.interactions.clean()
+        self.interactions = None
+        self.collision_system.clean()
+        self.collision_system = None
+        self.destructibles.clean()
+        self.destructibles = None
+        self.delayed_methods.clean()
+        self.delayed_methods = None
+        self.interval_manager.clean()
+        self.interval_manager = None
+        self.delayed_methods.clean()
+        self.delayed_methods = None
+        self.game_time.clean()
+        self.game_time = None
+
+        # Remove the game's root node to make sure every graphics thing is deleted
+        self.root_node.removeNode()
+
+        print("Cleaniiiiiiiing")
