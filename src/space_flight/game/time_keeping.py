@@ -146,7 +146,7 @@ class DelayedMethodManager:
         self.methods_to_run_dict = {}
 
     def do_method_later(
-        self, delay_s: float, name: str, method: Callable, extra_args: list = []
+        self, delay_s: float, name: str, method: Callable, extra_args: list = None
     ):
         """
         Schedule a method to run at some time in the future
@@ -156,6 +156,7 @@ class DelayedMethodManager:
         :param method: The method itself
         :param extra_args: extra arguments for the method
         """
+        extra_args = extra_args if extra_args is not None else []
         uid = uuid.uuid4()
         self.methods_to_run_dict[name + str(uid)] = {
             "delay_s": delay_s,

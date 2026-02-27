@@ -7,10 +7,14 @@ class Skybox:
     def __init__(self, game, name: str = "purple"):
         self.game = game
         self.id = uuid.uuid4()
-        self.skybox = self.game.app.asset_manager.get_asset(
-            asset_type="model",
-            path=DATAFILES_PATH / f"models/skyboxes/sky_{name}.bam",
+
+        self.skybox = self.game.root_node.attachNewNode("drydock_instance")
+        skybox_path = DATAFILES_PATH / f"models/skyboxes/sky_{name}.bam"
+        self.game.app.asset_manager.instantiate_3d_model_to_node(
+            path=skybox_path,
+            parent_node=self.skybox,
         )
+
         self.skybox.setBin("background", 1)
         self.skybox.setDepthWrite(0)
         self.skybox.reparentTo(self.game.root_node)

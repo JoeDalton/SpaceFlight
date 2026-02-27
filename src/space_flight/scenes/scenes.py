@@ -64,10 +64,11 @@ class SceneAsteroids(Scene):
         )
 
         # Drydock
+        self.drydock = self.game.root_node.attachNewNode("drydock_instance")
         drydock_path = DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
-        self.drydock = self.game.app.asset_manager.get_asset(
-            asset_type="model",
+        self.game.app.asset_manager.instantiate_3d_model_to_node(
             path=drydock_path,
+            parent_node=self.drydock,
         )
         self.drydock.reparent_to(self.game.root_node)
         self.drydock.set_pos(0, 8000, 50)
@@ -131,12 +132,13 @@ class SceneLavaPlanet(Scene):
         self.planet = Planet2D(game=self.game, type="lava")
 
         # Star destroyer
+        self.isd = self.game.root_node.attachNewNode("isd_instance")
         isd_path = (
             DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
         )
-        self.isd = self.game.app.asset_manager.get_asset(
-            asset_type="model",
+        self.game.app.asset_manager.instantiate_3d_model_to_node(
             path=isd_path,
+            parent_node=self.isd,
         )
         self.isd.reparent_to(self.game.root_node)
         self.isd.set_pos(0, 1000, 50)

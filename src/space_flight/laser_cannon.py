@@ -213,7 +213,7 @@ class LaserShot:
             method=self.clean,
         )
 
-    def clean(self):
+    def clean(self, remove_from_game_objects: bool = True):
         """
         Cleans a LaserShot object
         """
@@ -227,7 +227,10 @@ class LaserShot:
         self.shot.removeNode()
         self.shot = None
         # Remove shot from the temporary game objects
-        self.game.game_objects.pop(self.id)
+        if remove_from_game_objects:
+            # Do not do it at the final game cleanup
+            # Otherwise it messes up with the loop
+            self.game.game_objects.pop(self.id)
 
         self.game = None
 

@@ -250,6 +250,9 @@ class Keyboard(InputSystem):
             self.roll_rate_smoothed,
         )
 
+    def clean(self):
+        self.game = None
+
 
 class Joystick(InputSystem):
     # TODO add a joystick center and deadzone calibration utility
@@ -401,3 +404,9 @@ class Joystick(InputSystem):
             self.previous_button_states[i] = is_pressed
 
         return task.cont
+
+    def clean(self):
+        self.game.app.detachInputDevice(self.flightStick)
+        self.game.app.ignore("escape")
+        self.flightStick = None
+        self.game = None

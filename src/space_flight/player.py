@@ -249,6 +249,9 @@ class Player:
         self.rear_view_mirror = None
 
         self.available_targets = None
+        self.input_system.clean()
+        self.input_system = None
+        self.game = None
 
         # No need to clean the ship :
         # It has already been done when all actors were cleaned

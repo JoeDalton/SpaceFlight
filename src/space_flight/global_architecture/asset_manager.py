@@ -138,3 +138,17 @@ class AssetManager:
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
+
+    def instantiate_3d_model_to_node(self, path: str, parent_node):
+        """
+        Gets a 3D model form the dict of assets and attaches an instance to
+        the provided parent node
+
+        :param path: The path of the asset
+        :param parent_node: The node to attach the instance to
+        """
+        model = self.get_asset(
+            asset_type="model",
+            path=path,
+        )
+        model.instanceTo(parent_node)

@@ -16,7 +16,7 @@ Foes in any team > 1
 class Interactions:
     def __init__(
         self,
-        actors: List = [],
+        actors: List = None,
     ):
         """
         A class for computing interactions between actors in the simulation
@@ -24,7 +24,7 @@ class Interactions:
         :param app: The game object
         :param actors: A list containing all actors, defaults to []
         """
-        self.actors: List = actors
+        self.actors: List = actors if actors is not None else []
         self.n_actors: int = len(self.actors)
         self.actors_id_dict = {}
 

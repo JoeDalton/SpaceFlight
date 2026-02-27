@@ -38,15 +38,9 @@ class AsteroidField:
         self.asteroids = []
 
         # Get 3D models from asset manager
-        asteroid_models = [
-            self.game.app.asset_manager.get_asset(
-                asset_type="model",
-                path=DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf",
-            ),
-            self.game.app.asset_manager.get_asset(
-                asset_type="model",
-                path=DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf",
-            ),
+        asteroid_model_paths = [
+            DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf",
+            DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf",
         ]
 
         # Prepare integration
@@ -59,9 +53,12 @@ class AsteroidField:
 
         # Initialize instances of asteroids
         for ast_idx in range(self.n_asteroids):
-            asteroid_model = random.choice(asteroid_models)
+            asteroid_model_path = random.choice(asteroid_model_paths)
             instance = self.game.root_node.attachNewNode("asteroid_instance")
-            asteroid_model.instanceTo(instance)
+            self.game.app.asset_manager.instantiate_3d_model_to_node(
+                path=asteroid_model_path,
+                parent_node=instance,
+            )
 
             # Set initial position
             ini_pos = np.random.rand(3) * field_size - 0.5 * field_size

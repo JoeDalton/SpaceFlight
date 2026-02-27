@@ -1,6 +1,8 @@
-import gc  # Debug
-import sys  # Debug
+import gc
+import logging
+import sys
 
+from space_flight import DEBUG_DELETION
 from space_flight.ai.interactions import Interactions
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
@@ -14,6 +16,8 @@ from space_flight.game.time_keeping import (
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.integrator import Integrator
 from space_flight.ui.hud import HUD, TargetHUD
+
+LOGGER = logging.getLogger()
 
 
 class GameState(BaseState):
@@ -46,7 +50,9 @@ class GameState(BaseState):
         """
         Run game
         """
-        self.app.taskMgr.add(self.update_game_world_task, "update_game_world_task")
+        self.update_task = self.app.taskMgr.add(
+            self.update_game_world_task, "update_game_world_task"
+        )
 
         # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
         # time step of the sim. Fix it properly !
@@ -159,7 +165,9 @@ class GameState(BaseState):
         self.target_hud = None
 
         # Stop the task that updates the world
-        self.app.taskMgr.remove("update_game_world_task")
+        self.app.taskMgr.remove(self.update_task)
+        self.update_task = None
+        # Drop references to the methods to run
         self.actor_methods = None
 
         # Remove actors
@@ -176,8 +184,8 @@ class GameState(BaseState):
         self.scene = None
 
         # Remove other game objects (mostly temporary objects)
-        for key, object in self.game_objects:
-            object.clean()
+        for key, object in self.game_objects.items():
+            object.clean(remove_from_game_objects=False)
             self.game_objects[key] = None
         self.game_objects = None
 
@@ -200,14 +208,11 @@ class GameState(BaseState):
 
         # Remove the game's root node to make sure every graphics thing is deleted
         self.root_node.removeNode()
-
-        self.force_render()
-        self.force_render()
-        self.force_render()
-
-        print("Cleaned ship")
-        print(f"ship nref = {sys.getrefcount(self)}")
-        print(f"ship references {gc.get_referrers(self)}")
+        if DEBUG_DELETION:
+            LOGGER.info("Cleaned game")
+            LOGGER.info(f"game nref = {sys.getrefcount(self)}")
+            LOGGER.info(f"game references {gc.get_referrers(self)}")
 
     def __del__(self):
-        print("Game instance deleted.")
+        if DEBUG_DELETION:
+            LOGGER.info("Game instance deleted.")
