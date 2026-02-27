@@ -100,10 +100,11 @@ class AssetManager:
             self.app.taskMgr.remove("load-assets-task")
             app_state.on_loading_finished()
             return task.done
-
+        # Select the next asset to load
         asset_type, path, pattern = self.assets_to_load.pop(0)
-        self.load_single_asset(asset_type=asset_type, path=path, pattern=pattern)
-
+        # Load it from disk if it has not already been
+        if path not in self.assets.keys():
+            self.load_single_asset(asset_type=asset_type, path=path, pattern=pattern)
         # Update progress
         progress = (
             self.n_assets_to_load - len(self.assets_to_load)
