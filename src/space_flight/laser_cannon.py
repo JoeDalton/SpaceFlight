@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Tuple
 
 import numpy as np
@@ -126,6 +127,7 @@ class LaserCannon:
         self.sound_pool = []
         self.parent_ship = None
         self.laser_texture = None
+        self.game = None
         if DEBUG_DELETION:
             LOGGER.info("Cleaned laser cannon")
 
@@ -148,6 +150,7 @@ class LaserShot:
         quat,
     ):
         self.game = game
+        self.id = uuid.uuid4()
         self.power = power
         self.origin_ship_id = origin_ship_id
 
@@ -164,7 +167,6 @@ class LaserShot:
         my_range = speed * life_time_s
 
         end_pos = start_pos + LVector3(*my_range)
-        light_duration = life_time_s / 2
 
         # Don't rely on scene lighting since lasers emit their own light
         self.shot.set_light_off()
@@ -175,12 +177,12 @@ class LaserShot:
         self.game.interval_manager.play_interval(laser_movement_interval)
 
         # Add light source on laser
-        plight = PointLight("plight")
-        plight.setColor(light_color)
-        plight.set_attenuation(LIGHT_ATTENUATION)
-        plnp = self.shot.attachNewNode(plight)
-        plnp.setPos(0, 0, 0)
-        self.game.app.render.setLight(plnp)
+        self.plight = PointLight("plight")
+        self.plight.setColor(light_color)
+        self.plight.set_attenuation(LIGHT_ATTENUATION)
+        self.plnp = self.shot.attachNewNode(self.plight)
+        self.plnp.setPos(0, 0, 0)
+        self.game.app.render.setLight(self.plnp)
 
         # Initialize collision segment
         # The length of the segment is the typical frame time
@@ -190,7 +192,7 @@ class LaserShot:
         relative_start_position = np.zeros(3)
         length = np.linalg.norm(speed) * dt * np.array([0.0, 0.0, 1.0])
         relative_end_position = relative_start_position + length
-        self.laser_np = attach_collision_segment(
+        self.laser_col_np = attach_collision_segment(
             game=self.game,
             name="laser",
             collider_type="laser",
@@ -200,30 +202,34 @@ class LaserShot:
             relative_end_position=LPoint3(*relative_end_position),
         )
 
+        # Register self in temporary game objects
+        self.game.game_objects[self.id] = self
+
         # Clean laser at the end of its life
         # Make it disappear at the end of range
         self.game.delayed_methods.do_method_later(
-            delay_s=light_duration,
-            name="RemoveLaserLight1",
-            method=self.game.app.render.clear_light,
-            extra_args=[plnp],
-        )
-        self.game.delayed_methods.do_method_later(
-            delay_s=light_duration,
-            name="RemoveLaserLight2",
-            method=plnp.remove_node,
-        )
-        self.game.delayed_methods.do_method_later(
             delay_s=life_time_s,
-            name="DeleteLaserOwner",
-            method=self.laser_np.setPythonTag,
-            extra_args=["owner", None],
+            name="CleanLaserShot",
+            method=self.clean,
         )
-        self.game.delayed_methods.do_method_later(
-            delay_s=life_time_s,
-            name="RemoveLaser",
-            method=self.shot.remove_node,
-        )
+
+    def clean(self):
+        """
+        Cleans a LaserShot object
+        """
+        # Clear light
+        self.game.app.render.clear_light(self.plnp)
+        self.plnp.removeNode()
+        # Remove collision sphere reference to self
+        self.laser_col_np.setPythonTag("owner", None)
+        self.laser_col_np = None
+        # Remove shot node
+        self.shot.removeNode()
+        self.shot = None
+        # Remove shot from the temporary game objects
+        self.game.game_objects.pop(self.id)
+
+        self.game = None
 
     def __del__(self):
         if DEBUG_DELETION:

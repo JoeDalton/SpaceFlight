@@ -71,6 +71,12 @@ class GameTimeManager:
         )
         return average_frame_rate
 
+    def clean(self):
+        """
+        Cleans the GameTimeManager object
+        """
+        self.game = None
+
 
 class IntervalManager:
     """
@@ -122,6 +128,13 @@ class IntervalManager:
         for i in self.active_intervals:
             i.resume()
 
+    def clean(self):
+        """
+        Cleans the IntervalManager object
+        """
+        self.game = None
+        self.active_intervals = None
+
 
 class DelayedMethodManager:
     """
@@ -167,3 +180,10 @@ class DelayedMethodManager:
                     method(*extra_args)
             for name in methods_to_pop:
                 self.methods_to_run_dict.pop(name)
+
+    def clean(self):
+        """
+        Cleans the DelayedMethodManager object
+        """
+        self.game = None
+        self.methods_to_run_dict = None

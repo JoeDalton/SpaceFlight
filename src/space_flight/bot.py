@@ -118,13 +118,19 @@ class Bot(Destructible):
         """
         Remove every child
         """
-        # TODO: use Interactions and eliminate player targets
-
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaning bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
-        self.game.player.remove_target(target_to_remove=self.ship)
-        self.game.interactions.remove_actor(self.ship)
+        try:  # TODO to remove anyway when the player no longer has its own targets
+            self.game.player.remove_target(target_to_remove=self.ship)
+        except AttributeError:
+            # In level cleanup, player may no longer exist at this point
+            pass
+        try:
+            self.game.interactions.remove_actor(self.ship)
+        except AttributeError:
+            # In level cleanup, game.interactions no longer exist at this point
+            pass
         self.pilot.clean()
         self.pilot = None
         self.navigator.clean()

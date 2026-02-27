@@ -87,7 +87,7 @@ class AsteroidField:
 
             # Initialize collisions
             hit_box_radius_m = 1.2
-            self.collision_sphere_np = attach_collision_sphere(
+            attach_collision_sphere(
                 game=self.game,
                 name="terrain",
                 radius=hit_box_radius_m,
@@ -152,3 +152,12 @@ class AsteroidField:
             partial_x_dot=self.state_dot,
             partial_x_dot_previous=self.state_dot_previous,
         )
+
+    def clean(self):
+        """
+        Cleans the AsteroidField object
+        """
+        for asteroid in self.asteroids:
+            asteroid.removeNode()
+        self.asteroids = None
+        self.game = None

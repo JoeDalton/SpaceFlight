@@ -75,3 +75,14 @@ class SpeedDustCloud:
             particle.setY(particle.getY() - speed * dt)
             if particle.getY() < 0:
                 self._reset_particle(particle)
+
+    def clean(self):
+        """
+        Cleans the SpeedDustCloud object
+        """
+        self.game = None
+        for particle in self.particles:
+            particle.removeNode()
+        self.particles = None
+        self.root.removeNode()
+        self.root = None

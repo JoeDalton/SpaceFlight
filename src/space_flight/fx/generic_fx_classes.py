@@ -50,6 +50,13 @@ class Effect(NodePath):
         current_pos = self.start_pos + LVector3(*advance)
         self.setPos(current_pos)
 
+    def clean(self):
+        """ "
+        Cleans the EffectPool object
+        """
+        self.game = None
+        self.parent_pool = None
+
 
 class EffectPool:
     def __init__(self, game, path: Path, effect_class: Effect, initialize_size=20):
@@ -85,3 +92,17 @@ class EffectPool:
         if effect in self.used:
             self.used.remove(effect)
         self.free.append(effect)
+
+    def clean(self):
+        """ "
+        Cleans the EffectPool object
+        """
+        for effect in self.free:
+            effect.clean()
+            effect.removeNode()
+        self.free = None
+        for effect in self.used:
+            effect.clean()
+            effect.removeNode()
+        self.used = None
+        self.game = None

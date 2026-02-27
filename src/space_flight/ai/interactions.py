@@ -203,3 +203,17 @@ class Interactions:
                     ]
                     alignment = np.dot(source_to_target_direction, source_forward)
                     self.alignments[idx_source, idx_target] = alignment
+
+    def clean(self):
+        """
+        Cleans the Interactions object
+        """
+        self.actors = None
+        self.n_actors = None
+        self.actors_id_dict = None
+
+        self.directions = None
+        self.interact = None
+        self.distances = None
+        self.alignments = None
+        self.rel_velocities = None

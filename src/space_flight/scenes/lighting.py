@@ -11,9 +11,10 @@ class Lighting:
         directional_direction: List = [-30, -60, 0],
         ambient_color: List = [0.1, 0.2, 0.4, 1],
     ):
+        self.game = game
         # Directional light
-        dlight = DirectionalLight("dlight")
-        dlight.set_color(
+        self.dlight = DirectionalLight("dlight")
+        self.dlight.set_color(
             Vec4(
                 directional_color[0],
                 directional_color[1],
@@ -21,17 +22,17 @@ class Lighting:
                 directional_color[3],
             )
         )
-        dlnp = game.root_node.attach_new_node(dlight)
-        dlnp.set_hpr(
+        self.dlnp = game.root_node.attach_new_node(self.dlight)
+        self.dlnp.set_hpr(
             directional_direction[0],
             directional_direction[1],
             directional_direction[2],
         )
-        game.app.render.set_light(dlnp)
+        game.app.render.set_light(self.dlnp)
 
         # Ambient light
-        alight = AmbientLight("alight")
-        alight.set_color(
+        self.alight = AmbientLight("alight")
+        self.alight.set_color(
             Vec4(
                 ambient_color[0],
                 ambient_color[1],
@@ -39,10 +40,25 @@ class Lighting:
                 ambient_color[3],
             )
         )
-        alnp = game.root_node.attach_new_node(alight)
-        game.app.render.set_light(alnp)
+        self.alnp = game.root_node.attach_new_node(self.alight)
+        game.app.render.set_light(self.alnp)
 
         # # Use a 512x512 resolution shadow map
         # dlight.setShadowCaster(True, 512, 512)
         # # Enable the shader generator for the receiving nodes
         # game.app.render.setShaderAuto()
+
+    def clean(self):
+        """
+        Cleans the lighting object
+        """
+        # Clean directional light
+        self.game.app.render.clear_light(self.dlnp)
+        self.dlnp.removeNode()
+        self.dlight = None
+        # Clean ambient light
+        self.game.app.render.clear_light(self.alnp)
+        self.alnp.removeNode()
+        self.alight = None
+
+        self.game = None

@@ -188,6 +188,7 @@ class AutoPilot:
 
     def clean(self):
         self.ship = None
+        self.game = None
         if DEBUG_DELETION:
             LOGGER.info("Cleaned autopilot")
 

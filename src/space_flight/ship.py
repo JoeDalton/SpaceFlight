@@ -161,6 +161,7 @@ class Ship:
                 name="Play_engine_sound",
                 method=self.sound.play,
             )
+        self.is_clean = False
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -394,24 +395,32 @@ class Ship:
         Clean references before deleting the ship so that they can be properly
         garbage collected
         """
-        self.laser_cannon.clean()
-        self.laser_cannon = None
-        self.collision_sphere_np.setPythonTag("owner", None)
-        self.collision_sphere_np.remove_node()
-        self.collision_sphere_np = None
-        self.sound.stop()
-        self.game.app.sfx.audio3d.detachSound(self.sound)
-        self.sound = None
-        self.node.remove_node()
-        self.node = None
-        self.is_dead = True
-        self.parent = None
+        if not self.is_clean:
+            self.model.clean()
+            self.model = None
+            self.laser_cannon.clean()
+            self.laser_cannon = None
+            self.collision_sphere_np.setPythonTag("owner", None)
+            self.collision_sphere_np.remove_node()
+            self.collision_sphere_np = None
+            if self.parent.name != "player":
+                # TODO: remove condition when the player's ship gets sound
+                self.sound.stop()
+                self.game.app.sfx.audio3d.detachSound(self.sound)
+            self.sound = None
+            self.node.remove_node()
+            self.node = None
+            self.is_dead = True
+            self.parent = None
 
-        if DEBUG_DELETION:
-            LOGGER.info("Cleaned ship")
-            LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
-            LOGGER.info(f"ship references {gc.get_referrers(self)}")
-            LOGGER.info(self.game.app.taskMgr.getAllTasks)
+            if DEBUG_DELETION:
+                LOGGER.info("Cleaned ship")
+                LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
+                LOGGER.info(f"ship references {gc.get_referrers(self)}")
+                LOGGER.info(self.game.app.taskMgr.getAllTasks)
+
+            self.game = None
+            self.is_clean = True
 
     def __del__(self):
         if DEBUG_DELETION:

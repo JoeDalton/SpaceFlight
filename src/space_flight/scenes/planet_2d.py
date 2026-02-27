@@ -1,3 +1,5 @@
+import uuid
+
 import numpy as np
 from panda3d.core import CardMaker, NodePath, TransparencyAttrib
 
@@ -13,6 +15,7 @@ class Planet2D:
         type: str = "terran",
     ):
         self.game = game
+        self.id = uuid.uuid4()
         self.position = position
         cm = CardMaker("planet_card")
         cm.setFrame(-1, 1, -1, 1)
@@ -32,9 +35,16 @@ class Planet2D:
         self.planet.setScale(scale, scale, scale)
 
         # TODO add to game "tasks" instead of panda3d
-        self.game.app.taskMgr.add(self.move_planet_task, "move_planet_task")
+        # self.game.app.taskMgr.add(self.move_planet_task, "move_planet_task")
+        self.game.actor_methods[self.id] = [self.move_planet_task]
 
-    def move_planet_task(self, task):
+    def move_planet_task(self):
         new_position = self.position + self.game.player.ship.position
         self.planet.setPos(new_position[0], new_position[1], new_position[2])
-        return task.cont
+
+    def clean(self):
+        """
+        Cleans the Planet2D object
+        """
+        self.planet.removeNode()
+        self.game = None

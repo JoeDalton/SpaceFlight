@@ -1,7 +1,10 @@
+import gc  # Debug
+import sys  # Debug
+
 from space_flight.ai.interactions import Interactions
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
-from space_flight.fx import load_explosion_effect_pools
+from space_flight.fx import clean_explosion_pools, load_explosion_effect_pools
 from space_flight.game.levels.demo_level import build_demo_level
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
@@ -31,8 +34,8 @@ class GameState(BaseState):
         """
         HUD
         """
-        HUD(game=self)
-        TargetHUD(game=self)
+        self.hud = HUD(game=self)
+        self.target_hud = TargetHUD(game=self)
 
         """
         Graphics options
@@ -88,8 +91,11 @@ class GameState(BaseState):
         # }
         self.actor_methods = {}
 
-        # Initialize a list of objects to clean at game exit
-        self.game_objects = []
+        # Initialize a dictionary of temporary objects to clean at game exit
+        # {
+        #     object_id: object
+        # }
+        self.game_objects = {}
 
     def start(self, task):
         self.is_paused = False
@@ -125,9 +131,10 @@ class GameState(BaseState):
         return task.cont
 
     def set_pause(self):
-        self.app.state_manager.push(
-            state_class=self.app.state_manager.PAUSE_MENU_STATE,
-        )
+        if not self.is_paused:
+            self.app.state_manager.push(
+                state_class=self.app.state_manager.PAUSE_MENU_STATE,
+            )
 
     def pause(self):
         if not self.is_paused:
@@ -145,8 +152,15 @@ class GameState(BaseState):
         """
         Clean every object in the game session, in reverse order of creation
         """
+        # Remove HUD elements
+        self.hud.clean()
+        self.hud = None
+        self.target_hud.clean()
+        self.target_hud = None
+
         # Stop the task that updates the world
         self.app.taskMgr.remove("update_game_world_task")
+        self.actor_methods = None
 
         # Remove actors
         for actor in self.interactions.actors:
@@ -157,9 +171,14 @@ class GameState(BaseState):
         self.player.clean()
         self.player = None
 
-        # Remove other game objects (mostly in the scene)
-        for object in self.game_objects:
+        # Remove scene
+        self.scene.clean()
+        self.scene = None
+
+        # Remove other game objects (mostly temporary objects)
+        for key, object in self.game_objects:
             object.clean()
+            self.game_objects[key] = None
         self.game_objects = None
 
         # Remove game structure
@@ -171,16 +190,24 @@ class GameState(BaseState):
         self.collision_system = None
         self.destructibles.clean()
         self.destructibles = None
+        clean_explosion_pools(game=self)
         self.delayed_methods.clean()
         self.delayed_methods = None
         self.interval_manager.clean()
         self.interval_manager = None
-        self.delayed_methods.clean()
-        self.delayed_methods = None
         self.game_time.clean()
         self.game_time = None
 
         # Remove the game's root node to make sure every graphics thing is deleted
         self.root_node.removeNode()
 
-        print("Cleaniiiiiiiing")
+        self.force_render()
+        self.force_render()
+        self.force_render()
+
+        print("Cleaned ship")
+        print(f"ship nref = {sys.getrefcount(self)}")
+        print(f"ship references {gc.get_referrers(self)}")
+
+    def __del__(self):
+        print("Game instance deleted.")

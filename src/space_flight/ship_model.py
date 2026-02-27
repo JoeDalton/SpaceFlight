@@ -171,3 +171,11 @@ class ShipModel:
                 self.orientation.z,
             )
         )
+
+    def clean(self):
+        """
+        Cleans the ShipModel object
+        """
+        self.model.removeNode()
+        self.model = None
+        self.game = None

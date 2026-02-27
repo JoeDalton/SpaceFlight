@@ -48,6 +48,9 @@ COMMON_ASSETS_TO_LOAD = [
 class AssetManager:
     """
     A class to pre-load and store assets, with a possibility to load assets on the fly
+
+    # TODO: Drop useless assets to free memory ? Ex going from one level to the other:
+    we don't need the old scene's assets anymore
     """
 
     def __init__(self, app: ShowBase):

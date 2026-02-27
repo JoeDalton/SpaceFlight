@@ -228,3 +228,30 @@ class Player:
         )
         self.head_position_m = new_state[0:3]
         self.head_velocity_mps = new_state[3:6]
+
+    def clean(self):
+        """
+        Cleans the player object before it is deleted
+        """
+        self.game.app.camera.reparentTo(self.game.app.render)
+        self.head_pivot.removeNode()
+        self.head_jolt.removeNode()
+
+        if self.has_ai:
+            self.pilot.clean()
+            self.navigator.clean()
+            self.tactician.clean()
+            self.pilot = None
+            self.navigator = None
+            self.tactician = None
+
+        self.rear_view_mirror.clean()
+        self.rear_view_mirror = None
+
+        self.available_targets = None
+
+        # No need to clean the ship :
+        # It has already been done when all actors were cleaned
+
+        # TODO: clean input system
+        # Or attach it to a higher level (I'd prefer that, actually)

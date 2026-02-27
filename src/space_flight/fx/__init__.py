@@ -6,7 +6,7 @@ from space_flight import DATAFILES_PATH
 from space_flight.fx.explosions import ExplosionFire, ExplosionSmoke
 from space_flight.fx.generic_fx_classes import EffectPool
 
-# TODO : Load with asset manager ?
+# TODO : Load with asset manager ? Better management with a parent object ?
 
 
 def load_explosion_effect_pools(game):
@@ -19,3 +19,10 @@ def load_explosion_effect_pools(game):
 def spawn_explosion(game, position: np.ndarray, scale: float, speed: np.ndarray):
     game.fire_pool.spawn(position=position, scale=scale, speed=speed)
     game.smoke_pool.spawn(position=position, scale=scale, speed=speed)
+
+
+def clean_explosion_pools(game):
+    game.smoke_pool.clean()
+    game.fire_pool.clean()
+    game.smoke_pool = None
+    game.fire_pool = None

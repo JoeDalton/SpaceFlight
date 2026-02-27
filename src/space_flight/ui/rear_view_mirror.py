@@ -24,18 +24,18 @@ class RearViewMirror:
         )
         self.mirror_buffer.setClearColor((0, 0, 0, 1))
 
-        mirror_cam = Camera("rear_view_cam")
-        mirror_np = NodePath(mirror_cam)
+        self.mirror_cam = Camera("rear_view_cam")
+        self.mirror_np = NodePath(self.mirror_cam)
 
-        mirror_cam.setLens(self.game.app.camLens.makeCopy())
-        mirror_cam.getLens().setFov(MIRROR_FOV)  # Narrower = more realistic mirror
-        mirror_cam.getLens().setAspectRatio(MIRROR_ASPECT_RATIO)
+        self.mirror_cam.setLens(self.game.app.camLens.makeCopy())
+        self.mirror_cam.getLens().setFov(MIRROR_FOV)  # Narrower = more realistic mirror
+        self.mirror_cam.getLens().setAspectRatio(MIRROR_ASPECT_RATIO)
 
-        self.mirror_buffer.makeDisplayRegion().setCamera(mirror_np)
+        self.mirror_buffer.makeDisplayRegion().setCamera(self.mirror_np)
 
-        mirror_np.reparentTo(player_node)
-        mirror_np.setPos(0, -2, 1.5)  # Slightly behind and above
-        mirror_np.setHpr(180, 0, 0)  # Look backwards
+        self.mirror_np.reparentTo(player_node)
+        self.mirror_np.setPos(0, -2, 1.5)  # Slightly behind and above
+        self.mirror_np.setHpr(180, 0, 0)  # Look backwards
 
         cm = CardMaker("mirror")
         cm.setFrame(
@@ -62,9 +62,9 @@ class RearViewMirror:
         self.mirror_card.setTexture(mirror_tex)
 
         self.mirror_buffer.setSort(-100)
-        mirror_np.node().setCameraMask(BitMask32.bit(1))
+        self.mirror_np.node().setCameraMask(BitMask32.bit(1))
 
-        self.game.app.accept(
+        self.game.app.accept(  # TODO handle elsewhere
             self.game.key_bindings["toggle_mirror"], self.toggle_mirror
         )
 
@@ -78,3 +78,23 @@ class RearViewMirror:
             self.mirror_card.show()
         else:
             self.mirror_card.hide()
+
+    def clean(self):
+        """
+        Cleans the mirror object
+        """
+        # Remove key binding
+        self.game.app.ignore(  # TODO handle elsewhere
+            self.game.key_bindings["toggle_mirror"]
+        )
+        # Delete camera
+        self.mirror_np.removeNode()
+        self.mirror_cam = None
+        # Delete buffer
+        self.mirror_buffer.removeAllDisplayRegions()
+        self.mirror_buffer.clearRenderTextures()
+        self.game.app.graphicsEngine.removeWindow(self.mirror_buffer)
+        self.mirror_buffer = None
+        # Remove card
+        self.mirror_card.removeNode()
+        self.game = None

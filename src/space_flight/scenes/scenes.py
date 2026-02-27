@@ -44,7 +44,9 @@ class SceneAsteroids(Scene):
         self.lighting = Lighting(game=self.game)
 
         # Speed dust effect
-        SpeedDustCloud(game=self.game, colors=["blue", "green", "pink", "white"])
+        self.speed_dust_cloud = SpeedDustCloud(
+            game=self.game, colors=["blue", "green", "pink", "white"]
+        )
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
@@ -71,6 +73,25 @@ class SceneAsteroids(Scene):
         self.drydock.set_pos(0, 8000, 50)
         self.drydock.set_scale(100, 100, 100)
 
+    def clean(self):
+        """
+        Cleans the SceneAsteroids
+        """
+        self.drydock.removeNode()
+        self.rotating_asteroid_field.clean()
+        self.rotating_asteroid_field = None
+        self.big_rotating_asteroid_field.clean()
+        self.big_rotating_asteroid_field = None
+        self.static_asteroid_field.clean()
+        self.static_asteroid_field = None
+        self.speed_dust_cloud.clean()
+        self.speed_dust_cloud = None
+        self.lighting.clean()
+        self.lighting = None
+        self.skybox.clean()
+        self.skybox = None
+        self.game = None
+
 
 class SceneLavaPlanet(Scene):
     def __init__(
@@ -87,7 +108,9 @@ class SceneLavaPlanet(Scene):
         )
 
         # Speed dust effect
-        SpeedDustCloud(game=self.game, colors=["orange", "pink", "yellow", "white"])
+        self.speed_dust_cloud = SpeedDustCloud(
+            game=self.game, colors=["orange", "pink", "yellow", "white"]
+        )
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
@@ -119,6 +142,25 @@ class SceneLavaPlanet(Scene):
         self.isd.set_pos(0, 1000, 50)
         self.isd.set_scale(1)
 
+    def clean(self):
+        """
+        Cleans the SceneLavaPlanet
+        """
+        self.isd.removeNode()
+        self.rotating_asteroid_field.clean()
+        self.rotating_asteroid_field = None
+        self.big_rotating_asteroid_field.clean()
+        self.big_rotating_asteroid_field = None
+        self.static_asteroid_field.clean()
+        self.static_asteroid_field = None
+        self.speed_dust_cloud.clean()
+        self.speed_dust_cloud = None
+        self.lighting.clean()
+        self.lighting = None
+        # self.skybox.clean()
+        # self.skybox=None
+        self.game = None
+
 
 class SceneDebug(Scene):
     def __init__(
@@ -132,3 +174,13 @@ class SceneDebug(Scene):
 
         # Lights
         self.lighting = Lighting(game=self.game)
+
+    def clean(self):
+        """
+        Cleans the SceneDebug
+        """
+        self.lighting.clean()
+        self.lighting = None
+        self.skybox.clean()
+        self.skybox = None
+        self.game = None

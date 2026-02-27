@@ -190,6 +190,23 @@ class CollisionSystem:
         if DEBUG_COLLISION:
             LOGGER.info("ship into ship")
 
+    def clean(self):
+        """
+        Cleans the CollisionSystem object
+        """
+        # Clean traverser
+        self.traverser.clearColliders()
+        self.traverser = None
+        # Clean handler
+        self.handler.clearInPatterns()
+        self.handler.clearOutPatterns()
+        self.game.app.ignore("laser-into-ship")
+        self.game.app.ignore("laser-into-terrain")
+        self.game.app.ignore("ship-into-terrain")
+        self.game.app.ignore("ship-into-ship")
+        self.handler = None
+        self.game = None
+
 
 def attach_collision_sphere(
     game,

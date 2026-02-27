@@ -98,3 +98,16 @@ class Integrator:
         # Get the timespan of the current step
         dt = self.game.game_time.get_time_step()
         return state + state_derivative * dt
+
+    def clean(self):
+        """
+        Cleans the integrator object
+        """
+        self.game = None
+        self.x = None
+        self.x_new = None
+        self.x_dot = None
+        self.x_dot_previous = None
+        self.dt_previous = None
+        self.next_idx = None
+        self.max_state_size = None

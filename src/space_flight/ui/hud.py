@@ -1,3 +1,5 @@
+import uuid
+
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
 from direct.showbase.ShowBaseGlobal import aspect2d, render2d
@@ -24,6 +26,7 @@ class HUD:
 
     def __init__(self, game):
         self.game = game
+        self.id = uuid.uuid4()
 
         self.hud = TextNode("HUD")
         self.hud.setSmallCaps(True)
@@ -45,9 +48,9 @@ class HUD:
         self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
         self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
-        game.app.taskMgr.add(self.hud_update_task, "hud_update_task")
+        self.game.actor_methods[self.id] = [self.hud_update_task]
 
-    def hud_update_task(self, task):
+    def hud_update_task(self):
         """
         A task that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
@@ -95,7 +98,15 @@ class HUD:
 
         self.hud.setText(hud_text)
 
-        return task.cont
+    def clean(self):
+        """
+        Cleans the HUD object
+        """
+        self.hud_textNodePath.removeNode()
+        self.hud = None
+        self.fps_textNodePath.removeNode()
+        self.fps_counter = None
+        self.game = None
 
 
 class TargetHUD:
@@ -103,6 +114,8 @@ class TargetHUD:
         # TODO use Interactions instead of a player target list.
         # Allow filtering on team
         self.game = game
+        self.id = uuid.uuid4()
+
         self.target_idx = 0
         self.target = None
 
@@ -144,9 +157,7 @@ class TargetHUD:
             frameColor=(0, 0, 0, 0),
             text_fg=(1, 1, 1, 1),
         )
-
-        # TODO: This should be in "input_system"
-        game.app.taskMgr.add(self.target_hud_update_task, "target_hud_update_task")
+        self.game.actor_methods[self.id] = [self.target_hud_update_task]
 
         # Make sure the targeting HUD is rendered above other UI things
         self.square.setDepthTest(False)
@@ -166,7 +177,7 @@ class TargetHUD:
             self.game.key_bindings["switch_target"], self.switch_target
         )
 
-    def target_hud_update_task(self, task):
+    def target_hud_update_task(self):
         if self.target is None:
             self.distance_label.hide()
             self.name_label.hide()
@@ -227,8 +238,6 @@ class TargetHUD:
             ).length()
             self.distance_label["text"] = f"{int(distance/10)*10} m"
 
-        return task.cont
-
     def switch_target(self):
         self.target_idx = (self.target_idx + 1) % len(
             self.game.player.available_targets
@@ -240,3 +249,16 @@ class TargetHUD:
     def set_target(self, target, target_name: str = ""):
         self.target = target
         self.name_label["text"] = target_name
+
+    def clean(self):
+        """
+        Clean the TargetHud object
+        """
+        # TODO: This should be in "input_system"
+        self.game.app.ignore(self.game.key_bindings["switch_target"])
+        self.name_label.destroy()
+        self.distance_label.destroy()
+        self.square.removeNode()
+        self.aspect.removeNode()
+        self.root.removeNode()
+        self.game = None

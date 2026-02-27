@@ -58,27 +58,27 @@ def build_demo_level(game):
         np.array([-wp_distance, 0, -wp_distance]),
         np.array([-wp_distance, 0, 0]),
     ]
-    game.lead_bot = spawn_bot(
+    lead_bot = spawn_bot(
         game=game,
         name="lead_2",
         ship_type="tie-interceptor",
         ini_position=np.array([0, -200, 2]),
         has_debug_trihedron=True,
         team=2,
-        debug_decisions=True,
+        debug_decisions=False,
     )
-    game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
+    lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
 
-    game.chase_bot = spawn_bot(
+    chase_bot = spawn_bot(
         game=game,
         name="chase_1",
         ship_type="a-wing",
         ini_position=np.array([0, -2000, -0]),
         has_debug_trihedron=True,
         team=1,
-        debug_decisions=True,
+        debug_decisions=False,
     )
-    game.chase_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
+    chase_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
 
     for _ in range(5):
         bot = spawn_bot(

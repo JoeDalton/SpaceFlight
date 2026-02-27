@@ -89,3 +89,13 @@ class Destructibles:
             destructible.clean()
         # Drop references to the dead objects
         newly_dead_objects = []
+
+    def clean(self):
+        """
+        Cleans the Destructibles object
+        """
+        # Clean all remaining destructible objects
+        for destructible in self.alive_objects:
+            if destructible is not None:
+                destructible.clean()
+        self.alive_objects = None
