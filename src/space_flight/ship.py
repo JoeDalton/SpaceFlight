@@ -296,7 +296,7 @@ class Ship:
 
         # Record position, orientation and speed
         self.position = self.state[:3]
-        self.orientationi = self.state[3:7]
+        self.orientation = self.state[3:7]
         self.speed = self.state[7:10]
 
         # Prepare next integration step

@@ -112,6 +112,10 @@ class CollisionSystem:
                     "Ignoring."
                 )
             return
+        if destructible is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("destructible being removed while it hits. Ignoring.")
+            return
 
         # Check if the laser as encountered its own emitter => no "real" collision
         try:
@@ -203,6 +207,15 @@ class CollisionSystem:
         """
         ship_from = entry.from_node_path.python_tags["owner"]
         ship_into = entry.into_node_path.python_tags["owner"]
+
+        if ship_from is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+            return
+        if ship_into is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("ship_into being removed while it hits. " "Ignoring.")
+            return
 
         if DEBUG_COLLISION:
             LOGGER.info("ship into ship")
