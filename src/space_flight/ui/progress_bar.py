@@ -17,7 +17,7 @@ class ProgressBar:
         app: ShowBase,
         parent,
         blurbs: list[str] = [""],
-        blurb_update_delay_s: float = 1.5,
+        blurb_update_delay_s: float = 2.0,
         bar_height: float = 0.01,
     ):
         self.app = app

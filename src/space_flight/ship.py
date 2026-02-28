@@ -17,7 +17,7 @@ from space_flight.utils import rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
-DAMAGE_TO_FORCE_FACTOR = 100.0
+WEAPON_DAMAGE_TO_FORCE_FACTOR = 100.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 
 
@@ -94,6 +94,8 @@ class Ship:
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
         self.node.reparentTo(self.game.root_node)
+        self.node.set_pos(*ini_position)
+        self.node.set_quat(Quat(*ini_orientation))
 
         # Setup state vector
         self.position = ini_position.copy()
@@ -106,6 +108,10 @@ class Ship:
         self.state_dot_previous = np.zeros(10)
         self.pqr = np.zeros(3)
         self.scalar_thrust = 0
+
+        # Prepare corrections due to collisions
+        self.velocity_correction = np.zeros(3)
+        self.position_correction = np.zeros(3)
 
         # Prepare first integration step
         self.compute_derivatives()
@@ -120,10 +126,11 @@ class Ship:
         self.laser_cannon = LaserCannon(game=self.game, parent_ship=self)
 
         # Initialize collisions
+        self.hit_radius_m = self.conf["hit_box_radius_m"]
         self.collision_sphere_np = attach_collision_sphere(
             game=self.game,
             name="ship",
-            radius=self.conf["hit_box_radius_m"],
+            radius=self.hit_radius_m,
             collider_type="destructible",
             parent_node=self.node,
             parent_object=self,
@@ -186,7 +193,6 @@ class Ship:
         This is the flight model for the ships
 
         Depends on the FLIGHT_MODEL global variable
-        - "arcade": airplane-like flight with drag, velocity always aligned with forward
         - "airplane": airplane-like flight with lift, drag, AoA, sideslip
         - "space": Thrust is all you have, if you dare !
 
@@ -197,14 +203,14 @@ class Ship:
         - orientation (4)
         - linear speed (3)
         """
+
         # Save last derivative
         self.state_dot_previous = self.state_dot.copy()
 
         # Compute derivative of position
-        speed = self.state[7:10]
-        self.state_dot[0:3] = speed
+        self.state_dot[0:3] = self.speed.copy()
         # Compute derivative of orientation
-        quat = np.quaternion(*self.state[3:7])
+        quat = np.quaternion(*self.orientation)
         quat_pqr = np.quaternion(0, *self.pqr)
         # Formula for pqr in body axes
         quat_dot = 0.5 * quat * quat_pqr
@@ -222,26 +228,20 @@ class Ship:
         # Thrust is aligned with ship direction
         thrust_n = self.scalar_thrust * self.forward
 
-        if FLIGHT_MODEL == "arcade":
-            # Drag is opposed to speed
-            speed_norm = np.linalg.norm(speed)
-            drag_n = -self.drag_factor * speed_norm * speed
-            # No lift
-            lift_n = np.zeros(3)
-        elif FLIGHT_MODEL == "airplane":
-            speed_norm = np.linalg.norm(speed)
+        if FLIGHT_MODEL == "airplane":
+            speed_norm = np.linalg.norm(self.speed)
             if np.isnan(speed_norm) or (speed_norm <= 1e-4):
                 # No lift or drag without speed
                 drag_n = np.zeros(3)
                 lift_n = np.zeros(3)
             else:
                 # Drag is opposed to speed
-                drag_n = -self.drag_factor * speed_norm * speed
+                drag_n = -self.drag_factor * speed_norm * self.speed
                 # Lift is perpendicular to ship side and airflow
                 # and proportional to angle of attack
                 # + And perpendicular to ship up and airflow
                 # and proportional to side-slip angle
-                airflow_speed_body = -rotate_single_vector(quat.conjugate(), speed)
+                airflow_speed_body = -rotate_single_vector(quat.conjugate(), self.speed)
                 airflow_direction_body = airflow_speed_body / speed_norm
                 angle_of_attack_deg = -np.rad2deg(
                     np.arctan2(-airflow_speed_body[2], -airflow_speed_body[1])
@@ -270,6 +270,7 @@ class Ship:
             lift_n = np.zeros(3)
         else:
             raise NotImplementedError(f"Unknown flight model {FLIGHT_MODEL}")
+
         # Assemble thrust, lift, drag and accidental forces
         acceleration_mps2 = (
             thrust_n + drag_n + lift_n + self.additional_force_n + self.impact_force_n
@@ -286,25 +287,17 @@ class Ship:
             first_idx=self.integrator_idx,
             n_var=10,
         )
-        # Clip speed norm
-        self.speed = self.state[7:10]
-        speed_norm = np.linalg.norm(self.speed)
+        # Apply position and velocity collision corrections
+        self.state[:3] += self.position_correction
+        self.state[7:10] += self.velocity_correction
+        # Reset collision corrections
+        self.position_correction = np.zeros(3)
+        self.velocity_correction = np.zeros(3)
 
-        # Record position
+        # Record position, orientation and speed
         self.position = self.state[:3]
-
-        if FLIGHT_MODEL == "arcade":
-            # Clip speed norm
-            speed_norm = min(speed_norm, self.max_speed_mps)
-            # Since there is no lift model,
-            # we align the velocity with the nose of the ship
-            # Normalize ship orientation
-            self.orientation = self.state[3:7].copy()
-            self.orientation /= np.linalg.norm(self.orientation)
-            self.state[3:7] = self.orientation.copy()
-            # Reorient speed in ship direction
-            self.speed = self.forward * speed_norm
-            self.state[7:10] = self.speed.copy()
+        self.orientationi = self.state[3:7]
+        self.speed = self.state[7:10]
 
         # Prepare next integration step
         self.compute_derivatives()
@@ -336,32 +329,24 @@ class Ship:
         self.move_ship_physics()
 
         # Update render
-        ship_pos = self.state[0:3]
-        ship_quat = self.state[3:7]
-        self.node.setPos(*ship_pos)
-        self.node.setQuat(Quat(*ship_quat))
+        self.node.setPos(*self.position)
+        self.node.setQuat(Quat(*self.orientation))
 
-    def take_hit(self, damage: float, normal_body_vector: np.ndarray):
+    def take_hit(self, damage: float, normal_world_vector: np.ndarray):
         """
         Take damage from hits and jolt from the impact
+        # TODO move force calculations to collisions.py
+        # TODO allow energy (ion) damage when we add energy management
 
         :param damage: The amount of damage to take
-        :param normal_body_vector: The collision normal in body coordinates
+        :param normal_world_vector: The collision normal in world coordinates
         """
-        # Apply damage to health and shield
-        if self.shield - damage >= 0.0:
-            self.shield -= damage
-        else:
-            health_damage = damage - self.shield
-            self.health -= health_damage
-            self.shield = 0.0
+        self.apply_damage(damage=damage, damage_type="physical")
 
         # Apply momentum change
-        hit_force_body_n = (
-            -DAMAGE_TO_FORCE_FACTOR * damage * np.array([*normal_body_vector])
+        hit_force_world_n = (
+            -WEAPON_DAMAGE_TO_FORCE_FACTOR * damage * np.array([*normal_world_vector])
         )
-        quat = np.quaternion(*self.state[3:7])
-        hit_force_world_n = rotate_single_vector(quat, hit_force_body_n)
         self.impact_force_n += hit_force_world_n
         # Remove this additional force later on
         self.game.delayed_methods.do_method_later(
@@ -370,6 +355,48 @@ class Ship:
             method=self.remove_hit_force,
             extra_args=[hit_force_world_n],
         )
+
+    def push(
+        self,
+        damage: float,
+        velocity_correction: np.ndarray,
+        position_correction: np.ndarray,
+    ):
+        """
+        Push self due to collision with a solid object
+
+        We don't use collision forces because they are too stiff.
+        Instead, we use impulse and position correction
+
+        The corrections are stored and taken into account at the next "move_ship" call,
+        then reset to zero.
+
+        # TODO: sadly the head does not move with this method. Do something about it
+
+        :param damage: The damage to take
+        :param velocity_correction: The velocity correction to apply
+        :param position_correction: The position correction to apply
+        """
+        self.apply_damage(damage=damage, damage_type="physical")
+        self.velocity_correction = velocity_correction
+        self.position_correction = position_correction
+
+    def apply_damage(self, damage: float, damage_type: str):
+        """
+        Apply damage to the ship
+
+        :param damage_type: the type of damage to apply (physical, energy)
+        """
+        # Apply damage to health and shield
+        if damage_type == "physical":
+            if self.shield - damage >= 0.0:
+                self.shield -= damage
+            else:
+                health_damage = damage - self.shield
+                self.health -= health_damage
+                self.shield = 0.0
+        else:
+            raise NotImplementedError
 
     def remove_hit_force(self, hit_force_world_n: np.ndarray):
         """

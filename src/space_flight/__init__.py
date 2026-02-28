@@ -11,8 +11,8 @@ CONFIGURATION_PATH = Path(__file__).parent / "configuration"
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "tests/fixtures"
 
 DEBUG_DELETION = False
-DEBUG_COLLISION = False
-FLIGHT_MODEL = "airplane"  # "airplane", "space", "arcade"
+DEBUG_COLLISION = True
+FLIGHT_MODEL = "airplane"  # "airplane", "space"
 
 LOGGER = logging.getLogger()
 LOGGER.handlers = []

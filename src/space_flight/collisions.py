@@ -1,6 +1,6 @@
 import logging
-from typing import Tuple
 
+import numpy as np
 from panda3d.core import (
     BitMask32,
     CollisionHandlerEvent,
@@ -12,6 +12,11 @@ from panda3d.core import (
 )
 
 from space_flight import DEBUG_COLLISION
+
+SOLID_COLLISION_RESTITUTION = 0.3  # 0 = inelastic, 1 = elastic
+POSITION_CORRECTION_RATIO = 0.1
+PENETRATION_TOLERANCE_M = 0.1
+COLLISION_DAMAGE_FACTOR = 0.0001  # TODO configurable with difficulty
 
 LOGGER = logging.getLogger()
 
@@ -42,7 +47,7 @@ class CollisionLayers:
     TERRAIN_INTO = LASER | SENSOR | DESTRUCTIBLE
 
     @staticmethod
-    def define_collision_masks(collider_type: str) -> Tuple[BitMask32]:
+    def define_collision_masks(collider_type: str) -> tuple[BitMask32]:
         """
         Defines the from and into values of collider given its type
 
@@ -86,7 +91,7 @@ class CollisionSystem:
     def update_collisions(self):
         """
         Compute collisions via panda3d internal methods
-        is tiggers the "%fn-into-%in" events
+        it triggers the "%fn-into-%in" events
         """
         self.traverser.traverse(self.game.app.render)
 
@@ -120,8 +125,8 @@ class CollisionSystem:
             LOGGER.info("laser into destructible")
 
         # Apply damage to the destructible object
-        normal = entry.getSurfaceNormal(entry.getIntoNodePath())
-        destructible.take_hit(damage=laser.power, normal_body_vector=normal)
+        normal = entry.getSurfaceNormal(self.game.root_node)
+        destructible.take_hit(damage=laser.power, normal_world_vector=normal)
 
         # Delete laser
         laser.shot.removeNode()
@@ -183,12 +188,88 @@ class CollisionSystem:
 
     def ship_into_ship(self, entry):
         """
-        TODO
+        Handle the case where a ship hits another ship:
+        The collisions is registered on both sides.
+        So: hit only the "into" node. The other side of the collision
+        will receive its damage when the inverse collision is handled.
+
+        We don't use collision forces because they are too stiff.
+        Instead, we use impulse and position correction
+
+        TODO use new collision spheres the real size of the ships ? Maybe not necessary
+        if we use auto-aim and can reduce the hitboxes
 
         :param entry: Panda3d's description of the collision
         """
+        ship_from = entry.from_node_path.python_tags["owner"]
+        ship_into = entry.into_node_path.python_tags["owner"]
+
         if DEBUG_COLLISION:
             LOGGER.info("ship into ship")
+            LOGGER.info(f"ship into : {ship_into.id}")
+            LOGGER.info(f"ship from : {ship_from.id}")
+
+        # Get impact parameters
+        # Normal and penetration depth from ship positions directly (assumed spherical)
+        relative_position = ship_from.position - ship_into.position
+        distance_m = np.linalg.norm(relative_position)
+        if distance_m < 1e-4:
+            # Objects are so close that we are better off waiting for a more favorable
+            # situation
+            return
+        normal = relative_position / distance_m
+        penetration_depth_m = -(
+            distance_m - ship_from.hit_radius_m - ship_into.hit_radius_m
+        )
+        assert penetration_depth_m >= 0
+        relative_velocity = ship_from.speed - ship_into.speed
+        normal_relative_velocity = np.dot(normal, relative_velocity)
+        mass_from_kg = ship_from.mass_kg
+        mass_into_kg = ship_into.mass_kg
+        denominator = 1 + mass_into_kg / mass_from_kg
+        # Compute impulse correction
+        # Push back if objects are still approaching
+        if normal_relative_velocity < 0:
+            velocity_correction = (  # correction impulse / self mass
+                normal
+                * (1 + SOLID_COLLISION_RESTITUTION)
+                * normal_relative_velocity
+                / denominator
+            )
+        # Compute position correction.
+        # Not a big correction in most cases, but limits penetration.
+        position_correction = (
+            normal
+            * POSITION_CORRECTION_RATIO
+            * max(penetration_depth_m - PENETRATION_TOLERANCE_M, 0)
+            / denominator
+        )
+
+        # Apply damage to the destructible objects
+        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
+
+        ship_into.push(
+            damage=damage,
+            velocity_correction=velocity_correction,
+            position_correction=position_correction,
+        )
+
+        # TODO SFX
+        # # Apply hit effect depending on player or bot
+        # if ship_from.id == self.game.player.ship.id:
+        #     relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
+        #     self.game.app.sfx.ship_collision_on_player(
+        #         game=self.game, relative_hit_point=relative_hit_point
+        #     )
+        # else:
+        #     # TODO: Mute bots shooting on bots ?
+        #     # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
+        #     # TODO: Add a hit sprite
+        #     self.game.app.sfx.distant_impact_hit(
+        #         player_ship_pos=self.game.player.ship.position,
+        #         hit_pos=entry.into_node_path.parent.getPos(),
+        #         impact_type="target",
+        #     )
 
     def clean(self):
         """
