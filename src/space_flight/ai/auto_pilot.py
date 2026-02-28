@@ -108,7 +108,7 @@ class AutoPilot:
         TODO : take into account the speed vector instead of ship axes to account for
         nicer flight dynamics (sideslip, AoA) ?
 
-        TODO : Add pilot skill modifiers ? Randomness ?
+        TODO : Add pilot skill randomness ?
         """
         dt = self.game.game_time.get_time_step()
 

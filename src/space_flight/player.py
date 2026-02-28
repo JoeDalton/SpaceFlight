@@ -255,6 +255,3 @@ class Player:
 
         # No need to clean the ship :
         # It has already been done when all actors were cleaned
-
-        # TODO: clean input system
-        # Or attach it to a higher level (I'd prefer that, actually)

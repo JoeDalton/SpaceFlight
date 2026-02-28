@@ -315,8 +315,6 @@ def attach_collision_sphere(
     Attach a collision sphere to an existing node.
     This does not work well with lasers and low FPS. Could work for missiles, though ?
 
-    # TODO: use this for ships/asteroids
-
     :param game: The game stage
     :param name: The name of the collision sphere
     :param radius: Its radius
@@ -365,7 +363,7 @@ def attach_collision_segment(
     relative_end_position,
 ) -> NodePath:
     """
-    Attach a collision segment to an existing node.
+    Attach a collision segment to an existing node. Great for lasers
 
     :param game: The game stage
     :param name: The name of the collision sphere

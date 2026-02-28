@@ -40,12 +40,12 @@ plotly="^6.5.2"
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.3"
 pytest-cov = "^4.1.0"
+typing-extensions = "^4.15.0"
 
 # [[tool.poetry.source]]
 # name = "joe"
 # url = "http://tata.titi.toto.tata"
 # priority = "supplemental"
-
 
 
 [tool.poetry-dynamic-versioning]
