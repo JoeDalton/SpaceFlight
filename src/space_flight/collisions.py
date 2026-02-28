@@ -9,11 +9,12 @@ from panda3d.core import (
     CollisionSphere,
     CollisionTraverser,
     NodePath,
+    Vec3,
 )
 
 from space_flight import DEBUG_COLLISION
 
-SOLID_COLLISION_RESTITUTION = 0.3  # 0 = inelastic, 1 = elastic
+SOLID_COLLISION_ELASTICITY = 0.3  # 0 = inelastic, 1 = elastic
 POSITION_CORRECTION_RATIO = 0.1
 PENETRATION_TOLERANCE_M = 0.1
 COLLISION_DAMAGE_FACTOR = 0.0001  # TODO configurable with difficulty
@@ -82,23 +83,28 @@ class CollisionSystem:
             self.traverser.showCollisions(self.game.app.render)
         self.handler = CollisionHandlerEvent()
         self.handler.addInPattern("%fn-into-%in")
+        self.handler.addAgainPattern("%fn-again-%in")
 
+        # Weapon hit = one time events
         self.game.app.accept("laser-into-ship", self.laser_into_destructible)
         self.game.app.accept("laser-into-terrain", self.laser_into_terrain)
+        # Collision physics = detected at each frame
         self.game.app.accept("ship-into-terrain", self.ship_into_terrain)
+        self.game.app.accept("ship-again-terrain", self.ship_again_terrain)
         self.game.app.accept("ship-into-ship", self.ship_into_ship)
+        self.game.app.accept("ship-again-ship", self.ship_again_ship)
 
     def update_collisions(self):
         """
-        Compute collisions via panda3d internal methods
+        Computes collisions via panda3d internal methods
         it triggers the "%fn-into-%in" events
         """
         self.traverser.traverse(self.game.app.render)
 
     def laser_into_destructible(self, entry):
         """
-        Handle the case where a laser hits a destructible object:
-        Damage the destructible object and remove the laser.
+        Handles the case where a laser hits a destructible object:
+        Damages the destructible object and remove the laser.
 
         :param entry: Panda3d's description of the collision
         """
@@ -130,6 +136,10 @@ class CollisionSystem:
 
         # Apply damage to the destructible object
         normal = entry.getSurfaceNormal(self.game.root_node)
+        # Normalize the normal vector because it can have a non-unit length if a parent
+        # object was scaled. It's dumb, but it is what it is...
+        if not normal.almostEqual(Vec3(0, 0, 0)):
+            normal.normalize()
         destructible.take_hit(damage=laser.power, normal_world_vector=normal)
 
         # Delete laser
@@ -153,8 +163,8 @@ class CollisionSystem:
 
     def laser_into_terrain(self, entry):
         """
-        Handle the case where a laser hits a terrain object:
-        Remove the laser.
+        Handles the case where a laser hits a terrain object:
+        Removes the laser.
 
         TODO: Add a hit sprite
 
@@ -183,14 +193,138 @@ class CollisionSystem:
 
     def ship_into_terrain(self, entry):
         """
-        TODO
+        Handles the case where a ship hits immobile terrain.
+        If ship_from is the player, plays a crash sfx
+        In any case, calls ship_into_terrain_pushback
 
         :param entry: Panda3d's description of the collision
         """
+        ship_from = entry.from_node_path.python_tags["owner"]
+        terrain_into = entry.into_node_path.python_tags["owner"]
+
+        # Handle pathologic cases
+        if ship_from is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+            return
+        if terrain_into is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("terrain_into being removed while it hits. " "Ignoring.")
+            return
+
         if DEBUG_COLLISION:
             LOGGER.info("ship into terrain")
+            LOGGER.info(f"ship from : {ship_from.id}")
+
+        self.ship_into_terrain_pushback(entry)
+
+        # Play SFX for player only
+        if ship_from.id == self.game.player.ship.id:
+            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
+            self.game.app.sfx.player_crash(
+                game=self.game, relative_hit_point=relative_hit_point, in_terrain=True
+            )
+
+    def ship_again_terrain(self, entry):
+        """
+        Handles the case where a ship hits immobile terrain, and it already has
+        at the last frame : calls ship_into_terrain_pushback
+
+        :param entry: Panda3d's description of the collision
+        """
+        self.ship_into_terrain_pushback(entry)
+
+    def ship_into_terrain_pushback(self, entry):
+        """
+        Handle the case where a ship hits immobile terrain.
+        We don't use collision forces because they are too stiff.
+        Instead, we use impulse correction
+
+        TODO use new collision spheres the real size of the ships ? Maybe not necessary
+        if we use auto-aim and can reduce the hitboxes
+
+        :param entry: Panda3d's description of the collision
+        """
+        ship_from = entry.from_node_path.python_tags["owner"]
+        terrain_into = entry.into_node_path.python_tags["owner"]
+
+        # Handle pathologic cases
+        if ship_from is None:
+            return
+        if terrain_into is None:
+            return
+
+        # Get impact parameters
+        normal = entry.getSurfaceNormal(self.game.root_node)
+        # Normalize the normal vector because it can have a non-unit length if a parent
+        # object was scaled. It's dumb, but it is what it is...
+        if not normal.almostEqual(Vec3(0, 0, 0)):
+            normal.normalize()
+        normal_relative_velocity = np.dot(normal, ship_from.speed)
+
+        # Compute impulse correction
+        # Push back if objects are still approaching
+        if normal_relative_velocity < 0:
+            velocity_correction = (
+                -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
+            )
+        else:
+            velocity_correction = np.zeros(3)
+        # Position correction is too complicated to compute with arbitrary mesh
+        # => Rely only on elastic impact to push back
+
+        # Apply damage to the ship
+        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
+        ship_from.push(
+            damage=damage,
+            velocity_correction=velocity_correction,
+            position_correction=np.zeros(3),
+        )
 
     def ship_into_ship(self, entry):
+        """
+        Handle the case where a ship hits another ship for the first time
+        If ship_from is the player, play a crash sfx
+        In any case, call ship_into_ship_pushback
+
+        :param entry: Panda3d's description of the collision
+        """
+        ship_from = entry.from_node_path.python_tags["owner"]
+        ship_into = entry.into_node_path.python_tags["owner"]
+
+        # Handle pathologic cases
+        if ship_from is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+            return
+        if ship_into is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("ship_into being removed while it hits. " "Ignoring.")
+            return
+
+        if DEBUG_COLLISION:
+            LOGGER.info("ship into ship")
+            LOGGER.info(f"ship into : {ship_into.id}")
+            LOGGER.info(f"ship from : {ship_from.id}")
+
+        # Play SFX for player only
+        if ship_from.id == self.game.player.ship.id:
+            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
+            self.game.app.sfx.player_crash(
+                game=self.game, relative_hit_point=relative_hit_point, in_terrain=False
+            )
+        self.ship_into_ship_pushback(entry)
+
+    def ship_again_ship(self, entry):
+        """
+        Handle the case where a ship hits another ship, and it already has
+        at the last frame : call ship_into_ship_pushback
+
+        :param entry: Panda3d's description of the collision
+        """
+        self.ship_into_ship_pushback(entry)
+
+    def ship_into_ship_pushback(self, entry):
         """
         Handle the case where a ship hits another ship:
         The collisions is registered on both sides.
@@ -208,19 +342,11 @@ class CollisionSystem:
         ship_from = entry.from_node_path.python_tags["owner"]
         ship_into = entry.into_node_path.python_tags["owner"]
 
+        # Handle pathologic cases
         if ship_from is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
             return
         if ship_into is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("ship_into being removed while it hits. " "Ignoring.")
             return
-
-        if DEBUG_COLLISION:
-            LOGGER.info("ship into ship")
-            LOGGER.info(f"ship into : {ship_into.id}")
-            LOGGER.info(f"ship from : {ship_from.id}")
 
         # Get impact parameters
         # Normal and penetration depth from ship positions directly (assumed spherical)
@@ -231,10 +357,9 @@ class CollisionSystem:
             # situation
             return
         normal = relative_position / distance_m
-        penetration_depth_m = -(
-            distance_m - ship_from.hit_radius_m - ship_into.hit_radius_m
+        penetration_depth_m = max(  # Sometimes small numerical errors cause < 0
+            -(distance_m - ship_from.hit_radius_m - ship_into.hit_radius_m), 0.0
         )
-        assert penetration_depth_m >= 0
         relative_velocity = ship_from.speed - ship_into.speed
         normal_relative_velocity = np.dot(normal, relative_velocity)
         mass_from_kg = ship_from.mass_kg
@@ -245,10 +370,12 @@ class CollisionSystem:
         if normal_relative_velocity < 0:
             velocity_correction = (  # correction impulse / self mass
                 normal
-                * (1 + SOLID_COLLISION_RESTITUTION)
+                * (1 + SOLID_COLLISION_ELASTICITY)
                 * normal_relative_velocity
                 / denominator
             )
+        else:
+            velocity_correction = np.zeros(3)
         # Compute position correction.
         # Not a big correction in most cases, but limits penetration.
         position_correction = (
@@ -266,23 +393,6 @@ class CollisionSystem:
             velocity_correction=velocity_correction,
             position_correction=position_correction,
         )
-
-        # TODO SFX
-        # # Apply hit effect depending on player or bot
-        # if ship_from.id == self.game.player.ship.id:
-        #     relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-        #     self.game.app.sfx.ship_collision_on_player(
-        #         game=self.game, relative_hit_point=relative_hit_point
-        #     )
-        # else:
-        #     # TODO: Mute bots shooting on bots ?
-        #     # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-        #     # TODO: Add a hit sprite
-        #     self.game.app.sfx.distant_impact_hit(
-        #         player_ship_pos=self.game.player.ship.position,
-        #         hit_pos=entry.into_node_path.parent.getPos(),
-        #         impact_type="target",
-        #     )
 
     def clean(self):
         """

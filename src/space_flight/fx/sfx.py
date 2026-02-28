@@ -64,12 +64,12 @@ class SFX:
         return self.audio3d.loadSfx(sound_file)
 
     def get_sounds_from_asset_manager(self):
-        self.player_crash_short = self.app.asset_manager.get_asset(
+        self.player_crash_short_sound_pool = self.app.asset_manager.get_asset(
             asset_type="3d_sound",
             path=DATAFILES_PATH / "sounds/impacts/player_crash/short",
             pattern="*.wav",
         )
-        self.player_crash_long = self.app.asset_manager.get_asset(
+        self.player_crash_long_sound_pool = self.app.asset_manager.get_asset(
             asset_type="3d_sound",
             path=DATAFILES_PATH / "sounds/impacts/player_crash/long",
             pattern="*.wav",
@@ -147,6 +147,31 @@ class SFX:
 
         # Create ad-hoc dummy node to place the sound
         dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
+        dummy_node.setPos(*relative_hit_point)
+        # Delete it in the near future
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="remove_player_hit_sound_node",
+            method=dummy_node.remove_node,
+        )
+        # Add sound to laser hit
+        sound = sound_pool.get_sound(randomize_pitch=True)
+        # Attach sound to the dummy node
+        self.audio3d.attachSoundToObject(sound, dummy_node)
+        sound.setVolume(multiplier)
+        sound.play()
+
+    def player_crash(self, game, relative_hit_point: np.ndarray, in_terrain: bool):
+        """
+        Play a random impact sound where the impact took place
+        Blend a random long and a random short crash sound
+        If the crash is in terrain, add rock impact sound
+
+        :param relative_hit_point: The position of the hit relative to the player node
+        :param in_rock: Whether the player has crashed in terrain shield is active
+        """
+        # Create ad-hoc dummy node to place the sound
+        dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)  # slightly to the right
         # Delete it in the near future
         game.delayed_methods.do_method_later(
@@ -154,10 +179,26 @@ class SFX:
             name="remove_player_hit_sound_node",
             method=dummy_node.remove_node,
         )
-        # Add sound to laser hit (empty list if no sound)
-        # Add sound to laser hit
+        multiplier = PLAYER_HIT_SOUND_MULTIPLIER
+        # Play terrain hit sound if crash in terrain
+        if in_terrain:
+            sound_pool = self.terrain_hit_sound_pool
+            sound = sound_pool.get_sound(randomize_pitch=True)
+            # Attach sound to the cdumy node
+            self.audio3d.attachSoundToObject(sound, dummy_node)
+            sound.setVolume(multiplier)
+            sound.play()
+        # Play short crash sound
+        sound_pool = self.player_crash_short_sound_pool
         sound = sound_pool.get_sound(randomize_pitch=True)
-        # Attach sound to the camera
+        # Attach sound to the dumy node
+        self.audio3d.attachSoundToObject(sound, dummy_node)
+        sound.setVolume(multiplier)
+        sound.play()
+        # Play long crash sound
+        sound_pool = self.player_crash_long_sound_pool
+        sound = sound_pool.get_sound(randomize_pitch=True)
+        # Attach sound to the dumy node
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()

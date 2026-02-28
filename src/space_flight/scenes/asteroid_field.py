@@ -39,8 +39,9 @@ class AsteroidField:
 
         # Get 3D models from asset manager
         asteroid_model_paths = [
-            DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf",
-            DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf",
+            # DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf",
+            DATAFILES_PATH
+            / "models/asteroids/54509_asteroid/scene.gltf",
         ]
 
         # Prepare integration
@@ -83,7 +84,7 @@ class AsteroidField:
                 self.omegas[3 * ast_idx : 3 * (ast_idx + 1)] = omega.copy()
 
             # Initialize collisions
-            hit_box_radius_m = 1.2
+            hit_box_radius_m = 1.6
             attach_collision_sphere(
                 game=self.game,
                 name="terrain",
