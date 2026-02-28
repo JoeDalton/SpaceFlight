@@ -64,10 +64,25 @@ class SFX:
         return self.audio3d.loadSfx(sound_file)
 
     def get_sounds_from_asset_manager(self):
-        self.player_hit_sound_pool = self.app.asset_manager.get_asset(
+        self.player_crash_short = self.app.asset_manager.get_asset(
             asset_type="3d_sound",
-            path=DATAFILES_PATH / "sounds/impacts/laser_on_player",
+            path=DATAFILES_PATH / "sounds/impacts/player_crash/short",
             pattern="*.wav",
+        )
+        self.player_crash_long = self.app.asset_manager.get_asset(
+            asset_type="3d_sound",
+            path=DATAFILES_PATH / "sounds/impacts/player_crash/long",
+            pattern="*.wav",
+        )
+        self.player_hull_laser_hit_sound_pool = self.app.asset_manager.get_asset(
+            asset_type="3d_sound",
+            path=DATAFILES_PATH / "sounds/impacts/laser_on_player_hull",
+            pattern="*.wav",
+        )
+        self.player_shield_laser_hit_sound_pool = self.app.asset_manager.get_asset(
+            asset_type="3d_sound",
+            path=DATAFILES_PATH / "sounds/impacts/laser_on_player_shield",
+            pattern="*.ogg",
         )
         self.distant_target_hit_sound_pool = self.app.asset_manager.get_asset(
             asset_type="sound",
@@ -115,13 +130,19 @@ class SFX:
         sound.setVolume(volume * multiplier)
         sound.play()
 
-    def impact_hit_on_player(self, game, relative_hit_point: np.ndarray):
+    def laser_impact_hit_on_player(
+        self, game, relative_hit_point: np.ndarray, is_shield: bool
+    ):
         """
         Play a random impact sound where the impact took place
 
         :param relative_hit_point: The position of the hit relative to the player node
+        :param is_shield: Whether the player's shield is active
         """
-        sound_pool = self.player_hit_sound_pool
+        if is_shield:
+            sound_pool = self.player_shield_laser_hit_sound_pool
+        else:
+            sound_pool = self.player_hull_laser_hit_sound_pool
         multiplier = PLAYER_HIT_SOUND_MULTIPLIER
 
         # Create ad-hoc dummy node to place the sound

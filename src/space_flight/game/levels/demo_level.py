@@ -28,7 +28,7 @@ def build_demo_level(game):
         game=game,
         ship_type="a-wing",
         ini_position=np.array([0, 0, 0]),
-        is_neutral=True,
+        is_neutral=False,
         has_ai=False,
     )
 
@@ -62,42 +62,42 @@ def build_demo_level(game):
         game=game,
         name="lead_2",
         ship_type="tie-interceptor",
-        ini_position=np.array([0, -200, 2]),
+        ini_position=np.array([0, -200, 0]),
         has_debug_trihedron=True,
         team=2,
-        debug_decisions=False,
+        debug_decisions=True,
     )
     lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
 
-    chase_bot = spawn_bot(
-        game=game,
-        name="chase_1",
-        ship_type="a-wing",
-        ini_position=np.array([0, -2000, -0]),
-        has_debug_trihedron=True,
-        team=1,
-        debug_decisions=False,
-    )
-    chase_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
+    # chase_bot = spawn_bot(
+    #     game=game,
+    #     name="chase_1",
+    #     ship_type="a-wing",
+    #     ini_position=np.array([0, -2000, -0]),
+    #     has_debug_trihedron=True,
+    #     team=1,
+    #     debug_decisions=False,
+    # )
+    # chase_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
 
-    for _ in range(5):
-        bot = spawn_bot(
-            game=game,
-            name="team_1",
-            ship_type="x-wing",
-            ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-            has_debug_trihedron=True,
-            team=1,
-        )
-        bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
+    # for _ in range(5):
+    #     bot = spawn_bot(
+    #         game=game,
+    #         name="team_1",
+    #         ship_type="x-wing",
+    #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+    #         has_debug_trihedron=True,
+    #         team=1,
+    #     )
+    #     bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
 
-    for _ in range(5):
-        bot = spawn_bot(
-            game=game,
-            name="team_2",
-            ship_type="tie-interceptor",
-            ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-            has_debug_trihedron=True,
-            team=2,
-        )
-        bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
+    # for _ in range(5):
+    #     bot = spawn_bot(
+    #         game=game,
+    #         name="team_2",
+    #         ship_type="tie-interceptor",
+    #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
+    #         has_debug_trihedron=True,
+    #         team=2,
+    #     )
+    #     bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)

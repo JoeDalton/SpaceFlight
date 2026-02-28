@@ -138,8 +138,8 @@ class CollisionSystem:
         # Apply hit effect depending on player or bot
         if destructible_id == self.game.player.ship.id:
             relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-            self.game.app.sfx.impact_hit_on_player(
-                game=self.game, relative_hit_point=relative_hit_point
+            self.game.player.play_impact_sound(
+                relative_hit_point=relative_hit_point, kind="laser"
             )
         else:
             # TODO: Mute bots shooting on bots ?

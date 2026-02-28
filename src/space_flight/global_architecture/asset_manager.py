@@ -7,7 +7,10 @@ from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
 COMMON_ASSETS_TO_LOAD = [
     # Battle sounds
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/short", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/long", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_hull", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_shield", "*.ogg"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target", "*.wav"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
     ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.mp3", ""),

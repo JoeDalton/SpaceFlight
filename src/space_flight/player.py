@@ -229,6 +229,22 @@ class Player:
         self.head_position_m = new_state[0:3]
         self.head_velocity_mps = new_state[3:6]
 
+    def play_impact_sound(self, relative_hit_point: np.ndarray, kind: str):
+        """
+        Plays a sound when impacting something
+
+        :param relative_hit_point: The position of the hit relative to the player node
+        :param kind: The kind of impact
+        """
+        if kind == "laser":
+            self.game.app.sfx.laser_impact_hit_on_player(
+                game=self.game,
+                relative_hit_point=relative_hit_point,
+                is_shield=self.ship.shield > 0,
+            )
+        else:
+            raise NotImplementedError
+
     def clean(self):
         """
         Cleans the player object before it is deleted
