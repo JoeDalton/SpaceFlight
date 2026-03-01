@@ -12,7 +12,9 @@ class GameTimeManager:
 
     def __init__(self, game, pause_on_init: bool = True):
         self.game = game
-        self.time_in_pause_s = 0.0
+        # The game is not created at hte first frame since there are
+        # splash and menu states => Account for that delay in the initial pause time
+        self.time_in_pause_s = ClockObject.getGlobalClock().getFrameTime()
         self.real_time_at_last_pause_s = 0.0
         self.game_time_at_last_pause_s = 0.0
         if pause_on_init:
