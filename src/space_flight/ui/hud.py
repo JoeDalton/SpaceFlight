@@ -182,12 +182,14 @@ class TargetHUD:
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
+            self.game.player.ship.target_id = None
         elif self.target.is_dead:
             self.target = None
             self.target_idx = 0
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
+            self.game.player.ship.target_id = None
         else:
             self.distance_label.show()
             self.name_label.show()
@@ -249,6 +251,7 @@ class TargetHUD:
     def set_target(self, target, target_name: str = ""):
         self.target = target
         self.name_label["text"] = target_name
+        self.game.player.ship.target_id = target.id
 
     def clean(self):
         """

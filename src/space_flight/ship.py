@@ -10,6 +10,7 @@ import yaml
 from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
+from space_flight.ai.auto_aim import AutoAim
 from space_flight.collisions import attach_collision_sphere
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
@@ -123,7 +124,10 @@ class Ship:
         )
 
         # Initialize cannons
-        self.laser_cannon = LaserCannon(game=self.game, parent_ship=self)
+        # TODO auto-aim parameters from difficulty config file
+        self.target_id = None
+        self.auto_aim = AutoAim(game=self.game, parent=self)
+        self.laser_cannon = LaserCannon(game=self.game, parent=self)
 
         # Initialize collisions
         self.hit_radius_m = self.conf["hit_box_radius_m"]
@@ -332,6 +336,9 @@ class Ship:
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
 
+        # Compute target acquisition
+        self.auto_aim.compute_acquisition()
+
     def take_hit(self, damage: float, normal_world_vector: np.ndarray):
         """
         Take damage from hits and jolt from the impact
@@ -425,6 +432,8 @@ class Ship:
         if not self.is_clean:
             self.model.clean()
             self.model = None
+            self.auto_aim.clean()
+            self.auto_aim = None
             self.laser_cannon.clean()
             self.laser_cannon = None
             self.collision_sphere_np.setPythonTag("owner", None)

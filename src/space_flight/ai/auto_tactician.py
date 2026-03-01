@@ -70,6 +70,13 @@ class AutoTactician:
                 self.time_since_commitment = 0.0
                 self.intent = intent
                 self.target_dict = target_dict
+
+        # Register target_id if in offensive mode so the auto-aim can do its job
+        if self.intent == Intent.ENGAGE:
+            self.ship.target_id = self.target_dict["target_id"]
+        else:
+            self.ship.target_id = None
+
         return self.intent, self.target_dict
 
     def update_intent(self) -> Tuple[int, dict]:

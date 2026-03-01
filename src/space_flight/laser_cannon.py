@@ -26,30 +26,30 @@ LIGHT_ATTENUATION = (1, 0.05, 0)
 
 
 class LaserCannon:
-    def __init__(self, game, parent_ship):
-        self.parent_ship = parent_ship
+    def __init__(self, game, parent):
+        self.parent = parent
         self.game = game
 
         # Cannon configuration
-        cannon_positions = self.parent_ship.conf["cannon_positions"]
+        cannon_positions = self.parent.conf["cannon_positions"]
         self.n_cannon = len(cannon_positions)
         self.cannon_nodes = []
         for cannon_idx in range(self.n_cannon):
             # Create a dummy node to attach models
             node = NodePath("player_node")
-            node.reparentTo(self.parent_ship.node)
+            node.reparentTo(self.parent.node)
             node.set_pos(*cannon_positions[cannon_idx])
             self.cannon_nodes.append(node)
 
         # Laser configuration
-        self.shot_power = self.parent_ship.conf["shot_power"]
-        self.laser_base_range_m = self.parent_ship.conf["laser_base_range_m"]
+        self.shot_power = self.parent.conf["shot_power"]
+        self.laser_base_range_m = self.parent.conf["laser_base_range_m"]
         self.life_time_s = self.laser_base_range_m / LASER_SPEED_MPS
-        self.fire_delay = 1.0 / self.parent_ship.conf["laser_fire_rate"]
-        color = self.parent_ship.conf["laser_color"]
+        self.fire_delay = 1.0 / self.parent.conf["laser_fire_rate"]
+        color = self.parent.conf["laser_color"]
 
         # Sound initialization
-        sound_file = DATAFILES_PATH / self.parent_ship.conf["laser_sound"]
+        sound_file = DATAFILES_PATH / self.parent.conf["laser_sound"]
         self.sound_pool = self.game.app.asset_manager.get_asset(
             asset_type="3d_sound",
             path=sound_file,
@@ -80,30 +80,26 @@ class LaserCannon:
         if current_time - self.last_fire_time < self.fire_delay:
             return
 
-        # Start position and orientation relative to the ship
-        ship_quat = self.parent_ship.node.get_quat(self.game.root_node)
-        q_ship = np.quaternion(*ship_quat)
+        # Orientation of the render relative to the parent
+        q_ship = np.quaternion(*self.parent.orientation)
         q_laser = q_ship * np.quaternion(SQT2_S, SQT2_S, 0, 0)
-        ship_dir = ship_quat.get_forward()
 
-        # Compute start and end positions
-        speed = LASER_SPEED_MPS * np.array(ship_dir) + self.parent_ship.speed
+        # Compute start position
         start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
             self.game.root_node
         )
+        # Get shot direction from auto-aim
+        shot_speed = self.parent.auto_aim.compute_shot_speed(start_pos=start_pos)
 
-        # TODO : shoot slightly inward so that the shots cross at mid range
-        # TODO : Add random spread ? (Very small)
-        # TODO : Slight AutoAim when target lock
-
+        # Spawn laser shot
         _ = LaserShot(
             game=self.game,
-            origin_ship_id=self.parent_ship.id,
+            origin_ship_id=self.parent.id,
             texture=self.laser_texture,
             power=self.shot_power,
             life_time_s=self.life_time_s,
             light_color=self.light_color,
-            speed=speed,
+            speed=shot_speed,
             start_pos=start_pos,
             quat=q_laser,
         )
@@ -125,7 +121,7 @@ class LaserCannon:
             node.remove_node()
         self.cannon_nodes = []
         self.sound_pool = []
-        self.parent_ship = None
+        self.parent = None
         self.laser_texture = None
         self.game = None
         if DEBUG_DELETION:

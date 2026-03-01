@@ -104,9 +104,7 @@ class GameState(BaseState):
         self.game_objects = {}
 
     def start(self, task):
-        self.is_paused = False
-        self.interval_manager.resume()
-        self.game_time.resume()
+        self.resume()
         return task.done
 
     def update_game_world_task(self, task):
