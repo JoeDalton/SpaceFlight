@@ -133,6 +133,12 @@ class LaserCannon:
 
 
 class LaserShot:
+    """
+    A class for laser shot objects
+
+    # TODO: fix card orientation when the shot is not fired straight ahead
+    """
+
     def __init__(
         self,
         game,

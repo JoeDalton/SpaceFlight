@@ -196,7 +196,7 @@ class Player:
 
         quat = np.quaternion(*self.ship.state[3:7])
         ship_acceleration_body_mps2 = rotate_single_vector(
-            -quat, ship_acceleration_world_mps2
+            quat.conjugate(), ship_acceleration_world_mps2
         )
         # Scale down, because real world accelerations are biiiig
         ship_acceleration_body_mps2 *= COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH

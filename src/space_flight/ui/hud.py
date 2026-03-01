@@ -77,6 +77,9 @@ class HUD:
             f"Team 1 strength = {n_team_1}\n"
             f"Team 2 strength = {n_team_2}\n"
             "\n"
+            "Player has target lock = "
+            f"{self.game.player.ship.auto_aim.is_target_acquired}\n"
+            "\n"
         )
         try:
             bot_text = (
@@ -90,6 +93,9 @@ class HUD:
                 f"{self.game.lead_bot.pilot.throttle:.4f}\n"
                 "Lead Bot Speed = "
                 f"{np.linalg.norm(self.game.lead_bot.ship.state[7:10]):.1f}m/s\n"
+                "\n"
+                "Lead Bot has target lock = "
+                f"{self.game.lead_bot.ship.auto_aim.is_target_acquired}\n"
                 "\n"
             )
         except AttributeError:
@@ -112,6 +118,7 @@ class HUD:
 class TargetHUD:
     def __init__(self, game):
         # TODO use Interactions instead of a player target list.
+        # TODO add lead indicator
         # Allow filtering on team
         self.game = game
         self.id = uuid.uuid4()
