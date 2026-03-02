@@ -24,8 +24,11 @@ class SplashState(BaseState):
 
         self.app.win.requestProperties(props)
 
+        tex = self.app.loader.loadTexture(
+            DATAFILES_PATH / "sprites/splash_screen/splash.png"
+        )
         self.splash = OnscreenImage(
-            image=str(DATAFILES_PATH / "sprites/splash_screen/splash.png"),
+            image=tex,
             scale=(1280 / 544, 1, 1),
             parent=self.app.aspect2d,
         )
