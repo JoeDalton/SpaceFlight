@@ -17,7 +17,7 @@ from space_flight import DEBUG_COLLISION
 SOLID_COLLISION_ELASTICITY = 0.3  # 0 = inelastic, 1 = elastic
 POSITION_CORRECTION_RATIO = 0.1
 PENETRATION_TOLERANCE_M = 0.1
-COLLISION_DAMAGE_FACTOR = 0.0001  # TODO configurable with difficulty
+COLLISION_DAMAGE_FACTOR = 0.05  # TODO configurable with difficulty
 
 LOGGER = logging.getLogger()
 

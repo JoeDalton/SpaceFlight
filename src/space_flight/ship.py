@@ -18,7 +18,7 @@ from space_flight.utils import rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
-WEAPON_DAMAGE_TO_FORCE_FACTOR = 100.0
+WEAPON_DAMAGE_TO_FORCE_FACTOR = 20.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 
 

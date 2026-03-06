@@ -1,6 +1,6 @@
 # TIE-fighter
-mass_kg: 500
-max_thrust_n: 60000
+mass_kg: 110
+max_thrust_n: 14450
 max_pitch_rate_degps: 60
 max_yaw_rate_degps: 30
 max_roll_rate_degps: 150
@@ -9,15 +9,15 @@ lift_coefficient_slope_pdeg: 0.1
 lateral_lift_coefficient_slope_pdeg: 0.05
 reference_surface_m2: 10
 
-health: 20.0
-shield: 10.0
-shield_regen_rate: 0.05
+health: 1000.0
+shield: 0.0
+shield_regen_rate: 0.0
 hit_box_radius_m: 4.0
 
 laser_base_range_m: 1500
 laser_color: green
-laser_fire_rate: 10
+laser_fire_rate: 9.1
 cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.mp3
-shot_power: 1.0
+shot_power: 75.0
 explosion_scale: 5.0
