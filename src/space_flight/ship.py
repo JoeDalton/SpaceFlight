@@ -14,7 +14,7 @@ from space_flight.ai.auto_aim import AutoAim
 from space_flight.collisions import attach_collision_sphere
 from space_flight.laser_cannon import LaserCannon
 from space_flight.ship_model import ShipModel
-from space_flight.utils import rotate_single_vector
+from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -53,6 +53,10 @@ class Ship:
         self.is_dead = False
         self.id = uuid.uuid4()
         self.team = team
+
+        # Set a low-pass filter time to emulate physical delay in
+        # thrust and rotational rates
+        self.physics_filter_time_s = 0.3
 
         # Load configuration
         filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
@@ -178,18 +182,50 @@ class Ship:
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
         """
-        Sets the scalar thrust and rotational rates of the ship
+        Sets the scalar thrust and rotational rates of the ship.
+
         Square throttle so the velocity is easier to modulate
+
+        Run a low pass filter on them afterwards to emulate delay in physical systems
 
         Panda3d seems to use the pitch-roll-yaw convention
         """
-        self.scalar_thrust = throttle**2 * self.max_thrust_n
-        self.pqr = np.array(
+        dt = self.game.game_time.get_time_step()
+
+        scalar_thrust = throttle**2 * self.max_thrust_n
+        pqr = np.array(
             [
                 pitch_rate * self.max_pitch_rate_radps,
                 roll_rate * self.max_roll_rate_radps,
                 yaw_rate * self.max_yaw_rate_radps,
             ]
+        )
+
+        [
+            self.scalar_thrust,
+            self.pqr[0],
+            self.pqr[1],
+            self.pqr[2],
+        ] = low_pass_filter_first_order(
+            value=np.array(
+                [
+                    scalar_thrust,
+                    pqr[0],
+                    pqr[1],
+                    pqr[2],
+                ]
+            ),
+            previous=np.array(
+                [
+                    self.scalar_thrust,
+                    self.pqr[0],
+                    self.pqr[1],
+                    self.pqr[2],
+                ]
+            ),
+            dt=dt,
+            rise_time=self.physics_filter_time_s,
+            fall_time=self.physics_filter_time_s,
         )
 
     def compute_derivatives(self):
