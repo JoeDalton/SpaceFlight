@@ -17,7 +17,7 @@ COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_ROTATION_POSITION_FACTOR_DEGPM = 500.0
 HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD = 1.0
 
-IMPACT_FEELING_FACTOR = 2000
+IMPACT_FEELING_FACTOR = 1000
 
 
 class Player:
@@ -39,7 +39,7 @@ class Player:
             team = 1
 
         # Add update mehods to the game's update methods list
-        self.game.actor_methods[self.id] = []
+        self.game.method_lists[self.id] = []
         self.add_task(method=self.move_player)
 
         self.ship = Ship(
@@ -73,6 +73,10 @@ class Player:
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.ship)
+
+        # DEBUG
+        # from space_flight.ai.collision_sensor import CollisionSensor
+        # self.collision_sensor = CollisionSensor(game=game, ship=self.ship)
 
     def move_player(self):
         """
@@ -108,7 +112,7 @@ class Player:
 
         :param method: the method to be called by the task
         """
-        self.game.actor_methods[self.id].append(method)
+        self.game.method_lists[self.id].append(method)
 
     def add_target(self, target, name: str):
         """

@@ -36,7 +36,7 @@ class Planet2D:
 
         # TODO add to game "tasks" instead of panda3d
         # self.game.app.taskMgr.add(self.move_planet_task, "move_planet_task")
-        self.game.actor_methods[self.id] = [self.move_planet_task]
+        self.game.method_lists[self.id] = [self.move_planet_task]
 
     def move_planet_task(self):
         new_position = self.position + self.game.player.ship.position
@@ -46,5 +46,10 @@ class Planet2D:
         """
         Cleans the Planet2D object
         """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
         self.planet.removeNode()
         self.game = None

@@ -17,6 +17,8 @@ class SpeedDustCloud:
     to get them a feeling of their ship's speed
 
     Dust particles are sprites zooming past the player's ship
+
+    TODO: use a shader for this fx
     """
 
     def __init__(
@@ -58,7 +60,7 @@ class SpeedDustCloud:
         self.max_speed = self.game.player.ship.max_speed_mps
 
         # Add the update task to the game's methods
-        self.game.actor_methods[self.id] = [self.dust_update]
+        self.game.method_lists[self.id] = [self.dust_update]
 
     def _init_particle(self, particle):
         """
@@ -111,6 +113,11 @@ class SpeedDustCloud:
         """
         Cleans the SpeedDustCloud object
         """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
         self.game = None
         for particle in self.particles:
             particle.removeNode()

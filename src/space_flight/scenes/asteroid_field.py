@@ -106,7 +106,7 @@ class AsteroidField:
                 partial_x_dot=self.state_dot,
                 partial_x_dot_previous=self.state_dot_previous,
             )
-            self.game.actor_methods[self.id] = [self.move_asteriods_task]
+            self.game.method_lists[self.id] = [self.move_asteriods_task]
 
     def compute_derivatives(self):
         """
@@ -155,6 +155,11 @@ class AsteroidField:
         """
         Cleans the AsteroidField object
         """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
         for asteroid in self.asteroids:
             asteroid.removeNode()
         self.asteroids = None

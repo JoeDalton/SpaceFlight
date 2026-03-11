@@ -48,7 +48,7 @@ class HUD:
         self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
         self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
-        self.game.actor_methods[self.id] = [self.hud_update_task]
+        self.game.method_lists[self.id] = [self.hud_update_task]
 
     def hud_update_task(self):
         """
@@ -108,6 +108,11 @@ class HUD:
         """
         Cleans the HUD object
         """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
         self.hud_textNodePath.removeNode()
         self.hud = None
         self.fps_textNodePath.removeNode()
@@ -164,7 +169,7 @@ class TargetHUD:
             frameColor=(0, 0, 0, 0),
             text_fg=(1, 1, 1, 1),
         )
-        self.game.actor_methods[self.id] = [self.target_hud_update_task]
+        self.game.method_lists[self.id] = [self.target_hud_update_task]
 
         # Make sure the targeting HUD is rendered above other UI things
         self.square.setDepthTest(False)
@@ -258,12 +263,21 @@ class TargetHUD:
     def set_target(self, target, target_name: str = ""):
         self.target = target
         self.name_label["text"] = target_name
-        self.game.player.ship.target_id = target.id
+        try:
+            self.game.player.ship.target_id = target.id
+        except AttributeError:
+            # TODO: breaks looping over the target list
+            self.game.player.ship.target_id = None
 
     def clean(self):
         """
         Clean the TargetHud object
         """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
         # TODO: This should be in "input_system"
         self.game.app.ignore(self.game.key_bindings["switch_target"])
         self.name_label.destroy()

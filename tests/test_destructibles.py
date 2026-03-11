@@ -21,15 +21,15 @@ class DummyDestructible(Destructible):
 def mock_game():
     game = MagicMock()
     game.destructibles.alive_objects = []
-    game.actor_methods = {}
+    game.method_lists = {}
     return game
 
 
 def test_destructible_init_adds_to_game(mock_game):
     d = Destructible(mock_game)
     assert d in mock_game.destructibles.alive_objects
-    assert d.id in mock_game.actor_methods
-    assert mock_game.actor_methods[d.id] == []
+    assert d.id in mock_game.method_lists
+    assert mock_game.method_lists[d.id] == []
 
 
 def test_add_task_appends_to_actor_methods(mock_game):
@@ -39,14 +39,14 @@ def test_add_task_appends_to_actor_methods(mock_game):
         return 42
 
     d.add_task(task)
-    assert task in mock_game.actor_methods[d.id]
+    assert task in mock_game.method_lists[d.id]
 
 
 def test_clear_tasks_removes_actor_methods(mock_game):
     d = Destructible(mock_game)
     d.add_task(lambda: None)
     d.clear_tasks()
-    assert d.id not in mock_game.actor_methods
+    assert d.id not in mock_game.method_lists
 
 
 # ---------------------------

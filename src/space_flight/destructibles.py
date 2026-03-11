@@ -17,7 +17,7 @@ class Destructible:
         self.tasks = []
         self.id = uuid.uuid4()
         self.game.destructibles.alive_objects.append(self)
-        self.game.actor_methods[self.id] = []
+        self.game.method_lists[self.id] = []
 
     def add_task(self, method: Callable):
         """
@@ -25,13 +25,17 @@ class Destructible:
 
         :param method: the method to be called
         """
-        self.game.actor_methods[self.id].append(method)
+        self.game.method_lists[self.id].append(method)
 
     def clear_tasks(self):
         """
         Remove all tasks linked to this object
         """
-        self.game.actor_methods.pop(self.id)
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
 
     def clean(self):
         """

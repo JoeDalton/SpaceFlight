@@ -9,7 +9,6 @@ from space_flight.ai.auto_navigator import AutoNavigator
 from space_flight.ai.auto_pilot import AutoPilot
 from space_flight.ai.auto_tactician import AutoTactician
 from space_flight.destructibles import Destructible
-from space_flight.fx import spawn_explosion
 from space_flight.ship import Ship
 from space_flight.trihedron import Trihedron
 
@@ -107,11 +106,10 @@ class Bot(Destructible):
         Associated sound #TODO
         Model spinning before explosing ? TODO
         """
-        spawn_explosion(
-            game=self.game,
+        self.game.explosion_fx_pool.spawn(
             position=self.ship.position,
             scale=self.ship.explosion_scale,
-            speed=self.ship.speed,
+            base_velocity=self.ship.speed,
         )
 
     def clean(self):

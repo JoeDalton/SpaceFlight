@@ -232,7 +232,11 @@ class LaserShot:
         if remove_from_game_objects:
             # Do not do it at the final game cleanup
             # Otherwise it messes up with the loop
-            self.game.game_objects.pop(self.id)
+            if self.game.method_lists:
+                try:
+                    self.game.method_lists.pop(self.id)
+                except KeyError:
+                    pass
 
         self.game = None
 

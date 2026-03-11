@@ -82,3 +82,91 @@ def smooth_step_up(
     :return: f(x)
     """
     return 1.0 - smooth_step_down(x=x, x_step=x_step, slope=slope)
+
+
+def sample_unit_sphere() -> np.ndarray:
+    """
+    Returns a uniformly distributed random point inside the unit sphere.
+
+    Uses rejection sampling: draw a point from the unit cube and discard it
+    if it falls outside the sphere. The expected number of draws before
+    acceptance is ``8 / (4π/3) ≈ 1.91``.
+
+    :returns: A random vector in the unit sphere.
+    """
+    max_try = 50
+    for _ in range(max_try):
+        sample = np.random.uniform(low=-1, high=1, size=3)
+        if np.linalg.norm(sample) <= 1.0:
+            return sample
+    # If no suitable sample is found, fall back to the origin (center of the sphere)
+    return np.zeros(3)
+
+
+def build_orthogonal_basis(
+    normal: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Builds an orthonormal basis around *normal*.
+
+    Returns three mutually perpendicular unit vectors ``(n, tangent, bitangent)``
+    suitable for expressing arbitrary directions in the hemisphere defined by
+    *normal*. Handles degenerate (near-zero) input by falling back to ``+Z``.
+
+    :param normal: Preferred axis of the frame (need not be normalised).
+    :returns: (normal, tangent, bitangent) — three orthonormal vectors
+    """
+    if normal is None:
+        return None, None, None
+    normal_norm = np.linalg.norm(normal)
+    if normal_norm < 1e-6:
+        normal = np.array([0, 0, 1])
+        normal_norm = 1.0
+    normal /= normal_norm
+    # Pick a helper vector that is guaranteed not to be parallel to n,
+    # then use cross products to build the tangent plane.
+    helper = (
+        np.array([1, 0, 0])
+        if abs(np.dot(np.array([1, 0, 0]), normal)) < 0.9
+        else np.array([0, 1, 0])
+    )
+    tangent = np.cross(normal, helper)
+    tangent /= np.linalg.norm(tangent)
+    bitangent = np.cross(normal, tangent)
+    bitangent /= np.linalg.norm(bitangent)
+    return normal, tangent, bitangent
+
+
+def sample_direction_in_cone(
+    normal: np.ndarray,
+    tangent: np.ndarray,
+    bitangent: np.ndarray,
+    half_angle_rad: float,
+) -> np.ndarray:
+    """
+    Returns a random unit vector within a cone around normal.
+
+    The polar angle `theta` is sampled with a square-root bias so that
+    directions are uniformly distributed over the cone's solid angle rather
+    than clustering near the axis.
+
+    :param normal: Cone axis (unit vector).
+    :param tangent: Tangent vector perpendicular to normal.
+    :param bitangent: Bitangent vector perpendicular to both normal and tangent.
+    :param half_angle_rad: Half-angle of the cone in radians.
+    :returns: A normalised random direction inside the cone.
+    """
+    if normal is None:
+        return np.zeros(3)
+    theta_rad = (
+        np.random.uniform(low=0, high=1) ** 0.5 * half_angle_rad
+    )  # sqrt → uniform solid angle
+    phi_rad = 2 * np.pi * np.random.uniform(low=0, high=1)
+    sine_theta = np.sin(theta_rad)
+    sample = (
+        normal * np.cos(theta_rad)
+        + tangent * sine_theta * np.cos(phi_rad)
+        + bitangent * sine_theta * np.sin(phi_rad)
+    )
+    sample /= np.linalg.norm(sample)  # TODO Not necessary
+    return sample

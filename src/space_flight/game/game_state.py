@@ -6,7 +6,7 @@ from space_flight import DEBUG_DELETION
 from space_flight.ai.interactions import Interactions
 from space_flight.collisions import CollisionSystem
 from space_flight.destructibles import Destructibles
-from space_flight.fx import clean_explosion_pools, load_explosion_effect_pools
+from space_flight.fx.explosion_fx import ExplosionPool
 from space_flight.game.levels.demo_level import build_demo_level
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
@@ -67,6 +67,18 @@ class GameState(BaseState):
         # Create a root node for the game
         self.root_node = self.app.render.attachNewNode("game_root_node")
 
+        # Initialize a dictionary to hold actors and their update methods
+        # {
+        #     object_id: [method_to_run_1, method_to_run_2]
+        # }
+        self.method_lists = {}
+
+        # Initialize a dictionary of temporary objects to clean at game exit
+        # {
+        #     object_id: object
+        # }
+        self.game_objects = {}
+
         # Initialize time keeping
         self.is_paused = True
         self.game_time = GameTimeManager(game=self)
@@ -77,7 +89,7 @@ class GameState(BaseState):
         self.app.sfx.get_sounds_from_asset_manager()
 
         # Initialize special effects
-        load_explosion_effect_pools(game=self)
+        self.explosion_fx_pool = ExplosionPool(game=self)
 
         # Initialize Collision system and Destructibles
         self.destructibles = Destructibles()
@@ -90,18 +102,6 @@ class GameState(BaseState):
         # The update must come before the physics computations :
         # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
-
-        # Initialize a dictionary to hold actors and their update methods
-        # {
-        #     object_id: [method_to_run_1, method_to_run_2]
-        # }
-        self.actor_methods = {}
-
-        # Initialize a dictionary of temporary objects to clean at game exit
-        # {
-        #     object_id: object
-        # }
-        self.game_objects = {}
 
     def start(self, task):
         self.resume()
@@ -128,7 +128,7 @@ class GameState(BaseState):
         self.integrator.step()
         # Run the update tasks of all actors
         # TODO Could be parallelized from python 3.14 ?
-        for method_list in self.actor_methods.values():
+        for method_list in self.method_lists.values():
             for method in method_list:
                 method()
 
@@ -166,7 +166,7 @@ class GameState(BaseState):
         self.app.taskMgr.remove(self.update_task)
         self.update_task = None
         # Drop references to the methods to run
-        self.actor_methods = None
+        self.method_lists = None
 
         # Remove actors
         for actor in self.interactions.actors:
@@ -196,7 +196,8 @@ class GameState(BaseState):
         self.collision_system = None
         self.destructibles.clean()
         self.destructibles = None
-        clean_explosion_pools(game=self)
+        self.explosion_fx_pool.clean()
+        self.explosion_fx_pool = None
         self.delayed_methods.clean()
         self.delayed_methods = None
         self.interval_manager.clean()

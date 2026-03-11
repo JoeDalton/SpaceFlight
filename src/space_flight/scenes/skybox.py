@@ -19,7 +19,7 @@ class Skybox:
         self.skybox.setDepthWrite(0)
         self.skybox.reparentTo(self.game.root_node)
         self.skybox.set_scale(50000)
-        self.game.actor_methods[self.id] = [self.move_skybox_task]
+        self.game.method_lists[self.id] = [self.move_skybox_task]
 
     def move_skybox_task(self):
         """
@@ -32,5 +32,10 @@ class Skybox:
         """
         Cleans the Skybox object
         """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
         self.skybox.removeNode()
         self.game = None

@@ -1,0 +1,65 @@
+[
+  {
+    "u_min": 0.00048828125,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion00.png"
+  },
+  {
+    "u_min": 0.0634765625,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion01.png"
+  },
+  {
+    "u_min": 0.12646484375,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion02.png"
+  },
+  {
+    "u_min": 0.189453125,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion03.png"
+  },
+  {
+    "u_min": 0.25244140625,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion04.png"
+  },
+  {
+    "u_min": 0.3154296875,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion05.png"
+  },
+  {
+    "u_min": 0.37841796875,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion06.png"
+  },
+  {
+    "u_min": 0.44140625,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion07.png"
+  },
+  {
+    "u_min": 0.50439453125,
+    "v_min": 0.49609375,
+    "u_size": 0.0625,
+    "v_size": 0.5,
+    "name": "explosion08.png"
+  }
+]
