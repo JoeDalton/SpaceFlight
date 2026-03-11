@@ -93,6 +93,11 @@ class CollisionSystem:
         self.game.app.accept("ship-again-terrain", self.ship_again_terrain)
         self.game.app.accept("ship-into-ship", self.ship_into_ship)
         self.game.app.accept("ship-again-ship", self.ship_again_ship)
+        # Collision sensors = detected at each frame
+        self.game.app.accept("sensor-into-terrain", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-again-terrain", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-into-ship", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-again-ship", self.sensor_into_obstacle)
 
     def update_collisions(self):
         """
@@ -394,6 +399,28 @@ class CollisionSystem:
             position_correction=position_correction,
         )
 
+    def sensor_into_obstacle(self, entry):
+        """
+        Handles the case where a sensor hits an obstacle
+        Register the hit in the sensor
+
+        :param entry: Panda3d's description of the collision
+        """
+        # Identify sensor
+        sensor = entry.from_node_path.python_tags["owner"]
+        if sensor is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("Sensor is being removed while it hits")
+            return
+
+        if DEBUG_COLLISION:
+            LOGGER.info("sensor into obstacle")
+
+        # Register collision in sensor
+        normal = entry.getSurfaceNormal(self.game.root_node)
+        hit_point = entry.getSurfacePoint(self.game.root_node)
+        sensor.obstacles.append({"normal": normal, "hit_point": hit_point})
+
     def clean(self):
         """
         Cleans the CollisionSystem object
@@ -408,6 +435,10 @@ class CollisionSystem:
         self.game.app.ignore("laser-into-terrain")
         self.game.app.ignore("ship-into-terrain")
         self.game.app.ignore("ship-into-ship")
+        self.game.app.ignore("sensor-into-terrain")
+        self.game.app.ignore("sensor-again-terrain")
+        self.game.app.ignore("sensor-into-ship")
+        self.game.app.ignore("sensor-again-ship")
         self.handler = None
         self.game = None
 

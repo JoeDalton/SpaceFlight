@@ -6,13 +6,14 @@ import numpy as np
 from space_flight import DEBUG_DELETION
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
 from space_flight.ai.auto_tactician import Intent
+from space_flight.ai.collision_sensor import CollisionSensor
 from space_flight.utils import smooth_step_down, smooth_step_up
 
 LOGGER = logging.getLogger()
 
 NO_DIRECTION = np.zeros(3), 100.0
 WAYPOINT_MEETING_TOLERANCE_M = 50
-CHASE_DISTANCE_M = 80.0
+COLLISION_REFERENCE_SPEED_MPS = 30
 
 
 class AutoNavigator:
@@ -38,12 +39,57 @@ class AutoNavigator:
         self.behaviour_duration_s = 0.0
         self.time_in_spiral_s = 0.0
         self.last_update_time = self.game.game_time.get_current_time()
+        self.collision_sensor = CollisionSensor(game=game, ship=self.ship)
 
-    def navigate(self, intent: int, target_dict: dict):
+    def navigate(self, intent: int, target_dict: dict) -> tuple[np.ndarray, float]:
+        """
+        Turns the tactician's intent and collision avoidance into explicit directions
+
+        :param intent: The tactitcian's intent
+        :param target_dict: A dictionary containing target info
+        :return: The direction to point to and the desired speed
+        """
+        intent_direction, intent_speed = self.navigate_intent(
+            intent=intent, target_dict=target_dict
+        )
+        (
+            avoidance_direction,
+            avoidance_speed,
+            avoidance_weight,
+        ) = self.navigate_avoidance()
+
+        direction = (intent_direction + avoidance_weight * avoidance_direction) / (
+            1 + avoidance_weight
+        )
+        speed = (intent_speed + avoidance_weight * avoidance_speed) / (
+            1 + avoidance_weight
+        )
+
+        return direction, speed
+        # return self.navigate_intent(intent=intent, target_dict=target_dict)
+
+    def navigate_avoidance(self) -> tuple[np.ndarray, float, float]:
+        """
+        Polls the collision sensor and computes direction and speed to avoid collision
+
+        :return: The direction to point to, the desired speed and the avoidance weight
+        """
+        (
+            avoidance_direction,
+            avoidance_weight,
+        ) = self.collision_sensor.compute_repulsion()
+        if avoidance_weight < 1e-4:
+            return np.zeros(3), 0.0, 0.0
+        avoidance_speed = COLLISION_REFERENCE_SPEED_MPS / avoidance_weight
+        return avoidance_direction, avoidance_speed, avoidance_weight
+
+    def navigate_intent(
+        self, intent: int, target_dict: dict
+    ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
 
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         if intent == Intent.IDLE:
             self.engage_phase = ""
@@ -585,6 +631,8 @@ class AutoNavigator:
     def clean(self):
         self.ship = None
         self.game = None
+        self.collision_sensor.clean()
+        self.collision_sensor = None
         if DEBUG_DELETION:
             LOGGER.info("Cleaned autonavigator")
 
