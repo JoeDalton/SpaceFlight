@@ -105,8 +105,8 @@ class CollisionSensor:
         """
         self.ship = None
         self.sphere_1.setPythonTag("owner", None)
-        self.sphere_2.remove_node()
-        self.sphere_3 = None
+        self.sphere_1.remove_node()
+        self.sphere_1 = None
         self.sphere_2.setPythonTag("owner", None)
         self.sphere_2.remove_node()
         self.sphere_2 = None
