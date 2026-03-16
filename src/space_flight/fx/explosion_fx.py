@@ -441,7 +441,7 @@ class ExplosionPool:
             )
             bias = sample_unit_sphere() * (_SMOKE_POS_BIAS * scale)
             self._smoke.spawn_particle(
-                pos=position + bias,
+                pos=position + bias + base_velocity * _SMOKE_DELAY,
                 vel=vel,
                 size=random.uniform(_SMOKE_SIZE_MIN, _SMOKE_SIZE_MAX) * scale,
                 lifetime=random.uniform(_SMOKE_LIFE_MIN, _SMOKE_LIFE_MAX),
