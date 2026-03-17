@@ -17,6 +17,7 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION
 from space_flight.collisions import attach_collision_segment
+from space_flight.utils import build_axis_billboard_quat
 
 LOGGER = logging.getLogger()
 
@@ -80,16 +81,14 @@ class LaserCannon:
         if current_time - self.last_fire_time < self.fire_delay:
             return
 
-        # Orientation of the render relative to the parent
-        q_ship = np.quaternion(*self.parent.orientation)
-        q_laser = q_ship * np.quaternion(SQT2_S, SQT2_S, 0, 0)
-
         # Compute start position
-        start_pos = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
+        start_position = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
             self.game.root_node
         )
         # Get shot direction from auto-aim
-        shot_speed = self.parent.auto_aim.compute_shot_speed(start_pos=start_pos)
+        shot_speed = self.parent.auto_aim.compute_shot_speed(
+            start_position=start_position
+        )
 
         # Spawn laser shot
         _ = LaserShot(
@@ -100,8 +99,7 @@ class LaserCannon:
             life_time_s=self.life_time_s,
             light_color=self.light_color,
             speed=shot_speed,
-            start_pos=start_pos,
-            quat=q_laser,
+            start_position=start_position,
         )
 
         # Attach sound to the cannon currently firing
@@ -136,7 +134,9 @@ class LaserShot:
     """
     A class for laser shot objects
 
-    # TODO: fix card orientation when the shot is not fired straight ahead
+    The render is a custom camera-facing quad whose long axis is the laser velocity
+    direction.
+    A native panda3d billboard must not be used since it rotates freely
     """
 
     def __init__(
@@ -148,8 +148,7 @@ class LaserShot:
         life_time_s: float,
         light_color: Tuple,
         speed: np.ndarray,
-        start_pos,
-        quat,
+        start_position,
     ):
         self.game = game
         self.id = uuid.uuid4()
@@ -160,22 +159,33 @@ class LaserShot:
         cm = CardMaker("laser")
         cm.set_frame(-0.5, 0.5, -4.0, 4.0)
         self.shot = self.game.root_node.attach_new_node(cm.generate())
-        self.shot.set_texture(texture)
-        self.shot.set_two_sided(True)
-        self.shot.set_transparency(TransparencyAttrib.MAlpha)
 
-        self.shot.set_quat(Quat(*quaternion.as_float_array(quat)))
+        # Compute orientation
+        # A preset orientation is ok since lasers have short lifetimes. For longer-lived
+        # objects, I would have to reset the orientation at each frame.
+        camera_position = self.game.app.camera.get_pos(self.game.root_node)
+        to_camera_vector = camera_position - start_position
+        billboard_quat = build_axis_billboard_quat(
+            forward=speed, up_hint=to_camera_vector
+        ) * np.quaternion(SQT2_S, SQT2_S, 0, 0)
+        self.shot.set_quat(Quat(*quaternion.as_float_array(billboard_quat)))
 
         my_range = speed * life_time_s
 
-        end_pos = start_pos + LVector3(*my_range)
+        end_position = start_position + LVector3(*my_range)
 
         # Don't rely on scene lighting since lasers emit their own light
         self.shot.set_light_off()
+        # Set texture
+        self.shot.set_texture(texture)
+        # Allow to be seen from both sides
+        self.shot.set_two_sided(True)
+        # Allow transparency
+        self.shot.set_transparency(TransparencyAttrib.MAlpha)
 
         # Preset movement
-        self.shot.set_pos(start_pos)
-        laser_movement_interval = LerpPosInterval(self.shot, life_time_s, end_pos)
+        self.shot.set_pos(start_position)
+        laser_movement_interval = LerpPosInterval(self.shot, life_time_s, end_position)
         self.game.interval_manager.play_interval(laser_movement_interval)
 
         # Add light source on laser

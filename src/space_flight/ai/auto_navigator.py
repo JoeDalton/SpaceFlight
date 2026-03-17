@@ -66,7 +66,6 @@ class AutoNavigator:
         )
 
         return direction, speed
-        # return self.navigate_intent(intent=intent, target_dict=target_dict)
 
     def navigate_avoidance(self) -> tuple[np.ndarray, float, float]:
         """

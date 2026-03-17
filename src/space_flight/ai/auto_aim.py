@@ -38,13 +38,13 @@ class AutoAim:
         self.inv_max_assist_tan_angle = 1 / np.tan(np.deg2rad(max_assist_angle_deg))
         self.max_assist_distance_m = max_assist_distance_m
 
-    def compute_shot_speed(self, start_pos: np.ndarray):
+    def compute_shot_speed(self, start_position: np.ndarray):
         """
         Computes the speed vector at which the next laser shot will be emitted
 
         # TODO : Add random spread ? (Very small, subject to parent health ?)
 
-        :param start_pos: The starting point of the laser
+        :param start_position: The starting point of the laser
         """
         if not self.is_target_acquired:
             # No acquisition: fire straight ahead
@@ -92,7 +92,7 @@ class AutoAim:
                 )
 
                 # Find predicted target direction
-                predicted_direction = target_predicted_position - start_pos
+                predicted_direction = target_predicted_position - start_position
                 norm = np.linalg.norm(predicted_direction)
                 if norm < 1e-4:
                     # Better safe than sorry

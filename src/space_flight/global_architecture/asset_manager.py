@@ -27,8 +27,8 @@ COMMON_ASSETS_TO_LOAD = [
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_green.png", ""),
     ("texture", DATAFILES_PATH / "sprites/lasers/laser_blue.png", ""),
     # Explosion textures
-    ("texture", DATAFILES_PATH / "sprites/particles/explosion", "*.png"),
-    ("texture", DATAFILES_PATH / "sprites/particles/black_smoke", "*.png"),
+    ("texture", DATAFILES_PATH / "sprites/particles/fire_atlas.png", ""),
+    ("texture", DATAFILES_PATH / "sprites/particles/smoke_atlas.png", ""),
     # Asteroids # TODO use bam files for faster loading
     ("model", DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),

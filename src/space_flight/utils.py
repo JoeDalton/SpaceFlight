@@ -170,3 +170,57 @@ def sample_direction_in_cone(
     )
     sample /= np.linalg.norm(sample)  # TODO Not necessary
     return sample
+
+
+def build_axis_billboard_quat(
+    forward: np.ndarray, up_hint: np.ndarray = None
+) -> quaternion:
+    """
+    Builds a quaternion that rotates the +Y axis onto `forward`.
+    The up_hint is used to pin the `up` direction. It defaults to world Z+,
+    with a fallback to world +X if `forward` is nearly vertical.
+
+    #TODO test the crap out of this !
+
+    :param forward: The axis of the billboard
+    :param up_hint: The up hint vector, defaults to None
+    :return: A quaternion object for axis billboards
+    """
+    # Make copies to avoid modifying the original vectors
+
+    # Normalize forward vector
+    forward_norm = np.linalg.norm(forward)
+    if forward_norm < 1e-4:
+        forward_axis = np.array([0, 1, 0])
+    else:
+        forward_axis = forward / forward_norm
+
+    # Normalize up_hint
+    if up_hint is not None:
+        up_hint_norm = np.linalg.norm(up_hint)
+        if forward_norm < 1e-4:
+            up_hint_axis = np.array([0, 0, 1])
+        else:
+            up_hint_axis = up_hint / up_hint_norm
+
+    # Default up direction and fallback for forward/up alignment
+    if (up_hint is None) or (np.dot(forward_axis, up_hint_axis) > 0.99):
+        up_hint_axis = np.array([0, 0, 1])
+    # Second fallback in the case where up_hint was None and forward was world +Z
+    if np.dot(forward, up_hint) > 0.99:
+        up_hint_axis = np.array([1, 0, 0])
+
+    # Build orthogonal basis
+    right_axis = np.cross(forward_axis, up_hint_axis)
+    up_axis = np.cross(right_axis, forward_axis)
+
+    quat = quaternion.from_rotation_matrix(
+        np.array(
+            [
+                [right_axis[0], right_axis[1], right_axis[2]],
+                [forward_axis[0], forward_axis[1], forward_axis[2]],
+                [up_axis[0], up_axis[1], up_axis[2]],
+            ]
+        ).T
+    )
+    return quat
