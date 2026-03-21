@@ -5,10 +5,12 @@ from panda3d.core import (
     BitMask32,
     CollisionHandlerEvent,
     CollisionNode,
+    CollisionPlane,
     CollisionSegment,
     CollisionSphere,
     CollisionTraverser,
     NodePath,
+    Plane,
     Vec3,
 )
 
@@ -507,12 +509,13 @@ def attach_collision_segment(
     Attach a collision segment to an existing node. Great for lasers
 
     :param game: The game stage
-    :param name: The name of the collision sphere
+    :param name: The name of the collision segment
     :param collider_type: The nature of the collider, defines from and into bitmasks
     :param parent_node: Its parent_node
     :param parent_object: Its parent_object
-    :param relative_position: Its position relative to the origin of its parent node
-    :return: The node path to the collision sphere
+    :param relative_start_position: Its relative start position
+    :param relative_end_position: Its relative end position
+    :return: The node path to the collision segment
     """
     (
         from_mask_bit,
@@ -522,6 +525,51 @@ def attach_collision_segment(
 
     cnode = CollisionNode(name)
     cnode.addSolid(CollisionSegment(relative_start_position, relative_end_position))
+    # Define masks
+    cnode.setFromCollideMask(from_mask_bit)
+    cnode.setIntoCollideMask(into_mask_bit)
+    # Attach to parent node and objct
+    node_path = parent_node.attachNewNode(cnode)
+    node_path.setPythonTag("owner", parent_object)
+    # Register in collosion handler
+    if add_to_collision_handler:
+        game.collision_system.traverser.addCollider(
+            node_path, game.collision_system.handler
+        )
+
+    if DEBUG_COLLISION:
+        node_path.show()
+    return node_path
+
+
+def attach_collision_plane(
+    game,
+    name: str,
+    collider_type: str,
+    parent_node,
+    parent_object,
+) -> NodePath:
+    """
+    Attach a collision plane to an existing node facing this node's z-up
+
+    :param game: The game stage
+    :param name: The name of the collision plane
+    :param collider_type: The nature of the collider, defines from and into bitmasks
+    :param parent_node: Its parent_node
+    :param parent_object: Its parent_object
+    :return: The node path to the collision plane
+    """
+    (
+        from_mask_bit,
+        into_mask_bit,
+        add_to_collision_handler,
+    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
+
+    # Define a plane: normal + point
+    plane = Plane(Vec3(0, 0, 1), Vec3(0, 0, 0))  # Z-up plane at Z=0
+
+    cnode = CollisionNode(name)
+    cnode.addSolid(CollisionPlane(plane))
     # Define masks
     cnode.setFromCollideMask(from_mask_bit)
     cnode.setIntoCollideMask(into_mask_bit)

@@ -32,6 +32,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
+from space_flight.collisions import attach_collision_plane
 from space_flight.utils import compute_next_power_of_2
 
 # ---------------------------------------------------------------------------
@@ -147,6 +148,15 @@ class Ocean:
             self._rings.append((node, lod))
 
         self.game.method_lists[self.id] = [self.update]
+
+        # Initialize collisions
+        attach_collision_plane(
+            game=self.game,
+            name="terrain",
+            collider_type="terrain",
+            parent_node=self.base_node,
+            parent_object=self,
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
