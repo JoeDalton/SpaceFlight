@@ -1,7 +1,8 @@
 import numpy as np
 import yaml
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import InputDevice
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import ButtonThrower, InputDevice, InputDeviceNode
 
 from space_flight import CONFIGURATION_PATH
 from space_flight.utils import low_pass_filter_first_order
@@ -9,6 +10,28 @@ from space_flight.utils import low_pass_filter_first_order
 DEFAULT_STICK_DEAD_ZONE = 0.15
 DEFAULT_THROTTLE_DEAD_ZONE = 0.04
 THROTTLE_BOOST_VALUE = 2.0
+
+
+def _patched_attachInputDevice(self, device, prefix=None, watch=False):
+    """
+    Some controllers have a name with characters that make the game crash
+    on windows. This is fixed by replacing a Panda3d function
+
+    TODO: Propose this as a contribution to panda3d
+    """
+    assert device not in self._ShowBase__inputDeviceNodes
+    idn = self.dataRoot.attachNewNode(InputDeviceNode(device, prefix or "gamepad"))
+    if prefix is not None or not watch:
+        bt = idn.attachNewNode(ButtonThrower(prefix or "gamepad"))
+        if prefix is not None:
+            bt.node().setPrefix(prefix + "-")
+        self.deviceButtonThrowers.append(bt)
+    self._ShowBase__inputDeviceNodes[device] = idn
+    if watch:
+        idn.node().addChild(self.mouseWatcherNode)
+
+
+ShowBase.attachInputDevice = _patched_attachInputDevice
 
 
 def input_system_factory(game, player):
@@ -21,6 +44,8 @@ def input_system_factory(game, player):
         return Joystick(game=game, player=player)
     elif input_type == "keyboard":
         return Keyboard(game=game, player=player)
+    elif input_type == "gamepad":
+        return Gamepad(game=game, player=player)
     else:
         raise NotImplementedError
 
@@ -281,7 +306,7 @@ class Joystick(InputSystem):
         self.game.app.accept("connect-device", self.connect)
         self.game.app.accept("disconnect-device", self.disconnect)
 
-        self.game.app.accept("stick-start", exit)
+        self.game.app.accept("stick-start", self.game.set_pause)
 
         # Accept trigger event to fire lasers
         self.game.app.accept("stick-button1", self.player.ship.laser_cannon.fire)
@@ -409,4 +434,127 @@ class Joystick(InputSystem):
         self.game.app.detachInputDevice(self.flightStick)
         self.game.app.ignore("escape")
         self.flightStick = None
+        self.game = None
+
+
+class Gamepad(InputSystem):
+    # TODO add a gamepad center and deadzone calibration utility
+    def __init__(self, game, player):
+        super().__init__(game=game, player=player)
+
+        self.lblWarning = OnscreenText(
+            text="No devices found", fg=(1, 0, 0, 1), scale=0.25
+        )
+
+        self.lblAction = OnscreenText(text="Action", fg=(1, 1, 1, 1), scale=0.15)
+        self.lblAction.hide()
+
+        # Is there a gamepad connected?
+        self.gamepad = None
+        devices = self.game.app.devices.getDevices(InputDevice.DeviceClass.gamepad)
+        if devices:
+            self.connect(devices[0])
+
+        # Accept device dis-/connection events
+        self.game.app.accept("connect-device", self.connect)
+        self.game.app.accept("disconnect-device", self.disconnect)
+
+        self.game.app.accept("gamepad-start", self.game.set_pause)
+        self.game.app.accept("gamepad-back", self.game.set_pause)
+
+        # Accept trigger event to fire lasers
+        self.game.app.accept("gamepad-face_a", self.player.ship.laser_cannon.fire)
+        self.game.app.accept(
+            "gamepad-face_a-repeat", self.player.ship.laser_cannon.fire
+        )
+
+        # Accept boost toggle
+        self.game.app.accept("gamepad-face_x", self.activate_boost)
+        self.game.app.accept("gamepad-face_x-up", self.deactivate_boost)
+
+        # Register gamepad dead zone
+        self.stick_dead_zone = self.game.key_bindings.get(
+            "stick_dead_zone", DEFAULT_STICK_DEAD_ZONE
+        )
+        self.throttle_dead_zone = self.game.key_bindings.get(
+            "throttle_dead_zone", DEFAULT_THROTTLE_DEAD_ZONE
+        )
+
+    def connect(self, device):
+        """Event handler that is called when a device is discovered."""
+
+        # We're only interested if this is a flight stick and we don't have a
+        # flight stick yet.
+        if device.device_class == InputDevice.DeviceClass.gamepad and not self.gamepad:
+            print("Found %s" % (device))
+            self.gamepad = device
+
+            # Enable this device to ShowBase so that we can receive events.
+            # We set up the events with a prefix of "gamepad-".
+            self.game.app.attachInputDevice(device, prefix="gamepad")
+
+            # Hide the warning that we have no devices.
+            self.lblWarning.hide()
+
+    def disconnect(self, device):
+        """Event handler that is called when a device is removed."""
+
+        if self.gamepad != device:
+            # We don't care since it's not our gamepad.
+            return
+
+        # Tell ShowBase that the device is no longer needed.
+        print("Disconnected %s" % (device))
+        self.game.app.detachInputDevice(device)
+        self.gamepad = None
+
+        # Do we have any other gamepads?  Attach the first other gamepad.
+        devices = self.devices.getDevices(InputDevice.DeviceClass.gamepad)
+        if devices:
+            self.connect(devices[0])
+        else:
+            # No devices.  Show the warning.
+            self.lblWarning.show()
+
+    def get_inputs(self):
+        """
+        Reads the flightstick's axes values to inform the player object
+
+        returns throttle, yaw_rate, pitch_rate, roll_rate
+        """
+
+        if not self.gamepad:
+            return 0.0, 0.0, 0.0, 0.0
+
+        if self.is_boost:
+            throttle = THROTTLE_BOOST_VALUE
+        else:
+            throttle = self.gamepad.findAxis(InputDevice.Axis.right_trigger).value
+            if abs(throttle) < self.throttle_dead_zone:
+                throttle = 0
+
+        yaw_rate = -self.gamepad.findAxis(InputDevice.Axis.right_x).value
+        if abs(yaw_rate) < self.stick_dead_zone:
+            yaw_rate = 0
+        else:
+            yaw_rate = yaw_rate - np.sign(yaw_rate) * self.stick_dead_zone
+
+        pitch_rate = -self.gamepad.findAxis(InputDevice.Axis.left_y).value
+        if abs(pitch_rate) < self.stick_dead_zone:
+            pitch_rate = 0
+        else:
+            pitch_rate = pitch_rate - np.sign(pitch_rate) * self.stick_dead_zone
+
+        roll_rate = self.gamepad.findAxis(InputDevice.Axis.left_x).value
+        if abs(roll_rate) < self.stick_dead_zone:
+            roll_rate = 0
+        else:
+            roll_rate = roll_rate - np.sign(roll_rate) * self.stick_dead_zone
+
+        return throttle, yaw_rate, pitch_rate, roll_rate
+
+    def clean(self):
+        self.game.app.detachInputDevice(self.gamepad)
+        self.game.app.ignore("escape")
+        self.gamepad = None
         self.game = None
