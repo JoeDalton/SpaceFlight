@@ -27,17 +27,17 @@ def build_demo_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([0, 0, 0]),
+        ini_position=np.array([-400, -1500, 400]),
         is_neutral=False,
         has_ai=False,
     )
 
     """
     Build scene
-    `asteroids` or `lava_planet` or `debug_collisions`
+    `asteroids` or `lava_planet` or `debug_collisions` or `ocean_planet`
     """
 
-    game.scene = scene_factory(game=game, scene_name="lava_planet")
+    game.scene = scene_factory(game=game, scene_name="ocean_planet")
 
     """
     Initialize dummy bots

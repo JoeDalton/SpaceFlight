@@ -94,9 +94,9 @@ class CollisionSensor:
         if total_weight < 1e-4:
             return np.zeros(3), 0.0
 
-        print()
-        print(repulsion_vector / total_weight)
-        print(total_weight)
+        # print()
+        # print(repulsion_vector / total_weight)
+        # print(total_weight)
         return repulsion_vector / total_weight, total_weight
 
     def clean(self):

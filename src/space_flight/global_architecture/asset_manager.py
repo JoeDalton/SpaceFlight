@@ -142,10 +142,13 @@ class AssetManager:
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
 
-    def instantiate_3d_model_to_node(self, path: str, parent_node):
+    def instantiate_3d_model_to_node(self, path: Path | str, parent_node):
         """
         Gets a 3D model form the dict of assets and attaches an instance to
         the provided parent node
+
+        TODO: egg and bam files don't seem to be instatiable.
+        For now they are loaded directly. Do something about it
 
         :param path: The path of the asset
         :param parent_node: The node to attach the instance to

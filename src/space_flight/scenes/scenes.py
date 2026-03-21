@@ -1,9 +1,11 @@
+import numpy as np
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.lighting import Lighting
+from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D
 from space_flight.scenes.skybox import Skybox
 
@@ -13,6 +15,8 @@ def scene_factory(game, scene_name: str):
         return SceneAsteroids(game=game)
     elif scene_name == "lava_planet":
         return SceneLavaPlanet(game=game)
+    elif scene_name == "ocean_planet":
+        return SceneOcean(game=game)
     elif scene_name == "debug_collisions":
         return SceneDebug(game=game)
     else:
@@ -28,6 +32,85 @@ class Scene:
 
     def inititalize_move(self):
         pass
+
+
+class SceneOcean(Scene):
+    def __init__(
+        self,
+        game,
+    ):
+        super().__init__(game=game)
+
+        # ── Sky / sun ─────────────────────────────────────────────────────────
+        # TODO use asset manager. In any case, I will change the skybox
+        # Skybox
+        self.skybox = Skybox(game=self.game)  # , name="basic_sky/scene.gltf")
+        # self.skybox = self.game.app.loader.loadModel(
+        #   DATAFILES_PATH/"models/skyboxes/basic_sky/scene.gltf"
+        # )
+        # self.skybox.reparentTo(self.game.root_node)
+        # self.skybox.setBin('background', 1)
+        # self.skybox.setDepthWrite(0)
+        # self.skybox.setLightOff()
+        # self.skybox.setScale(1000)
+        # self.sun = self.game.app.loader.loadModel(
+        #   DATAFILES_PATH/"models/skyboxes/blue_sky/sun.egg"
+        # )
+        # self.sun.reparentTo(self.skybox)
+        # self.sun.setBin('background', 1)
+        # self.sun.setDepthWrite(0)
+        # self.sun.setLightOff()
+        # self.sun.setScale(50)
+        # self.sun.setP(20)
+
+        # Planet
+        self.planet = Planet2D(
+            game=self.game,
+            type="terran",
+            scale=1000,
+            position=np.array([5000.0, 10000.0, 2000.0]),
+        )
+
+        # Ocean
+        self.ocean = Ocean(game=game, refl_scale=0.5)
+
+        # Lights
+        self.lighting = Lighting(
+            game=self.game,
+            directional_color=[1.0, 0.8, 0.6, 1],
+            directional_direction=[0, -70, 0],
+            ambient_color=[0.3, 0.4, 0.5, 1],
+        )
+
+        # Speed dust effect
+        self.speed_dust_cloud = SpeedDustCloud(
+            game=self.game, colors=["blue", "yellow", "white"]
+        )
+
+        # Star destroyer
+        self.isd = self.game.root_node.attachNewNode("isd_instance")
+        isd_path = (
+            DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
+        )
+        self.game.app.asset_manager.instantiate_3d_model_to_node(
+            path=isd_path,
+            parent_node=self.isd,
+        )
+        self.isd.reparent_to(self.game.root_node)
+        self.isd.set_pos(0, 1500, 400)
+        self.isd.setP(90)
+        self.isd.set_scale(1)
+
+    def clean(self):
+        """
+        Cleans the SceneAsteroids
+        """
+        self.isd.removeNode()
+        self.speed_dust_cloud.clean()
+        self.speed_dust_cloud = None
+        self.lighting.clean()
+        self.lighting = None
+        self.game = None
 
 
 class SceneAsteroids(Scene):
@@ -142,6 +225,7 @@ class SceneLavaPlanet(Scene):
         )
         self.isd.reparent_to(self.game.root_node)
         self.isd.set_pos(0, 1000, 50)
+        self.isd.setP(90)
         self.isd.set_scale(1)
 
     def clean(self):

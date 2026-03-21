@@ -1,3 +1,4 @@
+import math
 from typing import Union
 
 import numpy as np
@@ -224,3 +225,13 @@ def build_axis_billboard_quat(
         ).T
     )
     return quat
+
+
+def compute_next_power_of_2(x: float) -> float:
+    """
+    Computes the next power of two for float x
+
+    :param x: The reference number
+    :return: The next power of 2 superior than x
+    """
+    return 2 ** math.ceil(math.log2(max(x, 1)))
