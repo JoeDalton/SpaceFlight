@@ -160,9 +160,12 @@ class Ship:
         # Initialize engine sound for bot ships
         # TODO better
         if self.parent.name != "player":
-            self.sound = self.game.app.sfx.get_3d_sound(
-                str(DATAFILES_PATH / "sounds/engines/tie_fighter/tie_scream_med.wav")
+            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
+            self.sound_pool = self.game.app.asset_manager.get_asset(
+                asset_type="3d_sound",
+                path=sound_file,
             )
+            self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
             self.sound.setVolume(10.0)
             self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
@@ -443,7 +446,7 @@ class Ship:
 
     def remove_hit_force(self, hit_force_world_n: np.ndarray):
         """
-        A method to remove a hit force from the additional forces
+        A method to remove a hit force from the impact forces
         once its application time has expired
 
         :param hit_force_world_n: The force to remove

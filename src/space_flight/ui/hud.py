@@ -250,7 +250,7 @@ class TargetHUD:
             distance = (
                 world_pos - self.game.app.camera.getPos(self.game.root_node)
             ).length()
-            self.distance_label["text"] = f"{int(distance/10)*10} m"
+            self.distance_label["text"] = f"{distance:.0f} m"
 
     def switch_target(self):
         self.target_idx = (self.target_idx + 1) % len(
