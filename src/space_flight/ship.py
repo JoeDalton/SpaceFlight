@@ -20,6 +20,7 @@ LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 WEAPON_DAMAGE_TO_FORCE_FACTOR = 2.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
+ZERO_THRUST_POSITION = 0.1  # TODO move to input_system ? Should be tunable ?
 
 
 class Ship:
@@ -64,6 +65,7 @@ class Ship:
             self.conf = yaml.safe_load(f)
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
+        self.brake_factor_nspm = self.conf["brake_factor_nspm"]
         self.max_pitch_rate_radps = np.deg2rad(self.conf["max_pitch_rate_degps"])
         self.max_yaw_rate_radps = np.deg2rad(self.conf["max_yaw_rate_degps"])
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
@@ -112,7 +114,7 @@ class Ship:
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
         self.pqr = np.zeros(3)
-        self.scalar_thrust = 0
+        self.scalar_thrust_n = 0
 
         # Prepare corrections due to collisions
         self.velocity_correction = np.zeros(3)
@@ -195,7 +197,19 @@ class Ship:
         """
         dt = self.game.game_time.get_time_step()
 
-        scalar_thrust = throttle**2 * self.max_thrust_n
+        if throttle >= ZERO_THRUST_POSITION:
+            # Thrust is positive
+            scalar_thrust_n = (
+                (throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)
+            ) ** 2 * self.max_thrust_n
+        else:
+            # Ship is braking, propotionally to its forward speed
+            brake_intensity = (ZERO_THRUST_POSITION - throttle) / ZERO_THRUST_POSITION
+            forward_speed_mps = max(0.0, np.dot(self.speed, self.forward))
+            scalar_thrust_n = (
+                -forward_speed_mps * self.brake_factor_nspm * brake_intensity
+            )
+
         pqr = np.array(
             [
                 pitch_rate * self.max_pitch_rate_radps,
@@ -205,14 +219,14 @@ class Ship:
         )
 
         [
-            self.scalar_thrust,
+            self.scalar_thrust_n,
             self.pqr[0],
             self.pqr[1],
             self.pqr[2],
         ] = low_pass_filter_first_order(
             value=np.array(
                 [
-                    scalar_thrust,
+                    scalar_thrust_n,
                     pqr[0],
                     pqr[1],
                     pqr[2],
@@ -220,7 +234,7 @@ class Ship:
             ),
             previous=np.array(
                 [
-                    self.scalar_thrust,
+                    self.scalar_thrust_n,
                     self.pqr[0],
                     self.pqr[1],
                     self.pqr[2],
@@ -269,7 +283,7 @@ class Ship:
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
-        thrust_n = self.scalar_thrust * self.forward
+        thrust_n = self.scalar_thrust_n * self.forward
 
         if FLIGHT_MODEL == "airplane":
             speed_norm = np.linalg.norm(self.speed)
