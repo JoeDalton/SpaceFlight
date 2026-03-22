@@ -34,6 +34,27 @@ def _patched_attachInputDevice(self, device, prefix=None, watch=False):
 ShowBase.attachInputDevice = _patched_attachInputDevice
 
 
+def safe_device_name(device):
+    """
+    Returns a printable name for a device, working around Panda3D's
+    UTF-8 bug on windows machines.
+    """
+    try:
+        return device.name
+    except UnicodeDecodeError:
+        pass
+    try:
+        return device.name.encode("raw_unicode_escape").decode(
+            "windows-1252", errors="replace"
+        )
+    except Exception:
+        pass
+    try:
+        return f"Gamepad (VID_{device.vendor_id:04X}&PID_{device.product_id:04X})"
+    except Exception:
+        return "Gamepad (unknown)"
+
+
 def input_system_factory(game, player):
     filepath = CONFIGURATION_PATH / "key_bindings.yaml"
     with open(filepath, "r") as f:
@@ -486,7 +507,7 @@ class Gamepad(InputSystem):
         # We're only interested if this is a flight stick and we don't have a
         # flight stick yet.
         if device.device_class == InputDevice.DeviceClass.gamepad and not self.gamepad:
-            print("Found %s" % (device))
+            print("Found %s" % safe_device_name(device))
             self.gamepad = device
 
             # Enable this device to ShowBase so that we can receive events.
@@ -504,7 +525,7 @@ class Gamepad(InputSystem):
             return
 
         # Tell ShowBase that the device is no longer needed.
-        print("Disconnected %s" % (device))
+        print("Disconnected %s" % safe_device_name(device))
         self.game.app.detachInputDevice(device)
         self.gamepad = None
 
@@ -533,7 +554,7 @@ class Gamepad(InputSystem):
             if abs(throttle) < self.throttle_dead_zone:
                 throttle = 0
 
-        yaw_rate = -self.gamepad.findAxis(InputDevice.Axis.right_x).value
+        yaw_rate = -self.gamepad.findAxis(InputDevice.Axis.left_x).value
         if abs(yaw_rate) < self.stick_dead_zone:
             yaw_rate = 0
         else:
@@ -545,7 +566,7 @@ class Gamepad(InputSystem):
         else:
             pitch_rate = pitch_rate - np.sign(pitch_rate) * self.stick_dead_zone
 
-        roll_rate = self.gamepad.findAxis(InputDevice.Axis.left_x).value
+        roll_rate = self.gamepad.findAxis(InputDevice.Axis.right_x).value
         if abs(roll_rate) < self.stick_dead_zone:
             roll_rate = 0
         else:
