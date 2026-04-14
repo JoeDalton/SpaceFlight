@@ -1,4 +1,4 @@
-input_type: gamepad # keyboard, gamepad, joystick
+input_type: keyboard #, gamepad, joystick
 
 # Keyboard bindings
 throttle_up: arrow_up

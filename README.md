@@ -4,7 +4,11 @@ https://github.com/JoeDalton/SpaceFlight
 
 ## Description
 
-An attempt at a space flight simulator
+An attempt at a home made space combat flight simulator (heavily) inspired by Star Wars Squadrons, using python!
+
+At the moment, most graphical assets are borrowed from assets licenced as Creative Commons. Licence files are kept alongside the assets themselves.
+
+![alt text](https://https://github.com/JoeDalton/SpaceFlight/blob/main/docs/asteroid_screenshot.png?raw=true)
 
 
 # Developer
@@ -62,3 +66,6 @@ python ./scripts/launcher.py
 
 * To update from the template:
   * `cruft update`
+
+  # User
+  To be announced :)

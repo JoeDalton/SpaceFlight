@@ -19,6 +19,7 @@ Panda3D = "^1.10.15"
 simple-pid = "^2.0.1"
 virtualenv = "^20.36.1"
 urllib3 = "^2.6.0"
+opensimplex = "^0.4.5.1"
 
 [tool.poetry.group.dev.dependencies]
 cruft = "^2.15.0"
@@ -36,9 +37,12 @@ pre-commit = "^3.5.0"
 openpyxl = "^3.1.5"
 nptdms = "^1.10.0"
 plotly="^6.5.2"
+cryptography="^46.0.7"
+requests="^2.33.1"
+pygments="^2.20.0"
 
 [tool.poetry.group.test.dependencies]
-pytest = "^7.4.3"
+pytest = "^9.0.3"
 pytest-cov = "^4.1.0"
 typing-extensions = "^4.15.0"
 

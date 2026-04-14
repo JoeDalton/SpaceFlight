@@ -26,6 +26,7 @@ class GameState(BaseState):
         # TODO: Handle input management in enter/pause/resume methods
         self.initialize_game_structure()
 
+        # TODO level choice
         build_demo_level(game=self)
         """
         DEBUG

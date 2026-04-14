@@ -37,7 +37,7 @@ def build_demo_level(game):
     `asteroids` or `lava_planet` or `debug_collisions` or `ocean_planet`
     """
 
-    game.scene = scene_factory(game=game, scene_name="ocean_planet")
+    game.scene = scene_factory(game=game, scene_name="asteroids")
 
     """
     Initialize dummy bots

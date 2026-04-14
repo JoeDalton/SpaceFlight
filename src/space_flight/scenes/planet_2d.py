@@ -34,8 +34,6 @@ class Planet2D:
         )
         self.planet.setScale(scale, scale, scale)
 
-        # TODO add to game "tasks" instead of panda3d
-        # self.game.app.taskMgr.add(self.move_planet_task, "move_planet_task")
         self.game.method_lists[self.id] = [self.move_planet_task]
 
     def move_planet_task(self):
