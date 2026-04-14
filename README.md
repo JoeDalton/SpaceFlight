@@ -8,7 +8,7 @@ An attempt at a home made space combat flight simulator (heavily) inspired by St
 
 At the moment, most graphical assets are borrowed from assets licenced as Creative Commons. Licence files are kept alongside the assets themselves.
 
-![alt text](https://https://github.com/JoeDalton/SpaceFlight/blob/main/docs/asteroid_screenshot.png?raw=true)
+<img src=>https://https://github.com/JoeDalton/SpaceFlight/blob/main/docs/asteroid_screenshot.png?raw=true>
 
 
 # Developer

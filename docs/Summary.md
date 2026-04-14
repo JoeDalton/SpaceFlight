@@ -1,2 +1,2 @@
-* [Welcome to AIRTHIUM](index.md)
+* [Welcome to the SpaceFlight documentation!](index.md)
 * [Reference](docs/)
