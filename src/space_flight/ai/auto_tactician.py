@@ -59,8 +59,13 @@ class AutoTactician:
         ):
             self.time_since_update = 0.0
             intent, target_dict = self.update_intent()
-            if (intent != self.intent) or (
-                target_dict["target_id"] != self.target_dict["target_id"]
+            if (
+                (intent != self.intent)
+                or (target_dict["target_id"] != self.target_dict["target_id"])
+                or (  # Changing formation position
+                    target_dict.get("formation_index")
+                    != self.target_dict.get("formation_index")
+                )
             ):
                 if self.debug:
                     LOGGER.info(
@@ -305,6 +310,7 @@ class AutoTactician:
             return {
                 "active": True,
                 "target_id": self.ship.formation.ship_ids[0],
+                "formation_index": formation_index,
                 "target_relative_position": self.ship.formation.RELATIVE_POSITIONS[
                     formation_index
                 ],

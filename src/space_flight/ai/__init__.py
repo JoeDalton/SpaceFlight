@@ -1,11 +1,13 @@
+import logging
 from enum import Enum, auto
 
 import numpy as np
 
 TARGET_DISTANCE_TOLERANCE_M = 1.0
 INTERACT_MAX_DISTANCE_M = 10000.0
-
 REFERENCE_ERROR_VELOCITY_MPS = 100
+
+LOGGER = logging.getLogger()
 
 
 class Intent(Enum):
@@ -62,19 +64,29 @@ class Formation:
         simply promoted.
         """
         ship_id = ship.id
-        ship.formation = self
+        in_formation = False
         if not leader:
             if ship_id in self.ship_ids:
                 # Ship is already in formation, do nothing
                 return
             # Add ship as the last wingman
-            self.ship_ids.append(ship_id)
+            if len(self.ship_ids) < len(self.RELATIVE_POSITIONS):
+                self.ship_ids.append(ship_id)
+                in_formation = True
+            else:
+                LOGGER.warning("Ship cannot be added to a full formation")
         else:
             # Pop the ship if it is already in formation
             if ship_id in self.ship_ids:
                 self.remove_ship(ship_id)
             # Set ship as leader
-            self.ship_ids.insert(index=0, object=ship_id)
+            if len(self.ship_ids) < len(self.RELATIVE_POSITIONS):
+                self.ship_ids.insert(index=0, object=ship_id)
+                in_formation = True
+            else:
+                LOGGER.warning("Ship cannot be added to a full formation")
+        if in_formation:
+            ship.formation = self
 
     def remove_ship(self, ship_id):
         """

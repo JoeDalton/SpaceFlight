@@ -588,9 +588,12 @@ class AutoNavigator:
             + leader.forward
             * self.personality["navigator"]["formation"]["ideal_distance_m"]
         )  # Aim forward of the intended position to make the follow algos work
-        # Target speed must take into account the turn speed of the leader
-        target_speed = leader.speed
-        # + np.cross(leader.pqr, (position_in_formation - leader.position))
+        # Should target speed must take into account the turn speed of the leader ?
+        target_speed = leader.speed  # +
+        # np.cross(
+        #     leader.pqr, (position_in_formation - leader.position)
+        # )
+
         # Compute relative quantities
         direction = np.float64(target_position - self.ship.position)
         distance_m = np.linalg.norm(direction)
@@ -603,20 +606,12 @@ class AutoNavigator:
         relative_speed_vector = target_speed - self.ship.speed
         longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
-        longitudinal_speed_vector = longitudinal_speed_scalar_mps * direction
-        lateral_speed_vector = relative_speed_vector - longitudinal_speed_vector
-
-        # Compute Constant Angle Pursuit
-        aim_vector = self.compute_constant_angle_pursuit(
-            direction=direction,
-            distance_m=distance_m,
-            lateral_speed_vector=lateral_speed_vector,
+        # Compute Lead pursuit
+        aim_vector = self.compute_lead_pursuit(
+            target_current_position=target_position,
+            target_current_speed=target_speed,
+            lead_time_s=1.0,
         )
-        # aim_vector = self.compute_lead_pursuit(
-        #     target_current_position=target_position,
-        #     target_current_speed=target_speed,
-        #     lead_time_s=1.0,
-        # ) # Is it better with lead pursuit ?
 
         aim_vector_norm = np.linalg.norm(aim_vector)
         if aim_vector_norm < 1e-5:

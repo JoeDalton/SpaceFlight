@@ -28,7 +28,7 @@ def build_demo_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([0, -1000, 0]),
+        ini_position=np.array([0, -1500, -100]),
         is_neutral=True,
         has_ai=False,
     )
@@ -46,21 +46,19 @@ def build_demo_level(game):
 
     team_2_formation = Formation()
 
-    wp_distance = 10000
+    wp_distance = 5000
     waypoints = [
         np.array([0, 0, 0]),
         np.array([0, wp_distance, 0]),
-        # np.array([0, wp_distance, wp_distance]),
-        # np.array([0, 0, wp_distance]),
-        # np.array([wp_distance, 0, wp_distance]),
-        # np.array([wp_distance, 0, 0]),
-        # np.array([0, 0, 0]),
-        # np.array([0, -wp_distance, 0]),
-        # np.array([0, -wp_distance, -wp_distance]),
-        # np.array([0, 0, -wp_distance]),
-        # np.array([-wp_distance, 0, -wp_distance]),
-        # np.array([-wp_distance, 0, 0]),
     ]
+    # # Make a circle
+    # n_waypoint = 5
+    # for angle_reduced in range(n_waypoint):
+    #     angle = angle_reduced * 2 * np.pi / n_waypoint
+    #     waypoints.append(
+    #         np.array([wp_distance * np.sin(angle), wp_distance * np.cos(angle), 0])
+    #     )
+
     game.lead_bot = spawn_bot(
         game=game,
         name="lead_2",
@@ -73,26 +71,16 @@ def build_demo_level(game):
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
     team_2_formation.add_ship(ship=game.lead_bot.ship)
 
-    # game.follow_bot = spawn_bot(
-    #     game=game,
-    #     name="follow_2",
-    #     ship_type="tie-interceptor",
-    #     ini_position=np.array([0, -300, 0]),
-    #     has_debug_trihedron=False,
-    #     team=2,
-    # )
-    # team_2_formation.add_ship(ship=game.follow_bot.ship)
-
-    # for _ in range(0):
-    #     bot = spawn_bot(
-    #         game=game,
-    #         name="team_2",
-    #         ship_type="tie-interceptor",
-    #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-    #         has_debug_trihedron=False,
-    #         team=2,
-    #     )
-    #     team_2_formation.add_ship(ship=bot.ship)
+    for i in range(7):
+        bot = spawn_bot(
+            game=game,
+            name="team_2",
+            ship_type="tie-interceptor",
+            ini_position=np.array([0, -(i + 1) * 200, 0]),
+            has_debug_trihedron=False,
+            team=2,
+        )
+        team_2_formation.add_ship(ship=bot.ship)
 
     # chase_bot = spawn_bot(
     #     game=game,
