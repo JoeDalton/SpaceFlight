@@ -17,7 +17,7 @@ def scene_factory(game, scene_name: str):
         return SceneLavaPlanet(game=game)
     elif scene_name == "ocean_planet":
         return SceneOcean(game=game)
-    elif scene_name == "debug_collisions":
+    elif scene_name == "debug":
         return SceneDebug(game=game)
     else:
         raise NotImplementedError(f"Unknown scene {scene_name}")
@@ -256,7 +256,7 @@ class SceneDebug(Scene):
         super().__init__(game=game)
 
         # Skybox
-        self.skybox = Skybox(game=self.game)
+        self.skybox = Skybox(game=self.game, name="sky_test.bam")
 
         # Lights
         self.lighting = Lighting(game=self.game)

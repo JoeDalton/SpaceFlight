@@ -109,6 +109,9 @@ class AutoNavigator:
         elif intent == Intent.DISENGAGE:
             self.engage_phase = ""
             return self.disengage(target_dict)
+        elif intent == Intent.FORMATION:
+            self.engage_phase = ""
+            return self.formation(target_dict)
         else:
             return ValueError(f"Unknown intent: {intent}")
 
@@ -137,6 +140,7 @@ class AutoNavigator:
         self.last_update_time = current_time
 
     # %% ==== ENGAGE ====
+
     def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Engages a target and tries to attack it
@@ -148,7 +152,7 @@ class AutoNavigator:
 
         :param target_dict: A dictionary with the target's direction, distance,
             alignment and relative velocity
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
@@ -260,58 +264,14 @@ class AutoNavigator:
 
         # Compute desired speed
         target_speed_mps = np.linalg.norm(target_current_speed)
-        pursuit_speed_mps = self.compute_pursuit_speed(
+        pursuit_speed_mps = self.compute_follow_speed(
             distance_m=distance_m,
             target_speed_mps=target_speed_mps,
             longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
+            intent="attack",
         )
 
         return aim_vector, pursuit_speed_mps
-
-    def compute_pursuit_speed(
-        self,
-        distance_m: float,
-        target_speed_mps: float,
-        longitudinal_speed_scalar_mps: float,
-    ) -> float:
-        """
-        Computes the desired speed in pursuit mode
-        It must be the same as the target speed if it is at the desired pursuit distance
-        It must increase if the target is too far and vice-versa
-        TODO : effect of closing speed ?
-
-        :param distance_m: Distance to target
-        :param target_speed_mps: Speed of target
-        :param longitudinal_speed_scalar_mps: relative speed in the target's direction
-        :return: The desired pursuit speed
-        """
-        desired_speed_mps = (
-            target_speed_mps + self.compute_target_distance_contribution(distance_m)
-        )
-        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.ship.max_speed_mps)
-        return desired_speed_mps
-
-    def compute_target_distance_contribution(self, distance_m: float) -> float:
-        """
-        Computes the contribution of target distance to pursuit speed
-        Far targets get high speed,
-
-        :param distance_m: Distance to target
-        :return: The distance contribution to pursuit speed
-        """
-        distance_contribution_mps = self.ship.max_speed_mps * (
-            0.5
-            - smooth_step_down(
-                x=distance_m,
-                x_step=self.personality["navigator"]["attack"][
-                    "ideal_pursuit_distance_m"
-                ],
-                slope=self.personality["navigator"]["attack"][
-                    "pursuit_speed_distance_slope"
-                ],
-            )
-        )
-        return distance_contribution_mps
 
     def compute_engage_weights(self, distance_m: float):
         """
@@ -345,55 +305,6 @@ class AutoNavigator:
             slope=self.personality["navigator"]["attack"]["lead_lag_cutoff_slope"],
         )
         return cap_weight, lead_weight, lag_weight
-
-    def compute_constant_angle_pursuit(
-        self, direction: np.ndarray, distance_m: float, lateral_speed_vector: np.ndarray
-    ) -> np.ndarray:
-        """
-        Constant Angle Pursuit (CAP)
-        Bring lateral velocity to zero
-        Good for closing in from a long distance
-        Also good for missiles until the end
-
-        :param direction: The direction of the target
-        :param distance_m: Its distance from self
-        :param lateral_speed_vector: Its relative velocity on the lateral plane
-        """
-        # TODO Dynamic CAP strength, should vary with distance/closing_speed
-        cap_strength_s = 1.0  # Or =1/omega_max_radps
-        desired_vector = direction * distance_m - cap_strength_s * lateral_speed_vector
-        desired_vector_norm = np.linalg.norm(desired_vector)
-        # Norm can't be zero if distance != 0
-        return desired_vector / desired_vector_norm
-
-    def compute_lead_pursuit(
-        self,
-        target_current_position: np.ndarray,
-        target_current_speed: np.ndarray,
-        lead_time_s: float,
-    ) -> Tuple[np.ndarray, float]:
-        """
-        Intercepts the target by flying to its future position
-        If the lead time is null, it's pure pursuit
-        If the lead time is negative, it's a lag pursuit
-
-        :param target_current_position: The absolute position of the target
-        :param target_current_speed: Its absolute speed
-        :return: The direction to point to and its reference distance
-        """
-        target_future_position = (
-            target_current_position + target_current_speed * lead_time_s
-        )
-
-        # Compute direction to point to
-        target_future_direction = target_future_position - self.ship.position
-        target_future_distance_m = np.linalg.norm(target_future_direction)
-        if target_future_distance_m < TARGET_DISTANCE_TOLERANCE_M:
-            target_future_direction = np.zeros(3)
-        else:
-            target_future_direction /= target_future_distance_m
-
-        return target_future_direction
 
     def check_extend_conditions(
         self,
@@ -473,7 +384,7 @@ class AutoNavigator:
         the same way as ships)
 
         :param direction: The direction to the target
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         # By definition, not in spiral => reset time in spiral
         self.time_in_spiral_s = 0.0
@@ -483,7 +394,7 @@ class AutoNavigator:
         """
         Go straight ahead and accelerate to break the pattern
 
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         return np.zeros(3), self.personality["navigator"]["speeding"]["speed_mps"]
 
@@ -501,7 +412,7 @@ class AutoNavigator:
         TODO: add randomness to avoid locking in circles
 
         :param target_dict: A dictionary with the target's direction and distance
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
@@ -545,7 +456,7 @@ class AutoNavigator:
         Regroups with allies. If none are left, go to the center of the world
 
         :param target_dict: A dictionary with the target's position
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         target_relative_position = target_dict["position"] - self.ship.position
         target_distance = np.linalg.norm(target_relative_position)
@@ -566,7 +477,7 @@ class AutoNavigator:
         Flees from the danger zone, defined as the center of gravity of all foes
 
         :param target_dict: A dictionary with the target's position
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         target_relative_position = target_dict["position"] - self.ship.position
         target_distance = np.linalg.norm(target_relative_position)
@@ -596,7 +507,7 @@ class AutoNavigator:
         """
         Goes to the next available waypoint
 
-        :return: The direction to point to and its reference distance
+        :return: The direction to point to and the desired speed
         """
         # Handle the case where waypoints have already been visited
         if self.next_waypoint_idx == len(self.waypoints):
@@ -624,6 +535,203 @@ class AutoNavigator:
         # Go to the next waypoint
         direction = waypoint_direction / distance_to_waypoint_m
         return direction, self.personality["navigator"]["patrol"]["speed_mps"]
+
+    # %% ==== formation ====
+
+    def formation(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
+        """
+        Follows the leader of the formation with the offset defined by the index of the
+        ship in the formation.
+
+        The formation leader is in the same team as self, so game.interactions does
+        not pre-compute their relative speeds/positions (cost saving).
+        Therefore, all computations are done here
+
+        :param target_dict: A dictionary with the formation leader's id, as well as the
+                            current ship's desired position in the formation
+        :return: The direction to point to and the desired speed
+        """
+
+        # Case where there is no target (Should not happen, but you never know...)
+        if target_dict == {}:
+            LOGGER.warning(
+                f"Navigator {self.ship.parent.name} told to form up "
+                "but there's no attached target"
+            )
+            return NO_DIRECTION
+
+        # Identify leader in interactions
+        try:
+            leader_actor_index = self.game.interactions.get_actor_index_from_id(
+                target_dict["target_id"]
+            )
+            leader = self.game.interactions.actors[leader_actor_index]
+        except ValueError:
+            if self.debug:
+                LOGGER.info(
+                    f"Navigator {self.ship.parent.name}: "
+                    "Formation leader has been destroyed since last intent update."
+                )
+            return NO_DIRECTION
+
+        # Compute pursuit variables
+        relative_position_in_formation = target_dict["target_relative_position"]
+        position_in_formation = leader.position + (
+            leader.right * relative_position_in_formation[0]
+            + leader.forward * relative_position_in_formation[1]
+            + leader.up * relative_position_in_formation[2]
+        )
+        target_position = (
+            position_in_formation
+            + leader.forward
+            * self.personality["navigator"]["formation"]["ideal_distance_m"]
+        )  # Aim forward of the intended position to make the follow algos work
+        # Target speed must take into account the turn speed of the leader
+        target_speed = leader.speed
+        # + np.cross(leader.pqr, (position_in_formation - leader.position))
+        # Compute relative quantities
+        direction = np.float64(target_position - self.ship.position)
+        distance_m = np.linalg.norm(direction)
+        if distance_m > TARGET_DISTANCE_TOLERANCE_M:
+            direction /= distance_m
+        else:
+            direction = np.zeros(3)
+            distance_m = 0.0
+
+        relative_speed_vector = target_speed - self.ship.speed
+        longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
+
+        longitudinal_speed_vector = longitudinal_speed_scalar_mps * direction
+        lateral_speed_vector = relative_speed_vector - longitudinal_speed_vector
+
+        # Compute Constant Angle Pursuit
+        aim_vector = self.compute_constant_angle_pursuit(
+            direction=direction,
+            distance_m=distance_m,
+            lateral_speed_vector=lateral_speed_vector,
+        )
+        # aim_vector = self.compute_lead_pursuit(
+        #     target_current_position=target_position,
+        #     target_current_speed=target_speed,
+        #     lead_time_s=1.0,
+        # ) # Is it better with lead pursuit ?
+
+        aim_vector_norm = np.linalg.norm(aim_vector)
+        if aim_vector_norm < 1e-5:
+            aim_vector = np.zeros(3)
+        else:
+            aim_vector /= aim_vector_norm
+
+        # Compute desired speed
+        target_speed_mps = np.linalg.norm(target_speed)
+        pursuit_speed_mps = self.compute_follow_speed(
+            distance_m=distance_m,
+            target_speed_mps=target_speed_mps,
+            longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
+            intent="formation",
+        )
+
+        return aim_vector, pursuit_speed_mps
+
+    # %% ==== COMMON METHODS ====
+
+    def compute_constant_angle_pursuit(
+        self, direction: np.ndarray, distance_m: float, lateral_speed_vector: np.ndarray
+    ) -> np.ndarray:
+        """
+        Constant Angle Pursuit (CAP)
+        Bring lateral velocity to zero
+        Good for closing in from a long distance
+        Also good for missiles until the end
+
+        :param direction: The direction of the target
+        :param distance_m: Its distance from self
+        :param lateral_speed_vector: Its relative velocity on the lateral plane
+        """
+        # TODO Dynamic CAP strength, should vary with distance/closing_speed
+        cap_strength_s = 1.0  # Or =1/omega_max_radps
+        desired_vector = direction * distance_m - cap_strength_s * lateral_speed_vector
+        desired_vector_norm = np.linalg.norm(desired_vector)
+        # Norm can't be zero if distance != 0
+        return desired_vector / desired_vector_norm
+
+    def compute_lead_pursuit(
+        self,
+        target_current_position: np.ndarray,
+        target_current_speed: np.ndarray,
+        lead_time_s: float,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Intercepts the target by flying to its future position
+        If the lead time is null, it's pure pursuit
+        If the lead time is negative, it's a lag pursuit
+
+        :param target_current_position: The absolute position of the target
+        :param target_current_speed: Its absolute speed
+        :return: The direction to point to and its reference distance
+        """
+        target_future_position = (
+            target_current_position + target_current_speed * lead_time_s
+        )
+
+        # Compute direction to point to
+        target_future_direction = target_future_position - self.ship.position
+        target_future_distance_m = np.linalg.norm(target_future_direction)
+        if target_future_distance_m < TARGET_DISTANCE_TOLERANCE_M:
+            target_future_direction = np.zeros(3)
+        else:
+            target_future_direction /= target_future_distance_m
+
+        return target_future_direction
+
+    def compute_follow_speed(
+        self,
+        distance_m: float,
+        target_speed_mps: float,
+        longitudinal_speed_scalar_mps: float,
+        intent: str,
+    ) -> float:
+        """
+        Computes the desired speed to follow a target
+        It must be the same as the target speed if it is at the desired follow distance
+        It must increase if the target is too far and vice-versa
+        TODO : effect of closing speed ?
+
+        :param distance_m: Distance to target
+        :param target_speed_mps: Speed of target
+        :param longitudinal_speed_scalar_mps: relative speed in the target's direction
+        :return: The desired follow speed
+        """
+        desired_speed_mps = (
+            target_speed_mps
+            + self.compute_speed_target_distance_contribution(
+                distance_m=distance_m, intent=intent
+            )
+        )
+        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.ship.max_speed_mps)
+        return desired_speed_mps
+
+    def compute_speed_target_distance_contribution(
+        self,
+        distance_m: float,
+        intent: str,
+    ) -> float:
+        """
+        Computes the contribution of target distance to pursuit speed
+        Far targets get high speed,
+
+        :param distance_m: Distance to target
+        :return: The distance contribution to pursuit speed
+        """
+        distance_contribution_mps = self.ship.max_speed_mps * (
+            0.5
+            - smooth_step_down(
+                x=distance_m,
+                x_step=self.personality["navigator"][intent]["ideal_distance_m"],
+                slope=self.personality["navigator"][intent]["speed_distance_slope"],
+            )
+        )
+        return distance_contribution_mps
 
     # %% ==== DELETING THE BOT ====
 

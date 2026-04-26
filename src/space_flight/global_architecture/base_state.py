@@ -1,6 +1,9 @@
+from direct.showbase.ShowBase import ShowBase
+
+
 class BaseState:
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, app: ShowBase):
+        self.app: ShowBase = app
 
     def enter(self):
         """

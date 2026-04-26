@@ -170,11 +170,4 @@ def spawn_bot(
     if has_debug_trihedron:
         Trihedron(game=game, parent=bot.ship.node, scale=1)
 
-    # Debug
-    # bot.ship.health = 2.0
-    # bot.ship.shield = 0.0
-    # bot.ship.shield_regen_rate = 0.0
-    # bot.ship.shield = 10.0
-    # bot.ship.shield_regen_rate = 10000.0
-
     return bot

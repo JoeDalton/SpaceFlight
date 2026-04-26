@@ -143,8 +143,8 @@ class Player:
         """
         # Get jolted by hits, ship acceleration, etc.
         self.head_jolt = self.ship.node.attachNewNode("head_jolt")
-        self.head_acceleration_mps2 = np.zeros(3)  # Initialization
-        self.head_velocity_mps = np.zeros(3)  # Initialization
+        self.head_acceleration_mps2 = np.zeros(3)
+        self.head_velocity_mps = np.zeros(3)
         self.head_position_m = np.zeros(3)
         self.head_spring_coefficient_npm = 25.0
         self.head_damping_ratio = 0.8  # Slightly suboptimal damping

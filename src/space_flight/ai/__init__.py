@@ -18,7 +18,70 @@ class Intent(Enum):
     DISENGAGE = auto()
     REGROUP = auto()
     PATROL = auto()
+    FORMATION = auto()
     IDLE = auto()
+
+
+class Formation:
+    """
+    A class for wing formations
+    """
+
+    RELATIVE_POSITIONS = [
+        np.array([0, 0, 0]),
+        np.array([30, -50, 0]),
+        np.array([-30, -50, 0]),
+        np.array([60, -100, 0]),
+        np.array([0, -150, 0]),
+        np.array([-60, -100, 0]),
+        np.array([0, -50, 30]),
+        np.array([0, -50, -30]),
+        np.array([0, -100, 60]),
+        np.array([0, -100, -60]),
+    ]
+
+    def __init__(self):
+        self.ship_ids = []
+
+    def get_ship_index(self, ship_id):
+        """
+        Returns the position of a given ship in the formation
+        """
+        ship_index = None
+        for index, candidate_id in enumerate(self.ship_ids):
+            if ship_id == candidate_id:
+                ship_index = index
+                break
+        return ship_index
+
+    def add_ship(self, ship, leader=False):
+        """
+        Adds a ship to the formation. By default, it is added as the
+        last wingman, but there is the option to set it as leader
+        If the leader option is True and the ship is already there, it is
+        simply promoted.
+        """
+        ship_id = ship.id
+        ship.formation = self
+        if not leader:
+            if ship_id in self.ship_ids:
+                # Ship is already in formation, do nothing
+                return
+            # Add ship as the last wingman
+            self.ship_ids.append(ship_id)
+        else:
+            # Pop the ship if it is already in formation
+            if ship_id in self.ship_ids:
+                self.remove_ship(ship_id)
+            # Set ship as leader
+            self.ship_ids.insert(index=0, object=ship_id)
+
+    def remove_ship(self, ship_id):
+        """
+        Removes a ship from the formation. Typical case is in the event of ship death
+        """
+        index_to_remove = self.get_ship_index(ship_id=ship_id)
+        self.ship_ids.pop(index_to_remove)
 
 
 class Personality:
@@ -43,15 +106,20 @@ class Personality:
                 Intent.DISENGAGE: 5.0,
                 Intent.REGROUP: 3.0,
                 Intent.PATROL: 3.0,
+                Intent.FORMATION: 3.0,
                 Intent.IDLE: 0.1,
             },
         },
         "navigator": {
-            "patrol": {"speed_mps": 100.0},
+            "patrol": {"speed_mps": 30.0},
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 100.0},
             "turning": {"speed_mps": 50.0},
             "speeding": {"speed_mps": 2000.0},
+            "formation": {
+                "ideal_distance_m": 50.0,
+                "speed_distance_slope": 0.01,
+            },
             "fire": {
                 "minimimum_window_duration_s": 0.5,
                 "maximum_distance_m": 1000,
@@ -73,8 +141,8 @@ class Personality:
                 "lag_cutoff_distance_m": 150.0,
                 "lead_lag_cutoff_slope": 0.02,
                 "cap_lead_cutoff_slope": 0.04,
-                "ideal_pursuit_distance_m": 200.0,
-                "pursuit_speed_distance_slope": 0.01,
+                "ideal_distance_m": 200.0,
+                "speed_distance_slope": 0.01,
             },
             "intercept": {
                 "lead_time_s": 1.5,

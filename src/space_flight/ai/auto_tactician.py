@@ -93,7 +93,7 @@ class AutoTactician:
         # Find current actor index of self
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
 
-        # Check if bot is threatened
+        # Check if bot is directly threatened (highest priority action)
         highest_threat_dict = self.evaluate_threats(my_actor_index)
         if (
             highest_threat_dict["score"]
@@ -119,6 +119,11 @@ class AutoTactician:
         # Check if bot has patrol orders
         if len(self.ship.parent.navigator.waypoints) != 0:
             return Intent.PATROL, {"target_id": Intent.PATROL}
+
+        # Check if bot has formation orders
+        formation_dict = self.evaluate_formation()
+        if formation_dict["active"] is True:
+            return Intent.FORMATION, formation_dict
 
         # Nothing specific to do for now. Regroup with friends
         friends_center_dict = self.evaluate_team_center(team="friends")
@@ -256,7 +261,7 @@ class AutoTactician:
         forward_scores = 1 + (base - 1) * focus_factor
         return forward_scores
 
-    def evaluate_team_center(self, team: str) -> np.ndarray:
+    def evaluate_team_center(self, team: str) -> dict:
         """
         Find the center of gravity of the "friends" or "foes" team
         """
@@ -281,6 +286,29 @@ class AutoTactician:
             return {"position": center}
 
         return {"position": center / n_actor_in_team}
+
+    def evaluate_formation(self) -> dict:
+        """
+        Finds whether the bot belongs to a wing formation and returns its leader
+        and relative target position
+        """
+        if self.ship.formation is None:
+            # Does not belong to a formation. Not applicable
+            return {"active": False}
+        formation_index = self.ship.formation.get_ship_index(self.ship.id)
+        if formation_index == 0:
+            # Self is the leader of the formation. Not applicable
+            return {"active": False}
+        else:
+            # Self belongs to a formation and is not the leader :
+            # Activate formation and get the corresponding position
+            return {
+                "active": True,
+                "target_id": self.ship.formation.ship_ids[0],
+                "target_relative_position": self.ship.formation.RELATIVE_POSITIONS[
+                    formation_index
+                ],
+            }
 
     def clean(self):
         self.ship = None

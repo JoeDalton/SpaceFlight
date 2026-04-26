@@ -54,6 +54,7 @@ class Ship:
         self.is_dead = False
         self.id = uuid.uuid4()
         self.team = team
+        self.formation = None
 
         # Set a low-pass filter time to emulate physical delay in
         # thrust and rotational rates
@@ -322,7 +323,7 @@ class Ship:
                 # Turn lift in world coordinates
                 lift_n = rotate_single_vector(quat, lift_body)
         elif FLIGHT_MODEL == "space":
-            # No lift or drag
+            # Neither lift nor drag
             drag_n = np.zeros(3)
             lift_n = np.zeros(3)
         else:
@@ -483,6 +484,10 @@ class Ship:
         garbage collected
         """
         if not self.is_clean:
+            # Remove ship from its formation if applicable
+            if self.formation is not None:
+                self.formation.remove_ship(self.id)
+                self.formation = None
             self.model.clean()
             self.model = None
             self.auto_aim.clean()
