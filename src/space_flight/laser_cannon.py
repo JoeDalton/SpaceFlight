@@ -230,7 +230,10 @@ class LaserShot:
         Cleans a LaserShot object
         """
         # Clear light
-        self.game.app.render.clear_light(self.plnp)
+        try:
+            self.game.app.render.clear_light(self.plnp)
+        except AttributeError:
+            pass
         self.plnp.removeNode()
         # Remove collision sphere reference to self
         self.laser_col_np.setPythonTag("owner", None)
