@@ -73,6 +73,7 @@ class AutoPilot:
         current_normalized_yaw_rate_command: float = 0.0,
         current_normalized_pitch_rate_command: float = 0.0,
         current_normalized_roll_rate_command: float = 0.0,
+        current_throttle_command: float = 0.0,
     ):
         """
         Sets the Auto pilot on
@@ -86,6 +87,7 @@ class AutoPilot:
         self.pid_roll.set_auto_mode(
             True, last_output=current_normalized_roll_rate_command
         )
+        self.pid_throttle.set_auto_mode(True, last_output=current_throttle_command)
 
     def set_off(self):
         """
@@ -94,6 +96,7 @@ class AutoPilot:
         self.pid_yaw.set_auto_mode(False)
         self.pid_pitch.set_auto_mode(False)
         self.pid_roll.set_auto_mode(False)
+        self.pid_throttle.set_auto_mode(False)
 
     def pilot(
         self,

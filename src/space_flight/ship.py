@@ -20,7 +20,7 @@ LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 WEAPON_DAMAGE_TO_FORCE_FACTOR = 2.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
-ZERO_THRUST_POSITION = 0.1  # TODO move to input_system ? Should be tunable ?
+ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
 
 
 class Ship:

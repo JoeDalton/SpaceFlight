@@ -80,6 +80,8 @@ class AutoNavigator:
         if avoidance_weight < 1e-4:
             return np.zeros(3), 0.0, 0.0
         avoidance_speed = COLLISION_REFERENCE_SPEED_MPS / avoidance_weight
+
+        avoidance_weight = 0.0  # DEBUG
         return avoidance_direction, avoidance_speed, avoidance_weight
 
     def navigate_intent(

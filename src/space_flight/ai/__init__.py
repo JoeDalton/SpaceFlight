@@ -111,13 +111,13 @@ class Personality:
             },
         },
         "navigator": {
-            "patrol": {"speed_mps": 30.0},
+            "patrol": {"speed_mps": 100.0},
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 100.0},
             "turning": {"speed_mps": 50.0},
             "speeding": {"speed_mps": 2000.0},
             "formation": {
-                "ideal_distance_m": 50.0,
+                "ideal_distance_m": 300.0,
                 "speed_distance_slope": 0.01,
             },
             "fire": {
@@ -160,10 +160,7 @@ class Personality:
         "pilot": {
             "sample_time_s": 0.1,
             "low_pass_filter_time_s": 0.5,
-            "minimum_throttle": 0.05,
-            "throttle_kp": 5.0,
-            "throttle_ki": 2.0,
-            "throttle_kd": 0.0,
+            "minimum_throttle": 0.01,
             "yaw_kp": 1.0,
             "yaw_ki": 0.0,
             "yaw_kd": 0.0,
@@ -173,5 +170,8 @@ class Personality:
             "roll_kp": -1.0,
             "roll_ki": 0.0,
             "roll_kd": 0.0,
+            "throttle_kp": 2.0,
+            "throttle_ki": 0.1,
+            "throttle_kd": 0.0,
         },
     }
