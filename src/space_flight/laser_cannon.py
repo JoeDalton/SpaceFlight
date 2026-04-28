@@ -236,10 +236,16 @@ class LaserShot:
             pass
         self.plnp.removeNode()
         # Remove collision sphere reference to self
-        self.laser_col_np.setPythonTag("owner", None)
+        try:
+            self.laser_col_np.setPythonTag("owner", None)
+        except AttributeError:
+            pass
         self.laser_col_np = None
         # Remove shot node
-        self.shot.removeNode()
+        try:
+            self.shot.removeNode()
+        except AttributeError:
+            pass
         self.shot = None
         # Remove shot from the temporary game objects
         if remove_from_game_objects:
