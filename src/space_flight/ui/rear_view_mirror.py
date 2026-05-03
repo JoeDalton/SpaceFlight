@@ -65,7 +65,7 @@ class RearViewMirror:
         self.mirror_np.node().setCameraMask(BitMask32.bit(1))
 
         self.game.app.accept(  # TODO handle elsewhere
-            self.game.key_bindings["toggle_mirror"], self.toggle_mirror
+            self.game.bindings["keyboard_bindings"]["toggle_mirror"], self.toggle_mirror
         )
 
     def toggle_mirror(self):
@@ -85,7 +85,7 @@ class RearViewMirror:
         """
         # Remove key binding
         self.game.app.ignore(  # TODO handle elsewhere
-            self.game.key_bindings["toggle_mirror"]
+            self.game.bindings["keyboard_bindings"]["toggle_mirror"]
         )
         # Delete camera
         self.mirror_np.removeNode()

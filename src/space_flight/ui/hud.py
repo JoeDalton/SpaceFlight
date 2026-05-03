@@ -186,7 +186,7 @@ class TargetHUD:
 
         # TODO: This should be in "input_system"
         self.game.app.accept(
-            self.game.key_bindings["switch_target"], self.switch_target
+            self.game.bindings["keyboard_bindings"]["switch_target"], self.switch_target
         )
 
     def target_hud_update_task(self):
@@ -279,7 +279,7 @@ class TargetHUD:
             except KeyError:
                 pass
         # TODO: This should be in "input_system"
-        self.game.app.ignore(self.game.key_bindings["switch_target"])
+        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["switch_target"])
         self.name_label.destroy()
         self.distance_label.destroy()
         self.square.removeNode()
