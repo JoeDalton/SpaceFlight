@@ -56,11 +56,11 @@ def safe_device_name(device):
 
 
 def input_system_factory(game, player):
-    filepath = CONFIGURATION_PATH / "key_bindings.yaml"
+    filepath = CONFIGURATION_PATH / "configuration.yaml"
     with open(filepath, "r") as f:
-        game.key_bindings = yaml.safe_load(f)
+        game.bindings = yaml.safe_load(f)
 
-    input_type = game.key_bindings["input_type"]
+    input_type = game.bindings["input_type"]
     if input_type == "joystick":
         return Joystick(game=game, player=player)
     elif input_type == "keyboard":
@@ -83,17 +83,15 @@ class InputSystem:
 
     def action(self, button):
         # Just show which button has been pressed.
-        self.lblAction.text = "Pressed once %s" % button
-        self.lblAction.show()
+        print("Pressed once %s" % button)
 
     def actionRepeat(self, button):
         # Just show which button has been pressed.
-        self.lblAction.text = "Pressed continuously %s" % button
-        self.lblAction.show()
+        print("Pressed continuously %s" % button)
 
-    def actionUp(self):
-        # Hide the label showing which button is pressed.
-        self.lblAction.hide()
+    def actionUp(self, button):
+        # Just show which button has been released.
+        print("Released %s" % button)
 
     def view_up(self):
         self.view_offset[0] += 1
@@ -117,8 +115,8 @@ class InputSystem:
         self,
         value: float,  # current raw input: 1.0 if pressed, 0.0 if not
         previous: float,  # previous smoothed output
-        rise_time: float = 0.5,  # seconds to reach ~63% when pressed
-        fall_time: float = 0.1,  # seconds to decay when released
+        rise_time: float = 1.0,  # seconds to reach ~63% when pressed
+        fall_time: float = 0.5,  # seconds to decay when released
     ):
         """
         Returns a smoothed value in [0, 1] based on button presses.
@@ -133,12 +131,12 @@ class InputSystem:
 
         Sluggish feel:
             rise_time=1.0
-            fall_time=0.2
+            fall_time=0.5
         """
         dt = self.game.game_time.get_time_step()
         return low_pass_filter_first_order(
-            value=value,
-            previous=previous,
+            value=float(value),
+            previous=float(previous),
             dt=dt,
             rise_time=rise_time,
             fall_time=fall_time,
@@ -157,98 +155,28 @@ class Keyboard(InputSystem):
         self.pitch_rate_smoothed = 0.0
         self.roll_rate_smoothed = 0.0
 
-        # Flight controls
-        self.game.app.accept(
-            self.game.key_bindings["pitch_down"], self.count_pitch_down, [0.05]
-        )
-        self.game.app.accept(
-            self.game.key_bindings["pitch_up"], self.count_pitch_up, [0.05]
-        )
-        self.game.app.accept(
-            self.game.key_bindings["yaw_right"], self.count_yaw_down, [0.05]
-        )
-        self.game.app.accept(
-            self.game.key_bindings["yaw_left"], self.count_yaw_up, [0.05]
-        )
-        self.game.app.accept(
-            self.game.key_bindings["roll_left"], self.count_roll_down, [0.05]
-        )
-        self.game.app.accept(
-            self.game.key_bindings["roll_right"], self.count_roll_up, [0.05]
-        )
-        self.game.app.accept(
-            self.game.key_bindings["throttle_down"], self.count_throttle_down
-        )
-        self.game.app.accept(
-            self.game.key_bindings["throttle_up"], self.count_throttle_up
-        )
+        self.keys = {k: False for k in self.game.bindings["keyboard_bindings"].keys()}
 
+        # Flight control events
+        for k in self.keys:
+            self.game.app.accept(
+                self.game.bindings["keyboard_bindings"][k],
+                self.keys.__setitem__,
+                [k, True],
+            )
+            self.game.app.accept(
+                self.game.bindings["keyboard_bindings"][k] + "-up",
+                self.keys.__setitem__,
+                [k, False],
+            )
         self.game.app.accept(
-            f"{self.game.key_bindings['pitch_down']}-repeat",
-            self.count_pitch_down,
-            [0.3],
+            self.game.bindings["keyboard_bindings"]["boost"],
+            self.activate_boost,
         )
         self.game.app.accept(
-            f"{self.game.key_bindings['pitch_up']}-repeat", self.count_pitch_up, [0.3]
+            f'{self.game.bindings["keyboard_bindings"]["boost"]}-up',
+            self.deactivate_boost,
         )
-        self.game.app.accept(
-            f"{self.game.key_bindings['yaw_right']}-repeat", self.count_yaw_down, [0.3]
-        )
-        self.game.app.accept(
-            f"{self.game.key_bindings['yaw_left']}-repeat", self.count_yaw_up, [0.3]
-        )
-        self.game.app.accept(
-            f"{self.game.key_bindings['roll_left']}-repeat", self.count_roll_down, [0.3]
-        )
-        self.game.app.accept(
-            f"{self.game.key_bindings['roll_right']}-repeat", self.count_roll_up, [0.3]
-        )
-        self.game.app.accept(
-            f"{self.game.key_bindings['throttle_down']}-repeat",
-            self.count_throttle_down,
-        )
-        self.game.app.accept(
-            f"{self.game.key_bindings['throttle_up']}-repeat", self.count_throttle_up
-        )
-
-        # Fire lasers
-        self.game.app.accept(
-            self.game.key_bindings["fire_primary"], self.player.ship.laser_cannon.fire
-        )
-        self.game.app.accept(
-            f"{self.game.key_bindings['fire_primary']}-repeat",
-            self.player.ship.laser_cannon.fire,
-        )
-
-        # Accept boost toggle
-        self.game.app.accept(self.game.key_bindings["boost"], self.activate_boost)
-        self.game.app.accept(
-            f"{self.game.key_bindings['boost']}-up", self.deactivate_boost
-        )
-
-    def count_pitch_down(self, value: float):
-        self.pitch_rate -= value
-
-    def count_pitch_up(self, value: float):
-        self.pitch_rate += value
-
-    def count_yaw_down(self, value: float):
-        self.yaw_rate -= value
-
-    def count_yaw_up(self, value: float):
-        self.yaw_rate += value
-
-    def count_roll_down(self, value: float):
-        self.roll_rate -= value
-
-    def count_roll_up(self, value: float):
-        self.roll_rate += value
-
-    def count_throttle_down(self):
-        self.throttle -= 0.1
-
-    def count_throttle_up(self):
-        self.throttle += 0.1
 
     def get_inputs(self):
         """
@@ -256,11 +184,11 @@ class Keyboard(InputSystem):
 
         returns throttle, roll, pitch, yaw
         """
-        dt = self.game.game_time.get_time_step()
-        # Get average command of yaw pitch roll since last frame
-        self.yaw_rate /= dt
-        self.pitch_rate /= dt
-        self.roll_rate /= dt
+        # Get inputs from key strokes
+        self.throttle += 0.005 * (self.keys["throttle_up"] - self.keys["throttle_down"])
+        self.yaw_rate = self.keys["yaw_left"] - self.keys["yaw_right"]
+        self.pitch_rate = self.keys["pitch_up"] - self.keys["pitch_down"]
+        self.roll_rate = self.keys["roll_right"] - self.keys["roll_left"]
 
         # Low pass filter for axes
         self.yaw_rate_smoothed = self.smooth_button(
@@ -279,10 +207,9 @@ class Keyboard(InputSystem):
         self.pitch_rate_smoothed = max(min(self.pitch_rate_smoothed, 1.0), -1.0)
         self.roll_rate_smoothed = max(min(self.roll_rate_smoothed, 1.0), -1.0)
 
-        # Reset commands
-        self.yaw_rate = 0.0
-        self.pitch_rate = 0.0
-        self.roll_rate = 0.0
+        # Fire weapons
+        if self.keys["fire_primary"]:
+            self.player.ship.laser_cannon.fire()
 
         # Boost usage
         if self.is_boost:
