@@ -49,15 +49,15 @@ def build_demo_level(game):
     wp_distance = 5000
     waypoints = [
         np.array([0, 0, 0]),
-        np.array([0, wp_distance, 0]),
+        # np.array([0, wp_distance, 0]),
     ]
-    # # Make a circle
-    # n_waypoint = 5
-    # for angle_reduced in range(n_waypoint):
-    #     angle = angle_reduced * 2 * np.pi / n_waypoint
-    #     waypoints.append(
-    #         np.array([wp_distance * np.sin(angle), wp_distance * np.cos(angle), 0])
-    #     )
+    # Make a circle
+    n_waypoint = 15
+    for angle_reduced in range(n_waypoint):
+        angle = angle_reduced * 2 * np.pi / n_waypoint
+        waypoints.append(
+            np.array([wp_distance * np.sin(angle), wp_distance * np.cos(angle), 0])
+        )
 
     game.lead_bot = spawn_bot(
         game=game,
