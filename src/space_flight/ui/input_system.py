@@ -174,7 +174,7 @@ class Keyboard(InputSystem):
             self.activate_boost,
         )
         self.game.app.accept(
-            f'{self.game.bindings["keyboard_bindings"]["boost"]}-up',
+            self.game.bindings["keyboard_bindings"]["boost"] + "-up",
             self.deactivate_boost,
         )
 
