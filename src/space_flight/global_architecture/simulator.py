@@ -89,7 +89,7 @@ class SpaceFlightSimulator(ShowBase):
         ShowBase.__init__(self)
         self.disableMouse()
 
-        # Use Physical Based Rendering pipeline. Messes with the skybox for now
+        # Use Physical Based Rendering pipeline. Messes with the ocean for now
         # import simplepbr
         # simplepbr.init()
 

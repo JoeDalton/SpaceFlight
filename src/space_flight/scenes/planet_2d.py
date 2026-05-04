@@ -23,6 +23,7 @@ class Planet2D:
         root = NodePath("planet_node")
         root.reparentTo(game.root_node)
         root.setTransparency(TransparencyAttrib.MAlpha)
+        root.setShaderOff()
         root.setLightOff()
 
         self.planet = root.attachNewNode(cm.generate())
