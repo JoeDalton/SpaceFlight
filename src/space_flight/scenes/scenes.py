@@ -68,7 +68,7 @@ class SceneOcean(Scene):
             game=self.game,
             type="terran",
             scale=1000,
-            position=np.array([5000.0, 10000.0, 2000.0]),
+            position=np.array([0.0, 10000.0, 2000.0]),
         )
 
         # Ocean
@@ -97,7 +97,7 @@ class SceneOcean(Scene):
             parent_node=self.isd,
         )
         self.isd.reparent_to(self.game.root_node)
-        self.isd.set_pos(0, 1500, 400)
+        self.isd.set_pos(2000, 3000, 400)
         self.isd.setP(90)
         self.isd.set_scale(1)
 
