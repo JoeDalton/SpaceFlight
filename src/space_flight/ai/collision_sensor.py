@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.collisions import attach_collision_sphere
+from space_flight.game.collisions import attach_collision_sphere
 
 LOGGER = logging.getLogger()
 

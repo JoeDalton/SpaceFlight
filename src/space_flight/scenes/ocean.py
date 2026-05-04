@@ -32,7 +32,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
-from space_flight.collisions import attach_collision_plane
+from space_flight.game.collisions import attach_collision_plane
 from space_flight.utils import compute_next_power_of_2
 
 # ---------------------------------------------------------------------------

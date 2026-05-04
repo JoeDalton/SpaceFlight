@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from space_flight.destructibles import Destructible, Destructibles
+from space_flight.actors.destructibles import Destructible, Destructibles
 
 
 # Minimal subclass to implement abstract methods

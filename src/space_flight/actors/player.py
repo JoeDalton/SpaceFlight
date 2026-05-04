@@ -3,10 +3,10 @@ from typing import Callable
 
 import numpy as np
 
+from space_flight.actors.ship import Ship
 from space_flight.ai.auto_navigator import AutoNavigator
 from space_flight.ai.auto_pilot import AutoPilot
 from space_flight.ai.auto_tactician import AutoTactician
-from space_flight.ship import Ship
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector

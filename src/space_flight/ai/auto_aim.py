@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.laser_cannon import LASER_SPEED_MPS
+from space_flight.actors.laser_cannon import LASER_SPEED_MPS
 from space_flight.utils import rotate_single_vector
 
 LOGGER = logging.getLogger()

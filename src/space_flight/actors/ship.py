@@ -10,10 +10,10 @@ import yaml
 from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
+from space_flight.actors.laser_cannon import LaserCannon
+from space_flight.actors.ship_model import ShipModel
 from space_flight.ai.auto_aim import AutoAim
-from space_flight.collisions import attach_collision_sphere
-from space_flight.laser_cannon import LaserCannon
-from space_flight.ship_model import ShipModel
+from space_flight.game.collisions import attach_collision_sphere
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()

@@ -5,12 +5,12 @@ import sys
 import numpy as np
 
 from space_flight import DEBUG_DELETION
+from space_flight.actors.destructibles import Destructible
+from space_flight.actors.ship import Ship
+from space_flight.actors.trihedron import Trihedron
 from space_flight.ai.auto_navigator import AutoNavigator
 from space_flight.ai.auto_pilot import AutoPilot
 from space_flight.ai.auto_tactician import AutoTactician
-from space_flight.destructibles import Destructible
-from space_flight.ship import Ship
-from space_flight.trihedron import Trihedron
 
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10

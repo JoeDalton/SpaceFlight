@@ -16,7 +16,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION
-from space_flight.collisions import attach_collision_segment
+from space_flight.game.collisions import attach_collision_segment
 from space_flight.utils import build_axis_billboard_quat
 
 LOGGER = logging.getLogger()
