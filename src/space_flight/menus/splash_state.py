@@ -7,7 +7,7 @@ from panda3d.core import TransparencyAttrib, WindowProperties
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.main_menu_state import MainMenuState
-from space_flight.ui.progress_bar import ProgressBar
+from space_flight.menus.progress_bar import ProgressBar
 
 
 class SplashState(BaseState):
