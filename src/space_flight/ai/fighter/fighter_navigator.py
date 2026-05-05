@@ -234,7 +234,7 @@ class FighterNavigator(GenericNavigator):
             * lag_weight
         )
         aim_vector_norm = np.linalg.norm(aim_vector)
-        if aim_vector_norm < 1e-5:
+        if aim_vector_norm < TARGET_DISTANCE_TOLERANCE_M:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm
@@ -589,7 +589,7 @@ class FighterNavigator(GenericNavigator):
         )
 
         aim_vector_norm = np.linalg.norm(aim_vector)
-        if aim_vector_norm < 1e-5:
+        if aim_vector_norm < TARGET_DISTANCE_TOLERANCE_M:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm

@@ -14,3 +14,6 @@ class Pawn:
         self.position = np.zeros(3)
         self.id = None
         self.formation = None
+
+    def clean(self):
+        raise NotImplementedError

@@ -188,3 +188,37 @@ class Personality:
             "throttle_kd": 0.0,
         },
     }
+
+    TURRET_DEFAULT = {
+        "tactician": {
+            "min_engagement_score": 0.5,
+            "primary_target_engagement_multiplier": 5.0,
+            "hunter_cutoff_distance": 900.0,
+            "hunter_angular_focus": 0.3,
+            "intent_update_delay": 0.5,
+            "commitment_times": {
+                Intent.ENGAGE: 10.0,
+                Intent.IDLE: 0.1,
+            },
+        },
+        "navigator": {
+            "fire": {
+                "maximum_distance_m": 1000,
+                "maximum_angle_rad": np.deg2rad(5),
+                "minimum_cos_angle": np.cos(np.deg2rad(5)),
+            },
+            "attack": {
+                "lead_time_s": 0.1,
+            },
+        },
+        "pilot": {
+            "sample_time_s": 0.1,
+            "low_pass_filter_time_s": 0.5,
+            "yaw_kp": 1.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -1.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
+        },
+    }

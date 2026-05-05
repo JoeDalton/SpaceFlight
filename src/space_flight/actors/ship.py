@@ -365,7 +365,7 @@ class Ship:
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-    def move_ship(
+    def move(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
         """

@@ -7,7 +7,6 @@ import numpy as np
 from space_flight import DEBUG_DELETION
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.ship import Ship
-from space_flight.actors.trihedron import Trihedron
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
@@ -21,7 +20,8 @@ class Bot(Destructible):
         self,
         game,
         name: str,
-        ship_type: str,
+        bot_type: str,
+        pawn_model: str,
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         team: int = 0,
@@ -29,31 +29,33 @@ class Bot(Destructible):
     ):
         super().__init__(game=game)
         self.name = name
-        self.ship = Ship(
-            game=self.game,
-            parent=self,
-            ship_type=ship_type,
-            ini_position=ini_position,
-            ini_orientation=ini_orientation,
-            is_cockpit=False,
-            team=team,
-        )
 
-        self.pilot = FighterPilot(game=self.game, pawn=self.ship)
-        self.navigator = FighterNavigator(
-            game=self.game, pawn=self.ship, debug=debug_decisions
-        )
-        self.tactician = FighterTactician(
-            game=self.game, pawn=self.ship, debug=debug_decisions
-        )
-        # TODO remove
-        self.game.player.add_target(target=self.ship, name=self.name)
-        self.team = team
+        if bot_type == "fighter":
+            self.pawn = Ship(
+                game=self.game,
+                parent=self,
+                ship_type=pawn_model,
+                ini_position=ini_position,
+                ini_orientation=ini_orientation,
+                is_cockpit=False,
+                team=team,
+            )
+
+            self.pilot = FighterPilot(game=self.game, pawn=self.pawn)
+            self.navigator = FighterNavigator(
+                game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
+            self.tactician = FighterTactician(
+                game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
+            # TODO remove
+            self.game.player.add_target(target=self.pawn, name=self.name)
+            self.team = team
 
         self.add_task(method=self.move_bot_task)
 
         # Add self to the interacting actors
-        self.game.interactions.add_actor(self.ship)
+        self.game.interactions.add_actor(self.pawn)
 
     def move_bot_task(self):
         """
@@ -73,7 +75,7 @@ class Bot(Destructible):
         throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
             target_direction=target_direction, desired_speed_mps=desired_speed_mps
         )
-        self.ship.move_ship(
+        self.pawn.move(
             throttle=throttle,
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,
@@ -86,7 +88,7 @@ class Bot(Destructible):
 
         :return: The health of the bot
         """
-        return self.ship.health
+        return self.pawn.health
 
     def set_personality(self, personality: dict):
         """
@@ -107,9 +109,9 @@ class Bot(Destructible):
         Model spinning before explosing ? TODO
         """
         self.game.explosion_fx_pool.spawn(
-            position=self.ship.position,
-            scale=self.ship.explosion_scale,
-            base_velocity=self.ship.speed,
+            position=self.pawn.position,
+            scale=self.pawn.explosion_scale,
+            base_velocity=self.pawn.speed,
         )
 
     def clean(self):
@@ -120,12 +122,12 @@ class Bot(Destructible):
             LOGGER.info(f"Cleaning bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
         try:  # TODO to remove anyway when the player no longer has its own targets
-            self.game.player.remove_target(target_to_remove=self.ship)
+            self.game.player.remove_target(target_to_remove=self.pawn)
         except AttributeError:
             # In level cleanup, player may no longer exist at this point
             pass
         try:
-            self.game.interactions.remove_actor(self.ship)
+            self.game.interactions.remove_actor(self.pawn)
         except AttributeError:
             # In level cleanup, game.interactions no longer exist at this point
             pass
@@ -135,8 +137,8 @@ class Bot(Destructible):
         self.navigator = None
         self.tactician.clean()
         self.tactician = None
-        self.ship.clean()
-        self.ship = None
+        self.pawn.clean()
+        self.pawn = None
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaned bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
@@ -154,7 +156,6 @@ def spawn_bot(
     ship_type: str,
     ini_position: np.ndarray = np.zeros(3),
     ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
-    has_debug_trihedron: bool = False,
     team: int = 0,
     debug_decisions: bool = False,
 ) -> Bot:
@@ -167,7 +168,5 @@ def spawn_bot(
         team=team,
         debug_decisions=debug_decisions,
     )
-    if has_debug_trihedron:
-        Trihedron(game=game, parent=bot.ship.node, scale=1)
 
     return bot

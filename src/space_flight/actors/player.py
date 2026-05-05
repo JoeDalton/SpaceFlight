@@ -100,7 +100,7 @@ class Player:
             )
         else:
             throttle, yaw_rate, pitch_rate, roll_rate = self.input_system.get_inputs()
-        self.ship.move_ship(
+        self.ship.move(
             throttle=throttle,
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,

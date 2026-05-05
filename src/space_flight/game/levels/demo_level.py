@@ -64,7 +64,6 @@ def build_demo_level(game):
         name="lead_2",
         ship_type="tie-interceptor",
         ini_position=np.array([0, -100, 500]),
-        has_debug_trihedron=False,
         team=2,
         debug_decisions=False,
     )
@@ -77,7 +76,6 @@ def build_demo_level(game):
             name="team_2",
             ship_type="tie-interceptor",
             ini_position=np.array([0, -(i + 1) * 200, 500]),
-            has_debug_trihedron=False,
             team=2,
         )
         team_2_formation.add_ship(ship=bot.ship)
@@ -87,7 +85,6 @@ def build_demo_level(game):
     #     name="chase_1",
     #     ship_type="a-wing",
     #     ini_position=np.array([0, -2000, -0]),
-    #     has_debug_trihedron=False,
     #     team=1,
     #     debug_decisions=False,
     # )
@@ -99,7 +96,6 @@ def build_demo_level(game):
     #         name="team_1",
     #         ship_type="x-wing",
     #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-    #         has_debug_trihedron=False,
     #         team=1,
     #     )
     #     bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
