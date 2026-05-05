@@ -1,0 +1,20 @@
+# Test turret
+max_pitch_rate_degps: 10.0
+max_yaw_rate_degps: 10.0
+inertia_filter_s: 0.01
+
+# min_yaw_deg: 0.0
+# max_yaw_deg: 0.0
+min_pitch_deg: -70.0
+max_pitch_deg: -5.0
+
+health: 500.0
+hit_box_radius_m: 4.0
+
+laser_base_range_m: 1500
+laser_color: red
+laser_fire_rate: 9.1
+cannon_positions: [[0, 0, 0]]
+laser_sound: sounds/weapons/XWING_BLASTER.mp3
+shot_power: 60.0
+explosion_scale: 5.0
