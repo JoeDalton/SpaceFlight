@@ -4,9 +4,9 @@ from typing import Callable
 import numpy as np
 
 from space_flight.actors.ship import Ship
-from space_flight.ai.auto_navigator import AutoNavigator
-from space_flight.ai.auto_pilot import AutoPilot
-from space_flight.ai.auto_tactician import AutoTactician
+from space_flight.ai.fighter.fighter_navigator import FighterNavigator
+from space_flight.ai.fighter.fighter_pilot import FighterPilot
+from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector
@@ -55,9 +55,13 @@ class Player:
         # Initialize input system
         self.has_ai = has_ai
         if self.has_ai:
-            self.pilot = AutoPilot(game=self.game, ship=self.ship)
-            self.navigator = AutoNavigator(game=self.game, ship=self.ship, debug=True)
-            self.tactician = AutoTactician(game=self.game, ship=self.ship, debug=True)
+            self.pilot = FighterPilot(game=self.game, pawn=self.ship)
+            self.navigator = FighterNavigator(
+                game=self.game, pawn=self.ship, debug=True
+            )
+            self.tactician = FighterTactician(
+                game=self.game, pawn=self.ship, debug=True
+            )
         self.input_system = input_system_factory(game=self.game, player=self)
 
         # Initialize rear view mirror

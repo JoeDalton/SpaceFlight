@@ -8,9 +8,9 @@ from space_flight import DEBUG_DELETION
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.ship import Ship
 from space_flight.actors.trihedron import Trihedron
-from space_flight.ai.auto_navigator import AutoNavigator
-from space_flight.ai.auto_pilot import AutoPilot
-from space_flight.ai.auto_tactician import AutoTactician
+from space_flight.ai.fighter.fighter_navigator import FighterNavigator
+from space_flight.ai.fighter.fighter_pilot import FighterPilot
+from space_flight.ai.fighter.fighter_tactician import FighterTactician
 
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
@@ -39,12 +39,12 @@ class Bot(Destructible):
             team=team,
         )
 
-        self.pilot = AutoPilot(game=self.game, ship=self.ship)
-        self.navigator = AutoNavigator(
-            game=self.game, ship=self.ship, debug=debug_decisions
+        self.pilot = FighterPilot(game=self.game, pawn=self.ship)
+        self.navigator = FighterNavigator(
+            game=self.game, pawn=self.ship, debug=debug_decisions
         )
-        self.tactician = AutoTactician(
-            game=self.game, ship=self.ship, debug=debug_decisions
+        self.tactician = FighterTactician(
+            game=self.game, pawn=self.ship, debug=debug_decisions
         )
         # TODO remove
         self.game.player.add_target(target=self.ship, name=self.name)

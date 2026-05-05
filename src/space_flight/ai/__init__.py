@@ -102,7 +102,7 @@ class Personality:
     """
 
     # TODO better personality. Optimize ?
-    DEFAULT = {
+    FIGHTER_DEFAULT = {
         "tactician": {
             "min_fighting_shape": 2,
             "min_engagement_score": 0.5,
@@ -112,6 +112,7 @@ class Personality:
             "hunter_angular_focus": 0.3,
             "prey_cutoff_distance": 800.0,
             "prey_angular_focus": 1.0,
+            "intent_update_delay": 0.5,
             "commitment_times": {
                 Intent.ENGAGE: 10.0,
                 Intent.EVADE: 1.5,

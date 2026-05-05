@@ -1,23 +1,24 @@
-import logging
-
 import numpy as np
 from simple_pid import PID
 
-from space_flight import DEBUG_DELETION
+from space_flight.actors.pawn import Pawn
 from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS, Personality
+from space_flight.ai.generic.generic_pilot import GenericPilot
 from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
 
-LOGGER = logging.getLogger()
-
 ROLL_TOLERANCE = 1e-2
-DISTANCE_FOR_MAX_THROTTLE = 2000
 
 
-class AutoPilot:
-    def __init__(self, game, ship, personality: dict = Personality.DEFAULT):
-        self.game = game
-        self.ship = ship
-        self.personality = personality
+class FighterPilot(GenericPilot):
+    """
+    A class to hold the autopilot of fighters
+    """
+
+    def __init__(
+        self, game, pawn: Pawn, personality: dict = Personality.FIGHTER_DEFAULT
+    ):
+        super().__init__(game=game, pawn=pawn, personality=personality)
+
         self.pid_yaw = PID(
             Kp=self.personality["pilot"]["yaw_kp"],
             Ki=self.personality["pilot"]["yaw_ki"],
@@ -127,9 +128,9 @@ class AutoPilot:
             # TODO remove normalization since the autonavigator is supposed to give
             # either a null or a unit direction
             target_direction = target_direction / target_direction_norm
-            ship_x = self.ship.right
-            ship_y = self.ship.forward
-            ship_z = self.ship.up
+            ship_x = self.pawn.right
+            ship_y = self.pawn.forward
+            ship_z = self.pawn.up
             # Project target direction on ship axes
             target_x = np.dot(ship_x, target_direction)
             target_y = np.dot(ship_y, target_direction)
@@ -147,7 +148,7 @@ class AutoPilot:
 
         # Find velocity error
         velocity_error = (
-            np.linalg.norm(self.ship.speed) - desired_speed_mps
+            np.linalg.norm(self.pawn.speed) - desired_speed_mps
         ) / REFERENCE_ERROR_VELOCITY_MPS
 
         # Update PID commands
@@ -188,13 +189,3 @@ class AutoPilot:
         # self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate = 0, 0, 0, 0
 
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
-
-    def clean(self):
-        self.ship = None
-        self.game = None
-        if DEBUG_DELETION:
-            LOGGER.info("Cleaned autopilot")
-
-    def __del__(self):
-        if DEBUG_DELETION:
-            LOGGER.info("Deleted autopilot")

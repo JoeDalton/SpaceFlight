@@ -1,49 +1,39 @@
 import logging
-from typing import Tuple
 
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai import Intent, Personality
+from space_flight.actors.pawn import Pawn
+from space_flight.ai import Intent
 from space_flight.utils import smooth_step_down
 
 LOGGER = logging.getLogger()
 
 
-# TODO make this probabilistic to avoid everyone update at the same time ?
-INTENT_UPDATE_DELAY_S = 0.5
-
-# TODO Add an intent to go back to the fight area if too far
-
-# TODO (Where ?) Make the ships that disengaged and are sufficiently far disappear
-# from the scene
-
-
-class AutoTactician:
+class GenericTactician:
     """
-    A very basic Finite State Machine to define the intents of the bots
+    A Finite State Machine to define the intents of the bots
     """
 
     def __init__(
         self,
         game,
-        ship,
-        personality: dict = Personality.DEFAULT,
+        pawn: Pawn,
+        personality: dict,
         debug: bool = False,
     ):
         self.game = game
-        self.ship = ship
+        self.pawn = pawn
         self.intent = Intent.IDLE  # Current state
         self.target_dict = {}  # Current target
-        self.primary_target = None  # Assigned by squad tactics
+        self.primary_target = None  # Assigned by squad tactics or level scenario
         self.time_since_update = 0.0
-        self.time_since_commitment = 1000.0
+        self.time_since_commitment = 1000.0  # Big time to choose new intent right away
         # Bot personality/role:
         # - commitment times (hysteresis)
         # - transition thresholds (aggresivity/recklessness)
         # - behaviour biases
         self.personality = personality
-
         self.debug = debug
 
     def think(self):
@@ -53,7 +43,11 @@ class AutoTactician:
         dt = self.game.game_time.get_time_step()
         self.time_since_update += dt
         self.time_since_commitment += dt
-        if (self.time_since_update >= INTENT_UPDATE_DELAY_S) and (
+        # TODO make this probabilistic to avoid everyone update at the same time ?
+        if (
+            self.time_since_update
+            >= self.personality["tactician"]["intent_update_delay"]
+        ) and (
             self.time_since_commitment
             >= self.personality["tactician"]["commitment_times"][self.intent]
         ):
@@ -62,14 +56,14 @@ class AutoTactician:
             if (
                 (intent != self.intent)
                 or (target_dict["target_id"] != self.target_dict["target_id"])
-                or (  # Changing formation position
+                or (  # Changing formation position, for ships only
                     target_dict.get("formation_index")
                     != self.target_dict.get("formation_index")
                 )
             ):
                 if self.debug:
                     LOGGER.info(
-                        f"Tactician {self.ship.parent.name} switched to intent "
+                        f"Tactician {self.pawn.parent.name} switched to intent "
                         f"{intent}, target {target_dict}"
                     )
                 self.time_since_commitment = 0.0
@@ -78,69 +72,17 @@ class AutoTactician:
 
         # Register target_id if in offensive mode so the auto-aim can do its job
         if self.intent == Intent.ENGAGE:
-            self.ship.target_id = self.target_dict["target_id"]
+            self.pawn.target_id = self.target_dict["target_id"]
         else:
-            self.ship.target_id = None
+            self.pawn.target_id = None
 
         return self.intent, self.target_dict
 
-    def update_intent(self) -> Tuple[int, dict]:
+    def update_intent(self):
         """
-        Evaluates the tactic situation around the bot.
-
-        For each foe, score its value as a threat or as a prey.
-        Also score the bot's own fighting shape
-
-        TODO: include role/squad strategy biases
-
-        Finally, evaluates the intent of the bot with priorites
+        Evaluates the tactical situation around the bot and computes the bot's intent
         """
-        # Find current actor index of self
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
-
-        # Check if bot is directly threatened (highest priority action)
-        highest_threat_dict = self.evaluate_threats(my_actor_index)
-        if (
-            highest_threat_dict["score"]
-            >= self.personality["tactician"]["max_threat_score"]
-        ):
-            return Intent.EVADE, highest_threat_dict
-
-        # Check if the bot's ship is in good enough shape to continue fighting
-        fighting_shape = self.evaluate_fighting_shape()
-        if fighting_shape <= self.personality["tactician"]["min_fighting_shape"]:
-            foes_center_dict = self.evaluate_team_center(team="foes")
-            foes_center_dict["target_id"] = Intent.DISENGAGE
-            return Intent.DISENGAGE, foes_center_dict
-
-        # Check if bot has a good enough target to engage
-        best_prey_dict = self.evaluate_preys(my_actor_index)
-        if (
-            best_prey_dict["score"]
-            >= self.personality["tactician"]["min_engagement_score"]
-        ):
-            return Intent.ENGAGE, best_prey_dict
-
-        # Check if bot has patrol orders
-        if len(self.ship.parent.navigator.waypoints) != 0:
-            return Intent.PATROL, {"target_id": Intent.PATROL}
-
-        # Check if bot has formation orders
-        formation_dict = self.evaluate_formation()
-        if formation_dict["active"] is True:
-            return Intent.FORMATION, formation_dict
-
-        # Nothing specific to do for now. Regroup with friends
-        friends_center_dict = self.evaluate_team_center(team="friends")
-        friends_center_dict["target_id"] = Intent.REGROUP
-        return Intent.REGROUP, friends_center_dict
-
-    def evaluate_fighting_shape(self) -> float:
-        """
-        Evaluates the fighting shape of the bot
-        TODO: add an "energy" mechanic ?
-        """
-        return 0.5 * self.ship.health + self.ship.shield
+        raise NotImplementedError
 
     def evaluate_threats(self, my_actor_index: int) -> dict:
         """
@@ -270,12 +212,12 @@ class AutoTactician:
         """
         Find the center of gravity of the "friends" or "foes" team
         """
-        my_team = self.ship.team
+        my_team = self.pawn.team
         n_actor_in_team = 0
         center = np.zeros(3)
         if team == "friends":
             for actor in self.game.interactions.actors:
-                if actor.team == my_team and actor != self.ship:
+                if actor.team == my_team and actor != self.pawn:
                     center += actor.position
                     n_actor_in_team += 1
         elif team == "foes":
@@ -297,10 +239,10 @@ class AutoTactician:
         Finds whether the bot belongs to a wing formation and returns its leader
         and relative target position
         """
-        if self.ship.formation is None:
+        if self.pawn.formation is None:
             # Does not belong to a formation. Not applicable
             return {"active": False}
-        formation_index = self.ship.formation.get_ship_index(self.ship.id)
+        formation_index = self.pawn.formation.get_ship_index(self.pawn.id)
         if formation_index == 0:
             # Self is the leader of the formation. Not applicable
             return {"active": False}
@@ -309,15 +251,15 @@ class AutoTactician:
             # Activate formation and get the corresponding position
             return {
                 "active": True,
-                "target_id": self.ship.formation.ship_ids[0],
+                "target_id": self.pawn.formation.ship_ids[0],
                 "formation_index": formation_index,
-                "target_relative_position": self.ship.formation.RELATIVE_POSITIONS[
+                "target_relative_position": self.pawn.formation.RELATIVE_POSITIONS[
                     formation_index
                 ],
             }
 
     def clean(self):
-        self.ship = None
+        self.pawn = None
         self.game = None
         if DEBUG_DELETION:
             LOGGER.info("Cleaned autotactician")

@@ -3,20 +3,21 @@ from typing import List, Tuple
 
 import numpy as np
 
-from space_flight import DEBUG_DELETION
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
-from space_flight.ai.auto_tactician import Intent
+from space_flight.actors.pawn import Pawn
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
 from space_flight.ai.collision_sensor import CollisionSensor
+from space_flight.ai.generic.generic_navigator import GenericNavigator
 from space_flight.utils import smooth_step_down, smooth_step_up
 
 LOGGER = logging.getLogger()
+
 
 NO_DIRECTION = np.zeros(3), 100.0
 WAYPOINT_MEETING_TOLERANCE_M = 50
 COLLISION_REFERENCE_SPEED_MPS = 30
 
 
-class AutoNavigator:
+class FighterNavigator(GenericNavigator):
     """
     A class to define the aim of a bot given an intent given by a tactician, and
     passes its decision to a pilot that steers the ship.
@@ -25,27 +26,25 @@ class AutoNavigator:
     """
 
     def __init__(
-        self, game, ship, personality: dict = Personality.DEFAULT, debug: bool = False
+        self,
+        game,
+        pawn: Pawn,
+        personality: dict = Personality.FIGHTER_DEFAULT,
+        debug: bool = False,
     ):
-        self.game = game
-        self.ship = ship
+        super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
         self.waypoints = []
         self.next_waypoint_idx = 0
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
-        self.personality = personality
-        self.debug = debug
-        self.behaviour = "idle"
-        self.behaviour_duration_s = 0.0
         self.time_in_spiral_s = 0.0
-        self.last_update_time = self.game.game_time.get_current_time()
-        self.collision_sensor = CollisionSensor(game=game, ship=self.ship)
+        self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
 
     def navigate(self, intent: int, target_dict: dict) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent and collision avoidance into explicit directions
 
-        :param intent: The tactitcian's intent
+        :param intent: The tactician's intent
         :param target_dict: A dictionary containing target info
         :return: The direction to point to and the desired speed
         """
@@ -117,31 +116,7 @@ class AutoNavigator:
         else:
             return ValueError(f"Unknown intent: {intent}")
 
-    def record_behaviour(self, behaviour: str):
-        """
-        Record which behaviour is currently running and for how long.
-
-        TODO: Somehow manage to commit to a behaviour for a certain time ?
-        TODO: Not necessary anymore ?
-
-        :param behaviour: A str describing the behaviour currently in play
-        """
-        current_time = self.game.game_time.get_current_time()
-        if behaviour == self.behaviour:
-            # Increment time since last navigator update
-            self.behaviour_duration_s += current_time - self.last_update_time
-        else:
-            # Reset counter and record new behaviour
-            self.behaviour_duration_s = 0.0
-            self.behaviour = behaviour
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.ship.parent.name} switched "
-                    f"to behaviour {behaviour}"
-                )
-        self.last_update_time = current_time
-
-    # %% ==== ENGAGE ====
+        # %% ==== ENGAGE ====
 
     def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
@@ -159,13 +134,13 @@ class AutoNavigator:
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
             LOGGER.warning(
-                f"Navigator {self.ship.parent.name} told to engage "
+                f"Navigator {self.pawn.parent.name} told to engage "
                 "but there's no attached target"
             )
             return NO_DIRECTION
 
         # Identify self and target in interactions
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
         try:
             target_actor_index = self.game.interactions.get_actor_index_from_id(
                 target_dict["target_id"]
@@ -173,7 +148,7 @@ class AutoNavigator:
         except ValueError:
             if self.debug:
                 LOGGER.info(
-                    f"Navigator {self.ship.parent.name}: "
+                    f"Navigator {self.pawn.parent.name}: "
                     "Target has been destroyed since last intent update."
                 )
             return NO_DIRECTION
@@ -191,8 +166,8 @@ class AutoNavigator:
         longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
         # Compute lead pursuit direction necessary for firing solution
-        target_current_position = self.ship.position + distance_m * direction
-        target_current_speed = self.ship.speed + relative_speed_vector
+        target_current_position = self.pawn.position + distance_m * direction
+        target_current_speed = self.pawn.speed + relative_speed_vector
         lead_direction = self.compute_lead_pursuit(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
@@ -200,14 +175,14 @@ class AutoNavigator:
         )
 
         # Decide whether to shoot
-        firing_alignment = np.dot(lead_direction, self.ship.forward)
+        firing_alignment = np.dot(lead_direction, self.pawn.forward)
         if (
             distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
         ) and (
             firing_alignment
             > self.personality["navigator"]["fire"]["minimum_cos_angle"]
         ):
-            self.ship.laser_cannon.fire()
+            self.pawn.laser_cannon.fire()
 
         # Check if we risk passing ahead of the target
         if self.check_overshoot_risk(
@@ -419,13 +394,13 @@ class AutoNavigator:
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
             LOGGER.warning(
-                f"Navigator {self.ship.parent.name} told to evade but "
+                f"Navigator {self.pawn.parent.name} told to evade but "
                 "there's no attached target"
             )
             return NO_DIRECTION
 
         # Identify self and target in interactions
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.ship.id)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
         try:
             target_actor_index = self.game.interactions.get_actor_index_from_id(
                 target_dict["target_id"]
@@ -433,7 +408,7 @@ class AutoNavigator:
         except ValueError:
             if self.debug:
                 LOGGER.info(
-                    f"Navigator {self.ship.parent.name}: "
+                    f"Navigator {self.pawn.parent.name}: "
                     "Target has been destroyed since last intent update."
                 )
             return NO_DIRECTION
@@ -460,7 +435,7 @@ class AutoNavigator:
         :param target_dict: A dictionary with the target's position
         :return: The direction to point to and the desired speed
         """
-        target_relative_position = target_dict["position"] - self.ship.position
+        target_relative_position = target_dict["position"] - self.pawn.position
         target_distance = np.linalg.norm(target_relative_position)
 
         # Case where the target is at zero distance
@@ -481,7 +456,7 @@ class AutoNavigator:
         :param target_dict: A dictionary with the target's position
         :return: The direction to point to and the desired speed
         """
-        target_relative_position = target_dict["position"] - self.ship.position
+        target_relative_position = target_dict["position"] - self.pawn.position
         target_distance = np.linalg.norm(target_relative_position)
 
         # Case where the target is at zero distance
@@ -525,7 +500,7 @@ class AutoNavigator:
 
         # Find next waypoint
         next_waypoint = self.waypoints[self.next_waypoint_idx]
-        waypoint_direction = next_waypoint - self.ship.position
+        waypoint_direction = next_waypoint - self.pawn.position
         distance_to_waypoint_m = np.linalg.norm(waypoint_direction)
 
         # Handle the case where the next waypoint has been met already
@@ -557,7 +532,7 @@ class AutoNavigator:
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
             LOGGER.warning(
-                f"Navigator {self.ship.parent.name} told to form up "
+                f"Navigator {self.pawn.parent.name} told to form up "
                 "but there's no attached target"
             )
             return NO_DIRECTION
@@ -571,7 +546,7 @@ class AutoNavigator:
         except ValueError:
             if self.debug:
                 LOGGER.info(
-                    f"Navigator {self.ship.parent.name}: "
+                    f"Navigator {self.pawn.parent.name}: "
                     "Formation leader has been destroyed since last intent update."
                 )
             return NO_DIRECTION
@@ -595,7 +570,7 @@ class AutoNavigator:
         # )
 
         # Compute relative quantities
-        direction = np.float64(target_position - self.ship.position)
+        direction = np.float64(target_position - self.pawn.position)
         distance_m = np.linalg.norm(direction)
         if distance_m > TARGET_DISTANCE_TOLERANCE_M:
             direction /= distance_m
@@ -603,7 +578,7 @@ class AutoNavigator:
             direction = np.zeros(3)
             distance_m = 0.0
 
-        relative_speed_vector = target_speed - self.ship.speed
+        relative_speed_vector = target_speed - self.pawn.speed
         longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
         # Compute Lead pursuit
@@ -631,56 +606,6 @@ class AutoNavigator:
         return aim_vector, pursuit_speed_mps
 
     # %% ==== COMMON METHODS ====
-
-    def compute_constant_angle_pursuit(
-        self, direction: np.ndarray, distance_m: float, lateral_speed_vector: np.ndarray
-    ) -> np.ndarray:
-        """
-        Constant Angle Pursuit (CAP)
-        Bring lateral velocity to zero
-        Good for closing in from a long distance
-        Also good for missiles until the end
-
-        :param direction: The direction of the target
-        :param distance_m: Its distance from self
-        :param lateral_speed_vector: Its relative velocity on the lateral plane
-        """
-        # TODO Dynamic CAP strength, should vary with distance/closing_speed
-        cap_strength_s = 1.0  # Or =1/omega_max_radps
-        desired_vector = direction * distance_m - cap_strength_s * lateral_speed_vector
-        desired_vector_norm = np.linalg.norm(desired_vector)
-        # Norm can't be zero if distance != 0
-        return desired_vector / desired_vector_norm
-
-    def compute_lead_pursuit(
-        self,
-        target_current_position: np.ndarray,
-        target_current_speed: np.ndarray,
-        lead_time_s: float,
-    ) -> Tuple[np.ndarray, float]:
-        """
-        Intercepts the target by flying to its future position
-        If the lead time is null, it's pure pursuit
-        If the lead time is negative, it's a lag pursuit
-
-        :param target_current_position: The absolute position of the target
-        :param target_current_speed: Its absolute speed
-        :return: The direction to point to and its reference distance
-        """
-        target_future_position = (
-            target_current_position + target_current_speed * lead_time_s
-        )
-
-        # Compute direction to point to
-        target_future_direction = target_future_position - self.ship.position
-        target_future_distance_m = np.linalg.norm(target_future_direction)
-        if target_future_distance_m < TARGET_DISTANCE_TOLERANCE_M:
-            target_future_direction = np.zeros(3)
-        else:
-            target_future_direction /= target_future_distance_m
-
-        return target_future_direction
-
     def compute_follow_speed(
         self,
         distance_m: float,
@@ -705,7 +630,7 @@ class AutoNavigator:
                 distance_m=distance_m, intent=intent
             )
         )
-        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.ship.max_speed_mps)
+        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.pawn.max_speed_mps)
         return desired_speed_mps
 
     def compute_speed_target_distance_contribution(
@@ -720,7 +645,7 @@ class AutoNavigator:
         :param distance_m: Distance to target
         :return: The distance contribution to pursuit speed
         """
-        distance_contribution_mps = self.ship.max_speed_mps * (
+        distance_contribution_mps = self.pawn.max_speed_mps * (
             0.5
             - smooth_step_down(
                 x=distance_m,
@@ -730,16 +655,9 @@ class AutoNavigator:
         )
         return distance_contribution_mps
 
-    # %% ==== DELETING THE BOT ====
+    # %% ==== DELETING ====
 
     def clean(self):
-        self.ship = None
-        self.game = None
+        super().clean()
         self.collision_sensor.clean()
         self.collision_sensor = None
-        if DEBUG_DELETION:
-            LOGGER.info("Cleaned autonavigator")
-
-    def __del__(self):
-        if DEBUG_DELETION:
-            LOGGER.info("Deleted autonavigator")
