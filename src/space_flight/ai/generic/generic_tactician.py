@@ -55,7 +55,7 @@ class GenericTactician:
             intent, target_dict = self.update_intent()
             if (
                 (intent != self.intent)
-                or (target_dict["target_id"] != self.target_dict["target_id"])
+                or (target_dict.get("target_id") != self.target_dict.get("target_id"))
                 or (  # Changing formation position, for ships only
                     target_dict.get("formation_index")
                     != self.target_dict.get("formation_index")

@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 import numpy as np
 from panda3d.core import NodePath, Quat
 
@@ -13,22 +11,21 @@ class TurretModel:
         # Instantiate already-loaded models to a new node
         self.model = self.game.root_node.attachNewNode("turret_model_instance")
 
-        if self.turret_type == "test":
+        if self.turret_type == "test2":
             self.game.app.asset_manager.instantiate_3d_model_to_node(
-                path=DATAFILES_PATH / "models/turrets/test/scene.gltf",
+                path=DATAFILES_PATH / "models/turrets/test2/turret.glb",
                 parent_node=self.model,
             )
             self.offset = np.array([0.0, 0.0, 0.0])
             self.orientation = np.quaternion(1.0, 0.0, 0.0, 0.0)
-            self.model.setScale(1)
+            self.model.setScale(2)
             # Find the proper nodes to manipulate in the model
-            self.yaw_node = self.actor.find("**/Base2")
-            self.pitch_node = self.actor.find("**/Head")
+            self.yaw_node = self.model.find("**/heading_axis")
+            self.pitch_node = self.model.find("**/cannon_axis")
             # Assign movement functions
-            self.set_yaw = self.yaw_node.setR
+            self.set_yaw = self.yaw_node.setH
             self.set_pitch = self.pitch_node.setP
-            # Create simple data structure to allow plug laser cannons on
-            self.cannon_attachment = SimpleNamespace(node=self.pitch_node)
+            self.cannon_node = self.pitch_node
         else:
             raise NotImplementedError(turret_type)
 

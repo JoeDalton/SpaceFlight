@@ -32,8 +32,8 @@ class Bot(Destructible):
     ):
         super().__init__(game=game)
         self.name = name
-
-        if bot_type == "fighter":
+        self.bot_type = bot_type
+        if self.bot_type == "fighter":
             self.pawn = Ship(
                 game=self.game,
                 parent=self,
@@ -54,7 +54,7 @@ class Bot(Destructible):
             self.tactician = FighterTactician(
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
-        elif bot_type == "turret":
+        elif self.bot_type == "turret":
             self.pawn = Turret(
                 game=self.game,
                 parent=self,
@@ -77,7 +77,7 @@ class Bot(Destructible):
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
         else:
-            raise NotImplementedError(f"Unknown bot type {bot_type}")
+            raise NotImplementedError(f"Unknown bot type {self.bot_type}")
         # TODO remove
         self.game.player.add_target(target=self.pawn, name=self.name)
         self.team = team
@@ -97,20 +97,34 @@ class Bot(Destructible):
         - The pilot steers the ship and adjusts the throttle to follow its aim
         - The ship moves according to the games physics
         """
-        intent, target_dict = self.tactician.think()
+        if self.bot_type == "fighter":
+            intent, target_dict = self.tactician.think()
 
-        target_direction, desired_speed_mps = self.navigator.navigate(
-            intent=intent, target_dict=target_dict
-        )
-        throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
-            target_direction=target_direction, desired_speed_mps=desired_speed_mps
-        )
-        self.pawn.move(
-            throttle=throttle,
-            yaw_rate=yaw_rate,
-            pitch_rate=pitch_rate,
-            roll_rate=roll_rate,
-        )
+            target_direction, desired_speed_mps = self.navigator.navigate(
+                intent=intent, target_dict=target_dict
+            )
+            throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
+                target_direction=target_direction, desired_speed_mps=desired_speed_mps
+            )
+            self.pawn.move(
+                throttle=throttle,
+                yaw_rate=yaw_rate,
+                pitch_rate=pitch_rate,
+                roll_rate=roll_rate,
+            )
+        elif self.bot_type == "turret":
+            intent, target_dict = self.tactician.think()
+
+            target_direction = self.navigator.navigate(
+                intent=intent, target_dict=target_dict
+            )
+            yaw_rate, pitch_rate = self.pilot.pilot(target_direction=target_direction)
+            self.pawn.move(
+                yaw_rate=yaw_rate,
+                pitch_rate=pitch_rate,
+            )
+        else:
+            raise NotImplementedError(f"Unknown bot type {self.bot_type}")
 
     def get_health(self) -> float:
         """

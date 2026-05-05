@@ -27,9 +27,11 @@ LIGHT_ATTENUATION = (1, 0.05, 0)
 
 
 class LaserCannon:
-    def __init__(self, game, parent):
+    def __init__(self, game, parent, parent_node=None):
         self.parent = parent
         self.game = game
+        if parent_node is None:
+            parent_node = self.parent.node
 
         # Cannon configuration
         cannon_positions = self.parent.conf["cannon_positions"]
@@ -38,7 +40,7 @@ class LaserCannon:
         for cannon_idx in range(self.n_cannon):
             # Create a dummy node to attach models
             node = NodePath("player_node")
-            node.reparentTo(self.parent.node)
+            node.reparentTo(parent_node)
             node.set_pos(*cannon_positions[cannon_idx])
             self.cannon_nodes.append(node)
 

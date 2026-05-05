@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from space_flight import EPSILON_TOLERANCE
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
 from space_flight.ai.collision_sensor import CollisionSensor
@@ -589,7 +590,7 @@ class FighterNavigator(GenericNavigator):
         )
 
         aim_vector_norm = np.linalg.norm(aim_vector)
-        if aim_vector_norm < TARGET_DISTANCE_TOLERANCE_M:
+        if aim_vector_norm < EPSILON_TOLERANCE:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm

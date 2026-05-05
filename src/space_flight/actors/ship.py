@@ -8,7 +8,14 @@ import quaternion
 import yaml
 from panda3d.core import NodePath, Quat
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
+from space_flight import (
+    DATAFILES_PATH,
+    DEBUG_DELETION,
+    FLIGHT_MODEL,
+    FORWARD_BODY,
+    RIGHT_BODY,
+    UP_BODY,
+)
 from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
@@ -269,12 +276,9 @@ class Ship(Pawn):
         self.state_dot[3:7] = quaternion.as_float_array(quat_dot)
 
         # Find and store ship directions
-        forward_body = np.array([0.0, 1.0, 0.0])
-        self.forward = rotate_single_vector(quat, forward_body)
-        right_body = np.array([1.0, 0.0, 0.0])
-        self.right = rotate_single_vector(quat, right_body)
-        up_body = np.array([0.0, 0.0, 1.0])
-        self.up = rotate_single_vector(quat, up_body)
+        self.forward = rotate_single_vector(quat, FORWARD_BODY)
+        self.right = rotate_single_vector(quat, RIGHT_BODY)
+        self.up = rotate_single_vector(quat, UP_BODY)
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
@@ -305,12 +309,12 @@ class Ship(Pawn):
                     self.lift_factor
                     * speed_norm**2
                     * angle_of_attack_deg
-                    * np.cross(airflow_direction_body, right_body)
+                    * np.cross(airflow_direction_body, RIGHT_BODY)
                     + self.lateral_lift_factor
                     * speed_norm**2
                     * side_slip_angle_deg
                     * np.cross(
-                        up_body,
+                        UP_BODY,
                         airflow_direction_body,
                     )
                 )

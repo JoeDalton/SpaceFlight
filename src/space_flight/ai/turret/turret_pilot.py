@@ -78,33 +78,41 @@ class TurretPilot(GenericPilot):
         TODO : Add turret randomness ?
         """
 
-        # Compute directions
+        # Compute angular errors
         target_direction_norm = np.linalg.norm(target_direction)
         if target_direction_norm == 0.0:
-            yaw_error = 0.0
-            pitch_error = 0.0
+            print("!")
+            print(f"{target_direction_norm=}")
+            yaw_error_rad = 0.0
+            pitch_error_rad = 0.0
             cos_angle_to_target = 1.0
         else:
-            # Find ship axes
-            # TODO remove normalization since the autonavigator is supposed to give
-            # either a null or a unit direction
             target_direction = target_direction / target_direction_norm
-            ship_x = self.pawn.right
-            ship_y = self.pawn.forward
-            ship_z = self.pawn.up
-            # Project target direction on ship axes
-            target_x = np.dot(ship_x, target_direction)
-            target_y = np.dot(ship_y, target_direction)
-            target_z = np.dot(ship_z, target_direction)
-            # Find angle errors
-            yaw_error = np.arctan2(target_x, target_y)
-            pitch_error = np.arctan2(target_z, target_y)
+            # Project target direction on turret base axes
+            base_x = self.pawn.base_right
+            base_y = self.pawn.base_forward
+            base_z = self.pawn.base_up
+            target_x = np.dot(base_x, target_direction)
+            target_y = np.dot(base_y, target_direction)
+            target_z = np.dot(base_z, target_direction)
+            cannon_x = np.dot(base_x, self.pawn.cannon_forward)
+            cannon_y = np.dot(base_y, self.pawn.cannon_forward)
+            cannon_z = np.dot(base_z, self.pawn.cannon_forward)
+            # Compute angular errors
+            # Yaw
+            yaw_target_rad = np.pi / 2 - np.arctan2(target_y, target_x)
+            yaw_cannon_rad = np.pi / 2 - np.arctan2(cannon_y, cannon_x)
+            yaw_error_rad = yaw_target_rad - yaw_cannon_rad
+            # Pitch
+            pitch_target_rad = np.arcsin(target_z)
+            pitch_cannon_rad = np.arcsin(cannon_z)
+            pitch_error_rad = pitch_target_rad - pitch_cannon_rad
 
-            cos_angle_to_target = np.dot(ship_y, target_direction)
+            cos_angle_to_target = np.dot(self.pawn.cannon_forward, target_direction)
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Update PID commands
-        self.yaw_rate = self.pid_yaw(yaw_error)
-        self.pitch_rate = self.pid_pitch(pitch_error)
+        self.yaw_rate = self.pid_yaw(yaw_error_rad)
+        self.pitch_rate = self.pid_pitch(pitch_error_rad)
 
         return self.yaw_rate, self.pitch_rate

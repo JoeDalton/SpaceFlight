@@ -4,6 +4,8 @@ from typing import Callable
 from direct.interval.Interval import Interval
 from direct.showbase.ShowBaseGlobal import ClockObject
 
+from space_flight import EPSILON_TOLERANCE
+
 
 class GameTimeManager:
     """
@@ -69,7 +71,7 @@ class GameTimeManager:
         :return: The average frame rate
         """
         average_frame_rate = max(
-            ClockObject.getGlobalClock().getAverageFrameRate(), 1e-5
+            ClockObject.getGlobalClock().getAverageFrameRate(), EPSILON_TOLERANCE
         )
         return average_frame_rate
 

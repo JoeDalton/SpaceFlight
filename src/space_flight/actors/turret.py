@@ -7,7 +7,13 @@ import numpy as np
 import yaml
 from panda3d.core import NodePath, Quat
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight import (
+    DATAFILES_PATH,
+    DEBUG_DELETION,
+    FORWARD_BODY,
+    RIGHT_BODY,
+    UP_BODY,
+)
 from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.turret_model import TurretModel
@@ -48,13 +54,15 @@ class Turret(Pawn):
         super().__init__(game=game, parent=parent, team=team)
         self.parent_object = parent_object
 
-        # Set a low-pass filter time to emulate physical delay in rotational rates
-        self.physics_filter_time_s = self.conf["inertia_filter_s"]
-
         # Load configuration
         filepath = DATAFILES_PATH / f"models/turrets/{turret_type}/configuration.yaml"
         with open(filepath, "r") as f:
             self.conf = yaml.safe_load(f)
+
+        # Set a low-pass filter time to emulate physical delay in rotational rates
+        self.physics_filter_time_s = self.conf["inertia_filter_s"]
+
+        # Set agility of turret
         self.max_pitch_rate_degps = self.conf["max_pitch_rate_degps"]
         self.max_yaw_rate_degps = self.conf["max_yaw_rate_degps"]
 
@@ -90,7 +98,7 @@ class Turret(Pawn):
         self.target_id = None
         # No auto aim : Auto-aiming turrets would be way too deadly!
         self.laser_cannon = LaserCannon(
-            game=self.game, parent=self.model.cannon_attachment
+            game=self.game, parent=self, parent_node=self.model.cannon_node
         )
 
         # Initialize collisions
@@ -139,25 +147,29 @@ class Turret(Pawn):
             state_derivative=self.state_derivative, state=self.state
         )
         # Clip angles to the turret's possibilities
-        self.state[0] = min(
-            self.conf["max_yaw_deg"], max(new_state[0], self.conf["min_yaw_deg"])
-        )
-        self.state[1] = min(
-            self.conf["max_pitch_deg"], max(new_state[1], self.conf["min_pitch_deg"])
-        )
+        # new_state[0] = min(
+        #     self.conf["max_yaw_deg"], max(new_state[0], self.conf["min_yaw_deg"])
+        # )
+        # new_state[1] = min(
+        #     self.conf["max_pitch_deg"], max(new_state[1], self.conf["min_pitch_deg"])
+        # )
+        self.state = new_state
 
         # Set angles on the model
         self.set_yaw(self.state[0])
         self.set_pitch(self.state[1])
 
         # Compute remarkable directions of the turret cannon
-        quat = np.quaternion(self.model.cannon_attachment.node.getQuat())
-        forward_body = np.array([0.0, 1.0, 0.0])
-        self.forward = rotate_single_vector(quat, forward_body)
-        right_body = np.array([1.0, 0.0, 0.0])
-        self.right = rotate_single_vector(quat, right_body)
-        up_body = np.array([0.0, 0.0, 1.0])
-        self.up = rotate_single_vector(quat, up_body)
+        cannon_quat = np.quaternion(
+            *self.model.cannon_node.getQuat(self.game.root_node)
+        )
+        self.cannon_forward = rotate_single_vector(cannon_quat, FORWARD_BODY)
+        self.cannon_right = rotate_single_vector(cannon_quat, RIGHT_BODY)
+        self.cannon_up = rotate_single_vector(cannon_quat, UP_BODY)
+        base_quat = np.quaternion(*self.node.getQuat(self.game.root_node))
+        self.base_forward = rotate_single_vector(base_quat, FORWARD_BODY)
+        self.base_right = rotate_single_vector(base_quat, RIGHT_BODY)
+        self.base_up = rotate_single_vector(base_quat, UP_BODY)
 
     def take_hit(self, damage: float, normal_world_vector: np.ndarray):
         """
