@@ -62,6 +62,7 @@ class FighterPilot(GenericPilot):
             time_fn=self.game.game_time.get_current_time,
             output_limits=(0.0, 1.0),
         )
+        # TODO remove that filter since there is already one in the ship model ?
         self.filter_time = self.personality["pilot"]["low_pass_filter_time_s"]
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0

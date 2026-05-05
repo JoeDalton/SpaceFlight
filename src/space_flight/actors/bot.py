@@ -7,9 +7,13 @@ import numpy as np
 from space_flight import DEBUG_DELETION
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.ship import Ship
+from space_flight.actors.turret import Turret
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
+from space_flight.ai.turret.turret_navigator import TurretNavigator
+from space_flight.ai.turret.turret_pilot import TurretPilot
+from space_flight.ai.turret.turret_tactician import TurretTactician
 
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
@@ -22,10 +26,9 @@ class Bot(Destructible):
         name: str,
         bot_type: str,
         pawn_model: str,
-        ini_position: np.ndarray = np.zeros(3),
-        ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         team: int = 0,
         debug_decisions: bool = False,
+        **kwargs,
     ):
         super().__init__(game=game)
         self.name = name
@@ -35,8 +38,11 @@ class Bot(Destructible):
                 game=self.game,
                 parent=self,
                 ship_type=pawn_model,
-                ini_position=ini_position,
-                ini_orientation=ini_orientation,
+                ini_position=kwargs.get("ini_position", np.zeros(3)),
+                ini_orientation=kwargs.get(
+                    "ini_orientation", np.array([1.0, 0.0, 0.0, 0.0])
+                ),
+                ini_speed=kwargs.get("ini_speed", np.zeros(3)),
                 is_cockpit=False,
                 team=team,
             )
@@ -48,9 +54,33 @@ class Bot(Destructible):
             self.tactician = FighterTactician(
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
-            # TODO remove
-            self.game.player.add_target(target=self.pawn, name=self.name)
-            self.team = team
+        elif bot_type == "turret":
+            self.pawn = Turret(
+                game=self.game,
+                parent=self,
+                turret_type=pawn_model,
+                parent_object=kwargs.get("parent_object", self.game.root_node),
+                base_position=kwargs.get("base_position", np.zeros(3)),
+                base_orientation=kwargs.get(
+                    "base_orientation", np.array([1.0, 0.0, 0.0, 0.0])
+                ),
+                ini_yaw_deg=kwargs.get("ini_yaw_deg", 0.0),
+                ini_pitch_deg=kwargs.get("ini_pitch_deg", -30),
+                team=team,
+            )
+
+            self.pilot = TurretPilot(game=self.game, pawn=self.pawn)
+            self.navigator = TurretNavigator(
+                game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
+            self.tactician = TurretTactician(
+                game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
+        else:
+            raise NotImplementedError(f"Unknown bot type {bot_type}")
+        # TODO remove
+        self.game.player.add_target(target=self.pawn, name=self.name)
+        self.team = team
 
         self.add_task(method=self.move_bot_task)
 
@@ -153,7 +183,8 @@ class Bot(Destructible):
 def spawn_bot(
     game,
     name: str,
-    ship_type: str,
+    bot_type: str,
+    pawn_model: str,
     ini_position: np.ndarray = np.zeros(3),
     ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
     team: int = 0,
@@ -162,7 +193,8 @@ def spawn_bot(
     bot = Bot(
         game=game,
         name=name,
-        ship_type=ship_type,
+        bot_type=bot_type,
+        pawn_model=pawn_model,
         ini_position=ini_position,
         ini_orientation=ini_orientation,
         team=team,

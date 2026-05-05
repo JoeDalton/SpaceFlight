@@ -86,9 +86,15 @@ class LaserCannon:
             self.game.root_node
         )
         # Get shot direction from auto-aim
-        shot_speed = self.parent.auto_aim.compute_shot_speed(
-            start_position=start_position
-        )
+        try:
+            shot_speed = self.parent.auto_aim.compute_shot_speed(
+                start_position=start_position
+            )
+        except AttributeError:
+            # Non relativistic projectiles: they are emitted from a possibly moving gun
+            shot_speed = (
+                LASER_SPEED_MPS * np.array(self.parent.forward) + self.parent.speed
+            )
 
         # Spawn laser shot
         _ = LaserShot(

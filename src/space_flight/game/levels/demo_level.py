@@ -62,28 +62,31 @@ def build_demo_level(game):
     game.lead_bot = spawn_bot(
         game=game,
         name="lead_2",
-        ship_type="tie-interceptor",
+        bot_type="fighter",
+        pawn_model="tie-interceptor",
         ini_position=np.array([0, -100, 500]),
         team=2,
         debug_decisions=False,
     )
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-    team_2_formation.add_ship(ship=game.lead_bot.ship)
+    team_2_formation.add_ship(ship=game.lead_bot.pawn)
 
     for i in range(7):
         bot = spawn_bot(
             game=game,
             name="team_2",
-            ship_type="tie-interceptor",
+            bot_type="fighter",
+            pawn_model="tie-interceptor",
             ini_position=np.array([0, -(i + 1) * 200, 500]),
             team=2,
         )
-        team_2_formation.add_ship(ship=bot.ship)
+        team_2_formation.add_ship(ship=bot.pawn)
 
     # chase_bot = spawn_bot(
     #     game=game,
     #     name="chase_1",
-    #     ship_type="a-wing",
+    #     bot_type="fighter",
+    #     pawn_model="a-wing",
     #     ini_position=np.array([0, -2000, -0]),
     #     team=1,
     #     debug_decisions=False,
@@ -94,7 +97,8 @@ def build_demo_level(game):
     #     bot = spawn_bot(
     #         game=game,
     #         name="team_1",
-    #         ship_type="x-wing",
+    #         bot_type="fighter",
+    #         pawn_model="x-wing",
     #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
     #         team=1,
     #     )

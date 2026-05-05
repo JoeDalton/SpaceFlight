@@ -4,7 +4,7 @@ from simple_pid import PID
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Personality
 from space_flight.ai.generic.generic_pilot import GenericPilot
-from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
+from space_flight.utils import safe_angle_rad
 
 ROLL_TOLERANCE = 1e-2
 
@@ -41,7 +41,6 @@ class TurretPilot(GenericPilot):
             time_fn=self.game.game_time.get_current_time,
             output_limits=(-1.0, 1.0),
         )
-        self.filter_time = self.personality["pilot"]["low_pass_filter_time_s"]
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.angle_to_target_deg = 0.0
@@ -78,7 +77,6 @@ class TurretPilot(GenericPilot):
 
         TODO : Add turret randomness ?
         """
-        dt = self.game.game_time.get_time_step()
 
         # Compute directions
         target_direction_norm = np.linalg.norm(target_direction)
@@ -106,24 +104,7 @@ class TurretPilot(GenericPilot):
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Update PID commands
-        yaw_rate_command = self.pid_yaw(yaw_error)
-        pitch_rate_command = self.pid_pitch(pitch_error)
-
-        # Low-pass filter on command to find "realistic" turn rates
-        [
-            self.yaw_rate,
-            self.pitch_rate,
-        ] = low_pass_filter_first_order(
-            value=np.array(
-                [
-                    yaw_rate_command,
-                    pitch_rate_command,
-                ]
-            ),
-            previous=np.array([self.yaw_rate, self.pitch_rate]),
-            dt=dt,
-            rise_time=self.filter_time,
-            fall_time=self.filter_time,
-        )
+        self.yaw_rate = self.pid_yaw(yaw_error)
+        self.pitch_rate = self.pid_pitch(pitch_error)
 
         return self.yaw_rate, self.pitch_rate

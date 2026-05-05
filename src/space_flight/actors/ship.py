@@ -1,7 +1,6 @@
 import gc
 import logging
 import sys
-import uuid
 from typing import Any
 
 import numpy as np
@@ -11,6 +10,7 @@ from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION, FLIGHT_MODEL
 from space_flight.actors.laser_cannon import LaserCannon
+from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
@@ -23,9 +23,9 @@ DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
 
 
-class Ship:
+class Ship(Pawn):
     """
-    A SimpleShip has 10 state variables
+    A Ship has 10 state variables
     - position (3)
     - orientation (4)
     - linear speed (3)
@@ -49,12 +49,7 @@ class Ship:
         is_cockpit: bool = True,
         team: int = 0,
     ):
-        self.game = game
-        self.parent = parent
-        self.is_dead = False
-        self.id = uuid.uuid4()
-        self.team = team
-        self.formation = None
+        super().__init__(game=game, parent=parent, team=team)
 
         # Set a low-pass filter time to emulate physical delay in
         # thrust and rotational rates
@@ -182,7 +177,6 @@ class Ship:
                 name="Play_engine_sound",
                 method=self.sound.play,
             )
-        self.is_clean = False
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
