@@ -48,7 +48,7 @@ class Turret(Pawn):
         base_position: np.ndarray = np.zeros(3),
         base_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_yaw_deg: float = 0.0,
-        ini_pitch_deg: float = -30.0,
+        ini_pitch_deg: float = 30.0,
         team: int = 0,
     ):
         super().__init__(game=game, parent=parent, team=team)
@@ -147,12 +147,9 @@ class Turret(Pawn):
             state_derivative=self.state_derivative, state=self.state
         )
         # Clip angles to the turret's possibilities
-        # new_state[0] = min(
-        #     self.conf["max_yaw_deg"], max(new_state[0], self.conf["min_yaw_deg"])
-        # )
-        # new_state[1] = min(
-        #     self.conf["max_pitch_deg"], max(new_state[1], self.conf["min_pitch_deg"])
-        # )
+        new_state[1] = min(
+            self.conf["max_pitch_deg"], max(new_state[1], self.conf["min_pitch_deg"])
+        )
         self.state = new_state
 
         # Set angles on the model
@@ -163,9 +160,7 @@ class Turret(Pawn):
         cannon_quat = np.quaternion(
             *self.model.cannon_node.getQuat(self.game.root_node)
         )
-        self.cannon_forward = rotate_single_vector(cannon_quat, FORWARD_BODY)
-        self.cannon_right = rotate_single_vector(cannon_quat, RIGHT_BODY)
-        self.cannon_up = rotate_single_vector(cannon_quat, UP_BODY)
+        self.forward = rotate_single_vector(cannon_quat, FORWARD_BODY)
         base_quat = np.quaternion(*self.node.getQuat(self.game.root_node))
         self.base_forward = rotate_single_vector(base_quat, FORWARD_BODY)
         self.base_right = rotate_single_vector(base_quat, RIGHT_BODY)

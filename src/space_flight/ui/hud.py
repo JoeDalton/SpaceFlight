@@ -100,7 +100,19 @@ class HUD:
             )
         except AttributeError:
             bot_text = ""
-        hud_text = player_text + bot_text
+        try:
+            turret_text = (
+                "Turret position = "
+                f"{np.array(self.game.turret.pawn.node.getPos())}\n"
+                "Turret angle to target = "
+                f"{self.game.turret.pilot.angle_to_target_deg:.1f}°\n"
+                "Turret health = "
+                f"{self.game.turret.pawn.health:.1f}\n"
+                "\n"
+            )
+        except AttributeError:
+            turret_text = ""
+        hud_text = player_text + bot_text + turret_text
 
         self.hud.setText(hud_text)
 

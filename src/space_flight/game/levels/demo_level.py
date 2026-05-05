@@ -28,7 +28,7 @@ def build_demo_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([0, -1500, 100]),
+        ini_position=np.array([0, -500, 50]),
         is_neutral=False,
         has_ai=False,
     )
@@ -38,7 +38,7 @@ def build_demo_level(game):
     `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     """
 
-    game.scene = scene_factory(game=game, scene_name="ocean_planet")
+    game.scene = scene_factory(game=game, scene_name="debug")
 
     """
     Initialize dummy bots
@@ -70,6 +70,16 @@ def build_demo_level(game):
     )
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
     team_2_formation.add_ship(ship=game.lead_bot.pawn)
+
+    game.turret = spawn_bot(
+        game=game,
+        name="turret_1",
+        bot_type="turret",
+        pawn_model="test2",
+        ini_position=np.array([0, 0, 10]),
+        team=1,
+        debug_decisions=False,
+    )
 
     for i in range(7):
         bot = spawn_bot(

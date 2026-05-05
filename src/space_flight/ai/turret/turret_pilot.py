@@ -81,8 +81,6 @@ class TurretPilot(GenericPilot):
         # Compute angular errors
         target_direction_norm = np.linalg.norm(target_direction)
         if target_direction_norm == 0.0:
-            print("!")
-            print(f"{target_direction_norm=}")
             yaw_error_rad = 0.0
             pitch_error_rad = 0.0
             cos_angle_to_target = 1.0
@@ -95,9 +93,9 @@ class TurretPilot(GenericPilot):
             target_x = np.dot(base_x, target_direction)
             target_y = np.dot(base_y, target_direction)
             target_z = np.dot(base_z, target_direction)
-            cannon_x = np.dot(base_x, self.pawn.cannon_forward)
-            cannon_y = np.dot(base_y, self.pawn.cannon_forward)
-            cannon_z = np.dot(base_z, self.pawn.cannon_forward)
+            cannon_x = np.dot(base_x, self.pawn.forward)
+            cannon_y = np.dot(base_y, self.pawn.forward)
+            cannon_z = np.dot(base_z, self.pawn.forward)
             # Compute angular errors
             # Yaw
             yaw_target_rad = np.pi / 2 - np.arctan2(target_y, target_x)
@@ -108,7 +106,7 @@ class TurretPilot(GenericPilot):
             pitch_cannon_rad = np.arcsin(cannon_z)
             pitch_error_rad = pitch_target_rad - pitch_cannon_rad
 
-            cos_angle_to_target = np.dot(self.pawn.cannon_forward, target_direction)
+            cos_angle_to_target = np.dot(self.pawn.forward, target_direction)
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Update PID commands
