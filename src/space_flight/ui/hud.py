@@ -226,7 +226,7 @@ class TargetHUD:
             self.aspect.setScale(1, 1, aspect)
 
             # World position of target
-            target_pos = self.target.state[:3]
+            target_pos = self.target.position
             world_pos = Point3(*target_pos)
 
             # Convert to camera space
