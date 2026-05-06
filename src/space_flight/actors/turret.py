@@ -60,7 +60,7 @@ class Turret(Pawn):
             self.conf = yaml.safe_load(f)
 
         # Set a low-pass filter time to emulate physical delay in rotational rates
-        self.physics_filter_time_s = self.conf["inertia_filter_s"]
+        self.physics_filter_time_s = self.conf["physics_filter_time_s"]
 
         # Set agility of turret
         self.max_pitch_rate_degps = self.conf["max_pitch_rate_degps"]

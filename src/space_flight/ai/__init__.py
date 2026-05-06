@@ -6,6 +6,8 @@ import numpy as np
 TARGET_DISTANCE_TOLERANCE_M = 1.0
 INTERACT_MAX_DISTANCE_M = 10000.0
 REFERENCE_ERROR_VELOCITY_MPS = 100
+ROLL_TOLERANCE = 1e-2
+HALF_PI = np.pi / 2
 
 LOGGER = logging.getLogger()
 
@@ -172,7 +174,6 @@ class Personality:
         },
         "pilot": {
             "sample_time_s": 0.1,
-            "low_pass_filter_time_s": 0.5,
             "minimum_throttle": 0.01,
             "yaw_kp": 1.0,
             "yaw_ki": 0.0,
@@ -180,7 +181,7 @@ class Personality:
             "pitch_kp": -1.0,
             "pitch_ki": 0.0,
             "pitch_kd": 0.0,
-            "roll_kp": -1.0,
+            "roll_kp": -0.5,
             "roll_ki": 0.0,
             "roll_kd": 0.0,
             "throttle_kp": 2.0,

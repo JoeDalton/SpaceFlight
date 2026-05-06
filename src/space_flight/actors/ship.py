@@ -58,14 +58,13 @@ class Ship(Pawn):
     ):
         super().__init__(game=game, parent=parent, team=team)
 
-        # Set a low-pass filter time to emulate physical delay in
-        # thrust and rotational rates
-        self.physics_filter_time_s = 0.3
-
         # Load configuration
         filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
         with open(filepath, "r") as f:
             self.conf = yaml.safe_load(f)
+        # Set a low-pass filter time to emulate physical delay in
+        # thrust and rotational rates
+        self.physics_filter_time_s = self.conf["physics_filter_time_s"]
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
         self.brake_factor_nspm = self.conf["brake_factor_nspm"]

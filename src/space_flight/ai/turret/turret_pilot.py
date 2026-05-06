@@ -2,11 +2,9 @@ import numpy as np
 from simple_pid import PID
 
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import Personality
+from space_flight.ai import HALF_PI, Personality
 from space_flight.ai.generic.generic_pilot import GenericPilot
 from space_flight.utils import safe_angle_rad
-
-ROLL_TOLERANCE = 1e-2
 
 
 class TurretPilot(GenericPilot):
@@ -98,8 +96,8 @@ class TurretPilot(GenericPilot):
             cannon_z = np.dot(base_z, self.pawn.forward)
             # Compute angular errors
             # Yaw
-            yaw_target_rad = np.pi / 2 - np.arctan2(target_y, target_x)
-            yaw_cannon_rad = np.pi / 2 - np.arctan2(cannon_y, cannon_x)
+            yaw_target_rad = HALF_PI - np.arctan2(target_y, target_x)
+            yaw_cannon_rad = HALF_PI - np.arctan2(cannon_y, cannon_x)
             yaw_error_rad = yaw_target_rad - yaw_cannon_rad
             # Pitch
             pitch_target_rad = np.arcsin(target_z)

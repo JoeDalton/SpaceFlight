@@ -29,6 +29,7 @@ class Scene:
         game: ShowBase,
     ):
         self.game = game
+        self.up_direction = np.array([0, 0, 1])
 
     def inititalize_move(self):
         pass
