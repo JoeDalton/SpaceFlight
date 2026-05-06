@@ -90,16 +90,21 @@ class CollisionSystem:
         # Weapon hit = one time events
         self.game.app.accept("laser-into-ship", self.laser_into_destructible)
         self.game.app.accept("laser-into-terrain", self.laser_into_terrain)
+        self.game.app.accept("laser-into-turret", self.laser_into_destructible)
         # Collision physics = detected at each frame
-        self.game.app.accept("ship-into-terrain", self.ship_into_terrain)
-        self.game.app.accept("ship-again-terrain", self.ship_again_terrain)
         self.game.app.accept("ship-into-ship", self.ship_into_ship)
         self.game.app.accept("ship-again-ship", self.ship_again_ship)
+        self.game.app.accept("ship-into-terrain", self.ship_into_terrain)
+        self.game.app.accept("ship-again-terrain", self.ship_again_terrain)
+        self.game.app.accept("ship-into-turret", self.ship_into_massive_actor)
+        self.game.app.accept("ship-again-turret", self.ship_again_massive_actor)
         # Collision sensors = detected at each frame
-        self.game.app.accept("sensor-into-terrain", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-again-terrain", self.sensor_into_obstacle)
         self.game.app.accept("sensor-into-ship", self.sensor_into_obstacle)
         self.game.app.accept("sensor-again-ship", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-into-terrain", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-again-terrain", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-into-turret", self.sensor_into_obstacle)
+        self.game.app.accept("sensor-again-turret", self.sensor_into_obstacle)
 
     def update_collisions(self):
         """
@@ -400,6 +405,98 @@ class CollisionSystem:
             velocity_correction=velocity_correction,
             position_correction=position_correction,
         )
+
+    def ship_into_massive_actor(self, entry):
+        """
+        Handle the case where a ship hits a massive actor for the first time
+        If ship_from is the player, play a crash sfx
+        In any case, call ship_into_massive_actor_pushback
+
+        :param entry: Panda3d's description of the collision
+        """
+        ship_from = entry.from_node_path.python_tags["owner"]
+        massive_actor_into = entry.into_node_path.python_tags["owner"]
+
+        # Handle pathologic cases
+        if ship_from is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+            return
+        if massive_actor_into is None:
+            if DEBUG_COLLISION:
+                LOGGER.info(
+                    "massive_actor_into being removed while it hits. " "Ignoring."
+                )
+            return
+
+        if DEBUG_COLLISION:
+            LOGGER.info("ship into massive actor")
+            LOGGER.info(f"Massive actor into : {massive_actor_into.id}")
+            LOGGER.info(f"ship from : {ship_from.id}")
+
+        # Play SFX for player only
+        if ship_from.id == self.game.player.ship.id:
+            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
+            self.game.app.sfx.player_crash(
+                game=self.game, relative_hit_point=relative_hit_point, in_terrain=False
+            )
+        self.ship_into_massive_actor_pushback(entry)
+
+    def ship_again_massive_actor(self, entry):
+        """
+        Handle the case where a ship hits a massive actor, and it already has
+        at the last frame : call ship_into_massive_actor_pushback
+
+        :param entry: Panda3d's description of the collision
+        """
+        self.ship_into_massive_actor_pushback(entry)
+
+    def ship_into_massive_actor_pushback(self, entry):
+        """
+        Handle the case where a ship hits massive actor.
+        We don't use collision forces because they are too stiff.
+        Instead, we use impulse correction
+
+        :param entry: Panda3d's description of the collision
+        """
+        ship_from = entry.from_node_path.python_tags["owner"]
+        massive_actor_into = entry.into_node_path.python_tags["owner"]
+
+        # Handle pathologic cases
+        if ship_from is None:
+            return
+        if massive_actor_into is None:
+            return
+
+        # Get impact parameters
+        normal = entry.getSurfaceNormal(self.game.root_node)
+        # Normalize the normal vector because it can have a non-unit length if a parent
+        # object was scaled. It's dumb, but it is what it is...
+        if not normal.almostEqual(Vec3(0, 0, 0)):
+            normal.normalize()
+        relative_velocity = ship_from.speed - massive_actor_into.speed
+        normal_relative_velocity = np.dot(normal, relative_velocity)
+
+        # Compute impulse correction
+        # Push back if objects are still approaching
+        if normal_relative_velocity < 0:
+            velocity_correction = (
+                -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
+            )
+        else:
+            velocity_correction = np.zeros(3)
+        # Position correction is too complicated to compute with arbitrary mesh
+        # => Rely only on elastic impact to push back
+
+        # Apply damage to the ship
+        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
+        ship_from.push(
+            damage=damage,
+            velocity_correction=velocity_correction,
+            position_correction=np.zeros(3),
+        )
+        # Apply damage to the massive actor
+        massive_actor_into.apply_damage(damage=damage, damage_type="physical")
 
     def sensor_into_obstacle(self, entry):
         """

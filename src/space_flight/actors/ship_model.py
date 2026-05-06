@@ -148,8 +148,6 @@ class ShipModel:
         Anchors the 3D model of the cockpit to the ship node
         """
         self.model.reparent_to(node)
-        # self.model.show_bounds()
-
         self.model.setPos(*self.offset)
         self.model.setQuat(
             Quat(

@@ -102,12 +102,14 @@ class Turret(Pawn):
         )
 
         # Initialize collisions
+        # It's a destructible, but immobile, so we count it as terrain
+        # TODO better names
         self.hit_radius_m = self.conf["hit_box_radius_m"]
         self.collision_sphere_np = attach_collision_sphere(
             game=self.game,
             name="turret",
             radius=self.hit_radius_m,
-            collider_type="destructible",
+            collider_type="terrain",
             parent_node=self.node,
             parent_object=self,
         )

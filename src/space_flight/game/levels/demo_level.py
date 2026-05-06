@@ -73,24 +73,24 @@ def build_demo_level(game):
 
     game.turret = spawn_bot(
         game=game,
-        name="turret_1",
+        name="turret_2",
         bot_type="turret",
-        pawn_model="test2",
+        pawn_model="test",
         ini_position=np.array([0, 0, 10]),
-        team=1,
+        team=2,
         debug_decisions=False,
     )
 
-    for i in range(7):
-        bot = spawn_bot(
-            game=game,
-            name="team_2",
-            bot_type="fighter",
-            pawn_model="tie-interceptor",
-            ini_position=np.array([0, -(i + 1) * 200, 500]),
-            team=2,
-        )
-        team_2_formation.add_ship(ship=bot.pawn)
+    # for i in range(7):
+    #     bot = spawn_bot(
+    #         game=game,
+    #         name="team_2",
+    #         bot_type="fighter",
+    #         pawn_model="tie-interceptor",
+    #         ini_position=np.array([0, -(i + 1) * 200, 500]),
+    #         team=2,
+    #     )
+    #     team_2_formation.add_ship(ship=bot.pawn)
 
     # chase_bot = spawn_bot(
     #     game=game,
