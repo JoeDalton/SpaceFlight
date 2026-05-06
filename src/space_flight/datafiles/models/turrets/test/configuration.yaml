@@ -1,7 +1,7 @@
 # Test turret
 max_pitch_rate_degps: 30.0
 max_yaw_rate_degps: 30.0
-inertia_filter_s: 0.1
+physics_filter_time_s: 0.3
 
 min_pitch_deg: 5.0
 max_pitch_deg: 70.0

@@ -2,11 +2,16 @@ import numpy as np
 from simple_pid import PID
 
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS, Personality
+from space_flight.ai import (
+    HALF_PI,
+    REFERENCE_ERROR_VELOCITY_MPS,
+    ROLL_TOLERANCE,
+    Personality,
+)
 from space_flight.ai.generic.generic_pilot import GenericPilot
-from space_flight.utils import low_pass_filter_first_order, safe_angle_rad
+from space_flight.utils import safe_angle_rad
 
-ROLL_TOLERANCE = 1e-2
+SCENE_ROLL_MULTIPLIER = 0.5
 
 
 class FighterPilot(GenericPilot):
@@ -62,8 +67,6 @@ class FighterPilot(GenericPilot):
             time_fn=self.game.game_time.get_current_time,
             output_limits=(0.0, 1.0),
         )
-        # TODO remove that filter since there is already one in the ship model ?
-        self.filter_time = self.personality["pilot"]["low_pass_filter_time_s"]
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.roll_rate = 0.0
@@ -81,24 +84,26 @@ class FighterPilot(GenericPilot):
         Sets the Auto pilot on
         """
         self.pid_yaw.set_auto_mode(
-            True, last_output=current_normalized_yaw_rate_command
+            enabled=True, last_output=current_normalized_yaw_rate_command
         )
         self.pid_pitch.set_auto_mode(
-            True, last_output=current_normalized_pitch_rate_command
+            enabled=True, last_output=current_normalized_pitch_rate_command
         )
         self.pid_roll.set_auto_mode(
-            True, last_output=current_normalized_roll_rate_command
+            enabled=True, last_output=current_normalized_roll_rate_command
         )
-        self.pid_throttle.set_auto_mode(True, last_output=current_throttle_command)
+        self.pid_throttle.set_auto_mode(
+            enabled=True, last_output=current_throttle_command
+        )
 
     def set_off(self):
         """
         Sets the Auto pilot off
         """
-        self.pid_yaw.set_auto_mode(False)
-        self.pid_pitch.set_auto_mode(False)
-        self.pid_roll.set_auto_mode(False)
-        self.pid_throttle.set_auto_mode(False)
+        self.pid_yaw.set_auto_mode(enabled=False)
+        self.pid_pitch.set_auto_mode(enabled=False)
+        self.pid_roll.set_auto_mode(enabled=False)
+        self.pid_throttle.set_auto_mode(enabled=False)
 
     def pilot(
         self,
@@ -115,7 +120,6 @@ class FighterPilot(GenericPilot):
 
         TODO : Add pilot skill randomness ?
         """
-        dt = self.game.game_time.get_time_step()
 
         # Compute directions
         target_direction_norm = np.linalg.norm(target_direction)
@@ -143,7 +147,18 @@ class FighterPilot(GenericPilot):
             # Clip roll error to zero if pitch and roll errors are small enough
             if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
                 roll_error = 0.0
-
+            # Take into account the scene's orientation
+            is_up = np.dot(self.pawn.up, self.game.scene.up_direction) >= 0
+            if is_up:
+                scene_roll_error = HALF_PI - np.arccos(
+                    np.dot(self.pawn.right, self.game.scene.up_direction)
+                )
+            else:
+                scene_roll_error = HALF_PI + np.arccos(
+                    np.dot(self.pawn.right, self.game.scene.up_direction)
+                )
+            roll_error += SCENE_ROLL_MULTIPLIER * scene_roll_error
+            # Debug output
             cos_angle_to_target = np.dot(ship_y, target_direction)
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
@@ -153,33 +168,10 @@ class FighterPilot(GenericPilot):
         ) / REFERENCE_ERROR_VELOCITY_MPS
 
         # Update PID commands
-        throttle_command = self.pid_throttle(velocity_error)
-        yaw_rate_command = self.pid_yaw(yaw_error)
-        pitch_rate_command = self.pid_pitch(pitch_error)
-        roll_rate_command = self.pid_roll(roll_error)
-
-        # Low-pass filter on command to find "realistic" turn rates
-        [
-            self.throttle,
-            self.yaw_rate,
-            self.pitch_rate,
-            self.roll_rate,
-        ] = low_pass_filter_first_order(
-            value=np.array(
-                [
-                    throttle_command,
-                    yaw_rate_command,
-                    pitch_rate_command,
-                    roll_rate_command,
-                ]
-            ),
-            previous=np.array(
-                [self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate]
-            ),
-            dt=dt,
-            rise_time=self.filter_time,
-            fall_time=self.filter_time,
-        )
+        self.throttle = self.pid_throttle(velocity_error)
+        self.yaw_rate = self.pid_yaw(yaw_error)
+        self.pitch_rate = self.pid_pitch(pitch_error)
+        self.roll_rate = self.pid_roll(roll_error)
 
         # Clamp throttle
         self.throttle = max(

@@ -28,8 +28,8 @@ def build_demo_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([0, -500, 50]),
-        is_neutral=False,
+        ini_position=np.array([0, -500, 600]),
+        is_neutral=True,
         has_ai=False,
     )
 
@@ -38,7 +38,7 @@ def build_demo_level(game):
     `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     """
 
-    game.scene = scene_factory(game=game, scene_name="debug")
+    game.scene = scene_factory(game=game, scene_name="ocean_planet")
 
     """
     Initialize dummy bots
@@ -62,7 +62,7 @@ def build_demo_level(game):
         game=game,
         name="lead_2",
         bot_type="fighter",
-        pawn_model="tie-interceptor",
+        pawn_model="y-wing",
         ini_position=np.array([0, -100, 500]),
         team=2,
         debug_decisions=False,
@@ -98,16 +98,16 @@ def build_demo_level(game):
         debug_decisions=False,
     )
 
-    # for i in range(7):
-    #     bot = spawn_bot(
-    #         game=game,
-    #         name="team_2",
-    #         bot_type="fighter",
-    #         pawn_model="tie-interceptor",
-    #         ini_position=np.array([0, -(i + 1) * 200, 500]),
-    #         team=2,
-    #     )
-    #     team_2_formation.add_ship(ship=bot.pawn)
+    for i in range(5):
+        bot = spawn_bot(
+            game=game,
+            name="team_2",
+            bot_type="fighter",
+            pawn_model="y-wing",
+            ini_position=np.array([0, -(i + 1) * 200, 500]),
+            team=2,
+        )
+        team_2_formation.add_ship(ship=bot.pawn)
 
     # chase_bot = spawn_bot(
     #     game=game,

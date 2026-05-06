@@ -1,5 +1,6 @@
 # TIE-interceptor
 mass_kg: 110
+physics_filter_time_s: 0.3
 max_thrust_n: 14450
 brake_factor_nspm: 100
 max_pitch_rate_degps: 60
