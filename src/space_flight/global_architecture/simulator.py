@@ -89,6 +89,10 @@ class SpaceFlightSimulator(ShowBase):
         ShowBase.__init__(self)
         self.disableMouse()
 
+        # Use Physical Based Rendering pipeline. Messes with the ocean for now
+        # import simplepbr
+        # simplepbr.init()
+
         self.state_manager = StateManager(self)
         self.asset_manager = AssetManager(app=self)
         self.sfx = SFX(app=self)

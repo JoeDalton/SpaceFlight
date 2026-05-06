@@ -1,4 +1,4 @@
-input_type: keyboard # keyboard, gamepad, joystick
+input_type: gamepad # keyboard, gamepad, joystick
 
 # Keyboard bindings
 keyboard_bindings:

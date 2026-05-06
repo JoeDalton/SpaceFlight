@@ -11,6 +11,7 @@ class Skybox:
         skybox_path = DATAFILES_PATH / f"models/skyboxes/{name}"
 
         self.skybox = self.game.app.loader.loadModel(skybox_path)
+        self.skybox.setShaderOff()
         self.skybox.setLightOff()
 
         self.skybox.setBin("background", 1)

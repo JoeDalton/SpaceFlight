@@ -276,10 +276,10 @@ class Joystick(InputSystem):
         self.game.app.accept("stick-button8-up", self.deactivate_boost)
 
         # Register joystick dead zone
-        self.stick_dead_zone = self.game.key_bindings.get(
+        self.stick_dead_zone = self.game.bindings.get(
             "stick_dead_zone", DEFAULT_STICK_DEAD_ZONE
         )
-        self.throttle_dead_zone = self.game.key_bindings.get(
+        self.throttle_dead_zone = self.game.bindings.get(
             "throttle_dead_zone", DEFAULT_THROTTLE_DEAD_ZONE
         )
 
@@ -421,10 +421,10 @@ class Gamepad(InputSystem):
         self.game.app.accept("gamepad-face_x-up", self.deactivate_boost)
 
         # Register gamepad dead zone
-        self.stick_dead_zone = self.game.key_bindings.get(
+        self.stick_dead_zone = self.game.bindings.get(
             "stick_dead_zone", DEFAULT_STICK_DEAD_ZONE
         )
-        self.throttle_dead_zone = self.game.key_bindings.get(
+        self.throttle_dead_zone = self.game.bindings.get(
             "throttle_dead_zone", DEFAULT_THROTTLE_DEAD_ZONE
         )
 

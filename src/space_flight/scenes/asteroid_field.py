@@ -6,7 +6,7 @@ import quaternion
 from panda3d.core import Quat
 
 from space_flight import DATAFILES_PATH
-from space_flight.collisions import attach_collision_sphere
+from space_flight.game.collisions import attach_collision_sphere
 
 
 class AsteroidField:

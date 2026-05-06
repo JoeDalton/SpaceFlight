@@ -1,8 +1,8 @@
 import numpy as np
 
+from space_flight.actors.bot import spawn_bot
+from space_flight.actors.player import Player
 from space_flight.ai import Formation
-from space_flight.bot import spawn_bot
-from space_flight.player import Player
 from space_flight.scenes.scenes import scene_factory
 
 
@@ -28,8 +28,8 @@ def build_demo_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([0, -1500, -100]),
-        is_neutral=True,
+        ini_position=np.array([0, -500, 50]),
+        is_neutral=False,
         has_ai=False,
     )
 
@@ -48,46 +48,73 @@ def build_demo_level(game):
 
     wp_distance = 5000
     waypoints = [
-        np.array([0, 0, 0]),
-        # np.array([0, wp_distance, 0]),
+        np.array([0, 0, 500]),
     ]
     # Make a circle
     n_waypoint = 15
     for angle_reduced in range(n_waypoint):
         angle = angle_reduced * 2 * np.pi / n_waypoint
         waypoints.append(
-            np.array([wp_distance * np.sin(angle), wp_distance * np.cos(angle), 0])
+            np.array([wp_distance * np.sin(angle), wp_distance * np.cos(angle), 500])
         )
 
     game.lead_bot = spawn_bot(
         game=game,
         name="lead_2",
-        ship_type="tie-interceptor",
-        ini_position=np.array([0, -100, 0]),
-        has_debug_trihedron=False,
+        bot_type="fighter",
+        pawn_model="tie-interceptor",
+        ini_position=np.array([0, -100, 500]),
         team=2,
         debug_decisions=False,
     )
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-    team_2_formation.add_ship(ship=game.lead_bot.ship)
+    team_2_formation.add_ship(ship=game.lead_bot.pawn)
 
-    for i in range(7):
-        bot = spawn_bot(
-            game=game,
-            name="team_2",
-            ship_type="tie-interceptor",
-            ini_position=np.array([0, -(i + 1) * 200, 0]),
-            has_debug_trihedron=False,
-            team=2,
-        )
-        team_2_formation.add_ship(ship=bot.ship)
+    game.turret = spawn_bot(
+        game=game,
+        name="turret_1",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([0, 0, 10]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_2",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([100, 140, 10]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_3",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([-100, 140, 10]),
+        team=2,
+        debug_decisions=False,
+    )
+
+    # for i in range(7):
+    #     bot = spawn_bot(
+    #         game=game,
+    #         name="team_2",
+    #         bot_type="fighter",
+    #         pawn_model="tie-interceptor",
+    #         ini_position=np.array([0, -(i + 1) * 200, 500]),
+    #         team=2,
+    #     )
+    #     team_2_formation.add_ship(ship=bot.pawn)
 
     # chase_bot = spawn_bot(
     #     game=game,
     #     name="chase_1",
-    #     ship_type="a-wing",
+    #     bot_type="fighter",
+    #     pawn_model="a-wing",
     #     ini_position=np.array([0, -2000, -0]),
-    #     has_debug_trihedron=False,
     #     team=1,
     #     debug_decisions=False,
     # )
@@ -97,9 +124,9 @@ def build_demo_level(game):
     #     bot = spawn_bot(
     #         game=game,
     #         name="team_1",
-    #         ship_type="x-wing",
+    #         bot_type="fighter",
+    #         pawn_model="x-wing",
     #         ini_position=np.random.uniform(-300, 300, 3) + np.array([0, 1000, 0]),
-    #         has_debug_trihedron=False,
     #         team=1,
     #     )
     #     bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)

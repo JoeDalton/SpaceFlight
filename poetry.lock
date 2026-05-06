@@ -143,14 +143,14 @@ uvloop = ["uvloop (>=0.15.2) ; sys_platform != \"win32\"", "winloop (>=0.5.0) ; 
 
 [[package]]
 name = "cachetools"
-version = "7.1.0"
+version = "7.1.1"
 description = "Extensible memoizing collections and decorators"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "cachetools-7.1.0-py3-none-any.whl", hash = "sha256:05afd1d309309e7c8971db462b4cf516d93fa8c9aea1b906e26e61b4399d0d82"},
-    {file = "cachetools-7.1.0.tar.gz", hash = "sha256:ea5406e92956f9006b121f8032177c6b02cc5f9a488d1e53b2e4d9cb5aae15c6"},
+    {file = "cachetools-7.1.1-py3-none-any.whl", hash = "sha256:0335cd7a0952d2b22327441fb0628139e234c565559eeb91a8a4ac7551c5353d"},
+    {file = "cachetools-7.1.1.tar.gz", hash = "sha256:27bdf856d68fd3c71c26c01b5edc312124ed427524d1ddb31aa2b7746fe20d4b"},
 ]
 
 [[package]]
@@ -1846,6 +1846,41 @@ files = [
 ]
 
 [[package]]
+name = "panda3d-gltf"
+version = "1.3.0"
+description = "glTF utilities for Panda3D"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "panda3d_gltf-1.3.0-py3-none-any.whl", hash = "sha256:2512500ee7e2fc13431dc47e9510efff2c29b9dd82714bd2c36165be2c82ef97"},
+    {file = "panda3d_gltf-1.3.0.tar.gz", hash = "sha256:40ed155ca060f662e53c9bd5526fa91024dd308bc61ebe27218b20a5afb1d9ff"},
+]
+
+[package.dependencies]
+panda3d = ">=1.10.8"
+panda3d-simplepbr = ">=0.6"
+
+[package.extras]
+test = ["pylint (>=3.1.0,<3.2.0)", "pytest", "pytest-pylint"]
+
+[[package]]
+name = "panda3d-simplepbr"
+version = "0.13.1"
+description = "A straight-forward, easy-to-use, drop-in, PBR replacement for Panda3D's builtin auto shader"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "panda3d_simplepbr-0.13.1-py3-none-any.whl", hash = "sha256:cda41cb57cff035b851646956cfbdcc408bee42511dabd4f2d7bd4fbf48c57a9"},
+    {file = "panda3d_simplepbr-0.13.1.tar.gz", hash = "sha256:c83766d7c8f47499f365a07fe1dff078fc8b3054c2689bdc8dceabddfe7f1a35"},
+]
+
+[package.dependencies]
+panda3d = ">=1.10.8"
+typing_extensions = ">=4.7,<5.0"
+
+[[package]]
 name = "pathspec"
 version = "1.1.1"
 description = "Utility library for gitignore style pattern matching of file paths."
@@ -2715,7 +2750,7 @@ version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
 optional = false
 python-versions = ">=3.9"
-groups = ["test"]
+groups = ["main", "test"]
 files = [
     {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
     {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
@@ -2834,4 +2869,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "62bc614bba8f1c8bf67a6d965df87d745f2819eb27847e9975f2c829de244d66"
+content-hash = "3c8814708169d2822248cdd5a351d1cf2413a5c6465184fa015cb35e586fdabb"

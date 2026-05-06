@@ -102,7 +102,7 @@ class Personality:
     """
 
     # TODO better personality. Optimize ?
-    DEFAULT = {
+    FIGHTER_DEFAULT = {
         "tactician": {
             "min_fighting_shape": 2,
             "min_engagement_score": 0.5,
@@ -112,6 +112,7 @@ class Personality:
             "hunter_angular_focus": 0.3,
             "prey_cutoff_distance": 800.0,
             "prey_angular_focus": 1.0,
+            "intent_update_delay": 0.5,
             "commitment_times": {
                 Intent.ENGAGE: 10.0,
                 Intent.EVADE: 1.5,
@@ -185,5 +186,38 @@ class Personality:
             "throttle_kp": 2.0,
             "throttle_ki": 0.1,
             "throttle_kd": 0.0,
+        },
+    }
+
+    TURRET_DEFAULT = {
+        "tactician": {
+            "min_engagement_score": 0.5,
+            "primary_target_engagement_multiplier": 5.0,
+            "hunter_cutoff_distance": 900.0,
+            "hunter_angular_focus": 0.3,
+            "intent_update_delay": 0.5,
+            "commitment_times": {
+                Intent.ENGAGE: 10.0,
+                Intent.IDLE: 0.1,
+            },
+        },
+        "navigator": {
+            "fire": {
+                "maximum_distance_m": 1000,
+                "maximum_angle_rad": np.deg2rad(5),
+                "minimum_cos_angle": np.cos(np.deg2rad(5)),
+            },
+            "attack": {
+                "lead_time_s": 0.1,
+            },
+        },
+        "pilot": {
+            "sample_time_s": 0.1,
+            "yaw_kp": 3.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -3.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
         },
     }

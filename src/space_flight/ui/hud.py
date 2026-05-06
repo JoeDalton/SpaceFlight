@@ -12,7 +12,7 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -86,21 +86,33 @@ class HUD:
                 "Lead Bot angle to target = "
                 f"{self.game.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
                 "Lead Bot health = "
-                f"{self.game.lead_bot.ship.health:.1f}\n"
+                f"{self.game.lead_bot.pawn.health:.1f}\n"
                 "Lead Bot shield = "
-                f"{self.game.lead_bot.ship.shield:.1f}\n"
+                f"{self.game.lead_bot.pawn.shield:.1f}\n"
                 "Lead Bot throttle = "
                 f"{self.game.lead_bot.pilot.throttle:.4f}\n"
                 "Lead Bot Speed = "
-                f"{np.linalg.norm(self.game.lead_bot.ship.state[7:10]):.1f}m/s\n"
+                f"{np.linalg.norm(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
                 "\n"
                 "Lead Bot has target lock = "
-                f"{self.game.lead_bot.ship.auto_aim.is_target_acquired}\n"
+                f"{self.game.lead_bot.pawn.auto_aim.is_target_acquired}\n"
                 "\n"
             )
         except AttributeError:
             bot_text = ""
-        hud_text = player_text + bot_text
+        try:
+            turret_text = (
+                "Turret position = "
+                f"{np.array(self.game.turret.pawn.node.getPos())}\n"
+                "Turret angle to target = "
+                f"{self.game.turret.pilot.angle_to_target_deg:.1f}°\n"
+                "Turret health = "
+                f"{self.game.turret.pawn.health:.1f}\n"
+                "\n"
+            )
+        except AttributeError:
+            turret_text = ""
+        hud_text = player_text + bot_text + turret_text
 
         self.hud.setText(hud_text)
 
@@ -214,7 +226,7 @@ class TargetHUD:
             self.aspect.setScale(1, 1, aspect)
 
             # World position of target
-            target_pos = self.target.state[:3]
+            target_pos = self.target.position
             world_pos = Point3(*target_pos)
 
             # Convert to camera space
@@ -229,7 +241,7 @@ class TargetHUD:
                 # Target is behind, so the projection could fall inside the screen,
                 # but we want the indicator to stay clamped to the edges of the screen
                 norm = np.sqrt(indic_x**2 + indic_z**2)
-                if norm > 1e-5:
+                if norm > EPSILON_TOLERANCE:
                     two_norm_inv = 2 / norm
                     indic_x *= two_norm_inv
                     indic_z *= two_norm_inv

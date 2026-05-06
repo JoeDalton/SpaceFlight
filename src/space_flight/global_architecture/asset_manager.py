@@ -15,6 +15,7 @@ COMMON_ASSETS_TO_LOAD = [
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
     ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.mp3", ""),
     ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.mp3", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/AA_TURRET.WAV", ""),
     # Ship engine sounds
     ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_fighter/tie_scream_med.wav", ""),
     # Dust textures

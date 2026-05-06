@@ -3,10 +3,11 @@ import logging
 import sys
 
 from space_flight import DEBUG_DELETION
+from space_flight.actors.destructibles import Destructibles
 from space_flight.ai.interactions import Interactions
-from space_flight.collisions import CollisionSystem
-from space_flight.destructibles import Destructibles
 from space_flight.fx.explosion_fx import ExplosionPool
+from space_flight.game.collisions import CollisionSystem
+from space_flight.game.integrator import Integrator
 from space_flight.game.levels.demo_level import build_demo_level
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
@@ -14,7 +15,6 @@ from space_flight.game.time_keeping import (
     IntervalManager,
 )
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.integrator import Integrator
 from space_flight.ui.hud import HUD, TargetHUD
 
 LOGGER = logging.getLogger()
