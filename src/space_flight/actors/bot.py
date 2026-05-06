@@ -199,20 +199,18 @@ def spawn_bot(
     name: str,
     bot_type: str,
     pawn_model: str,
-    ini_position: np.ndarray = np.zeros(3),
-    ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
     team: int = 0,
     debug_decisions: bool = False,
+    **kwargs,
 ) -> Bot:
     bot = Bot(
         game=game,
         name=name,
         bot_type=bot_type,
         pawn_model=pawn_model,
-        ini_position=ini_position,
-        ini_orientation=ini_orientation,
         team=team,
         debug_decisions=debug_decisions,
+        **kwargs,
     )
 
     return bot

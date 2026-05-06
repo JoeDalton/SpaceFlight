@@ -49,7 +49,6 @@ def build_demo_level(game):
     wp_distance = 5000
     waypoints = [
         np.array([0, 0, 500]),
-        # np.array([0, wp_distance, 500]),
     ]
     # Make a circle
     n_waypoint = 15
@@ -73,10 +72,28 @@ def build_demo_level(game):
 
     game.turret = spawn_bot(
         game=game,
+        name="turret_1",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([0, 0, 10]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
         name="turret_2",
         bot_type="turret",
         pawn_model="test",
-        ini_position=np.array([0, 0, 10]),
+        base_position=np.array([100, 140, 10]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_3",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([-100, 140, 10]),
         team=2,
         debug_decisions=False,
     )
