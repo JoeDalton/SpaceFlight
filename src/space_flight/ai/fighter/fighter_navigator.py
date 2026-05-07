@@ -64,9 +64,6 @@ class FighterNavigator(GenericNavigator):
             avoidance_weight *= self.personality["navigator"]["formation"][
                 "collision_avoidance_contribution_factor"
             ]
-            print()
-            print(f"{self.pawn.parent.name=}")
-            print(f"{avoidance_weight=}")
 
         direction = (intent_direction + avoidance_weight * avoidance_direction) / (
             1 + avoidance_weight

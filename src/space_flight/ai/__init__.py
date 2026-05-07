@@ -33,15 +33,15 @@ class Formation:
 
     RELATIVE_POSITIONS = [
         np.array([0, 0, 0]),
-        np.array([30, -50, 0]),
-        np.array([-30, -50, 0]),
-        np.array([60, -100, 0]),
-        np.array([0, -150, 0]),
-        np.array([-60, -100, 0]),
+        np.array([30, -60, 0]),
+        np.array([-30, -60, 0]),
+        np.array([60, -120, 0]),
+        np.array([0, -180, 10]),
+        np.array([-60, -120, 0]),
         np.array([0, -50, 30]),
         np.array([0, -50, -30]),
-        np.array([0, -100, 60]),
-        np.array([0, -100, -60]),
+        np.array([0, -120, 60]),
+        np.array([0, -120, -60]),
     ]
 
     def __init__(self):
@@ -134,7 +134,7 @@ class Personality:
             "formation": {
                 "ideal_distance_m": 300.0,
                 "speed_distance_slope": 0.01,
-                "collision_avoidance_contribution_factor": 0.1,
+                "collision_avoidance_contribution_factor": 0.015,
             },
             "fire": {
                 "minimimum_window_duration_s": 0.5,

@@ -78,10 +78,6 @@ class Player:
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.ship)
 
-        # DEBUG
-        # from space_flight.ai.collision_sensor import CollisionSensor
-        # self.collision_sensor = CollisionSensor(game=game, ship=self.ship)
-
     def move_player(self):
         """
         Moves the camera and the skybox along with the player's

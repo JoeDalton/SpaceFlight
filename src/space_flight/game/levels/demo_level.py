@@ -28,7 +28,7 @@ def build_demo_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([100, -600, 505]),
+        ini_position=np.array([100, -800, 505]),
         is_neutral=True,
         has_ai=False,
     )
@@ -79,32 +79,97 @@ def build_demo_level(game):
         team=2,
         debug_decisions=False,
     )
-    # spawn_bot(
-    #     game=game,
-    #     name="turret_2",
-    #     bot_type="turret",
-    #     pawn_model="test",
-    #     base_position=np.array([100, 140, 10]),
-    #     team=2,
-    #     debug_decisions=False,
-    # )
-    # spawn_bot(
-    #     game=game,
-    #     name="turret_3",
-    #     bot_type="turret",
-    #     pawn_model="test",
-    #     base_position=np.array([-100, 140, 10]),
-    #     team=2,
-    #     debug_decisions=False,
-    # )
+    spawn_bot(
+        game=game,
+        name="turret_2",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([100, 140, 500]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_3",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([-100, 140, 500]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_2",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([100, 1000, 500]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_3",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([-100, 1000, 500]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_2",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([0, 1000, 400]),
+        team=2,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_3",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([0, 100, 600]),
+        team=2,
+        debug_decisions=False,
+    )
 
-    for i in range(7):
+    n_follower = 7
+    for i in range(n_follower):
         bot = spawn_bot(
             game=game,
             name="team_2, ",
             bot_type="fighter",
             pawn_model="y-wing",
-            ini_position=np.array([0, -500 - (i + 1) * 200, 500]),
+            ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
             team=2,
         )
         team_2_formation.add_ship(ship=bot.pawn)
+
+    spawn_bot(
+        game=game,
+        name="turret_1",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([0, -5000, 500]),
+        team=1,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_1",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([-100, -5140, 500]),
+        team=1,
+        debug_decisions=False,
+    )
+    spawn_bot(
+        game=game,
+        name="turret_1",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([100, 48600, 500]),
+        team=1,
+        debug_decisions=False,
+    )
