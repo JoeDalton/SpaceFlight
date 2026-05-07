@@ -49,14 +49,21 @@ class FighterNavigator(GenericNavigator):
         :param target_dict: A dictionary containing target info
         :return: The direction to point to and the desired speed
         """
+        # Compute intentional component
         intent_direction, intent_speed = self.navigate_intent(
             intent=intent, target_dict=target_dict
         )
+        # Compute collision avoidance component
         (
             avoidance_direction,
             avoidance_speed,
             avoidance_weight,
         ) = self.navigate_avoidance()
+        # Dwarf collision avoidance component when flying in formation
+        if intent == Intent.FORMATION:
+            avoidance_weight *= self.personality["navigator"]["formation"][
+                "collision_avoidance_contribution_factor"
+            ]
 
         direction = (intent_direction + avoidance_weight * avoidance_direction) / (
             1 + avoidance_weight
@@ -81,7 +88,6 @@ class FighterNavigator(GenericNavigator):
             return np.zeros(3), 0.0, 0.0
         avoidance_speed = COLLISION_REFERENCE_SPEED_MPS / avoidance_weight
 
-        avoidance_weight = 0.0  # DEBUG
         return avoidance_direction, avoidance_speed, avoidance_weight
 
     def navigate_intent(

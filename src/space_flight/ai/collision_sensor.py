@@ -20,11 +20,11 @@ class CollisionSensor:
         game,
         ship,
         collision_reference_distance_m=200.0,
-        ship_distance_1_m=15,
-        radius_1_m=20,
+        ship_distance_1_m=5,
+        radius_1_m=30,
         ship_distance_2_m=50,
         radius_2_m=50,
-        ship_distance_3_m=100,
+        ship_distance_3_m=125,
         radius_3_m=100,
     ):
         self.obstacles = []
@@ -77,26 +77,25 @@ class CollisionSensor:
             hit_point = obstacle["hit_point"]
 
             obstacle_direction = hit_point - self_position
-            distance = np.linalg.norm(obstacle_direction)
+            distance_m = np.linalg.norm(obstacle_direction)
 
-            if distance > 1e-4:
+            if distance_m > 1e-4:
                 # Fallback if normal is degenerate
                 if np.linalg.norm(normal) < 1e-4:
-                    normal = obstacle_direction / distance
+                    normal = obstacle_direction / distance_m
                 # Compute obstacle weight
-                weight = 1 / distance
+                weight = self.collision_reference_distance_m / distance_m
                 repulsion_vector += weight * normal
                 total_weight += weight
 
-        total_weight /= self.collision_reference_distance_m
+        if len(self.obstacles) > 0:
+            total_weight /= len(self.obstacles)
+
         self.obstacles = []
 
         if total_weight < 1e-4:
             return np.zeros(3), 0.0
 
-        # print()
-        # print(repulsion_vector / total_weight)
-        # print(total_weight)
         return repulsion_vector / total_weight, total_weight
 
     def clean(self):

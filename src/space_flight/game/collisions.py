@@ -505,15 +505,26 @@ class CollisionSystem:
 
         :param entry: Panda3d's description of the collision
         """
-        # Identify sensor
+        # Identify sensor and obstacle
         sensor = entry.from_node_path.python_tags["owner"]
+        obstacle = entry.into_node_path.python_tags["owner"]
         if sensor is None:
             if DEBUG_COLLISION:
                 LOGGER.info("Sensor is being removed while it hits")
             return
 
+        if obstacle is None:
+            if DEBUG_COLLISION:
+                LOGGER.info("Obstacle is being removed while it is hit by a sensor")
+            return
+        try:
+            if sensor.ship.id == obstacle.id:
+                return  # It's the sensor's parent => Ignore collision
+        except AttributeError:
+            pass  # When the obstacle does not have an id, it's not the sensor parent
+
         if DEBUG_COLLISION:
-            LOGGER.info("sensor into obstacle")
+            LOGGER.info(f"sensor into obstacle: {obstacle} with id: {obstacle.id}")
 
         # Register collision in sensor
         normal = entry.getSurfaceNormal(self.game.root_node)
