@@ -5,9 +5,13 @@ import sys
 import numpy as np
 
 from space_flight import DEBUG_DELETION
+from space_flight.actors.capital_ship import CapitalShip
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.turret import Turret
+from space_flight.ai.capital_ship.capital_ship_navigator import CapitalShipNavigator
+from space_flight.ai.capital_ship.capital_ship_pilot import CapitalShipPilot
+from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTactician
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
@@ -76,6 +80,27 @@ class Bot(Destructible):
             self.tactician = TurretTactician(
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
+        elif self.bot_type == "capital_ship":
+            self.pawn = CapitalShip(
+                game=self.game,
+                parent=self,
+                ship_type=pawn_model,
+                ini_position=kwargs.get("ini_position", np.zeros(3)),
+                ini_orientation=kwargs.get(
+                    "ini_orientation", np.array([1.0, 0.0, 0.0, 0.0])
+                ),
+                ini_speed=kwargs.get("ini_speed", np.zeros(3)),
+                is_cockpit=False,
+                team=team,
+            )
+
+            self.pilot = CapitalShipPilot(game=self.game, pawn=self.pawn)
+            self.navigator = CapitalShipNavigator(
+                game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
+            self.tactician = CapitalShipTactician(
+                game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
         else:
             raise NotImplementedError(f"Unknown bot type {self.bot_type}")
         # TODO remove
@@ -97,7 +122,7 @@ class Bot(Destructible):
         - The pilot steers the ship and adjusts the throttle to follow its aim
         - The ship moves according to the games physics
         """
-        if self.bot_type == "fighter":
+        if self.bot_type == "fighter" or self.bot_type == "capital_ship":
             intent, target_dict = self.tactician.think()
 
             target_direction, desired_speed_mps = self.navigator.navigate(
@@ -149,7 +174,8 @@ class Bot(Destructible):
         Plays the death animation of the ship
 
         Procedural explosion at the ship's last location
-        Associated sound #TODO
+        Pawn-type dependent ! TODO
+        Associated sound TODO
         Model spinning before explosing ? TODO
         """
         self.game.explosion_fx_pool.spawn(

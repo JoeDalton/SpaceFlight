@@ -94,6 +94,7 @@ class Ship(Pawn):
         self.max_health = self.conf["health"]
         self.health = self.max_health
         # Shield setup is ship-type dependent
+        self.parent.add_task(method=self.ship_handle_health)
 
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
@@ -127,8 +128,6 @@ class Ship(Pawn):
         )
 
         # Collision setup is ship-type dependent
-
-        # Health and shield tasks are sip-type dependent
 
         # Death animation is ship-type dependent
 

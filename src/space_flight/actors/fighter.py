@@ -12,25 +12,12 @@ from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
 
 LOGGER = logging.getLogger()
-RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
-WEAPON_DAMAGE_TO_FORCE_FACTOR = 2.0
-DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
-ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
 
 
 class Fighter(Ship):
     """
-    A Ship has 10 state variables
-    - position (3)
-    - orientation (4)
-    - linear speed (3)
-
-    The linear speed is integrated from the ship's acceleration.
-    However, the rotation rate is given directly (from user input
-    or PNJ behaviour)
-
-    "Forward" is on an object's Y axis in panda3d, so thrust is in +Y
-    X axis is to the right, Z axis is up
+    A class for fighter planes and light bombers
+    (quick, manoeuverable, have forward cannons, chase targets...)
     """
 
     def __init__(

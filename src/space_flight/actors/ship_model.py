@@ -138,8 +138,19 @@ class ShipModel:
                     np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
                 )
                 self.model.setScale(1000.0)
+        elif self.ship_type == "gr-75":
+            if is_cockpit:
+                raise NotImplementedError(ship_type + f" {is_cockpit=}")
+            else:
+                self.game.app.asset_manager.instantiate_3d_model_to_node(
+                    path=DATAFILES_PATH / "models/ships/gr-75/scene.gltf",
+                    parent_node=self.model,
+                )
+                self.offset = np.array([0.0, 0.0, 0.0])
+                self.orientation = np.quaternion(0.0, 0.0, 0.0, 1.0)
+                self.model.setScale(1.0)
         else:
-            raise NotImplementedError(ship_type)
+            raise NotImplementedError(f"{ship_type=}")
 
         self.anchor_model(parent_node)
 
