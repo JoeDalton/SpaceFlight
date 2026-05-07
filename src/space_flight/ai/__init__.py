@@ -134,6 +134,7 @@ class Personality:
             "formation": {
                 "ideal_distance_m": 300.0,
                 "speed_distance_slope": 0.01,
+                "collision_avoidance_contribution_factor": 0.1,
             },
             "fire": {
                 "minimimum_window_duration_s": 0.5,

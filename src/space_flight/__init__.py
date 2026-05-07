@@ -13,7 +13,7 @@ CONFIGURATION_PATH = Path(__file__).parent / "configuration"
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "tests/fixtures"
 
 DEBUG_DELETION = False
-DEBUG_COLLISION = False
+DEBUG_COLLISION = True
 FLIGHT_MODEL = "airplane"  # "airplane", "space"
 
 FORWARD_BODY = np.array([0.0, 1.0, 0.0])
