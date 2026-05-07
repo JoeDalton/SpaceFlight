@@ -169,7 +169,7 @@ def build_demo_level(game):
         name="turret_1",
         bot_type="turret",
         pawn_model="test",
-        base_position=np.array([100, 4860, 500]),
+        base_position=np.array([100, -4860, 500]),
         team=1,
         debug_decisions=False,
     )

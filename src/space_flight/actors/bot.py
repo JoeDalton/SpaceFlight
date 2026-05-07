@@ -6,7 +6,7 @@ import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.actors.destructibles import Destructible
-from space_flight.actors.ship import Ship
+from space_flight.actors.fighter import Fighter
 from space_flight.actors.turret import Turret
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
@@ -34,7 +34,7 @@ class Bot(Destructible):
         self.name = name
         self.bot_type = bot_type
         if self.bot_type == "fighter":
-            self.pawn = Ship(
+            self.pawn = Fighter(
                 game=self.game,
                 parent=self,
                 ship_type=pawn_model,

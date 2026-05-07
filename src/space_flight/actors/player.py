@@ -3,7 +3,7 @@ from typing import Callable
 
 import numpy as np
 
-from space_flight.actors.ship import Ship
+from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
@@ -42,7 +42,7 @@ class Player:
         self.game.method_lists[self.id] = []
         self.add_task(method=self.move_player)
 
-        self.ship = Ship(
+        self.ship = Fighter(
             game=self.game,
             parent=self,
             ship_type=ship_type,
