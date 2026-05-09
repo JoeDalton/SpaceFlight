@@ -46,12 +46,12 @@ def build_demo_level(game):
 
     team_2_formation = Formation()
 
-    wp_distance = 1000
+    wp_distance = 5000
     waypoints = [
         np.array([0, 100, 500]),
     ]
     # Make a circle
-    n_waypoint = 15
+    n_waypoint = 5
     for angle_reduced in range(n_waypoint):
         angle = angle_reduced * 2 * np.pi / n_waypoint
         waypoints.append(
@@ -62,7 +62,7 @@ def build_demo_level(game):
         game=game,
         name="lead_2",
         bot_type="capital_ship",
-        pawn_model="gr-75",
+        pawn_model="cr-90",
         ini_position=np.array([0, 0, 500]),
         team=2,
         debug_decisions=False,
@@ -87,7 +87,7 @@ def build_demo_level(game):
         name="turret_1",
         bot_type="turret",
         pawn_model="test",
-        base_position=np.array([0, -5000, 500]),
-        team=2,
+        base_position=np.array([0, -5000, 400]),
+        team=1,
         debug_decisions=False,
     )

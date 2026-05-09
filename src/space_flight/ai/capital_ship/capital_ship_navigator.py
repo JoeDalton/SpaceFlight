@@ -14,7 +14,7 @@ LOGGER = logging.getLogger()
 
 
 NO_DIRECTION = np.zeros(3), 100.0
-WAYPOINT_MEETING_TOLERANCE_M = 50
+WAYPOINT_MEETING_TOLERANCE_M = 200
 COLLISION_REFERENCE_SPEED_MPS = 30
 
 
@@ -41,7 +41,6 @@ class CapitalShipNavigator(GenericNavigator):
         self.next_waypoint_idx = 0
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
-        self.time_in_spiral_s = 0.0
         self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
 
     def navigate(self, intent: int, target_dict: dict) -> tuple[np.ndarray, float]:
@@ -210,16 +209,18 @@ class CapitalShipNavigator(GenericNavigator):
         # Find next waypoint
         next_waypoint = self.waypoints[self.next_waypoint_idx]
         waypoint_direction = next_waypoint - self.pawn.position
-        distance_to_waypoint_m = np.linalg.norm(waypoint_direction)
+        self.distance_to_waypoint_m = np.linalg.norm(
+            waypoint_direction
+        )  # debug attribute
 
         # Handle the case where the next waypoint has been met already
-        if distance_to_waypoint_m < WAYPOINT_MEETING_TOLERANCE_M:
+        if self.distance_to_waypoint_m < WAYPOINT_MEETING_TOLERANCE_M:
             # Do nothing this turn and target the next waypoint next time
             self.next_waypoint_idx += 1
             return NO_DIRECTION
 
         # Go to the next waypoint
-        direction = waypoint_direction / distance_to_waypoint_m
+        direction = waypoint_direction / self.distance_to_waypoint_m
         return direction, self.personality["navigator"]["patrol"]["speed_mps"]
 
     # %% ==== formation ====
