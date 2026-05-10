@@ -1,6 +1,4 @@
-import gc
 import logging
-import sys
 from typing import Any
 
 import numpy as np
@@ -16,11 +14,8 @@ from space_flight import (
     RIGHT_BODY,
     UP_BODY,
 )
-from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
-from space_flight.ai.auto_aim import AutoAim
-from space_flight.game.collisions import attach_collision_sphere
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()
@@ -73,6 +68,8 @@ class Ship(Pawn):
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
         self.additional_force_n = np.zeros(3)  # e.g. for gravity if applicable
         self.impact_force_n = np.zeros(3)  # e.g. for collisions and laser hits
+        self.formation = None
+
         self.drag_factor = (
             0.5
             * RHO
@@ -93,12 +90,11 @@ class Ship(Pawn):
         )
         self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
 
-        # Setup health and shield
+        # Setup health
         self.max_health = self.conf["health"]
-        self.max_shield = self.conf["shield"]
         self.health = self.max_health
-        self.shield = self.max_shield
-        self.shield_regen_rate = self.conf["shield_regen_rate"]
+        # Shield setup is ship-type dependent
+        self.parent.add_task(method=self.ship_handle_health)
 
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
@@ -118,7 +114,7 @@ class Ship(Pawn):
         self.pqr = np.zeros(3)
         self.scalar_thrust_n = 0
 
-        # Prepare corrections due to collisions
+        # Prepare state corrections due to collisions
         self.velocity_correction = np.zeros(3)
         self.position_correction = np.zeros(3)
 
@@ -131,27 +127,9 @@ class Ship(Pawn):
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-        # Initialize cannons
-        # TODO auto-aim parameters from difficulty config file
-        self.target_id = None
-        self.auto_aim = AutoAim(game=self.game, parent=self)
-        self.laser_cannon = LaserCannon(game=self.game, parent=self)
+        # Collision setup is ship-type dependent
 
-        # Initialize collisions
-        self.hit_radius_m = self.conf["hit_box_radius_m"]
-        self.collision_sphere_np = attach_collision_sphere(
-            game=self.game,
-            name="ship",
-            radius=self.hit_radius_m,
-            collider_type="destructible",
-            parent_node=self.node,
-            parent_object=self,
-        )
-
-        # Handle ship health and shield
-        self.parent.add_task(method=self.ship_handle_health)
-        # Set explosion size for death animation
-        self.explosion_scale = self.conf["explosion_scale"]
+        # Death animation is ship-type dependent
 
         # Create render
         self.model = ShipModel(
@@ -161,28 +139,7 @@ class Ship(Pawn):
             is_cockpit=is_cockpit,
         )
 
-        # Initialize engine sound for bot ships
-        # TODO better
-        if self.parent.name != "player":
-            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
-            self.sound_pool = self.game.app.asset_manager.get_asset(
-                asset_type="3d_sound",
-                path=sound_file,
-            )
-            self.sound = self.sound_pool.get_sound()
-            self.sound.setLoop(True)
-            self.sound.setVolume(10.0)
-            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
-
-            # Automatic velocity tracking
-            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
-
-            # TODO Doppler does not seem to work great
-            self.game.delayed_methods.do_method_later(
-                delay_s=0.5,
-                name="Play_engine_sound",
-                method=self.sound.play,
-            )
+        # VFX are ship-type dependent
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -387,9 +344,6 @@ class Ship(Pawn):
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
 
-        # Compute target acquisition
-        self.auto_aim.compute_acquisition()
-
     def take_hit(self, damage: float, normal_world_vector: np.ndarray):
         """
         Take damage from hits and jolt from the impact
@@ -429,8 +383,6 @@ class Ship(Pawn):
         The corrections are stored and taken into account at the next "move_ship" call,
         then reset to zero.
 
-        # TODO: sadly the head does not move with this method. Do something about it
-
         :param damage: The damage to take
         :param velocity_correction: The velocity correction to apply
         :param position_correction: The position correction to apply
@@ -442,19 +394,11 @@ class Ship(Pawn):
     def apply_damage(self, damage: float, damage_type: str):
         """
         Apply damage to the ship
+        Ship-type dependent
 
         :param damage_type: the type of damage to apply (physical, energy)
         """
-        # Apply damage to health and shield
-        if damage_type == "physical":
-            if self.shield - damage >= 0.0:
-                self.shield -= damage
-            else:
-                health_damage = damage - self.shield
-                self.health -= health_damage
-                self.shield = 0.0
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
 
     def remove_hit_force(self, hit_force_world_n: np.ndarray):
         """
@@ -468,12 +412,9 @@ class Ship(Pawn):
     def ship_handle_health(self):
         """
         Monitors the ships health and shield
+        Ship-type dependent
         """
-        dt = self.game.game_time.get_time_step()
-        self.shield = min(
-            max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
-        )
-        self.health = min(self.health, self.max_health)
+        raise NotImplementedError
 
     def clean(self):
         """
@@ -487,29 +428,8 @@ class Ship(Pawn):
                 self.formation = None
             self.model.clean()
             self.model = None
-            self.auto_aim.clean()
-            self.auto_aim = None
-            self.laser_cannon.clean()
-            self.laser_cannon = None
-            self.collision_sphere_np.setPythonTag("owner", None)
-            self.collision_sphere_np.remove_node()
-            self.collision_sphere_np = None
-            if self.parent.name != "player":
-                # TODO: remove condition when the player's ship gets sound
-                self.sound.stop()
-                self.game.app.sfx.audio3d.detachSound(self.sound)
-            self.sound = None
-            self.node.remove_node()
-            self.node = None
             self.is_dead = True
             self.parent = None
-
-            if DEBUG_DELETION:
-                LOGGER.info("Cleaned ship")
-                LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
-                LOGGER.info(f"ship references {gc.get_referrers(self)}")
-                LOGGER.info(self.game.app.taskMgr.getAllTasks)
-
             self.game = None
             self.is_clean = True
 

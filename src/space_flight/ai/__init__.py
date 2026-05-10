@@ -126,7 +126,10 @@ class Personality:
             },
         },
         "navigator": {
-            "patrol": {"speed_mps": 100.0},
+            "patrol": {
+                "speed_mps": 100.0,
+                "waypoint_meeting_tolerance_m": 50.0,
+            },
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 100.0},
             "turning": {"speed_mps": 50.0},
@@ -221,5 +224,56 @@ class Personality:
             "pitch_kp": -3.0,
             "pitch_ki": 0.0,
             "pitch_kd": 0.0,
+        },
+    }
+
+    CAPITAL_SHIP_DEFAULT = {
+        "tactician": {
+            "min_fighting_shape": 2,
+            "intent_update_delay": 5,
+            "commitment_times": {
+                Intent.ENGAGE: 10.0,
+                Intent.DISENGAGE: 5.0,
+                Intent.REGROUP: 3.0,
+                Intent.PATROL: 3.0,
+                Intent.FORMATION: 3.0,
+                Intent.IDLE: 0.1,
+            },
+        },
+        "navigator": {
+            "patrol": {
+                "speed_mps": 80.0,
+                "waypoint_meeting_tolerance_m": 200.0,
+            },
+            "idle": {"speed_mps": 0.0},
+            "regroup": {"speed_mps": 80.0},
+            "turning": {"speed_mps": 30.0},
+            "speeding": {"speed_mps": 2000.0},
+            "formation": {
+                "ideal_distance_m": 300.0,
+                "speed_distance_slope": 0.01,
+                "collision_avoidance_contribution_factor": 0.015,
+            },
+            "attack": {
+                "relative_direction": np.array([0, 1, 0]),
+                "distance_m": 500,
+                "speed_mps": 50,
+            },
+        },
+        "pilot": {
+            "sample_time_s": 0.2,
+            "minimum_throttle": 0.01,
+            "yaw_kp": 1.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -1.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
+            "roll_kp": -1.0,
+            "roll_ki": 0.0,
+            "roll_kd": 0.0,
+            "throttle_kp": 2.0,
+            "throttle_ki": 0.1,
+            "throttle_kd": 0.0,
         },
     }

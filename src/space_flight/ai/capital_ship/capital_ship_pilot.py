@@ -1,28 +1,26 @@
 import numpy as np
 
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import HALF_PI, ROLL_TOLERANCE, Personality
+from space_flight.ai import HALF_PI, Personality
 from space_flight.ai.generic.generic_ship_pilot import GenericShipPilot
 
-SCENE_ROLL_MULTIPLIER = 0.5
 
-
-class FighterPilot(GenericShipPilot):
+class CapitalShipPilot(GenericShipPilot):
     """
-    A class to hold the autopilot of fighters
+    A class to hold the autopilot of capital ships
     """
 
     def __init__(
-        self, game, pawn: Pawn, personality: dict = Personality.FIGHTER_DEFAULT
+        self, game, pawn: Pawn, personality: dict = Personality.CAPITAL_SHIP_DEFAULT
     ):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
     def compute_angular_error(
         self,
         target_direction: np.ndarray = np.zeros(3),
-    ) -> tuple[float]:
+    ):
         """
-        Computes the angular error of the ship. Adapted to fighter ships
+        Computes the angular error of the ship. Adapted to capital ships
 
         :param target_direction: Direction of the target
         :return: the yaw, pitch and roll error, and the alignment error
@@ -50,21 +48,16 @@ class FighterPilot(GenericShipPilot):
             # Find angle errors
             yaw_error = np.arctan2(target_x, target_y)
             pitch_error = np.arctan2(target_z, target_y)
-            roll_error = np.arctan2(target_x, target_z)
-            # Clip roll error to zero if pitch and roll errors are small enough
-            if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
-                roll_error = 0.0
-            # Take into account the scene's orientation
+            # Capital ships only roll for the scene orientation
             is_up = np.dot(self.pawn.up, self.game.scene.up_direction) >= 0
             if is_up:
-                scene_roll_error = HALF_PI - np.arccos(
+                roll_error = HALF_PI - np.arccos(
                     np.dot(self.pawn.right, self.game.scene.up_direction)
                 )
             else:
-                scene_roll_error = HALF_PI + np.arccos(
+                roll_error = HALF_PI + np.arccos(
                     np.dot(self.pawn.right, self.game.scene.up_direction)
                 )
-            roll_error += SCENE_ROLL_MULTIPLIER * scene_roll_error
             # Debug output
             cos_angle_to_target = np.dot(ship_y, target_direction)
 
