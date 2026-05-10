@@ -126,7 +126,10 @@ class Personality:
             },
         },
         "navigator": {
-            "patrol": {"speed_mps": 100.0},
+            "patrol": {
+                "speed_mps": 100.0,
+                "waypoint_meeting_tolerance_m": 50.0,
+            },
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 100.0},
             "turning": {"speed_mps": 50.0},
@@ -238,7 +241,10 @@ class Personality:
             },
         },
         "navigator": {
-            "patrol": {"speed_mps": 80.0},
+            "patrol": {
+                "speed_mps": 80.0,
+                "waypoint_meeting_tolerance_m": 200.0,
+            },
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 80.0},
             "turning": {"speed_mps": 30.0},
