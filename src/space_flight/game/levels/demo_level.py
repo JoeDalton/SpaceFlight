@@ -70,17 +70,17 @@ def build_demo_level(game):
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
     team_2_formation.add_ship(ship=game.lead_bot.pawn)
 
-    # n_follower = 7
-    # for i in range(n_follower):
-    #     bot = spawn_bot(
-    #         game=game,
-    #         name="team_2, ",
-    #         bot_type="fighter",
-    #         pawn_model="y-wing",
-    #         ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
-    #         team=2,
-    #     )
-    #     team_2_formation.add_ship(ship=bot.pawn)
+    n_follower = 3
+    for i in range(n_follower):
+        bot = spawn_bot(
+            game=game,
+            name="team_2, ",
+            bot_type="fighter",
+            pawn_model="y-wing",
+            ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
+            team=2,
+        )
+        team_2_formation.add_ship(ship=bot.pawn)
 
     spawn_bot(
         game=game,
