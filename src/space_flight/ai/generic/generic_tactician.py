@@ -26,9 +26,9 @@ class GenericTactician:
         self.pawn = pawn
         self.intent = Intent.IDLE  # Current state
         self.target_dict = {}  # Current target
-        self.primary_target = None  # Assigned by squad tactics or level scenario
-        self.time_since_update = 0.0
-        self.time_since_commitment = 1000.0  # Big time to choose new intent right away
+        self.primary_target_ids = []  # Assigned by squad tactics or level scenario
+        self.time_since_update_s = 0.0
+        self.time_since_commitment_s = 1000.0  # A new intent is chosen right away
         # Bot personality/role:
         # - commitment times (hysteresis)
         # - transition thresholds (aggresivity/recklessness)
@@ -41,17 +41,17 @@ class GenericTactician:
         Evaluates the intent of the bot at the correct frequency
         """
         dt = self.game.game_time.get_time_step()
-        self.time_since_update += dt
-        self.time_since_commitment += dt
+        self.time_since_update_s += dt
+        self.time_since_commitment_s += dt
         # TODO make this probabilistic to avoid everyone update at the same time ?
         if (
-            self.time_since_update
+            self.time_since_update_s
             >= self.personality["tactician"]["intent_update_delay"]
         ) and (
-            self.time_since_commitment
+            self.time_since_commitment_s
             >= self.personality["tactician"]["commitment_times"][self.intent]
         ):
-            self.time_since_update = 0.0
+            self.time_since_update_s = 0.0
             intent, target_dict = self.update_intent()
             if (
                 (intent != self.intent)
@@ -66,7 +66,7 @@ class GenericTactician:
                         f"Tactician {self.pawn.parent.name} switched to intent "
                         f"{intent}, target {target_dict}"
                     )
-                self.time_since_commitment = 0.0
+                self.time_since_commitment_s = 0.0
                 self.intent = intent
                 self.target_dict = target_dict
 
@@ -135,10 +135,7 @@ class GenericTactician:
         - Not too far
         - Mostly forward
         - Low on health ? -- TODO
-        - A primary target -- TODO
-        - Threatening a protected ally -- TODO
-
-        TODO: Add a multiplier bonus for targets threatening an ally and primary target
+        - Threatening a protected ally -- TODO using primary targets
         """
         interact_mask = self.game.interactions.interact[my_actor_index, :]
         distances = self.game.interactions.distances[my_actor_index, :]
@@ -159,11 +156,14 @@ class GenericTactician:
         # Health status contribution TODO
         health_scores = 1.0
 
-        # Ally threatening contribution TODO
-        ally_threatening_scores = 1.0
-
-        # Primary target contribution TODO
-        primary_target_scores = 1.0
+        # Primary target contribution: modifies the interact mask
+        primary_target_scores = np.ones(len(distances))
+        for actor_idx, actor in enumerate(self.game.interactions.actors):
+            if interact_mask[actor_idx]:
+                if actor.id in self.primary_target_ids:
+                    primary_target_scores[actor_idx] = self.personality["tactician"][
+                        "primary_target_engagement_multiplier"
+                    ]
 
         # Assemble all contributions
         prey_scores = (
@@ -171,7 +171,6 @@ class GenericTactician:
             * distance_scores
             * forward_scores
             * health_scores
-            * ally_threatening_scores
             * primary_target_scores
         )
 

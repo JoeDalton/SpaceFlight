@@ -11,7 +11,7 @@ lift_coefficient_slope_pdeg: 0.1
 lateral_lift_coefficient_slope_pdeg: 0.05
 reference_surface_m2: 100
 
-health: 100.0
+health: 10000.0
 hit_box_radius_m: 30.0
 
 explosion_scale: 50.0
