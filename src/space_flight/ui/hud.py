@@ -28,32 +28,89 @@ class HUD:
         self.game = game
         self.id = uuid.uuid4()
 
-        self.hud = TextNode("HUD")
-        self.hud.setSmallCaps(True)
-        self.hud.setShadow(0.05, 0.05)
-        self.hud.setShadowColor(0, 0, 0, 1)
-        self.hud_textNodePath = aspect2d.attachNewNode(self.hud)
-        self.hud_textNodePath.setScale(0.07)
+        # Debug info
+        self.debug = TextNode("Debug")
+        self.debug.setSmallCaps(True)
+        self.debug.setShadow(0.05, 0.05)
+        self.debug.setShadowColor(0, 0, 0, 1)
+        self.debug_textNodePath = aspect2d.attachNewNode(self.debug)
+        self.debug_textNodePath.setScale(0.07)
+        self.debug_textNodePath.reparentTo(self.game.app.a2dTopLeft)
+        self.debug_textNodePath.setPos(0.05, 0, -0.1)
 
-        self.hud_textNodePath.reparentTo(self.game.app.a2dTopLeft)
-        self.hud_textNodePath.setPos(0.05, 0, -0.1)
-
-        self.fps_counter = TextNode("HUD")
+        # Performance info
+        self.fps_counter = TextNode("FPS")
         self.fps_counter.setSmallCaps(True)
         self.fps_counter.setShadow(0.05, 0.05)
         self.fps_counter.setShadowColor(0, 0, 0, 1)
         self.fps_textNodePath = aspect2d.attachNewNode(self.fps_counter)
         self.fps_textNodePath.setScale(0.07)
-
         self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
         self.fps_textNodePath.setPos(-0.4, 0, -0.1)
+
+        # Event text
+        self.event_text_endtime = 0.0
+        self.events = TextNode("FPS")
+        self.events.setSmallCaps(True)
+        self.events.setShadow(0.05, 0.05)
+        self.events.setShadowColor(0, 0, 0, 1)
+        self.events_textNodePath = aspect2d.attachNewNode(self.events)
+        self.events_textNodePath.setScale(0.1)
+        self.events_textNodePath.setPos(0.0, 0.0, 0.2)
+
+        # Chatter text
+        self.chatter_text_endtime = 0.0
+        self.chatter = TextNode("FPS")
+        self.chatter.setSmallCaps(True)
+        self.chatter.setShadow(0.05, 0.05)
+        self.chatter.setShadowColor(0, 0, 0, 1)
+        self.chatter_textNodePath = aspect2d.attachNewNode(self.chatter)
+        self.chatter_textNodePath.setScale(0.05)
+        self.chatter_textNodePath.setPos(0.0, 0, -0.8)
 
         self.game.method_lists[self.id] = [self.hud_update_task]
 
     def hud_update_task(self):
         """
-        A task that gets the relevant informations from the sim
+        A method that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
+        """
+        self.update_debug_hud()
+        self.clear_scenario_hud()
+
+    def set_event_text(self, text: str, display_time_s: float = 2.5):
+        """
+        Sets an event text and its display time
+        """
+        self.events.set_text(text)
+        self.event_text_endtime = (
+            self.game.game_time.get_current_time() + display_time_s
+        )
+        self.events.setAlign(TextNode.ACenter)
+
+    def set_chatter_text(self, text: str, display_time_s: float = 2.5):
+        """
+        Sets a chatter text and its display time
+        """
+        self.chatter.set_text(text)
+        self.chatter_text_endtime = (
+            self.game.game_time.get_current_time() + display_time_s
+        )
+        self.chatter.setAlign(TextNode.ACenter)
+
+    def clear_scenario_hud(self):
+        """
+        A method to clear the scenario text on screen if the display time is spent
+        """
+        current_time = self.game.game_time.get_current_time()
+        if current_time > self.event_text_endtime:
+            self.events.set_text("")
+        if current_time > self.chatter_text_endtime:
+            self.chatter.set_text("")
+
+    def update_debug_hud(self):
+        """
+        A method to update debug info on screen
         """
         frame_rate = self.game.game_time.get_average_frame_rate()
         self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
@@ -118,7 +175,7 @@ class HUD:
             turret_text = ""
         hud_text = player_text + bot_text + turret_text
 
-        self.hud.setText(hud_text)
+        self.debug.setText(hud_text)
 
     def clean(self):
         """
@@ -129,10 +186,15 @@ class HUD:
                 self.game.method_lists.pop(self.id)
             except KeyError:
                 pass
-        self.hud_textNodePath.removeNode()
-        self.hud = None
+        self.debug_textNodePath.removeNode()
+        self.debug = None
         self.fps_textNodePath.removeNode()
         self.fps_counter = None
+        self.game = None
+        self.events_textNodePath.removeNode()
+        self.events = None
+        self.chatter_textNodePath.removeNode()
+        self.chatter = None
         self.game = None
 
 

@@ -38,13 +38,13 @@ def build_intro_level(game):
     `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     """
 
-    game.scene = scene_factory(game=game, scene_name="lava_planet")
+    game.scene = scene_factory(game=game, scene_name="asteroids")
 
     """
     Initialize allies
     """
     # Initialize convoy formation
-    game.team_1_formation = Formation(scale_m=100, shape="diamond")
+    game.team_1_formation = Formation(scale_m=300, shape="arrowhead")
 
     # Define transport waypoints
     transport_waypoints = [
@@ -61,9 +61,7 @@ def build_intro_level(game):
             name=f"transport_{i+1}",
             bot_type="capital_ship",
             pawn_model="gr-75",
-            ini_position=np.array(
-                [-(int(n_transports / 2)) * 100 + 100 * i, -2000 - i * 100, 0]
-            ),
+            ini_position=np.array([-(int(n_transports / 2)) * 100 + 100 * i, -2000, 0]),
             team=1,
             debug_decisions=False,
         )
@@ -73,7 +71,7 @@ def build_intro_level(game):
         game.team_1_formation.add_ship(ship=bot.pawn)
 
     # Spawn escort
-    n_follower = 3
+    n_follower = 5
     for i in range(n_follower):
         bot = spawn_bot(
             game=game,
@@ -97,8 +95,8 @@ def build_intro_level(game):
             "size": 3,
             "ship_model": "tie-bomber",
             "spawn_point": np.array([300, 3000, -300]),
-            "spaw_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 30,
+            "spawn_orientation": np.array([0, 0, 0, 1]),
+            "spawn_time_s": 1,
             "waypoints": [
                 np.array([300, 0, -300]),
                 np.array([300, -3000, -300]),
@@ -109,7 +107,7 @@ def build_intro_level(game):
             "size": 3,
             "ship_model": "tie-interceptor",
             "spawn_point": np.array([300, 3000, -300]),
-            "spaw_orientation": np.array([0, 0, 0, 1]),
+            "spawn_orientation": np.array([0, 0, 0, 1]),
             "spawn_time_s": 120,
             "waypoints": [
                 np.array([300, 0, -300]),
@@ -147,5 +145,10 @@ def update_scenario_method(game):
                     # Set transports as primary targets
                     for transport in game.transport_bots:
                         bot.tactician.primary_target_ids.append(transport.pawn.id)
+
+                # Warn player
+                game.hud.set_event_text(
+                    text="Enemy ships incoming!", display_time_s=2.5
+                )
 
     return

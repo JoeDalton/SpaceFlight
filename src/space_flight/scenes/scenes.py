@@ -148,15 +148,15 @@ class SceneAsteroids(Scene):
         )
 
         # Drydock
-        self.drydock = self.game.root_node.attachNewNode("drydock_instance")
-        drydock_path = DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
-        self.game.app.asset_manager.instantiate_3d_model_to_node(
-            path=drydock_path,
-            parent_node=self.drydock,
-        )
-        self.drydock.reparent_to(self.game.root_node)
-        self.drydock.set_pos(0, 8000, 50)
-        self.drydock.set_scale(100, 100, 100)
+        # self.drydock = self.game.root_node.attachNewNode("drydock_instance")
+        # drydock_path = DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
+        # self.game.app.asset_manager.instantiate_3d_model_to_node(
+        #     path=drydock_path,
+        #     parent_node=self.drydock,
+        # )
+        # self.drydock.reparent_to(self.game.root_node)
+        # self.drydock.set_pos(0, 8000, 50)
+        # self.drydock.set_scale(100, 100, 100)
 
     def clean(self):
         """

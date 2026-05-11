@@ -8,7 +8,9 @@ from space_flight.ai.interactions import Interactions
 from space_flight.fx.explosion_fx import ExplosionPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
-from space_flight.game.levels.dev_level import build_dev_level
+
+# from space_flight.game.levels.dev_level import build_dev_level
+from space_flight.game.levels.intro_level import build_intro_level
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -27,7 +29,8 @@ class GameState(BaseState):
         self.initialize_game_structure()
 
         # TODO level choice
-        build_dev_level(game=self)
+        # build_dev_level(game=self)
+        build_intro_level(game=self)
         """
         DEBUG
         """
