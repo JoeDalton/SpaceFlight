@@ -51,6 +51,7 @@ class GameState(BaseState):
         """
         Run game
         """
+        # Update the physics and object methods of the game world
         self.update_task = self.app.taskMgr.add(
             self.update_game_world_task, "update_game_world_task"
         )
@@ -104,10 +105,6 @@ class GameState(BaseState):
         # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
 
-    def start(self, task):
-        self.resume()
-        return task.done
-
     def update_game_world_task(self, task):
         """
         Updates the game world when it is not paused
@@ -132,8 +129,16 @@ class GameState(BaseState):
         for method_list in self.method_lists.values():
             for method in method_list:
                 method()
-
+        # Handle the death of the player
+        if self.player.ship.health <= 0:
+            self.app.state_manager.push(
+                state_class=self.app.state_manager.DEATH_MENU_STATE,
+            )
         return task.cont
+
+    def start(self, task):
+        self.resume()
+        return task.done
 
     def set_pause(self):
         if not self.is_paused:

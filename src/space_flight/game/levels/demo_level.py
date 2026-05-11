@@ -29,7 +29,7 @@ def build_demo_level(game):
         game=game,
         ship_type="a-wing",
         ini_position=np.array([100, -800, 505]),
-        is_neutral=True,
+        is_neutral=False,
         has_ai=False,
     )
 

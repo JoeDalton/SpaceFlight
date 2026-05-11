@@ -8,6 +8,7 @@ from space_flight.game.game_state import GameState
 from space_flight.game.loading_state import LoadingState
 from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
+from space_flight.menus.death_menu_state import DeathMenuState
 from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.pause_menu_state import PauseMenuState
 from space_flight.menus.splash_state import SplashState
@@ -22,6 +23,7 @@ class StateManager:
     SPLASH_STATE = SplashState
     MAIN_MENU_STATE = MainMenuState
     PAUSE_MENU_STATE = PauseMenuState
+    DEATH_MENU_STATE = DeathMenuState
     GAME_STATE = GameState
     LOADING_STATE = LoadingState
 
