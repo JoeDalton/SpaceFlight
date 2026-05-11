@@ -55,6 +55,10 @@ class GameState(BaseState):
         self.update_task = self.app.taskMgr.add(
             self.update_game_world_task, "update_game_world_task"
         )
+        # Update the scenario of the level, defined in the level build
+        self.update_task = self.app.taskMgr.add(
+            self.update_scenario_task, "update_scenario_task"
+        )
 
         # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
         # time step of the sim. Fix it properly !
@@ -105,6 +109,9 @@ class GameState(BaseState):
         # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
 
+        # Initialize scenario events
+        self.scenario_events = {}
+
     def update_game_world_task(self, task):
         """
         Updates the game world when it is not paused
@@ -134,6 +141,17 @@ class GameState(BaseState):
             self.app.state_manager.push(
                 state_class=self.app.state_manager.DEATH_MENU_STATE,
             )
+        return task.cont
+
+    def update_scenario_task(self, task):
+        """
+        Updates the scenario when the game is not paused
+        """
+        # Do nothing if paused
+        if self.is_paused:
+            return task.cont
+
+        self.update_scenario_method(game=self)
         return task.cont
 
     def start(self, task):

@@ -29,7 +29,7 @@ def build_demo_level(game):
         game=game,
         ship_type="a-wing",
         ini_position=np.array([100, -800, 505]),
-        is_neutral=False,
+        is_neutral=True,
         has_ai=False,
     )
 
@@ -44,7 +44,7 @@ def build_demo_level(game):
     Initialize dummy bots
     """
 
-    team_2_formation = Formation()
+    game.team_2_formation = Formation()
 
     wp_distance = 5000
     waypoints = [
@@ -68,26 +68,43 @@ def build_demo_level(game):
         debug_decisions=False,
     )
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
-    team_2_formation.add_ship(ship=game.lead_bot.pawn)
-
-    n_follower = 3
-    for i in range(n_follower):
-        bot = spawn_bot(
-            game=game,
-            name="team_2, ",
-            bot_type="fighter",
-            pawn_model="y-wing",
-            ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
-            team=2,
-        )
-        team_2_formation.add_ship(ship=bot.pawn)
+    game.team_2_formation.add_ship(ship=game.lead_bot.pawn)
 
     spawn_bot(
         game=game,
         name="turret_1",
         bot_type="turret",
         pawn_model="test",
-        base_position=np.array([0, -5000, 400]),
+        base_position=np.array([0, 000, 400]),
         team=1,
         debug_decisions=False,
     )
+
+    # Define level scenario
+    game.scenario_events["bots_spawned"] = False
+
+    game.update_scenario_method = update_scenario_method
+
+
+def update_scenario_method(game):
+    """
+    Updates the scenario
+    """
+
+    if (game.game_time.get_current_time() > 10) and (
+        not game.scenario_events["bots_spawned"]
+    ):
+        game.scenario_events["bots_spawned"] = True
+        n_follower = 3
+        for i in range(n_follower):
+            bot = spawn_bot(
+                game=game,
+                name="team_2, ",
+                bot_type="fighter",
+                pawn_model="y-wing",
+                ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
+                team=2,
+            )
+            game.team_2_formation.add_ship(ship=bot.pawn)
+
+    return
