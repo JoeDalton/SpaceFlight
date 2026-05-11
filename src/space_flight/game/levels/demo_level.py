@@ -2,7 +2,7 @@ import numpy as np
 
 from space_flight.actors.bot import spawn_bot
 from space_flight.actors.player import Player
-from space_flight.ai import Formation
+from space_flight.ai.formation import Formation
 from space_flight.scenes.scenes import scene_factory
 
 
