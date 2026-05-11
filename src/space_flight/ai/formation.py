@@ -32,11 +32,26 @@ class Formation:
         np.array([-1, -6, 0]),
         np.array([0, -8, 0]),
     ]
+    AROUND_DIAMOND_POSITIONS = [
+        np.array([0, 0, 0]),
+        np.array([2, 0, 0]),
+        np.array([-2, 0, 0]),
+        np.array([1, -2, 0]),
+        np.array([-1, -2, 0]),
+        np.array([0, -4, 0]),
+        np.array([1, 2, 0]),
+        np.array([-1, 2, 0]),
+        np.array([0, 4, 0]),
+    ]
 
-    def __init__(self, scale: float | None = None, shape: int | None = None):
+    def __init__(
+        self,
+        scale_m: float | None = None,
+        shape: int | None = None,
+    ):
         self.ship_ids = []
-        if scale is None:
-            scale = self.FIGHTER_SCALE_M
+        if scale_m is None:
+            scale_m = self.FIGHTER_SCALE_M
         if shape is None:
             shape = "arrowhead"
 
@@ -45,12 +60,14 @@ class Formation:
             self.relative_positions = self.ARROWHEAD_POSITIONS
         elif shape == "diamond":
             self.relative_positions = self.DIAMOND_POSITIONS
+        elif shape == "around_diamond":
+            self.relative_positions = self.AROUND_DIAMOND_POSITIONS
         else:
             raise NotImplementedError(f"Unknown formation shape {shape}")
 
         # Set the scale of the formation
         for item in self.relative_positions:
-            item *= scale
+            item *= scale_m
 
     def get_ship_index(self, ship_id):
         """
@@ -77,7 +94,7 @@ class Formation:
                 # Ship is already in formation, do nothing
                 return
             # Add ship as the last wingman
-            if len(self.ship_ids) < len(self.RELATIVE_POSITIONS):
+            if len(self.ship_ids) < len(self.relative_positions):
                 self.ship_ids.append(ship_id)
                 in_formation = True
             else:
@@ -87,7 +104,7 @@ class Formation:
             if ship_id in self.ship_ids:
                 self.remove_ship(ship_id)
             # Set ship as leader
-            if len(self.ship_ids) < len(self.RELATIVE_POSITIONS):
+            if len(self.ship_ids) < len(self.relative_positions):
                 self.ship_ids.insert(index=0, object=ship_id)
                 in_formation = True
             else:
