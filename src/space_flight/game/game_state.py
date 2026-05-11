@@ -51,8 +51,13 @@ class GameState(BaseState):
         """
         Run game
         """
+        # Update the physics and object methods of the game world
         self.update_task = self.app.taskMgr.add(
             self.update_game_world_task, "update_game_world_task"
+        )
+        # Update the scenario of the level, defined in the level build
+        self.update_task = self.app.taskMgr.add(
+            self.update_scenario_task, "update_scenario_task"
         )
 
         # TODO: This is an ugly hack to avoid having stupid dt at the second (?!)
@@ -104,9 +109,8 @@ class GameState(BaseState):
         # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
 
-    def start(self, task):
-        self.resume()
-        return task.done
+        # Initialize scenario events
+        self.scenario_events = {}
 
     def update_game_world_task(self, task):
         """
@@ -132,8 +136,27 @@ class GameState(BaseState):
         for method_list in self.method_lists.values():
             for method in method_list:
                 method()
-
+        # Handle the death of the player
+        if self.player.ship.health <= 0:
+            self.app.state_manager.push(
+                state_class=self.app.state_manager.DEATH_MENU_STATE,
+            )
         return task.cont
+
+    def update_scenario_task(self, task):
+        """
+        Updates the scenario when the game is not paused
+        """
+        # Do nothing if paused
+        if self.is_paused:
+            return task.cont
+
+        self.update_scenario_method(game=self)
+        return task.cont
+
+    def start(self, task):
+        self.resume()
+        return task.done
 
     def set_pause(self):
         if not self.is_paused:
