@@ -29,7 +29,7 @@ def build_demo_level(game):
         game=game,
         ship_type="a-wing",
         ini_position=np.array([100, -800, 505]),
-        is_neutral=True,
+        is_neutral=False,
         has_ai=False,
     )
 
@@ -70,12 +70,22 @@ def build_demo_level(game):
     game.lead_bot.navigator.set_waypoints(waypoints=waypoints, is_loop=True)
     game.team_2_formation.add_ship(ship=game.lead_bot.pawn)
 
-    spawn_bot(
+    game.turret_1 = spawn_bot(
         game=game,
         name="turret_1",
         bot_type="turret",
         pawn_model="test",
-        base_position=np.array([0, 000, 400]),
+        base_position=np.array([100, 600, 400]),
+        team=1,
+        debug_decisions=False,
+    )
+
+    game.turret_2 = spawn_bot(
+        game=game,
+        name="turret_2",
+        bot_type="turret",
+        pawn_model="test",
+        base_position=np.array([-100, 600, 400]),
         team=1,
         debug_decisions=False,
     )
@@ -91,11 +101,11 @@ def update_scenario_method(game):
     Updates the scenario
     """
 
-    if (game.game_time.get_current_time() > 10) and (
+    if (game.game_time.get_current_time() > 1) and (
         not game.scenario_events["bots_spawned"]
     ):
         game.scenario_events["bots_spawned"] = True
-        n_follower = 3
+        n_follower = 1
         for i in range(n_follower):
             bot = spawn_bot(
                 game=game,
@@ -104,7 +114,9 @@ def update_scenario_method(game):
                 pawn_model="y-wing",
                 ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
                 team=2,
+                debug_decisions=True,
             )
             game.team_2_formation.add_ship(ship=bot.pawn)
+            bot.tactician.primary_target_ids.append(game.turret_2.pawn.id)
 
     return
