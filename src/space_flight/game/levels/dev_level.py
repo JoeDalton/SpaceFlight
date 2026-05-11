@@ -6,9 +6,9 @@ from space_flight.ai.formation import Formation
 from space_flight.scenes.scenes import scene_factory
 
 
-def build_demo_level(game):
+def build_dev_level(game):
     """
-    A function to build the demo level
+    A function to build a development level
     """
 
     """
