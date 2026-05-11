@@ -2,7 +2,7 @@ import numpy as np
 
 from space_flight.actors.bot import spawn_bot
 from space_flight.actors.player import Player
-from space_flight.ai import Formation
+from space_flight.ai.formation import Formation
 from space_flight.scenes.scenes import scene_factory
 
 
@@ -29,7 +29,7 @@ def build_demo_level(game):
         game=game,
         ship_type="a-wing",
         ini_position=np.array([100, -800, 505]),
-        is_neutral=False,
+        is_neutral=True,
         has_ai=False,
     )
 
@@ -44,7 +44,7 @@ def build_demo_level(game):
     Initialize dummy bots
     """
 
-    game.team_2_formation = Formation()
+    game.team_2_formation = Formation(scale_m=100, shape="around_diamond")
 
     wp_distance = 5000
     waypoints = [
@@ -75,7 +75,7 @@ def build_demo_level(game):
         name="turret_1",
         bot_type="turret",
         pawn_model="test",
-        base_position=np.array([100, 600, 400]),
+        base_position=np.array([100, -5600, 400]),
         team=1,
         debug_decisions=False,
     )
@@ -85,7 +85,7 @@ def build_demo_level(game):
         name="turret_2",
         bot_type="turret",
         pawn_model="test",
-        base_position=np.array([-100, 600, 400]),
+        base_position=np.array([-100, -5600, 400]),
         team=1,
         debug_decisions=False,
     )
@@ -105,7 +105,7 @@ def update_scenario_method(game):
         not game.scenario_events["bots_spawned"]
     ):
         game.scenario_events["bots_spawned"] = True
-        n_follower = 1
+        n_follower = 8
         for i in range(n_follower):
             bot = spawn_bot(
                 game=game,
@@ -114,9 +114,9 @@ def update_scenario_method(game):
                 pawn_model="y-wing",
                 ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
                 team=2,
-                debug_decisions=True,
+                debug_decisions=False,
             )
             game.team_2_formation.add_ship(ship=bot.pawn)
-            bot.tactician.primary_target_ids.append(game.turret_2.pawn.id)
+            # bot.tactician.primary_target_ids.append(game.turret_2.pawn.id)
 
     return

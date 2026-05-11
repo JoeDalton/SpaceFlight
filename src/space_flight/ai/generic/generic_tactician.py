@@ -252,7 +252,7 @@ class GenericTactician:
                 "active": True,
                 "target_id": self.pawn.formation.ship_ids[0],
                 "formation_index": formation_index,
-                "target_relative_position": self.pawn.formation.RELATIVE_POSITIONS[
+                "target_relative_position": self.pawn.formation.relative_positions[
                     formation_index
                 ],
             }
