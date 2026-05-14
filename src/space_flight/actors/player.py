@@ -15,6 +15,8 @@ from space_flight.utils import rotate_single_vector
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
 COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
+HEAD_SPRING_COEFFICIENT_NPM = 17
+HEAD_DAMPING_RATIO = 0.8  # Slightly suboptimal damping
 HEAD_ROTATION_POSITION_FACTOR_DEGPM = 500.0
 HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD = 1.0
 
@@ -94,75 +96,34 @@ class Player:
             target_direction, desired_speed_mps = self.navigator.navigate(
                 intent=intent, target_dict=target_dict
             )
-            throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
+            (
+                self.throttle,
+                self.yaw_rate,
+                self.pitch_rate,
+                self.roll_rate,
+            ) = self.pilot.pilot(
                 target_direction=target_direction, desired_speed_mps=desired_speed_mps
             )
         else:
-            throttle, yaw_rate, pitch_rate, roll_rate = self.input_system.get_inputs()
+            (
+                self.throttle,
+                self.yaw_rate,
+                self.pitch_rate,
+                self.roll_rate,
+            ) = self.input_system.get_inputs()
         self.ship.move(
-            throttle=throttle,
-            yaw_rate=yaw_rate,
-            pitch_rate=pitch_rate,
-            roll_rate=roll_rate,
+            throttle=self.throttle,
+            yaw_rate=self.yaw_rate,
+            pitch_rate=self.pitch_rate,
+            roll_rate=self.roll_rate,
         )
 
         # Move camera relative to the ship node
         self.move_camera()
 
+        # Record state if needed
         if RECORD_GAME and self.record:
-            self.game.record.record(variable_name="player_throttle", variable=throttle)
-            self.game.record.record(
-                variable_name="player_yaw_rate_radps", variable=yaw_rate
-            )
-            self.game.record.record(
-                variable_name="player_pitch_rate_radps", variable=pitch_rate
-            )
-            self.game.record.record(
-                variable_name="player_roll_rate_radps", variable=roll_rate
-            )
-
-            self.game.record.record(
-                variable_name="player_impact_force_n", variable=self.ship.impact_force_n
-            )
-            self.game.record.record(
-                variable_name="player_additional_force_n",
-                variable=self.ship.additional_force_n,
-            )
-            self.game.record.record(
-                variable_name="player_lift_n", variable=self.ship.lift_n
-            )
-            self.game.record.record(
-                variable_name="player_lift_body_n", variable=self.ship.lift_body_n
-            )
-            self.game.record.record(
-                variable_name="player_drag_n", variable=self.ship.drag_n
-            )
-            self.game.record.record(
-                variable_name="player_thrust_n", variable=self.ship.thrust_n
-            )
-
-            self.game.record.record(
-                variable_name="player_position_correction_m",
-                variable=self.ship.position_correction,
-            )
-            self.game.record.record(
-                variable_name="player_velocity_correction_mps",
-                variable=self.ship.velocity_correction,
-            )
-
-            self.game.record.record(
-                variable_name="player_position_m", variable=self.ship.position
-            )
-            self.game.record.record(
-                variable_name="player_orientation_quat", variable=self.ship.orientation
-            )
-            self.game.record.record(
-                variable_name="player_speed_mps", variable=self.ship.speed
-            )
-            self.game.record.record(
-                variable_name="player_acceleration_mps2",
-                variable=self.ship.acceleration_mps2,
-            )
+            self.record_state()
 
     def add_task(self, method: Callable):
         """
@@ -204,8 +165,8 @@ class Player:
         self.head_acceleration_mps2 = np.zeros(3)
         self.head_velocity_mps = np.zeros(3)
         self.head_position_m = np.zeros(3)
-        self.head_spring_coefficient_npm = 25.0
-        self.head_damping_ratio = 0.8  # Slightly suboptimal damping
+        self.head_spring_coefficient_npm = HEAD_SPRING_COEFFICIENT_NPM
+        self.head_damping_ratio = HEAD_DAMPING_RATIO
         self.head_inv_mass_pkg = 0.2
         self.head_damping_coefficient_nspm = (
             2
@@ -306,6 +267,61 @@ class Player:
             )
         else:
             raise NotImplementedError
+
+    def record_state(self):
+        """
+        Records the player's state
+        """
+        self.game.record.record(variable_name="player_throttle", variable=self.throttle)
+        self.game.record.record(
+            variable_name="player_yaw_rate_radps", variable=self.yaw_rate
+        )
+        self.game.record.record(
+            variable_name="player_pitch_rate_radps", variable=self.pitch_rate
+        )
+        self.game.record.record(
+            variable_name="player_roll_rate_radps", variable=self.roll_rate
+        )
+        self.game.record.record(
+            variable_name="player_impact_force_n", variable=self.ship.impact_force_n
+        )
+        self.game.record.record(
+            variable_name="player_additional_force_n",
+            variable=self.ship.additional_force_n,
+        )
+        self.game.record.record(
+            variable_name="player_lift_n", variable=self.ship.lift_n
+        )
+        self.game.record.record(
+            variable_name="player_lift_body_n", variable=self.ship.lift_body_n
+        )
+        self.game.record.record(
+            variable_name="player_drag_n", variable=self.ship.drag_n
+        )
+        self.game.record.record(
+            variable_name="player_thrust_n", variable=self.ship.thrust_n
+        )
+        self.game.record.record(
+            variable_name="player_position_correction_m",
+            variable=self.ship.position_correction,
+        )
+        self.game.record.record(
+            variable_name="player_velocity_correction_mps",
+            variable=self.ship.velocity_correction,
+        )
+        self.game.record.record(
+            variable_name="player_position_m", variable=self.ship.position
+        )
+        self.game.record.record(
+            variable_name="player_orientation_quat", variable=self.ship.orientation
+        )
+        self.game.record.record(
+            variable_name="player_speed_mps", variable=self.ship.speed
+        )
+        self.game.record.record(
+            variable_name="player_acceleration_mps2",
+            variable=self.ship.acceleration_mps2,
+        )
 
     def clean(self):
         """

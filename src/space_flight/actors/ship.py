@@ -238,17 +238,18 @@ class Ship(Pawn):
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
-        thrust_n = self.scalar_thrust_n * self.forward
+        self.thrust_n = self.scalar_thrust_n * self.forward
 
         if FLIGHT_MODEL == "airplane":
             speed_norm = np.linalg.norm(self.speed)
             if np.isnan(speed_norm) or (speed_norm <= 1e-4):
                 # No lift or drag without speed
-                drag_n = np.zeros(3)
-                lift_n = np.zeros(3)
+                self.drag_n = np.zeros(3)
+                self.lift_n = np.zeros(3)
+                self.lift_body_n = np.zeros(3)
             else:
                 # Drag is opposed to speed
-                drag_n = -self.drag_factor * speed_norm * self.speed
+                self.drag_n = -self.drag_factor * speed_norm * self.speed
                 # Lift is perpendicular to ship side and airflow
                 # and proportional to angle of attack
                 # + And perpendicular to ship up and airflow
@@ -261,7 +262,7 @@ class Ship(Pawn):
                 side_slip_angle_deg = np.rad2deg(
                     np.arcsin(airflow_speed_body[0] / speed_norm)
                 )
-                lift_body = (
+                self.lift_body_n = (
                     self.lift_factor
                     * speed_norm**2
                     * angle_of_attack_deg
@@ -275,19 +276,31 @@ class Ship(Pawn):
                     )
                 )
                 # Turn lift in world coordinates
-                lift_n = rotate_single_vector(quat, lift_body)
+                self.lift_n = rotate_single_vector(quat, self.lift_body_n)
+
+                # Clip the lift to the max thrust to avoid simulation divergence
+                lift_norm_n = np.linalg.norm(self.lift_n)
+                if lift_norm_n > self.max_thrust_n:
+                    self.lift_n /= lift_norm_n
+                    self.lift_n *= self.max_thrust_n
+
         elif FLIGHT_MODEL == "space":
             # Neither lift nor drag
-            drag_n = np.zeros(3)
-            lift_n = np.zeros(3)
+            self.drag_n = np.zeros(3)
+            self.lift_n = np.zeros(3)
+            self.lift_body_n = np.zeros(3)
         else:
             raise NotImplementedError(f"Unknown flight model {FLIGHT_MODEL}")
 
         # Assemble thrust, lift, drag and accidental forces
-        acceleration_mps2 = (
-            thrust_n + drag_n + lift_n + self.additional_force_n + self.impact_force_n
+        self.acceleration_mps2 = (
+            self.thrust_n
+            + self.drag_n
+            + self.lift_n
+            + self.additional_force_n
+            + self.impact_force_n
         ) / self.mass_kg
-        self.state_dot[7:10] = acceleration_mps2
+        self.state_dot[7:10] = self.acceleration_mps2
 
     def move_ship_physics(self):
         """
