@@ -91,7 +91,7 @@ def build_intro_level(game):
             name=f"escort_ship_{i}",
             bot_type="fighter",
             pawn_model="x-wing",
-            ini_position=np.array([(int(n_follower / 2)) * 100 - 100 * i, -2300, 300]),
+            ini_position=np.array([(int(n_follower / 2)) * 100 - 100 * i, -1500, 300]),
             team=1,
             debug_decisions=False,
         )
@@ -100,13 +100,15 @@ def build_intro_level(game):
     # Set custom formation positions
     game.team_1_formation.relative_positions = [
         np.array([0.0, 0.0, 0.0]),
-        np.array([1.0, -2.0, 0.5]),
-        np.array([-1.0, -2.0, 0.5]),
-        np.array([1.4, 1.0, 1.0]),
-        np.array([-1.4, 1.0, 1.0]),
-        np.array([0.0, 1.0, -1.0]),
+        np.array([1.0, -1.0, 0.5]),
+        np.array([-1.0, -1.0, 0.5]),
+        np.array([1.4, 2.0, 1.0]),
+        np.array([-1.4, 2.0, 1.0]),
+        np.array([0.0, 2.0, -1.0]),
         np.array([0.0, -2.0, 1.0]),
         np.array([0.0, -2.0, -1.0]),
+        np.array([1.0, -2.0, 0.0]),
+        np.array([-1.0, -2.0, 0.0]),
         np.array([0.0, -3.0, 0.0]),
     ]
 
@@ -114,15 +116,17 @@ def build_intro_level(game):
     Initialize scenario
     """
     # Define level scenario
-    game.team_2_formation = Formation(scale_m=30, shape="arrowhead")
+    game.team_2_formation1 = Formation(scale_m=30, shape="arrowhead")
+    game.team_2_formation2 = Formation(scale_m=30, shape="diamond")
+    game.team_2_formation3 = Formation(scale_m=30, shape="around_diamond")
     game.scenario_data = {
         "first_wave": {
             "spawned": False,
-            "size": 3,
+            "size": 5,
             "ship_model": "tie-bomber",
             "spawn_point": np.array([300, 6000, 500]),
             "spawn_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 30,
+            "spawn_time_s": 40,
             "waypoints": [
                 np.array([300, 0, 500]),
                 np.array([300, -6000, 500]),
@@ -130,11 +134,23 @@ def build_intro_level(game):
         },
         "second_wave": {
             "spawned": False,
-            "size": 3,
+            "size": 5,
             "ship_model": "tie-interceptor",
-            "spawn_point": np.array([300, 0, 500]),
+            "spawn_point": np.array([300, 6300, 800]),
             "spawn_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 180,
+            "spawn_time_s": 45,
+            "waypoints": [
+                np.array([300, 0, 500]),
+                np.array([300, -6000, 500]),
+            ],
+        },
+        "third_wave": {
+            "spawned": False,
+            "size": 8,
+            "ship_model": "tie-interceptor",
+            "spawn_point": np.array([300, 0, 800]),
+            "spawn_orientation": np.array([0, 0, 0, 1]),
+            "spawn_time_s": 200,
             "waypoints": [
                 np.array([300, 6000, 500]),
                 np.array([300, 0, 500]),
@@ -167,15 +183,22 @@ def update_scenario_method(game):
                         team=2,
                         debug_decisions=False,
                     )
-                    game.team_2_formation.add_ship(ship=bot.pawn)
+                    if "first" in key:
+                        game.team_2_formation1.add_ship(ship=bot.pawn)
+                    elif "second" in key:
+                        game.team_2_formation2.add_ship(ship=bot.pawn)
+                    elif "third" in key:
+                        game.team_2_formation3.add_ship(ship=bot.pawn)
                     # Set patrol waypoints
                     bot.navigator.set_waypoints(
                         waypoints=value["waypoints"], is_loop=True
                     )
                     # Set transports as primary targets
                     for transport in game.transport_bots:
-                        bot.tactician.primary_target_ids.append(transport.pawn.id)
-
+                        try:
+                            bot.tactician.primary_target_ids.append(transport.pawn.id)
+                        except AttributeError:
+                            pass
                 # Warn player
                 game.hud.set_event_text(
                     text="Enemy ships incoming!", display_time_s=2.5
