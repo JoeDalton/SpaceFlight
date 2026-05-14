@@ -193,6 +193,10 @@ class GameState(BaseState):
         """
         Clean every object in the game session, in reverse order of creation
         """
+        # Save records
+        if RECORD_GAME:
+            self.record.save()
+
         # Remove HUD elements
         self.hud.clean()
         self.hud = None

@@ -111,6 +111,7 @@ class Player:
                 self.pitch_rate,
                 self.roll_rate,
             ) = self.input_system.get_inputs()
+
         self.ship.move(
             throttle=self.throttle,
             yaw_rate=self.yaw_rate,
@@ -300,14 +301,6 @@ class Player:
         )
         self.game.record.record(
             variable_name="player_thrust_n", variable=self.ship.thrust_n
-        )
-        self.game.record.record(
-            variable_name="player_position_correction_m",
-            variable=self.ship.position_correction,
-        )
-        self.game.record.record(
-            variable_name="player_velocity_correction_mps",
-            variable=self.ship.velocity_correction,
         )
         self.game.record.record(
             variable_name="player_position_m", variable=self.ship.position

@@ -11,6 +11,7 @@ from space_flight import (
     DEBUG_DELETION,
     FLIGHT_MODEL,
     FORWARD_BODY,
+    RECORD_GAME,
     RIGHT_BODY,
     UP_BODY,
 )
@@ -307,6 +308,17 @@ class Ship(Pawn):
         Gets the new ship's state, then prepare the next
         integration step.
         """
+        # Record collision corrections
+        if RECORD_GAME and self.parent.record:
+            self.game.record.record(
+                variable_name="player_position_correction_m",
+                variable=self.position_correction.copy(),
+            )
+            self.game.record.record(
+                variable_name="player_velocity_correction_mps",
+                variable=self.velocity_correction.copy(),
+            )
+
         # Get state
         self.state = self.game.integrator.get_state_variables(
             first_idx=self.integrator_idx,
