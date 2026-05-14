@@ -28,7 +28,7 @@ def build_intro_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
-        ini_position=np.array([0, -2500, 100]),
+        ini_position=np.array([0, -2600, 250]),
         is_neutral=False,
         has_ai=False,
     )
@@ -38,35 +38,48 @@ def build_intro_level(game):
     `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     """
 
-    game.scene = scene_factory(game=game, scene_name="asteroids")
+    game.scene = scene_factory(game=game, scene_name="ocean_planet")
 
     """
     Initialize allies
     """
     # Initialize convoy formation
-    game.team_1_formation = Formation(scale_m=300, shape="arrowhead")
+    game.team_1_formation = Formation(scale_m=300)
 
     # Define transport waypoints
     transport_waypoints = [
-        np.array([0, 0, 0]),
-        np.array([0, 3000, 0]),
+        np.array([0, 0, 200]),
+        np.array([0, 3000, 200]),
+        np.array([500, 4000, 200]),
+        np.array([1000, 4500, 200]),
+        np.array([2000, 5000, 200]),
+        np.array([5000, 5000, 200]),
+        np.array([6000, 4500, 200]),
+        np.array([6500, 4000, 200]),
+        np.array([7000, 3000, 200]),
     ]
 
     # Spawn transports
     game.transport_bots = []
     n_transports = 3
     for i in range(n_transports):
+        if i == 0:
+            r_pos = np.zeros(3)
+        elif i == 1:
+            r_pos = np.array([300, -600, 150])
+        elif i == 2:
+            r_pos = np.array([-300, -600, 150])
         bot = spawn_bot(
             game=game,
             name=f"transport_{i+1}",
             bot_type="capital_ship",
             pawn_model="gr-75",
-            ini_position=np.array([-(int(n_transports / 2)) * 100 + 100 * i, -2000, 0]),
+            ini_position=np.array([0, -2000, 200]) + r_pos,
             team=1,
             debug_decisions=False,
         )
         # All transport ships get the waypoints in case the leader is destroyed
-        bot.navigator.set_waypoints(waypoints=transport_waypoints, is_loop=False)
+        bot.navigator.set_waypoints(waypoints=transport_waypoints, is_loop=True)
         game.transport_bots.append(bot)
         game.team_1_formation.add_ship(ship=bot.pawn)
 
@@ -78,11 +91,24 @@ def build_intro_level(game):
             name=f"escort_ship_{i}",
             bot_type="fighter",
             pawn_model="x-wing",
-            ini_position=np.array([-(int(n_follower / 2)) * 100 + 100 * i, -2300, 0]),
+            ini_position=np.array([(int(n_follower / 2)) * 100 - 100 * i, -2300, 300]),
             team=1,
             debug_decisions=False,
         )
         game.team_1_formation.add_ship(ship=bot.pawn)
+
+    # Set custom formation positions
+    game.team_1_formation.relative_positions = [
+        np.array([0.0, 0.0, 0.0]),
+        np.array([1.0, -2.0, 0.5]),
+        np.array([-1.0, -2.0, 0.5]),
+        np.array([1.4, 1.0, 1.0]),
+        np.array([-1.4, 1.0, 1.0]),
+        np.array([0.0, 1.0, -1.0]),
+        np.array([0.0, -2.0, 1.0]),
+        np.array([0.0, -2.0, -1.0]),
+        np.array([0.0, -3.0, 0.0]),
+    ]
 
     """
     Initialize scenario
@@ -94,24 +120,24 @@ def build_intro_level(game):
             "spawned": False,
             "size": 3,
             "ship_model": "tie-bomber",
-            "spawn_point": np.array([300, 3000, -300]),
+            "spawn_point": np.array([300, 6000, 500]),
             "spawn_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 1,
+            "spawn_time_s": 30,
             "waypoints": [
-                np.array([300, 0, -300]),
-                np.array([300, -3000, -300]),
+                np.array([300, 0, 500]),
+                np.array([300, -6000, 500]),
             ],
         },
         "second_wave": {
             "spawned": False,
             "size": 3,
             "ship_model": "tie-interceptor",
-            "spawn_point": np.array([300, 3000, -300]),
+            "spawn_point": np.array([300, 0, 500]),
             "spawn_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 120,
+            "spawn_time_s": 180,
             "waypoints": [
-                np.array([300, 0, -300]),
-                np.array([300, -3000, -300]),
+                np.array([300, 6000, 500]),
+                np.array([300, 0, 500]),
             ],
         },
     }
@@ -142,6 +168,10 @@ def update_scenario_method(game):
                         debug_decisions=False,
                     )
                     game.team_2_formation.add_ship(ship=bot.pawn)
+                    # Set patrol waypoints
+                    bot.navigator.set_waypoints(
+                        waypoints=value["waypoints"], is_loop=True
+                    )
                     # Set transports as primary targets
                     for transport in game.transport_bots:
                         bot.tactician.primary_target_ids.append(transport.pawn.id)
