@@ -31,6 +31,7 @@ def build_dev_level(game):
         ini_position=np.array([100, -800, 505]),
         is_neutral=True,
         has_ai=False,
+        record=True,
     )
 
     """
@@ -38,7 +39,7 @@ def build_dev_level(game):
     `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     """
 
-    game.scene = scene_factory(game=game, scene_name="ocean_planet")
+    game.scene = scene_factory(game=game, scene_name="asteroids")
 
     """
     Initialize dummy bots

@@ -21,6 +21,10 @@ class Formation:
         np.array([-2, -4, 0]),
         np.array([3, -6, 0]),
         np.array([-3, -6, 0]),
+        np.array([4, -8, 0]),
+        np.array([-4, -8, 0]),
+        np.array([5, -10, 0]),
+        np.array([-5, -10, 0]),
     ]
     DIAMOND_POSITIONS = [
         np.array([0, 0, 0]),

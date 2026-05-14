@@ -277,7 +277,7 @@ class CollisionSystem:
         # Compute impulse correction
         # Push back if objects are still approaching
         if normal_relative_velocity < 0:
-            velocity_correction = (
+            velocity_correction = np.array(
                 -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
             )
         else:
@@ -391,7 +391,7 @@ class CollisionSystem:
         # Compute position correction.
         # Not a big correction in most cases, but limits penetration.
         position_correction = (
-            normal
+            -normal
             * POSITION_CORRECTION_RATIO
             * max(penetration_depth_m - PENETRATION_TOLERANCE_M, 0)
             / denominator
@@ -480,7 +480,7 @@ class CollisionSystem:
         # Compute impulse correction
         # Push back if objects are still approaching
         if normal_relative_velocity < 0:
-            velocity_correction = (
+            velocity_correction = np.array(
                 -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
             )
         else:

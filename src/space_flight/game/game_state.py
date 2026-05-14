@@ -2,7 +2,7 @@ import gc
 import logging
 import sys
 
-from space_flight import DEBUG_DELETION
+from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructibles
 from space_flight.ai.interactions import Interactions
 from space_flight.fx.explosion_fx import ExplosionPool
@@ -11,6 +11,7 @@ from space_flight.game.integrator import Integrator
 
 # from space_flight.game.levels.dev_level import build_dev_level
 from space_flight.game.levels.intro_level import build_intro_level
+from space_flight.game.record import Record
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -115,6 +116,11 @@ class GameState(BaseState):
         # Initialize scenario data
         self.scenario_data = {}
 
+        # Initialize records
+        if RECORD_GAME:
+            self.record = Record()
+            self.record.new_time(time=self.game_time.get_current_time())
+
     def update_game_world_task(self, task):
         """
         Updates the game world when it is not paused
@@ -122,6 +128,10 @@ class GameState(BaseState):
         # Do nothing if paused
         if self.is_paused:
             return task.cont
+
+        # Create new time record
+        if RECORD_GAME:
+            self.record.new_time(time=self.game_time.get_current_time())
 
         # Handle delayed methods
         self.delayed_methods.update()
@@ -183,6 +193,10 @@ class GameState(BaseState):
         """
         Clean every object in the game session, in reverse order of creation
         """
+        # Save records
+        if RECORD_GAME:
+            self.record.save()
+
         # Remove HUD elements
         self.hud.clean()
         self.hud = None

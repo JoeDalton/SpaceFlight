@@ -106,6 +106,7 @@ class Bot(Destructible):
         # TODO remove
         self.game.player.add_target(target=self.pawn, name=self.name)
         self.team = team
+        self.record = kwargs.get("record", False)
 
         self.add_task(method=self.move_bot_task)
 

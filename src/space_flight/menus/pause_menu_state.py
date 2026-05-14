@@ -2,6 +2,7 @@ import sys
 
 from direct.gui.DirectGui import DirectButton
 
+from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
 
 # TODO: overlay transparent-grey image between game and  menu buttons
@@ -36,6 +37,9 @@ class PauseMenuState(BaseState):
         self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
 
     def quit_game(self):
+        if RECORD_GAME:
+            # Record game logs
+            self.app.state_manager.stack[-2].record.save()
         sys.exit()
 
     def exit(self):
