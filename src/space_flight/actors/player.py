@@ -3,6 +3,7 @@ from typing import Callable
 
 import numpy as np
 
+from space_flight import RECORD_GAME
 from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
@@ -29,10 +30,12 @@ class Player:
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         is_neutral: bool = False,
         has_ai: bool = False,
+        record: bool = False,
     ):
         self.game = game
         self.name = "player"
         self.id = uuid.uuid4()
+        self.record = record
         if is_neutral:
             team = 0
         else:
@@ -105,6 +108,61 @@ class Player:
 
         # Move camera relative to the ship node
         self.move_camera()
+
+        if RECORD_GAME and self.record:
+            self.game.record.record(variable_name="player_throttle", variable=throttle)
+            self.game.record.record(
+                variable_name="player_yaw_rate_radps", variable=yaw_rate
+            )
+            self.game.record.record(
+                variable_name="player_pitch_rate_radps", variable=pitch_rate
+            )
+            self.game.record.record(
+                variable_name="player_roll_rate_radps", variable=roll_rate
+            )
+
+            self.game.record.record(
+                variable_name="player_impact_force_n", variable=self.ship.impact_force_n
+            )
+            self.game.record.record(
+                variable_name="player_additional_force_n",
+                variable=self.ship.additional_force_n,
+            )
+            self.game.record.record(
+                variable_name="player_lift_n", variable=self.ship.lift_n
+            )
+            self.game.record.record(
+                variable_name="player_lift_body_n", variable=self.ship.lift_body_n
+            )
+            self.game.record.record(
+                variable_name="player_drag_n", variable=self.ship.drag_n
+            )
+            self.game.record.record(
+                variable_name="player_thrust_n", variable=self.ship.thrust_n
+            )
+
+            self.game.record.record(
+                variable_name="player_position_correction_m",
+                variable=self.ship.position_correction,
+            )
+            self.game.record.record(
+                variable_name="player_velocity_correction_mps",
+                variable=self.ship.velocity_correction,
+            )
+
+            self.game.record.record(
+                variable_name="player_position_m", variable=self.ship.position
+            )
+            self.game.record.record(
+                variable_name="player_orientation_quat", variable=self.ship.orientation
+            )
+            self.game.record.record(
+                variable_name="player_speed_mps", variable=self.ship.speed
+            )
+            self.game.record.record(
+                variable_name="player_acceleration_mps2",
+                variable=self.ship.acceleration_mps2,
+            )
 
     def add_task(self, method: Callable):
         """
