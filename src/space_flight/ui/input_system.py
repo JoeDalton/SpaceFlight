@@ -78,6 +78,7 @@ class InputSystem:
         self.view_offset = np.zeros(2)
         self.game.app.disableMouse()
         self.is_boost = False
+        self.is_laser_fire = False
         # Game UI
         self.game.app.accept("escape", self.game.set_pause)
 
@@ -110,6 +111,12 @@ class InputSystem:
 
     def deactivate_boost(self):
         self.is_boost = False
+
+    def activate_laser(self):
+        self.is_laser_fire = True
+
+    def deactivate_laser(self):
+        self.is_laser_fire = False
 
     def smooth_button(
         self,
@@ -411,14 +418,12 @@ class Gamepad(InputSystem):
         self.game.app.accept("gamepad-back", self.game.set_pause)
 
         # Accept trigger event to fire lasers
-        self.game.app.accept("gamepad-face_a", self.player.ship.laser_cannon.fire)
-        self.game.app.accept(
-            "gamepad-face_a-repeat", self.player.ship.laser_cannon.fire
-        )
+        self.game.app.accept("gamepad-lshoulder", self.activate_laser)
+        self.game.app.accept("gamepad-lshoulder-up", self.deactivate_laser)
 
         # Accept boost toggle
-        self.game.app.accept("gamepad-face_x", self.activate_boost)
-        self.game.app.accept("gamepad-face_x-up", self.deactivate_boost)
+        self.game.app.accept("gamepad-rshoulder", self.activate_boost)
+        self.game.app.accept("gamepad-rshoulder-up", self.deactivate_boost)
 
         # Register gamepad dead zone
         self.stick_dead_zone = self.game.bindings.get(
@@ -473,6 +478,9 @@ class Gamepad(InputSystem):
 
         if not self.gamepad:
             return 0.0, 0.0, 0.0, 0.0
+
+        if self.is_laser_fire:
+            self.player.ship.laser_cannon.fire()
 
         if self.is_boost:
             throttle = THROTTLE_BOOST_VALUE
