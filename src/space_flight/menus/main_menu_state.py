@@ -2,7 +2,6 @@ import sys
 
 from direct.gui.DirectGui import DirectButton
 
-from space_flight.game.game_state import GameState
 from space_flight.global_architecture.base_state import BaseState
 
 # TODO: Background image
@@ -10,10 +9,10 @@ from space_flight.global_architecture.base_state import BaseState
 
 class MainMenuState(BaseState):
     def enter(self):
-        self.start_button = DirectButton(
-            text="Start Game",
+        self.play_button = DirectButton(
+            text="Play",
             scale=0.1,
-            command=self.start_game,
+            command=self.choose_level,
             pos=(0.0, 0.0, 0.5),
         )
         self.settings_button = DirectButton(
@@ -29,8 +28,9 @@ class MainMenuState(BaseState):
             pos=(0.0, 0.0, -0.5),
         )
 
-    def start_game(self):
-        self.app.state_manager.replace(GameState)
+    def choose_level(self):
+        self.app.state_manager.pop()
+        self.app.state_manager.push(self.app.state_manager.LEVEL_SELECTION_MENU_STATE)
 
     def enter_settings(self):
         pass
@@ -39,7 +39,7 @@ class MainMenuState(BaseState):
         sys.exit()
 
     def exit(self):
-        self.start_button.destroy()
+        self.play_button.destroy()
         self.settings_button.destroy()
         self.quit_button.destroy()
         self.force_render()

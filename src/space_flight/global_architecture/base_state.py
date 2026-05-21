@@ -19,13 +19,13 @@ class BaseState:
 
     def resume(self):
         """
-        Called when leaving the state
+        Called when resuming the state
         """
         raise NotImplementedError
 
     def pause(self):
         """
-        Called when leaving the state
+        Called when pausing the state
         """
         raise NotImplementedError
 

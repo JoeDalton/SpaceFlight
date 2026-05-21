@@ -92,7 +92,7 @@ def build_dev_level(game):
     )
 
     # Define level scenario
-    game.scenario_events["bots_spawned"] = False
+    game.scenario_data["bots_spawned"] = False
 
     game.update_scenario_method = update_scenario_method
 
@@ -103,9 +103,9 @@ def update_scenario_method(game):
     """
 
     if (game.game_time.get_current_time() > 1) and (
-        not game.scenario_events["bots_spawned"]
+        not game.scenario_data["bots_spawned"]
     ):
-        game.scenario_events["bots_spawned"] = True
+        game.scenario_data["bots_spawned"] = True
         n_follower = 8
         for i in range(n_follower):
             bot = spawn_bot(
