@@ -1,6 +1,6 @@
 import sys
 
-from direct.gui.DirectGui import DirectButton
+from direct.gui.DirectGui import DirectButton, DirectFrame
 
 from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
@@ -10,6 +10,12 @@ from space_flight.global_architecture.base_state import BaseState
 
 class PauseMenuState(BaseState):
     def enter(self):
+        self.frame = DirectFrame(
+            frameSize=(self.app.a2dLeft + 0.5, self.app.a2dRight - 0.5, -0.8, 0.8),
+            frameColor=(0, 0, 0, 0.6),
+            pos=(0, 0, 0),
+        )
+        self.frame.setTransparency(True)
         self.resume_button = DirectButton(
             text="Resume Game",
             scale=0.1,
@@ -46,3 +52,4 @@ class PauseMenuState(BaseState):
         self.resume_button.destroy()
         self.return_button.destroy()
         self.quit_button.destroy()
+        self.frame.destroy()
