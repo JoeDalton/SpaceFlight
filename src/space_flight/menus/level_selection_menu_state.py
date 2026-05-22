@@ -15,7 +15,7 @@ class LevelSelectionMenuState(BaseState):
             "demonstrates the latest implemented features",
         },
         {"name": "Intro", "description": "The first `game ready` level."},
-    ] + [{"name": "toto", "description": "Lorem ipsum"}] * 20
+    ]
 
     def enter(self):
         """
