@@ -1,14 +1,8 @@
-from direct.gui.DirectGui import (
-    DGG,
-    DirectButton,
-    DirectFrame,
-    DirectLabel,
-    DirectScrolledFrame,
-)
-from panda3d.core import TextNode, VBase4, Vec2
+from direct.gui.DirectGui import DirectFrame, DirectLabel, DirectScrolledFrame
+from panda3d.core import TextNode
 
-from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.base_state import BaseState
+from space_flight.menus.menu_utils import CustomButton
 
 # TODO: Background image
 
@@ -27,74 +21,51 @@ class LevelSelectionMenuState(BaseState):
         """
         Build the level selection menu
         """
-        button_maps = self.app.asset_manager.get_asset(
-            asset_type="model",
-            path=DATAFILES_PATH / "menus" / "button_map.egg",
-        )
-
-        self.buttonGeom = (
-            button_maps.find("**/ready"),
-            button_maps.find("**/click"),
-            button_maps.find("**/hover"),
-            button_maps.find("**/disabled"),
-        )
 
         main_button_scale = 0.3
         self.title_text_scale = 0.1
         # State change buttons
-        self.back_button = DirectButton(
-            text="Back",
-            image=self.buttonGeom,
-            scale=main_button_scale,
-            command=self.back,
+        self.back_button = CustomButton(
+            app=self.app,
             pos=(0.5, 0.0, -0.9),
-            text_scale=0.25,
-            text_align=TextNode.ALeft,
-            text_fg=VBase4(1, 1, 1, 1),
-            text_pos=Vec2(-0.9, -0.085),
-            relief=1,
-            pad=Vec2(0.01, 0.01),
-            frameColor=VBase4(0, 0, 0, 0),
-            frameSize=VBase4(-1.0, 1.0, -0.25, 0.25),
-            pressEffect=True,
-        )
-        self.start_button = DirectButton(
-            text="Start Game",
-            image=self.buttonGeom,
+            command=self.back,
+            text="Back",
             scale=main_button_scale,
-            command=self.start_game,
+            layout="center",
+        )
+
+        self.start_button = CustomButton(
+            app=self.app,
             pos=(1.2, 0.0, -0.9),
-            text_scale=0.25,
-            text_align=TextNode.ALeft,
-            text_fg=VBase4(1, 1, 1, 1),
-            text_pos=Vec2(-0.9, -0.085),
-            relief=1,
-            pad=Vec2(0.01, 0.01),
-            frameColor=VBase4(0, 0, 0, 0),
-            frameSize=VBase4(-1.0, 1.0, -0.25, 0.25),
-            pressEffect=True,
+            command=self.start_game,
+            text="Start Game",
+            scale=main_button_scale,
+            layout="center",
         )
         self.start_button.hide()
 
         self.description_frame = DirectFrame(
-            frameSize=VBase4(0.0, self.app.a2dRight - 0.1, 0.3, 1.55),
-            frameColor=VBase4(0.25, 0.25, 0.25, 0.3),
+            frameSize=(0.0, self.app.a2dRight - 0.1, 0.3, 1.55),
+            frameColor=(0.25, 0.25, 0.25, 0.3),
             pos=(0, 0, -0.8),
             text="",
             text_wordwrap=30,
             text_align=TextNode.ALeft,
             text_scale=0.05,
-            text_fg=VBase4(1, 1, 1, 1),
+            text_fg=(1, 1, 1, 1),
             text_pos=(0.05, 1.45),
-            text_shadow=VBase4(0, 0, 0, 0.35),
-            text_shadowOffset=Vec2(-0.05, -0.05),
+            text_shadow=(0, 0, 0, 0.35),
+            text_shadowOffset=(-0.05, -0.05),
         )
         self.description_frame.setTransparency(True)
 
         self.create_level_list()
 
     def start_game(self):
-        if self.app.configuration.get("selected_level") in self.LEVELS:
+        level_names = []
+        for level in self.LEVELS:
+            level_names.append(level["name"])
+        if self.app.configuration.get("selected_level") in level_names:
             self.app.state_manager.replace(self.app.state_manager.GAME_STATE)
 
     def back(self):
@@ -122,90 +93,37 @@ class LevelSelectionMenuState(BaseState):
                 0.0,
                 self.app.a2dTop - (self.title_text_scale + 0.05),
             ),
-            frameColor=VBase4(0, 0, 0, 0),
+            frameColor=(0, 0, 0, 0),
             text="Level selection",
             text_align=TextNode.ALeft,
-            text_fg=VBase4(1, 1, 1, 1),
-            text_shadow=VBase4(0, 0, 0, 0.75),
-            text_shadowOffset=Vec2(0.05, 0.05),
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.75),
+            text_shadowOffset=(0.05, 0.05),
         )
         self.title.setTransparency(1)
 
         # Change the default dialog skin.
         self.level_buttons = []
-        # DGG.setDefaultDialogGeom(DATAFILES_PATH / "menus" / "dialog.png")
-        DGG.setDefaultDialogGeom(
-            self.app.asset_manager.get_asset(
-                asset_type="texture",
-                path=DATAFILES_PATH / "menus" / "dialog.png",
-            )
-        )
-
-        # Set up the list of actions that we can map keys to
-        # create a frame that will create the scrollbars for us
-        # Load the models for the scrollbar elements
-        thumb_map = self.app.asset_manager.get_asset(
-            asset_type="model",
-            path=DATAFILES_PATH / "menus" / "thumb_map.egg",
-        )
-        thumb_geom = (
-            thumb_map.find("**/thumb_ready"),
-            thumb_map.find("**/thumb_click"),
-            thumb_map.find("**/thumb_hover"),
-            thumb_map.find("**/thumb_disabled"),
-        )
-        inc_map = self.app.asset_manager.get_asset(
-            asset_type="model",
-            path=DATAFILES_PATH / "menus" / "inc_map.egg",
-        )
-        inc_geom = (
-            inc_map.find("**/inc_ready"),
-            inc_map.find("**/inc_click"),
-            inc_map.find("**/inc_hover"),
-            inc_map.find("**/inc_disabled"),
-        )
-        dec_map = self.app.asset_manager.get_asset(
-            asset_type="model",
-            path=DATAFILES_PATH / "menus" / "dec_map.egg",
-        )
-        dec_geom = (
-            dec_map.find("**/dec_ready"),
-            dec_map.find("**/dec_click"),
-            dec_map.find("**/dec_hover"),
-            dec_map.find("**/dec_disabled"),
-        )
 
         # create the scrolled frame that will hold our list
         self.lstActionMap = DirectScrolledFrame(
-            # make the frame occupy the whole window
-            # frameSize=VBase4(self.app.a2dLeft, self.app.a2dRight, 0.0, 1.55),
-            frameSize=VBase4(self.app.a2dLeft, -0.25, 0.0, 1.55),
-            # set the frames color to white
-            # frameColor=VBase4(0, 0, 0.25, 0.75),
-            frameColor=VBase4(0, 0, 0, 0),
+            frameSize=(self.app.a2dLeft, -0.25, 0.0, 1.55),
+            frameColor=(0, 0, 0, 0),
             pos=(0, 0, -0.8),
             verticalScroll_scrollSize=0.2,
-            verticalScroll_frameColor=VBase4(0.02, 0.02, 0.02, 1),
+            verticalScroll_frameColor=(0.02, 0.02, 0.02, 1),
             verticalScroll_thumb_relief=1,
-            verticalScroll_thumb_geom=thumb_geom,
+            verticalScroll_thumb_geom=self.app.menu_models.thumb_geom,
             verticalScroll_thumb_pressEffect=False,
-            verticalScroll_thumb_frameColor=VBase4(0, 0, 0, 0),
+            verticalScroll_thumb_frameColor=(0, 0, 0, 0),
             verticalScroll_incButton_relief=1,
-            verticalScroll_incButton_geom=inc_geom,
+            verticalScroll_incButton_geom=self.app.menu_models.inc_geom,
             verticalScroll_incButton_pressEffect=False,
-            verticalScroll_incButton_frameColor=VBase4(0, 0, 0, 0),
+            verticalScroll_incButton_frameColor=(0, 0, 0, 0),
             verticalScroll_decButton_relief=1,
-            verticalScroll_decButton_geom=dec_geom,
+            verticalScroll_decButton_geom=self.app.menu_models.dec_geom,
             verticalScroll_decButton_pressEffect=False,
-            verticalScroll_decButton_frameColor=VBase4(0, 0, 0, 0),
-        )
-
-        # Create the list items
-        self.listBGEven = self.app.loader.loadModel(
-            DATAFILES_PATH / "menus" / "list_item_even"
-        )
-        self.listBGOdd = self.app.loader.loadModel(
-            DATAFILES_PATH / "menus" / "list_item_odd"
+            verticalScroll_decButton_frameColor=(0, 0, 0, 0),
         )
 
         self.actionLabels = {}
@@ -224,70 +142,53 @@ class LevelSelectionMenuState(BaseState):
         self.lstActionMap.setCanvasSize()
 
     def __makeListItem(self, level_name, index):
-        def set_level(button_index: int):
-            level_name = self.LEVELS[button_index]["name"]
-            for idx, btn in enumerate(self.level_buttons):
-                if idx == button_index:
-                    if self.app.configuration.get("selected_level") == level_name:
-                        # Unselect current level and make the button "READY"
-                        self.app.configuration["selected_level"] = None
-                        self.description_frame["text"] = ""
-                        btn["geom"] = self.buttonGeom[0]
-                        self.start_button.hide()
-                    else:
-                        # Set the level and make the button "PRESSED"
-                        self.app.configuration["selected_level"] = level_name
-                        self.description_frame["text"] = self.LEVELS[button_index][
-                            "description"
-                        ]
-                        btn["geom"] = self.buttonGeom[1]
-                        self.start_button.show()
-                else:
-                    # Set all other level buttons to "READY"
-                    btn["geom"] = self.buttonGeom[0]
-
-        # if index % 2 == 0:
-        #     bg = self.listBGEven
-        # else:
-        #     bg = self.listBGOdd
         item = DirectFrame(
             text="",
             geom=None,
-            # geom=bg,
             geom_scale=(self.app.a2dRight - 0.05, 1, 0.1),
-            frameSize=VBase4(
-                self.app.a2dLeft + 0.05, self.app.a2dRight - 0.05, -0.05, 0.05
-            ),
-            frameColor=VBase4(1, 0, 0, 0),
+            frameSize=(self.app.a2dLeft + 0.05, self.app.a2dRight - 0.05, -0.05, 0.05),
+            frameColor=(1, 0, 0, 0),
             text_align=TextNode.ALeft,
             text_scale=0.05,
-            text_fg=VBase4(1, 1, 1, 1),
+            text_fg=(1, 1, 1, 1),
             text_pos=(self.app.a2dLeft + 0.3, -0.015),
-            text_shadow=VBase4(0, 0, 0, 0.35),
-            text_shadowOffset=Vec2(-0.05, -0.05),
+            text_shadow=(0, 0, 0, 0.35),
+            text_shadowOffset=(-0.05, -0.05),
             pos=(0.05, 0, -(0.10 * index)),
         )
         item.setTransparency(True)
 
         buttonScale = 0.2
-        btn = DirectButton(
-            text=level_name,
-            geom=self.buttonGeom,
-            scale=buttonScale,
-            text_scale=0.25,
-            text_align=TextNode.ALeft,
-            text_fg=VBase4(1, 1, 1, 1),
-            text_pos=Vec2(-0.9, -0.085),
-            relief=1,
-            pad=Vec2(0.01, 0.01),
-            frameColor=VBase4(0, 0, 0, 0),
-            frameSize=VBase4(-1.0, 1.0, -0.25, 0.25),
+        btn = CustomButton(
+            app=self.app,
             pos=(self.app.a2dLeft + (0.898 * buttonScale + 0.3), 0, 0),
-            pressEffect=True,
-            command=set_level,
+            command=self.set_level,
+            text=level_name,
+            scale=buttonScale,
             extraArgs=[index],
+            parent=item,
         )
-        btn.setTransparency(True)
-        btn.reparentTo(item)
         self.level_buttons.append(btn)
         return item
+
+    def set_level(self, button_index: int):
+        level_name = self.LEVELS[button_index]["name"]
+        for idx, btn in enumerate(self.level_buttons):
+            if idx == button_index:
+                if self.app.configuration.get("selected_level") == level_name:
+                    # Unselect current level and reset the button
+                    self.app.configuration["selected_level"] = None
+                    self.description_frame["text"] = ""
+                    btn.reset()
+                    self.start_button.hide()
+                else:
+                    # Set the level and make the button "PRESSED"
+                    self.app.configuration["selected_level"] = level_name
+                    self.description_frame["text"] = self.LEVELS[button_index][
+                        "description"
+                    ]
+                    btn.set_pressed()
+                    self.start_button.show()
+            else:
+                # Reet all other level buttons
+                btn.reset()

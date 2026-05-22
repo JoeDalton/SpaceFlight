@@ -1,11 +1,10 @@
 import sys
 
-from direct.gui.DirectGui import DirectButton, DirectFrame
+from direct.gui.DirectGui import DirectFrame
 
 from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
-
-# TODO: overlay transparent-grey image between game and  menu buttons
+from space_flight.menus.menu_utils import CustomButton
 
 
 class PauseMenuState(BaseState):
@@ -16,23 +15,34 @@ class PauseMenuState(BaseState):
             pos=(0, 0, 0),
         )
         self.frame.setTransparency(True)
-        self.resume_button = DirectButton(
+        button_scale = 0.5
+        text_scale = 0.15
+        self.resume_button = CustomButton(
+            app=self.app,
             text="Resume Game",
-            scale=0.1,
+            scale=button_scale,
+            text_scale=text_scale,
             command=self.resume_game,
-            pos=(0.0, 0.0, 0.5),
+            pos=(0.0, 0.0, 0.3),
+            layout="center",
         )
-        self.return_button = DirectButton(
+        self.return_button = CustomButton(
+            app=self.app,
             text="Return to main menu",
-            scale=0.1,
+            scale=button_scale,
+            text_scale=text_scale,
             command=self.return_to_main,
             pos=(0.0, 0.0, 0.0),
+            layout="center",
         )
-        self.quit_button = DirectButton(
+        self.quit_button = CustomButton(
+            app=self.app,
             text="Quit Game",
-            scale=0.1,
+            scale=button_scale,
+            text_scale=text_scale,
             command=self.quit_game,
-            pos=(0.0, 0.0, -0.5),
+            pos=(0.0, 0.0, -0.3),
+            layout="center",
         )
 
     def resume_game(self):

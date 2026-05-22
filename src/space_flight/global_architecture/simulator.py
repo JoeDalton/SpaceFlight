@@ -11,6 +11,7 @@ from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.death_menu_state import DeathMenuState
 from space_flight.menus.level_selection_menu_state import LevelSelectionMenuState
 from space_flight.menus.main_menu_state import MainMenuState
+from space_flight.menus.menu_utils import MenuModels
 from space_flight.menus.pause_menu_state import PauseMenuState
 from space_flight.menus.splash_state import SplashState
 
@@ -97,8 +98,9 @@ class SpaceFlightSimulator(ShowBase):
         # import simplepbr
         # simplepbr.init()
 
-        self.state_manager = StateManager(self)
+        self.state_manager = StateManager(app=self)
         self.asset_manager = AssetManager(app=self)
+        self.menu_models = MenuModels(app=self)
         self.sfx = SFX(app=self)
 
         self.configuration = {}
