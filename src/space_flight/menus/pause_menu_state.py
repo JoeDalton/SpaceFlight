@@ -1,32 +1,48 @@
 import sys
 
-from direct.gui.DirectGui import DirectButton
+from direct.gui.DirectGui import DirectFrame
 
 from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
-
-# TODO: overlay transparent-grey image between game and  menu buttons
+from space_flight.menus.menu_utils import CustomButton
 
 
 class PauseMenuState(BaseState):
     def enter(self):
-        self.resume_button = DirectButton(
-            text="Resume Game",
-            scale=0.1,
-            command=self.resume_game,
-            pos=(0.0, 0.0, 0.5),
+        self.frame = DirectFrame(
+            frameSize=(self.app.a2dLeft + 0.5, self.app.a2dRight - 0.5, -0.8, 0.8),
+            frameColor=(0, 0, 0, 0.6),
+            pos=(0, 0, 0),
         )
-        self.return_button = DirectButton(
+        self.frame.setTransparency(True)
+        button_scale = 0.5
+        text_scale = 0.15
+        self.resume_button = CustomButton(
+            app=self.app,
+            text="Resume Game",
+            scale=button_scale,
+            text_scale=text_scale,
+            command=self.resume_game,
+            pos=(0.0, 0.0, 0.3),
+            layout="center",
+        )
+        self.return_button = CustomButton(
+            app=self.app,
             text="Return to main menu",
-            scale=0.1,
+            scale=button_scale,
+            text_scale=text_scale,
             command=self.return_to_main,
             pos=(0.0, 0.0, 0.0),
+            layout="center",
         )
-        self.quit_button = DirectButton(
+        self.quit_button = CustomButton(
+            app=self.app,
             text="Quit Game",
-            scale=0.1,
+            scale=button_scale,
+            text_scale=text_scale,
             command=self.quit_game,
-            pos=(0.0, 0.0, -0.5),
+            pos=(0.0, 0.0, -0.3),
+            layout="center",
         )
 
     def resume_game(self):
@@ -46,3 +62,4 @@ class PauseMenuState(BaseState):
         self.resume_button.destroy()
         self.return_button.destroy()
         self.quit_button.destroy()
+        self.frame.destroy()

@@ -6,6 +6,40 @@ from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
 COMMON_ASSETS_TO_LOAD = [
+    # UI
+    ("model", DATAFILES_PATH / "menus/button_map.egg", ""),
+    ("model", DATAFILES_PATH / "menus/dec_map.egg", ""),
+    ("model", DATAFILES_PATH / "menus/inc_map.egg", ""),
+    ("model", DATAFILES_PATH / "menus/list_item_even.egg", ""),
+    ("model", DATAFILES_PATH / "menus/list_item_odd.egg", ""),
+    ("model", DATAFILES_PATH / "menus/thumb_map.egg", ""),
+    ("model", DATAFILES_PATH / "menus/xbone-icons.egg", ""),
+    ("texture", DATAFILES_PATH / "menus/dialog.png", ""),
+    # Asteroids # TODO use bam files for faster loading
+    ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
+    # Skyboxes
+    ("model", DATAFILES_PATH / "models/skyboxes/sky_purple.bam", ""),
+    # Ships # TODO use bam files for faster loading
+    # ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf", ""),
+    # ("model", DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/tie-interceptor/exterior/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/tie-fighter/exterior/scene.gltf", ""),
+    # Battle sounds
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/short", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/long", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_hull", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_shield", "*.ogg"),
+    ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target", "*.wav"),
+    ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.mp3", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.mp3", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/AA_TURRET.WAV", ""),
     # Ship engine sounds
     ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_fighter/tie_scream_med.wav", ""),
     # Dust textures
@@ -22,32 +56,6 @@ COMMON_ASSETS_TO_LOAD = [
     # Explosion textures
     ("texture", DATAFILES_PATH / "sprites/particles/fire_atlas.png", ""),
     ("texture", DATAFILES_PATH / "sprites/particles/smoke_atlas.png", ""),
-    # Asteroids # TODO use bam files for faster loading
-    # ("model", DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
-    # Skyboxes
-    ("model", DATAFILES_PATH / "models/skyboxes/sky_purple.bam", ""),
-    # Ships # TODO use bam files for faster loading
-    ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/tie-interceptor/exterior/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/tie-fighter/exterior/scene.gltf", ""),
-    # Battle sounds
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/short", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/long", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_hull", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_shield", "*.ogg"),
-    ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target", "*.wav"),
-    ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.mp3", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.mp3", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/AA_TURRET.WAV", ""),
 ]
 
 
