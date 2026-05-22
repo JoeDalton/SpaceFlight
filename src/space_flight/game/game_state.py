@@ -33,7 +33,10 @@ class GameState(BaseState):
         elif self.app.configuration["selected_level"] == "Intro":
             build_intro_level(game=self)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(
+                f"Level `{self.app.configuration.get('selected_level')}` "
+                "does not exist."
+            )
         """
         DEBUG
         """

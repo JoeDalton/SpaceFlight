@@ -14,10 +14,24 @@ from space_flight.global_architecture.base_state import BaseState
 
 
 class LevelSelectionMenuState(BaseState):
-    LEVELS = ["Dev", "Intro"]
+    LEVELS = [
+        {
+            "name": "Dev",
+            "description": "A development level that usually "
+            "demonstrates the latest implemented features",
+        },
+        {"name": "Intro", "description": "The first `game ready` level."},
+    ] + [{"name": "toto", "description": "Lorem ipsum"}] * 20
 
     def enter(self):
-        button_maps = self.app.loader.loadModel(DATAFILES_PATH / "menus" / "button_map")
+        """
+        Build the level selection menu
+        """
+        button_maps = self.app.asset_manager.get_asset(
+            asset_type="model",
+            path=DATAFILES_PATH / "menus" / "button_map.egg",
+        )
+
         self.buttonGeom = (
             button_maps.find("**/ready"),
             button_maps.find("**/click"),
@@ -26,6 +40,7 @@ class LevelSelectionMenuState(BaseState):
         )
 
         main_button_scale = 0.3
+        self.title_text_scale = 0.1
         # State change buttons
         self.back_button = DirectButton(
             text="Back",
@@ -61,6 +76,21 @@ class LevelSelectionMenuState(BaseState):
         )
         self.start_button.hide()
 
+        self.description_frame = DirectFrame(
+            frameSize=VBase4(0.0, self.app.a2dRight - 0.1, 0.3, 1.55),
+            frameColor=VBase4(0.25, 0.25, 0.25, 0.3),
+            pos=(0, 0, -0.8),
+            text="",
+            text_wordwrap=30,
+            text_align=TextNode.ALeft,
+            text_scale=0.05,
+            text_fg=VBase4(1, 1, 1, 1),
+            text_pos=(0.05, 1.45),
+            text_shadow=VBase4(0, 0, 0, 0.35),
+            text_shadowOffset=Vec2(-0.05, -0.05),
+        )
+        self.description_frame.setTransparency(True)
+
         self.create_level_list()
 
     def start_game(self):
@@ -76,6 +106,7 @@ class LevelSelectionMenuState(BaseState):
         self.start_button.destroy()
         self.lstActionMap.destroy()
         self.title.destroy()
+        self.description_frame.destroy()
 
         self.force_render()
 
@@ -84,13 +115,12 @@ class LevelSelectionMenuState(BaseState):
         Creates a list of levels for the user to select
         """
         # create a sample title
-        self.textscale = 0.1
         self.title = DirectLabel(
-            scale=self.textscale,
+            scale=self.title_text_scale,
             pos=(
                 self.app.a2dLeft + 0.05,
                 0.0,
-                self.app.a2dTop - (self.textscale + 0.05),
+                self.app.a2dTop - (self.title_text_scale + 0.05),
             ),
             frameColor=VBase4(0, 0, 0, 0),
             text="Level selection",
@@ -103,31 +133,46 @@ class LevelSelectionMenuState(BaseState):
 
         # Change the default dialog skin.
         self.level_buttons = []
-        DGG.setDefaultDialogGeom(DATAFILES_PATH / "menus" / "dialog.png")
+        # DGG.setDefaultDialogGeom(DATAFILES_PATH / "menus" / "dialog.png")
+        DGG.setDefaultDialogGeom(
+            self.app.asset_manager.get_asset(
+                asset_type="texture",
+                path=DATAFILES_PATH / "menus" / "dialog.png",
+            )
+        )
 
         # Set up the list of actions that we can map keys to
         # create a frame that will create the scrollbars for us
         # Load the models for the scrollbar elements
-        thumbMaps = self.app.loader.loadModel(DATAFILES_PATH / "menus" / "thumb_map")
-        thumbGeom = (
-            thumbMaps.find("**/thumb_ready"),
-            thumbMaps.find("**/thumb_click"),
-            thumbMaps.find("**/thumb_hover"),
-            thumbMaps.find("**/thumb_disabled"),
+        thumb_map = self.app.asset_manager.get_asset(
+            asset_type="model",
+            path=DATAFILES_PATH / "menus" / "thumb_map.egg",
         )
-        incMaps = self.app.loader.loadModel(DATAFILES_PATH / "menus" / "inc_map")
-        incGeom = (
-            incMaps.find("**/inc_ready"),
-            incMaps.find("**/inc_click"),
-            incMaps.find("**/inc_hover"),
-            incMaps.find("**/inc_disabled"),
+        thumb_geom = (
+            thumb_map.find("**/thumb_ready"),
+            thumb_map.find("**/thumb_click"),
+            thumb_map.find("**/thumb_hover"),
+            thumb_map.find("**/thumb_disabled"),
         )
-        decMaps = self.app.loader.loadModel(DATAFILES_PATH / "menus" / "dec_map")
-        decGeom = (
-            decMaps.find("**/dec_ready"),
-            decMaps.find("**/dec_click"),
-            decMaps.find("**/dec_hover"),
-            decMaps.find("**/dec_disabled"),
+        inc_map = self.app.asset_manager.get_asset(
+            asset_type="model",
+            path=DATAFILES_PATH / "menus" / "inc_map.egg",
+        )
+        inc_geom = (
+            inc_map.find("**/inc_ready"),
+            inc_map.find("**/inc_click"),
+            inc_map.find("**/inc_hover"),
+            inc_map.find("**/inc_disabled"),
+        )
+        dec_map = self.app.asset_manager.get_asset(
+            asset_type="model",
+            path=DATAFILES_PATH / "menus" / "dec_map.egg",
+        )
+        dec_geom = (
+            dec_map.find("**/dec_ready"),
+            dec_map.find("**/dec_click"),
+            dec_map.find("**/dec_hover"),
+            dec_map.find("**/dec_disabled"),
         )
 
         # create the scrolled frame that will hold our list
@@ -142,15 +187,15 @@ class LevelSelectionMenuState(BaseState):
             verticalScroll_scrollSize=0.2,
             verticalScroll_frameColor=VBase4(0.02, 0.02, 0.02, 1),
             verticalScroll_thumb_relief=1,
-            verticalScroll_thumb_geom=thumbGeom,
+            verticalScroll_thumb_geom=thumb_geom,
             verticalScroll_thumb_pressEffect=False,
             verticalScroll_thumb_frameColor=VBase4(0, 0, 0, 0),
             verticalScroll_incButton_relief=1,
-            verticalScroll_incButton_geom=incGeom,
+            verticalScroll_incButton_geom=inc_geom,
             verticalScroll_incButton_pressEffect=False,
             verticalScroll_incButton_frameColor=VBase4(0, 0, 0, 0),
             verticalScroll_decButton_relief=1,
-            verticalScroll_decButton_geom=decGeom,
+            verticalScroll_decButton_geom=dec_geom,
             verticalScroll_decButton_pressEffect=False,
             verticalScroll_decButton_frameColor=VBase4(0, 0, 0, 0),
         )
@@ -162,9 +207,11 @@ class LevelSelectionMenuState(BaseState):
         self.listBGOdd = self.app.loader.loadModel(
             DATAFILES_PATH / "menus" / "list_item_odd"
         )
+
         self.actionLabels = {}
         for idx, level in enumerate(self.LEVELS):
-            item = self.__makeListItem(level, idx)
+            level_name = level["name"]
+            item = self.__makeListItem(level_name, idx)
             item.reparentTo(self.lstActionMap.getCanvas())
 
         # Recalculate the canvas size to set scrollbars if necesary
@@ -178,17 +225,21 @@ class LevelSelectionMenuState(BaseState):
 
     def __makeListItem(self, level_name, index):
         def set_level(button_index: int):
-            level_name = self.LEVELS[button_index]
+            level_name = self.LEVELS[button_index]["name"]
             for idx, btn in enumerate(self.level_buttons):
                 if idx == button_index:
                     if self.app.configuration.get("selected_level") == level_name:
                         # Unselect current level and make the button "READY"
                         self.app.configuration["selected_level"] = None
+                        self.description_frame["text"] = ""
                         btn["geom"] = self.buttonGeom[0]
                         self.start_button.hide()
                     else:
                         # Set the level and make the button "PRESSED"
                         self.app.configuration["selected_level"] = level_name
+                        self.description_frame["text"] = self.LEVELS[button_index][
+                            "description"
+                        ]
                         btn["geom"] = self.buttonGeom[1]
                         self.start_button.show()
                 else:
@@ -225,7 +276,6 @@ class LevelSelectionMenuState(BaseState):
             scale=buttonScale,
             text_scale=0.25,
             text_align=TextNode.ALeft,
-            # text_fg=VBase4(0.898, 0.839, 0.730, 1.0),
             text_fg=VBase4(1, 1, 1, 1),
             text_pos=Vec2(-0.9, -0.085),
             relief=1,
