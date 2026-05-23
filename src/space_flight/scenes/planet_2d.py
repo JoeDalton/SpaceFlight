@@ -1,7 +1,8 @@
 import uuid
 
 import numpy as np
-from panda3d.core import CardMaker, NodePath, TransparencyAttrib
+import quaternion
+from panda3d.core import CardMaker, NodePath, Quat, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
 
@@ -11,7 +12,8 @@ class Planet2D:
         self,
         game,
         scale: float = 5000,
-        position: np.ndarray = np.array([0.0, 10000.0, 0.0]),
+        position: np.ndarray = np.array([0.0, 10000.0, 2000.0]),
+        orientation: quaternion = np.quaternion(1, 0, 0, 0),
         type: str = "terran",
     ):
         self.game = game
@@ -34,6 +36,14 @@ class Planet2D:
             )
         )
         self.planet.setScale(scale, scale, scale)
+        self.planet.setQuat(
+            Quat(
+                orientation.w,
+                orientation.x,
+                orientation.y,
+                orientation.z,
+            )
+        )
 
         self.game.method_lists[self.id] = [self.move_planet_task]
 

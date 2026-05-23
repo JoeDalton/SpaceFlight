@@ -1,6 +1,6 @@
 from typing import List
 
-from panda3d.core import AmbientLight, DirectionalLight, Vec4
+from panda3d.core import AmbientLight, DirectionalLight, Point3, Vec4
 
 
 class Lighting:
@@ -8,7 +8,7 @@ class Lighting:
         self,
         game,
         directional_color: List = [0.5, 0.5, 0.45, 1],
-        directional_direction: List = [-30, -60, 0],
+        directional_direction: List = [-30, -60, 0],  # FROM scene TOWARD sun
         ambient_color: List = [0.1, 0.2, 0.4, 1],
     ):
         self.game = game
@@ -23,10 +23,12 @@ class Lighting:
             )
         )
         self.dlnp = game.root_node.attach_new_node(self.dlight)
-        self.dlnp.set_hpr(
-            directional_direction[0],
-            directional_direction[1],
-            directional_direction[2],
+        self.dlnp.look_at(
+            Point3(
+                -directional_direction[0],
+                -directional_direction[1],
+                -directional_direction[2],
+            )
         )
         game.app.render.set_light(self.dlnp)
 

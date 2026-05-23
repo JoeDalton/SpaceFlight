@@ -42,34 +42,16 @@ class SceneOcean(Scene):
     ):
         super().__init__(game=game)
 
-        # ── Sky / sun ─────────────────────────────────────────────────────────
-        # TODO use asset manager. In any case, I will change the skybox
         # Skybox
-        self.skybox = Skybox(game=self.game)  # , name="basic_sky/scene.gltf")
-        # self.skybox = self.game.app.loader.loadModel(
-        #   DATAFILES_PATH/"models/skyboxes/basic_sky/scene.gltf"
-        # )
-        # self.skybox.reparentTo(self.game.root_node)
-        # self.skybox.setBin('background', 1)
-        # self.skybox.setDepthWrite(0)
-        # self.skybox.setLightOff()
-        # self.skybox.setScale(1000)
-        # self.sun = self.game.app.loader.loadModel(
-        #   DATAFILES_PATH/"models/skyboxes/blue_sky/sun.egg"
-        # )
-        # self.sun.reparentTo(self.skybox)
-        # self.sun.setBin('background', 1)
-        # self.sun.setDepthWrite(0)
-        # self.sun.setLightOff()
-        # self.sun.setScale(50)
-        # self.sun.setP(20)
+        self.skybox = Skybox(game=self.game, name="dusk")
 
         # Planet
         self.planet = Planet2D(
             game=self.game,
             type="terran",
             scale=1000,
-            position=np.array([0.0, 10000.0, 2000.0]),
+            position=np.array([10000.0, 0.0, 2000.0]),
+            orientation=np.quaternion(np.sqrt(2) / 2, 0, 0, -np.sqrt(2) / 2),
         )
 
         # Ocean
@@ -78,9 +60,10 @@ class SceneOcean(Scene):
         # Lights
         self.lighting = Lighting(
             game=self.game,
-            directional_color=[1.0, 0.8, 0.6, 1],
-            directional_direction=[0, -70, 0],
-            ambient_color=[0.3, 0.4, 0.5, 1],
+            directional_color=[1.0, 0.8, 0.2, 1],
+            directional_direction=[-0.2, -1, 0.1],
+            ambient_color=[0.2, 0.3, 0.4, 0.2],
+            # ambient_color=[0,0,0,0],
         )
 
         # Speed dust effect
@@ -122,7 +105,7 @@ class SceneAsteroids(Scene):
         super().__init__(game=game)
 
         # Skybox
-        self.skybox = Skybox(game=self.game)
+        self.skybox = Skybox(game=self.game, name="purple")
 
         # Lights
         self.lighting = Lighting(game=self.game)
@@ -257,7 +240,7 @@ class SceneDebug(Scene):
         super().__init__(game=game)
 
         # Skybox
-        self.skybox = Skybox(game=self.game, name="sky_test.bam")
+        self.skybox = Skybox(game=self.game, name="test")
 
         # Lights
         self.lighting = Lighting(game=self.game)

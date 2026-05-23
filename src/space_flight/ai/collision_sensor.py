@@ -19,7 +19,7 @@ class CollisionSensor:
         self,
         game,
         ship,
-        collision_reference_distance_m=200.0,
+        collision_reference_distance_m=100.0,
         ship_distance_1_m=5,
         radius_1_m=30,
         ship_distance_2_m=50,

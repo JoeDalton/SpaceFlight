@@ -106,7 +106,7 @@ class Personality:
         },
         "pilot": {
             "sample_time_s": 0.1,
-            "minimum_throttle": 0.01,
+            "minimum_throttle": 0.2,
             "yaw_kp": 1.0,
             "yaw_ki": 0.0,
             "yaw_kd": 0.0,
@@ -190,7 +190,7 @@ class Personality:
         },
         "pilot": {
             "sample_time_s": 0.2,
-            "minimum_throttle": 0.01,
+            "minimum_throttle": 0.2,
             "yaw_kp": 1.0,
             "yaw_ki": 0.0,
             "yaw_kd": 0.0,

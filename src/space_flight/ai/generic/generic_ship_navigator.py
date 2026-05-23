@@ -14,7 +14,7 @@ LOGGER = logging.getLogger()
 
 
 NO_DIRECTION = np.zeros(3), 100.0
-COLLISION_REFERENCE_SPEED_MPS = 30
+COLLISION_REFERENCE_SPEED_MPS = 50
 
 
 class GenericShipNavigator(GenericNavigator):

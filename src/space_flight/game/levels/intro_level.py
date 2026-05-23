@@ -44,7 +44,7 @@ def build_intro_level(game):
     Initialize allies
     """
     # Initialize convoy formation
-    game.team_1_formation = Formation(scale_m=300)
+    game.team_1_formation = Formation(scale_m=150)
 
     # Define transport waypoints
     transport_waypoints = [
@@ -66,9 +66,9 @@ def build_intro_level(game):
         if i == 0:
             r_pos = np.zeros(3)
         elif i == 1:
-            r_pos = np.array([300, -600, 150])
+            r_pos = np.array([-150, -150, 75])
         elif i == 2:
-            r_pos = np.array([-300, -600, 150])
+            r_pos = np.array([150, -150, 75])
         bot = spawn_bot(
             game=game,
             name=f"transport_{i+1}",
@@ -84,14 +84,14 @@ def build_intro_level(game):
         game.team_1_formation.add_ship(ship=bot.pawn)
 
     # Spawn escort
-    n_follower = 5
+    n_follower = 8
     for i in range(n_follower):
         bot = spawn_bot(
             game=game,
             name=f"escort_ship_{i}",
             bot_type="fighter",
             pawn_model="x-wing",
-            ini_position=np.array([(int(n_follower / 2)) * 100 - 100 * i, -1500, 300]),
+            ini_position=np.array([(int(n_follower / 2)) * 100 - 100 * i, -2500, 300]),
             team=1,
             debug_decisions=False,
         )
@@ -102,11 +102,11 @@ def build_intro_level(game):
         np.array([0.0, 0.0, 0.0]),
         np.array([1.0, -1.0, 0.5]),
         np.array([-1.0, -1.0, 0.5]),
-        np.array([1.4, 2.0, 1.0]),
-        np.array([-1.4, 2.0, 1.0]),
+        np.array([1.4, 2.0, 0.0]),
+        np.array([-1.4, 2.0, 0.0]),
         np.array([0.0, 2.0, -1.0]),
         np.array([0.0, -2.0, 1.0]),
-        np.array([0.0, -2.0, -1.0]),
+        np.array([0.0, -2.0, 0.0]),
         np.array([1.0, -2.0, 0.0]),
         np.array([-1.0, -2.0, 0.0]),
         np.array([0.0, -3.0, 0.0]),

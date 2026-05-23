@@ -18,7 +18,8 @@ COMMON_ASSETS_TO_LOAD = [
     # Asteroids # TODO use bam files for faster loading
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
     # Skyboxes
-    ("model", DATAFILES_PATH / "models/skyboxes/sky_purple.bam", ""),
+    ("model", DATAFILES_PATH / "models/skyboxes/purple.bam", ""),
+    ("model", DATAFILES_PATH / "models/skyboxes/dusk.bam", ""),
     # Ships # TODO use bam files for faster loading
     # ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
