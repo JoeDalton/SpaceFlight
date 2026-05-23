@@ -81,6 +81,7 @@ class InputSystem:
         self.is_laser_fire = False
         # Game UI
         self.game.app.accept("escape", self.game.set_pause)
+        self.lblWarning = OnscreenText(text="", fg=(1, 0, 0, 1), scale=0.25)
 
     def action(self, button):
         # Just show which button has been pressed.
@@ -239,9 +240,7 @@ class Joystick(InputSystem):
     def __init__(self, game, player):
         super().__init__(game=game, player=player)
 
-        self.lblWarning = OnscreenText(
-            text="No devices found", fg=(1, 0, 0, 1), scale=0.25
-        )
+        self.lblWarning["text"] = "No devices found"
 
         self.lblAction = OnscreenText(text="Action", fg=(1, 1, 1, 1), scale=0.15)
         self.lblAction.hide()
@@ -397,9 +396,7 @@ class Gamepad(InputSystem):
     def __init__(self, game, player):
         super().__init__(game=game, player=player)
 
-        self.lblWarning = OnscreenText(
-            text="No devices found", fg=(1, 0, 0, 1), scale=0.25
-        )
+        self.lblWarning["text"] = "Node devices found"
 
         self.lblAction = OnscreenText(text="Action", fg=(1, 1, 1, 1), scale=0.15)
         self.lblAction.hide()
@@ -510,7 +507,11 @@ class Gamepad(InputSystem):
         return throttle, yaw_rate, pitch_rate, roll_rate
 
     def clean(self):
-        self.game.app.detachInputDevice(self.gamepad)
+        try:
+            self.game.app.detachInputDevice(self.gamepad)
+        except AssertionError:
+            pass
+        self.lblWarning.destroy()
         self.game.app.ignore("escape")
         self.gamepad = None
         self.game = None
