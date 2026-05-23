@@ -6,10 +6,11 @@ from panda3d.core import TexGenAttrib, TextureStage
 Create skyboxes with Spacescape
 
 Rename files from right1-back6 to 0-5, then invert files 2 and 3 (top and bottom)
-
+Must be launched from the game's root,
+then the bam file must be moved into the skybox folder.
 """
 
-skybox_name = "test"
+skybox_name = "dusk"
 
 
 class SkySphere(DirectObject):
@@ -37,7 +38,12 @@ class SkySphere(DirectObject):
         self.sphere.reparentTo(base.render)
         # Reparent the sphere to render so you can see it.
 
-        result = self.sphere.writeBamFile(f"sky_{skybox_name}.bam")
+        if skybox_name == "dusk":
+            ts = TextureStage.getDefault()
+            self.sphere.setTexHpr(ts, (0, 90, 0))
+        # Turn texture map if necessary
+
+        result = self.sphere.writeBamFile(f"{skybox_name}.bam")
         # Save out the bam file.
         print(result)
         # Print out whether the saving succeeded or not.
