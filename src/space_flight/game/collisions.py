@@ -168,6 +168,7 @@ class CollisionSystem:
             # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
             # TODO: Add a hit sprite
             self.game.app.sfx.distant_impact_hit(
+                game=self.game,
                 player_ship_pos=self.game.player.ship.position,
                 hit_pos=entry.into_node_path.parent.getPos(),
                 impact_type="target",
@@ -195,6 +196,7 @@ class CollisionSystem:
             return
 
         self.game.app.sfx.distant_impact_hit(
+            game=self.game,
             player_ship_pos=self.game.player.ship.position,
             hit_pos=entry.into_node_path.parent.getPos(),
             impact_type="terrain",
