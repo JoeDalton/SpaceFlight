@@ -3,9 +3,9 @@ mass_kg: 100
 physics_filter_time_s: 0.3
 max_thrust_n: 6050
 brake_factor_nspm: 100
-max_pitch_rate_degps: 60
-max_yaw_rate_degps: 30
-max_roll_rate_degps: 150
+max_pitch_rate_degps: 35
+max_yaw_rate_degps: 15
+max_roll_rate_degps: 90
 drag_coefficient: 0.1
 lift_coefficient_slope_pdeg: 0.1
 lateral_lift_coefficient_slope_pdeg: 0.05
@@ -20,7 +20,7 @@ laser_base_range_m: 1500
 laser_color: red
 laser_fire_rate: 8
 cannon_positions: [[-3, 5, -1], [3, 5, -1]]
-laser_sound: sounds/weapons/YWING_BLASTER.mp3
+laser_sound: sounds/weapons/YWING_BLASTER.wav
 shot_power: 60.0
 explosion_scale: 5.0
 
