@@ -97,30 +97,7 @@ class GenericShipNavigator(GenericNavigator):
 
         :return: The direction to point to and the desired speed
         """
-        if intent == Intent.IDLE:
-            self.engage_phase = ""
-            return NO_DIRECTION
-        elif intent == Intent.PATROL:
-            self.engage_phase = ""
-            return self.follow_waypoints()
-        elif intent == Intent.ENGAGE:
-            # Exact behaviour is defined and recorded inside engage_target
-            # TODO reset spiral time if new order ? May not be necessary
-            return self.engage_target(target_dict)
-        elif intent == Intent.EVADE:
-            self.engage_phase = ""
-            return self.evade_target(target_dict)
-        elif intent == Intent.REGROUP:
-            self.engage_phase = ""
-            return self.regroup(target_dict)
-        elif intent == Intent.DISENGAGE:
-            self.engage_phase = ""
-            return self.disengage(target_dict)
-        elif intent == Intent.FORMATION:
-            self.engage_phase = ""
-            return self.formation(target_dict)
-        else:
-            return ValueError(f"Unknown intent: {intent}")
+        raise NotImplementedError
 
     # %% ==== REGROUP ====
 
