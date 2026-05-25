@@ -130,6 +130,14 @@ class SFX:
         sound.setVolume(volume * multiplier)
         sound.play()
 
+        # Schedule sound release
+        self.app.taskMgr.doMethodLater(
+            5.0,
+            sound_pool.release_sound,
+            "Release distant impact sound",
+            extraArgs=[sound],
+        )
+
     def laser_impact_hit_on_player(
         self, game, relative_hit_point: np.ndarray, is_shield: bool
     ):
@@ -160,6 +168,14 @@ class SFX:
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
+
+        # Schedule sound release
+        self.app.taskMgr.doMethodLater(
+            5.0,
+            sound_pool.release_sound,
+            "Release Laser impact on player sound",
+            extraArgs=[sound],
+        )
 
     def player_crash(self, game, relative_hit_point: np.ndarray, in_terrain: bool):
         """
@@ -202,6 +218,13 @@ class SFX:
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
+        # Schedule sound release
+        self.app.taskMgr.doMethodLater(
+            5.0,
+            sound_pool.release_sound,
+            "Release player crash sound",
+            extraArgs=[sound],
+        )
 
     def cannon_fire(self, sound_pool, node):
         """
@@ -213,6 +236,11 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
         self.audio3d.attachSoundToObject(sound, node)
         sound.play()
+        # Schedule sound release
+        # TODO use my own domethodlater
+        self.app.taskMgr.doMethodLater(
+            2.0, sound_pool.release_sound, "Release laser sound", extraArgs=[sound]
+        )
 
     def update_task(self, task):
         self.audio3d.update()

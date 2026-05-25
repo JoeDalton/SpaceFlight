@@ -2,8 +2,6 @@ import logging
 import random
 from pathlib import Path
 
-from panda3d.core import AudioSound
-
 LOGGER = logging.getLogger()
 
 SOUND_POOL_LENGTH = 100
@@ -77,6 +75,7 @@ class SoundPool:
                 else:
                     sound = load_generic_sound(app=app, sound_file=path)
                 self.pool.append(sound)
+        self.in_use = set()
 
     def get_sound(self, randomize_pitch: bool = False) -> object:
         """
@@ -87,7 +86,8 @@ class SoundPool:
         """
         for sound in self.pool:
             # Must use a non-currently-playing sound, otherwise it will restart
-            if sound.status() != AudioSound.PLAYING:
+            if sound not in self.in_use:
+                self.in_use.add(sound)
                 if randomize_pitch:
                     # Randomize the pitch of the sound to get a more realistic feeling
                     sound.setPlayRate(random.uniform(0.9, 1.1))
@@ -95,6 +95,15 @@ class SoundPool:
         # If this state is reached, no ready-to-play sound is available
         LOGGER.warning("No sound ready to play")
         raise RuntimeError("No sound ready to play")
+
+    def release_sound(self, sound):
+        """
+        Releases sound from in_use set and stops the audio
+
+        :param sound: _description_
+        """
+        sound.stop()
+        self.in_use.discard(sound)
 
 
 def build_sound_pool(app, directory: Path, pattern: str, is_3d: bool) -> list:
