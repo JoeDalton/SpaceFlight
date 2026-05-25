@@ -16,4 +16,4 @@ hit_box_radius_m: 30.0
 
 explosion_scale: 50.0
 
-exterior_engine_sound: sounds/engines/tie_fighter/tie_scream_med.wav
+exterior_engine_sound: sounds/engines/x-wing/exterior.ogg

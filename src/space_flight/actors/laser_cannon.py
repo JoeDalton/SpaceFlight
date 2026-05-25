@@ -112,6 +112,7 @@ class LaserCannon:
 
         # Attach sound to the cannon currently firing
         self.game.app.sfx.cannon_fire(
+            game=self.game,
             sound_pool=self.sound_pool,
             node=self.cannon_nodes[self.current_next_cannon_idx],
         )

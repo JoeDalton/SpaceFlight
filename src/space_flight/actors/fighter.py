@@ -156,7 +156,7 @@ class Fighter(Ship):
             self.collision_sphere_np.remove_node()
             self.collision_sphere_np = None
             try:  # TODO: remove try when the player's ship gets sound
-                self.sound.stop()
+                self.sound_pool.release_sound(self.sound)
                 self.game.app.sfx.audio3d.detachSound(self.sound)
                 self.sound = None  # TODO This is what breaks the sound of other ships ?
             except AttributeError:

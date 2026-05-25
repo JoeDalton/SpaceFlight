@@ -118,7 +118,7 @@ def build_intro_level(game):
     # Define level scenario
     game.team_2_formation1 = Formation(scale_m=30, shape="arrowhead")
     game.team_2_formation2 = Formation(scale_m=30, shape="diamond")
-    game.team_2_formation3 = Formation(scale_m=30, shape="around_diamond")
+    game.team_2_formation3 = Formation(scale_m=30, shape="diamond")
     game.scenario_data = {
         "first_wave": {
             "spawned": False,
@@ -126,7 +126,7 @@ def build_intro_level(game):
             "ship_model": "tie-bomber",
             "spawn_point": np.array([300, 6000, 500]),
             "spawn_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 40,
+            "spawn_time_s": 50,
             "waypoints": [
                 np.array([300, 0, 500]),
                 np.array([300, -6000, 500]),
@@ -138,7 +138,7 @@ def build_intro_level(game):
             "ship_model": "tie-interceptor",
             "spawn_point": np.array([300, 6300, 800]),
             "spawn_orientation": np.array([0, 0, 0, 1]),
-            "spawn_time_s": 45,
+            "spawn_time_s": 60,
             "waypoints": [
                 np.array([300, 0, 500]),
                 np.array([300, -6000, 500]),

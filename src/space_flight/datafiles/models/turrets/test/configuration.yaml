@@ -13,6 +13,6 @@ laser_base_range_m: 1500
 laser_color: green
 laser_fire_rate: 1.0
 cannon_positions: [[2.2, 0, 0], [-2.2, 0, 0]]
-laser_sound: sounds/weapons/AA_TURRET.WAV
+laser_sound: sounds/weapons/AA_TURRET_BLASTER.WAV
 shot_power: 200.0
 explosion_scale: 30

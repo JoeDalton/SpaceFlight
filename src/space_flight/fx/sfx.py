@@ -96,13 +96,14 @@ class SFX:
         )
 
     def distant_impact_hit(
-        self, player_ship_pos: np.ndarray, hit_pos: np.ndarray, impact_type: str
+        self, game, player_ship_pos: np.ndarray, hit_pos: np.ndarray, impact_type: str
     ):
         """
         Play an impact sound where the impact took place
 
         TODO: add pitch randmoness for variation ?
 
+        :param game: The game object
         :param player_ship_pos: The location of the player
         :param hit_pos: The location of impact
         :param impact_type: The type of impact (target, terrain, etc.)
@@ -130,12 +131,29 @@ class SFX:
         sound.setVolume(volume * multiplier)
         sound.play()
 
+        # Schedule sound release
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="Release distant impact sound",
+            method=sound_pool.release_sound,
+            extra_args=[sound],
+        )
+
+        # # Schedule sound release
+        # self.app.taskMgr.doMethodLater(
+        #     5.0,
+        #     sound_pool.release_sound,
+        #     "Release distant impact sound",
+        #     extraArgs=[sound],
+        # )
+
     def laser_impact_hit_on_player(
         self, game, relative_hit_point: np.ndarray, is_shield: bool
     ):
         """
         Play a random impact sound where the impact took place
 
+        :param game: The game object
         :param relative_hit_point: The position of the hit relative to the player node
         :param is_shield: Whether the player's shield is active
         """
@@ -161,12 +179,21 @@ class SFX:
         sound.setVolume(multiplier)
         sound.play()
 
+        # Schedule sound release
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="Release Laser impact on player sound",
+            method=sound_pool.release_sound,
+            extra_args=[sound],
+        )
+
     def player_crash(self, game, relative_hit_point: np.ndarray, in_terrain: bool):
         """
         Play a random impact sound where the impact took place
         Blend a random long and a random short crash sound
         If the crash is in terrain, add rock impact sound
 
+        :param game: The game object
         :param relative_hit_point: The position of the hit relative to the player node
         :param in_rock: Whether the player has crashed in terrain shield is active
         """
@@ -202,17 +229,32 @@ class SFX:
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
+        # Schedule sound release
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="Release player crash sound",
+            method=sound_pool.release_sound,
+            extra_args=[sound],
+        )
 
-    def cannon_fire(self, sound_pool, node):
+    def cannon_fire(self, game, sound_pool, node):
         """
         Play the cannon firing sound at the cannon's location
 
+        :param game: The game object
         :param sound_pool: The sound pool from which to draw the sound
         :param node: The node to attach the sound to
         """
         sound = sound_pool.get_sound(randomize_pitch=True)
         self.audio3d.attachSoundToObject(sound, node)
         sound.play()
+        # Schedule sound release
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="Release player crash sound",
+            method=sound_pool.release_sound,
+            extra_args=[sound],
+        )
 
     def update_task(self, task):
         self.audio3d.update()
