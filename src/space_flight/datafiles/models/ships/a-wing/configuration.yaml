@@ -24,4 +24,4 @@ laser_sound: sounds/weapons/XWING_BLASTER.mp3
 shot_power: 60.0
 explosion_scale: 5.0
 
-exterior_engine_sound: sounds/engines/tie_fighter/tie_scream_med.wav
+exterior_engine_sound: sounds/engines/x-wing/exterior.ogg
