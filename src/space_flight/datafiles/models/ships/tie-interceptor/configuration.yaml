@@ -25,3 +25,4 @@ shot_power: 75.0
 explosion_scale: 5.0
 
 exterior_engine_sound: sounds/engines/tie_fighter/exterior.wav
+interior_engine_sound: sounds/test_interior.ogg

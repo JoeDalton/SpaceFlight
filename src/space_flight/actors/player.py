@@ -122,6 +122,9 @@ class Player:
         # Move camera relative to the ship node
         self.move_camera()
 
+        # Update engine sound
+        self.adjust_engine_pitch()
+
         # Record state if needed
         if RECORD_GAME and self.record:
             self.record_state()
@@ -268,6 +271,15 @@ class Player:
             )
         else:
             raise NotImplementedError
+
+    def adjust_engine_pitch(self):
+        """
+        Updates the pitch of the engine noise
+
+        Uses self.throttle: The throttle value of the player's ship [0, 1]
+        """
+        pitch_multiplier = 0.9 + 0.3 * min(self.throttle, 1.3)
+        self.ship.sound.setPlayRate(pitch_multiplier)
 
     def record_state(self):
         """

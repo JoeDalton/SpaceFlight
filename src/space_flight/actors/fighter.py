@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight import DEBUG_DELETION
 from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.ship import Ship
 from space_flight.ai.auto_aim import AutoAim
@@ -69,29 +69,6 @@ class Fighter(Ship):
 
         # Set explosion size for death animation
         self.explosion_scale = self.conf["explosion_scale"]
-
-        # Initialize engine sound for bot ships
-        # TODO better
-        if self.parent.name != "player":
-            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
-            self.sound_pool = self.game.app.asset_manager.get_asset(
-                asset_type="3d_sound",
-                path=sound_file,
-            )
-            self.sound = self.sound_pool.get_sound()
-            self.sound.setLoop(True)
-            self.sound.setVolume(10.0)
-            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
-
-            # Automatic velocity tracking
-            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
-
-            # TODO Doppler does not seem to work great
-            self.game.delayed_methods.do_method_later(
-                delay_s=0.5,
-                name="Play_engine_sound",
-                method=self.sound.play,
-            )
 
     def move(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float

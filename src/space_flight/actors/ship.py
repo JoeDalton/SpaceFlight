@@ -142,6 +142,40 @@ class Ship(Pawn):
 
         # VFX are ship-type dependent
 
+        # Initialize engine sound for ships
+        # TODO better
+        if self.parent.name == "player":
+            sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
+            self.sound_pool = self.game.app.asset_manager.get_asset(
+                asset_type="sound",
+                path=sound_file,
+            )
+            self.sound = self.sound_pool.get_sound()
+            self.sound.setLoop(True)
+            self.sound.setVolume(0.1)
+        else:
+            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
+            self.sound_pool = self.game.app.asset_manager.get_asset(
+                asset_type="3d_sound",
+                path=sound_file,
+            )
+            self.sound = self.sound_pool.get_sound()
+            self.sound.setLoop(True)
+            self.sound.setVolume(10.0)
+            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
+
+            # Automatic velocity tracking
+            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
+
+            # TODO Doppler does not seem to work great
+
+        # Play a bit later to avoid audio artifacts at startup
+        self.game.delayed_methods.do_method_later(
+            delay_s=0.5,
+            name="Play_engine_sound",
+            method=self.sound.play,
+        )
+
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):

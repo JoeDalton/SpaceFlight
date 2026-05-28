@@ -45,6 +45,7 @@ COMMON_ASSETS_TO_LOAD = [
     # Ship engine sounds
     ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_fighter/exterior.wav", ""),
     ("3d_sound", DATAFILES_PATH / "sounds/engines/x-wing/exterior.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/test_interior.ogg", ""),
     # Dust textures
     ("texture", DATAFILES_PATH / "sprites/dust/dust_blue.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_green.png", ""),
