@@ -20,9 +20,9 @@ laser_base_range_m: 1500
 laser_color: green
 laser_fire_rate: 6.7
 cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
-laser_sound: sounds/weapons/TIE_BLASTER.mp3
+laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 70.0
 explosion_scale: 5.0
 
-exterior_engine_sound: sounds/engines/tie_fighter/exterior.wav
-interior_engine_sound: sounds/test_interior.ogg
+exterior_engine_sound: sounds/engines/tie_common/tie_ext_med.ogg
+interior_engine_sound: sounds/engines/tie_common/tie_int_med.ogg

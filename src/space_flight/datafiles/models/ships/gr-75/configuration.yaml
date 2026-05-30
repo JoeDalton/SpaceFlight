@@ -16,5 +16,5 @@ hit_box_radius_m: 30.0
 
 explosion_scale: 50.0
 
-exterior_engine_sound: sounds/engines/x-wing/exterior.ogg
-interior_engine_sound: sounds/test_interior.ogg
+exterior_engine_sound: sounds/engines/capital_ships/test_capital_ext.ogg
+# interior_engine_sound: sounds/test_interior.ogg
