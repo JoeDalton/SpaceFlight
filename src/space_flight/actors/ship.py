@@ -399,6 +399,9 @@ class Ship(Pawn):
         # Apply physics and integrate movement
         self.move_ship_physics()
 
+        # Update engine sound
+        self.adjust_engine_pitch(throttle=throttle)
+
         # Update render
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
@@ -449,6 +452,15 @@ class Ship(Pawn):
         self.apply_damage(damage=damage, damage_type="physical")
         self.velocity_correction = velocity_correction
         self.position_correction = position_correction
+
+    def adjust_engine_pitch(self, throttle: float):
+        """
+        Updates the pitch of the engine noise
+
+        :param throttle: The throttle value of the ship [0, 1]
+        """
+        pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
+        self.sound.setPlayRate(pitch_multiplier)
 
     def apply_damage(self, damage: float, damage_type: str):
         """

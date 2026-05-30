@@ -28,6 +28,11 @@ def build_dev_level(game):
     game.player = Player(
         game=game,
         ship_type="a-wing",
+        # ship_type="x-wing",
+        # ship_type="y-wing",
+        # ship_type="tie-interceptor",
+        # ship_type="tie-fighter",
+        # ship_type="tie-bomber",
         ini_position=np.array([100, -800, 505]),
         is_neutral=True,
         has_ai=False,
@@ -106,18 +111,27 @@ def update_scenario_method(game):
         not game.scenario_data["bots_spawned"]
     ):
         game.scenario_data["bots_spawned"] = True
-        n_follower = 8
+        n_follower = 6
+        ship_models = [
+            "a-wing",
+            "x-wing",
+            "y-wing",
+            "tie-bomber",
+            "tie-fighter",
+            "tie-interceptor",
+        ]
         for i in range(n_follower):
+            ship_model = ship_models[i]
             bot = spawn_bot(
                 game=game,
-                name="team_2, ",
+                name=ship_model,
                 bot_type="fighter",
-                pawn_model="y-wing",
+                pawn_model=ship_model,
                 ini_position=np.array([-(int(n_follower / 2)) + 50 * i, -700, 500]),
                 team=2,
                 debug_decisions=False,
             )
             game.team_2_formation.add_ship(ship=bot.pawn)
-            # bot.tactician.primary_target_ids.append(game.turret_2.pawn.id)
+            bot.tactician.primary_target_ids.append(game.turret_2.pawn.id)
 
     return
