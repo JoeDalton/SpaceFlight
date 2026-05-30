@@ -143,7 +143,6 @@ class Interactions:
                 target_actor = self.actors[idx_target]
 
                 # Find whether the two actors can interact based on teams
-                # TODO: remove the both in same team condition if "protect" behaviour ?
                 interact = not (
                     source_actor.team == 0  # Source is neutral
                     or target_actor.team == 0  # Target is neutral

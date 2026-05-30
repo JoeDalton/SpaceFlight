@@ -140,10 +140,7 @@ class Ship(Pawn):
             is_cockpit=is_cockpit,
         )
 
-        # VFX are ship-type dependent
-
-        # Initialize engine sound for ships
-        # TODO better
+        # Initialize engine sound
         if self.parent.name == "player":
             sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
@@ -168,6 +165,8 @@ class Ship(Pawn):
             self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
 
             # TODO Doppler does not seem to work great
+            # https://docs.panda3d.org/1.10/python/programming/audio/3d-audio
+            # TODO Attach engine sound to a node located at the engine location
 
         # Play a bit later to avoid audio artifacts at startup
         self.game.delayed_methods.do_method_later(

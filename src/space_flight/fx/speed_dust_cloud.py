@@ -17,8 +17,6 @@ class SpeedDustCloud:
     to get them a feeling of their ship's speed
 
     Dust particles are sprites zooming past the player's ship
-
-    TODO: use a shader for this fx
     """
 
     def __init__(
@@ -29,7 +27,7 @@ class SpeedDustCloud:
         depth: float = 100.0,
         colors: List = ["white"],
     ):
-        # TODO: GPU-friendly loading of nodes (cf asteroids)
+        # TODO: GPU-friendly loading of nodes (cf asteroids) or shader
         self.game = game
         self.spread = spread
         self.depth = depth

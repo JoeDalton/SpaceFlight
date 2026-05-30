@@ -5,6 +5,8 @@ from direct.showbase.ShowBase import ShowBase
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
+# TODO use bam files for faster loading of 3D models
+
 COMMON_ASSETS_TO_LOAD = [
     # UI
     ("model", DATAFILES_PATH / "menus/button_map.egg", ""),
@@ -15,12 +17,12 @@ COMMON_ASSETS_TO_LOAD = [
     ("model", DATAFILES_PATH / "menus/thumb_map.egg", ""),
     ("model", DATAFILES_PATH / "menus/xbone-icons.egg", ""),
     ("texture", DATAFILES_PATH / "menus/dialog.png", ""),
-    # Asteroids # TODO use bam files for faster loading
+    # Asteroids
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
     # Skyboxes
     ("model", DATAFILES_PATH / "models/skyboxes/purple.bam", ""),
     ("model", DATAFILES_PATH / "models/skyboxes/dusk.bam", ""),
-    # Ships # TODO use bam files for faster loading
+    # Ships
     # ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf", ""),
