@@ -497,8 +497,21 @@ class Ship(Pawn):
             if self.formation is not None:
                 self.formation.remove_ship(self.id)
                 self.formation = None
+            # Remove collision nodes
+            self.collision_sphere_np.setPythonTag("owner", None)
+            self.collision_sphere_np.remove_node()
+            self.collision_sphere_np = None
+            # Remove sound
+            self.sound_pool.release_sound(self.sound)
+            self.game.app.sfx.audio3d.detachSound(self.sound)
+            self.sound = None
+            # Remove model
             self.model.clean()
             self.model = None
+            # Remove node
+            self.node.remove_node()
+            self.node = None
+            # Remove upward references
             self.is_dead = True
             self.parent = None
             self.game = None

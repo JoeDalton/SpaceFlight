@@ -125,21 +125,11 @@ class Fighter(Ship):
         """
         if not self.is_clean:
             super().clean()
+            # Remove fighter-specific attributes
             self.auto_aim.clean()
             self.auto_aim = None
             self.laser_cannon.clean()
             self.laser_cannon = None
-            self.collision_sphere_np.setPythonTag("owner", None)
-            self.collision_sphere_np.remove_node()
-            self.collision_sphere_np = None
-            try:  # TODO: remove try when the player's ship gets sound
-                self.sound_pool.release_sound(self.sound)
-                self.game.app.sfx.audio3d.detachSound(self.sound)
-                self.sound = None  # TODO This is what breaks the sound of other ships ?
-            except AttributeError:
-                pass
-            self.node.remove_node()
-            self.node = None
 
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")

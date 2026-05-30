@@ -126,18 +126,6 @@ class CapitalShip(Ship):
         """
         if not self.is_clean:
             super().clean()
-            self.collision_sphere_np.setPythonTag("owner", None)
-            self.collision_sphere_np.remove_node()
-            self.collision_sphere_np = None
-            try:  # TODO: remove try when the player's ship gets sound
-                self.sound.stop()
-                self.game.app.sfx.audio3d.detachSound(self.sound)
-                self.sound = None  # TODO This is what breaks the sound of other ships ?
-            except AttributeError:
-                pass
-            self.node.remove_node()
-            self.node = None
-
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")
                 LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
