@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight import DEBUG_DELETION
 from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.ship import Ship
 from space_flight.ai.auto_aim import AutoAim
@@ -70,29 +70,6 @@ class Fighter(Ship):
         # Set explosion size for death animation
         self.explosion_scale = self.conf["explosion_scale"]
 
-        # Initialize engine sound for bot ships
-        # TODO better
-        if self.parent.name != "player":
-            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
-            self.sound_pool = self.game.app.asset_manager.get_asset(
-                asset_type="3d_sound",
-                path=sound_file,
-            )
-            self.sound = self.sound_pool.get_sound()
-            self.sound.setLoop(True)
-            self.sound.setVolume(10.0)
-            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
-
-            # Automatic velocity tracking
-            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
-
-            # TODO Doppler does not seem to work great
-            self.game.delayed_methods.do_method_later(
-                delay_s=0.5,
-                name="Play_engine_sound",
-                method=self.sound.play,
-            )
-
     def move(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
@@ -148,21 +125,11 @@ class Fighter(Ship):
         """
         if not self.is_clean:
             super().clean()
+            # Remove fighter-specific attributes
             self.auto_aim.clean()
             self.auto_aim = None
             self.laser_cannon.clean()
             self.laser_cannon = None
-            self.collision_sphere_np.setPythonTag("owner", None)
-            self.collision_sphere_np.remove_node()
-            self.collision_sphere_np = None
-            try:  # TODO: remove try when the player's ship gets sound
-                self.sound_pool.release_sound(self.sound)
-                self.game.app.sfx.audio3d.detachSound(self.sound)
-                self.sound = None  # TODO This is what breaks the sound of other ships ?
-            except AttributeError:
-                pass
-            self.node.remove_node()
-            self.node = None
 
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")

@@ -111,6 +111,7 @@ class SFX:
         """
         # Set the volume according to the distance fromm the impact to the player
         impact_distance = np.linalg.norm(hit_pos - player_ship_pos)
+
         # Ignore distant events
         if impact_distance > MAX_SOUND_DISTANCE_M:
             return
@@ -139,14 +140,6 @@ class SFX:
             extra_args=[sound],
         )
 
-        # # Schedule sound release
-        # self.app.taskMgr.doMethodLater(
-        #     5.0,
-        #     sound_pool.release_sound,
-        #     "Release distant impact sound",
-        #     extraArgs=[sound],
-        # )
-
     def laser_impact_hit_on_player(
         self, game, relative_hit_point: np.ndarray, is_shield: bool
     ):
@@ -166,6 +159,7 @@ class SFX:
         # Create ad-hoc dummy node to place the sound
         dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)
+
         # Delete it in the near future
         game.delayed_methods.do_method_later(
             delay_s=SFX_MAX_SOUND_DURATION_S,
@@ -174,6 +168,7 @@ class SFX:
         )
         # Add sound to laser hit
         sound = sound_pool.get_sound(randomize_pitch=True)
+
         # Attach sound to the dummy node
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
@@ -207,6 +202,7 @@ class SFX:
             method=dummy_node.remove_node,
         )
         multiplier = PLAYER_HIT_SOUND_MULTIPLIER
+
         # Play terrain hit sound if crash in terrain
         if in_terrain:
             sound_pool = self.terrain_hit_sound_pool
@@ -215,20 +211,25 @@ class SFX:
             self.audio3d.attachSoundToObject(sound, dummy_node)
             sound.setVolume(multiplier)
             sound.play()
+
         # Play short crash sound
         sound_pool = self.player_crash_short_sound_pool
         sound = sound_pool.get_sound(randomize_pitch=True)
+
         # Attach sound to the dumy node
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
+
         # Play long crash sound
         sound_pool = self.player_crash_long_sound_pool
         sound = sound_pool.get_sound(randomize_pitch=True)
+
         # Attach sound to the dumy node
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
+
         # Schedule sound release
         game.delayed_methods.do_method_later(
             delay_s=SFX_MAX_SOUND_DURATION_S,

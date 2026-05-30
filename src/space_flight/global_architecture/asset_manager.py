@@ -5,6 +5,8 @@ from direct.showbase.ShowBase import ShowBase
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
+# TODO use bam files for faster loading of 3D models
+
 COMMON_ASSETS_TO_LOAD = [
     # UI
     ("model", DATAFILES_PATH / "menus/button_map.egg", ""),
@@ -15,12 +17,12 @@ COMMON_ASSETS_TO_LOAD = [
     ("model", DATAFILES_PATH / "menus/thumb_map.egg", ""),
     ("model", DATAFILES_PATH / "menus/xbone-icons.egg", ""),
     ("texture", DATAFILES_PATH / "menus/dialog.png", ""),
-    # Asteroids # TODO use bam files for faster loading
+    # Asteroids
     ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
     # Skyboxes
     ("model", DATAFILES_PATH / "models/skyboxes/purple.bam", ""),
     ("model", DATAFILES_PATH / "models/skyboxes/dusk.bam", ""),
-    # Ships # TODO use bam files for faster loading
+    # Ships
     # ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf", ""),
@@ -38,13 +40,28 @@ COMMON_ASSETS_TO_LOAD = [
     ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_shield", "*.ogg"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target", "*.wav"),
     ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.mp3", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.mp3", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.wav", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.wav", ""),
     ("3d_sound", DATAFILES_PATH / "sounds/weapons/YWING_BLASTER.wav", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/AA_TURRET_BLASTER.WAV", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/weapons/AA_TURRET_BLASTER.wav", ""),
     # Ship engine sounds
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_fighter/exterior.wav", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/x-wing/exterior.ogg", ""),
+    (
+        "3d_sound",
+        DATAFILES_PATH / "sounds/engines/capital_ships/test_capital_ext.ogg",
+        "",
+    ),
+    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_high.ogg", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_med.ogg", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_low.ogg", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/engines/a-wing/aw_ext_med.ogg", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/engines/x-wing/xw_ext_med.ogg", ""),
+    ("3d_sound", DATAFILES_PATH / "sounds/engines/y-wing/yw_ext_med.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_int_high.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_int_med.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_int_low.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/engines/a-wing/aw_int_med.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/engines/x-wing/xw_int_med.ogg", ""),
+    ("sound", DATAFILES_PATH / "sounds/engines/y-wing/yw_int_med.ogg", ""),
     # Dust textures
     ("texture", DATAFILES_PATH / "sprites/dust/dust_blue.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_green.png", ""),

@@ -140,7 +140,40 @@ class Ship(Pawn):
             is_cockpit=is_cockpit,
         )
 
-        # VFX are ship-type dependent
+        # Initialize engine sound
+        if self.parent.name == "player":
+            sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
+            self.sound_pool = self.game.app.asset_manager.get_asset(
+                asset_type="sound",
+                path=sound_file,
+            )
+            self.sound = self.sound_pool.get_sound()
+            self.sound.setLoop(True)
+            self.sound.setVolume(0.1)
+        else:
+            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
+            self.sound_pool = self.game.app.asset_manager.get_asset(
+                asset_type="3d_sound",
+                path=sound_file,
+            )
+            self.sound = self.sound_pool.get_sound()
+            self.sound.setLoop(True)
+            self.sound.setVolume(10.0)
+            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
+
+            # Automatic velocity tracking
+            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
+
+            # TODO Doppler does not seem to work great
+            # https://docs.panda3d.org/1.10/python/programming/audio/3d-audio
+            # TODO Attach engine sound to a node located at the engine location
+
+        # Play a bit later to avoid audio artifacts at startup
+        self.game.delayed_methods.do_method_later(
+            delay_s=0.5,
+            name="Play_engine_sound",
+            method=self.sound.play,
+        )
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -365,6 +398,9 @@ class Ship(Pawn):
         # Apply physics and integrate movement
         self.move_ship_physics()
 
+        # Update engine sound
+        self.adjust_engine_pitch(throttle=throttle)
+
         # Update render
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
@@ -416,6 +452,15 @@ class Ship(Pawn):
         self.velocity_correction = velocity_correction
         self.position_correction = position_correction
 
+    def adjust_engine_pitch(self, throttle: float):
+        """
+        Updates the pitch of the engine noise
+
+        :param throttle: The throttle value of the ship [0, 1]
+        """
+        pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
+        self.sound.setPlayRate(pitch_multiplier)
+
     def apply_damage(self, damage: float, damage_type: str):
         """
         Apply damage to the ship
@@ -451,8 +496,21 @@ class Ship(Pawn):
             if self.formation is not None:
                 self.formation.remove_ship(self.id)
                 self.formation = None
+            # Remove collision nodes
+            self.collision_sphere_np.setPythonTag("owner", None)
+            self.collision_sphere_np.remove_node()
+            self.collision_sphere_np = None
+            # Remove sound
+            self.sound_pool.release_sound(self.sound)
+            self.game.app.sfx.audio3d.detachSound(self.sound)
+            self.sound = None
+            # Remove model
             self.model.clean()
             self.model = None
+            # Remove node
+            self.node.remove_node()
+            self.node = None
+            # Remove upward references
             self.is_dead = True
             self.parent = None
             self.game = None
