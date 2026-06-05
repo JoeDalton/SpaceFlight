@@ -77,11 +77,15 @@ class Player:
         # Anchor camera to player ship node
         self.initialize_camera()
 
-        # Initialize targetting list
-        self.available_targets = [{None: ""}]  # TODO remove
-
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.ship)
+
+        self.game.app.accept(
+            self.game.bindings["keyboard_bindings"]["loop_target"], self.loop_target
+        )
+        self.game.app.accept(
+            self.game.bindings["keyboard_bindings"]["point_target"], self.point_target
+        )
 
     def move_player(self):
         """
@@ -133,29 +137,6 @@ class Player:
         :param method: the method to be called by the task
         """
         self.game.method_lists[self.id].append(method)
-
-    def add_target(self, target, name: str):
-        """
-        TODO: use Interactions for targets and remove
-
-        :param target: _description_
-        :param name: _description_
-        """
-        self.available_targets.append({target: name})
-
-    def remove_target(self, target_to_remove):
-        """
-        TODO: use Interactions for targets and remove
-
-        :param target_to_remove: _description_
-        """
-        for target_idx in range(len(self.available_targets)):
-            target_dict = self.available_targets[target_idx]
-            target, _ = list(target_dict.items())[0]
-            if target == target_to_remove:
-                idx_to_remove = target_idx
-                break
-        self.available_targets.pop(idx_to_remove)
 
     def initialize_camera(self):
         """
@@ -269,6 +250,33 @@ class Player:
         else:
             raise NotImplementedError
 
+    def loop_target(self):
+        """
+        Loops over available targets
+        TODO
+        """
+        self.target_idx = (self.target_idx + 1) % len(
+            self.game.player.available_targets
+        )
+        target_dict = self.game.player.available_targets[self.target_idx]
+        target, target_name = list(target_dict.items())[0]
+        self.set_target(target=target)
+
+    def point_target(self):
+        """
+        Finds the closest and most forward available target
+        TODO
+        """
+        target = None
+        self.set_target(target=target)
+
+    def set_target(self, target):
+        self.target = target
+        try:
+            self.target_id = target.id
+        except AttributeError:
+            self.target_id = None
+
     def record_state(self):
         """
         Records the player's state
@@ -324,6 +332,9 @@ class Player:
         self.head_pivot.removeNode()
         self.head_jolt.removeNode()
 
+        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["loop_target"])
+        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["point_target"])
+
         if self.has_ai:
             self.pilot.clean()
             self.navigator.clean()
@@ -335,10 +346,13 @@ class Player:
         self.rear_view_mirror.clean()
         self.rear_view_mirror = None
 
-        self.available_targets = None
         self.input_system.clean()
         self.input_system = None
         self.game = None
 
-        # No need to clean the ship :
+        # Remove target
+        self.target = None
+        self.target_id = None
+
+        # No need to clean the ship:
         # It has already been done when all actors were cleaned
