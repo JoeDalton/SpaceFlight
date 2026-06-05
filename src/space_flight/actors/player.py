@@ -425,6 +425,9 @@ class Player:
         self.head_pivot.removeNode()
         self.head_jolt.removeNode()
 
+        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["loop_target"])
+        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["point_target"])
+
         if self.has_ai:
             self.pilot.clean()
             self.navigator.clean()
