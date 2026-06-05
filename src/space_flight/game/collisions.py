@@ -158,7 +158,7 @@ class CollisionSystem:
         laser.shot.removeNode()
 
         # Apply hit effect depending on player or bot
-        if destructible_id == self.game.player.ship.id:
+        if destructible_id == self.game.player.pawn.id:
             relative_hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
             self.game.player.play_impact_sound(
                 relative_hit_point=relative_hit_point, kind="laser"
@@ -169,7 +169,7 @@ class CollisionSystem:
             # TODO: Add a hit sprite
             self.game.app.sfx.distant_impact_hit(
                 game=self.game,
-                player_ship_pos=self.game.player.ship.position,
+                player_ship_pos=self.game.player.pawn.position,
                 hit_pos=entry.into_node_path.parent.getPos(),
                 impact_type="target",
             )
@@ -197,7 +197,7 @@ class CollisionSystem:
 
         self.game.app.sfx.distant_impact_hit(
             game=self.game,
-            player_ship_pos=self.game.player.ship.position,
+            player_ship_pos=self.game.player.pawn.position,
             hit_pos=entry.into_node_path.parent.getPos(),
             impact_type="terrain",
         )
@@ -233,7 +233,7 @@ class CollisionSystem:
         self.ship_into_terrain_pushback(entry)
 
         # Play SFX for player only
-        if ship_from.id == self.game.player.ship.id:
+        if ship_from.id == self.game.player.pawn.id:
             relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
             self.game.app.sfx.player_crash(
                 game=self.game, relative_hit_point=relative_hit_point, in_terrain=True
@@ -322,7 +322,7 @@ class CollisionSystem:
             LOGGER.info(f"ship from : {ship_from.id}")
 
         # Play SFX for player only
-        if ship_from.id == self.game.player.ship.id:
+        if ship_from.id == self.game.player.pawn.id:
             relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
             self.game.app.sfx.player_crash(
                 game=self.game, relative_hit_point=relative_hit_point, in_terrain=False
@@ -437,7 +437,7 @@ class CollisionSystem:
             LOGGER.info(f"ship from : {ship_from.id}")
 
         # Play SFX for player only
-        if ship_from.id == self.game.player.ship.id:
+        if ship_from.id == self.game.player.pawn.id:
             relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
             self.game.app.sfx.player_crash(
                 game=self.game, relative_hit_point=relative_hit_point, in_terrain=False

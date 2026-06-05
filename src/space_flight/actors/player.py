@@ -10,7 +10,7 @@ from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
-from space_flight.utils import rotate_single_vector
+from space_flight.utils import rotate_single_vector  # , smooth_step_down
 
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
@@ -47,7 +47,7 @@ class Player:
         self.game.method_lists[self.id] = []
         self.add_task(method=self.move_player)
 
-        self.ship = Fighter(
+        self.pawn = Fighter(
             game=self.game,
             parent=self,
             ship_type=ship_type,
@@ -60,26 +60,28 @@ class Player:
         # Initialize input system
         self.has_ai = has_ai
         if self.has_ai:
-            self.pilot = FighterPilot(game=self.game, pawn=self.ship)
+            self.pilot = FighterPilot(game=self.game, pawn=self.pawn)
             self.navigator = FighterNavigator(
-                game=self.game, pawn=self.ship, debug=True
+                game=self.game, pawn=self.pawn, debug=True
             )
             self.tactician = FighterTactician(
-                game=self.game, pawn=self.ship, debug=True
+                game=self.game, pawn=self.pawn, debug=True
             )
         self.input_system = input_system_factory(game=self.game, player=self)
 
         # Initialize rear view mirror
         self.rear_view_mirror = RearViewMirror(
-            game=self.game, player_node=self.ship.node
+            game=self.game, player_node=self.pawn.node
         )
 
         # Anchor camera to player ship node
         self.initialize_camera()
 
         # Add self to the interacting actors
-        self.game.interactions.add_actor(self.ship)
+        self.game.interactions.add_actor(self.pawn)
 
+        # Prepare target selection TODO put this in input system
+        self.target = None
         self.game.app.accept(
             self.game.bindings["keyboard_bindings"]["loop_target"], self.loop_target
         )
@@ -116,7 +118,7 @@ class Player:
                 self.roll_rate,
             ) = self.input_system.get_inputs()
 
-        self.ship.move(
+        self.pawn.move(
             throttle=self.throttle,
             yaw_rate=self.yaw_rate,
             pitch_rate=self.pitch_rate,
@@ -143,7 +145,7 @@ class Player:
         Initialize the node structure to hold the camera
         """
         # Get jolted by hits, ship acceleration, etc.
-        self.head_jolt = self.ship.node.attachNewNode("head_jolt")
+        self.head_jolt = self.pawn.node.attachNewNode("head_jolt")
         self.head_acceleration_mps2 = np.zeros(3)
         self.head_velocity_mps = np.zeros(3)
         self.head_position_m = np.zeros(3)
@@ -178,7 +180,7 @@ class Player:
         self.head_jolt.setPos(*self.head_position_m)
 
         # Set head angular position proportional and opposite to ship roll rate
-        roll_rate_radps = self.ship.pqr[1]
+        roll_rate_radps = self.pawn.pqr[1]
         self.head_jolt.setR(
             roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
         )
@@ -193,13 +195,13 @@ class Player:
         with a simple damped spring system
         """
         # Take ship acceleration into account
-        ship_acceleration_world_mps2 = self.ship.state_dot[7:10]
+        ship_acceleration_world_mps2 = self.pawn.state_dot[7:10]
         # Special treatment for impacts that should be more sensible
         ship_acceleration_world_mps2 += (
-            (IMPACT_FEELING_FACTOR - 1) * self.ship.impact_force_n / self.ship.mass_kg
+            (IMPACT_FEELING_FACTOR - 1) * self.pawn.impact_force_n / self.pawn.mass_kg
         )
 
-        quat = np.quaternion(*self.ship.state[3:7])
+        quat = np.quaternion(*self.pawn.state[3:7])
         ship_acceleration_body_mps2 = rotate_single_vector(
             quat.conjugate(), ship_acceleration_world_mps2
         )
@@ -245,7 +247,7 @@ class Player:
             self.game.app.sfx.laser_impact_hit_on_player(
                 game=self.game,
                 relative_hit_point=relative_hit_point,
-                is_shield=self.ship.shield > 0,
+                is_shield=self.pawn.shield > 0,
             )
         else:
             raise NotImplementedError
@@ -292,36 +294,36 @@ class Player:
             variable_name="player_roll_rate_radps", variable=self.roll_rate
         )
         self.game.record.record(
-            variable_name="player_impact_force_n", variable=self.ship.impact_force_n
+            variable_name="player_impact_force_n", variable=self.pawn.impact_force_n
         )
         self.game.record.record(
             variable_name="player_additional_force_n",
-            variable=self.ship.additional_force_n,
+            variable=self.pawn.additional_force_n,
         )
         self.game.record.record(
-            variable_name="player_lift_n", variable=self.ship.lift_n
+            variable_name="player_lift_n", variable=self.pawn.lift_n
         )
         self.game.record.record(
-            variable_name="player_lift_body_n", variable=self.ship.lift_body_n
+            variable_name="player_lift_body_n", variable=self.pawn.lift_body_n
         )
         self.game.record.record(
-            variable_name="player_drag_n", variable=self.ship.drag_n
+            variable_name="player_drag_n", variable=self.pawn.drag_n
         )
         self.game.record.record(
-            variable_name="player_thrust_n", variable=self.ship.thrust_n
+            variable_name="player_thrust_n", variable=self.pawn.thrust_n
         )
         self.game.record.record(
-            variable_name="player_position_m", variable=self.ship.position
+            variable_name="player_position_m", variable=self.pawn.position
         )
         self.game.record.record(
-            variable_name="player_orientation_quat", variable=self.ship.orientation
+            variable_name="player_orientation_quat", variable=self.pawn.orientation
         )
         self.game.record.record(
-            variable_name="player_speed_mps", variable=self.ship.speed
+            variable_name="player_speed_mps", variable=self.pawn.speed
         )
         self.game.record.record(
             variable_name="player_acceleration_mps2",
-            variable=self.ship.acceleration_mps2,
+            variable=self.pawn.acceleration_mps2,
         )
 
     def clean(self):

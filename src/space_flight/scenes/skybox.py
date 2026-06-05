@@ -26,7 +26,7 @@ class Skybox:
         """
         Moves the skybox along with the player to make it appear to be at infinity
         """
-        new_position = self.game.player.ship.position
+        new_position = self.game.player.pawn.position
         self.node.setPos(new_position[0], new_position[1], new_position[2])
 
     def clean(self):

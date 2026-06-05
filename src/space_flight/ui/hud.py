@@ -127,15 +127,15 @@ class HUD:
         player_text = (
             ""
             "Player Speed = "
-            f"{np.linalg.norm(self.game.player.ship.state[7:10]):.1f}m/s\n"
-            f"Player health = {self.game.player.ship.health:.1f}\n"
-            f"Player shield = {self.game.player.ship.shield:.1f}\n"
+            f"{np.linalg.norm(self.game.player.pawn.state[7:10]):.1f}m/s\n"
+            f"Player health = {self.game.player.pawn.health:.1f}\n"
+            f"Player shield = {self.game.player.pawn.shield:.1f}\n"
             f"Time = {self.game.game_time.get_current_time():.0f}\n"
             f"Team 1 strength = {n_team_1}\n"
             f"Team 2 strength = {n_team_2}\n"
             "\n"
             "Player has target lock = "
-            f"{self.game.player.ship.auto_aim.is_target_acquired}\n"
+            f"{self.game.player.pawn.auto_aim.is_target_acquired}\n"
             "\n"
         )
         try:

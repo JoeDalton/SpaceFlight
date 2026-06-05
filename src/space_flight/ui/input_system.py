@@ -217,7 +217,7 @@ class Keyboard(InputSystem):
 
         # Fire weapons
         if self.keys["fire_primary"]:
-            self.player.ship.laser_cannon.fire()
+            self.player.pawn.laser_cannon.fire()
 
         # Boost usage
         if self.is_boost:
@@ -263,8 +263,8 @@ class Joystick(InputSystem):
         self.game.app.accept("stick-start", self.game.set_pause)
 
         # Accept trigger event to fire lasers
-        self.game.app.accept("stick-button1", self.player.ship.laser_cannon.fire)
-        self.game.app.accept("stick-button1-repeat", self.player.ship.laser_cannon.fire)
+        self.game.app.accept("stick-button1", self.player.pawn.laser_cannon.fire)
+        self.game.app.accept("stick-button1-repeat", self.player.pawn.laser_cannon.fire)
 
         # Accept button events on the thumb hat
         # to change head orientation
@@ -477,7 +477,7 @@ class Gamepad(InputSystem):
             return 0.0, 0.0, 0.0, 0.0
 
         if self.is_laser_fire:
-            self.player.ship.laser_cannon.fire()
+            self.player.pawn.laser_cannon.fire()
 
         if self.is_boost:
             throttle = THROTTLE_BOOST_VALUE

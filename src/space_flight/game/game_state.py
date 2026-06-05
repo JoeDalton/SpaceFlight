@@ -155,7 +155,7 @@ class GameState(BaseState):
             for method in method_list:
                 method()
         # Handle the death of the player
-        if self.player.ship.health <= 0:
+        if self.player.pawn.health <= 0:
             self.app.state_manager.push(
                 state_class=self.app.state_manager.DEATH_MENU_STATE,
             )
