@@ -10,7 +10,7 @@ from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.ui.input_system import input_system_factory
 from space_flight.ui.rear_view_mirror import RearViewMirror
-from space_flight.utils import rotate_single_vector  # , smooth_step_down
+from space_flight.utils import rotate_single_vector, smooth_step_down
 
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
@@ -257,19 +257,35 @@ class Player:
         Loops over available targets
         TODO
         """
-        self.target_idx = (self.target_idx + 1) % len(
-            self.game.player.available_targets
-        )
-        target_dict = self.game.player.available_targets[self.target_idx]
-        target, target_name = list(target_dict.items())[0]
-        self.set_target(target=target)
+        pass
+        # self.target_idx = (self.target_idx + 1) % len(
+        #     self.game.player.available_targets
+        # )
+        # target_dict = self.game.player.available_targets[self.target_idx]
+        # target, target_name = list(target_dict.items())[0]
+        # self.set_target(target=target)
 
     def point_target(self):
         """
         Finds the closest and most forward available target
-        TODO
         """
-        target = None
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
+        interact_mask = self.game.interactions.interact[my_actor_index, :]
+        distances = self.game.interactions.distances[my_actor_index, :]
+        alignments = self.game.interactions.alignments[my_actor_index, :]
+        # Distance contribution
+        distance_scores = smooth_step_down(
+            x=distances,
+            x_step=1000,
+            slope=0.01,
+        )
+        # Forwardness contribution
+        forward_scores = (0.5 + 0.5 * alignments) ** 2
+        # Assemble all contributions
+        prey_scores = interact_mask * distance_scores * forward_scores
+        # Select highest scoring prey
+        max_prey_score_idx = np.nanargmax(prey_scores)
+        target = self.game.interactions.actors[max_prey_score_idx]
         self.set_target(target=target)
 
     def set_target(self, target):

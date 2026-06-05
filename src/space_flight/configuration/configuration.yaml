@@ -10,7 +10,8 @@ keyboard_bindings:
   roll_right: d
   yaw_left: a
   yaw_right: e
-  switch_target: tab
+  loop_target: tab
+  point_target: p
   toggle_mirror: alt
   fire_primary: space
   boost: b
