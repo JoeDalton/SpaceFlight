@@ -11,7 +11,7 @@ include = ["src/space_flight/_version.py", "resources","scripts"]
 [tool.poetry.dependencies]
 python = ">=3.12,<3.15"
 black = "^26.3.1"
-pyarrow = "^21.0.0"
+pyarrow = "^23.0.1"
 numpy = "^2.3.5"
 scipy = "^1.13.1"
 numpy-quaternion = "^2024.0.13"
