@@ -260,15 +260,15 @@ class TargetHUD:
     def target_hud_update_task(self):
         target = self.game.player.target
         if target is None:
+            # Either there is no target selected or it has been purged recently
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
-            self.game.player.target_id = None
         elif target.is_dead:
+            # The target died recently but has not yet been purged
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
-            self.game.player.target_id = None
             self.game.player.target = None
         else:
             self.name_label["text"] = target.parent.name

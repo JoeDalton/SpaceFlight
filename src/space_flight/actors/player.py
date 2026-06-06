@@ -80,10 +80,17 @@ class Player:
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
 
-        # Prepare target selection TODO put this in input system
+        # Prepare target selection
         self.target = None
+        self.target_idx = None
+        # TODO put this in input system
         self.game.app.accept(
             self.game.bindings["keyboard_bindings"]["loop_target"], self.loop_target
+        )
+        self.game.app.accept(
+            self.game.bindings["keyboard_bindings"]["loop_target_reverse"],
+            self.loop_target,
+            extraArgs=[-1],
         )
         self.game.app.accept(
             self.game.bindings["keyboard_bindings"]["point_target"], self.point_target
@@ -252,7 +259,7 @@ class Player:
         else:
             raise NotImplementedError
 
-    def loop_target(self):
+    def loop_target(self, increment: int = 1):
         """
         Loops over available targets
         TODO
@@ -270,30 +277,47 @@ class Player:
         Finds the closest and most forward available target
         """
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        interact_mask = self.game.interactions.interact[my_actor_index, :]
+        target_mask = self.create_target_mask(player_actor_index=my_actor_index)
+        # Case of no available targets
+        if np.sum(target_mask) == 0:
+            self.target = None
+            self.target_idx = None
+            return
+        # Find the best prey
         distances = self.game.interactions.distances[my_actor_index, :]
         alignments = self.game.interactions.alignments[my_actor_index, :]
         # Distance contribution
         distance_scores = smooth_step_down(
             x=distances,
-            x_step=1000,
+            x_step=2000,
             slope=0.01,
         )
         # Forwardness contribution
         forward_scores = (0.5 + 0.5 * alignments) ** 2
         # Assemble all contributions
-        prey_scores = interact_mask * distance_scores * forward_scores
+        prey_scores = target_mask * distance_scores * forward_scores
         # Select highest scoring prey
         max_prey_score_idx = np.nanargmax(prey_scores)
-        target = self.game.interactions.actors[max_prey_score_idx]
-        self.set_target(target=target)
+        # Case of no interesting target
+        if prey_scores[max_prey_score_idx] < 1e-4:
+            self.target = None
+            self.target_idx = None
+            return
+        self.target = self.game.interactions.actors[max_prey_score_idx]
+        # Record target index
+        self.target_idx = self.game.interactions.get_actor_index_from_id(self.target.id)
 
-    def set_target(self, target):
-        self.target = target
-        try:
-            self.target_id = target.id
-        except AttributeError:
-            self.target_id = None
+    def create_target_mask(self, player_actor_index: int) -> np.ndarray:
+        """
+        Creates a target mask depending on the player's wishes
+
+        :param player_actor_index: Index of the player in the interactions class
+        :return: the target mask
+        """
+        # Placeholder
+        target_mask = self.game.interactions.interact[player_actor_index, :]
+        # TODO: use player defined criteria
+        return target_mask
 
     def record_state(self):
         """
@@ -370,7 +394,6 @@ class Player:
 
         # Remove target
         self.target = None
-        self.target_id = None
 
         # No need to clean the ship:
         # It has already been done when all actors were cleaned
