@@ -258,18 +258,22 @@ class TargetHUD:
         self.name_label.setBin("fixed", 10)
 
     def target_hud_update_task(self):
-        target = self.game.player.target
+        target = self.game.player.pawn.target
         if target is None:
             # Either there is no target selected or it has been purged recently
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
+            self.game.player.pawn.target_id = None
+            self.game.player.pawn.target_idx = None
         elif target.is_dead:
             # The target died recently but has not yet been purged
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
             self.game.player.target = None
+            self.game.player.pawn.target_id = None
+            self.game.player.pawn.target_idx = None
         else:
             self.name_label["text"] = target.parent.name
             self.distance_label.show()
@@ -283,7 +287,7 @@ class TargetHUD:
             self.aspect.setScale(1, 1, aspect)
 
             # World position of target
-            target_pos = self.game.player.target.position
+            target_pos = self.game.player.pawn.target.position
             world_pos = Point3(*target_pos)
 
             # Convert to camera space

@@ -80,9 +80,6 @@ class Player:
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
 
-        # Prepare target selection
-        self.target = None
-        self.target_idx = None
         # TODO put this in input system
         self.game.app.accept(
             self.game.bindings["keyboard_bindings"]["loop_target"], self.loop_target
@@ -269,14 +266,14 @@ class Player:
         target_mask = self.create_target_mask(player_actor_index=my_actor_index)
         # Case of no available targets
         if np.sum(target_mask) == 0:
-            self.target = None
-            self.target_idx = None
+            self.pawn.target = None
+            self.pawn.target_idx = None
             return
 
         # Find indices of available targets
         available_indices = np.where(target_mask)[0]
         # Find current target in available targets
-        target_available_index = np.where(available_indices == self.target_idx)[0]
+        target_available_index = np.where(available_indices == self.pawn.target_idx)[0]
         # Reset index if current target is not in the available targets
         # (Filter might have changed, for example)
         if len(target_available_index) == 0:
@@ -287,10 +284,7 @@ class Player:
         next_available_target_idx = available_indices[
             (target_available_index + increment) % len(available_indices)
         ]
-        # Set new target
-        self.target = self.game.interactions.actors[next_available_target_idx]
-        # Record target index
-        self.target_idx = self.game.interactions.get_actor_index_from_id(self.target.id)
+        self.set_target_from_actor_index(target_idx=next_available_target_idx)
 
     def point_target(self):
         """
@@ -300,8 +294,9 @@ class Player:
         target_mask = self.create_target_mask(player_actor_index=my_actor_index)
         # Case of no available targets
         if np.sum(target_mask) == 0:
-            self.target = None
-            self.target_idx = None
+            self.pawn.target = None
+            self.pawn.target_id = None
+            self.pawn.target_idx = None
             return
         # Find the best prey
         distances = self.game.interactions.distances[my_actor_index, :]
@@ -320,12 +315,23 @@ class Player:
         max_prey_score_idx = np.nanargmax(prey_scores)
         # Case of no interesting target
         if prey_scores[max_prey_score_idx] < 1e-4:
-            self.target = None
-            self.target_idx = None
+            self.pawn.target = None
+            self.pawn.target_id = None
+            self.pawn.target_idx = None
             return
-        self.target = self.game.interactions.actors[max_prey_score_idx]
-        # Record target index
-        self.target_idx = self.game.interactions.get_actor_index_from_id(self.target.id)
+        self.set_target_from_actor_index(target_idx=max_prey_score_idx)
+
+    def set_target_from_actor_index(self, target_idx: int):
+        """
+        Sets the target of the player
+
+        :param target_idx: The index of the target in the actor list
+        """
+        self.pawn.target = self.game.interactions.actors[target_idx]
+        self.pawn.target_id = self.pawn.target.id
+        self.pawn.target_idx = self.game.interactions.get_actor_index_from_id(
+            self.pawn.target_id
+        )
 
     def create_target_mask(self, player_actor_index: int) -> np.ndarray:
         """
@@ -411,9 +417,6 @@ class Player:
         self.input_system.clean()
         self.input_system = None
         self.game = None
-
-        # Remove target
-        self.target = None
 
         # No need to clean the ship:
         # It has already been done when all actors were cleaned

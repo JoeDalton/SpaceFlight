@@ -202,6 +202,7 @@ class Turret(Pawn):
         garbage collected
         """
         if not self.is_clean:
+            super().clean()
             self.model.clean()
             self.model = None
             # self.auto_aim.clean()
