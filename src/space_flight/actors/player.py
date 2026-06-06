@@ -262,15 +262,35 @@ class Player:
     def loop_target(self, increment: int = 1):
         """
         Loops over available targets
-        TODO
+
+        :param increment: Target list loop increment
         """
-        pass
-        # self.target_idx = (self.target_idx + 1) % len(
-        #     self.game.player.available_targets
-        # )
-        # target_dict = self.game.player.available_targets[self.target_idx]
-        # target, target_name = list(target_dict.items())[0]
-        # self.set_target(target=target)
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
+        target_mask = self.create_target_mask(player_actor_index=my_actor_index)
+        # Case of no available targets
+        if np.sum(target_mask) == 0:
+            self.target = None
+            self.target_idx = None
+            return
+
+        # Find indices of available targets
+        available_indices = np.where(target_mask)[0]
+        # Find current target in available targets
+        target_available_index = np.where(available_indices == self.target_idx)[0]
+        # Reset index if current target is not in the available targets
+        # (Filter might have changed, for example)
+        if len(target_available_index) == 0:
+            target_available_index = -1
+        else:
+            target_available_index = target_available_index[0]
+        # Loop over target list
+        next_available_target_idx = available_indices[
+            (target_available_index + increment) % len(available_indices)
+        ]
+        # Set new target
+        self.target = self.game.interactions.actors[next_available_target_idx]
+        # Record target index
+        self.target_idx = self.game.interactions.get_actor_index_from_id(self.target.id)
 
     def point_target(self):
         """
@@ -289,7 +309,7 @@ class Player:
         # Distance contribution
         distance_scores = smooth_step_down(
             x=distances,
-            x_step=2000,
+            x_step=3000,
             slope=0.01,
         )
         # Forwardness contribution
