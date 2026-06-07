@@ -61,11 +61,11 @@ class GameState(BaseState):
         Run game
         """
         # Update the physics and object methods of the game world
-        self.update_task = self.app.taskMgr.add(
+        self.game_world_task = self.app.taskMgr.add(
             self.update_game_world_task, "update_game_world_task"
         )
         # Update the scenario of the level, defined in the level build
-        self.update_task = self.app.taskMgr.add(
+        self.scenario_task = self.app.taskMgr.add(
             self.update_scenario_task, "update_scenario_task"
         )
 
@@ -168,7 +168,6 @@ class GameState(BaseState):
         # Do nothing if paused
         if self.is_paused:
             return task.cont
-
         self.update_scenario_method(game=self)
         return task.cont
 
@@ -208,9 +207,11 @@ class GameState(BaseState):
         self.target_hud.clean()
         self.target_hud = None
 
-        # Stop the task that updates the world
-        self.app.taskMgr.remove(self.update_task)
-        self.update_task = None
+        # Stop the tasks that update the world
+        self.app.taskMgr.remove(self.game_world_task)
+        self.app.taskMgr.remove(self.scenario_task)
+        self.game_world_task = None
+        self.scenario_task = None
         # Drop references to the methods to run
         self.method_lists = None
 
@@ -218,6 +219,9 @@ class GameState(BaseState):
         for actor in self.interactions.live_actors:
             actor.clean()
         self.interactions.actors = None
+
+        # Clean all session-specific contexts before removing actors they reference
+        self.app.input_context_stack.clean()
 
         # Remove player
         self.player.clean()

@@ -5,10 +5,13 @@ from direct.gui.DirectGui import DirectFrame
 from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.menu_utils import CustomButton
+from space_flight.ui.input_context import PauseMenuInputContext
 
 
 class PauseMenuState(BaseState):
     def enter(self):
+        game_state = self.app.state_manager.stack[-2]
+        self.app.input_context_stack.push(PauseMenuInputContext(game=game_state))
         self.frame = DirectFrame(
             frameSize=(self.app.a2dLeft + 0.5, self.app.a2dRight - 0.5, -0.8, 0.8),
             frameColor=(0, 0, 0, 0.6),
@@ -63,3 +66,4 @@ class PauseMenuState(BaseState):
         self.return_button.destroy()
         self.quit_button.destroy()
         self.frame.destroy()
+        self.app.input_context_stack.pop()

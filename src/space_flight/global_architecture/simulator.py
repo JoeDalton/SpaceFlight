@@ -14,6 +14,8 @@ from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.menu_utils import MenuModels
 from space_flight.menus.pause_menu_state import PauseMenuState
 from space_flight.menus.splash_state import SplashState
+from space_flight.ui.input_context import InputContextStack
+from space_flight.ui.input_reader import reader_factory
 
 LOGGER = logging.getLogger()
 
@@ -99,6 +101,9 @@ class SpaceFlightSimulator(ShowBase):
         # simplepbr.init()
 
         self.state_manager = StateManager(app=self)
+        self.input_context_stack = InputContextStack()
+        self.input_reader = reader_factory(app=self)
+        self.taskMgr.add(self._input_task, "input_task", sort=-100)
         self.asset_manager = AssetManager(app=self)
         self.menu_models = MenuModels(app=self)
         self.sfx = SFX(app=self)
@@ -107,3 +112,8 @@ class SpaceFlightSimulator(ShowBase):
 
         # Start with splash screen
         self.state_manager.push(SplashState)
+
+    def _input_task(self, task):
+        state = self.input_reader.poll()
+        self.input_context_stack.dispatch(state)
+        return task.cont

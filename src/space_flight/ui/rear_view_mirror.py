@@ -64,13 +64,10 @@ class RearViewMirror:
         self.mirror_buffer.setSort(-100)
         self.mirror_np.node().setCameraMask(BitMask32.bit(1))
 
-        self.game.app.accept(  # TODO handle elsewhere
-            self.game.bindings["keyboard_bindings"]["toggle_mirror"], self.toggle_mirror
-        )
-
     def toggle_mirror(self):
         """
         Toggles mirror visibility
+        triggered by FlightInputContext via player.rear_view_mirror.toggle_mirror()
         """
         self.is_mirror_visible = not self.is_mirror_visible
         self.mirror_buffer.setActive(self.is_mirror_visible)
@@ -83,10 +80,6 @@ class RearViewMirror:
         """
         Cleans the mirror object
         """
-        # Remove key binding
-        self.game.app.ignore(  # TODO handle elsewhere
-            self.game.bindings["keyboard_bindings"]["toggle_mirror"]
-        )
         # Delete camera
         self.mirror_np.removeNode()
         self.mirror_cam = None

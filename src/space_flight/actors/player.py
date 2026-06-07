@@ -8,7 +8,7 @@ from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
-from space_flight.ui.input_system import input_system_factory
+from space_flight.ui.input_context import FlightInputContext
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
 
@@ -57,7 +57,13 @@ class Player:
             team=team,
         )
 
-        # Initialize input system
+        # Flight state written by FlightInputContext (or AI pilot) each frame
+        self.throttle = 0.0
+        self.yaw_rate = 0.0
+        self.pitch_rate = 0.0
+        self.roll_rate = 0.0
+        self.view_offset = np.zeros(2)
+
         self.has_ai = has_ai
         if self.has_ai:
             self.pilot = FighterPilot(game=self.game, pawn=self.pawn)
@@ -67,7 +73,10 @@ class Player:
             self.tactician = FighterTactician(
                 game=self.game, pawn=self.pawn, debug=True
             )
-        self.input_system = input_system_factory(game=self.game, player=self)
+            self.flight_context = None
+        else:  # TODO put in game state
+            self.flight_context = FlightInputContext(game=self.game, player=self)
+            self.game.app.input_context_stack.push(self.flight_context)
 
         # Initialize rear view mirror
         self.rear_view_mirror = RearViewMirror(
@@ -79,19 +88,6 @@ class Player:
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
-
-        # TODO put this in input system
-        self.game.app.accept(
-            self.game.bindings["keyboard_bindings"]["loop_target"], self.loop_target
-        )
-        self.game.app.accept(
-            self.game.bindings["keyboard_bindings"]["loop_target_reverse"],
-            self.loop_target,
-            extraArgs=[-1],
-        )
-        self.game.app.accept(
-            self.game.bindings["keyboard_bindings"]["point_target"], self.point_target
-        )
 
     def move_player(self):
         """
@@ -114,14 +110,6 @@ class Player:
             ) = self.pilot.pilot(
                 target_direction=target_direction, desired_speed_mps=desired_speed_mps
             )
-        else:
-            (
-                self.throttle,
-                self.yaw_rate,
-                self.pitch_rate,
-                self.roll_rate,
-            ) = self.input_system.get_inputs()
-
         self.pawn.move(
             throttle=self.throttle,
             yaw_rate=self.yaw_rate,
@@ -190,8 +178,8 @@ class Player:
         )
 
         # Pilot turning their head TODO smoother system, independent of framerate
-        self.head_pivot.setP(self.input_system.view_offset[0] * CAMERA_ANGLE_INCREMENT)
-        self.head_pivot.setH(self.input_system.view_offset[1] * CAMERA_ANGLE_INCREMENT)
+        self.head_pivot.setP(self.view_offset[0] * CAMERA_ANGLE_INCREMENT)
+        self.head_pivot.setH(self.view_offset[1] * CAMERA_ANGLE_INCREMENT)
 
     def compute_head_acceleration(self):
         """
@@ -400,9 +388,6 @@ class Player:
         self.head_pivot.removeNode()
         self.head_jolt.removeNode()
 
-        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["loop_target"])
-        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["point_target"])
-
         if self.has_ai:
             self.pilot.clean()
             self.navigator.clean()
@@ -414,8 +399,10 @@ class Player:
         self.rear_view_mirror.clean()
         self.rear_view_mirror = None
 
-        self.input_system.clean()
-        self.input_system = None
+        if self.flight_context is not None:
+            self.game.app.input_context_stack.pop()
+            self.flight_context = None
+
         self.game = None
 
         # No need to clean the ship:
