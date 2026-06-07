@@ -3,7 +3,7 @@ from typing import Callable
 
 import numpy as np
 
-from space_flight import RECORD_GAME
+from space_flight import RECORD_GAME, TARGET_FILTERS
 from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
