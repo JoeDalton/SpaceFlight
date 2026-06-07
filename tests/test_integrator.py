@@ -24,7 +24,7 @@ class MockGameTime:
 
 class MockGame:
     """
-    Minimal stand-in for GameState that provides only the game_time attribute.
+    Minimal stand-in for FlightState that provides only the game_time attribute.
     """
 
     def __init__(self, dt: float = 0.1):

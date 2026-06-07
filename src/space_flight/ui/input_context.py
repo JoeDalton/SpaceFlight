@@ -60,7 +60,7 @@ class InputContextStack:
 
     Only the top context receives input.  Pushing a new context deactivates
     the previous top; popping restores it.  The stack is owned by the active
-    game state (e.g. :class:`~space_flight.game.game_state.GameState`).
+    game state (e.g. :class:`~space_flight.game.flight_state.FlightState`).
     """
 
     def __init__(self) -> None:
@@ -129,7 +129,7 @@ class FlightInputContext(InputContext):
 
     def __init__(self, game, player) -> None:
         """
-        :param game: Active :class:`~space_flight.game.game_state.GameState`.
+        :param game: Active :class:`~space_flight.game.flight_state.FlightState`.
         :param player: The human :class:`~space_flight.actors.player.Player`.
         """
         self._game = game
@@ -307,7 +307,7 @@ class PauseMenuInputContext(InputContext):
 
     Blocks all flight inputs (``FlightInputContext`` is below and not ticked).
     Pressing the pause key again calls ``state_manager.pop()``, which triggers
-    ``GameState.resume()`` and pops this context.
+    ``FlightState.resume()`` and pops this context.
 
     Both the device-specific pause binding and the global one are checked so
     that escape always works regardless of the active input type.

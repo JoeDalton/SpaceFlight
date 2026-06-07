@@ -4,7 +4,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData
 
 from space_flight.fx.sfx import SFX
-from space_flight.game.game_state import GameState
+from space_flight.game.flight_state import FlightState
 from space_flight.game.loading_state import LoadingState
 from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
@@ -29,7 +29,7 @@ class StateManager:
     LEVEL_SELECTION_MENU_STATE = LevelSelectionMenuState
     PAUSE_MENU_STATE = PauseMenuState
     DEATH_MENU_STATE = DeathMenuState
-    GAME_STATE = GameState
+    GAME_STATE = FlightState
     LOADING_STATE = LoadingState
 
     def __init__(self, app):

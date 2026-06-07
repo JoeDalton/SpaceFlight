@@ -23,7 +23,7 @@ from space_flight.ui.input_context import FlightInputContext
 LOGGER = logging.getLogger()
 
 
-class GameState(BaseState):
+class FlightState(BaseState):
     def enter(self):
         # TODO: Initialize game in a loading state stacked above self
 
