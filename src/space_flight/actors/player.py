@@ -3,7 +3,7 @@ from typing import Callable
 
 import numpy as np
 
-from space_flight import RECORD_GAME
+from space_flight import RECORD_GAME, TARGET_FILTERS
 from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
@@ -341,6 +341,23 @@ class Player:
             # Don't change the target mask
             pass
         self.target_mask[player_actor_index] = 0
+
+    def open_radial_target_menu(self):
+        """
+        Prepare the radial target menu
+        """
+
+        def set_player_filter(idx: int | None):
+            if idx is None:
+                self.target_filter = ""
+            else:
+                self.target_filter = TARGET_FILTERS[idx]
+
+        self.game.app.state_manager.push(
+            state_class=self.game.app.state_manager.RADIAL_MENU_STATE,
+            on_select=lambda idx: set_player_filter(idx),
+            slice_labels=TARGET_FILTERS,
+        )
 
     def record_state(self):
         """
