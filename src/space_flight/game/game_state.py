@@ -215,7 +215,7 @@ class GameState(BaseState):
         self.method_lists = None
 
         # Remove actors
-        for actor in self.interactions.actors:
+        for actor in self.interactions.live_actors:
             actor.clean()
         self.interactions.actors = None
 

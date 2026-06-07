@@ -118,7 +118,7 @@ class HUD:
         # Count team members
         n_team_1 = 0
         n_team_2 = 0
-        for actor in self.game.interactions.actors:
+        for actor in self.game.interactions.live_actors:
             if actor.team == 1:
                 n_team_1 += 1
             elif actor.team == 2:
