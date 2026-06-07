@@ -2,7 +2,7 @@ import gc
 import logging
 import sys
 
-from space_flight import DEBUG_DELETION, RECORD_GAME
+from space_flight import DEBUG_DELETION, RECORD_GAME, TARGET_FILTERS
 from space_flight.actors.destructibles import Destructibles
 from space_flight.ai.interactions import Interactions
 from space_flight.fx.explosion_fx import ExplosionPool
@@ -41,11 +41,26 @@ class FlightState(BaseState):
                 "does not exist."
             )
 
+        def open_radial_target_menu():
+            # TODO move this to the player file
+
+            def set_player_filter(idx: int | None):
+                if idx is None:
+                    self.player.target_filter = ""
+                else:
+                    self.player.target_filter = TARGET_FILTERS[idx]
+
+            self.app.state_manager.push(
+                state_class=self.app.state_manager.RADIAL_MENU_STATE,
+                on_select=lambda idx: set_player_filter(idx),
+                slice_labels=TARGET_FILTERS,
+            )
+
         # Initialize input system
         self.flight_context = FlightInputContext(
             game=self,
             player=self.player,
-            radial_menu_factory=self.player.open_radial_target_menu,
+            radial_menu_factory=open_radial_target_menu,
         )
         self.app.input_context_stack.push(self.flight_context)
 
