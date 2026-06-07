@@ -29,7 +29,7 @@ class Interactions:
         self._max_actors = max_actors
         self.actors: List = [None] * max_actors  # sparse; None == empty slot
         self.actors_id_dict = {}  # UUID -> stable slot index
-        self._alive = np.zeros(max_actors, dtype=bool)
+        self.alive = np.zeros(max_actors, dtype=bool)
         # LIFO stack of free slot indices; pop() is O(1)
         self._free_slots = list(range(max_actors - 1, -1, -1))
 
@@ -45,12 +45,12 @@ class Interactions:
 
     @property
     def n_actors(self) -> int:
-        return int(self._alive.sum())
+        return int(self.alive.sum())
 
     @property
     def live_actors(self) -> List:
         """Returns only the currently live actors (no None entries)."""
-        return [self.actors[i] for i in np.where(self._alive)[0]]
+        return [self.actors[i] for i in np.where(self.alive)[0]]
 
     # ------------------------------------------------------------------
     # Actor management
@@ -70,7 +70,7 @@ class Interactions:
             )
         slot = self._free_slots.pop()
         self.actors[slot] = actor
-        self._alive[slot] = True
+        self.alive[slot] = True
         self.actors_id_dict[actor.id] = slot
 
     def remove_actor(self, actor):
@@ -82,7 +82,7 @@ class Interactions:
         """
         slot = self.actors_id_dict.pop(actor.id)
         self.actors[slot] = None
-        self._alive[slot] = False
+        self.alive[slot] = False
 
         self.interact[slot, :] = False
         self.interact[:, slot] = False
@@ -127,7 +127,7 @@ class Interactions:
             - A bubble of a few seconds max
         TODO: add an "engagement" array to update these very frequently ?
         """
-        live_indices = np.where(self._alive)[0]
+        live_indices = np.where(self.alive)[0]
         n_live = len(live_indices)
 
         # Upper-triangular pass: distances, directions, relative velocities
@@ -201,7 +201,7 @@ class Interactions:
         """
         self.actors = None
         self.actors_id_dict = None
-        self._alive = None
+        self.alive = None
         self._free_slots = None
 
         self.directions = None

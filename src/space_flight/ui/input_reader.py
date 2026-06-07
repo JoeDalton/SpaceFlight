@@ -375,6 +375,9 @@ class GamepadReader(InputReader):
         state.axes["right_trigger"] = self._dz(
             self.gamepad.findAxis(InputDevice.Axis.right_trigger).value, tdz
         )
+        state.axes["left_trigger"] = self._dz(
+            self.gamepad.findAxis(InputDevice.Axis.left_trigger).value, tdz
+        )
         state.axes["left_x"] = self._dz(
             -self.gamepad.findAxis(InputDevice.Axis.left_x).value, sdz
         )
@@ -383,6 +386,9 @@ class GamepadReader(InputReader):
         )
         state.axes["right_x"] = self._dz(
             self.gamepad.findAxis(InputDevice.Axis.right_x).value, sdz
+        )
+        state.axes["right_y"] = self._dz(
+            self.gamepad.findAxis(InputDevice.Axis.right_y).value, sdz
         )
 
     def clean(self) -> None:

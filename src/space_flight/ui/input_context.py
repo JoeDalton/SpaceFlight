@@ -12,7 +12,9 @@ it at the right moment — no changes to the reader or the game loop.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
+from typing import Callable
 
 from space_flight.utils import low_pass_filter_first_order
 
@@ -127,13 +129,19 @@ class FlightInputContext(InputContext):
     soften the step response.
     """
 
-    def __init__(self, game, player) -> None:
+    def __init__(
+        self, game, player, radial_menu_factory: Callable | None = None
+    ) -> None:
         """
         :param game: Active :class:`~space_flight.game.flight_state.FlightState`.
         :param player: The human :class:`~space_flight.actors.player.Player`.
+        :param radial_menu_factory: Zero-argument callable that opens the radial
+            menu when the ``radial_menu`` binding is pressed.  ``None`` disables
+            the trigger.
         """
         self._game = game
         self._player = player
+        self._radial_menu_factory = radial_menu_factory
 
         input_type = game.app.bindings["input_type"]
         self._input_type = input_type
@@ -170,6 +178,7 @@ class FlightInputContext(InputContext):
     def clean(self) -> None:
         self._game = None
         self._player = None
+        self._radial_menu_factory = None
 
     # ------------------------------------------------------------------
     # Binding helpers
@@ -236,6 +245,12 @@ class FlightInputContext(InputContext):
         # Rear-view mirror
         if self._pressed(state, "toggle_mirror"):
             self._player.rear_view_mirror.toggle_mirror()
+
+        # Radial menu
+        if self._radial_menu_factory is not None and self._pressed(
+            state, "radial_menu"
+        ):
+            self._radial_menu_factory()
 
         # Head-look (button-based: keyboard hat keys, joystick hat)
         if self._active(state, "view_up"):
@@ -338,3 +353,138 @@ class PauseMenuInputContext(InputContext):
 
     def clean(self) -> None:
         self._game = None
+
+
+# ---------------------------------------------------------------------------
+# RadialMenuInputContext
+# ---------------------------------------------------------------------------
+
+
+def _angle_to_slice(x: float, y: float, n_slices: int) -> int:
+    """
+    Map a 2-D direction to a slice index.
+
+    Slice 0 is at the top (positive-y direction) and slices are numbered
+    clockwise.
+
+    :param x: Horizontal component of the direction vector.
+    :param y: Vertical component of the direction vector.
+    :param n_slices: Total number of slices.
+    :return: Index of the slice the direction falls into.
+    """
+    angle = math.atan2(y, x)
+    normalized = (math.pi / 2 - angle) % (2 * math.pi)
+    return int(normalized / (2 * math.pi / n_slices)) % n_slices
+
+
+class RadialMenuInputContext(InputContext):
+    """
+    Input context active while a radial menu is open.
+
+    Reads a 2-D direction vector each frame (from analog axes or keyboard
+    directional keys, as configured in the ``radial_menu`` YAML context) and
+    determines which slice the player is pointing at.  When the trigger button
+    is released the ``on_select`` callback receives the chosen slice index (or
+    ``None`` if the vector magnitude was below ``min_magnitude``).
+
+    The context pops itself by calling ``state_manager.pop()`` on release,
+    which causes :class:`~space_flight.menus.radial_menu_state.RadialMenuState`
+    to call ``exit()`` and clean up the visual overlay.
+
+    The context never touches game time, so the simulation keeps running while
+    the menu is open.
+    """
+
+    def __init__(
+        self,
+        game,
+        n_slices: int,
+        on_select: Callable,
+        trigger_hw_name: str,
+        on_hover: Callable | None = None,
+        min_magnitude: float = 0.8,
+    ) -> None:
+        """
+        :param game: Active game state.
+        :param n_slices: Number of radial slices.
+        :param on_select: Called with the selected slice index (or ``None``)
+            when the trigger is released.
+        :param trigger_hw_name: Hardware name of the button that opened the
+            menu.  Release of this button closes the menu.
+        :param on_hover: Optional callback called every frame with the
+            currently highlighted slice index (or ``None``); used to update
+            the visual overlay.
+        :param min_magnitude: Direction vector magnitude below which no slice
+            is selected.
+        """
+        self._game = game
+        self._n_slices = n_slices
+        self._on_select = on_select
+        self._trigger_hw_name = trigger_hw_name
+        self._on_hover = on_hover
+        self._min_magnitude = min_magnitude
+
+        input_type = game.app.bindings["input_type"]
+        self._bindings: dict[str, str] = (
+            game.app.bindings.get("contexts", {})
+            .get("radial_menu", {})
+            .get(input_type, {})
+        )
+        self._selected_slice: int | None = None
+
+    # ------------------------------------------------------------------
+    # InputContext interface
+    # ------------------------------------------------------------------
+
+    def consume(self, state) -> None:
+        """
+        :param state: Current
+            :class:`~space_flight.ui.input_reader.InputState`.
+        """
+        x, y = self._read_direction(state)
+        mag = (x**2 + y**2) ** 0.5
+        if mag >= self._min_magnitude:
+            self._selected_slice = _angle_to_slice(x, y, self._n_slices)
+        else:
+            self._selected_slice = None
+
+        if self._on_hover is not None:
+            self._on_hover(self._selected_slice)
+
+        if state.releases.get(self._trigger_hw_name):
+            selected = self._selected_slice
+            on_select = self._on_select
+            self._game.app.state_manager.pop()
+            on_select(selected)
+
+    def clean(self) -> None:
+        self._game = None
+        self._on_select = None
+        self._on_hover = None
+
+    # ------------------------------------------------------------------
+    # Direction reading
+    # ------------------------------------------------------------------
+
+    def _read_direction(self, state) -> tuple[float, float]:
+        """
+        Return ``(x, y)`` in ``[-1, 1]`` from analog axes or keyboard keys.
+
+        :param state: Current input state.
+        :return: ``(x, y)`` direction tuple.
+        """
+        ax = self._bindings.get("axis_x")
+        ay = self._bindings.get("axis_y")
+        if ax and ay:
+            return state.axes.get(ax, 0.0), state.axes.get(ay, 0.0)
+
+        def _active(key: str) -> float:
+            if not key:
+                return 0.0
+            return 1.0 if (state.buttons.get(key) or state.repeats.get(key)) else 0.0
+
+        right = _active(self._bindings.get("dir_right", ""))
+        left = _active(self._bindings.get("dir_left", ""))
+        up = _active(self._bindings.get("dir_up", ""))
+        down = _active(self._bindings.get("dir_down", ""))
+        return right - left, up - down

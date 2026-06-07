@@ -13,6 +13,7 @@ from space_flight.menus.level_selection_menu_state import LevelSelectionMenuStat
 from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.menu_utils import MenuModels
 from space_flight.menus.pause_menu_state import PauseMenuState
+from space_flight.menus.radial_menu_state import RadialMenuState
 from space_flight.menus.splash_state import SplashState
 from space_flight.ui.input_context import InputContextStack
 from space_flight.ui.input_reader import reader_factory
@@ -28,6 +29,7 @@ class StateManager:
     MAIN_MENU_STATE = MainMenuState
     LEVEL_SELECTION_MENU_STATE = LevelSelectionMenuState
     PAUSE_MENU_STATE = PauseMenuState
+    RADIAL_MENU_STATE = RadialMenuState
     DEATH_MENU_STATE = DeathMenuState
     GAME_STATE = FlightState
     LOADING_STATE = LoadingState
@@ -36,16 +38,20 @@ class StateManager:
         self.app = app
         self.stack: list[BaseState] = []
 
-    def push(self, state_class: BaseState):
+    def push(self, state_class: BaseState, **kwargs):
         """
-        Pauses the currently running state then
-        pushes a new state on top of the current stack.
+        Pushes *state_class* onto the stack and calls its ``enter()``.
 
-        :param state_class: The new state class to enter
+        Pauses the current top state first, unless *state_class* declares
+        ``PAUSES_BELOW = False`` (e.g. overlays that keep game time running).
+        Extra *kwargs* are forwarded to the state constructor.
+
+        :param state_class: The new state class to enter.
+        :param kwargs: Optional constructor arguments for *state_class*.
         """
-        if self.stack:
+        if self.stack and getattr(state_class, "PAUSES_BELOW", True):
             self.stack[-1].pause()
-        state_instance = state_class(self.app)
+        state_instance = state_class(self.app, **kwargs)
         self.stack.append(state_instance)
         state_instance.enter()
 

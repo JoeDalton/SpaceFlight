@@ -84,6 +84,9 @@ class Player:
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
 
+        # Prepare targetting filters
+        self.target_filter: str = "All"
+
     def move_player(self):
         """
         Moves the camera and the skybox along with the player's
@@ -246,15 +249,15 @@ class Player:
         :param increment: Target list loop increment
         """
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        target_mask = self.create_target_mask(player_actor_index=my_actor_index)
+        self.update_target_mask(player_actor_index=my_actor_index)
         # Case of no available targets
-        if np.sum(target_mask) == 0:
+        if np.sum(self.target_mask) == 0:
             self.pawn.target = None
             self.pawn.target_idx = None
             return
 
         # Find indices of available targets
-        available_indices = np.where(target_mask)[0]
+        available_indices = np.where(self.target_mask)[0]
         # Find current target in available targets
         target_available_index = np.where(available_indices == self.pawn.target_idx)[0]
         # Reset index if current target is not in the available targets
@@ -274,16 +277,20 @@ class Player:
         Finds the closest and most forward available target
         """
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        target_mask = self.create_target_mask(player_actor_index=my_actor_index)
+        self.update_target_mask(player_actor_index=my_actor_index)
         # Case of no available targets
-        if np.sum(target_mask) == 0:
+        if np.sum(self.target_mask) == 0:
             self.pawn.target = None
             self.pawn.target_id = None
             self.pawn.target_idx = None
             return
         # Find the best prey
-        distances = self.game.interactions.distances[my_actor_index, :]
-        alignments = self.game.interactions.alignments[my_actor_index, :]
+        distances = self.game.interactions.distances[
+            my_actor_index, self.game.interactions.alive
+        ]
+        alignments = self.game.interactions.alignments[
+            my_actor_index, self.game.interactions.alive
+        ]
         # Distance contribution
         distance_scores = smooth_step_down(
             x=distances,
@@ -293,7 +300,7 @@ class Player:
         # Forwardness contribution
         forward_scores = (0.5 + 0.5 * alignments) ** 2
         # Assemble all contributions
-        prey_scores = target_mask * distance_scores * forward_scores
+        prey_scores = self.target_mask * distance_scores * forward_scores
         # Select highest scoring prey
         max_prey_score_idx = np.nanargmax(prey_scores)
         # Case of no interesting target
@@ -310,23 +317,30 @@ class Player:
 
         :param target_idx: The index of the target in the actor list
         """
-        self.pawn.target = self.game.interactions.actors[target_idx]
+        self.pawn.target = self.game.interactions.live_actors[target_idx]
         self.pawn.target_id = self.pawn.target.id
         self.pawn.target_idx = self.game.interactions.get_actor_index_from_id(
             self.pawn.target_id
         )
 
-    def create_target_mask(self, player_actor_index: int) -> np.ndarray:
+    def update_target_mask(self, player_actor_index: int) -> np.ndarray:
         """
-        Creates a target mask depending on the player's wishes
+        Updates the target mask depending on the player's wishes
 
         :param player_actor_index: Index of the player in the interactions class
         :return: the target mask
         """
-        # Placeholder
-        target_mask = self.game.interactions.interact[player_actor_index, :]
-        # TODO: use player defined criteria
-        return target_mask
+        if (self.target_filter == "All") or (self.target_filter == ""):
+            self.target_mask = np.ones(self.game.interactions.n_actors)
+        elif self.target_filter == "Enemies":
+            self.target_mask = self.game.interactions.interact[
+                player_actor_index, self.game.interactions.alive
+            ]
+            # TODO: other filters
+        else:
+            # Don't change the target mask
+            pass
+        self.target_mask[player_actor_index] = 0
 
     def record_state(self):
         """

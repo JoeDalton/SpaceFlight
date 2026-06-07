@@ -7,6 +7,8 @@ from space_flight.ui.input_context import (
     InputContext,
     InputContextStack,
     PauseMenuInputContext,
+    RadialMenuInputContext,
+    _angle_to_slice,
 )
 from space_flight.ui.input_reader import InputState
 
@@ -407,7 +409,7 @@ def _make_pause_ctx(device_pause=None, global_pause=None):
         device_bindings={"pause": device_pause} if device_pause else {},
         global_bindings={"pause": global_pause} if global_pause else {},
     )
-    ctx = PauseMenuInputContext(game=game)
+    ctx = PauseMenuInputContext(app=game.app)
     return ctx, game
 
 
@@ -458,3 +460,252 @@ def test_pause_ctx_clean_nulls_game():
     ctx, _ = _make_pause_ctx(global_pause="escape")
     ctx.clean()
     assert ctx._game is None
+
+
+# ---------------------------------------------------------------------------
+# _angle_to_slice helper
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "x, y, n_slices, expected",
+    [
+        (0.0, 1.0, 4, 0),  # straight up   → slice 0
+        (1.0, 0.0, 4, 1),  # right          → slice 1
+        (0.0, -1.0, 4, 2),  # down           → slice 2
+        (-1.0, 0.0, 4, 3),  # left           → slice 3
+        (0.0, 1.0, 8, 0),  # up, 8 slices   → slice 0
+        (1.0, 0.0, 8, 2),  # right, 8 slices → slice 2
+    ],
+)
+def test_angle_to_slice_cardinal_directions(x, y, n_slices, expected):
+    """
+    Cardinal directions must map to the expected slice index for common
+    slice counts.
+    """
+    assert _angle_to_slice(x, y, n_slices) == expected
+
+
+def test_angle_to_slice_wraps_near_top():
+    """
+    A direction just left of straight up must map to the last slice, not
+    wrap beyond the valid range.
+    """
+    import math
+
+    epsilon = 0.01
+    x = -math.sin(epsilon)
+    y = math.cos(epsilon)
+    result = _angle_to_slice(x, y, 4)
+    assert result == 3
+
+
+# ---------------------------------------------------------------------------
+# RadialMenuInputContext
+# ---------------------------------------------------------------------------
+
+
+def _make_radial_ctx(
+    input_type="keyboard",
+    device_bindings=None,
+    radial_bindings=None,
+    n_slices=4,
+    trigger_hw="r",
+    min_magnitude=0.3,
+):
+    """
+    Build a RadialMenuInputContext with a fresh mock game.
+
+    :param input_type: Active device type.
+    :param device_bindings: Flight context device bindings.
+    :param radial_bindings: ``radial_menu`` context bindings (direction keys /
+        axes).
+    :param n_slices: Number of radial slices.
+    :param trigger_hw: Hardware name of the trigger button.
+    :param min_magnitude: Dead-zone threshold.
+    :return: Tuple of (RadialMenuInputContext, game_mock, on_select_mock).
+    """
+    game = MagicMock()
+    game.app.bindings = {
+        "input_type": input_type,
+        "contexts": {
+            "flight": {input_type: device_bindings or {}},
+            "radial_menu": {input_type: radial_bindings or {}},
+        },
+        "global": {},
+    }
+    on_select = MagicMock()
+    ctx = RadialMenuInputContext(
+        game=game,
+        n_slices=n_slices,
+        on_select=on_select,
+        trigger_hw_name=trigger_hw,
+        min_magnitude=min_magnitude,
+    )
+    return ctx, game, on_select
+
+
+def test_radial_ctx_no_selection_when_magnitude_below_threshold():
+    """
+    When the direction vector magnitude is below min_magnitude, _selected_slice
+    must be None and on_select must not be called.
+    """
+    ctx, game, on_select = _make_radial_ctx(
+        radial_bindings={
+            "dir_up": "i",
+            "dir_down": "k",
+            "dir_left": "j",
+            "dir_right": "l",
+        },
+        trigger_hw="r",
+    )
+    ctx.consume(_make_state())  # no keys held
+    assert ctx._selected_slice is None
+    on_select.assert_not_called()
+
+
+def test_radial_ctx_selects_slice_on_held_direction_key():
+    """
+    Holding a direction key long enough to appear in repeats must produce a
+    valid slice index.
+    """
+    ctx, _, _ = _make_radial_ctx(
+        radial_bindings={
+            "dir_up": "i",
+            "dir_down": "k",
+            "dir_left": "j",
+            "dir_right": "l",
+        },
+    )
+    ctx.consume(_make_state(repeats={"i": True}))  # pointing up → slice 0
+    assert ctx._selected_slice == 0
+
+
+def test_radial_ctx_selects_slice_on_pressed_direction_key():
+    """
+    A freshly pressed direction key (in state.buttons) must also produce a
+    valid slice.
+    """
+    ctx, _, _ = _make_radial_ctx(
+        radial_bindings={
+            "dir_up": "i",
+            "dir_down": "k",
+            "dir_left": "j",
+            "dir_right": "l",
+        },
+    )
+    ctx.consume(_make_state(buttons={"l": True}))  # pointing right → slice 1
+    assert ctx._selected_slice == 1
+
+
+def test_radial_ctx_selects_slice_from_analog_axis():
+    """
+    When axis bindings are present, the direction must be read from state.axes.
+    """
+    ctx, _, _ = _make_radial_ctx(
+        input_type="gamepad",
+        radial_bindings={"axis_x": "right_x", "axis_y": "right_y"},
+    )
+    ctx.consume(_make_state(axes={"right_x": 0.0, "right_y": 0.8}))  # up → slice 0
+    assert ctx._selected_slice == 0
+
+
+def test_radial_ctx_calls_on_hover_every_frame():
+    """
+    on_hover must be called every frame with the current selected slice.
+    """
+    hover = MagicMock()
+    game = MagicMock()
+    game.app.bindings = {
+        "input_type": "keyboard",
+        "contexts": {
+            "radial_menu": {"keyboard": {"dir_up": "i"}},
+            "flight": {"keyboard": {}},
+        },
+        "global": {},
+    }
+    ctx = RadialMenuInputContext(
+        game=game,
+        n_slices=4,
+        on_select=MagicMock(),
+        trigger_hw_name="r",
+        on_hover=hover,
+    )
+    ctx.consume(_make_state(repeats={"i": True}))
+    hover.assert_called_once_with(0)
+
+
+def test_radial_ctx_on_hover_none_when_no_direction():
+    """
+    on_hover must be called with None when the direction magnitude is below
+    the threshold.
+    """
+    hover = MagicMock()
+    game = MagicMock()
+    game.app.bindings = {
+        "input_type": "keyboard",
+        "contexts": {"radial_menu": {"keyboard": {}}, "flight": {"keyboard": {}}},
+        "global": {},
+    }
+    ctx = RadialMenuInputContext(
+        game=game,
+        n_slices=4,
+        on_select=MagicMock(),
+        trigger_hw_name="r",
+        on_hover=hover,
+    )
+    ctx.consume(_make_state())
+    hover.assert_called_once_with(None)
+
+
+def test_radial_ctx_trigger_release_calls_on_select_with_slice():
+    """
+    Releasing the trigger button must call on_select with the selected slice
+    index and call state_manager.pop().
+    """
+    ctx, game, on_select = _make_radial_ctx(
+        radial_bindings={
+            "dir_up": "i",
+            "dir_down": "k",
+            "dir_left": "j",
+            "dir_right": "l",
+        },
+        trigger_hw="r",
+    )
+    ctx.consume(_make_state(repeats={"i": True}, releases={"r": True}))
+    game.app.state_manager.pop.assert_called_once()
+    on_select.assert_called_once_with(0)
+
+
+def test_radial_ctx_trigger_release_calls_on_select_with_none_in_dead_zone():
+    """
+    Releasing the trigger with no direction held must call on_select(None).
+    """
+    ctx, game, on_select = _make_radial_ctx(trigger_hw="r")
+    ctx.consume(_make_state(releases={"r": True}))
+    game.app.state_manager.pop.assert_called_once()
+    on_select.assert_called_once_with(None)
+
+
+def test_radial_ctx_no_pop_while_trigger_held():
+    """
+    While the trigger is held (button or repeat but not release), on_select
+    and state_manager.pop must not be called.
+    """
+    ctx, game, on_select = _make_radial_ctx(trigger_hw="r")
+    ctx.consume(_make_state(buttons={"r": True}))
+    ctx.consume(_make_state(repeats={"r": True}))
+    game.app.state_manager.pop.assert_not_called()
+    on_select.assert_not_called()
+
+
+def test_radial_ctx_clean_nulls_references():
+    """
+    clean() must set game, on_select, and on_hover to None.
+    """
+    ctx, _, _ = _make_radial_ctx()
+    ctx._on_hover = MagicMock()
+    ctx.clean()
+    assert ctx._game is None
+    assert ctx._on_select is None
+    assert ctx._on_hover is None

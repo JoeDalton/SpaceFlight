@@ -45,6 +45,7 @@ contexts:
       loop_target_reverse: "7"
       point_target:        "8"
       toggle_mirror:       alt
+      radial_menu:         r
 
     gamepad:
       # Flight axes
@@ -61,6 +62,7 @@ contexts:
       loop_target_reverse: gamepad_dpad_left
       point_target:        gamepad_dpad_up
       toggle_mirror:       gamepad_back
+      radial_menu:         gamepad_dpad_down
 
     joystick:
       # Flight axes
@@ -82,3 +84,22 @@ contexts:
       loop_target_reverse: stick_button_10
       point_target:        stick_button_11
       toggle_mirror:       stick_button_12
+      radial_menu:         stick_button_3
+
+  radial_menu:
+    # Direction input while the radial menu is open.
+    # For analog devices the right stick / joystick axes are used.
+    # For keyboard the same i/j/k/l keys used for head-look work: no
+    # conflict because FlightInputContext is deactivated while the menu
+    # is open.
+    keyboard:
+      dir_up:    i
+      dir_down:  k
+      dir_left:  j
+      dir_right: l
+    gamepad:
+      axis_x: right_x
+      axis_y: right_y
+    joystick:
+      axis_x: roll
+      axis_y: pitch
