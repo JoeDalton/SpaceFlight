@@ -30,17 +30,6 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
 
-TARGET_FILTERS = [
-    "All",
-    "Enemies",
-    "Capital ships",
-    "Subsystems",
-    "Turrets",
-    "fighters",
-    "",
-    "",
-]
-
 
 LOGGER.info("Importing space_flight library")
 # LOGGER.info(f"Importing space_flight {_version.__version__}")
