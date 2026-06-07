@@ -55,7 +55,7 @@ def test_add_actor_registers_slot(interactions):
     assert a.id in interactions.actors_id_dict
     slot = interactions.actors_id_dict[a.id]
     assert interactions.actors[slot] is a
-    assert interactions._alive[slot]
+    assert interactions.alive[slot]
 
 
 def test_add_duplicate_actor_raises(interactions):
@@ -93,7 +93,7 @@ def test_remove_actor_frees_slot(interactions):
 
     assert a.id not in interactions.actors_id_dict
     assert interactions.actors[slot] is None
-    assert not interactions._alive[slot]
+    assert not interactions.alive[slot]
     assert slot in interactions._free_slots
 
 
@@ -554,7 +554,7 @@ def test_clean_nulls_all_references(interactions):
 
     assert interactions.actors is None
     assert interactions.actors_id_dict is None
-    assert interactions._alive is None
+    assert interactions.alive is None
     assert interactions._free_slots is None
     assert interactions.interact is None
     assert interactions.distances is None
