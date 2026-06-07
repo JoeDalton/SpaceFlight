@@ -8,7 +8,6 @@ from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
-from space_flight.ui.input_context import FlightInputContext
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
 
@@ -73,10 +72,6 @@ class Player:
             self.tactician = FighterTactician(
                 game=self.game, pawn=self.pawn, debug=True
             )
-            self.flight_context = None
-        else:  # TODO put in game state
-            self.flight_context = FlightInputContext(game=self.game, player=self)
-            self.game.app.input_context_stack.push(self.flight_context)
 
         # Initialize rear view mirror
         self.rear_view_mirror = RearViewMirror(
@@ -398,10 +393,6 @@ class Player:
 
         self.rear_view_mirror.clean()
         self.rear_view_mirror = None
-
-        if self.flight_context is not None:
-            self.game.app.input_context_stack.pop()
-            self.flight_context = None
 
         self.game = None
 

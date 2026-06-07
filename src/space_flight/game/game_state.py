@@ -18,6 +18,7 @@ from space_flight.game.time_keeping import (
 )
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.ui.hud import HUD, TargetHUD
+from space_flight.ui.input_context import FlightInputContext
 
 LOGGER = logging.getLogger()
 
@@ -25,9 +26,11 @@ LOGGER = logging.getLogger()
 class GameState(BaseState):
     def enter(self):
         # TODO: Initialize game in a loading state stacked above self
-        # TODO: Handle input management in enter/pause/resume methods
+
+        # Initialize mandatory game elements
         self.initialize_game_structure()
 
+        # Initialize level. The player is defined here
         if self.app.configuration["selected_level"] == "Dev":
             build_dev_level(game=self)
         elif self.app.configuration["selected_level"] == "Intro":
@@ -37,6 +40,11 @@ class GameState(BaseState):
                 f"Level `{self.app.configuration.get('selected_level')}` "
                 "does not exist."
             )
+
+        # Initialize input system
+        self.flight_context = FlightInputContext(game=self, player=self.player)
+        self.app.input_context_stack.push(self.flight_context)
+
         """
         DEBUG
         """
@@ -254,6 +262,11 @@ class GameState(BaseState):
         self.interval_manager = None
         self.game_time.clean()
         self.game_time = None
+
+        # Remove input system
+        if self.flight_context is not None:
+            self.app.input_context_stack.pop()
+            self.flight_context = None
 
         # Remove the game's root node to make sure every graphics thing is deleted
         self.root_node.removeNode()
