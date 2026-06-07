@@ -29,5 +29,13 @@ class Pawn:
         self.speed = np.zeros(3)
         self.position = np.zeros(3)
 
+        # Initialize tactician and autoaim targets
+        self.target = None
+        self.target_id = None
+        self.target_idx = None
+
     def clean(self):
-        raise NotImplementedError
+        if not self.is_clean:
+            self.target = None
+            self.target_id = None
+            self.target_idx = None

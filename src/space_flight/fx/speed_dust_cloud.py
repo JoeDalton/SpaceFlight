@@ -40,7 +40,7 @@ class SpeedDustCloud:
 
         # Create a dummy node at the player's ship location to attach the dust
         self.root = NodePath("speedDust")
-        self.root.reparentTo(self.game.player.ship.node)
+        self.root.reparentTo(self.game.player.pawn.node)
         self.root.setTransparency(TransparencyAttrib.MAlpha)
         # Make that dust independent from scene lighting
         self.root.setLightOff()
@@ -55,7 +55,7 @@ class SpeedDustCloud:
             self._init_particle(particle)
             self.particles.append(particle)
 
-        self.max_speed = self.game.player.ship.max_speed_mps
+        self.max_speed = self.game.player.pawn.max_speed_mps
 
         # Add the update task to the game's methods
         self.game.method_lists[self.id] = [self.dust_update]
@@ -97,7 +97,7 @@ class SpeedDustCloud:
         The dust's opacity increases with player speed to reinforce the feeling
         """
         dt = self.game.game_time.get_time_step()
-        speed = np.linalg.norm(self.game.player.ship.speed)
+        speed = np.linalg.norm(self.game.player.pawn.speed)
         alpha = (
             MIN_DUST_ALPHA + speed * (MAX_DUST_ALPHA - MIN_DUST_ALPHA) / self.max_speed
         )

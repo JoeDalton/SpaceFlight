@@ -19,10 +19,6 @@ PLAYER_HIT_SOUND_MULTIPLIER = 1.0
 
 SOUND_POOL_LENGTH = 20
 
-# TODO
-# Add engine sounds to bot ships. Doppler effect is handled
-# https://docs.panda3d.org/1.10/python/programming/audio/3d-audio
-
 
 class SFX:
     def __init__(self, app):

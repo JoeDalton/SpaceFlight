@@ -492,6 +492,7 @@ class Ship(Pawn):
         garbage collected
         """
         if not self.is_clean:
+            super().clean()
             # Remove ship from its formation if applicable
             if self.formation is not None:
                 self.formation.remove_ship(self.id)

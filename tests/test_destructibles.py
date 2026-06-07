@@ -100,7 +100,7 @@ def test_clean_removes_all_destructibles(mock_game):
 
 
 def test_del_logs_destruction(caplog, mock_game, monkeypatch):
-    monkeypatch.setattr("space_flight.destructibles.DEBUG_DELETION", True)
+    monkeypatch.setattr("space_flight.actors.destructibles.DEBUG_DELETION", True)
 
     d = DummyDestructible(mock_game)
     d.name = "TestObject"

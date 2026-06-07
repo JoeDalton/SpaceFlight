@@ -119,6 +119,9 @@ class GenericTactician:
         max_threat_score_idx = np.nanargmax(threat_scores)
         max_threat_score = threat_scores[max_threat_score_idx]
 
+        if max_threat_score == 0:
+            return {"score": 0, "target_id": None}
+
         highest_threat_dict = {
             "score": max_threat_score,
             "target_id": self.game.interactions.actors[max_threat_score_idx].id,
@@ -178,6 +181,9 @@ class GenericTactician:
         max_prey_score_idx = np.nanargmax(prey_scores)
         max_prey_score = prey_scores[max_prey_score_idx]
 
+        if max_prey_score == 0:
+            return {"score": 0, "target_id": None}
+
         best_prey_dict = {
             "score": max_prey_score,
             "target_id": self.game.interactions.actors[max_prey_score_idx].id,
@@ -215,12 +221,12 @@ class GenericTactician:
         n_actor_in_team = 0
         center = np.zeros(3)
         if team == "friends":
-            for actor in self.game.interactions.actors:
+            for actor in self.game.interactions.live_actors:
                 if actor.team == my_team and actor != self.pawn:
                     center += actor.position
                     n_actor_in_team += 1
         elif team == "foes":
-            for actor in self.game.interactions.actors:
+            for actor in self.game.interactions.live_actors:
                 if actor.team != my_team and actor.team != 0:
                     center += actor.position
                     n_actor_in_team += 1

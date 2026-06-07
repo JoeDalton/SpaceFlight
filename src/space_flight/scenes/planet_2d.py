@@ -48,7 +48,7 @@ class Planet2D:
         self.game.method_lists[self.id] = [self.move_planet_task]
 
     def move_planet_task(self):
-        new_position = self.position + self.game.player.ship.position
+        new_position = self.position + self.game.player.pawn.position
         self.planet.setPos(new_position[0], new_position[1], new_position[2])
 
     def clean(self):

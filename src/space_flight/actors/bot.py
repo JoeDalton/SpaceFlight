@@ -103,8 +103,7 @@ class Bot(Destructible):
             )
         else:
             raise NotImplementedError(f"Unknown bot type {self.bot_type}")
-        # TODO remove
-        self.game.player.add_target(target=self.pawn, name=self.name)
+
         self.team = team
         self.record = kwargs.get("record", False)
 
@@ -230,6 +229,7 @@ def spawn_bot(
     debug_decisions: bool = False,
     **kwargs,
 ) -> Bot:
+    # TODO useless function, just use the constructor directly ?
     bot = Bot(
         game=game,
         name=name,

@@ -2,6 +2,9 @@ from direct.showbase.ShowBase import ShowBase
 
 
 class BaseState:
+    # Set to False on subclasses that should not pause the state below them when pushed.
+    PAUSES_BELOW: bool = True
+
     def __init__(self, app: ShowBase):
         self.app: ShowBase = app
 

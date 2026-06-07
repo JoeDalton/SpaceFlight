@@ -59,13 +59,16 @@ class LevelSelectionMenuState(BaseState):
         )
         self.description_frame.setTransparency(True)
 
+        self.menu_selection = None
         self.create_level_list()
 
     def start_game(self):
         level_names = []
         for level in self.LEVELS:
             level_names.append(level["name"])
-        if self.app.configuration.get("selected_level") in level_names:
+        if self.menu_selection in level_names:
+            self.app.configuration["selected_level"] = self.menu_selection
+            self.menu_selection = None
             self.app.state_manager.replace(self.app.state_manager.GAME_STATE)
 
     def back(self):
@@ -175,15 +178,15 @@ class LevelSelectionMenuState(BaseState):
         level_name = self.LEVELS[button_index]["name"]
         for idx, btn in enumerate(self.level_buttons):
             if idx == button_index:
-                if self.app.configuration.get("selected_level") == level_name:
+                if self.menu_selection == level_name:
                     # Unselect current level and reset the button
-                    self.app.configuration["selected_level"] = None
+                    self.menu_selection = None
                     self.description_frame["text"] = ""
                     btn.reset()
                     self.start_button.hide()
                 else:
                     # Set the level and make the button "PRESSED"
-                    self.app.configuration["selected_level"] = level_name
+                    self.menu_selection = level_name
                     self.description_frame["text"] = self.LEVELS[button_index][
                         "description"
                     ]

@@ -1,6 +1,6 @@
 from direct.gui.DirectGui import DirectWaitBar
 
-from space_flight.game.game_state import GameState
+from space_flight.game.flight_state import FlightState
 from space_flight.global_architecture.base_state import BaseState
 
 
@@ -29,9 +29,9 @@ class LoadingState(BaseState):
         self.loaded_model = model
         self.progress["value"] = 100
 
-        # Transition to GameState
+        # Transition to FlightState
         self.app.state_manager.change_state(
-            lambda app: GameState(app, self.loaded_model)
+            lambda app: FlightState(app, self.loaded_model)
         )
 
     def exit(self):

@@ -118,7 +118,7 @@ class HUD:
         # Count team members
         n_team_1 = 0
         n_team_2 = 0
-        for actor in self.game.interactions.actors:
+        for actor in self.game.interactions.live_actors:
             if actor.team == 1:
                 n_team_1 += 1
             elif actor.team == 2:
@@ -127,15 +127,15 @@ class HUD:
         player_text = (
             ""
             "Player Speed = "
-            f"{np.linalg.norm(self.game.player.ship.state[7:10]):.1f}m/s\n"
-            f"Player health = {self.game.player.ship.health:.1f}\n"
-            f"Player shield = {self.game.player.ship.shield:.1f}\n"
+            f"{np.linalg.norm(self.game.player.pawn.state[7:10]):.1f}m/s\n"
+            f"Player health = {self.game.player.pawn.health:.1f}\n"
+            f"Player shield = {self.game.player.pawn.shield:.1f}\n"
             f"Time = {self.game.game_time.get_current_time():.0f}\n"
             f"Team 1 strength = {n_team_1}\n"
             f"Team 2 strength = {n_team_2}\n"
             "\n"
             "Player has target lock = "
-            f"{self.game.player.ship.auto_aim.is_target_acquired}\n"
+            f"{self.game.player.pawn.auto_aim.is_target_acquired}\n"
             "\n"
         )
         try:
@@ -200,14 +200,9 @@ class HUD:
 
 class TargetHUD:
     def __init__(self, game):
-        # TODO use Interactions instead of a player target list.
         # TODO add lead indicator
-        # Allow filtering on team
         self.game = game
         self.id = uuid.uuid4()
-
-        self.target_idx = 0
-        self.target = None
 
         # Prepare target indicator atachment and aspect ratio correction
         self.root = NodePath("targetHudRoot")
@@ -262,25 +257,25 @@ class TargetHUD:
         self.name_label.setDepthWrite(False)
         self.name_label.setBin("fixed", 10)
 
-        # TODO: This should be in "input_system"
-        self.game.app.accept(
-            self.game.bindings["keyboard_bindings"]["switch_target"], self.switch_target
-        )
-
     def target_hud_update_task(self):
-        if self.target is None:
+        target = self.game.player.pawn.target
+        if target is None:
+            # Either there is no target selected or it has been purged recently
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
-            self.game.player.ship.target_id = None
-        elif self.target.is_dead:
-            self.target = None
-            self.target_idx = 0
+            self.game.player.pawn.target_id = None
+            self.game.player.pawn.target_idx = None
+        elif target.is_dead:
+            # The target died recently but has not yet been purged
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
-            self.game.player.ship.target_id = None
+            self.game.player.target = None
+            self.game.player.pawn.target_id = None
+            self.game.player.pawn.target_idx = None
         else:
+            self.name_label["text"] = target.parent.name
             self.distance_label.show()
             self.name_label.show()
             self.square.show()
@@ -292,7 +287,7 @@ class TargetHUD:
             self.aspect.setScale(1, 1, aspect)
 
             # World position of target
-            target_pos = self.target.position
+            target_pos = self.game.player.pawn.target.position
             world_pos = Point3(*target_pos)
 
             # Convert to camera space
@@ -330,23 +325,6 @@ class TargetHUD:
             ).length()
             self.distance_label["text"] = f"{distance:.0f} m"
 
-    def switch_target(self):
-        self.target_idx = (self.target_idx + 1) % len(
-            self.game.player.available_targets
-        )
-        target_dict = self.game.player.available_targets[self.target_idx]
-        target, target_name = list(target_dict.items())[0]
-        self.set_target(target=target, target_name=target_name)
-
-    def set_target(self, target, target_name: str = ""):
-        self.target = target
-        self.name_label["text"] = target_name
-        try:
-            self.game.player.ship.target_id = target.id
-        except AttributeError:
-            # TODO: breaks looping over the target list
-            self.game.player.ship.target_id = None
-
     def clean(self):
         """
         Clean the TargetHud object
@@ -356,8 +334,6 @@ class TargetHUD:
                 self.game.method_lists.pop(self.id)
             except KeyError:
                 pass
-        # TODO: This should be in "input_system"
-        self.game.app.ignore(self.game.bindings["keyboard_bindings"]["switch_target"])
         self.name_label.destroy()
         self.distance_label.destroy()
         self.square.removeNode()

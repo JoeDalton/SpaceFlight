@@ -4,7 +4,7 @@ from pathlib import Path
 
 LOGGER = logging.getLogger()
 
-SOUND_POOL_LENGTH = 100
+SOUND_POOL_LENGTH = 200
 
 
 class TexturePool:
