@@ -1,6 +1,11 @@
 import pytest
 
-from space_flight.ui.input_reader import InputReader, InputState
+from space_flight.ui.input_reader import (
+    GamepadReader,
+    InputReader,
+    InputState,
+    JoystickReader,
+)
 
 # ---------------------------------------------------------------------------
 # Stub — exercises InputReader.poll() without any Panda3D initialisation
@@ -262,3 +267,70 @@ def test_poll_returns_same_state_object_each_call(reader):
     s1 = reader.poll()
     s2 = reader.poll()
     assert s1 is s2
+
+
+# ---------------------------------------------------------------------------
+# GamepadReader._dz / JoystickReader._dz — pure static dead-zone methods
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(
+    params=[GamepadReader._dz, JoystickReader._dz], ids=["gamepad", "joystick"]
+)
+def dz(request):
+    """Parametrize over both reader dead-zone implementations."""
+    return request.param
+
+
+def test_dz_zero_input_returns_zero(dz):
+    assert dz(0.0, 0.1) == pytest.approx(0.0)
+
+
+def test_dz_value_inside_dead_zone_returns_zero(dz):
+    assert dz(0.05, 0.1) == pytest.approx(0.0)
+
+
+def test_dz_value_at_dead_zone_boundary_returns_zero(dz):
+    # At exactly the boundary: value - sign*dead_zone = 0.
+    assert dz(0.1, 0.1) == pytest.approx(0.0)
+
+
+def test_dz_positive_value_beyond_dead_zone(dz):
+    assert dz(0.5, 0.1) == pytest.approx(0.4)
+
+
+def test_dz_negative_value_beyond_dead_zone(dz):
+    assert dz(-0.5, 0.1) == pytest.approx(-0.4)
+
+
+def test_dz_negative_inside_dead_zone_returns_zero(dz):
+    assert dz(-0.05, 0.1) == pytest.approx(0.0)
+
+
+def test_dz_full_deflection(dz):
+    assert dz(1.0, 0.15) == pytest.approx(0.85)
+
+
+# ---------------------------------------------------------------------------
+# JoystickReader._button_index — pure static name-to-index conversion
+# ---------------------------------------------------------------------------
+
+
+def test_button_index_stick_button_1_is_zero():
+    assert JoystickReader._button_index("stick_button_1") == 0
+
+
+def test_button_index_stick_button_10_is_nine():
+    assert JoystickReader._button_index("stick_button_10") == 9
+
+
+def test_button_index_non_numeric_suffix_returns_none():
+    assert JoystickReader._button_index("stick_button_a") is None
+
+
+def test_button_index_empty_suffix_returns_none():
+    assert JoystickReader._button_index("stick_button_") is None
+
+
+def test_button_index_arbitrary_name_returns_none():
+    assert JoystickReader._button_index("fire") is None

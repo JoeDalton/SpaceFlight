@@ -4,9 +4,9 @@ from collections.abc import Callable
 from direct.gui.DirectGui import (
     DGG,
     DirectButton,
+    DirectEntry,
     DirectFrame,
     DirectLabel,
-    OkCancelDialog,
 )
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject
@@ -17,8 +17,14 @@ from space_flight import DATAFILES_PATH
 
 class ProgressBar:
     """
-    A lean progress bar that attaches to the bottom of its parent and prints
-    blurbs above
+    A progress bar that attaches to the bottom of a parent node and cycles
+    through short hint strings ("blurbs") above it while loading progresses.
+
+    "Lean" here means the bar is a plain white DirectFrame with no border or
+    background — just a thin filled rectangle that grows from left to right.
+    Blurbs are arbitrary strings chosen at random from the supplied list and
+    swapped out on a fixed time interval so the player has something to read
+    during long loading screens.
     """
 
     def __init__(
@@ -29,6 +35,21 @@ class ProgressBar:
         blurb_update_delay_s: float = 2.0,
         bar_height: float = 0.01,
     ):
+        """
+        Build the bar and blurb label, then call update(0) to initialise sizes.
+
+        :param app: The running ShowBase application; used to attach the bar
+            frame to aspect2d.
+        :param parent: The Panda3D node the bar should sit beneath. Its tight
+            bounds are queried to determine the bar width and left edge.
+        :param blurbs: List of hint strings shown above the bar. A random entry
+            is displayed at construction time and rotated every
+            *blurb_update_delay_s* seconds.
+        :param blurb_update_delay_s: Minimum number of seconds between blurb
+            changes.
+        :param bar_height: Vertical extent of the filled bar rectangle in
+            aspect2d units.
+        """
         self.app = app
 
         # Create the progress bar object
@@ -61,10 +82,12 @@ class ProgressBar:
 
     def update(self, value: float):
         """
-        Updates the progress bar's length and
-        updates the blurb if enough time has passed
+        Resize the bar to reflect the current progress and, if enough time has
+        elapsed since the last change, swap the blurb for a new random entry.
 
-        :param value: The progress value [0,1]
+        :param value: Fractional progress in the range [0, 1]. A value of 0
+            renders an empty bar; 1 renders a bar that spans the full width of
+            the parent node.
         """
         if (
             ClockObject.getGlobalClock().getFrameTime() - self.last_blurb_update
@@ -78,7 +101,8 @@ class ProgressBar:
 
     def destroy(self):
         """
-        Destroys all GUI object
+        Remove the bar frame and the blurb label from the scene graph and free
+        their resources.
         """
         self.bar.destroy()
         self.blurb_label.destroy()
@@ -86,15 +110,31 @@ class ProgressBar:
 
 class MenuModels:
     """
-    A class to hold the models used in menus
+    Container for Panda3D egg models shared across all menu screens.
+
+    On construction it loads four egg files (button, thumb, inc, dec) from the
+    data directory and stores their named sub-nodes as geometry tuples in the
+    standard Panda3D (ready, click, hover, disabled) order expected by
+    DirectButton and DirectScrollBar. It also sets the global default dialog
+    background geometry via DGG.setDefaultDialogGeom so that every
+    DirectDialog in the session uses the game's custom dialog texture.
     """
 
     def __init__(
         self,
         app: ShowBase,
     ):
+        """
+        Load all menu egg models and register the default dialog geometry.
+
+        :param app: The running ShowBase application; used to access the
+            asset manager and the Panda3D loader.
+        """
         # Dialog box background
-        DGG.setDefaultDialogGeom(DATAFILES_PATH / "menus" / "dialog.png")
+        dialog_geom = app.asset_manager.get_asset(
+            "texture", DATAFILES_PATH / "menus/dialog.png"
+        ).get_texture()
+        DGG.setDefaultDialogGeom(dialog_geom)
         # Button model
         button_map = app.loader.loadModel(DATAFILES_PATH / "menus" / "button_map.egg")
         self.button_geom = (
@@ -127,41 +167,16 @@ class MenuModels:
         )
 
 
-class CustomOKDialog(OkCancelDialog):
-    def __init__(self, app: ShowBase, text: str, command: Callable, parent=None):
-        super().__init__(parent=parent)
-        # Personalizable items
-        self["text"] = text
-        self["command"] = command
-
-        # Common parameters
-        self["pos"] = (0, 0, 0.25)
-        self["text_fg"] = (0.898, 0.839, 0.730, 1.0)
-        self["text_shadow"] = (0, 0, 0, 0.75)
-        self["text_shadowOffset"] = (0.05, 0.05)
-        self["text_scale"] = (0.05,)
-        self["text_align"] = (TextNode.ACenter,)
-        self["fadeScreen"] = (0.65,)
-        self["frameColor"] = ((0.3, 0.3, 0.3, 1),)
-        self["button_geom"] = (app.menu_models.button_geom,)
-        self["button_scale"] = (0.15,)
-        self["button_text_scale"] = (0.35,)
-        self["button_text_align"] = (TextNode.ALeft,)
-        self["button_text_fg"] = ((0.898, 0.839, 0.730, 1.0),)
-        self["button_text_pos"] = ((-0.9, -0.125),)
-        self["button_relief"] = (1,)
-        self["button_pad"] = ((0.01, 0.01),)
-        self["button_frameColor"] = ((0, 0, 0, 0),)
-        self["button_frameSize"] = ((-1.0, 1.0, -0.25, 0.25),)
-        self["button_pressEffect"] = (True,)
-        self.setTransparency(True)
-        self.configureDialog()
-        scale = self["image_scale"]
-        self["image_scale"] = (scale[0] / 2.0, scale[1], scale[2] / 2.0)
-        self["text_pos"] = (self["text_pos"][0], self["text_pos"][1] + 0.06)
-
-
 class CustomButton:
+    """
+    A styled DirectButton wrapper that uses the game's button egg model for its
+    four visual states (ready, click, hover, disabled).
+
+    Wrapping DirectButton keeps callers free of Panda3D-specific keyword
+    arguments and ensures every button in the game shares the same geometry,
+    colours, and relief settings.
+    """
+
     def __init__(
         self,
         app: ShowBase,
@@ -174,6 +189,27 @@ class CustomButton:
         extraArgs: list = [],
         parent=None,
     ):
+        """
+        Create and configure the underlying DirectButton.
+
+        :param app: The running ShowBase application; used to retrieve shared
+            button geometry from app.menu_models.
+        :param pos: 3-tuple (x, y, z) giving the button's position in its
+            parent's coordinate space.
+        :param command: Callable invoked when the button is clicked.
+        :param text: Label string rendered on the button face.
+        :param scale: Uniform scale applied to the whole button node.
+        :param text_scale: Scale of the text relative to the button geometry.
+            Defaults to 0.25.
+        :param layout: Controls text alignment and horizontal anchor.
+            ``"left"`` aligns text to the left edge, ``"center"`` centres it,
+            and ``"right"`` aligns it to the right edge. Raises
+            ``NotImplementedError`` for any other value.
+        :param extraArgs: Additional positional arguments forwarded to
+            *command* when the button is clicked.
+        :param parent: Panda3D node to attach the button to. Defaults to the
+            global aspect2d when ``None``.
+        """
         self.app = app
 
         if layout == "left":
@@ -211,22 +247,98 @@ class CustomButton:
         self.button.setTransparency(True)
 
     def destroy(self):
+        """
+        Remove the button from the scene graph and free its resources.
+        """
         self.button.destroy()
 
     def hide(self):
+        """
+        Hide the button without removing it from the scene graph.
+        """
         self.button.hide()
 
     def show(self):
+        """
+        Make the button visible after it has been hidden.
+        """
         self.button.show()
 
     def set_pressed(self):
         """
-        Visually register a "pressed" state
+        Lock the button into its "click" visual state regardless of mouse
+        interaction, so the caller can signal that the associated option is
+        currently active.
         """
         self.button["geom"] = self.app.menu_models.button_geom[1]
 
     def reset(self):
         """
-        Resets the visual of the button
+        Restore the full four-state geometry tuple so the button cycles through
+        ready, click, hover, and disabled states normally again.
         """
         self.button["geom"] = self.app.menu_models.button_geom
+
+
+class CustomEntry:
+    """
+    A styled single-line text entry widget backed by a DirectEntry.
+
+    Applies a dark semi-transparent background and warm off-white text colour
+    consistent with the game's UI palette, and restricts the entry to a single
+    line of input.
+    """
+
+    def __init__(
+        self,
+        app: ShowBase,
+        pos: tuple[float],
+        initial_text: str = "",
+        width: float = 14,
+        scale: float = 0.05,
+        parent=None,
+    ):
+        """
+        Create the underlying DirectEntry with game-standard styling.
+
+        :param app: The running ShowBase application (currently unused but
+            accepted for API consistency with other custom widgets).
+        :param pos: 3-tuple (x, y, z) giving the entry's position in its
+            parent's coordinate space.
+        :param initial_text: String pre-filled in the entry on creation.
+        :param width: Visible width of the entry field in character units.
+        :param scale: Uniform scale applied to the entry node.
+        :param parent: Panda3D node to attach the entry to. Defaults to the
+            global aspect2d when ``None``.
+        """
+        self.entry = DirectEntry(
+            parent=parent,
+            pos=pos,
+            scale=scale,
+            initialText=initial_text,
+            width=width,
+            numLines=1,
+            frameColor=(0.12, 0.12, 0.18, 0.92),
+            text_fg=(0.898, 0.839, 0.730, 1.0),
+            relief=DGG.FLAT,
+        )
+
+    def get(self) -> str:
+        """
+        Return the current contents of the entry field.
+
+        :return: The string currently typed in the entry.
+        """
+        return self.entry.get()
+
+    def set(self, text: str) -> None:
+        """
+        Replace the entry field's contents with the given string.
+
+        :param text: The new string to display in the entry.
+        """
+        self.entry.set(text)
+
+    def destroy(self) -> None:
+        """Remove the entry widget from the scene graph and free its resources."""
+        self.entry.destroy()
