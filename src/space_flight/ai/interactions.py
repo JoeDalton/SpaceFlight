@@ -26,12 +26,12 @@ class Interactions:
 
         :param max_actors: Upper bound on the number of simultaneously live actors
         """
-        self._max_actors = max_actors
+        self.max_actors = max_actors
         self.actors: List = [None] * max_actors  # sparse; None == empty slot
         self.actors_id_dict = {}  # UUID -> stable slot index
         self.alive = np.zeros(max_actors, dtype=bool)
         # LIFO stack of free slot indices; pop() is O(1)
-        self._free_slots = list(range(max_actors - 1, -1, -1))
+        self.free_slots = list(range(max_actors - 1, -1, -1))
 
         self.directions: np.ndarray = np.zeros((max_actors, max_actors, 3))
         self.interact: np.ndarray = np.zeros((max_actors, max_actors), dtype=bool)
@@ -64,11 +64,11 @@ class Interactions:
         """
         if actor.id in self.actors_id_dict:
             raise ValueError(f"Actor {actor.name} is already in the actors' list")
-        if not self._free_slots:
+        if not self.free_slots:
             raise RuntimeError(
-                f"Cannot add actor: max_actors ({self._max_actors}) reached"
+                f"Cannot add actor: max_actors ({self.max_actors}) reached"
             )
-        slot = self._free_slots.pop()
+        slot = self.free_slots.pop()
         self.actors[slot] = actor
         self.alive[slot] = True
         self.actors_id_dict[actor.id] = slot
@@ -95,7 +95,7 @@ class Interactions:
         self.rel_velocities[slot, :, :] = 0.0
         self.rel_velocities[:, slot, :] = 0.0
 
-        self._free_slots.append(slot)
+        self.free_slots.append(slot)
 
     def get_actor_index_from_id(self, actor_id: UUID) -> int:
         """
@@ -202,7 +202,7 @@ class Interactions:
         self.actors = None
         self.actors_id_dict = None
         self.alive = None
-        self._free_slots = None
+        self.free_slots = None
 
         self.directions = None
         self.interact = None

@@ -36,7 +36,7 @@ _ROW_HEIGHT = 0.09
 _AXIS_DEAD_ZONE = 0.33
 
 
-def _format_binding(input_type: str, value: str, forced_type: str | None = None) -> str:
+def format_binding(input_type: str, value: str, forced_type: str | None = None) -> str:
     """
     Format a raw binding value for display in the UI.
 
@@ -118,7 +118,7 @@ class ChangeBindingDialog(object):
         self.newInputType = ""
         self.newInput = ""
 
-        self.__command = command
+        self._command = command
 
         # ---- Dialog UI (same as ChangeActionDialog.__init__ in mappingGUI.py) ----
         self.dialog = OkCancelDialog(
@@ -274,9 +274,9 @@ class ChangeBindingDialog(object):
         self.dialog.cleanup()
 
         if self.newInput and result == DGG.DIALOG_OK:
-            self.__command(self.action, self.newInputType, self.newInput)
+            self._command(self.action, self.newInputType, self.newInput)
         else:
-            self.__command(self.action, None, None)
+            self._command(self.action, None, None)
 
         # Restore button throwers (same as mappingGUI.py).
         for bt in self.app.buttonThrowers:
@@ -315,13 +315,13 @@ class InputSettingsMenuState(BaseState):
 
     def __init__(self, app):
         super().__init__(app)
-        self._working_config: dict = {}
-        self._saved_config: dict = {}
-        self._dz_entries: dict[tuple, CustomEntry] = {}
-        self._binding_labels: dict[tuple, DirectLabel] = {}
-        self._input_type_buttons: dict[str, CustomButton] = {}
-        self._static_widgets: list = []
-        self._active_dialog: ChangeBindingDialog | None = None
+        self.working_config: dict = {}
+        self.saved_config: dict = {}
+        self.dz_entries: dict[tuple, CustomEntry] = {}
+        self.binding_labels: dict[tuple, DirectLabel] = {}
+        self.input_type_buttons: dict[str, CustomButton] = {}
+        self.static_widgets: list = []
+        self.active_dialog: ChangeBindingDialog | None = None
         self.scroll_frame = None
 
     # ------------------------------------------------------------------
@@ -336,10 +336,10 @@ class InputSettingsMenuState(BaseState):
         The YAML is read from disk each time the state is entered, so any
         changes written by a previous session are picked up automatically.
         """
-        self._working_config = self._load_file(_CONFIG_FILE)
-        self._saved_config = copy.deepcopy(self._working_config)
-        self._build_static_ui()
-        self._rebuild_scroll()
+        self.working_config = self.load_file(_CONFIG_FILE)
+        self.saved_config = copy.deepcopy(self.working_config)
+        self.build_static_ui()
+        self.rebuild_scroll()
 
     def pause(self):
         """
@@ -361,17 +361,17 @@ class InputSettingsMenuState(BaseState):
         because the state manager pops this state programmatically), the dialog
         is closed with a cancel result before the rest of the UI is torn down.
         """
-        if self._active_dialog is not None:
-            self._active_dialog.onClose(DGG.DIALOG_CANCEL)
-            self._active_dialog = None
+        if self.active_dialog is not None:
+            self.active_dialog.onClose(DGG.DIALOG_CANCEL)
+            self.active_dialog = None
         if self.scroll_frame is not None:
             self.scroll_frame.destroy()
             self.scroll_frame = None
         self.title.destroy()
         self.bg.destroy()
-        for w in self._static_widgets:
+        for w in self.static_widgets:
             w.destroy()
-        for btn in self._input_type_buttons.values():
+        for btn in self.input_type_buttons.values():
             btn.destroy()
         self.default_btn.destroy()
         self.cancel_btn.destroy()
@@ -382,7 +382,7 @@ class InputSettingsMenuState(BaseState):
     # UI construction
     # ------------------------------------------------------------------
 
-    def _build_static_ui(self):
+    def build_static_ui(self):
         """
         Create the persistent UI elements shown for the lifetime of this state.
 
@@ -420,7 +420,7 @@ class InputSettingsMenuState(BaseState):
             text_align=TextNode.ALeft,
         )
         it_label.setTransparency(True)
-        self._static_widgets.append(it_label)
+        self.static_widgets.append(it_label)
 
         # Input type selector buttons
         xs = {"keyboard": -0.1, "gamepad": 0.38, "joystick": 0.86}
@@ -428,20 +428,20 @@ class InputSettingsMenuState(BaseState):
             btn = CustomButton(
                 app=self.app,
                 pos=(x, 0, 0.73),
-                command=self._select_input_type,
+                command=self.select_input_type,
                 text=name.capitalize(),
                 scale=0.23,
                 layout="center",
                 extraArgs=[name],
             )
-            self._input_type_buttons[name] = btn
-        self._refresh_input_type_buttons()
+            self.input_type_buttons[name] = btn
+        self.refresh_input_type_buttons()
 
         # Bottom action buttons
         self.default_btn = CustomButton(
             app=self.app,
             pos=(-0.7, 0, -0.91),
-            command=self._load_default,
+            command=self.load_default,
             text="Default",
             scale=0.28,
             layout="center",
@@ -449,7 +449,7 @@ class InputSettingsMenuState(BaseState):
         self.cancel_btn = CustomButton(
             app=self.app,
             pos=(0.0, 0, -0.91),
-            command=self._cancel,
+            command=self.cancel,
             text="Cancel",
             scale=0.28,
             layout="center",
@@ -457,13 +457,13 @@ class InputSettingsMenuState(BaseState):
         self.save_btn = CustomButton(
             app=self.app,
             pos=(0.7, 0, -0.91),
-            command=self._save,
+            command=self.save,
             text="Save",
             scale=0.28,
             layout="center",
         )
 
-    def _rebuild_scroll(self):
+    def rebuild_scroll(self):
         """
         Destroy the current scrollable frame and rebuild it from the working
         configuration.
@@ -476,10 +476,10 @@ class InputSettingsMenuState(BaseState):
         if self.scroll_frame is not None:
             self.scroll_frame.destroy()
             self.scroll_frame = None
-        self._dz_entries.clear()
-        self._binding_labels.clear()
+        self.dz_entries.clear()
+        self.binding_labels.clear()
 
-        rows = self._make_row_data()
+        rows = self.make_row_data()
         canvas_h = len(rows) * _ROW_HEIGHT + 0.05
 
         frame_bottom = -0.82
@@ -517,13 +517,13 @@ class InputSettingsMenuState(BaseState):
             y = -(i * _ROW_HEIGHT)
             kind = row["kind"]
             if kind == "header":
-                self._add_header(canvas, row["text"], y)
+                self.add_header(canvas, row["text"], y)
             elif kind == "deadzone":
-                self._add_deadzone_row(canvas, row, y)
+                self.add_deadzone_row(canvas, row, y)
             else:
-                self._add_binding_row(canvas, row, y)
+                self.add_binding_row(canvas, row, y)
 
-    def _add_header(self, canvas, text: str, y: float):
+    def add_header(self, canvas, text: str, y: float):
         """
         Add a blue section-header label to the scroll canvas.
 
@@ -547,7 +547,7 @@ class InputSettingsMenuState(BaseState):
         )
         hdr.setTransparency(True)
 
-    def _add_deadzone_row(self, canvas, row: dict, y: float):
+    def add_deadzone_row(self, canvas, row: dict, y: float):
         """
         Add a dead-zone label and editable entry to the scroll canvas.
 
@@ -575,9 +575,9 @@ class InputSettingsMenuState(BaseState):
             width=8,
             parent=canvas,
         )
-        self._dz_entries[row["path"]] = entry
+        self.dz_entries[row["path"]] = entry
 
-    def _add_binding_row(self, canvas, row: dict, y: float):
+    def add_binding_row(self, canvas, row: dict, y: float):
         """
         Add an action-binding row to the scroll canvas.
 
@@ -592,7 +592,7 @@ class InputSettingsMenuState(BaseState):
             ``"value"`` keys.
         :param y: Vertical position on the canvas.
         """
-        inp = self._working_config.get("input_type", "keyboard")
+        inp = self.working_config.get("input_type", "keyboard")
 
         DirectLabel(
             parent=canvas,
@@ -606,7 +606,7 @@ class InputSettingsMenuState(BaseState):
 
         val_lbl = DirectLabel(
             parent=canvas,
-            text=_format_binding(inp, row["value"]),
+            text=format_binding(inp, row["value"]),
             scale=0.045,
             pos=(-0.15, 0, y - 0.015),
             frameColor=(0, 0, 0, 0),
@@ -614,13 +614,13 @@ class InputSettingsMenuState(BaseState):
             text_align=TextNode.ALeft,
         )
         val_lbl.setTransparency(True)
-        self._binding_labels[row["path"]] = val_lbl
+        self.binding_labels[row["path"]] = val_lbl
 
         btn_scale = 0.18
         CustomButton(
             app=self.app,
             pos=(self.app.a2dRight - (0.898 * btn_scale + 0.3), 0, y),
-            command=self._open_dialog,
+            command=self.open_dialog,
             text="Change",
             scale=btn_scale,
             layout="center",
@@ -628,13 +628,13 @@ class InputSettingsMenuState(BaseState):
             parent=canvas,
         )
 
-    def _refresh_input_type_buttons(self):
+    def refresh_input_type_buttons(self):
         """
         Visually mark the active input-type button as pressed and reset the
         others so the selector reflects ``_working_config["input_type"]``.
         """
-        cur = self._working_config.get("input_type", "keyboard")
-        for name, btn in self._input_type_buttons.items():
+        cur = self.working_config.get("input_type", "keyboard")
+        for name, btn in self.input_type_buttons.items():
             if name == cur:
                 btn.set_pressed()
             else:
@@ -644,7 +644,7 @@ class InputSettingsMenuState(BaseState):
     # Row data
     # ------------------------------------------------------------------
 
-    def _make_row_data(self) -> list[dict]:
+    def make_row_data(self) -> list[dict]:
         """
         Build the ordered list of row descriptors for the scrollable area.
 
@@ -661,7 +661,7 @@ class InputSettingsMenuState(BaseState):
 
         :return: Ordered list of row descriptor dicts.
         """
-        cfg = self._working_config
+        cfg = self.working_config
         inp = cfg.get("input_type", "keyboard")
         rows = []
 
@@ -711,7 +711,7 @@ class InputSettingsMenuState(BaseState):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _load_file(path) -> dict:
+    def load_file(path) -> dict:
         """
         Parse a YAML configuration file and return its contents as a dict.
 
@@ -721,7 +721,7 @@ class InputSettingsMenuState(BaseState):
         with open(path, "r") as f:
             return yaml.safe_load(f)
 
-    def _flush_dead_zones(self):
+    def flush_dead_zones(self):
         """
         Write current entry widget values back into :attr:`_working_config`.
 
@@ -730,9 +730,9 @@ class InputSettingsMenuState(BaseState):
         the original YAML value was a float; strings that cannot be parsed are
         kept as strings.
         """
-        for path, entry in self._dz_entries.items():
+        for path, entry in self.dz_entries.items():
             val = entry.get().strip()
-            d = self._working_config
+            d = self.working_config
             for key in path[:-1]:
                 d = d[key]
             orig = d.get(path[-1])
@@ -747,7 +747,7 @@ class InputSettingsMenuState(BaseState):
     # Dialog
     # ------------------------------------------------------------------
 
-    def _open_dialog(self, path: tuple, label: str):
+    def open_dialog(self, path: tuple, label: str):
         """
         Open a :class:`ChangeBindingDialog` for the action at *path*.
 
@@ -757,18 +757,18 @@ class InputSettingsMenuState(BaseState):
             ``("contexts", "flight", "keyboard", "fire")``).
         :param label: Human-readable action name shown inside the dialog.
         """
-        if self._active_dialog is not None:
+        if self.active_dialog is not None:
             return
-        inp = self._working_config.get("input_type", "keyboard")
-        self._active_dialog = ChangeBindingDialog(
+        inp = self.working_config.get("input_type", "keyboard")
+        self.active_dialog = ChangeBindingDialog(
             app=self.app,
             action=label,
             input_type=inp,
             button_geom=self.app.menu_models.button_geom,
-            command=lambda _, t, v: self._on_confirmed(path, t, v),
+            command=lambda _, t, v: self.on_confirmed(path, t, v),
         )
 
-    def _on_confirmed(self, path: tuple, new_type: str | None, new_value: str | None):
+    def on_confirmed(self, path: tuple, new_type: str | None, new_value: str | None):
         """
         Callback fired by :class:`ChangeBindingDialog` when the user confirms a
         new binding.
@@ -782,24 +782,22 @@ class InputSettingsMenuState(BaseState):
         :param new_value: Hardware name to store (e.g. ``"space"`` or
             ``"gamepad_lshoulder"``), or ``None`` on cancel.
         """
-        self._active_dialog = None
+        self.active_dialog = None
         if new_value is None:
             return
-        d = self._working_config
+        d = self.working_config
         for key in path[:-1]:
             d = d[key]
         d[path[-1]] = new_value
-        inp = self._working_config.get("input_type", "keyboard")
-        if path in self._binding_labels:
-            self._binding_labels[path]["text"] = _format_binding(
-                inp, new_value, new_type
-            )
+        inp = self.working_config.get("input_type", "keyboard")
+        if path in self.binding_labels:
+            self.binding_labels[path]["text"] = format_binding(inp, new_value, new_type)
 
     # ------------------------------------------------------------------
     # Button callbacks
     # ------------------------------------------------------------------
 
-    def _select_input_type(self, input_type: str):
+    def select_input_type(self, input_type: str):
         """
         Switch the active input type and rebuild the binding list.
 
@@ -809,14 +807,14 @@ class InputSettingsMenuState(BaseState):
         :param input_type: One of ``"keyboard"``, ``"gamepad"``, or
             ``"joystick"``.
         """
-        if self._active_dialog is not None:
+        if self.active_dialog is not None:
             return
-        self._flush_dead_zones()
-        self._working_config["input_type"] = input_type
-        self._refresh_input_type_buttons()
-        self._rebuild_scroll()
+        self.flush_dead_zones()
+        self.working_config["input_type"] = input_type
+        self.refresh_input_type_buttons()
+        self.rebuild_scroll()
 
-    def _save(self):
+    def save(self):
         """
         Flush edits, write the configuration to disk, and rebuild the reader.
 
@@ -826,14 +824,12 @@ class InputSettingsMenuState(BaseState):
         are active in the current session without a restart.  Finally navigates
         back to the main menu.  Silently ignored if a dialog is open.
         """
-        if self._active_dialog is not None:
+        if self.active_dialog is not None:
             return
-        self._flush_dead_zones()
+        self.flush_dead_zones()
         with open(_CONFIG_FILE, "w") as f:
-            yaml.dump(
-                self._working_config, f, default_flow_style=False, sort_keys=False
-            )
-        self._saved_config = copy.deepcopy(self._working_config)
+            yaml.dump(self.working_config, f, default_flow_style=False, sort_keys=False)
+        self.saved_config = copy.deepcopy(self.working_config)
         # Rebuild the InputReader so the new bindings take effect immediately.
         # reader_factory re-reads the YAML, sets app.bindings, and re-registers
         # all accept() callbacks with the updated hardware names.
@@ -842,19 +838,19 @@ class InputSettingsMenuState(BaseState):
         self.app.state_manager.pop()
         self.app.state_manager.push(self.app.state_manager.MAIN_MENU_STATE)
 
-    def _cancel(self):
+    def cancel(self):
         """
         Discard all unsaved changes and return to the main menu.
 
         The YAML file on disk is not modified.  Silently ignored if a dialog is
         open.
         """
-        if self._active_dialog is not None:
+        if self.active_dialog is not None:
             return
         self.app.state_manager.pop()
         self.app.state_manager.push(self.app.state_manager.MAIN_MENU_STATE)
 
-    def _load_default(self):
+    def load_default(self):
         """
         Replace the working configuration with the factory defaults.
 
@@ -862,8 +858,8 @@ class InputSettingsMenuState(BaseState):
         binding list.  Changes are not written to disk until the user clicks
         *Save*.  Silently ignored if a dialog is open.
         """
-        if self._active_dialog is not None:
+        if self.active_dialog is not None:
             return
-        self._working_config = self._load_file(_DEFAULT_CONFIG_FILE)
-        self._refresh_input_type_buttons()
-        self._rebuild_scroll()
+        self.working_config = self.load_file(_DEFAULT_CONFIG_FILE)
+        self.refresh_input_type_buttons()
+        self.rebuild_scroll()

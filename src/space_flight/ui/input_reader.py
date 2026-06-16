@@ -233,19 +233,19 @@ class InputReader:
         :param app: The Panda3D application instance; ``app.bindings`` must
             already be populated (see :func:`reader_factory`).
         """
-        self._app = app
-        self._state = InputState()
-        self._previous: dict[str, bool] = {}
-        self._ev_pressed: set[str] = set()
-        self._ev_released: set[str] = set()
-        self._app.disableMouse()
+        self.app = app
+        self.state = InputState()
+        self.previous: dict[str, bool] = {}
+        self.ev_pressed: set[str] = set()
+        self.ev_released: set[str] = set()
+        self.app.disableMouse()
 
         # Universal keyboard bindings
         # Registered on every reader regardless of device type
-        self._global_keys: list[str] = list(app.bindings.get("global", {}).values())
-        for hw_name in self._global_keys:
-            app.accept(hw_name, lambda n=hw_name: self._ev_pressed.add(n))
-            app.accept(hw_name + "-up", lambda n=hw_name: self._ev_released.add(n))
+        self.global_keys: list[str] = list(app.bindings.get("global", {}).values())
+        for hw_name in self.global_keys:
+            app.accept(hw_name, lambda n=hw_name: self.ev_pressed.add(n))
+            app.accept(hw_name + "-up", lambda n=hw_name: self.ev_released.add(n))
 
     # ------------------------------------------------------------------
     # Public API
@@ -267,33 +267,33 @@ class InputReader:
 
         :return: The updated :class:`InputState` for this frame.
         """
-        current = self._read_all_buttons()
+        current = self.read_all_buttons()
 
-        self._state.buttons.clear()
-        self._state.repeats.clear()
-        self._state.releases.clear()
-        self._state.axes.clear()
+        self.state.buttons.clear()
+        self.state.repeats.clear()
+        self.state.releases.clear()
+        self.state.axes.clear()
 
         for name, is_down in current.items():
-            was_down = self._previous.get(name, False)
+            was_down = self.previous.get(name, False)
             if is_down and not was_down:
-                self._state.buttons[name] = True
+                self.state.buttons[name] = True
             elif is_down and was_down:
-                self._state.repeats[name] = True
+                self.state.repeats[name] = True
             elif not is_down and was_down:
-                self._state.releases[name] = True
+                self.state.releases[name] = True
 
         # Safety-net: catch brief press/release invisible to frame-rate polling
-        for name in self._ev_pressed:
-            self._state.buttons[name] = True
-        for name in self._ev_released:
-            self._state.releases[name] = True
-        self._ev_pressed.clear()
-        self._ev_released.clear()
+        for name in self.ev_pressed:
+            self.state.buttons[name] = True
+        for name in self.ev_released:
+            self.state.releases[name] = True
+        self.ev_pressed.clear()
+        self.ev_released.clear()
 
-        self._previous = current
-        self._read_axes(self._state)
-        return self._state
+        self.previous = current
+        self.read_axes(self.state)
+        return self.state
 
     def clean(self) -> None:
         """
@@ -304,21 +304,21 @@ class InputReader:
         configuration.  Subclasses that register additional handlers must call
         ``super().clean()`` after their own cleanup.
         """
-        for hw_name in self._global_keys:
-            self._app.ignore(hw_name)
-            self._app.ignore(hw_name + "-up")
-        self._global_keys = None
-        self._app = None
-        self._state = None
-        self._previous = None
-        self._ev_pressed = None
-        self._ev_released = None
+        for hw_name in self.global_keys:
+            self.app.ignore(hw_name)
+            self.app.ignore(hw_name + "-up")
+        self.global_keys = None
+        self.app = None
+        self.state = None
+        self.previous = None
+        self.ev_pressed = None
+        self.ev_released = None
 
     # ------------------------------------------------------------------
     # Subclass interface
     # ------------------------------------------------------------------
 
-    def _read_all_buttons(self) -> dict[str, bool]:
+    def read_all_buttons(self) -> dict[str, bool]:
         """
         Returns the current raw button state as a ``{hardware_name: is_down}``
         mapping.
@@ -332,7 +332,7 @@ class InputReader:
         """
         raise NotImplementedError
 
-    def _read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState) -> None:
         """
         Populates ``state.axes`` with dead-zoned axis values for this frame.
 
@@ -349,7 +349,7 @@ class InputReader:
     # Helper
     # ------------------------------------------------------------------
 
-    def _collect_button_names(self, axis_names: frozenset[str]) -> frozenset[str]:
+    def collect_button_names(self, axis_names: frozenset[str]) -> frozenset[str]:
         """
         Scans all context bindings and returns the hardware names that are
         buttons (i.e. not continuous axes).
@@ -361,9 +361,9 @@ class InputReader:
             continuous axes and must not be polled as buttons.
         :return: Frozenset of button hardware names from the configuration.
         """
-        input_type = self._app.bindings["input_type"]
+        input_type = self.app.bindings["input_type"]
         names: set[str] = set()
-        for ctx_data in self._app.bindings.get("contexts", {}).values():
+        for ctx_data in self.app.bindings.get("contexts", {}).values():
             for hw_name in ctx_data.get(input_type, {}).values():
                 if hw_name not in axis_names:
                     names.add(hw_name)
@@ -385,7 +385,7 @@ class KeyboardReader(InputReader):
         """
         Collects bound key names and register safety-net event callbacks.
 
-        Calls :meth:`~InputReader._collect_button_names` with an empty axis
+        Calls :meth:`~InputReader.collect_button_names` with an empty axis
         set (keyboards have no analogue axes), then registers ``accept()``
         callbacks for every bound key so that short presses between polls are
         not missed.
@@ -393,14 +393,14 @@ class KeyboardReader(InputReader):
         :param app: The Panda3D application instance.
         """
         super().__init__(app)
-        self._button_names = self._collect_button_names(frozenset())
-        self._registry = ButtonRegistry.ptr()
+        self.button_names = self.collect_button_names(frozenset())
+        self.registry = ButtonRegistry.ptr()
 
-        for key in self._button_names:
-            app.accept(key, lambda k=key: self._ev_pressed.add(k))
-            app.accept(key + "-up", lambda k=key: self._ev_released.add(k))
+        for key in self.button_names:
+            app.accept(key, lambda k=key: self.ev_pressed.add(k))
+            app.accept(key + "-up", lambda k=key: self.ev_released.add(k))
 
-    def _read_all_buttons(self) -> dict[str, bool]:
+    def read_all_buttons(self) -> dict[str, bool]:
         """
         Polls every bound key via the MouseWatcher.
 
@@ -408,12 +408,12 @@ class KeyboardReader(InputReader):
             currently held down.
         """
         result: dict[str, bool] = {}
-        for key in self._button_names:
-            handle = self._registry.getButton(key)
-            result[key] = self._app.mouseWatcherNode.isButtonDown(handle)
+        for key in self.button_names:
+            handle = self.registry.getButton(key)
+            result[key] = self.app.mouseWatcherNode.isButtonDown(handle)
         return result
 
-    def _read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState) -> None:
         """
         No-op — keyboards have no physical axes.
 
@@ -428,9 +428,9 @@ class KeyboardReader(InputReader):
         """
         Unregisters key event callbacks, then delegate to the base class.
         """
-        for key in self._button_names:
-            self._app.ignore(key)
-            self._app.ignore(key + "-up")
+        for key in self.button_names:
+            self.app.ignore(key)
+            self.app.ignore(key + "-up")
         super().clean()
 
 
@@ -461,31 +461,29 @@ class GamepadReader(InputReader):
         :param app: The Panda3D application instance.
         """
         super().__init__(app)
-        self._button_names = self._collect_button_names(GAMEPAD_AXIS_NAMES)
-        self._dead_zones = app.bindings.get("dead_zones", {})
+        self.button_names = self.collect_button_names(GAMEPAD_AXIS_NAMES)
+        self.dead_zones = app.bindings.get("dead_zones", {})
         self.gamepad = None
 
         devices = app.devices.getDevices(InputDevice.DeviceClass.gamepad)
         if devices:
-            self._connect(devices[0])
+            self.connect(devices[0])
         else:
-            self._lbl = OnscreenText(
-                text="No gamepad found", fg=(1, 0, 0, 1), scale=0.2
-            )
+            self.lbl = OnscreenText(text="No gamepad found", fg=(1, 0, 0, 1), scale=0.2)
 
-        app.accept("connect-device", self._connect)
-        app.accept("disconnect-device", self._disconnect)
+        app.accept("connect-device", self.connect)
+        app.accept("disconnect-device", self.disconnect)
 
         # Safety-net events for named gamepad buttons
         # Hardware name "gamepad_lshoulder" → Panda3D event "gamepad-lshoulder"
-        for hw in self._button_names:
+        for hw in self.button_names:
             evt = "gamepad-" + hw[len("gamepad_") :]
-            app.accept(evt, lambda n=hw: self._ev_pressed.add(n))
-            app.accept(evt + "-up", lambda n=hw: self._ev_released.add(n))
+            app.accept(evt, lambda n=hw: self.ev_pressed.add(n))
+            app.accept(evt + "-up", lambda n=hw: self.ev_released.add(n))
 
     # ------------------------------------------------------------------
 
-    def _connect(self, device) -> None:
+    def connect(self, device) -> None:
         """
         Attaches *device* if it is a gamepad and no gamepad is already active.
 
@@ -494,11 +492,11 @@ class GamepadReader(InputReader):
         if device.device_class == InputDevice.DeviceClass.gamepad and not self.gamepad:
             print(f"Gamepad connected: {safe_device_name(device)}")
             self.gamepad = device
-            self._app.attachInputDevice(device, prefix="gamepad")
+            self.app.attachInputDevice(device, prefix="gamepad")
             if hasattr(self, "_lbl"):
-                self._lbl.hide()
+                self.lbl.hide()
 
-    def _disconnect(self, device) -> None:
+    def disconnect(self, device) -> None:
         """
         Detaches *device* and fall back to another gamepad if one is available.
 
@@ -507,17 +505,17 @@ class GamepadReader(InputReader):
         if self.gamepad != device:
             return
         print(f"Gamepad disconnected: {safe_device_name(device)}")
-        self._app.detachInputDevice(device)
+        self.app.detachInputDevice(device)
         self.gamepad = None
-        devices = self._app.devices.getDevices(InputDevice.DeviceClass.gamepad)
+        devices = self.app.devices.getDevices(InputDevice.DeviceClass.gamepad)
         if devices:
-            self._connect(devices[0])
+            self.connect(devices[0])
         elif hasattr(self, "_lbl"):
-            self._lbl.show()
+            self.lbl.show()
 
     # ------------------------------------------------------------------
 
-    def _read_all_buttons(self) -> dict[str, bool]:
+    def read_all_buttons(self) -> dict[str, bool]:
         """
         Polls the physical state of every bound gamepad button.
 
@@ -528,9 +526,9 @@ class GamepadReader(InputReader):
         :return: Dict mapping hardware name → ``True`` if the button is held.
         """
         if not self.gamepad:
-            return {name: False for name in self._button_names}
+            return {name: False for name in self.button_names}
         result: dict[str, bool] = {}
-        for hw in self._button_names:
+        for hw in self.button_names:
             code = GAMEPAD_BUTTON_CODES.get(hw)
             if code is not None:
                 btn = self.gamepad.findButton(code)
@@ -540,7 +538,7 @@ class GamepadReader(InputReader):
         return result
 
     @staticmethod
-    def _dz(value: float, dead_zone: float) -> float:
+    def dz(value: float, dead_zone: float) -> float:
         """
         Applies a symmetric dead zone to a raw axis value.
 
@@ -556,7 +554,7 @@ class GamepadReader(InputReader):
             return 0.0
         return value - np.sign(value) * dead_zone
 
-    def _read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState) -> None:
         """
         Reads and dead-zones all six gamepad axes into ``state.axes``.
 
@@ -568,26 +566,26 @@ class GamepadReader(InputReader):
         """
         if not self.gamepad:
             return
-        sdz = self._dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
-        tdz = self._dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
+        sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
+        tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
 
         # Sign conventions match the original Gamepad.get_inputs() behaviour
-        state.axes["right_trigger"] = self._dz(
+        state.axes["right_trigger"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.right_trigger).value, tdz
         )
-        state.axes["left_trigger"] = self._dz(
+        state.axes["left_trigger"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.left_trigger).value, tdz
         )
-        state.axes["left_x"] = self._dz(
+        state.axes["left_x"] = self.dz(
             -self.gamepad.findAxis(InputDevice.Axis.left_x).value, sdz
         )
-        state.axes["left_y"] = self._dz(
+        state.axes["left_y"] = self.dz(
             -self.gamepad.findAxis(InputDevice.Axis.left_y).value, sdz
         )
-        state.axes["right_x"] = self._dz(
+        state.axes["right_x"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.right_x).value, sdz
         )
-        state.axes["right_y"] = self._dz(
+        state.axes["right_y"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.right_y).value, sdz
         )
 
@@ -598,18 +596,18 @@ class GamepadReader(InputReader):
         """
         if self.gamepad:
             try:
-                self._app.detachInputDevice(self.gamepad)
+                self.app.detachInputDevice(self.gamepad)
             except AssertionError:
                 pass
             self.gamepad = None
         if hasattr(self, "_lbl"):
-            self._lbl.destroy()
-        for hw in self._button_names:
+            self.lbl.destroy()
+        for hw in self.button_names:
             evt = "gamepad-" + hw[len("gamepad_") :]
-            self._app.ignore(evt)
-            self._app.ignore(evt + "-up")
-        self._app.ignore("connect-device")
-        self._app.ignore("disconnect-device")
+            self.app.ignore(evt)
+            self.app.ignore(evt + "-up")
+        self.app.ignore("connect-device")
+        self.app.ignore("disconnect-device")
         super().clean()
 
 
@@ -636,25 +634,25 @@ class JoystickReader(InputReader):
         :param app: The Panda3D application instance.
         """
         super().__init__(app)
-        self._button_names = self._collect_button_names(JOYSTICK_AXIS_NAMES)
-        self._dead_zones = app.bindings.get("dead_zones", {})
+        self.button_names = self.collect_button_names(JOYSTICK_AXIS_NAMES)
+        self.dead_zones = app.bindings.get("dead_zones", {})
         self.flightStick = None
 
         devices = app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
         if devices:
-            self._connect(devices[0])
+            self.connect(devices[0])
         else:
-            self._lbl = OnscreenText(
+            self.lbl = OnscreenText(
                 text="No joystick found", fg=(1, 0, 0, 1), scale=0.2
             )
 
-        app.accept("connect-device", self._connect)
-        app.accept("disconnect-device", self._disconnect)
+        app.accept("connect-device", self.connect)
+        app.accept("disconnect-device", self.disconnect)
         # No button events — polling-only for joystick buttons
 
     # ------------------------------------------------------------------
 
-    def _connect(self, device) -> None:
+    def connect(self, device) -> None:
         """
         Attaches *device* if it is a flight stick and none is already active.
 
@@ -666,11 +664,11 @@ class JoystickReader(InputReader):
         ):
             print(f"Joystick connected: {device}")
             self.flightStick = device
-            self._app.attachInputDevice(device, prefix="stick")
+            self.app.attachInputDevice(device, prefix="stick")
             if hasattr(self, "_lbl"):
-                self._lbl.hide()
+                self.lbl.hide()
 
-    def _disconnect(self, device) -> None:
+    def disconnect(self, device) -> None:
         """
         Detaches *device* and falls back to another flight stick if available.
 
@@ -679,18 +677,18 @@ class JoystickReader(InputReader):
         if self.flightStick != device:
             return
         print(f"Joystick disconnected: {device}")
-        self._app.detachInputDevice(device)
+        self.app.detachInputDevice(device)
         self.flightStick = None
-        devices = self._app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
+        devices = self.app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
         if devices:
-            self._connect(devices[0])
+            self.connect(devices[0])
         elif hasattr(self, "_lbl"):
-            self._lbl.show()
+            self.lbl.show()
 
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _button_index(hw_name: str) -> int | None:
+    def button_index(hw_name: str) -> int | None:
         """
         Converts a ``"stick_button_N"`` name to a zero-based hardware index.
 
@@ -704,7 +702,7 @@ class JoystickReader(InputReader):
         suffix = hw_name.rsplit("_", 1)[-1]
         return int(suffix) - 1 if suffix.isdigit() else None
 
-    def _read_all_buttons(self) -> dict[str, bool]:
+    def read_all_buttons(self) -> dict[str, bool]:
         """
         Polls every bound flight-stick button by its zero-based hardware index.
 
@@ -714,11 +712,11 @@ class JoystickReader(InputReader):
         :return: Dict mapping hardware name → ``True`` if the button is held.
         """
         if not self.flightStick:
-            return {name: False for name in self._button_names}
+            return {name: False for name in self.button_names}
         n = len(self.flightStick.buttons)
         result: dict[str, bool] = {}
-        for hw in self._button_names:
-            idx = self._button_index(hw)
+        for hw in self.button_names:
+            idx = self.button_index(hw)
             result[hw] = (
                 bool(self.flightStick.buttons[idx].pressed)
                 if idx is not None and 0 <= idx < n
@@ -727,7 +725,7 @@ class JoystickReader(InputReader):
         return result
 
     @staticmethod
-    def _dz(value: float, dead_zone: float) -> float:
+    def dz(value: float, dead_zone: float) -> float:
         """
         Applies a symmetric dead zone to a raw axis value.
 
@@ -739,7 +737,7 @@ class JoystickReader(InputReader):
             return 0.0
         return value - np.sign(value) * dead_zone
 
-    def _read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState) -> None:
         """
         Reads and dead-zone the four flight-stick axes into ``state.axes``.
 
@@ -751,19 +749,19 @@ class JoystickReader(InputReader):
         """
         if not self.flightStick:
             return
-        sdz = self._dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
-        tdz = self._dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
+        sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
+        tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
 
-        state.axes["throttle"] = self._dz(
+        state.axes["throttle"] = self.dz(
             1 - self.flightStick.findAxis(InputDevice.Axis.throttle).value, tdz
         )
-        state.axes["yaw"] = self._dz(
+        state.axes["yaw"] = self.dz(
             self.flightStick.findAxis(InputDevice.Axis.yaw).value, sdz
         )
-        state.axes["pitch"] = self._dz(
+        state.axes["pitch"] = self.dz(
             self.flightStick.findAxis(InputDevice.Axis.pitch).value, sdz
         )
-        state.axes["roll"] = self._dz(
+        state.axes["roll"] = self.dz(
             self.flightStick.findAxis(InputDevice.Axis.roll).value, sdz
         )
 
@@ -773,12 +771,12 @@ class JoystickReader(InputReader):
         events, then delegates to the base class.
         """
         if self.flightStick:
-            self._app.detachInputDevice(self.flightStick)
+            self.app.detachInputDevice(self.flightStick)
             self.flightStick = None
         if hasattr(self, "_lbl"):
-            self._lbl.destroy()
-        self._app.ignore("connect-device")
-        self._app.ignore("disconnect-device")
+            self.lbl.destroy()
+        self.app.ignore("connect-device")
+        self.app.ignore("disconnect-device")
         super().clean()
 
 

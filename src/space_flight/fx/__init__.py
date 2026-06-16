@@ -212,17 +212,17 @@ class ParticleBuffer:
         self.game = game
         self.id = uuid.uuid4()
         self.game.method_lists[self.id] = []
-        self._time = 0.0
+        self.time = 0.0
         # None  → slot was never used and its vertex data is zeroed (safe).
         # tuple → (absolute_spawn_time, reserved_duration); slot is live until
-        #         self._time - spawn_time >= reserved_duration.
-        self._slots: list[tuple | None] = [None] * POOL_SIZE
+        #         self.time - spawn_time >= reserved_duration.
+        self.slots: list[tuple | None] = [None] * POOL_SIZE
 
         # --- Vertex buffer ---
         # UHDynamic because the CPU writes individual slots at spawn time.
         vdata = GeomVertexData("pb", FMT, Geom.UHDynamic)
         vdata.setNumRows(POOL_SIZE * 4)  # 4 vertices per quad
-        self._vdata = vdata
+        self.vdata = vdata
 
         # Zero-initialise all vertices. Dead particles have spawn_time far in
         # the past so the shader's alive flag is 0 → quad collapses to size 0.
@@ -292,7 +292,7 @@ class ParticleBuffer:
         self.node_path.setShaderInput("uCamRight", Vec3(1, 0, 0))
         self.node_path.setShaderInput("uCamUp", Vec3(0, 0, 1))
 
-        self._task_name = task_name
+        self.task_name = task_name
 
         self.game.method_lists[self.id].append(self.update)
 
@@ -313,8 +313,8 @@ class ParticleBuffer:
         :returns: A free slot index in ``[0, _POOL_SIZE)``, or ``None``
                   if the pool is completely full.
         """
-        now = self._time
-        for i, s in enumerate(self._slots):
+        now = self.time
+        for i, s in enumerate(self.slots):
             if s is None or now - s[0] >= s[1]:
                 return i
         return None
@@ -373,17 +373,17 @@ class ParticleBuffer:
                               the explosion packing scheme. Pass explicitly for
                               sparkles (where ``texcoord_w`` is raw lifetime).
         """
-        now = self._time
+        now = self.time
         base_v = slot_index * 4
         # spawn_time is stored as an absolute clock value. The shader computes
         # t = uTime - spawn_time, which is negative while the delay is pending.
         spawn_t = now + spawn_delay
 
-        wp = GeomVertexWriter(self._vdata, "vertex")
+        wp = GeomVertexWriter(self.vdata, "vertex")
         wp.setRow(base_v)
-        wc = GeomVertexWriter(self._vdata, "color")
+        wc = GeomVertexWriter(self.vdata, "color")
         wc.setRow(base_v)
-        wt = GeomVertexWriter(self._vdata, "texcoord")
+        wt = GeomVertexWriter(self.vdata, "texcoord")
         wt.setRow(base_v)
 
         for cx, cy in CORNERS:
@@ -401,7 +401,7 @@ class ParticleBuffer:
         )
         # Reserve the slot for delay + lifetime so alloc_slot() does not reclaim
         # it before the particle has even appeared on screen.
-        self._slots[slot_index] = (now, duration + spawn_delay)
+        self.slots[slot_index] = (now, duration + spawn_delay)
 
     # ------------------------------------------------------------------
     # Per-frame update
@@ -415,12 +415,12 @@ class ParticleBuffer:
         Override in a sub-class to push additional per-frame uniforms,
         remembering to call ``super().update()``.
         """
-        self._time = self.game.game_time.get_current_time()
+        self.time = self.game.game_time.get_current_time()
         cam_mat = self.game.app.camera.getMat(self.game.root_node)
         cam_right, cam_up = cam_mat.getRow3(0), cam_mat.getRow3(2)
         # Row 0 = camera right axis, row 2 = camera up axis
         # (Panda3D uses a Y-forward, Z-up convention).
-        self.node_path.setShaderInput("uTime", self._time)
+        self.node_path.setShaderInput("uTime", self.time)
         self.node_path.setShaderInput("uCamRight", cam_right)
         self.node_path.setShaderInput("uCamUp", cam_up)
 

@@ -52,7 +52,7 @@ LOD_LEVELS = [
 _OCEAN_BIT = BitMask32.bit(1)
 
 
-def _make_ring_mesh(size: float, subdivs: int, inner_fraction: float = 0.0):
+def make_ring_mesh(size: float, subdivs: int, inner_fraction: float = 0.0):
     """
     Flat XY mesh of given world size.  If inner_fraction > 0, quads whose
     centre falls within (inner_fraction * half_size) of the origin are
@@ -122,22 +122,22 @@ class Ocean:
         self.base_node = self.game.root_node.attachNewNode("ocean")
 
         # ── Reflection buffer (shared by all LOD levels) ──────────────────────
-        self._refl_tex, uv_scale = self._make_reflection_buffer(refl_scale, water_color)
+        self.refl_tex, uv_scale = self.make_reflection_buffer(refl_scale, water_color)
 
         # ── Shader (shared by all LOD levels) ─────────────────────────────────
         shader = Shader.load(Shader.SL_GLSL, vertex=vert_shader, fragment=frag_shader)
 
         # ── One mesh node per LOD level ───────────────────────────────────────
-        self._rings = []
+        self.rings = []
         for lod in LOD_LEVELS:
             node = self.base_node.attachNewNode(
-                _make_ring_mesh(lod["size"], lod["subdivs"], lod["inner"])
+                make_ring_mesh(lod["size"], lod["subdivs"], lod["inner"])
             )
             node.setShader(shader)
             node.setShaderInput("iTime", 0.0)
             node.setShaderInput("iCameraPos", LVecBase3f(0, 0, 20))
             node.setShaderInput("iWaterColor", water_color)
-            node.setShaderInput("iReflectionTex", self._refl_tex)
+            node.setShaderInput("iReflectionTex", self.refl_tex)
             node.setShaderInput("iRippleStrength", ripple_strength)
             node.setShaderInput("iWindDir", wind_dir)
             node.setShaderInput("iWindStrength", wind_strength)
@@ -145,7 +145,7 @@ class Ocean:
             node.setShaderInput("uReflUVScale", uv_scale)
             # Hide ocean rings from the reflection camera
             node.hide(_OCEAN_BIT)
-            self._rings.append((node, lod))
+            self.rings.append((node, lod))
 
         self.game.method_lists[self.id] = [self.update]
 
@@ -164,15 +164,15 @@ class Ocean:
         """Call every frame from your update task."""
         current_time = self.game.game_time.get_current_time()
         camera_pos = self.game.app.camera.getPos(self.base_node)
-        self._mirror_camera()
+        self.mirror_camera()
 
         # Build reflection MVP once, share across all rings
         view = LMatrix4f()
-        view.invertFrom(self._refl_cam.getMat(self.base_node))
-        proj = self._refl_cam_node.getLens().getProjectionMat()
+        view.invertFrom(self.refl_cam.getMat(self.base_node))
+        proj = self.refl_cam_node.getLens().getProjectionMat()
         mvp = view * proj
 
-        for node, lod in self._rings:
+        for node, lod in self.rings:
             # Snap ring XY to grid so it stays centred under the camera
             snap = lod["snap"]
             sx = math.floor(camera_pos.x / snap) * snap
@@ -185,7 +185,7 @@ class Ocean:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
-    def _make_reflection_buffer(self, refl_scale, water_color):
+    def make_reflection_buffer(self, refl_scale, water_color):
         win_w = self.game.app.win.getXSize()
         win_h = self.game.app.win.getYSize()
         buf_w = max(1, int(win_w * refl_scale))
@@ -195,35 +195,33 @@ class Ocean:
         refl_tex.setWrapU(Texture.WMClamp)
         refl_tex.setWrapV(Texture.WMClamp)
 
-        self._refl_buffer = self.game.app.win.makeTextureBuffer(
+        self.refl_buffer = self.game.app.win.makeTextureBuffer(
             "refl_buffer", buf_w, buf_h, refl_tex
         )
-        self._refl_buffer.setSort(-100)
-        self._refl_buffer.setClearColor(
-            (water_color.x, water_color.y, water_color.z, 1)
-        )
+        self.refl_buffer.setSort(-100)
+        self.refl_buffer.setClearColor((water_color.x, water_color.y, water_color.z, 1))
 
-        self._refl_cam_node = Camera("refl_cam")
+        self.refl_cam_node = Camera("refl_cam")
         # Use a wider lens than the main camera to avoid frustum culling
         # artifacts when turning quickly — the extra margin ensures reflected
         # objects are never culled at the edges of the reflection buffer.
         refl_lens = self.game.app.camLens.makeCopy()
         fov = self.game.app.camLens.getFov()
         refl_lens.setFov(fov.x * 1.4, fov.y * 1.4)
-        self._refl_cam_node.setLens(refl_lens)
-        self._refl_cam = self.base_node.attachNewNode(self._refl_cam_node)
+        self.refl_cam_node.setLens(refl_lens)
+        self.refl_cam = self.base_node.attachNewNode(self.refl_cam_node)
 
         # Use only the lower 20 bits, excluding bit 1 (ocean rings)
-        self._refl_cam_node.setCameraMask(BitMask32(0xFFFFF & ~2))
+        self.refl_cam_node.setCameraMask(BitMask32(0xFFFFF & ~2))
 
-        self._refl_buffer.makeDisplayRegion(0, 1, 0, 1).setCamera(self._refl_cam)
+        self.refl_buffer.makeDisplayRegion(0, 1, 0, 1).setCamera(self.refl_cam)
 
         clip_plane = PlaneNode("water_clip")
         clip_plane.setPlane(LPlane(0, 0, 1, 0))
-        self._clip_np = self.base_node.attachNewNode(clip_plane)
-        clip_attrib = ClipPlaneAttrib.makeAllOff().addOnPlane(self._clip_np)
-        self._refl_cam_node.setInitialState(
-            self._refl_cam_node.getInitialState().addAttrib(clip_attrib)
+        self.clip_np = self.base_node.attachNewNode(clip_plane)
+        clip_attrib = ClipPlaneAttrib.makeAllOff().addOnPlane(self.clip_np)
+        self.refl_cam_node.setInitialState(
+            self.refl_cam_node.getInitialState().addAttrib(clip_attrib)
         )
 
         uv_scale = LVecBase2f(
@@ -232,11 +230,11 @@ class Ocean:
         )
         return refl_tex, uv_scale
 
-    def _mirror_camera(self):
+    def mirror_camera(self):
         pos = self.game.app.camera.getPos(self.base_node)
         hpr = self.game.app.camera.getHpr(self.base_node)
-        self._refl_cam.setPos(self.base_node, pos.x, pos.y, -pos.z)
-        self._refl_cam.setHpr(self.base_node, hpr.x, -hpr.y, -hpr.z)
+        self.refl_cam.setPos(self.base_node, pos.x, pos.y, -pos.z)
+        self.refl_cam.setHpr(self.base_node, hpr.x, -hpr.y, -hpr.z)
 
     def clean(self):
         """

@@ -13,13 +13,13 @@ class MockGameTime:
         """
         :param dt: Time step in seconds returned on every call to get_time_step
         """
-        self._dt = dt
+        self.dt = dt
 
     def get_time_step(self) -> float:
         """
         :return: The fixed time step set at construction
         """
-        return self._dt
+        return self.dt
 
 
 class MockGame:

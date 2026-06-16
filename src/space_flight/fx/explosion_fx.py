@@ -281,7 +281,7 @@ class _ExplosionBuffer(ParticleBuffer):
         # does not support dynamic uniform-array indexing.
         for i, (u, v, uw, vh) in enumerate(tile_rects):
             self.set_input(f"uTileRect{i}", Vec4(u, v, uw, vh))
-        self._n_tiles = len(tile_rects)
+        self.n_tiles = len(tile_rects)
 
     def spawn_particle(
         self,
@@ -355,31 +355,31 @@ class ExplosionPool:
 
     def __init__(self, game):
         self.game = game
-        fire_tex, self._fire_rects = load_atlas(
+        fire_tex, self.fire_rects = load_atlas(
             game=self.game, texture_path=_ATLAS_FIRE, json_path=_JSON_FIRE
         )
-        smoke_tex, self._smoke_rects = load_atlas(
+        smoke_tex, self.smoke_rects = load_atlas(
             game=self.game, texture_path=_ATLAS_SMOKE, json_path=_JSON_SMOKE
         )
 
         # Fire grows slightly over its lifetime; smoke does the same but with
         # a longer fade-in so it appears to emerge from the dissipating fire.
-        self._fire = _ExplosionBuffer(
+        self.fire = _ExplosionBuffer(
             game,
             build_expl_vert("base_size * (0.3 + frac * 0.7)", _FIRE_FADEIN),
-            build_expl_frag(len(self._fire_rects)),
+            build_expl_frag(len(self.fire_rects)),
             fire_tex,
-            self._fire_rects,
+            self.fire_rects,
             bin_order=20,
             additive=False,
             task_name="exp_fire_update",
         )
-        self._smoke = _ExplosionBuffer(
+        self.smoke = _ExplosionBuffer(
             game,
             build_expl_vert("base_size * (0.3 + frac * 0.7)", _SMOKE_FADEIN),
-            build_expl_frag(len(self._smoke_rects)),
+            build_expl_frag(len(self.smoke_rects)),
             smoke_tex,
-            self._smoke_rects,
+            self.smoke_rects,
             bin_order=20,
             additive=False,
             task_name="exp_smoke_update",
@@ -415,12 +415,12 @@ class ExplosionPool:
                 + base_velocity
             )
             bias = sample_unit_sphere() * (_FIRE_POS_BIAS * scale)
-            self._fire.spawn_particle(
+            self.fire.spawn_particle(
                 pos=position + bias,
                 vel=vel,
                 size=random.uniform(_FIRE_SIZE_MIN, _FIRE_SIZE_MAX) * scale,
                 lifetime=random.uniform(_FIRE_LIFE_MIN, _FIRE_LIFE_MAX),
-                tile_index=random.randrange(len(self._fire_rects)),
+                tile_index=random.randrange(len(self.fire_rects)),
                 spin_rate=random.uniform(0.3, 2.0) * random.choice([-1, 1]),
                 delay=0.0,  # fire is immediate
             )
@@ -438,12 +438,12 @@ class ExplosionPool:
                 + base_velocity
             )
             bias = sample_unit_sphere() * (_SMOKE_POS_BIAS * scale)
-            self._smoke.spawn_particle(
+            self.smoke.spawn_particle(
                 pos=position + bias + base_velocity * _SMOKE_DELAY,
                 vel=vel,
                 size=random.uniform(_SMOKE_SIZE_MIN, _SMOKE_SIZE_MAX) * scale,
                 lifetime=random.uniform(_SMOKE_LIFE_MIN, _SMOKE_LIFE_MAX),
-                tile_index=random.randrange(len(self._smoke_rects)),
+                tile_index=random.randrange(len(self.smoke_rects)),
                 spin_rate=random.uniform(0.1, 0.6) * random.choice([-1, 1]),
                 delay=_SMOKE_DELAY,  # smoke trails fire by _SMOKE_DELAY s
             )
@@ -452,5 +452,5 @@ class ExplosionPool:
         """
         Destroy both particle buffers and their update tasks.
         """
-        self._fire.clean()
-        self._smoke.clean()
+        self.fire.clean()
+        self.smoke.clean()

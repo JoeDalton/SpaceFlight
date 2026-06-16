@@ -52,7 +52,7 @@ class SpeedDustCloud:
         for _ in range(num_particles):
             particle = self.root.attachNewNode(cm.generate())
             particle.setBillboardPointEye()
-            self._init_particle(particle)
+            self.init_particle(particle)
             self.particles.append(particle)
 
         self.max_speed = self.game.player.pawn.max_speed_mps
@@ -60,7 +60,7 @@ class SpeedDustCloud:
         # Add the update task to the game's methods
         self.game.method_lists[self.id] = [self.dust_update]
 
-    def _init_particle(self, particle):
+    def init_particle(self, particle):
         """
         Initializes a particle with random color, scale and position
 
@@ -80,7 +80,7 @@ class SpeedDustCloud:
         )
         particle.setScale(scaling, scaling, scaling)
 
-    def _reset_particle(self, particle):
+    def reset_particle(self, particle):
         """
         Resets a particle upstream of the player, at a random transversal location
 
@@ -105,7 +105,7 @@ class SpeedDustCloud:
         for particle in self.particles:
             particle.setY(particle.getY() - speed * dt)
             if particle.getY() < 0:
-                self._reset_particle(particle)
+                self.reset_particle(particle)
 
     def clean(self):
         """

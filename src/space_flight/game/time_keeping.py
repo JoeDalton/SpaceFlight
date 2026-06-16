@@ -104,12 +104,12 @@ class IntervalManager:
         event_name = f"interval-done-{id(interval)}"
         interval.setDoneEvent(event_name)
 
-        self.game.app.acceptOnce(event_name, self._on_interval_done, [interval])
+        self.game.app.acceptOnce(event_name, self.on_interval_done, [interval])
 
         self.active_intervals.append(interval)
         interval.start()
 
-    def _on_interval_done(self, interval: Interval):
+    def on_interval_done(self, interval: Interval):
         """
         Remove an interval from the active list
 

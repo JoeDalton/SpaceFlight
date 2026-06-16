@@ -25,21 +25,21 @@ class _StubReader(InputReader):
         """
         Initialise without calling InputReader.__init__ to avoid Panda3D.
         """
-        self._state = InputState()
-        self._previous = {}
-        self._ev_pressed = set()
-        self._ev_released = set()
-        self._global_keys = []
+        self.state = InputState()
+        self.previous = {}
+        self.ev_pressed = set()
+        self.ev_released = set()
+        self.global_keys = []
         self.hw_state = {}
         self.hw_axes = {}
 
-    def _read_all_buttons(self) -> dict:
+    def read_all_buttons(self) -> dict:
         """
         :return: A copy of hw_state set by the test.
         """
         return dict(self.hw_state)
 
-    def _read_axes(self, state) -> None:
+    def read_axes(self, state) -> None:
         """
         :param state: The InputState whose axes dict will be updated.
         """
@@ -172,7 +172,7 @@ def test_poll_safety_net_pressed_merges_into_buttons(reader):
     A name in ``_ev_pressed`` must be merged into ``state.buttons`` even if
     polling does not see the button down this frame (brief tap between frames).
     """
-    reader._ev_pressed.add("fire")
+    reader.ev_pressed.add("fire")
     reader.hw_state = {}
     state = reader.poll()
     assert state.buttons.get("fire") is True
@@ -182,7 +182,7 @@ def test_poll_safety_net_released_merges_into_releases(reader):
     """
     A name in ``_ev_released`` must be merged into ``state.releases``.
     """
-    reader._ev_released.add("fire")
+    reader.ev_released.add("fire")
     reader.hw_state = {}
     state = reader.poll()
     assert state.releases.get("fire") is True
@@ -193,9 +193,9 @@ def test_poll_safety_net_ev_pressed_cleared_after_poll(reader):
     ``_ev_pressed`` must be empty after poll() so events are not replayed
     on the next frame.
     """
-    reader._ev_pressed.add("fire")
+    reader.ev_pressed.add("fire")
     reader.poll()
-    assert len(reader._ev_pressed) == 0
+    assert len(reader.ev_pressed) == 0
 
 
 def test_poll_safety_net_ev_released_cleared_after_poll(reader):
@@ -203,9 +203,9 @@ def test_poll_safety_net_ev_released_cleared_after_poll(reader):
     ``_ev_released`` must be empty after poll() so events are not replayed
     on the next frame.
     """
-    reader._ev_released.add("fire")
+    reader.ev_released.add("fire")
     reader.poll()
-    assert len(reader._ev_released) == 0
+    assert len(reader.ev_released) == 0
 
 
 def test_poll_safety_net_and_polling_agree_no_duplicate(reader):
@@ -214,7 +214,7 @@ def test_poll_safety_net_and_polling_agree_no_duplicate(reader):
     ``buttons`` must contain the button exactly once (True, not duplicated).
     """
     reader.hw_state = {"fire": True}
-    reader._ev_pressed.add("fire")
+    reader.ev_pressed.add("fire")
     state = reader.poll()
     assert state.buttons.get("fire") is True
     assert list(state.buttons.keys()).count("fire") == 1
@@ -270,12 +270,12 @@ def test_poll_returns_same_state_object_each_call(reader):
 
 
 # ---------------------------------------------------------------------------
-# GamepadReader._dz / JoystickReader._dz — pure static dead-zone methods
+# GamepadReader.dz / JoystickReader.dz — pure static dead-zone methods
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(
-    params=[GamepadReader._dz, JoystickReader._dz], ids=["gamepad", "joystick"]
+    params=[GamepadReader.dz, JoystickReader.dz], ids=["gamepad", "joystick"]
 )
 def dz(request):
     """Parametrize over both reader dead-zone implementations."""
@@ -312,25 +312,25 @@ def test_dz_full_deflection(dz):
 
 
 # ---------------------------------------------------------------------------
-# JoystickReader._button_index — pure static name-to-index conversion
+# JoystickReader.button_index — pure static name-to-index conversion
 # ---------------------------------------------------------------------------
 
 
 def test_button_index_stick_button_1_is_zero():
-    assert JoystickReader._button_index("stick_button_1") == 0
+    assert JoystickReader.button_index("stick_button_1") == 0
 
 
 def test_button_index_stick_button_10_is_nine():
-    assert JoystickReader._button_index("stick_button_10") == 9
+    assert JoystickReader.button_index("stick_button_10") == 9
 
 
 def test_button_index_non_numeric_suffix_returns_none():
-    assert JoystickReader._button_index("stick_button_a") is None
+    assert JoystickReader.button_index("stick_button_a") is None
 
 
 def test_button_index_empty_suffix_returns_none():
-    assert JoystickReader._button_index("stick_button_") is None
+    assert JoystickReader.button_index("stick_button_") is None
 
 
 def test_button_index_arbitrary_name_returns_none():
-    assert JoystickReader._button_index("fire") is None
+    assert JoystickReader.button_index("fire") is None

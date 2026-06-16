@@ -151,7 +151,7 @@ class SpaceFlightSimulator(ShowBase):
         self.state_manager = StateManager(app=self)
         self.input_context_stack = InputContextStack()
         self.input_reader = reader_factory(app=self)
-        self.taskMgr.add(self._input_task, "input_task", sort=-100)
+        self.taskMgr.add(self.input_task, "input_task", sort=-100)
         self.asset_manager = AssetManager(app=self)
         self.menu_models = MenuModels(app=self)
         self.sfx = SFX(app=self)
@@ -161,7 +161,7 @@ class SpaceFlightSimulator(ShowBase):
         # Start with splash screen
         self.state_manager.push(SplashState)
 
-    def _input_task(self, task):
+    def input_task(self, task):
         state = self.input_reader.poll()
         self.input_context_stack.dispatch(state)
         return task.cont
