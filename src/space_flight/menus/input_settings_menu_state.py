@@ -529,8 +529,7 @@ class InputSettingsMenuState(BaseState):
             content.setZ(frame_h - half_row + self.v_scrollbar["value"])
 
         self.v_scrollbar = DirectScrollBar(
-            # range=(0, scrollable),
-            range=(-scrollable, scrollable),
+            range=(0, scrollable),
             value=0,
             scrollSize=0.25 * _ROW_HEIGHT,
             pageSize=frame_h,
@@ -539,8 +538,16 @@ class InputSettingsMenuState(BaseState):
             frameSize=(-0.04, 0.04, 0.0, frame_h),
             frameColor=(0.02, 0.02, 0.02, 1),
             command=scroll,
+            # resizeThumb=0 keeps the thumb a fixed size, so its travel is
+            # identical across input modes (only the value->content mapping
+            # differs). With it off, PGSliderBar slides the thumb *node* across
+            # the whole trough; the thumb_geom is authored 1.1 units tall, which
+            # would overflow far past the inc/dec buttons, so scale it down to a
+            # compact grip that stays within the trough between the buttons.
+            resizeThumb=0,
             thumb_relief=1,
             thumb_geom=self.app.menu_models.thumb_geom,
+            thumb_geom_scale=(1, 1, 0.15),
             thumb_pressEffect=True,
             thumb_frameColor=(0, 0, 0, 0),
             incButton_relief=1,
