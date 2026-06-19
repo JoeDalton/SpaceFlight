@@ -65,13 +65,13 @@ format-jinja = """
       {{ serialize_pep440(base, stage, revision, metadata=["dirty"]) }}
     {%- elif distance == 0 and not dirty -%}
         {{ serialize_pep440(base, stage, revision) }}
-    {%- elif branch == "master" and dirty -%}
+    {%- elif branch == "main" and dirty -%}
         {{ serialize_pep440(bump_version(base), stage, revision, dev=distance, metadata=["dirty"]) }}
-    {%- elif branch == "master" and not dirty -%}
+    {%- elif branch == "main" and not dirty -%}
         {{ serialize_pep440(bump_version(base), stage, revision, dev=distance) }}
-    {%- elif branch != "master" and dirty -%}
+    {%- elif branch != "main" and dirty -%}
         {{ serialize_pep440(bump_version(base), stage, revision, dev=distance, metadata=[commit, "dirty"]) }}
-    {%- elif branch != "master" and not dirty -%}
+    {%- elif branch != "main" and not dirty -%}
         {{ serialize_pep440(bump_version(base), stage, revision, dev=distance, metadata=[commit]) }}
     {%- endif -%}
 """
