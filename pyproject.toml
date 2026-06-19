@@ -109,7 +109,7 @@ legacy_tox_ini = """
     [testenv]
     allowlist_externals = poetry
     commands_pre = poetry install --only test
-    commands = pytest tests/ --clean
+    commands = pytest tests/
 """
 
 [tool.poetry-dynamic-versioning.substitution]

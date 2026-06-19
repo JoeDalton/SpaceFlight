@@ -13,7 +13,7 @@ def develop(c):
 
 @task
 def test(c):
-    c.run("poetry run pytest tests/ --clean")
+    c.run("poetry run pytest tests/")
 
 
 @task()
