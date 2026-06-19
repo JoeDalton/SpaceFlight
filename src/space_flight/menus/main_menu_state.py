@@ -7,7 +7,17 @@ from space_flight.menus.menu_utils import CustomButton
 
 
 class MainMenuState(BaseState):
+    """
+    Top-level menu state shown at application start.
+
+    Presents three buttons — *Play*, *Settings*, and *Quit Game* — and
+    delegates navigation to the state manager.
+    """
+
     def enter(self):
+        """
+        Create and display the three main menu buttons.
+        """
         button_scale = 0.5
         text_scale = 0.15
         self.play_button = CustomButton(
@@ -39,16 +49,38 @@ class MainMenuState(BaseState):
         )
 
     def choose_level(self):
+        """
+        Navigate to the level selection screen.
+        """
         self.app.state_manager.pop()
         self.app.state_manager.push(self.app.state_manager.LEVEL_SELECTION_MENU_STATE)
 
     def enter_settings(self):
-        pass
+        """
+        Navigate to the input settings screen.
+        """
+        self.app.state_manager.push(self.app.state_manager.INPUT_SETTINGS_STATE)
+
+    def pause(self):
+        self.play_button.hide()
+        self.settings_button.hide()
+        self.quit_button.hide()
+
+    def resume(self):
+        self.play_button.show()
+        self.settings_button.show()
+        self.quit_button.show()
 
     def quit_game(self):
+        """
+        Exit the process immediately.
+        """
         sys.exit()
 
     def exit(self):
+        """
+        Destroy all menu buttons and force a frame render.
+        """
         self.play_button.destroy()
         self.settings_button.destroy()
         self.quit_button.destroy()

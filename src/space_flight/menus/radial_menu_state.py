@@ -52,15 +52,15 @@ class RadialMenuVisual:
         :param app: The simulator app (needed for ``aspect2d``).
         :param slice_labels: Display text for each slice
         """
-        self._frame = DirectFrame(
+        self.frame = DirectFrame(
             frameSize=(-0.7, 0.7, -0.7, 0.7),
             frameColor=_BG_COLOR,
             pos=(0, 0, 0),
         )
-        self._frame.setTransparency(True)
+        self.frame.setTransparency(True)
         n_slices = len(slice_labels)
 
-        self._labels: list[DirectLabel] = []
+        self.labels: list[DirectLabel] = []
         for i, text in enumerate(slice_labels):
             angle = math.pi / 2 - i * 2 * math.pi / n_slices
             x = _RADIUS * math.cos(angle)
@@ -71,9 +71,9 @@ class RadialMenuVisual:
                 text_fg=_UNSELECTED_FG,
                 frameColor=(0, 0, 0, 0),
                 pos=(x, 0, z),
-                parent=self._frame,
+                parent=self.frame,
             )
-            self._labels.append(lbl)
+            self.labels.append(lbl)
 
     def update(self, selected: int | None) -> None:
         """
@@ -82,18 +82,18 @@ class RadialMenuVisual:
         :param selected: Index of the slice the player is pointing at, or
             ``None`` when the direction vector is within the dead zone.
         """
-        for i, lbl in enumerate(self._labels):
+        for i, lbl in enumerate(self.labels):
             active = i == selected
             lbl["text_scale"] = _SELECTED_SCALE if active else _UNSELECTED_SCALE
             lbl["text_fg"] = _SELECTED_FG if active else _UNSELECTED_FG
 
     def destroy(self) -> None:
         """Remove all Panda3D nodes."""
-        for lbl in self._labels:
+        for lbl in self.labels:
             lbl.destroy()
-        self._labels = []
-        self._frame.destroy()
-        self._frame = None
+        self.labels = []
+        self.frame.destroy()
+        self.frame = None
 
 
 # ---------------------------------------------------------------------------
@@ -135,14 +135,14 @@ class RadialMenuState(BaseState):
         """
         super().__init__(app)
         self.n_slices = len(slice_labels)
-        self._on_select = on_select
+        self.on_select = on_select
         self.slice_labels = (
             slice_labels
             if slice_labels is not None
             else [str(i) for i in range(self.n_slices)]
         )
-        self._min_magnitude = min_magnitude
-        self._visual: RadialMenuVisual | None = None
+        self.min_magnitude = min_magnitude
+        self.visual: RadialMenuVisual | None = None
 
     def enter(self) -> None:
         # Resolve the trigger hardware name from the flight context bindings
@@ -155,14 +155,14 @@ class RadialMenuState(BaseState):
         )
 
         game_state = self.app.state_manager.stack[-2]
-        self._visual = RadialMenuVisual(self.app, self.slice_labels)
+        self.visual = RadialMenuVisual(self.app, self.slice_labels)
         ctx = RadialMenuInputContext(
             game=game_state,
             n_slices=self.n_slices,
-            on_select=self._on_select,
+            on_select=self.on_select,
             trigger_hw_name=trigger_hw_name,
-            on_hover=self._visual.update,
-            min_magnitude=self._min_magnitude,
+            on_hover=self.visual.update,
+            min_magnitude=self.min_magnitude,
         )
         self.app.input_context_stack.push(ctx)
 
@@ -174,6 +174,6 @@ class RadialMenuState(BaseState):
 
     def exit(self) -> None:
         self.app.input_context_stack.pop()
-        if self._visual is not None:
-            self._visual.destroy()
-            self._visual = None
+        if self.visual is not None:
+            self.visual.destroy()
+            self.visual = None

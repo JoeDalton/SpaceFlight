@@ -132,7 +132,7 @@ class LevelSelectionMenuState(BaseState):
         self.actionLabels = {}
         for idx, level in enumerate(self.LEVELS):
             level_name = level["name"]
-            item = self.__makeListItem(level_name, idx)
+            item = self.makeListItem(level_name, idx)
             item.reparentTo(self.lstActionMap.getCanvas())
 
         # Recalculate the canvas size to set scrollbars if necesary
@@ -144,7 +144,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.lstActionMap.setCanvasSize()
 
-    def __makeListItem(self, level_name, index):
+    def makeListItem(self, level_name, index):
         item = DirectFrame(
             text="",
             geom=None,

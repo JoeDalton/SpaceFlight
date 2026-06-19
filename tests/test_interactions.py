@@ -94,7 +94,7 @@ def test_remove_actor_frees_slot(interactions):
     assert a.id not in interactions.actors_id_dict
     assert interactions.actors[slot] is None
     assert not interactions.alive[slot]
-    assert slot in interactions._free_slots
+    assert slot in interactions.free_slots
 
 
 def test_remove_actor_zeroes_interact_row_and_col(interactions):
@@ -555,7 +555,7 @@ def test_clean_nulls_all_references(interactions):
     assert interactions.actors is None
     assert interactions.actors_id_dict is None
     assert interactions.alive is None
-    assert interactions._free_slots is None
+    assert interactions.free_slots is None
     assert interactions.interact is None
     assert interactions.distances is None
     assert interactions.directions is None

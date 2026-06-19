@@ -55,6 +55,9 @@ class InputContext(ABC):
     def clean(self) -> None:
         pass
 
+    def refresh_bindings(self, app) -> None:
+        pass
+
 
 class InputContextStack:
     """
@@ -66,7 +69,7 @@ class InputContextStack:
     """
 
     def __init__(self) -> None:
-        self._stack: list[InputContext] = []
+        self.stack: list[InputContext] = []
 
     def push(self, context: InputContext) -> None:
         """
@@ -74,22 +77,22 @@ class InputContextStack:
 
         :param context: The context to activate.
         """
-        if self._stack:
-            self._stack[-1].on_deactivate()
-        self._stack.append(context)
+        if self.stack:
+            self.stack[-1].on_deactivate()
+        self.stack.append(context)
         context.on_activate()
 
     def pop(self) -> None:
         """
         Removes the top context, cleans it, and re-activates the one below.
         """
-        if not self._stack:
+        if not self.stack:
             return
-        top = self._stack.pop()
+        top = self.stack.pop()
         top.on_deactivate()
         top.clean()
-        if self._stack:
-            self._stack[-1].on_activate()
+        if self.stack:
+            self.stack[-1].on_activate()
 
     def dispatch(self, state) -> None:
         """
@@ -98,15 +101,20 @@ class InputContextStack:
         :param state: Current frame's
             :class:`~space_flight.ui.input_system.InputState`.
         """
-        if self._stack:
-            self._stack[-1].consume(state)
+        if self.stack:
+            self.stack[-1].consume(state)
 
     def clean(self) -> None:
         """Pops and cleans all remaining contexts."""
-        while self._stack:
-            top = self._stack.pop()
+        while self.stack:
+            top = self.stack.pop()
             top.on_deactivate()
             top.clean()
+
+    def refresh_all_bindings(self, app) -> None:
+        """Call refresh_bindings on every context in the stack."""
+        for context in self.stack:
+            context.refresh_bindings(app)
 
 
 # ---------------------------------------------------------------------------
@@ -139,25 +147,25 @@ class FlightInputContext(InputContext):
             menu when the ``radial_menu`` binding is pressed.  ``None`` disables
             the trigger.
         """
-        self._game = game
-        self._player = player
-        self._radial_menu_factory = radial_menu_factory
+        self.game = game
+        self.player = player
+        self.radial_menu_factory = radial_menu_factory
 
         input_type = game.app.bindings["input_type"]
-        self._input_type = input_type
-        self._bindings: dict[str, str] = game.app.bindings["contexts"]["flight"][
+        self.input_type = input_type
+        self.bindings: dict[str, str] = game.app.bindings["contexts"]["flight"][
             input_type
         ]
-        self._global_bindings: dict[str, str] = game.app.bindings.get("global", {})
+        self.global_bindings: dict[str, str] = game.app.bindings.get("global", {})
 
         # Persistent flight state
-        self._throttle = 0.0  # keyboard accumulator
-        self._is_boost = False
+        self.throttle = 0.0  # keyboard accumulator
+        self.is_boost = False
 
         # Keyboard axis smoothing state
-        self._yaw_smoothed = 0.0
-        self._pitch_smoothed = 0.0
-        self._roll_smoothed = 0.0
+        self.yaw_smoothed = 0.0
+        self.pitch_smoothed = 0.0
+        self.roll_smoothed = 0.0
 
     # ------------------------------------------------------------------
     # InputContext interface
@@ -168,49 +176,55 @@ class FlightInputContext(InputContext):
         :param state: Current
             :class:`~space_flight.ui.input_system.InputState`.
         """
-        self._handle_actions(state)
-        throttle, yaw, pitch, roll = self._flight_axes(state)
-        self._player.throttle = throttle
-        self._player.yaw_rate = yaw
-        self._player.pitch_rate = pitch
-        self._player.roll_rate = roll
+        self.handle_actions(state)
+        throttle, yaw, pitch, roll = self.flight_axes(state)
+        self.player.throttle = throttle
+        self.player.yaw_rate = yaw
+        self.player.pitch_rate = pitch
+        self.player.roll_rate = roll
 
     def clean(self) -> None:
-        self._game = None
-        self._player = None
-        self._radial_menu_factory = None
+        self.game = None
+        self.player = None
+        self.radial_menu_factory = None
+
+    def refresh_bindings(self, app) -> None:
+        input_type = app.bindings["input_type"]
+        self.input_type = input_type
+        self.bindings = app.bindings["contexts"]["flight"][input_type]
+        self.global_bindings = app.bindings.get("global", {})
 
     # ------------------------------------------------------------------
     # Binding helpers
     # ------------------------------------------------------------------
 
-    def _pressed(self, state, action: str) -> bool:
-        key = self._bindings.get(action)
+    def pressed(self, state, action: str) -> bool:
+        key = self.bindings.get(action)
         if key and state.buttons.get(key):
             return True
-        key = self._global_bindings.get(action)
+        key = self.global_bindings.get(action)
         return bool(key and state.buttons.get(key))
 
-    def _held(self, state, action: str) -> bool:
-        key = self._bindings.get(action)
+    def held(self, state, action: str) -> bool:
+        key = self.bindings.get(action)
         if key and state.repeats.get(key):
             return True
-        key = self._global_bindings.get(action)
+        key = self.global_bindings.get(action)
         return bool(key and state.repeats.get(key))
 
-    def _active(self, state, action: str) -> bool:
+    def active(self, state, action: str) -> bool:
         """True on the frame of first press OR while held."""
-        return self._pressed(state, action) or self._held(state, action)
+        return self.pressed(state, action) or self.held(state, action)
 
-    def _released(self, state, action: str) -> bool:
-        key = self._bindings.get(action)
+    def released(self, state, action: str) -> bool:
+        key = self.bindings.get(action)
         if key and state.releases.get(key):
             return True
-        key = self._global_bindings.get(action)
+        key = self.global_bindings.get(action)
         return bool(key and state.releases.get(key))
 
-    def _axis(self, state, action: str) -> float:
-        key = self._bindings.get(action)
+    def axis(self, state, action: str) -> float:
+        key = self.bindings.get(action)
         if not key:
             return 0.0
         return state.axes.get(key, 0.0)
@@ -219,94 +233,92 @@ class FlightInputContext(InputContext):
     # Actions
     # ------------------------------------------------------------------
 
-    def _handle_actions(self, state) -> None:
+    def handle_actions(self, state) -> None:
         # Fire weapons
-        if self._active(state, "fire"):
-            self._player.pawn.laser_cannon.fire()
+        if self.active(state, "fire"):
+            self.player.pawn.laser_cannon.fire()
 
         # Boost
-        if self._pressed(state, "boost_on"):
-            self._is_boost = True
-        if self._released(state, "boost_off"):
-            self._is_boost = False
+        if self.pressed(state, "boost_on"):
+            self.is_boost = True
+        if self.released(state, "boost_off"):
+            self.is_boost = False
 
         # Pause
-        if self._pressed(state, "pause"):
-            self._game.set_pause()
+        if self.pressed(state, "pause"):
+            self.game.set_pause()
 
         # Target selection
-        if self._pressed(state, "loop_target"):
-            self._player.loop_target(1)
-        if self._pressed(state, "loop_target_reverse"):
-            self._player.loop_target(-1)
-        if self._pressed(state, "point_target"):
-            self._player.point_target()
+        if self.pressed(state, "loop_target"):
+            self.player.loop_target(1)
+        if self.pressed(state, "loop_target_reverse"):
+            self.player.loop_target(-1)
+        if self.pressed(state, "point_target"):
+            self.player.point_target()
 
         # Rear-view mirror
-        if self._pressed(state, "toggle_mirror"):
-            self._player.rear_view_mirror.toggle_mirror()
+        if self.pressed(state, "toggle_mirror"):
+            self.player.rear_view_mirror.toggle_mirror()
 
         # Radial menu
-        if self._radial_menu_factory is not None and self._pressed(
-            state, "radial_menu"
-        ):
-            self._radial_menu_factory()
+        if self.radial_menu_factory is not None and self.pressed(state, "radial_menu"):
+            self.radial_menu_factory()
 
         # Head-look (button-based: keyboard hat keys, joystick hat)
-        if self._active(state, "view_up"):
-            self._player.view_offset[0] += VIEW_BUTTON_INCREMENT
-        if self._active(state, "view_down"):
-            self._player.view_offset[0] -= VIEW_BUTTON_INCREMENT
-        if self._active(state, "view_left"):
-            self._player.view_offset[1] += VIEW_BUTTON_INCREMENT
-        if self._active(state, "view_right"):
-            self._player.view_offset[1] -= VIEW_BUTTON_INCREMENT
+        if self.active(state, "view_up"):
+            self.player.view_offset[0] += VIEW_BUTTON_INCREMENT
+        if self.active(state, "view_down"):
+            self.player.view_offset[0] -= VIEW_BUTTON_INCREMENT
+        if self.active(state, "view_left"):
+            self.player.view_offset[1] += VIEW_BUTTON_INCREMENT
+        if self.active(state, "view_right"):
+            self.player.view_offset[1] -= VIEW_BUTTON_INCREMENT
 
     # ------------------------------------------------------------------
     # Flight axes
     # ------------------------------------------------------------------
 
-    def _flight_axes(self, state) -> tuple[float, float, float, float]:
-        if self._input_type == "keyboard":
-            return self._keyboard_axes(state)
-        return self._analog_axes(state)
+    def flight_axes(self, state) -> tuple[float, float, float, float]:
+        if self.input_type == "keyboard":
+            return self.keyboard_axes(state)
+        return self.analog_axes(state)
 
-    def _keyboard_axes(self, state) -> tuple[float, float, float, float]:
-        throttle_up = self._active(state, "throttle_up")
-        throttle_down = self._active(state, "throttle_down")
-        self._throttle += 0.005 * (float(throttle_up) - float(throttle_down))
-        self._throttle = max(0.0, min(1.0, self._throttle))
+    def keyboard_axes(self, state) -> tuple[float, float, float, float]:
+        throttle_up = self.active(state, "throttle_up")
+        throttle_down = self.active(state, "throttle_down")
+        self.throttle += 0.005 * (float(throttle_up) - float(throttle_down))
+        self.throttle = max(0.0, min(1.0, self.throttle))
 
-        yaw = float(self._active(state, "yaw_left")) - float(
-            self._active(state, "yaw_right")
+        yaw = float(self.active(state, "yaw_left")) - float(
+            self.active(state, "yaw_right")
         )
-        pitch = float(self._active(state, "pitch_up")) - float(
-            self._active(state, "pitch_down")
+        pitch = float(self.active(state, "pitch_up")) - float(
+            self.active(state, "pitch_down")
         )
-        roll = float(self._active(state, "roll_right")) - float(
-            self._active(state, "roll_left")
-        )
-
-        dt = self._game.game_time.get_time_step()
-        self._yaw_smoothed = low_pass_filter_first_order(
-            yaw, self._yaw_smoothed, dt, 0.5, 0.1
-        )
-        self._pitch_smoothed = low_pass_filter_first_order(
-            pitch, self._pitch_smoothed, dt, 0.5, 0.1
-        )
-        self._roll_smoothed = low_pass_filter_first_order(
-            roll, self._roll_smoothed, dt, 0.5, 0.1
+        roll = float(self.active(state, "roll_right")) - float(
+            self.active(state, "roll_left")
         )
 
-        throttle = THROTTLE_BOOST_VALUE if self._is_boost else self._throttle
-        return throttle, self._yaw_smoothed, self._pitch_smoothed, self._roll_smoothed
+        dt = self.game.game_time.get_time_step()
+        self.yaw_smoothed = low_pass_filter_first_order(
+            yaw, self.yaw_smoothed, dt, 0.5, 0.1
+        )
+        self.pitch_smoothed = low_pass_filter_first_order(
+            pitch, self.pitch_smoothed, dt, 0.5, 0.1
+        )
+        self.roll_smoothed = low_pass_filter_first_order(
+            roll, self.roll_smoothed, dt, 0.5, 0.1
+        )
 
-    def _analog_axes(self, state) -> tuple[float, float, float, float]:
-        throttle = self._axis(state, "throttle")
-        yaw = self._axis(state, "yaw")
-        pitch = self._axis(state, "pitch")
-        roll = self._axis(state, "roll")
-        if self._is_boost:
+        throttle = THROTTLE_BOOST_VALUE if self.is_boost else self.throttle
+        return throttle, self.yaw_smoothed, self.pitch_smoothed, self.roll_smoothed
+
+    def analog_axes(self, state) -> tuple[float, float, float, float]:
+        throttle = self.axis(state, "throttle")
+        yaw = self.axis(state, "yaw")
+        pitch = self.axis(state, "pitch")
+        roll = self.axis(state, "roll")
+        if self.is_boost:
             throttle = THROTTLE_BOOST_VALUE
         return throttle, yaw, pitch, roll
 
@@ -338,7 +350,7 @@ class PauseMenuInputContext(InputContext):
         global_bindings = app.bindings.get("global", {})
         pause_device = device_bindings.get("pause")
         pause_global = global_bindings.get("pause")
-        self._pause_keys: frozenset[str] = frozenset(
+        self.pause_keys: frozenset[str] = frozenset(
             k for k in (pause_device, pause_global) if k
         )
 
@@ -346,13 +358,21 @@ class PauseMenuInputContext(InputContext):
         """
         :param state: the current input state
         """
-        for key in self._pause_keys:
+        for key in self.pause_keys:
             if state.buttons.get(key):
                 self.app.state_manager.pop()
                 return
 
+    def refresh_bindings(self, app) -> None:
+        input_type = app.bindings["input_type"]
+        device_bindings = app.bindings["contexts"]["flight"].get(input_type, {})
+        global_bindings = app.bindings.get("global", {})
+        pause_device = device_bindings.get("pause")
+        pause_global = global_bindings.get("pause")
+        self.pause_keys = frozenset(k for k in (pause_device, pause_global) if k)
+
     def clean(self) -> None:
-        self._game = None
+        self.game = None
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +380,7 @@ class PauseMenuInputContext(InputContext):
 # ---------------------------------------------------------------------------
 
 
-def _angle_to_slice(x: float, y: float, n_slices: int) -> int:
+def angle_to_slice(x: float, y: float, n_slices: int) -> int:
     """
     Map a 2-D direction to a slice index.
 
@@ -417,20 +437,20 @@ class RadialMenuInputContext(InputContext):
         :param min_magnitude: Direction vector magnitude below which no slice
             is selected.
         """
-        self._game = game
-        self._n_slices = n_slices
-        self._on_select = on_select
-        self._trigger_hw_name = trigger_hw_name
-        self._on_hover = on_hover
-        self._min_magnitude = min_magnitude
+        self.game = game
+        self.n_slices = n_slices
+        self.on_select = on_select
+        self.trigger_hw_name = trigger_hw_name
+        self.on_hover = on_hover
+        self.min_magnitude = min_magnitude
 
         input_type = game.app.bindings["input_type"]
-        self._bindings: dict[str, str] = (
+        self.bindings: dict[str, str] = (
             game.app.bindings.get("contexts", {})
             .get("radial_menu", {})
             .get(input_type, {})
         )
-        self._selected_slice: int | None = None
+        self.selected_slice: int | None = None
 
     # ------------------------------------------------------------------
     # InputContext interface
@@ -441,50 +461,50 @@ class RadialMenuInputContext(InputContext):
         :param state: Current
             :class:`~space_flight.ui.input_reader.InputState`.
         """
-        x, y = self._read_direction(state)
+        x, y = self.read_direction(state)
         mag = (x**2 + y**2) ** 0.5
-        if mag >= self._min_magnitude:
-            self._selected_slice = _angle_to_slice(x, y, self._n_slices)
+        if mag >= self.min_magnitude:
+            self.selected_slice = angle_to_slice(x, y, self.n_slices)
         else:
-            self._selected_slice = None
+            self.selected_slice = None
 
-        if self._on_hover is not None:
-            self._on_hover(self._selected_slice)
+        if self.on_hover is not None:
+            self.on_hover(self.selected_slice)
 
-        if state.releases.get(self._trigger_hw_name):
-            selected = self._selected_slice
-            on_select = self._on_select
-            self._game.app.state_manager.pop()
+        if state.releases.get(self.trigger_hw_name):
+            selected = self.selected_slice
+            on_select = self.on_select
+            self.game.app.state_manager.pop()
             on_select(selected)
 
     def clean(self) -> None:
-        self._game = None
-        self._on_select = None
-        self._on_hover = None
+        self.game = None
+        self.on_select = None
+        self.on_hover = None
 
     # ------------------------------------------------------------------
     # Direction reading
     # ------------------------------------------------------------------
 
-    def _read_direction(self, state) -> tuple[float, float]:
+    def read_direction(self, state) -> tuple[float, float]:
         """
         Return ``(x, y)`` in ``[-1, 1]`` from analog axes or keyboard keys.
 
         :param state: Current input state.
         :return: ``(x, y)`` direction tuple.
         """
-        ax = self._bindings.get("axis_x")
-        ay = self._bindings.get("axis_y")
+        ax = self.bindings.get("axis_x")
+        ay = self.bindings.get("axis_y")
         if ax and ay:
             return state.axes.get(ax, 0.0), state.axes.get(ay, 0.0)
 
-        def _active(key: str) -> float:
+        def active(key: str) -> float:
             if not key:
                 return 0.0
             return 1.0 if (state.buttons.get(key) or state.repeats.get(key)) else 0.0
 
-        right = _active(self._bindings.get("dir_right", ""))
-        left = _active(self._bindings.get("dir_left", ""))
-        up = _active(self._bindings.get("dir_up", ""))
-        down = _active(self._bindings.get("dir_down", ""))
+        right = active(self.bindings.get("dir_right", ""))
+        left = active(self.bindings.get("dir_left", ""))
+        up = active(self.bindings.get("dir_up", ""))
+        down = active(self.bindings.get("dir_down", ""))
         return right - left, up - down

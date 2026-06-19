@@ -1,0 +1,105 @@
+input_type: gamepad  # keyboard | gamepad | joystick
+
+# Bindings active on ALL input types (keyboard shortcuts that always work)
+global:
+  pause: escape
+
+dead_zones:
+  stick: 0.15
+  throttle: 0.04
+
+# Hardware-level button/axis names used in context bindings below:
+#
+#   keyboard  — Panda3D key strings: space, arrow_up, lshift, a, escape, …
+#   gamepad   — buttons: gamepad_lshoulder, gamepad_rshoulder, gamepad_start,
+#                        gamepad_back, gamepad_face_a/b/x/y,
+#                        gamepad_dpad_up/down/left/right
+#               axes:    left_x, left_y, right_x, right_trigger
+#   joystick  — buttons: stick_button_N  (1-indexed, matches physical label)
+#               axes:    pitch, roll, yaw, throttle
+
+contexts:
+  flight:
+
+    keyboard:
+      # Flight axes (synthesised from key pairs in FlightInputContext)
+      throttle_up:         arrow_up
+      throttle_down:       arrow_down
+      pitch_up:            s
+      pitch_down:          z
+      roll_left:           q
+      roll_right:          d
+      yaw_left:            a
+      yaw_right:           e
+      # Head look (hat-style on keyboard)
+      view_up:             i
+      view_down:           k
+      view_left:           j
+      view_right:          l
+      # Actions
+      fire:                space
+      boost_on:            b
+      boost_off:           b
+      pause:               escape
+      loop_target:         "9"
+      loop_target_reverse: "7"
+      point_target:        "8"
+      toggle_mirror:       alt
+      radial_menu:         r
+
+    gamepad:
+      # Flight axes
+      throttle:            right_trigger
+      yaw:                 left_x
+      pitch:               left_y
+      roll:                right_x
+      # Actions
+      fire:                gamepad_lshoulder
+      boost_on:            gamepad_rshoulder
+      boost_off:           gamepad_rshoulder
+      pause:               gamepad_start
+      loop_target:         gamepad_dpad_right
+      loop_target_reverse: gamepad_dpad_left
+      point_target:        gamepad_dpad_up
+      toggle_mirror:       gamepad_back
+      radial_menu:         gamepad_dpad_down
+
+    joystick:
+      # Flight axes
+      throttle:            throttle
+      yaw:                 yaw
+      pitch:               pitch
+      roll:                roll
+      # Head look (hat buttons)
+      view_up:             stick_button_19
+      view_down:           stick_button_18
+      view_left:           stick_button_16
+      view_right:          stick_button_17
+      # Actions
+      fire:                stick_button_1
+      boost_on:            stick_button_8
+      boost_off:           stick_button_8
+      # pause: not bound — assign a stick_button_N when your stick has one
+      loop_target:         stick_button_9
+      loop_target_reverse: stick_button_10
+      point_target:        stick_button_11
+      toggle_mirror:       stick_button_12
+      radial_menu:         stick_button_3
+
+  radial_menu:
+    # Direction input while the radial menu is open.
+    # For analog devices the right stick / joystick axes are used.
+    # For keyboard the same i/j/k/l keys used for head-look work: no
+    # conflict because FlightInputContext is deactivated while the menu
+    # is open.
+    keyboard:
+      dir_up:    i
+      dir_down:  k
+      dir_left:  j
+      dir_right: l
+    gamepad:
+      axis_x: right_x
+      axis_y: right_y
+    joystick:
+      axis_x: roll
+      axis_y: pitch

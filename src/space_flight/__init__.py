@@ -4,9 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-# from space_flight import _version
+from space_flight import _version
 
-# __version__ = _version.__version__
+__version__ = _version.__version__
 
 DATAFILES_PATH = Path(__file__).parent / "datafiles"
 CONFIGURATION_PATH = Path(__file__).parent / "configuration"
@@ -31,5 +31,5 @@ handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
 
 
-LOGGER.info("Importing space_flight library")
-# LOGGER.info(f"Importing space_flight {_version.__version__}")
+# LOGGER.info("Importing space_flight library")
+LOGGER.info(f"Importing space_flight {_version.__version__}")
