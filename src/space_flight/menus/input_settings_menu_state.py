@@ -14,6 +14,7 @@ from direct.gui.DirectGui import (
     DGG,
     DirectFrame,
     DirectLabel,
+    DirectScrollBar,
     DirectScrolledFrame,
     OkCancelDialog,
 )
@@ -118,7 +119,7 @@ class ChangeBindingDialog(object):
         self.newInputType = ""
         self.newInput = ""
 
-        self._command = command
+        self.command = command
 
         # ---- Dialog UI (same as ChangeActionDialog.__init__ in mappingGUI.py) ----
         self.dialog = OkCancelDialog(
@@ -274,9 +275,9 @@ class ChangeBindingDialog(object):
         self.dialog.cleanup()
 
         if self.newInput and result == DGG.DIALOG_OK:
-            self._command(self.action, self.newInputType, self.newInput)
+            self.command(self.action, self.newInputType, self.newInput)
         else:
-            self._command(self.action, None, None)
+            self.command(self.action, None, None)
 
         # Restore button throwers (same as mappingGUI.py).
         for bt in self.app.buttonThrowers:
@@ -323,6 +324,7 @@ class InputSettingsMenuState(BaseState):
         self.static_widgets: list = []
         self.active_dialog: ChangeBindingDialog | None = None
         self.scroll_frame = None
+        self.v_scrollbar: DirectScrollBar | None = None
 
     # ------------------------------------------------------------------
     # State lifecycle
@@ -340,6 +342,8 @@ class InputSettingsMenuState(BaseState):
         self.saved_config = copy.deepcopy(self.working_config)
         self.build_static_ui()
         self.rebuild_scroll()
+        self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
+        self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
 
     def pause(self):
         """
@@ -361,9 +365,14 @@ class InputSettingsMenuState(BaseState):
         because the state manager pops this state programmatically), the dialog
         is closed with a cancel result before the rest of the UI is torn down.
         """
+        self.app.ignore("wheel_up")
+        self.app.ignore("wheel_down")
         if self.active_dialog is not None:
             self.active_dialog.onClose(DGG.DIALOG_CANCEL)
             self.active_dialog = None
+        if self.v_scrollbar is not None:
+            self.v_scrollbar.destroy()
+            self.v_scrollbar = None
         if self.scroll_frame is not None:
             self.scroll_frame.destroy()
             self.scroll_frame = None
@@ -473,6 +482,9 @@ class InputSettingsMenuState(BaseState):
         resets the :attr:`_dz_entries` and :attr:`_binding_labels` caches so
         stale widget references are never kept.
         """
+        if self.v_scrollbar is not None:
+            self.v_scrollbar.destroy()
+            self.v_scrollbar = None
         if self.scroll_frame is not None:
             self.scroll_frame.destroy()
             self.scroll_frame = None
@@ -480,12 +492,17 @@ class InputSettingsMenuState(BaseState):
         self.binding_labels.clear()
 
         rows = self.make_row_data()
-        canvas_h = len(rows) * _ROW_HEIGHT + 0.05
+        n = len(rows)
+        half_row = _ROW_HEIGHT / 2
 
         frame_bottom = -0.82
         frame_top = 0.65
         frame_h = frame_top - frame_bottom
+        scrollable = max(0.0, n * _ROW_HEIGHT - frame_h)
 
+        # Canvas height equals frame height so PGScrollFrame does not move the canvas.
+        # A content_node child is scrolled directly by _v_scrollbar instead.
+        sb_cx = self.app.a2dRight - 0.12  # scrollbar centre x
         self.scroll_frame = DirectScrolledFrame(
             frameSize=(self.app.a2dLeft + 0.08, self.app.a2dRight - 0.08, 0.0, frame_h),
             pos=(0, 0, frame_bottom),
@@ -493,35 +510,60 @@ class InputSettingsMenuState(BaseState):
             canvasSize=(
                 self.app.a2dLeft + 0.12,
                 self.app.a2dRight - 0.12,
-                -canvas_h,
-                0.02,
+                0.0,
+                frame_h,
             ),
-            verticalScroll_scrollSize=0.2,
-            verticalScroll_frameColor=(0.02, 0.02, 0.02, 1),
-            verticalScroll_thumb_relief=1,
-            verticalScroll_thumb_geom=self.app.menu_models.thumb_geom,
-            verticalScroll_thumb_pressEffect=False,
-            verticalScroll_thumb_frameColor=(0, 0, 0, 0),
-            verticalScroll_incButton_relief=1,
-            verticalScroll_incButton_geom=self.app.menu_models.inc_geom,
-            verticalScroll_incButton_pressEffect=False,
-            verticalScroll_incButton_frameColor=(0, 0, 0, 0),
-            verticalScroll_decButton_relief=1,
-            verticalScroll_decButton_geom=self.app.menu_models.dec_geom,
-            verticalScroll_decButton_pressEffect=False,
-            verticalScroll_decButton_frameColor=(0, 0, 0, 0),
+            manageScrollBars=False,
+            verticalScroll_relief=None,
+            horizontalScroll_relief=None,
+        )
+        self.scroll_frame.verticalScroll.hide()
+        self.scroll_frame.horizontalScroll.hide()
+
+        # Content node that moves to scroll the list.
+        canvas = self.scroll_frame.getCanvas()
+        content = canvas.attachNewNode("content")
+        content.setZ(frame_h - half_row)  # scroll=0: first row at frame top
+
+        def scroll():
+            content.setZ(frame_h - half_row + self.v_scrollbar["value"])
+
+        self.v_scrollbar = DirectScrollBar(
+            # range=(0, scrollable),
+            range=(-scrollable, scrollable),
+            value=0,
+            scrollSize=0.25 * _ROW_HEIGHT,
+            pageSize=frame_h,
+            orientation=DGG.VERTICAL,
+            pos=(sb_cx, 0, frame_bottom),
+            frameSize=(-0.04, 0.04, 0.0, frame_h),
+            frameColor=(0.02, 0.02, 0.02, 1),
+            command=scroll,
+            thumb_relief=1,
+            thumb_geom=self.app.menu_models.thumb_geom,
+            thumb_pressEffect=True,
+            thumb_frameColor=(0, 0, 0, 0),
+            incButton_relief=1,
+            incButton_geom=self.app.menu_models.inc_geom,
+            incButton_frameSize=(-0.04, 0.04, -0.04, 0.04),
+            incButton_pressEffect=True,
+            incButton_frameColor=(0, 0, 0, 0),
+            decButton_relief=1,
+            decButton_geom=self.app.menu_models.dec_geom,
+            decButton_frameSize=(-0.04, 0.04, -0.04, 0.04),
+            decButton_pressEffect=True,
+            decButton_frameColor=(0, 0, 0, 0),
         )
 
-        canvas = self.scroll_frame.getCanvas()
         for i, row in enumerate(rows):
             y = -(i * _ROW_HEIGHT)
             kind = row["kind"]
             if kind == "header":
-                self.add_header(canvas, row["text"], y)
+                self.add_header(content, row["text"], y)
             elif kind == "deadzone":
-                self.add_deadzone_row(canvas, row, y)
+                self.add_deadzone_row(content, row, y)
             else:
-                self.add_binding_row(canvas, row, y)
+                self.add_binding_row(content, row, y)
 
     def add_header(self, canvas, text: str, y: float):
         """
@@ -568,11 +610,17 @@ class InputSettingsMenuState(BaseState):
             text_fg=(0.898, 0.839, 0.730, 1.0),
             text_align=TextNode.ALeft,
         ).setTransparency(True)
+        btn_scale = 0.18
+        entry_scale = 0.05
         entry = CustomEntry(
             app=self.app,
-            pos=(-0.5, 0, y - 0.01),
+            pos=(
+                self.app.a2dRight - (0.898 * btn_scale + 0.3) - btn_scale,
+                0,
+                y - 0.01,
+            ),
             initial_text=row["value"],
-            width=8,
+            width=2 * btn_scale / entry_scale,
             parent=canvas,
         )
         self.dz_entries[row["path"]] = entry
@@ -797,6 +845,22 @@ class InputSettingsMenuState(BaseState):
     # Button callbacks
     # ------------------------------------------------------------------
 
+    def wheel_scroll(self, direction: int):
+        """
+        Scroll the binding list by one step in *direction* (-1 = up, +1 = down).
+
+        Silently ignored when a dialog is open so wheel events do not interfere
+        with binding capture.
+
+        :param direction: ``-1`` to scroll toward the top, ``+1`` toward the
+            bottom.
+        """
+        if self.active_dialog is not None or self.v_scrollbar is None:
+            return
+        vs = self.v_scrollbar
+        lo, hi = vs["range"]
+        vs["value"] = max(lo, min(hi, vs["value"] + direction * vs["scrollSize"]))
+
     def select_input_type(self, input_type: str):
         """
         Switch the active input type and rebuild the binding list.
@@ -835,12 +899,12 @@ class InputSettingsMenuState(BaseState):
         # all accept() callbacks with the updated hardware names.
         self.app.input_reader.clean()
         self.app.input_reader = reader_factory(app=self.app)
+        self.app.input_context_stack.refresh_all_bindings(self.app)
         self.app.state_manager.pop()
-        self.app.state_manager.push(self.app.state_manager.MAIN_MENU_STATE)
 
     def cancel(self):
         """
-        Discard all unsaved changes and return to the main menu.
+        Discard all unsaved changes and return to the caller.
 
         The YAML file on disk is not modified.  Silently ignored if a dialog is
         open.
@@ -848,7 +912,6 @@ class InputSettingsMenuState(BaseState):
         if self.active_dialog is not None:
             return
         self.app.state_manager.pop()
-        self.app.state_manager.push(self.app.state_manager.MAIN_MENU_STATE)
 
     def load_default(self):
         """

@@ -59,8 +59,17 @@ class MainMenuState(BaseState):
         """
         Navigate to the input settings screen.
         """
-        self.app.state_manager.pop()
         self.app.state_manager.push(self.app.state_manager.INPUT_SETTINGS_STATE)
+
+    def pause(self):
+        self.play_button.hide()
+        self.settings_button.hide()
+        self.quit_button.hide()
+
+    def resume(self):
+        self.play_button.show()
+        self.settings_button.show()
+        self.quit_button.show()
 
     def quit_game(self):
         """

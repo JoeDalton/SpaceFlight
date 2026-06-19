@@ -55,6 +55,9 @@ class InputContext(ABC):
     def clean(self) -> None:
         pass
 
+    def refresh_bindings(self, app) -> None:
+        pass
+
 
 class InputContextStack:
     """
@@ -107,6 +110,11 @@ class InputContextStack:
             top = self.stack.pop()
             top.on_deactivate()
             top.clean()
+
+    def refresh_all_bindings(self, app) -> None:
+        """Call refresh_bindings on every context in the stack."""
+        for context in self.stack:
+            context.refresh_bindings(app)
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +187,12 @@ class FlightInputContext(InputContext):
         self.game = None
         self.player = None
         self.radial_menu_factory = None
+
+    def refresh_bindings(self, app) -> None:
+        input_type = app.bindings["input_type"]
+        self.input_type = input_type
+        self.bindings = app.bindings["contexts"]["flight"][input_type]
+        self.global_bindings = app.bindings.get("global", {})
 
     # ------------------------------------------------------------------
     # Binding helpers
@@ -348,6 +362,14 @@ class PauseMenuInputContext(InputContext):
             if state.buttons.get(key):
                 self.app.state_manager.pop()
                 return
+
+    def refresh_bindings(self, app) -> None:
+        input_type = app.bindings["input_type"]
+        device_bindings = app.bindings["contexts"]["flight"].get(input_type, {})
+        global_bindings = app.bindings.get("global", {})
+        pause_device = device_bindings.get("pause")
+        pause_global = global_bindings.get("pause")
+        self.pause_keys = frozenset(k for k in (pause_device, pause_global) if k)
 
     def clean(self) -> None:
         self.game = None

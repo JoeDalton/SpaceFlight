@@ -709,3 +709,115 @@ def test_radial_ctx_clean_nulls_references():
     assert ctx.game is None
     assert ctx.on_select is None
     assert ctx.on_hover is None
+
+
+# ---------------------------------------------------------------------------
+# refresh_bindings / refresh_all_bindings
+# ---------------------------------------------------------------------------
+
+
+class _RefreshTrackingContext(InputContext):
+    """InputContext stub that records refresh_bindings calls."""
+
+    def __init__(self):
+        self.refresh_calls = []
+
+    def consume(self, state):
+        pass
+
+    def refresh_bindings(self, app):
+        self.refresh_calls.append(app)
+
+
+def test_refresh_all_bindings_calls_refresh_on_every_context(stack):
+    """
+    refresh_all_bindings must call refresh_bindings(app) on every context
+    currently in the stack, including those not on top.
+    """
+    ctx_a = _RefreshTrackingContext()
+    ctx_b = _RefreshTrackingContext()
+    stack.push(ctx_a)
+    stack.push(ctx_b)
+    sentinel = object()
+    stack.refresh_all_bindings(sentinel)
+    assert ctx_a.refresh_calls == [sentinel]
+    assert ctx_b.refresh_calls == [sentinel]
+
+
+def test_refresh_all_bindings_on_empty_stack_does_not_raise(stack):
+    """
+    refresh_all_bindings on an empty stack must silently do nothing.
+    """
+    stack.refresh_all_bindings(MagicMock())  # must not raise
+
+
+def test_flight_ctx_refresh_bindings_new_key_triggers_action():
+    """
+    After refresh_bindings with a new app.bindings that remaps 'fire' from
+    'space' to 'f', pressing 'f' must return True for the fire action.
+    """
+    ctx, game, _ = make_flight_ctx(device_bindings={"fire": "space"})
+    game.app.bindings["contexts"]["flight"]["keyboard"]["fire"] = "f"
+    ctx.refresh_bindings(game.app)
+    state = make_state(buttons={"f": True})
+    assert ctx.pressed(state, "fire") is True
+
+
+def test_flight_ctx_refresh_bindings_old_key_no_longer_triggers():
+    """
+    After refresh_bindings, the previously mapped key ('space') must no longer
+    trigger the fire action.
+    """
+    ctx, game, _ = make_flight_ctx(device_bindings={"fire": "space"})
+    game.app.bindings["contexts"]["flight"]["keyboard"]["fire"] = "f"
+    ctx.refresh_bindings(game.app)
+    state = make_state(buttons={"space": True})
+    assert ctx.pressed(state, "fire") is False
+
+
+def test_flight_ctx_refresh_bindings_updates_global_bindings():
+    """
+    After refresh_bindings, the global binding dict must also reflect the
+    updated app.bindings so that global keys (e.g. pause) use the new mapping.
+    """
+    ctx, game, _ = make_flight_ctx(global_bindings={"pause": "escape"})
+    game.app.bindings["global"]["pause"] = "p"
+    ctx.refresh_bindings(game.app)
+    state = make_state(buttons={"p": True})
+    assert ctx.pressed(state, "pause") is True
+    assert ctx.pressed(make_state(buttons={"escape": True}), "pause") is False
+
+
+def test_flight_ctx_refresh_bindings_updates_input_type():
+    """
+    refresh_bindings must update _input_type when the active device changes.
+    """
+    ctx, game, _ = make_flight_ctx(input_type="keyboard")
+    game.app.bindings["input_type"] = "gamepad"
+    game.app.bindings["contexts"]["flight"]["gamepad"] = {"fire": "gamepad_a"}
+    ctx.refresh_bindings(game.app)
+    assert ctx.input_type == "gamepad"
+
+
+def test_pause_ctx_refresh_bindings_new_key_triggers_pop():
+    """
+    After refresh_bindings with a new pause key, pressing the new key must
+    call state_manager.pop().
+    """
+    ctx, game = make_pause_ctx(global_pause="escape")
+    game.app.bindings["global"]["pause"] = "p"
+    ctx.refresh_bindings(game.app)
+    ctx.consume(make_state(buttons={"p": True}))
+    game.app.state_manager.pop.assert_called_once()
+
+
+def test_pause_ctx_refresh_bindings_old_key_no_longer_triggers():
+    """
+    After refresh_bindings, the previously mapped pause key must no longer
+    trigger state_manager.pop().
+    """
+    ctx, game = make_pause_ctx(global_pause="escape")
+    game.app.bindings["global"]["pause"] = "p"
+    ctx.refresh_bindings(game.app)
+    ctx.consume(make_state(buttons={"escape": True}))
+    game.app.state_manager.pop.assert_not_called()
