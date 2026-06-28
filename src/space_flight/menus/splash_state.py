@@ -1,5 +1,3 @@
-from time import sleep
-
 from direct.gui.OnscreenImage import OnscreenImage
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import TransparencyAttrib, WindowProperties
@@ -72,13 +70,7 @@ class SplashState(BaseState):
         self.sequence.finish()
         self.progress_bar.destroy()
         self.splash.destroy()
-        old_win = self.app.win
-        self.app.closeWindow(old_win)
-        sleep(0.3)  # TODO: cleaner version ? A clear cut between windows is nicer
-        # than the flicker that happens without it
-        props = WindowProperties()
-        props.setUndecorated(False)
-        props.setSize(self.app.pipe.getDisplayWidth(), self.app.pipe.getDisplayHeight())
-        props.setFullscreen(True)
-        self.app.openDefaultWindow(props=props)
-        self.app.set_background_color(0, 0, 0)
+        # Open the real game window honouring the saved graphics settings
+        # (fullscreen/windowed, size). Render scale & AA are applied later, per
+        # level load, by the GraphicsManager's scene-render pipeline.
+        self.app.graphics_manager.open_game_window()

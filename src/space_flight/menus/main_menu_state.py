@@ -57,9 +57,9 @@ class MainMenuState(BaseState):
 
     def enter_settings(self):
         """
-        Navigate to the input settings screen.
+        Navigate to the settings hub.
         """
-        self.app.state_manager.push(self.app.state_manager.INPUT_SETTINGS_STATE)
+        self.app.state_manager.push(self.app.state_manager.SETTINGS_STATE)
 
     def pause(self):
         self.play_button.hide()

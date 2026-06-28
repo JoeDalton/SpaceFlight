@@ -30,7 +30,7 @@ class PauseMenuState(BaseState):
         )
         self.settings_button = CustomButton(
             app=self.app,
-            text="Input Settings",
+            text="Settings",
             scale=button_scale,
             text_scale=text_scale,
             command=self.enter_settings,
@@ -60,7 +60,7 @@ class PauseMenuState(BaseState):
         self.app.state_manager.pop()
 
     def enter_settings(self):
-        self.app.state_manager.push(self.app.state_manager.INPUT_SETTINGS_STATE)
+        self.app.state_manager.push(self.app.state_manager.SETTINGS_STATE)
 
     def pause(self):
         self.resume_button.hide()
