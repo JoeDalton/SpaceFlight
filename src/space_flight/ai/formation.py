@@ -61,11 +61,11 @@ class Formation:
 
         # Set the relative positions in the formation
         if shape == "arrowhead":
-            self.relative_positions = self.ARROWHEAD_POSITIONS
+            self.relative_positions = self.ARROWHEAD_POSITIONS.copy()
         elif shape == "diamond":
-            self.relative_positions = self.DIAMOND_POSITIONS
+            self.relative_positions = self.DIAMOND_POSITIONS.copy()
         elif shape == "around_diamond":
-            self.relative_positions = self.AROUND_DIAMOND_POSITIONS
+            self.relative_positions = self.AROUND_DIAMOND_POSITIONS.copy()
         else:
             raise NotImplementedError(f"Unknown formation shape {shape}")
 
@@ -109,7 +109,7 @@ class Formation:
                 self.remove_ship(ship_id)
             # Set ship as leader
             if len(self.ship_ids) < len(self.relative_positions):
-                self.ship_ids.insert(index=0, object=ship_id)
+                self.ship_ids.insert(0, ship_id)
                 in_formation = True
             else:
                 LOGGER.warning("Ship cannot be added to a full formation")

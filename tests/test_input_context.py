@@ -4,6 +4,7 @@ import pytest
 
 from space_flight.ui.input_context import (
     FlightInputContext,
+    HyperspaceInputContext,
     InputContext,
     InputContextStack,
     PauseMenuInputContext,
@@ -821,3 +822,72 @@ def test_pause_ctx_refresh_bindings_old_key_no_longer_triggers():
     ctx.refresh_bindings(game.app)
     ctx.consume(make_state(buttons={"escape": True}))
     game.app.state_manager.pop.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# HyperspaceInputContext
+# ---------------------------------------------------------------------------
+
+
+def make_hyperspace_ctx(device_key=None, global_key=None, input_type="keyboard"):
+    """
+    Return a (HyperspaceInputContext, app_mock, on_trigger_mock) triple.
+
+    :param device_key: hardware name bound to drop_hyperspace for the device
+    :param global_key: hardware name bound to drop_hyperspace globally
+    :param input_type: active device type
+    :return: tuple of (context, app, on_trigger)
+    """
+    app = MagicMock()
+    app.bindings = {
+        "input_type": input_type,
+        "contexts": {
+            "hyperspace": {
+                input_type: {"drop_hyperspace": device_key} if device_key else {}
+            }
+        },
+        "global": {"drop_hyperspace": global_key} if global_key else {},
+    }
+    on_trigger = MagicMock()
+    ctx = HyperspaceInputContext(app=app, on_trigger=on_trigger)
+    return ctx, app, on_trigger
+
+
+def test_hyperspace_ctx_triggers_on_bound_key():
+    ctx, _, on_trigger = make_hyperspace_ctx(device_key="space")
+    ctx.consume(make_state(buttons={"space": True}))
+    on_trigger.assert_called_once()
+    assert ctx.triggered
+
+
+def test_hyperspace_ctx_triggers_only_once():
+    """A held/repeated key must fire the jump exactly once."""
+    ctx, _, on_trigger = make_hyperspace_ctx(device_key="space")
+    ctx.consume(make_state(buttons={"space": True}))
+    ctx.consume(make_state(buttons={"space": True}))
+    on_trigger.assert_called_once()
+
+
+def test_hyperspace_ctx_ignores_unbound_keys():
+    ctx, _, on_trigger = make_hyperspace_ctx(device_key="space")
+    ctx.consume(make_state(buttons={"enter": True}))
+    on_trigger.assert_not_called()
+    assert not ctx.triggered
+
+
+def test_hyperspace_ctx_honours_global_binding():
+    """The drop key works when bound only in the global section."""
+    ctx, _, on_trigger = make_hyperspace_ctx(global_key="space")
+    ctx.consume(make_state(buttons={"space": True}))
+    on_trigger.assert_called_once()
+
+
+def test_hyperspace_ctx_refresh_bindings():
+    """refresh_bindings re-resolves the drop key after a remap."""
+    ctx, app, on_trigger = make_hyperspace_ctx(device_key="space")
+    app.bindings["contexts"]["hyperspace"]["keyboard"]["drop_hyperspace"] = "enter"
+    ctx.refresh_bindings(app)
+    ctx.consume(make_state(buttons={"space": True}))
+    on_trigger.assert_not_called()
+    ctx.consume(make_state(buttons={"enter": True}))
+    on_trigger.assert_called_once()

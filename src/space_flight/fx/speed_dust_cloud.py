@@ -26,17 +26,20 @@ class SpeedDustCloud:
         spread: float = 30,
         depth: float = 100.0,
         colors: List = ["white"],
+        *,
+        defer_build: bool = False,
     ):
         # TODO: GPU-friendly loading of nodes (cf asteroids) or shader
         self.game = game
         self.spread = spread
         self.depth = depth
         self.id = uuid.uuid4()
+        self.num_particles = num_particles
 
         self.particles = []
 
-        cm = CardMaker("particle")
-        cm.setFrame(-0.02, 0.02, -0.02, 0.02)
+        self._cm = CardMaker("particle")
+        self._cm.setFrame(-0.02, 0.02, -0.02, 0.02)
 
         # Create a dummy node at the player's ship location to attach the dust
         self.root = NodePath("speedDust")
@@ -48,12 +51,29 @@ class SpeedDustCloud:
         # Get the dust's colors
         self.colors = colors
 
-        # Initialize dust particles
-        for _ in range(num_particles):
-            particle = self.root.attachNewNode(cm.generate())
+        # Build now unless the caller wants to drive build() incrementally.
+        if not defer_build:
+            for _ in self.build():
+                pass
+
+    def build(self, chunk: int = 25):
+        """
+        Create the dust particles a chunk at a time, yielding after each chunk,
+        then register the per-frame update once they all exist. Use with
+        ``defer_build=True`` to spread the node creation across frames::
+
+            self.speed_dust = SpeedDustCloud(game, defer_build=True, ...)
+            yield from self.speed_dust.build()
+
+        :param chunk: number of particles to create between yields
+        """
+        for i in range(self.num_particles):
+            particle = self.root.attachNewNode(self._cm.generate())
             particle.setBillboardPointEye()
             self.init_particle(particle)
             self.particles.append(particle)
+            if (i + 1) % chunk == 0:
+                yield
 
         self.max_speed = self.game.player.pawn.max_speed_mps
 

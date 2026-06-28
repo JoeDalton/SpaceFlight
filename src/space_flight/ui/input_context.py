@@ -301,13 +301,21 @@ class FlightInputContext(InputContext):
 
         dt = self.game.game_time.get_time_step()
         self.yaw_smoothed = low_pass_filter_first_order(
-            yaw, self.yaw_smoothed, dt, 0.5, 0.1
+            value=yaw, previous=self.yaw_smoothed, dt=dt, rise_time=0.05, fall_time=0.01
         )
         self.pitch_smoothed = low_pass_filter_first_order(
-            pitch, self.pitch_smoothed, dt, 0.5, 0.1
+            value=pitch,
+            previous=self.pitch_smoothed,
+            dt=dt,
+            rise_time=0.05,
+            fall_time=0.01,
         )
         self.roll_smoothed = low_pass_filter_first_order(
-            roll, self.roll_smoothed, dt, 0.5, 0.1
+            value=roll,
+            previous=self.roll_smoothed,
+            dt=dt,
+            rise_time=0.05,
+            fall_time=0.01,
         )
 
         throttle = THROTTLE_BOOST_VALUE if self.is_boost else self.throttle
@@ -373,6 +381,63 @@ class PauseMenuInputContext(InputContext):
 
     def clean(self) -> None:
         self.game = None
+
+
+# ---------------------------------------------------------------------------
+# HyperspaceInputContext
+# ---------------------------------------------------------------------------
+
+
+class HyperspaceInputContext(InputContext):
+    """
+    Pushed while the hyperspace loading screen waits for the player to drop out.
+
+    It is a thin trigger: the first time the ``drop_hyperspace`` key is pressed
+    it calls *on_trigger* once and then ignores further input (the level reveal
+    pops it). Being on top of the stack, it also blocks the flight context below
+    so the ship cannot be controlled until the world is revealed.
+
+    Both the device-specific binding and the global one are honoured.
+    """
+
+    def __init__(self, app, on_trigger: Callable) -> None:
+        """
+        :param app: the simulator app
+        :param on_trigger: zero-argument callback fired on the first key press
+        """
+        self.app = app
+        self.on_trigger = on_trigger
+        self.triggered = False
+        self.drop_keys = self._resolve_keys(app)
+
+    @staticmethod
+    def _resolve_keys(app) -> frozenset[str]:
+        """Collect the device-specific and global ``drop_hyperspace`` keys."""
+        input_type = app.bindings["input_type"]
+        device = (
+            app.bindings.get("contexts", {}).get("hyperspace", {}).get(input_type, {})
+        )
+        global_bindings = app.bindings.get("global", {})
+        keys = (device.get("drop_hyperspace"), global_bindings.get("drop_hyperspace"))
+        return frozenset(k for k in keys if k)
+
+    def consume(self, state) -> None:
+        """
+        :param state: the current input state
+        """
+        if self.triggered:
+            return
+        for key in self.drop_keys:
+            if state.buttons.get(key):
+                self.triggered = True
+                self.on_trigger()
+                return
+
+    def refresh_bindings(self, app) -> None:
+        self.drop_keys = self._resolve_keys(app)
+
+    def clean(self) -> None:
+        self.on_trigger = None
 
 
 # ---------------------------------------------------------------------------

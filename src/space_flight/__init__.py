@@ -11,6 +11,9 @@ __version__ = _version.__version__
 DATAFILES_PATH = Path(__file__).parent / "datafiles"
 CONFIGURATION_PATH = Path(__file__).parent / "configuration"
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "tests/fixtures"
+# Project-local, git-ignored cache for generated/compiled artifacts (compiled
+# shader binaries, cloud templates). Kept in-repo so it travels with a checkout.
+CACHE_PATH = Path(__file__).parent.parent.parent / ".cache"
 
 DEBUG_DELETION = False
 DEBUG_COLLISION = False

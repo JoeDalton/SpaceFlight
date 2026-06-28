@@ -23,16 +23,24 @@ COMMON_ASSETS_TO_LOAD = [
     ("model", DATAFILES_PATH / "models/skyboxes/purple.bam", ""),
     ("model", DATAFILES_PATH / "models/skyboxes/dusk.bam", ""),
     # Ships
-    # ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf", ""),
-    # ("model", DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/tie-interceptor/exterior/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/tie-fighter/exterior/scene.gltf", ""),
+    # Capital ships (heavy glTF — preload so the level build never blocks on them)
+    ("model", DATAFILES_PATH / "models/ships/gr-75/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/ships/cr-90/scene.gltf", ""),
+    (
+        "model",
+        DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf",
+        "",
+    ),
     # Battle sounds
     ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/short", "*.wav"),
     ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/long", "*.wav"),
@@ -62,6 +70,12 @@ COMMON_ASSETS_TO_LOAD = [
     ("sound", DATAFILES_PATH / "sounds/engines/a-wing/aw_int_med.ogg", ""),
     ("sound", DATAFILES_PATH / "sounds/engines/x-wing/xw_int_med.ogg", ""),
     ("sound", DATAFILES_PATH / "sounds/engines/y-wing/yw_int_med.ogg", ""),
+    # Planet sprite (large PNG — preload so the level build never blocks on it;
+    # loadTexture caches by path, so Planet2D's own load becomes a cache hit)
+    ("texture", DATAFILES_PATH / "sprites/planets_2d/terran.png", ""),
+    # Cloud sprite atlas (loaded in CloudField's build preamble — preload so the
+    # cloud build doesn't block ~77ms on it; load_atlas keys get_asset by path)
+    ("texture", DATAFILES_PATH.parent / "scenes/cloud/cloud_atlas.png", ""),
     # Dust textures
     ("texture", DATAFILES_PATH / "sprites/dust/dust_blue.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_green.png", ""),

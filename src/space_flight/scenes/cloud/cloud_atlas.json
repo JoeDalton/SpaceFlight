@@ -1,0 +1,177 @@
+[
+  {
+    "u_min": 0.000244140625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff00.png"
+  },
+  {
+    "u_min": 0.03173828125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff01.png"
+  },
+  {
+    "u_min": 0.063232421875,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff02.png"
+  },
+  {
+    "u_min": 0.0947265625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff03.png"
+  },
+  {
+    "u_min": 0.126220703125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff04.png"
+  },
+  {
+    "u_min": 0.15771484375,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff05.png"
+  },
+  {
+    "u_min": 0.189208984375,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff06.png"
+  },
+  {
+    "u_min": 0.220703125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff07.png"
+  },
+  {
+    "u_min": 0.252197265625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff08.png"
+  },
+  {
+    "u_min": 0.28369140625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff09.png"
+  },
+  {
+    "u_min": 0.315185546875,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff10.png"
+  },
+  {
+    "u_min": 0.3466796875,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff11.png"
+  },
+  {
+    "u_min": 0.378173828125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff12.png"
+  },
+  {
+    "u_min": 0.40966796875,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff13.png"
+  },
+  {
+    "u_min": 0.441162109375,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff14.png"
+  },
+  {
+    "u_min": 0.47265625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff15.png"
+  },
+  {
+    "u_min": 0.504150390625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff16.png"
+  },
+  {
+    "u_min": 0.53564453125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff17.png"
+  },
+  {
+    "u_min": 0.567138671875,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff18.png"
+  },
+  {
+    "u_min": 0.5986328125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff19.png"
+  },
+  {
+    "u_min": 0.630126953125,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff20.png"
+  },
+  {
+    "u_min": 0.66162109375,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff21.png"
+  },
+  {
+    "u_min": 0.693115234375,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff22.png"
+  },
+  {
+    "u_min": 0.724609375,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff23.png"
+  },
+  {
+    "u_min": 0.756103515625,
+    "v_min": 0.49609375,
+    "u_size": 0.03125,
+    "v_size": 0.5,
+    "name": "whitePuff24.png"
+  }
+]
