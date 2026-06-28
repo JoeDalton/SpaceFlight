@@ -30,6 +30,11 @@ WAIT_FOR_JUMP_KEY = True
 
 class FlightState(BaseState):
     def enter(self):
+        # Apply the saved render-scale / anti-aliasing settings for this
+        # session (no-op when scale is 1.0 and AA is off). Done before any scene
+        # rendering so the offscreen buffer and reflection sizing are in place.
+        self.app.graphics_manager.begin_scene_render()
+
         # Initialize mandatory game elements (cheap; done up front).
         self.initialize_game_structure()
         self.flight_context = None
@@ -288,6 +293,10 @@ class FlightState(BaseState):
         # Save records
         if RECORD_GAME:
             self.record.save()
+
+        # Tear down the render-scale / AA pipeline, restoring direct-to-window
+        # rendering before the scene it was compositing is destroyed.
+        self.app.graphics_manager.end_scene_render()
 
         # Remove HUD elements (may not exist if exiting before build finished)
         if getattr(self, "hud", None) is not None:

@@ -9,13 +9,17 @@ from space_flight.game.hyperspace_loading_state import HyperspaceLoadingState
 from space_flight.game.loading_state import LoadingState
 from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
+from space_flight.global_architecture.graphics_manager import GraphicsManager
+from space_flight.global_architecture.graphics_settings import GraphicsSettings
 from space_flight.menus.death_menu_state import DeathMenuState
+from space_flight.menus.graphics_settings_menu_state import GraphicsSettingsMenuState
 from space_flight.menus.input_settings_menu_state import InputSettingsMenuState
 from space_flight.menus.level_selection_menu_state import LevelSelectionMenuState
 from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.menu_utils import MenuModels
 from space_flight.menus.pause_menu_state import PauseMenuState
 from space_flight.menus.radial_menu_state import RadialMenuState
+from space_flight.menus.settings_menu_state import SettingsMenuState
 from space_flight.menus.splash_state import SplashState
 from space_flight.ui.input_context import InputContextStack
 from space_flight.ui.input_reader import reader_factory
@@ -48,7 +52,9 @@ class StateManager:
     MAIN_MENU_STATE = MainMenuState
     LEVEL_SELECTION_MENU_STATE = LevelSelectionMenuState
     PAUSE_MENU_STATE = PauseMenuState
+    SETTINGS_STATE = SettingsMenuState
     INPUT_SETTINGS_STATE = InputSettingsMenuState
+    GRAPHICS_SETTINGS_STATE = GraphicsSettingsMenuState
     RADIAL_MENU_STATE = RadialMenuState
     DEATH_MENU_STATE = DeathMenuState
     GAME_STATE = FlightState
@@ -157,6 +163,8 @@ class SpaceFlightSimulator(ShowBase):
         # import simplepbr
         # simplepbr.init()
 
+        self.graphics_settings = GraphicsSettings()
+        self.graphics_manager = GraphicsManager(app=self)
         self.state_manager = StateManager(app=self)
         self.input_context_stack = InputContextStack()
         self.input_reader = reader_factory(app=self)
