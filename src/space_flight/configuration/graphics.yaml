@@ -1,0 +1,21 @@
+# Default graphics settings. Read-only fallback layered under the user-editable
+# graphics.yaml (see space_flight.global_architecture.graphics_settings).
+
+display:
+  mode: fullscreen        # fullscreen | windowed
+  windowed_size: [1600, 900]
+
+render:
+  # Internal 3D render resolution as a fraction of the window resolution.
+  # 1.0 = native; lower renders the 3D scene smaller and upscales it to the
+  # window (the HUD stays crisp). Useful on old hardware in fullscreen.
+  scale: 1.0
+  # Ocean planar-reflection buffer resolution, as a fraction of the 3D render
+  # resolution. Lower is cheaper and blurrier.
+  reflection_scale: 0.5
+  # Rear-view mirror resolution, as a multiple of its 128px base height.
+  mirror_scale: 0.5
+
+antialiasing:
+  msaa: 0                 # hardware multisampling: 0 | 2 | 4 | 8
+  fxaa: true             # post-process anti-aliasing (on/off)

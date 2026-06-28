@@ -4,9 +4,11 @@ from collections.abc import Callable
 from direct.gui.DirectGui import (
     DGG,
     DirectButton,
+    DirectCheckButton,
     DirectEntry,
     DirectFrame,
     DirectLabel,
+    DirectSlider,
 )
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject
@@ -342,3 +344,128 @@ class CustomEntry:
     def destroy(self) -> None:
         """Remove the entry widget from the scene graph and free its resources."""
         self.entry.destroy()
+
+
+class CustomSlider:
+    """
+    A styled horizontal :class:`DirectSlider` wrapper using the game's thumb
+    geometry, consistent with the scrollbar in the input settings menu.
+
+    The caller supplies a value range and a command invoked on every change;
+    read the live value with :meth:`get_value`.
+    """
+
+    def __init__(
+        self,
+        app: ShowBase,
+        pos: tuple[float],
+        value: float,
+        value_range: tuple[float, float],
+        command: Callable,
+        extraArgs: list = [],
+        parent=None,
+        scale: float = 0.4,
+    ):
+        """
+        Create the underlying DirectSlider with game-standard styling.
+
+        :param app: The running ShowBase application; used to retrieve the
+            shared thumb geometry from ``app.menu_models``.
+        :param pos: 3-tuple (x, y, z) of the slider's position.
+        :param value: Initial value of the slider.
+        :param value_range: ``(min, max)`` range of the slider.
+        :param command: Callable invoked (with *extraArgs*) on every change.
+        :param extraArgs: Additional positional arguments forwarded to *command*.
+        :param parent: Panda3D node to attach to. Defaults to aspect2d.
+        :param scale: Uniform scale applied to the slider node.
+        """
+        self.app = app
+        self.slider = DirectSlider(
+            parent=parent,
+            pos=pos,
+            scale=scale,
+            range=value_range,
+            value=value,
+            pageSize=(value_range[1] - value_range[0]) / 10.0,
+            command=command,
+            extraArgs=extraArgs,
+            relief=DGG.FLAT,
+            frameColor=(0.12, 0.12, 0.18, 0.92),
+            frameSize=(-1, 1, -0.06, 0.06),
+            thumb_relief=1,
+            thumb_geom=app.menu_models.thumb_geom,
+            thumb_geom_scale=(1, 1, 0.4),
+            thumb_frameSize=(-0.06, 0.06, -0.14, 0.14),
+            thumb_frameColor=(0, 0, 0, 0),
+            thumb_pressEffect=True,
+        )
+        self.slider.setTransparency(True)
+
+    def get_value(self) -> float:
+        """Return the slider's current value."""
+        return self.slider["value"]
+
+    def set_value(self, value: float) -> None:
+        """Set the slider's value (does not fire the command)."""
+        self.slider["value"] = value
+
+    def destroy(self) -> None:
+        """Remove the slider from the scene graph and free its resources."""
+        self.slider.destroy()
+
+
+class CustomCheckButton:
+    """
+    A styled :class:`DirectCheckButton` wrapper rendering a simple on/off box.
+
+    The command is invoked with the new boolean state (followed by *extraArgs*)
+    on every toggle.
+    """
+
+    def __init__(
+        self,
+        app: ShowBase,
+        pos: tuple[float],
+        value: bool,
+        command: Callable,
+        extraArgs: list = [],
+        parent=None,
+        scale: float = 0.07,
+    ):
+        """
+        Create the underlying DirectCheckButton with game-standard styling.
+
+        :param app: The running ShowBase application (accepted for API
+            consistency with the other custom widgets).
+        :param pos: 3-tuple (x, y, z) of the checkbox position.
+        :param value: Initial checked state.
+        :param command: Callable invoked as ``command(status, *extraArgs)`` on
+            toggle, where *status* is ``1`` (checked) or ``0`` (unchecked).
+        :param extraArgs: Additional positional arguments forwarded to *command*.
+        :param parent: Panda3D node to attach to. Defaults to aspect2d.
+        :param scale: Uniform scale applied to the checkbox node.
+        """
+        self.checkbox = DirectCheckButton(
+            parent=parent,
+            pos=pos,
+            scale=scale,
+            command=command,
+            extraArgs=extraArgs,
+            indicatorValue=1 if value else 0,
+            text="",
+            relief=DGG.FLAT,
+            frameColor=(0, 0, 0, 0),
+            boxRelief=DGG.FLAT,
+            boxBorder=0.04,
+            boxImageColor=(0.12, 0.12, 0.18, 0.92),
+            indicator_text_fg=(0.65, 0.82, 1.0, 1.0),
+        )
+        self.checkbox.setTransparency(True)
+
+    def get_value(self) -> bool:
+        """Return the current checked state."""
+        return bool(self.checkbox["indicatorValue"])
+
+    def destroy(self) -> None:
+        """Remove the checkbox from the scene graph and free its resources."""
+        self.checkbox.destroy()

@@ -54,8 +54,8 @@ class SceneOcean(Scene):
         Requires the player to already exist: the ocean's reflection camera
         copies the player camera's lens.
         """
-        # Ocean (geometry, reflection buffer, shader)
-        self.ocean = Ocean(self.game, geometric_swell=True)
+        # Ocean (geometry, reflection buffer, shader).
+        self.ocean = Ocean(game=self.game, geometric_swell=True)
 
         # Volumetric clouds (cumulus + cirrus), lit to match the dusk sun.
         self.clouds = Clouds(
