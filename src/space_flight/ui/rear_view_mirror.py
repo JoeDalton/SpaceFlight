@@ -16,10 +16,14 @@ class RearViewMirror:
         mirror_tex.setWrapU(Texture.WMClamp)
         mirror_tex.setWrapV(Texture.WMClamp)
 
+        # Mirror resolution scales with the player's graphics setting.
+        mirror_scale = self.game.app.graphics_settings.config["render"]["mirror_scale"]
+        vertical_res = max(1, int(MIRROR_VERTICAL_RESOLUTION * mirror_scale))
+
         self.mirror_buffer = self.game.app.win.makeTextureBuffer(
             "RearViewBuffer",
-            MIRROR_VERTICAL_RESOLUTION * MIRROR_ASPECT_RATIO,
-            MIRROR_VERTICAL_RESOLUTION,
+            vertical_res * MIRROR_ASPECT_RATIO,
+            vertical_res,
             mirror_tex,
         )
         self.mirror_buffer.setClearColor((0, 0, 0, 1))
@@ -62,7 +66,7 @@ class RearViewMirror:
         self.mirror_card.setTexture(mirror_tex)
 
         self.mirror_buffer.setSort(-100)
-        self.mirror_np.node().setCameraMask(BitMask32.bit(1))
+        self.mirror_np.node().setCameraMask(BitMask32.bit(2))
 
     def toggle_mirror(self):
         """

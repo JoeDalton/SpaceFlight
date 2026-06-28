@@ -167,7 +167,6 @@ class Ocean:
     def __init__(
         self,
         game,
-        refl_scale=0.5,
         water_color=LVecBase3f(0.02, 0.06, 0.14),
         ripple_strength=0.02,
         wind_dir=LVecBase2f(1.0, 0.0),  # normalised XY
@@ -176,13 +175,17 @@ class Ocean:
         # higher = sharper, costlier 16, 36
         geometric_swell=False,  # prototype: geometrically displace
         # the surface by the swell
-        swell_grid_subdivs=256,  # tessellation of the dense centre grid
+        swell_grid_subdivs=512,  # tessellation of the dense centre grid
+        # swell_grid_subdivs=256,  # tessellation of the dense centre grid
         # (geometric_swell)
         swell_grid_half=4000.0,  # half-size of the dense grid in world units
         swell_amplitude=20.0,  # vertical swell displacement in world units
         swell_scale=0.004,  # swell spatial frequency (shared vert/frag); long
         # wavelength so the geometric-swell mesh samples it without aliasing
-        swell_drift=0.01,  # swell scroll speed along the wind (shared vert/frag)
+        swell_drift=0.1,  # swell scroll speed along the wind (shared vert/frag)
+        fm_depth=0.2,  # small-wave frequency-modulation depth (radians); the swell
+        # field modulates the wave phase to break the dominant octave's tiling
+        # (0 = off). Frag-only; does not affect the geometric-swell displacement.
         wave_fade_near=300.0,  # distance (world units) below which
         # small waves are at full detail
         wave_fade_far=5000.0,  # distance (world units) beyond which
@@ -207,6 +210,9 @@ class Ocean:
         self.base_node = self.game.root_node.attachNewNode("ocean")
 
         # ── Reflection buffer (shared by all LOD levels) ──────────────────────
+        refl_scale = self.game.app.graphics_settings.config["render"][
+            "reflection_scale"
+        ]
         self.refl_tex, uv_scale = self.make_reflection_buffer(refl_scale, water_color)
 
         # ── Shader (shared by all LOD levels) ─────────────────────────────────
@@ -248,6 +254,8 @@ class Ocean:
         # Swell frequency/drift shared by the vertex and fragment shaders.
         self.ocean_node.setShaderInput("iSwellScale", float(swell_scale))
         self.ocean_node.setShaderInput("iSwellDrift", float(swell_drift))
+        # Swell-driven frequency modulation of the small waves (frag-only).
+        self.ocean_node.setShaderInput("uFmDepth", float(fm_depth))
         self.ocean_node.setShaderInput("uDebugMode", 0)
         self.ocean_node.setShaderInput("uWaveOff", 0)
         self.ocean_node.setShaderInput("uExposure", 0.9)
@@ -321,10 +329,12 @@ class Ocean:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def make_reflection_buffer(self, refl_scale, water_color):
-        win_w = self.game.app.win.getXSize()
-        win_h = self.game.app.win.getYSize()
-        buf_w = max(1, int(win_w * refl_scale))
-        buf_h = max(1, int(win_h * refl_scale))
+        # Size off the 3D render resolution (which may be a downscale of the
+        # window when render-scale is active) rather than the window itself, so
+        # the reflection cost scales with the chosen internal resolution.
+        render_w, render_h = self.game.app.graphics_manager.get_render_size()
+        buf_w = max(1, int(render_w * refl_scale))
+        buf_h = max(1, int(render_h * refl_scale))
 
         refl_tex = Texture("refl_tex")
         refl_tex.setWrapU(Texture.WMClamp)

@@ -15,6 +15,11 @@ uniform int       iIterationsNormal;  // wave-detail iterations (quality knob, s
 // the geometric-swell mesh must sample it without aliasing).
 uniform float     iSwellScale;
 uniform float     iSwellDrift;
+// Frequency-modulation depth (radians). The low-frequency swell field is added
+// to the small-wave phase, so the wave field drifts over the swell's scale and
+// the exact tiling of the dominant (lowest-frequency) octave is broken up. 0
+// disables FM.
+uniform float     uFmDepth;
 uniform int       uDebugMode;  // 0 normal, 1 N, 2 reflUV, 3 fresnel, 4 worldgrid
 uniform int       uWaveOff;    // debug: 1 = skip small-wave normal, swell only
 uniform float     uExposure;   // pre-tonemap exposure
@@ -129,7 +134,15 @@ vec2 domainWarp(vec2 pos, int iterations, float strength) {
 // Approximation: the loop advects `position` to sharpen crests, and we keep
 // that advection so the field matches getwaves(), but we don't differentiate
 // through it — the standard, visually-faithful real-time simplification.
-vec2 waveGradient(vec2 position, int iterations) {
+//
+// fmPhase is the swell-driven frequency-modulation phase (constant per fragment,
+// varying slowly across the surface). Added to every octave's phase, it shifts
+// each octave's crests — most in world units for the longest-wavelength octave —
+// so the dominant tiling drifts with the swell. It is treated as locally
+// constant for the gradient (same simplification already applied to
+// wavePhaseShift and the advection); the swell is low-frequency, so its spatial
+// derivative is negligible next to freq*p and omitting it keeps the normal stable.
+vec2 waveGradient(vec2 position, int iterations, float fmPhase) {
     float wavePhaseShift = length(position) * 0.1;
     float frequency      = 1.0;
     float timeMultiplier = 2.0;
@@ -138,7 +151,7 @@ vec2 waveGradient(vec2 position, int iterations) {
     float sumOfWeights   = 0.0;
     for (int i = 0; i < iterations && i < MAX_WAVE_ITER; i++) {
         vec2  p     = iWaveDirs[i];
-        float x     = dot(p, position) * frequency + iTime * timeMultiplier + wavePhaseShift;
+        float x     = dot(p, position) * frequency + iTime * timeMultiplier + wavePhaseShift + fmPhase;
         float wave  = exp(sin(x) - 1.0);
         float dwave = wave * cos(x);  // d(wave)/dx
         sumGrad      += dwave * frequency * p * weight;
@@ -151,9 +164,9 @@ vec2 waveGradient(vec2 position, int iterations) {
     return sumGrad / sumOfWeights;
 }
 
-vec3 oceanNormal(vec2 pos, int iterations) {
+vec3 oceanNormal(vec2 pos, int iterations, float fmPhase) {
     // Slope of the height field (scaled by WAVE_HEIGHT) → surface normal.
-    vec2 g = waveGradient(pos, iterations) * WAVE_HEIGHT;
+    vec2 g = waveGradient(pos, iterations, fmPhase) * WAVE_HEIGHT;
     return normalize(vec3(-g.x, -g.y, 1.0));
 }
 
@@ -193,6 +206,17 @@ void main() {
     // Combined LOD factor drives iteration counts and warp strength.
     float lodFactor   = detailAngle * distFade;
 
+    // --- Swell field (sampled once; drives both the small-wave frequency
+    //     modulation below and the swell normal-tilt further down) -----------
+    float epsW  = 0.5 / iSwellScale;  // world step ≈ 0.5 in primary noise space
+    float s0    = swellField(vWorldPos.xy);
+    vec2  sgrad = vec2(swellField(vWorldPos.xy + vec2(epsW, 0.0)) - s0,
+                       swellField(vWorldPos.xy + vec2(0.0, epsW)) - s0) / 0.5;
+    // FM phase for the small waves: the swell recentred (so the phase wanders
+    // both ways rather than only advancing) and scaled by the depth knob. World-
+    // anchored, view-independent — so crests stay put as the camera moves.
+    float fmPhase = uFmDepth * (s0 - 0.1);
+
     // --- Small waves (faded by both angle and distance) ----------------------
     vec3 N;
     if (detailAngle < 0.01) {
@@ -214,7 +238,7 @@ void main() {
             vec2 warpedPos = vWorldPos.xy + warp;
 
             // Detail normal (WAVE_SCALE sets the wave size, applied at the call site)
-            N = oceanNormal(warpedPos * WAVE_SCALE, normalIter);
+            N = oceanNormal(warpedPos * WAVE_SCALE, normalIter, fmPhase);
         }
 
         // Flatten small-wave normal toward vertical at grazing angles.
@@ -223,11 +247,7 @@ void main() {
         N = normalize(mix(vec3(0.0, 0.0, 1.0), N, distFade));
     }
 
-    // --- Swell (unconditional — large wavelength, no distance fading needed) -
-    float epsW  = 0.5 / iSwellScale;  // world step ≈ 0.5 in primary noise space
-    float s0    = swellField(vWorldPos.xy);
-    vec2  sgrad = vec2(swellField(vWorldPos.xy + vec2(epsW, 0.0)) - s0,
-                       swellField(vWorldPos.xy + vec2(0.0, epsW)) - s0) / 0.5;
+    // --- Swell tilt (unconditional — large wavelength, no distance fading) ---
     N = normalize(N - vec3(sgrad * SWELL_STRENGTH, 0.0));
 
     // Large-scale noise mask (unconditional)
@@ -277,6 +297,8 @@ void main() {
     } else if (uDebugMode == 7) { // pre-tonemap C*2 > 1 saturation (red=clipped chan)
         vec3 lin = C * 2.0;
         fragColor = vec4(step(1.0, lin.r), step(1.0, lin.g), step(1.0, lin.b), 1.0); return;
+    } else if (uDebugMode == 8) { // FM phase field (swell-driven), wrapped to [0,1]
+        fragColor = vec4(vec3(0.5 + 0.5 * sin(fmPhase)), 1.0); return;
     }
 
     fragColor = vec4(aces_tonemap(C * uExposure), 1.0);
