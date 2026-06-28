@@ -257,6 +257,11 @@ class TargetHUD:
         self.name_label.setDepthWrite(False)
         self.name_label.setBin("fixed", 10)
 
+        # Hide at startup
+        self.distance_label.hide()
+        self.name_label.hide()
+        self.square.hide()
+
     def target_hud_update_task(self):
         target = self.game.player.pawn.target
         if target is None:
