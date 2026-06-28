@@ -45,6 +45,10 @@ def build_dev_level(game):
     """
 
     game.scene = scene_factory(game=game, scene_name="asteroids")
+    # Scenes now build incrementally via a generator; the dev level is not
+    # decomposed, so drive it to completion in one go here.
+    for _ in game.scene.build():
+        pass
 
     """
     Initialize dummy bots

@@ -19,6 +19,7 @@ dead_zones:
 #               axes:    pitch, roll, yaw, throttle
 
 contexts:
+
   flight:
 
     keyboard:
@@ -41,9 +42,9 @@ contexts:
       boost_on:            b
       boost_off:           b
       pause:               escape
-      loop_target:         "9"
-      loop_target_reverse: "7"
-      point_target:        "8"
+      loop_target:         ","
+      loop_target_reverse: ":"
+      point_target:        ";"
       toggle_mirror:       alt
       radial_menu:         r
 
@@ -97,9 +98,20 @@ contexts:
       dir_down:  k
       dir_left:  j
       dir_right: l
+
     gamepad:
       axis_x: right_x
       axis_y: right_y
+
     joystick:
       axis_x: roll
       axis_y: pitch
+
+  hyperspace:
+    # Hyperspace trasition state
+    keyboard:
+      drop_hyperspace: space
+    gamepad:
+      drop_hyperspace: gamepad_lshoulder
+    joystick:
+      drop_hyperspace: stick_button_1

@@ -1,9 +1,11 @@
 import numpy as np
 from direct.showbase.ShowBase import ShowBase
+from panda3d.core import Vec3
 
 from space_flight import DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.scenes.asteroid_field import AsteroidField
+from space_flight.scenes.cloud import Clouds
 from space_flight.scenes.lighting import Lighting
 from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D
@@ -36,14 +38,52 @@ class Scene:
 
 
 class SceneOcean(Scene):
-    def __init__(
-        self,
-        game,
-    ):
-        super().__init__(game=game)
+    # Sun lighting, shared by the cloud field (build_upfront) and the directional
+    # light (build_decomposed).
+    SUN_DIRECTION = [-0.35, -1, 0.05]
+    SUN_COLOR = np.array([1.0, 0.8, 0.2, 1])
+    AMBIENT_COLOR = np.array([0.2, 0.2, 0.4, 0.2])
 
+    def build_upfront(self):
+        """
+        Build the objects whose one-time GPU preparation (shader compile, vertex
+        munge, buffer upload) is heavy enough to spike a frame, and force that
+        prep now — on a black screen, BEFORE the hyperspace animation starts —
+        so the animation that follows stays smooth.
+
+        Requires the player to already exist: the ocean's reflection camera
+        copies the player camera's lens.
+        """
+        # Ocean (geometry, reflection buffer, shader)
+        self.ocean = Ocean(self.game, geometric_swell=True)
+
+        # Volumetric clouds (cumulus + cirrus), lit to match the dusk sun.
+        self.clouds = Clouds(
+            game=self.game,
+            sun_direction=Vec3(*self.SUN_DIRECTION),
+            sun_color=self.SUN_COLOR[:3],
+            ambient_color=self.AMBIENT_COLOR[:3],
+            use_cache=True,
+        )
+
+        # Force the one-time GPU preparation now (textures, vertex buffers and
+        # shader compile) so the first time these draw during the animation
+        # there is no upload/compile spike. We're on a black screen here, so the
+        # cost is invisible.
+        gsg = self.game.app.win.get_gsg()
+        if gsg is not None:
+            self.ocean.base_node.prepare_scene(gsg)
+            self.clouds.field.node.prepare_scene(gsg)
+
+    def build_decomposed(self):
+        """
+        Build the rest of the scene incrementally, yielding between components
+        so the loading animation keeps rendering. These are all light and their
+        first-render GPU prep is cheap, so they need no special handling.
+        """
         # Skybox
         self.skybox = Skybox(game=self.game, name="dusk")
+        yield "skybox"
 
         # Planet
         self.planet = Planet2D(
@@ -53,23 +93,22 @@ class SceneOcean(Scene):
             position=np.array([10000.0, 0.0, 2000.0]),
             orientation=np.quaternion(np.sqrt(2) / 2, 0, 0, -np.sqrt(2) / 2),
         )
-
-        # Ocean
-        self.ocean = Ocean(game=game, refl_scale=0.5)
+        yield "planet"
 
         # Lights
         self.lighting = Lighting(
             game=self.game,
-            directional_color=[1.0, 0.8, 0.2, 1],
-            directional_direction=[-0.2, -1, 0.1],
+            directional_color=self.SUN_COLOR,
+            directional_direction=self.SUN_DIRECTION,
             ambient_color=[0.2, 0.3, 0.4, 0.2],
-            # ambient_color=[0,0,0,0],
         )
+        yield "lighting"
 
-        # Speed dust effect
+        # Speed dust effect (100 nodes — build in chunks across frames)
         self.speed_dust_cloud = SpeedDustCloud(
-            game=self.game, colors=["blue", "yellow", "white"]
+            game=self.game, colors=["blue", "yellow", "white"], defer_build=True
         )
+        yield from self.speed_dust_cloud.build()
 
         # Star destroyer
         self.isd = self.game.root_node.attachNewNode("isd_instance")
@@ -81,31 +120,34 @@ class SceneOcean(Scene):
             parent_node=self.isd,
         )
         self.isd.reparent_to(self.game.root_node)
-        self.isd.set_pos(2000, 3000, 400)
+        self.isd.set_pos(2000, 3000, 1000)
         self.isd.setP(90)
         self.isd.set_scale(1)
+        yield "isd"
 
     def clean(self):
         """
-        Cleans the SceneAsteroids
+        Cleans the SceneOcean
         """
         self.isd.removeNode()
+        self.clouds.clean()
+        self.clouds = None
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
         self.lighting.clean()
         self.lighting = None
         self.game = None
 
+        # self.big_rotating_asteroid_field.clean()
+        # self.big_rotating_asteroid_field = None
+
 
 class SceneAsteroids(Scene):
-    def __init__(
-        self,
-        game,
-    ):
-        super().__init__(game=game)
-
+    def build(self):
+        """Build the asteroids scene incrementally (see SceneOcean.build)."""
         # Skybox
         self.skybox = Skybox(game=self.game, name="purple")
+        yield 0.1
 
         # Lights
         self.lighting = Lighting(game=self.game)
@@ -114,11 +156,13 @@ class SceneAsteroids(Scene):
         self.speed_dust_cloud = SpeedDustCloud(
             game=self.game, colors=["blue", "green", "pink", "white"]
         )
+        yield 0.2
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=2000, field_size=15000, is_moving=False
         )
+        yield 0.5
         self.big_rotating_asteroid_field = AsteroidField(
             game=self.game,
             n_asteroids=20,
@@ -126,9 +170,11 @@ class SceneAsteroids(Scene):
             field_size=15000,
             is_moving=True,
         )
+        yield 0.7
         self.rotating_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=500, field_size=15000, is_moving=True
         )
+        yield 0.9
 
         # Drydock
         self.drydock = self.game.root_node.attachNewNode("drydock_instance")
@@ -140,6 +186,7 @@ class SceneAsteroids(Scene):
         self.drydock.reparent_to(self.game.root_node)
         self.drydock.set_pos(0, 8000, 50)
         self.drydock.set_scale(100, 100, 100)
+        yield 1.0
 
     def clean(self):
         """
@@ -162,12 +209,8 @@ class SceneAsteroids(Scene):
 
 
 class SceneLavaPlanet(Scene):
-    def __init__(
-        self,
-        game,
-    ):
-        super().__init__(game=game)
-
+    def build(self):
+        """Build the lava-planet scene incrementally (see SceneOcean.build)."""
         # Lights
         self.lighting = Lighting(
             game=self.game,
@@ -179,11 +222,13 @@ class SceneLavaPlanet(Scene):
         self.speed_dust_cloud = SpeedDustCloud(
             game=self.game, colors=["orange", "pink", "yellow", "white"]
         )
+        yield 0.2
 
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=500, field_size=15000, is_moving=False
         )
+        yield 0.5
         self.big_rotating_asteroid_field = AsteroidField(
             game=self.game,
             n_asteroids=3,
@@ -194,9 +239,11 @@ class SceneLavaPlanet(Scene):
         self.rotating_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=100, field_size=15000, is_moving=True
         )
+        yield 0.7
 
         # Planet
         self.planet = Planet2D(game=self.game, type="lava")
+        yield 0.85
 
         # Star destroyer
         self.isd = self.game.root_node.attachNewNode("isd_instance")
@@ -211,6 +258,7 @@ class SceneLavaPlanet(Scene):
         self.isd.set_pos(0, 1000, 50)
         self.isd.setP(90)
         self.isd.set_scale(1)
+        yield 1.0
 
     def clean(self):
         """
@@ -233,17 +281,15 @@ class SceneLavaPlanet(Scene):
 
 
 class SceneDebug(Scene):
-    def __init__(
-        self,
-        game,
-    ):
-        super().__init__(game=game)
-
+    def build(self):
+        """Build the debug scene incrementally (see SceneOcean.build)."""
         # Skybox
         self.skybox = Skybox(game=self.game, name="test")
+        yield 0.5
 
         # Lights
         self.lighting = Lighting(game=self.game)
+        yield 1.0
 
     def clean(self):
         """

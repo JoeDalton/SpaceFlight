@@ -5,6 +5,7 @@ from panda3d.core import loadPrcFileData
 
 from space_flight.fx.sfx import SFX
 from space_flight.game.flight_state import FlightState
+from space_flight.game.hyperspace_loading_state import HyperspaceLoadingState
 from space_flight.game.loading_state import LoadingState
 from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
@@ -23,6 +24,13 @@ LOGGER = logging.getLogger()
 
 
 loadPrcFileData("", "notify-level-ffmpeg error")
+
+# NOTE: we do NOT enable Panda's on-disk cache (model-cache-dir). It is the only
+# switch for the compiled-shader binary cache, but it also routes glTF loading
+# through panda3d-gltf, whose calculate_tangents() crashes on models containing
+# a non-triangle primitive (e.g. the x-wing cockpit: "not enough values to
+# unpack (expected 3, got 2)"). Shader compilation was measured at ~4ms and was
+# never the loading bottleneck, so the cache is not worth breaking model loading.
 
 
 class StateManager:
@@ -45,6 +53,7 @@ class StateManager:
     DEATH_MENU_STATE = DeathMenuState
     GAME_STATE = FlightState
     LOADING_STATE = LoadingState
+    HYPERSPACE_LOADING_STATE = HyperspaceLoadingState
 
     def __init__(self, app):
         self.app = app

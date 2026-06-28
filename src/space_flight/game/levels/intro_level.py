@@ -6,24 +6,15 @@ from space_flight.ai.formation import Formation
 from space_flight.scenes.scenes import scene_factory
 
 
-def build_intro_level(game):
+def build_intro_upfront(game):
     """
-    A function to build the demo level
-    """
+    Build the heavy, up-front part of the level — run synchronously on a black
+    screen BEFORE the hyperspace animation starts.
 
-    """
-    Launch music
-    """
-    # music = game.app.loader.loadMusic(
-    # DATAFILES_PATH / "sounds/music_Koyaanisqatsi.mp3"
-    # )
-    # music = game.app.loader.loadMusic(DATAFILES_PATH / "sounds/music_westworld.mp3")
-    # music.setLoop(True)
-    # music.setVolume(0.8)
-    # music.play()
-
-    """
-    Initialize player and ship
+    This is the player plus the scene's GPU-heavy objects (ocean, cloud field),
+    whose one-time first-render preparation would otherwise spike a frame in the
+    middle of the animation. The player is created here first because the scene's
+    ocean reflection camera copies the player camera's lens.
     """
     game.player = Player(
         game=game,
@@ -32,13 +23,22 @@ def build_intro_level(game):
         is_neutral=False,
         has_ai=False,
     )
-
-    """
-    Build scene
-    `asteroids` or `lava_planet` or `ocean_planet` or `debug`
-    """
-
+    # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     game.scene = scene_factory(game=game, scene_name="ocean_planet")
+    game.scene.build_upfront()
+
+
+def build_intro_level(game):
+    """
+    A generator that builds the rest of the level one step at a time, DURING the
+    hyperspace animation. Each ``yield`` hands control back to the render loop so
+    the animation keeps playing; the loading overlay advances it once per frame.
+
+    Assumes :func:`build_intro_upfront` has already created the player and the
+    scene and built the scene's heavy objects.
+    """
+    # Rest of the scene (skybox, planet, lights, dust, star destroyer)
+    yield from game.scene.build_decomposed()
 
     """
     Initialize allies
@@ -82,6 +82,7 @@ def build_intro_level(game):
         bot.navigator.set_waypoints(waypoints=transport_waypoints, is_loop=True)
         game.transport_bots.append(bot)
         game.team_1_formation.add_ship(ship=bot.pawn)
+        yield f"transport_{i + 1}"
 
     # Spawn escort
     n_follower = 8
@@ -96,6 +97,7 @@ def build_intro_level(game):
             debug_decisions=False,
         )
         game.team_1_formation.add_ship(ship=bot.pawn)
+        yield f"escort_{i}"
 
     # Set custom formation positions
     game.team_1_formation.relative_positions = [
@@ -158,6 +160,7 @@ def build_intro_level(game):
         },
     }
     game.update_scenario_method = update_scenario_method
+    yield "scenario"
 
 
 def update_scenario_method(game):
