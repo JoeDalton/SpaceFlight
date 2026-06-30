@@ -42,6 +42,8 @@ def make_player_for_target_mask(
     )
     game = MagicMock()
     game.interactions.n_actors = n_actors
+    # Plain actors with no `category`, so "All" treats them all as targetable.
+    game.interactions.live_actors = [object() for _ in range(n_actors)]
     player.game = game
     player.pawn = MagicMock()
     return player
