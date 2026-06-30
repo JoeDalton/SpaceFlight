@@ -50,7 +50,7 @@ class HUD:
 
         # Event text
         self.event_text_endtime = 0.0
-        self.events = TextNode("FPS")
+        self.events = TextNode("Events")
         self.events.setSmallCaps(True)
         self.events.setShadow(0.05, 0.05)
         self.events.setShadowColor(0, 0, 0, 1)
@@ -60,7 +60,7 @@ class HUD:
 
         # Chatter text
         self.chatter_text_endtime = 0.0
-        self.chatter = TextNode("FPS")
+        self.chatter = TextNode("Chatter")
         self.chatter.setSmallCaps(True)
         self.chatter.setShadow(0.05, 0.05)
         self.chatter.setShadowColor(0, 0, 0, 1)
