@@ -162,7 +162,9 @@ class HyperspaceLoadingState(BaseState):
 
     def exit(self):
         self.app.taskMgr.remove(_TASK_NAME)
-        self.app.ignore("window-event")
+        # Restore ShowBase's default window-event handler. `ignore` would leave
+        # the app with no handler, so closing the window would no longer quit.
+        self.app.accept("window-event", self.app.windowEvent)
         if self._prompt is not None:
             self._prompt.destroy()
             self._prompt = None
@@ -323,6 +325,11 @@ class HyperspaceLoadingState(BaseState):
         self.app.state_manager.pop()
 
     def _on_window(self, win):
+        # Accepting "window-event" on the app replaces ShowBase's own handler,
+        # so call it explicitly to preserve default behaviour — in particular,
+        # closing the window must still quit the app. We only piggy-back to keep
+        # the shader resolution in sync with the window size.
+        self.app.windowEvent(win)
         if not self._quads:
             return
         props = win.getProperties()
