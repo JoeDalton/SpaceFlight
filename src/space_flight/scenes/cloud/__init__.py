@@ -16,8 +16,8 @@ Public API:
     load_cloud_atlas / build_templates — lower-level building blocks.
 """
 
-from .cloud import CloudType, build_templates, load_cloud_atlas
-from .field import CloudField, CloudLayer, Clouds
+from space_flight.scenes.cloud.cloud import CloudType, build_templates, load_cloud_atlas
+from space_flight.scenes.cloud.field import CloudField, CloudLayer, Clouds
 
 __all__ = [
     "Clouds",
