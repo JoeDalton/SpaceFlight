@@ -1,6 +1,6 @@
 """
-A development sandbox level that usually demonstrates the latest implemented
-features.
+The tutorial race level: the player and three friendly rivals race through a
+series of checkpoints in an asteroid field.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 
-def build_dev_upfront(game: FlightState) -> None:
+def build_race_upfront(game: FlightState) -> None:
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
@@ -34,29 +34,30 @@ def build_dev_upfront(game: FlightState) -> None:
     """
     game.player = Player(
         game=game,
-        ship_type="a-wing",
-        # ship_type="x-wing",
-        # ship_type="y-wing",
-        # ship_type="tie-interceptor",
-        # ship_type="tie-fighter",
-        # ship_type="tie-bomber",
-        ini_position=np.array([100, -800, 505]),
+        ship_type="y-wing",
+        ini_position=np.array([0, -500, 500]),
         is_neutral=False,
         has_ai=False,
-        record=True,
     )
-    # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
-    game.scene = scene_factory(game=game, scene_name="asteroids")
+
+    # Asteroids double as race obstacles.
+    game.scene = scene_factory(game=game, scene_name="lava_planet")
     game.scene.build_upfront()
 
 
-def build_dev_level(game: FlightState) -> Iterator[str]:
+def build_race_level(game: FlightState) -> Iterator[str]:
     """
-    Build the development sandbox level.
+    Build the tutorial race level.
+
+    The player and three friendly rivals race through a string of checkpoints in
+    an asteroid field. Everyone is on the same team — a friendly contest with
+    plenty of radio teasing. The rivals, the win/lose conditions, and the banter
+    are all driven by the sibling YAML scenario; this builder only sets up the
+    player and the scene.
 
     :param game: The game/flight state
     """
-    # Rest of the scene (skybox, planet, lights, dust, star destroyer)
+    # Rest of the scene (skybox, planet, lights, dust, ...)
     yield from game.scene.build_decomposed()
 
     # Mission events (waves, objectives) are defined declaratively in the

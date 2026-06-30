@@ -68,7 +68,11 @@ from panda3d.core import (
     Vec3,
 )
 
-from .cloud import CloudType, build_templates_iter, load_cloud_atlas
+from space_flight.scenes.cloud.cloud import (
+    CloudType,
+    build_templates_iter,
+    load_cloud_atlas,
+)
 
 # ── Per-type layer spec (the only structured, repeating config) ─────────────────
 

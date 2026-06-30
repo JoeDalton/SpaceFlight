@@ -84,11 +84,40 @@ def test_formation_default_scale_leader_position_is_zero():
     np.testing.assert_array_equal(formation.relative_positions[0], np.zeros(3))
 
 
+def test_formation_scales_template_by_scale_m():
+    """
+    Each slot is the template position multiplied by ``scale_m``. The arrowhead
+    template is [1, -2, 0] at index 1, so at scale 30 it must be [30, -60, 0].
+    """
+    formation = Formation(scale_m=30, shape="arrowhead")
+
+    np.testing.assert_allclose(
+        formation.relative_positions[1], np.array([30.0, -60.0, 0.0])
+    )
+
+
+def test_formation_does_not_mutate_shared_template():
+    """
+    Building Formations must not scale the class-level template in place;
+    otherwise scale compounds across every construction. Two arrowhead
+    formations at the same scale must produce identical positions.
+    """
+    first = Formation(scale_m=30, shape="arrowhead")
+    second = Formation(scale_m=30, shape="arrowhead")
+
+    np.testing.assert_allclose(
+        first.relative_positions[1], second.relative_positions[1]
+    )
+    # And the template itself is untouched (index 1 is still the unit [1, -2, 0]).
+    np.testing.assert_array_equal(
+        Formation.ARROWHEAD_POSITIONS[1], np.array([1, -2, 0])
+    )
+
+
 def test_formation_positions_preserve_relative_proportions():
     """
-    Regardless of accumulated scale, the second and third arrowhead positions
-    must be symmetric about the Y axis (equal X magnitude, same Y value).
-    The arrowhead template is [1, -2, 0] and [-1, -2, 0] for indices 1 and 2.
+    The second and third arrowhead positions are symmetric about the Y axis
+    (equal X magnitude, same Y value): template [1, -2, 0] and [-1, -2, 0].
     """
     formation = Formation()
     pos_1 = formation.relative_positions[1]

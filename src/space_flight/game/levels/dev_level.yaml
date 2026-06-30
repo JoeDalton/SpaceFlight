@@ -1,0 +1,44 @@
+# Scenario for the dev level.
+#
+# `waves` are reusable spawn definitions, keyed by the group id they spawn into.
+# `triggers` are the mission rules: when <condition> then <action>.
+#
+# This reproduces the original three timed waves, then adds two chained events
+# (reinforcements after a wipe, and an objective on escort progress) to show how
+# conditions compose. Tune freely without touching Python.
+
+waves:
+  allied_patrol:
+    size: 7
+    ship_model: y-wing
+    bot_type: fighter
+    team: 1
+    spawn_point: [0, -2100, 500]
+    spawn_orientation: [1, 0, 0, 0]
+    formation: { scale_m: 30, shape: arrowhead }
+    waypoints:
+      - [0, 0, 500]
+      - [200, 1000, 500]
+      - [500, 2000, 500]
+      - [1000, 3000, 500]
+      - [1000, 2000, 500]
+      - [500, 1000, 500]
+      - [0, 0, 500]
+      - [-200, -1000, 500]
+      - [-500, -2000, 500]
+      - [-1000, -3000, 500]
+      - [-1000, -2000, 500]
+      - [-500, -1000, 500]
+      - [0, 0, 500]
+triggers:
+  # --- the original timed waves -------------------------------------------
+  - name: allied_patrol
+    when: { after_seconds: 2 }
+    then:
+      all:
+        - { hud_text: "Allies have arrived" }
+        - { spawn: allied_patrol }
+        - speech:
+            speaker: "Gold Leader"
+            text: "Gold squadron reporting in. We've got your back."
+            display_time_s: 5

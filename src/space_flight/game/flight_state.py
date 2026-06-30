@@ -8,9 +8,11 @@ from space_flight.ai.interactions import Interactions
 from space_flight.fx.explosion_fx import ExplosionPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
-from space_flight.game.levels.dev_level import build_dev_level
+from space_flight.game.levels.dev_level import build_dev_level, build_dev_upfront
 from space_flight.game.levels.intro_level import build_intro_level, build_intro_upfront
+from space_flight.game.levels.race_level import build_race_level, build_race_upfront
 from space_flight.game.record import Record
+from space_flight.game.scenario import Scenario
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -85,9 +87,14 @@ class FlightState(BaseState):
         where the heavy objects are created and GPU-prepared before the animation.
         """
         selected_level = self.app.configuration["selected_level"]
-        if selected_level == "Intro":
-            build_intro_upfront(game=self)
-        # The Dev level is not split; it builds entirely in its generator below.
+        if selected_level == "Dev":
+            return build_dev_upfront(game=self)
+        elif selected_level == "Intro":
+            return build_intro_upfront(game=self)
+        elif selected_level == "Race":
+            return build_race_upfront(game=self)
+        else:
+            raise NotImplementedError(f"Level `{selected_level}` does not exist.")
 
     def _make_build_generator(self):
         """
@@ -96,14 +103,11 @@ class FlightState(BaseState):
         """
         selected_level = self.app.configuration["selected_level"]
         if selected_level == "Dev":
-            # The dev level is not decomposed; run it in one (blocking) step.
-            def _dev_build():
-                build_dev_level(game=self)
-                yield 1.0
-
-            return _dev_build()
+            return build_dev_level(game=self)
         elif selected_level == "Intro":
             return build_intro_level(game=self)
+        elif selected_level == "Race":
+            return build_race_level(game=self)
         else:
             raise NotImplementedError(f"Level `{selected_level}` does not exist.")
 
@@ -215,8 +219,8 @@ class FlightState(BaseState):
         # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
 
-        # Initialize scenario data
-        self.scenario_data = {}
+        # Empty scenario by default; levels replace it with a loaded one.
+        self.scenario = Scenario([])
 
         # Initialize records
         if RECORD_GAME:
@@ -254,7 +258,9 @@ class FlightState(BaseState):
         # Handle the death of the player
         if self.player.pawn.health <= 0:
             self.app.state_manager.push(
-                state_class=self.app.state_manager.DEATH_MENU_STATE,
+                state_class=self.app.state_manager.LEVEL_END_STATE,
+                outcome="death",
+                text="Your ship was destroyed.",
             )
         return task.cont
 
@@ -265,7 +271,7 @@ class FlightState(BaseState):
         # Do nothing if paused
         if self.is_paused:
             return task.cont
-        self.update_scenario_method(game=self)
+        self.scenario.update(self)
         return task.cont
 
     def set_pause(self):

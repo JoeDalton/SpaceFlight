@@ -1,0 +1,84 @@
+# Tutorial race level.
+#
+# The player and three friendly rivals race through a string of checkpoints in
+# an asteroid field. Everyone is on the same team (team 1) — a friendly contest,
+# with plenty of radio teasing. Cross the finish line before any rival to win.
+#
+# The course (shared by the player and the rivals):
+#   start  [    0,  -500, 500]   (player + rival spawn)
+#   CP1    [    0,  2000, 500]
+#   CP2    [ 3000,  4000, 600]
+#   CP3    [ 3000,  8000, 500]
+#   CP4    [-1000, 10000, 600]
+#   finish [-3000, 12000, 500]
+
+waves:
+  rivals:
+    size: 3
+    ship_model: x-wing
+    bot_type: fighter
+    team: 1
+    spawn_point: [0, -500, 500]
+    spawn_orientation: [1, 0, 0, 0]
+    # No formation: each rival flies the course independently.
+    waypoints:
+      - [0, 2000, 500]
+      - [3000, 4000, 600]
+      - [3000, 8000, 500]
+      - [-1000, 10000, 600]
+      - [-3000, 12000, 500]
+
+triggers:
+  # --- race start --------------------------------------------------------
+  - name: race_start
+    when: { after_seconds: 1 }
+    then:
+      all:
+        - { hud_text: "RACE — first to the finish wins!" }
+        - { spawn: rivals }
+        - speech: { speaker: "Wedge", text: "Last one to the finish buys the drinks!" }
+        # Guide the player through the course with targetable waypoint spheres.
+        - player_waypoints:
+            points:
+              - [0, 2000, 500]
+              - [3000, 4000, 600]
+              - [3000, 8000, 500]
+              - [-1000, 10000, 600]
+              - [-3000, 12000, 500]
+
+  # --- friendly banter as the player passes each checkpoint --------------
+  - name: cp1
+    when: { near: { who: player, point: [0, 2000, 500], radius: 350 } }
+    then:
+      speech: { speaker: "Hobbie", text: "Not bad, rookie. Now try to keep up!" }
+
+  - name: cp2
+    when: { near: { who: player, point: [3000, 4000, 600], radius: 350 } }
+    then:
+      speech: { speaker: "Wedge", text: "Mind the rocks — they don't move for anyone." }
+
+  - name: cp3
+    when: { near: { who: player, point: [3000, 8000, 500], radius: 350 } }
+    then:
+      speech: { speaker: "Janson", text: "Hey, you're actually gaining on us!" }
+
+  - name: cp4
+    when: { near: { who: player, point: [-1000, 10000, 600], radius: 350 } }
+    then:
+      speech: { speaker: "Wedge", text: "Final stretch! Don't get cocky now." }
+
+  # --- finish: whoever crosses first ends the race -----------------------
+  # The player's win is listed first, so a simultaneous cross goes to the player.
+  - name: player_finish
+    when: { near: { who: player, point: [-3000, 12000, 500], radius: 350 } }
+    then:
+      end_level:
+        outcome: victory
+        text: "You crossed the line first! Drinks are on the rest of the squadron."
+
+  - name: rival_finish
+    when: { near: { who: rivals, point: [-3000, 12000, 500], radius: 350 } }
+    then:
+      end_level:
+        outcome: defeat
+        text: "A rival beat you to the finish. Better luck next time, rookie."

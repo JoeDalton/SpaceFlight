@@ -59,19 +59,20 @@ class Formation:
         if shape is None:
             shape = "arrowhead"
 
-        # Set the relative positions in the formation
+        # Select the template layout for the requested shape
         if shape == "arrowhead":
-            self.relative_positions = self.ARROWHEAD_POSITIONS.copy()
+            template = self.ARROWHEAD_POSITIONS
         elif shape == "diamond":
-            self.relative_positions = self.DIAMOND_POSITIONS.copy()
+            template = self.DIAMOND_POSITIONS
         elif shape == "around_diamond":
-            self.relative_positions = self.AROUND_DIAMOND_POSITIONS.copy()
+            template = self.AROUND_DIAMOND_POSITIONS
         else:
             raise NotImplementedError(f"Unknown formation shape {shape}")
 
-        # Set the scale of the formation
-        for item in self.relative_positions:
-            item *= scale_m
+        # Build fresh, scaled position arrays. ``position * scale_m`` allocates a
+        # new array per slot, so the shared class-level templates are never
+        # mutated (scaling them in place would compound across every Formation).
+        self.relative_positions = [position * scale_m for position in template]
 
     def get_ship_index(self, ship_id):
         """

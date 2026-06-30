@@ -27,8 +27,8 @@ TARGET_FILTERS = [
     "Capital ships",
     "Subsystems",
     "Turrets",
-    "fighters",
-    "",
+    "Fighters",
+    "Waypoints",
     "",
 ]
 
@@ -342,7 +342,21 @@ class Player:
         :return: the target mask
         """
         if (self.target_filter == "All") or (self.target_filter == ""):
-            self.target_mask = np.ones(self.game.interactions.n_actors)
+            # Everything except waypoint markers (those are Waypoints-mode only).
+            self.target_mask = np.array(
+                [
+                    0.0 if getattr(actor, "category", None) == "waypoint" else 1.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Waypoints":
+            # Only waypoint markers.
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "waypoint" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
         elif self.target_filter == "Enemies":
             self.target_mask = self.game.interactions.interact[
                 player_actor_index, self.game.interactions.alive

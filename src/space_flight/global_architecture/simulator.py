@@ -11,9 +11,9 @@ from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.graphics_manager import GraphicsManager
 from space_flight.global_architecture.graphics_settings import GraphicsSettings
-from space_flight.menus.death_menu_state import DeathMenuState
 from space_flight.menus.graphics_settings_menu_state import GraphicsSettingsMenuState
 from space_flight.menus.input_settings_menu_state import InputSettingsMenuState
+from space_flight.menus.level_end_state import LevelEndState
 from space_flight.menus.level_selection_menu_state import LevelSelectionMenuState
 from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.menu_utils import MenuModels
@@ -56,7 +56,7 @@ class StateManager:
     INPUT_SETTINGS_STATE = InputSettingsMenuState
     GRAPHICS_SETTINGS_STATE = GraphicsSettingsMenuState
     RADIAL_MENU_STATE = RadialMenuState
-    DEATH_MENU_STATE = DeathMenuState
+    LEVEL_END_STATE = LevelEndState
     GAME_STATE = FlightState
     LOADING_STATE = LoadingState
     HYPERSPACE_LOADING_STATE = HyperspaceLoadingState

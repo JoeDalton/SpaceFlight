@@ -1,5 +1,4 @@
 import numpy as np
-from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Vec3
 
 from space_flight import DATAFILES_PATH
@@ -28,7 +27,7 @@ def scene_factory(game, scene_name: str):
 class Scene:
     def __init__(
         self,
-        game: ShowBase,
+        game,
     ):
         self.game = game
         self.up_direction = np.array([0, 0, 1])
@@ -143,26 +142,20 @@ class SceneOcean(Scene):
 
 
 class SceneAsteroids(Scene):
-    def build(self):
-        """Build the asteroids scene incrementally (see SceneOcean.build)."""
-        # Skybox
-        self.skybox = Skybox(game=self.game, name="purple")
-        yield 0.1
+    def build_upfront(self):
+        """
+        Build the objects whose one-time GPU preparation (shader compile, vertex
+        munge, buffer upload) is heavy enough to spike a frame, and force that
+        prep now — on a black screen, BEFORE the hyperspace animation starts —
+        so the animation that follows stays smooth.
 
-        # Lights
-        self.lighting = Lighting(game=self.game)
-
-        # Speed dust effect
-        self.speed_dust_cloud = SpeedDustCloud(
-            game=self.game, colors=["blue", "green", "pink", "white"]
-        )
-        yield 0.2
-
+        Requires the player to already exist: the ocean's reflection camera
+        copies the player camera's lens.
+        """
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=2000, field_size=15000, is_moving=False
         )
-        yield 0.5
         self.big_rotating_asteroid_field = AsteroidField(
             game=self.game,
             n_asteroids=20,
@@ -170,11 +163,25 @@ class SceneAsteroids(Scene):
             field_size=15000,
             is_moving=True,
         )
-        yield 0.7
         self.rotating_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=500, field_size=15000, is_moving=True
         )
-        yield 0.9
+
+    def build_decomposed(self):
+        """Build the asteroids scene incrementally"""
+        # Skybox
+        self.skybox = Skybox(game=self.game, name="purple")
+        yield "skybox"
+
+        # Lights
+        self.lighting = Lighting(game=self.game)
+        yield "lighting"
+
+        # Speed dust effect
+        self.speed_dust_cloud = SpeedDustCloud(
+            game=self.game, colors=["blue", "green", "pink", "white"]
+        )
+        yield "dust"
 
         # Drydock
         self.drydock = self.game.root_node.attachNewNode("drydock_instance")
@@ -186,7 +193,7 @@ class SceneAsteroids(Scene):
         self.drydock.reparent_to(self.game.root_node)
         self.drydock.set_pos(0, 8000, 50)
         self.drydock.set_scale(100, 100, 100)
-        yield 1.0
+        yield "drydock"
 
     def clean(self):
         """
@@ -209,26 +216,20 @@ class SceneAsteroids(Scene):
 
 
 class SceneLavaPlanet(Scene):
-    def build(self):
-        """Build the lava-planet scene incrementally (see SceneOcean.build)."""
-        # Lights
-        self.lighting = Lighting(
-            game=self.game,
-            directional_direction=[0, 0, 0],
-            ambient_color=[0.4, 0.2, 0.1, 1],
-        )
+    def build_upfront(self):
+        """
+        Build the objects whose one-time GPU preparation (shader compile, vertex
+        munge, buffer upload) is heavy enough to spike a frame, and force that
+        prep now — on a black screen, BEFORE the hyperspace animation starts —
+        so the animation that follows stays smooth.
 
-        # Speed dust effect
-        self.speed_dust_cloud = SpeedDustCloud(
-            game=self.game, colors=["orange", "pink", "yellow", "white"]
-        )
-        yield 0.2
-
+        Requires the player to already exist: the ocean's reflection camera
+        copies the player camera's lens.
+        """
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=500, field_size=15000, is_moving=False
         )
-        yield 0.5
         self.big_rotating_asteroid_field = AsteroidField(
             game=self.game,
             n_asteroids=3,
@@ -239,11 +240,26 @@ class SceneLavaPlanet(Scene):
         self.rotating_asteroid_field = AsteroidField(
             game=self.game, n_asteroids=100, field_size=15000, is_moving=True
         )
-        yield 0.7
+
+    def build_decomposed(self):
+        """Build the lava-planet scene incrementally (see SceneOcean.build)."""
+        # Lights
+        self.lighting = Lighting(
+            game=self.game,
+            directional_direction=[0, 0, 0],
+            ambient_color=[0.4, 0.2, 0.1, 1],
+        )
+        yield "lighting"
+
+        # Speed dust effect
+        self.speed_dust_cloud = SpeedDustCloud(
+            game=self.game, colors=["orange", "pink", "yellow", "white"]
+        )
+        yield "dust"
 
         # Planet
         self.planet = Planet2D(game=self.game, type="lava")
-        yield 0.85
+        yield "planet"
 
         # Star destroyer
         self.isd = self.game.root_node.attachNewNode("isd_instance")
@@ -258,7 +274,7 @@ class SceneLavaPlanet(Scene):
         self.isd.set_pos(0, 1000, 50)
         self.isd.setP(90)
         self.isd.set_scale(1)
-        yield 1.0
+        yield "ISD"
 
     def clean(self):
         """
@@ -281,15 +297,27 @@ class SceneLavaPlanet(Scene):
 
 
 class SceneDebug(Scene):
-    def build(self):
+    def build_upfront(self) -> None:
+        """
+        Build the objects whose one-time GPU preparation (shader compile, vertex
+        munge, buffer upload) is heavy enough to spike a frame, and force that
+        prep now — on a black screen, BEFORE the hyperspace animation starts —
+        so the animation that follows stays smooth.
+
+        Requires the player to already exist: the ocean's reflection camera
+        copies the player camera's lens.
+        """
+        pass
+
+    def build_decomposed(self):
         """Build the debug scene incrementally (see SceneOcean.build)."""
         # Skybox
         self.skybox = Skybox(game=self.game, name="test")
-        yield 0.5
+        yield "skybox"
 
         # Lights
         self.lighting = Lighting(game=self.game)
-        yield 1.0
+        yield "lighting"
 
     def clean(self):
         """
