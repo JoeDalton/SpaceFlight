@@ -15,6 +15,11 @@ class LevelSelectionMenuState(BaseState):
             "demonstrates the latest implemented features",
         },
         {"name": "Intro", "description": "The first `game ready` level."},
+        {
+            "name": "Race",
+            "description": "A friendly tutorial race: pass the checkpoints and "
+            "beat three rival pilots to the finish line.",
+        },
     ]
 
     def enter(self):

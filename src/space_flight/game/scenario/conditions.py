@@ -51,7 +51,22 @@ def all_destroyed(group: str) -> Condition:
     """
 
     def cond(game: FlightState) -> bool:
-        return game.scenario.is_destroyed(game, group)
+        return game.scenario.all_destroyed(game, group)
+
+    return cond
+
+
+def any_destroyed(group: str) -> Condition:
+    """
+    True once ``group`` has spawned and one of its member is dead.
+
+    :param group: A group name (see :class:`Scenario`)
+    :return: The condition callable
+    """
+
+    # TODO
+    def cond(game: FlightState) -> bool:
+        return False
 
     return cond
 

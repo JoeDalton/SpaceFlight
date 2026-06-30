@@ -69,6 +69,8 @@ class WaypointMarker:
         self.node.setScale(radius_m)
         self.node.reparentTo(game.root_node)
         self.node.hide()
+        self.node.setShaderOff()
+        self.node.setLightOff()
 
         game.interactions.add_actor(self)
 

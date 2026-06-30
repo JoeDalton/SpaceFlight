@@ -222,23 +222,23 @@ def test_resolve_query_group_is_live(game):
     assert game.scenario.resolve(game, "enemies") == [a.pawn]
 
 
-def test_is_destroyed_false_before_spawn(game):
+def test_all_destroyed_false_before_spawn(game):
     """A group that never spawned is not 'destroyed'."""
-    assert game.scenario.is_destroyed(game, "wave") is False
+    assert game.scenario.all_destroyed(game, "wave") is False
 
 
-def test_is_destroyed_lifecycle(game):
+def test_all_destroyed_lifecycle(game):
     """Destroyed only once a spawned group has lost all members."""
     a = MockBot("a", [0, 0, 0], team=2)
     game.interactions.add(a.pawn)
     game.scenario.register("wave", [a])
 
-    assert game.scenario.is_destroyed(game, "wave") is False
+    assert game.scenario.all_destroyed(game, "wave") is False
     game.interactions.kill(a.pawn)
-    assert game.scenario.is_destroyed(game, "wave") is True
+    assert game.scenario.all_destroyed(game, "wave") is True
 
 
-def test_is_destroyed_false_while_wave_mid_spawn(game, patch_spawn_bot):
+def test_all_destroyed_false_while_wave_mid_spawn(game, patch_spawn_bot):
     """
     A wave whose spawn has been scheduled but whose ships have not yet appeared
     must NOT read as destroyed. Otherwise a chained ``all_destroyed`` condition
@@ -247,10 +247,10 @@ def test_is_destroyed_false_while_wave_mid_spawn(game, patch_spawn_bot):
     spawn_wave(WAVE_CFG)(game)  # scheduled, but the job has not run yet
     assert "wave_a" in game.scenario.scheduled
     assert "wave_a" not in game.scenario.spawned
-    assert game.scenario.is_destroyed(game, "wave_a") is False
+    assert game.scenario.all_destroyed(game, "wave_a") is False
 
     game.scenario.update(game)  # first ship spawns
-    assert game.scenario.is_destroyed(game, "wave_a") is False
+    assert game.scenario.all_destroyed(game, "wave_a") is False
 
 
 # ---------------------------------------------------------------------------

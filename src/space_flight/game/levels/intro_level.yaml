@@ -1,0 +1,212 @@
+# Scenario for the intro level.
+#
+# `waves` are reusable spawn definitions, keyed by the group id they spawn into.
+# `triggers` are the mission rules: when <condition> then <action>.
+#
+# This reproduces the original three timed waves, then adds two chained events
+# (reinforcements after a wipe, and an objective on escort progress) to show how
+# conditions compose. Tune freely without touching Python.
+
+waves:
+
+  transports:
+    size: 3
+    ship_model: gr-75
+    bot_type: capital_ship
+    team: 1
+    spawn_point: [0, -2000, 200]
+    spawn_orientation: [1, 0, 0, 0]
+    formation: { scale_m: 150, shape: arrowhead }
+    waypoints:
+      - [0000, 0000, 200]
+      - [0000, 3000, 200]
+      - [0500, 4000, 200]
+      - [1000, 4500, 200]
+      - [2000, 5000, 200]
+      - [5000, 5000, 200]
+      - [6000, 4500, 200]
+      - [6500, 4000, 200]
+      - [7000, 3000, 200]
+
+  escort:
+    size: 4
+    ship_model: x-wing
+    bot_type: fighter
+    team: 1
+    spawn_point: [200, -2100, 300]
+    spawn_orientation: [1, 0, 0, 0]
+    formation: { scale_m: 30, shape: arrowhead }
+    waypoints:
+      - [0200, 0000, 300]
+      - [0200, 3000, 300]
+      - [0700, 4000, 300]
+      - [1200, 4500, 300]
+      - [2200, 5000, 300]
+      - [5200, 5000, 300]
+      - [6200, 4500, 300]
+      - [6700, 4000, 300]
+      - [7200, 3000, 300]
+
+  allied_patrol:
+    size: 4
+    ship_model: y-wing
+    bot_type: fighter
+    team: 1
+    spawn_point: [0, -2100, 500]
+    spawn_orientation: [1, 0, 0, 0]
+    formation: { scale_m: 30, shape: arrowhead }
+    waypoints:
+      - [0000, 0000, 500]
+      - [0000, 3000, 500]
+      - [0500, 4000, 500]
+      - [1000, 4500, 500]
+      - [2000, 5000, 500]
+      - [5000, 5000, 500]
+      - [6000, 4500, 500]
+      - [6500, 4000, 500]
+      - [7000, 3000, 500]
+
+  first_wave:
+    size: 5
+    ship_model: tie-bomber
+    bot_type: fighter
+    team: 2
+    spawn_point: [300, 6000, 500]
+    spawn_orientation: [0, 0, 0, 1]
+    formation: { scale_m: 30, shape: arrowhead }
+    waypoints:
+      - [300, 0, 500]
+      - [300, -6000, 500]
+    target: transports
+    #hud_text: "Enemy ships incoming!"
+
+  second_wave:
+    size: 5
+    ship_model: tie-interceptor
+    bot_type: fighter
+    team: 2
+    spawn_point: [300, 6300, 800]
+    spawn_orientation: [0, 0, 0, 1]
+    formation: { scale_m: 30, shape: diamond }
+    waypoints:
+      - [300, 0, 500]
+      - [300, -6000, 500]
+    target: transports
+
+  third_wave:
+    size: 8
+    ship_model: tie-bomber
+    bot_type: fighter
+    team: 2
+    spawn_point: [300, 0, 800]
+    spawn_orientation: [0, 0, 0, 1]
+    formation: { scale_m: 30, shape: diamond }
+    waypoints:
+      - [300, 6000, 500]
+      - [300, 0, 500]
+    target: transports
+
+triggers:
+  # --- escort -------------------------------------------
+  - name: transports
+    when: { after_seconds: 0.1 }
+    then:
+      spawn: transports
+
+  - name: escort
+    when: { after_seconds: 0.5 }
+    then:
+      all:
+        - { spawn: escort }
+        - speech:
+            speaker: "Red Leader"
+            text: "Red squadron standing by."
+            display_time_s: 5
+
+  # --- the original timed waves -------------------------------------------
+  - name: allied_patrol
+    when: { after_seconds: 2 }
+    then:
+      all:
+        - { hud_text: "Allies have arrived" }
+        - { spawn: allied_patrol }
+        - speech:
+            speaker: "Gold Leader"
+            text: "Gold squadron reporting in. We've got your back."
+            display_time_s: 5
+
+  - name: first_wave
+    when: { after_seconds: 10 }
+    then:
+      all:
+        - { hud_text: "First wave" }
+        - { spawn: first_wave }
+
+  - name: second_wave
+    when: { after_seconds: 30 }
+    then:
+      all:
+        - { hud_text: "Second wave" }
+        - { spawn: second_wave }
+
+  # --- chained events (new capability) ------------------------------------
+  # The third wave arrives either at 200s OR 3s after the first wave is wiped,
+  # whichever comes first — and only once, because a single trigger owns a
+  # single one-shot guard. (Two triggers pointing at one wave would double-spawn.)
+  - name: third_wave
+    when:
+      any_of:
+        - { after_seconds: 200 }
+        - delay:
+            after: { all_destroyed: first_wave }
+            seconds: 3
+    then:
+      all:
+        - { hud_text: "Enemy reinforcements detected!" }
+        - { spawn: third_wave }
+
+  # Mission won once the convoy reaches waypoint 5 and wave 2 is gone.
+  - name: blockade_past
+    when:
+      all_of:
+        - { reached_waypoint: { who: transports, index: 8 } }
+        - { all_destroyed: second_wave }
+    then:
+      all:
+        - { hud_text: "Convoy past the blockade — well done." }
+
+  - name: victory
+    when:
+      delay:
+        after: { fired: blockade_past }
+        seconds: 3
+    then:
+      end_level: { outcome: victory, text: "The convoy reached the fleet. Mission accomplished." }
+
+  # Warning when first transport destroyed
+  - name: transport_destroyed
+    when:
+      { any_destroyed: transports }
+    then:
+      speech:
+        speaker: "Red Leader"
+        text: "A transport has been destroyed! Focus fire on the bombers!"
+        display_time_s: 5
+
+  # Mission lost if all transports are destroyed
+  - name: all_transports_destroyed
+    when:
+      { all_destroyed: transports }
+    then:
+      speech:
+        speaker: "Red Leader"
+        text: "All transports have been destroyed. Let's retreat!"
+        display_time_s: 5
+
+  - name: defeat
+    when:
+      delay:
+        after: { fired: all_transports_destroyed }
+        seconds: 3
+    then:
+      end_level: { outcome: defeat, text: "The convoy has been destroyed." }

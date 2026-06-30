@@ -277,7 +277,7 @@ class Scenario:
         """
         return bool(self.resolve(game, name))
 
-    def is_destroyed(self, game: FlightState, name: str) -> bool:
+    def all_destroyed(self, game: FlightState, name: str) -> bool:
         """
         Whether an identity group has spawned and now has no live members.
 

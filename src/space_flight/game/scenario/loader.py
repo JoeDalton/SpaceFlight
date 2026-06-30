@@ -97,6 +97,8 @@ def _build_condition(node: dict) -> Condition:
         return conditions.after_seconds(arg)
     if kind == "all_destroyed":
         return conditions.all_destroyed(arg)
+    if kind == "any_destroyed":
+        return conditions.any_destroyed(arg)
     if kind == "any_alive":
         return conditions.any_alive(arg)
     if kind == "fired":
