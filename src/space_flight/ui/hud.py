@@ -280,7 +280,12 @@ class TargetHUD:
             self.game.player.pawn.target_id = None
             self.game.player.pawn.target_idx = None
         else:
-            self.name_label["text"] = target.parent.name
+            # Most targets show their parent's name (a ship shows its bot's name).
+            # Subsystems have no named parent, so fall back to their own name.
+            display_name = getattr(target.parent, "name", None) or getattr(
+                target, "name", ""
+            )
+            self.name_label["text"] = display_name
             self.distance_label.show()
             self.name_label.show()
             self.square.show()

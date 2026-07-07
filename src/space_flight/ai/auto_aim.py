@@ -24,15 +24,45 @@ class AutoAim:
         parent,
         target_lock_delay_s: float = 1.0,
         acquisition_cone_angle_deg: float = 30.0,
-        max_assist_angle_deg: float = 5,
+        max_assist_angle_deg: float = 5.0,
         max_assist_distance_m: float = 1000.0,
     ):
         self.game = game
         self.parent = parent
         self.previous_target_id = None
         self.is_target_acquired = False
-        self.target_lock_delay_s = target_lock_delay_s
         self.acquisition_elapsed_time_s = 0.0
+        self.configure(
+            target_lock_delay_s=target_lock_delay_s,
+            acquisition_cone_angle_deg=acquisition_cone_angle_deg,
+            max_assist_angle_deg=max_assist_angle_deg,
+            max_assist_distance_m=max_assist_distance_m,
+        )
+
+    def configure(
+        self,
+        target_lock_delay_s: float = 1.0,
+        acquisition_cone_angle_deg: float = 30.0,
+        max_assist_angle_deg: float = 5.0,
+        max_assist_distance_m: float = 1000.0,
+    ):
+        """
+        Sets the auto-aim tuning parameters, recomputing the derived thresholds.
+
+        Splitting this out of ``__init__`` lets the assist quality be retuned at
+        runtime: a turret reconfigures its auto-aim from the parameters of the
+        targeting system currently boosting it, so a better targeting system
+        yields a tighter firing solution.
+
+        :param target_lock_delay_s: Time the target must stay in the acquisition
+            cone before shots start leading it
+        :param acquisition_cone_angle_deg: Half-angle of the cone within which a
+            target can be acquired
+        :param max_assist_angle_deg: Maximum angle a shot may be bent away from
+            the barrel toward the predicted intercept (higher = tighter aim)
+        :param max_assist_distance_m: Range beyond which the assist is not applied
+        """
+        self.target_lock_delay_s = target_lock_delay_s
         self.min_acquisition_alignment = np.cos(np.deg2rad(acquisition_cone_angle_deg))
         self.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
         self.inv_max_assist_tan_angle = 1 / np.tan(np.deg2rad(max_assist_angle_deg))

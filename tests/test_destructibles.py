@@ -49,6 +49,20 @@ def test_clear_tasks_removes_actor_methods(mock_game):
     assert d.id not in mock_game.method_lists
 
 
+def test_clear_tasks_is_safe_after_game_dropped(mock_game):
+    """
+    A destructible whose game was already dropped by a prior clean (e.g. a turret
+    pawn cleaned by its Bot before the death handler reaches it) clears its tasks
+    without raising.
+    """
+    d = Destructible(mock_game)
+    d.add_task(lambda: None)
+    d.game = None
+
+    # Should not raise
+    d.clear_tasks()
+
+
 # ---------------------------
 # Destructibles
 # ---------------------------

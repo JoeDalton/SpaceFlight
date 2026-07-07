@@ -54,11 +54,11 @@ class Fighter(Ship):
         self.laser_cannon = LaserCannon(game=self.game, parent=self)
 
         # Initialize collisions
-        self.hit_radius_m = self.conf["hit_box_radius_m"]
+        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
         self.collision_sphere_np = attach_collision_sphere(
             game=self.game,
             name="ship",
-            radius=self.hit_radius_m,
+            radius=self.hit_box_radius_m,
             collider_type="destructible",
             parent_node=self.node,
             parent_object=self,

@@ -6,8 +6,8 @@ from typing import Any
 import numpy as np
 
 from space_flight import DATAFILES_PATH, DEBUG_DELETION
-
-# from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
+from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
+from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 
 # from space_flight.actors.turret import Turret
@@ -44,14 +44,52 @@ class CapitalShip(Ship):
             team=team,
         )
 
-        # TODO Setup subsystems
+        # Setup subsystems (shield generators, targeting systems, ...) declared
+        # in the ship config.
+        self.sub_systems = []
+        for gen_conf in self.conf["sub_systems"].get("shield_generators", []):
+            self.sub_systems.append(
+                ShieldGenerator(
+                    game=self.game,
+                    parent=self,
+                    relative_position=np.array(
+                        gen_conf.get("relative_position", [0.0, 0.0, 0.0])
+                    ),
+                    hit_box_radius_m=gen_conf.get("hit_box_radius_m", 5.0),
+                    health=gen_conf.get("health", 1000.0),
+                    explosion_scale=gen_conf.get("explosion_scale", 10.0),
+                    shield_conf=gen_conf.get("shield", {}),
+                )
+            )
+        for ts_conf in self.conf["sub_systems"].get("targeting_systems", []):
+            self.sub_systems.append(
+                TargetingSystem(
+                    game=self.game,
+                    parent=self,
+                    relative_position=np.array(
+                        ts_conf.get("relative_position", [0.0, 0.0, 0.0])
+                    ),
+                    hit_box_radius_m=ts_conf.get("hit_box_radius_m", 5.0),
+                    health=ts_conf.get("health", 1000.0),
+                    explosion_scale=ts_conf.get("explosion_scale", 10.0),
+                    fire_rate_multiplier=ts_conf.get("fire_rate_multiplier", 2.0),
+                    auto_aim_params=ts_conf.get("auto_aim", {}),
+                )
+            )
+
+        # Mounted turrets. Unlike the pure subsystems above, a turret is
+        # bot-controlled (it has its own AI), so it is spawned as a Bot whose
+        # pawn is a turret mounted on us. They are separate Destructibles that
+        # die with us on their own (via mounted_on.is_dead), so we only keep the
+        # bots referenced to spawn them; see clean().
+        self.turret_bots = self._spawn_mounted_turrets()
 
         # Initialize collisions # TODO capsule/mesh/whatever relevant
-        self.hit_radius_m = self.conf["hit_box_radius_m"]
+        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
         self.collision_sphere_np = attach_collision_sphere(
             game=self.game,
             name="ship",
-            radius=self.hit_radius_m,
+            radius=self.hit_box_radius_m,
             collider_type="destructible",
             parent_node=self.node,
             parent_object=self,
@@ -82,6 +120,42 @@ class CapitalShip(Ship):
                 name="Play_engine_sound",
                 method=self.sound.play,
             )
+
+    def _spawn_mounted_turrets(self) -> list:
+        """
+        Spawns the bot-controlled turrets declared in the ship config.
+
+        Each turret is a Bot (it has its own targeting AI) whose pawn is a turret
+        mounted on this ship. ``spawn_bot`` is imported here rather than at module
+        level to break the ``bot`` <-> ``capital_ship`` import cycle.
+
+        :return: The spawned turret bots
+        """
+        # Deferred import: bot imports CapitalShip, so importing spawn_bot at the
+        # top would be circular.
+        from space_flight.actors.bot import spawn_bot
+
+        turret_bots = []
+        for i, turret_conf in enumerate(self.conf["sub_systems"].get("turrets", [])):
+            turret_bots.append(
+                spawn_bot(
+                    game=self.game,
+                    name=f"{self.parent.name}_turret_{i}",
+                    bot_type="turret",
+                    pawn_model=turret_conf["turret_type"],
+                    team=self.team,
+                    parent_object=self,
+                    base_position=np.array(
+                        turret_conf.get("base_position", [0.0, 0.0, 0.0])
+                    ),
+                    base_orientation=np.array(
+                        turret_conf.get("base_orientation", [1.0, 0.0, 0.0, 0.0])
+                    ),
+                    ini_yaw_deg=turret_conf.get("ini_yaw_deg", 0.0),
+                    ini_pitch_deg=turret_conf.get("ini_pitch_deg", 30.0),
+                )
+            )
+        return turret_bots
 
     def move(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -125,6 +199,16 @@ class CapitalShip(Ship):
         garbage collected
         """
         if not self.is_clean:
+            # Subsystems are Destructibles of their own. Once this ship is dead
+            # they detect it (parent.is_dead) and drop their health, so the
+            # central death handling explodes and cleans each one
+            # (see SubSystem.handle_health). We only drop our references here:
+            # explicitly cleaning them would leave dead husks lingering in
+            # alive_objects (get_health would still report their stale health).
+            # Turret bots likewise die with us on their own (mounted_on.is_dead),
+            # so we only drop their references too.
+            self.sub_systems = []
+            self.turret_bots = []
             super().clean()
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")

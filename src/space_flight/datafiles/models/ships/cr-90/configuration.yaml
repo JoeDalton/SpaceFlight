@@ -11,10 +11,59 @@ lift_coefficient_slope_pdeg: 0.1
 lateral_lift_coefficient_slope_pdeg: 0.05
 reference_surface_m2: 100
 
-health: 10000.0
+health: 8000.0
 hit_box_radius_m: 30.0
 
 explosion_scale: 50.0
 
 exterior_engine_sound: sounds/engines/capital_ships/test_capital_ext.ogg
 # interior_engine_sound: sounds/test_interior.ogg
+
+sub_systems:
+  # Shield generators: external subsystems, each projecting a protective bubble.
+  # relative_position is relative to the ship node; radius/health values are
+  # tunable placeholders until the hull dimensions are pinned down.
+  shield_generators:
+    - relative_position: [0.0, 0.0, 15.0]
+      hit_box_radius_m: 6.0
+      health: 1.0
+      explosion_scale: 20.0
+      shield:
+        # Geometry: a "sphere" or "tube" primitive, or a shared "model" path.
+        # The visible bubble and the collision solid share this geometry.
+        # Tube = capsule between point_a and point_b (ship-local); dimensions
+        # here are placeholders until the hull is measured.
+        shape:
+          type: tube
+          point_a: [0.0, -40.0, 0.0]
+          point_b: [0.0, 40.0, 0.0]
+          radius_m: 50.0
+        health: 8000.0
+        regen_rate: 25.0
+        color: [0.4, 0.8, 1.0, 0.15]
+
+  # Targeting systems: fire-control subsystems. While alive, they give every
+  # turret on this ship auto-aim and a faster rate of fire; destroying one (or
+  # the ship) removes those boosts. relative_position/radius are placeholders.
+  targeting_systems:
+    - relative_position: [0.0, 0.0, -15.0]
+      hit_box_radius_m: 6.0
+      health: 1000.0
+      explosion_scale: 20.0
+      fire_rate_multiplier: 2.0
+      # Auto-aim tuning granted to the turrets (passed to AutoAim.configure).
+      # Omitted keys fall back to the auto-aim defaults.
+      auto_aim:
+        target_lock_delay_s: 0.5
+        acquisition_cone_angle_deg: 30.0
+        max_assist_angle_deg: 8.0
+        max_assist_distance_m: 1500.0
+
+  # Bot-controlled turrets mounted on the hull. Each is spawned as its own bot
+  # whose pawn is mounted on the ship; base_position/orientation are ship-local.
+  turrets:
+    - turret_type: test
+      base_position: [0.0, 0.0, 20.0]  # on top of the hull
+      base_orientation: [1.0, 0.0, 0.0, 0.0]
+      ini_yaw_deg: 0.0
+      ini_pitch_deg: 30.0

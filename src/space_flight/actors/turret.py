@@ -1,132 +1,140 @@
-import gc
 import logging
-import sys
-from typing import Any
 
 import numpy as np
+import quaternion
 import yaml
-from panda3d.core import NodePath, Quat
+from panda3d.core import Quat
 
-from space_flight import (
-    DATAFILES_PATH,
-    DEBUG_DELETION,
-    FORWARD_BODY,
-    RIGHT_BODY,
-    UP_BODY,
-)
+from space_flight import DATAFILES_PATH, FORWARD_BODY, RIGHT_BODY, UP_BODY
+from space_flight.actors.capital_ship.sub_system import SubSystem
+from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.laser_cannon import LaserCannon
-from space_flight.actors.pawn import Pawn
 from space_flight.actors.turret_model import TurretModel
-from space_flight.game.collisions import attach_collision_sphere
+from space_flight.ai.auto_aim import AutoAim
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()
 
 
-class Turret(Pawn):
+class Turret(SubSystem):
     """
-    A Turret has 2 state variables
-    - yaw
-    - pitch
+    A turret subsystem: a ship-mounted, bot-controlled weapon that aims in yaw
+    and pitch and fires laser cannons.
 
-    Turrents have constrained and uninteresting movement,
-    So we use an basic Euler 1 integrator.
+    A turret is a :class:`SubSystem`, so it is a destructible, targetable part of
+    its ship (into-only "subsystem" collider, dies with the ship, absorbs ram
+    damage while the ship takes the impulse). It is still driven by a Bot: the bot
+    is its ``parent`` (controller, whose name the HUD/logs read) while
+    ``mounted_on`` is the ship it sits on.
 
-    The rotation rate are given directly (from user input
-    or PNJ behaviour)
+    Movement has 2 state variables (yaw, pitch), integrated with a basic Euler 1
+    step; the rotation rates come directly from the bot's pilot.
 
-    "Forward" is on an object's Y axis in panda3d, so thrust is in +Y
-    X axis is to the right, Z axis is up
+    "Forward" is on an object's Y axis in panda3d. X is right, Z is up.
+
+    :param game: The game/flight state
+    :param parent: The controlling Bot
+    :param turret_type: The turret model/config name
+    :param mounted_on: The ship this turret is bolted onto
+    :param base_position: Mounting position relative to the ship node
+    :param base_orientation: Mounting orientation (quaternion) on the ship
+    :param ini_yaw_deg: Initial yaw angle
+    :param ini_pitch_deg: Initial pitch angle
     """
 
     def __init__(
         self,
         game,
-        parent: Any,
+        parent,
         turret_type: str,
-        parent_object: Any,
+        mounted_on,
         base_position: np.ndarray = np.zeros(3),
         base_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_yaw_deg: float = 0.0,
         ini_pitch_deg: float = 30.0,
-        team: int = 0,
     ):
-        super().__init__(game=game, parent=parent, team=team)
-        self.parent_object = parent_object
-
-        # Load configuration
+        # Load configuration first: it feeds the SubSystem parameters below
         filepath = DATAFILES_PATH / f"models/turrets/{turret_type}/configuration.yaml"
         with open(filepath, "r") as f:
-            self.conf = yaml.safe_load(f)
+            conf = yaml.safe_load(f)
 
-        # Set a low-pass filter time to emulate physical delay in rotational rates
-        self.physics_filter_time_s = self.conf["physics_filter_time_s"]
+        super().__init__(
+            game=game,
+            parent=parent,
+            mounted_on=mounted_on,
+            relative_position=base_position,
+            hit_box_radius_m=conf["hit_box_radius_m"],
+            health=conf["health"],
+            explosion_scale=conf["explosion_scale"],
+            name="turret",
+        )
+        self.conf = conf
 
-        # Set agility of turret
-        self.max_pitch_rate_degps = self.conf["max_pitch_rate_degps"]
-        self.max_yaw_rate_degps = self.conf["max_yaw_rate_degps"]
-
-        # Setup health and shield
-        self.max_health = self.conf["health"]
-        self.health = self.max_health
-
-        # Create a dummy node to attach models
-        self.node = NodePath("turret_node")
-        if isinstance(self.parent_object, NodePath):
-            self.node.reparentTo(self.parent_object)
-        else:
-            self.node.reparentTo(self.parent_object.node)
-
-        self.node.set_pos(*base_position)
+        # Orient the mounting base (SubSystem already positioned the node)
         self.node.set_quat(Quat(*base_orientation))
         self.position = np.array(self.node.getPos(self.game.root_node))
 
-        # Create render
-        self.model = TurretModel(
-            game=self.game,
-            parent_node=self.node,
-            turret_type=turret_type,
-        )
-        self.set_yaw = self.model.set_yaw
-        self.set_pitch = self.model.set_pitch
+        # Agility and physical delay of the turret's aim
+        self.physics_filter_time_s = conf["physics_filter_time_s"]
+        self.max_pitch_rate_degps = conf["max_pitch_rate_degps"]
+        self.max_yaw_rate_degps = conf["max_yaw_rate_degps"]
+
+        # Kinematic/targeting attributes read by the turret AI. Directions are
+        # filled in by move(); a turret has no linear velocity of its own.
+        self.right = np.zeros(3)
+        self.forward = np.zeros(3)
+        self.up = np.zeros(3)
+        self.speed = np.zeros(3)
+        # Orientation frame whose forward (+Y) axis is the cannon's aim. Read by
+        # AutoAim to fold the firing solution back into the turret's frame; kept
+        # in sync with the cannon each frame in move().
+        self.orientation = np.array(base_orientation, dtype=float)
+        self.base_forward = np.zeros(3)
+        self.base_right = np.zeros(3)
+        self.base_up = np.zeros(3)
+        self.target = None
+        self.target_id = None
+        self.target_idx = None
+        self.formation = None
+
+        # Aim state (yaw, pitch)
         self.state = np.array([ini_yaw_deg, ini_pitch_deg])
-        self.set_yaw(self.state[0])
-        self.set_pitch(self.state[1])
         self.state_derivative = np.zeros(2)
 
-        # Initialize cannons
-        self.target_id = None
-        # No auto aim : Auto-aiming turrets would be way too deadly!
+        # Render
+        self.turret_model = TurretModel(
+            game=self.game, parent_node=self.node, turret_type=turret_type
+        )
+        self.set_yaw = self.turret_model.set_yaw
+        self.set_pitch = self.turret_model.set_pitch
+        self.set_yaw(self.state[0])
+        self.set_pitch(self.state[1])
+
+        # Cannons. A turret fires straight down its barrel by default; a living
+        # targeting system on the ship grants auto-aim and a faster fire rate,
+        # pulled each frame in move() (see _apply_targeting_support).
         self.laser_cannon = LaserCannon(
-            game=self.game, parent=self, parent_node=self.model.cannon_node
+            game=self.game, parent=self, parent_node=self.turret_model.cannon_node
         )
-
-        # Initialize collisions
-        # It's a destructible, but immobile, so we count it as terrain
-        # TODO better names
-        self.hit_radius_m = self.conf["hit_box_radius_m"]
-        self.collision_sphere_np = attach_collision_sphere(
-            game=self.game,
-            name="turret",
-            radius=self.hit_radius_m,
-            collider_type="terrain",
-            parent_node=self.node,
-            parent_object=self,
-        )
-
-        # Handle ship health and shield
-        self.parent.add_task(method=self.turret_handle_health)
-        # Set explosion size for death animation
-        self.explosion_scale = self.conf["explosion_scale"]
+        self.base_fire_delay = self.laser_cannon.fire_delay
+        # Auto-aim is held ready but only exposed to the cannon (through
+        # self.auto_aim) while a targeting system is alive. self.auto_aim is None
+        # otherwise, which the cannon reads as "fire straight ahead". It is
+        # retuned from the parameters of whichever targeting system is boosting
+        # us; _targeting_source tracks that system so we only reconfigure on a
+        # change.
+        self._auto_aim = AutoAim(game=self.game, parent=self)
+        self.auto_aim = None
+        self._targeting_source = None
 
     def move(self, yaw_rate: float, pitch_rate: float):
         """
-        Moves the turret given its turn rates
-        Run a low pass filter on the turn rates beforehand
-        to emulate delay in physical systems
+        Moves the turret given its turn rates.
+        Runs a low pass filter on the turn rates beforehand to emulate delay in
+        physical systems.
 
-        :param yaw_rate: _description_
-        :param pitch_rate: _description_
+        :param yaw_rate: Yaw rate command in [-1, 1]
+        :param pitch_rate: Pitch rate command in [-1, 1]
         """
         dt = self.game.game_time.get_time_step()
 
@@ -160,73 +168,69 @@ class Turret(Pawn):
 
         # Compute remarkable directions of the turret cannon
         cannon_quat = np.quaternion(
-            *self.model.cannon_node.getQuat(self.game.root_node)
+            *self.turret_model.cannon_node.getQuat(self.game.root_node)
         )
         self.forward = rotate_single_vector(cannon_quat, FORWARD_BODY)
+        # Aim frame for the auto-aim firing solution (forward is the cannon's +Y)
+        self.orientation = quaternion.as_float_array(cannon_quat)
         base_quat = np.quaternion(*self.node.getQuat(self.game.root_node))
         self.base_forward = rotate_single_vector(base_quat, FORWARD_BODY)
         self.base_right = rotate_single_vector(base_quat, RIGHT_BODY)
         self.base_up = rotate_single_vector(base_quat, UP_BODY)
 
-    def take_hit(self, damage: float, normal_world_vector: np.ndarray):
-        """
-        Take damage from hits
-        # TODO allow energy (ion) damage when we add energy management
+        # Pull the current support from the ship's targeting system: auto-aim and
+        # a faster fire rate while one is alive, unassisted fire otherwise.
+        self._apply_targeting_support()
 
-        :param damage: The amount of damage to take
-        :param normal_world_vector: The collision normal in world coordinates
+    def _active_targeting_system(self):
         """
-        self.apply_damage(damage=damage, damage_type="physical")
+        Finds a living targeting system on the ship this turret is mounted on.
 
-    def apply_damage(self, damage: float, damage_type: str):
+        :return: The active :class:`TargetingSystem` boosting this turret, or
+            ``None`` if its ship has none alive
         """
-        Apply damage to the turret
+        for sub_system in getattr(self.mounted_on, "sub_systems", []):
+            if isinstance(sub_system, TargetingSystem) and not sub_system.is_dead:
+                return sub_system
+        return None
 
-        :param damage_type: The type of damage to apply (physical, energy)
+    def _apply_targeting_support(self):
         """
-        # Apply damage to health and shield
-        if damage_type == "physical":
-            self.health -= damage
+        Applies (or removes) the boosts granted by the ship's targeting system.
+
+        While a targeting system is alive the turret gains auto-aim (its shots
+        lead the target) and a faster fire rate; with none alive it fires
+        straight down the barrel at its base rate.
+        """
+        targeting_system = self._active_targeting_system()
+        if targeting_system is None:
+            # No fire control: fire straight ahead at the base rate.
+            self.auto_aim = None
+            self.laser_cannon.fire_delay = self.base_fire_delay
+            self._targeting_source = None
         else:
-            raise NotImplementedError
-
-    def turret_handle_health(self):
-        """
-        Monitors the turret's health
-        """
-        self.health = min(self.health, self.max_health)
+            # Fire control online: retune the auto-aim from this system (only
+            # when it just came online or changed), then lead the target and
+            # fire faster.
+            if targeting_system is not self._targeting_source:
+                self._auto_aim.configure(**targeting_system.auto_aim_params)
+                self._targeting_source = targeting_system
+            self.auto_aim = self._auto_aim
+            self.auto_aim.compute_acquisition()
+            self.laser_cannon.fire_delay = (
+                self.base_fire_delay / targeting_system.fire_rate_multiplier
+            )
 
     def clean(self):
         """
-        Clean references before deleting the turret so that they can be properly
-        garbage collected
+        Cleans the turret's cannons, auto-aim and model, then the subsystem itself.
         """
         if not self.is_clean:
-            super().clean()
-            self.model.clean()
-            self.model = None
-            # self.auto_aim.clean()
-            # self.auto_aim = None
             self.laser_cannon.clean()
             self.laser_cannon = None
-            self.collision_sphere_np.setPythonTag("owner", None)
-            self.collision_sphere_np.remove_node()
-            self.collision_sphere_np = None
-            self.node.remove_node()
-            self.node = None
-            self.is_dead = True
-            self.parent = None
-
-            if DEBUG_DELETION:
-                LOGGER.info("Cleaned turret")
-                LOGGER.info(f"turret nref = {sys.getrefcount(self)}")
-                LOGGER.info(f"turret references {gc.get_referrers(self)}")
-                LOGGER.info(self.game.app.taskMgr.getAllTasks)
-
-            self.game = None
-            self.is_clean = True
-
-    def __del__(self):
-        if DEBUG_DELETION:
-            LOGGER.info(self.game.app.taskMgr.getAllTasks)
-            LOGGER.info("Deleted turret")
+            self._auto_aim.clean()
+            self._auto_aim = None
+            self.auto_aim = None
+            self.turret_model.clean()
+            self.turret_model = None
+            super().clean()

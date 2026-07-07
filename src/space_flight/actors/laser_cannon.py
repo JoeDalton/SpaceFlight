@@ -102,6 +102,7 @@ class LaserCannon:
         _ = LaserShot(
             game=self.game,
             origin_ship_id=self.parent.id,
+            origin_ship=self.parent,
             texture=self.laser_texture,
             power=self.shot_power,
             life_time_s=self.life_time_s,
@@ -158,11 +159,20 @@ class LaserShot:
         light_color: Tuple,
         speed: np.ndarray,
         start_position,
+        origin_ship=None,
     ):
         self.game = game
         self.id = uuid.uuid4()
         self.power = power
         self.origin_ship_id = origin_ship_id
+        # The emitter object itself (a ship pawn or a mounted turret). Read by the
+        # laser collision handlers to spare the whole firing vehicle -- the
+        # emitter, the ship it is mounted on, and that ship's other subsystems --
+        # via owners_share_vehicle, so a turret cannot hit its own ship or shield.
+        self.origin_ship = origin_ship
+        # World-space velocity, read by laser_into_shield to tell an inward
+        # crossing (blocked) from an outward one (passes through).
+        self.speed = np.asarray(speed, dtype=float)
 
         # Create flat quad
         cm = CardMaker("laser")

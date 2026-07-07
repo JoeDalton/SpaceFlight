@@ -181,7 +181,9 @@ class Interactions:
         # Full pass for alignments (source -> target and target -> source)
         for i in range(n_live):
             idx_source = live_indices[i]
-            source_forward = self.actors[idx_source].forward
+            # Some actors (e.g. subsystems) have no facing: treat them as
+            # unoriented so they still take part in interactions.
+            source_forward = getattr(self.actors[idx_source], "forward", np.zeros(3))
             for j in range(n_live):
                 idx_target = live_indices[j]
                 if self.interact[idx_source, idx_target] and (idx_source != idx_target):
