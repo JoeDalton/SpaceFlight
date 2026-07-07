@@ -1,3 +1,4 @@
+import logging
 import random
 from pathlib import Path
 from typing import List
@@ -6,6 +7,8 @@ import numpy as np
 from direct.showbase import Audio3DManager
 
 from space_flight import DATAFILES_PATH
+
+LOGGER = logging.getLogger()
 
 SOUND_VOLUME_REFERENCE_DISTANCE_M = 500
 MAX_SOUND_DISTANCE_M = 2000
@@ -135,6 +138,18 @@ class SFX:
             method=sound_pool.release_sound,
             extra_args=[sound],
         )
+
+    def tractor_beam_grab(self, game):
+        """
+        Placeholder cue for a tractor beam locking onto the player.
+
+        TODO: play a looping tractor-beam hum for the duration of the grab. For
+        now this only logs, so the grab mechanic can be wired and exercised
+        without a dedicated audio asset.
+
+        :param game: The game object
+        """
+        LOGGER.info("Tractor beam locked onto the player (placeholder SFX)")
 
     def laser_impact_hit_on_player(
         self, game, relative_hit_point: np.ndarray, is_shield: bool

@@ -7,9 +7,12 @@ from space_flight.ai.generic.generic_pilot import GenericPilot
 from space_flight.utils import safe_angle_rad
 
 
-class TurretPilot(GenericPilot):
+class TrackingMountPilot(GenericPilot):
     """
-    A class to hold the autopilot of turrets
+    A class to hold the autopilot of tracking mounts (turrets, tractor beams...).
+
+    It steers the mount in yaw and pitch to point its barrel/antenna at a target
+    direction; it is agnostic to what the mount does once aimed.
     """
 
     def __init__(
@@ -70,10 +73,10 @@ class TurretPilot(GenericPilot):
         target_direction: np.ndarray = np.zeros(3),
     ):
         """
-        Given a target direction and the current orientation of the ship, compute the
-        yaw and pitch rates that will be applied to the turret.
+        Given a target direction and the current orientation of the mount, compute
+        the yaw and pitch rates that will be applied to it.
 
-        TODO : Add turret randomness ?
+        TODO : Add mount randomness ?
         """
 
         # Compute angular errors
@@ -84,7 +87,7 @@ class TurretPilot(GenericPilot):
             cos_angle_to_target = 1.0
         else:
             target_direction = target_direction / target_direction_norm
-            # Project target direction on turret base axes
+            # Project target direction on the mount's base axes
             base_x = self.pawn.base_right
             base_y = self.pawn.base_forward
             base_z = self.pawn.base_up

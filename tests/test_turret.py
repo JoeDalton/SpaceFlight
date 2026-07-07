@@ -8,6 +8,7 @@ from panda3d.core import NodePath
 from space_flight.actors.capital_ship.sub_system import SubSystem
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.turret import Turret
+from space_flight.ai import Personality
 
 
 def make_turret_without_init(
@@ -159,9 +160,9 @@ def test_turret_is_a_subsystem_of_its_ship():
     ship.node.reparentTo(game.root_node)
     bot = SimpleNamespace(name="turret_bot")
 
-    with patch("space_flight.actors.turret.TurretModel") as mock_model_cls, patch(
-        "space_flight.actors.turret.LaserCannon"
-    ):
+    with patch(
+        "space_flight.actors.tracking_mount.TurretModel"
+    ) as mock_model_cls, patch("space_flight.actors.turret.LaserCannon"):
         mock_model_cls.return_value.set_yaw = MagicMock()
         mock_model_cls.return_value.set_pitch = MagicMock()
         mock_model_cls.return_value.cannon_node = NodePath("cannon")
@@ -295,3 +296,76 @@ def test_apply_targeting_support_reverts_when_no_targeting_system():
     assert turret.laser_cannon.fire_delay == pytest.approx(1.0)
     assert turret._targeting_source is None
     turret._auto_aim.compute_acquisition.assert_not_called()
+
+
+# ---------------------------
+# fire condition (_fire_if_engaged), lead-vector based
+# ---------------------------
+
+
+def make_firing_turret(aim_direction, forward, target_distance_m):
+    """
+    Build a Turret (bypassing __init__) with just the state the fire gate reads:
+    the navigator's published lead solution, the barrel direction, and a cannon.
+    """
+    turret = make_turret_without_init()
+    turret.personality = Personality.TURRET_DEFAULT
+    turret.aim_direction = np.array(aim_direction, dtype=float)
+    turret.forward = np.array(forward, dtype=float)
+    turret.target_distance_m = target_distance_m
+    turret.laser_cannon = MagicMock()
+    return turret
+
+
+def test_fire_when_barrel_aligned_with_lead_and_in_range():
+    """
+    The turret fires when its barrel is aligned with the published lead direction
+    and the prey is within firing range.
+    """
+    turret = make_firing_turret(
+        aim_direction=[0.0, 1.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=500.0
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_called_once()
+
+
+def test_no_fire_when_barrel_not_aligned_with_lead():
+    """
+    A barrel pointing away from the lead direction does not fire, even in range.
+    """
+    turret = make_firing_turret(
+        aim_direction=[1.0, 0.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=500.0
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_not_called()
+
+
+def test_no_fire_when_out_of_range():
+    """
+    An aligned barrel still holds fire when the prey is beyond firing range.
+    """
+    turret = make_firing_turret(
+        aim_direction=[0.0, 1.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=5000.0
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_not_called()
+
+
+def test_no_fire_when_navigator_published_no_engagement():
+    """
+    When the navigator published no engagement (zero aim, infinite distance), the
+    turret does not fire.
+    """
+    turret = make_firing_turret(
+        aim_direction=[0.0, 0.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=np.inf
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_not_called()

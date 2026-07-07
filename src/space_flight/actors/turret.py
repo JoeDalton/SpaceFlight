@@ -1,36 +1,31 @@
 import logging
 
 import numpy as np
-import quaternion
 import yaml
-from panda3d.core import Quat
 
-from space_flight import DATAFILES_PATH, FORWARD_BODY, RIGHT_BODY, UP_BODY
-from space_flight.actors.capital_ship.sub_system import SubSystem
+from space_flight import DATAFILES_PATH
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.laser_cannon import LaserCannon
-from space_flight.actors.turret_model import TurretModel
+from space_flight.actors.tracking_mount import TrackingMount
+from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
-from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()
 
 
-class Turret(SubSystem):
+class Turret(TrackingMount):
     """
-    A turret subsystem: a ship-mounted, bot-controlled weapon that aims in yaw
-    and pitch and fires laser cannons.
+    A laser turret: a :class:`TrackingMount` that fires laser cannons.
 
-    A turret is a :class:`SubSystem`, so it is a destructible, targetable part of
-    its ship (into-only "subsystem" collider, dies with the ship, absorbs ram
-    damage while the ship takes the impulse). It is still driven by a Bot: the bot
-    is its ``parent`` (controller, whose name the HUD/logs read) while
-    ``mounted_on`` is the ship it sits on.
+    It inherits all of its aiming from :class:`TrackingMount` and adds the weapon:
+    laser cannons, an auto-aim held ready, and the per-frame fire decision in
+    :meth:`_operate`. The fire gate keys off the navigator's published lead
+    solution (:attr:`aim_direction` / :attr:`target_distance_m`), so the turret
+    fires when its barrel is aligned with where the prey is *going* and the prey
+    is in range.
 
-    Movement has 2 state variables (yaw, pitch), integrated with a basic Euler 1
-    step; the rotation rates come directly from the bot's pilot.
-
-    "Forward" is on an object's Y axis in panda3d. X is right, Z is up.
+    A ship-mounted targeting system, while alive, grants the turret auto-aim and a
+    faster rate of fire (see :meth:`_apply_targeting_support`).
 
     :param game: The game/flight state
     :param parent: The controlling Bot
@@ -40,6 +35,7 @@ class Turret(SubSystem):
     :param base_orientation: Mounting orientation (quaternion) on the ship
     :param ini_yaw_deg: Initial yaw angle
     :param ini_pitch_deg: Initial pitch angle
+    :param personality: Behaviour parameters (fire thresholds, shared with the AI)
     """
 
     def __init__(
@@ -52,8 +48,9 @@ class Turret(SubSystem):
         base_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_yaw_deg: float = 0.0,
         ini_pitch_deg: float = 30.0,
+        personality: dict = Personality.TURRET_DEFAULT,
     ):
-        # Load configuration first: it feeds the SubSystem parameters below
+        # Load configuration first: it feeds the TrackingMount parameters below
         filepath = DATAFILES_PATH / f"models/turrets/{turret_type}/configuration.yaml"
         with open(filepath, "r") as f:
             conf = yaml.safe_load(f)
@@ -62,57 +59,19 @@ class Turret(SubSystem):
             game=game,
             parent=parent,
             mounted_on=mounted_on,
-            relative_position=base_position,
-            hit_box_radius_m=conf["hit_box_radius_m"],
-            health=conf["health"],
-            explosion_scale=conf["explosion_scale"],
+            conf=conf,
+            model_type=turret_type,
+            base_position=base_position,
+            base_orientation=base_orientation,
+            ini_yaw_deg=ini_yaw_deg,
+            ini_pitch_deg=ini_pitch_deg,
+            personality=personality,
             name="turret",
         )
-        self.conf = conf
-
-        # Orient the mounting base (SubSystem already positioned the node)
-        self.node.set_quat(Quat(*base_orientation))
-        self.position = np.array(self.node.getPos(self.game.root_node))
-
-        # Agility and physical delay of the turret's aim
-        self.physics_filter_time_s = conf["physics_filter_time_s"]
-        self.max_pitch_rate_degps = conf["max_pitch_rate_degps"]
-        self.max_yaw_rate_degps = conf["max_yaw_rate_degps"]
-
-        # Kinematic/targeting attributes read by the turret AI. Directions are
-        # filled in by move(); a turret has no linear velocity of its own.
-        self.right = np.zeros(3)
-        self.forward = np.zeros(3)
-        self.up = np.zeros(3)
-        self.speed = np.zeros(3)
-        # Orientation frame whose forward (+Y) axis is the cannon's aim. Read by
-        # AutoAim to fold the firing solution back into the turret's frame; kept
-        # in sync with the cannon each frame in move().
-        self.orientation = np.array(base_orientation, dtype=float)
-        self.base_forward = np.zeros(3)
-        self.base_right = np.zeros(3)
-        self.base_up = np.zeros(3)
-        self.target = None
-        self.target_id = None
-        self.target_idx = None
-        self.formation = None
-
-        # Aim state (yaw, pitch)
-        self.state = np.array([ini_yaw_deg, ini_pitch_deg])
-        self.state_derivative = np.zeros(2)
-
-        # Render
-        self.turret_model = TurretModel(
-            game=self.game, parent_node=self.node, turret_type=turret_type
-        )
-        self.set_yaw = self.turret_model.set_yaw
-        self.set_pitch = self.turret_model.set_pitch
-        self.set_yaw(self.state[0])
-        self.set_pitch(self.state[1])
 
         # Cannons. A turret fires straight down its barrel by default; a living
         # targeting system on the ship grants auto-aim and a faster fire rate,
-        # pulled each frame in move() (see _apply_targeting_support).
+        # pulled each frame in _operate() (see _apply_targeting_support).
         self.laser_cannon = LaserCannon(
             game=self.game, parent=self, parent_node=self.turret_model.cannon_node
         )
@@ -127,60 +86,25 @@ class Turret(SubSystem):
         self.auto_aim = None
         self._targeting_source = None
 
-    def move(self, yaw_rate: float, pitch_rate: float):
+    def _operate(self):
         """
-        Moves the turret given its turn rates.
-        Runs a low pass filter on the turn rates beforehand to emulate delay in
-        physical systems.
-
-        :param yaw_rate: Yaw rate command in [-1, 1]
-        :param pitch_rate: Pitch rate command in [-1, 1]
+        Per-frame turret action: refresh the targeting-system support, then fire
+        if the published lead solution says we are aligned and in range.
         """
-        dt = self.game.game_time.get_time_step()
-
-        # Apply low pass filter on rotation rates
-        self.state_derivative = low_pass_filter_first_order(
-            value=np.array(
-                [
-                    yaw_rate * self.max_yaw_rate_degps,
-                    pitch_rate * self.max_pitch_rate_degps,
-                ]
-            ),
-            previous=self.state_derivative,
-            dt=dt,
-            rise_time=self.physics_filter_time_s,
-            fall_time=self.physics_filter_time_s,
-        )
-
-        # Compute new angles
-        new_state = self.game.integrator.first_order_euler_step(
-            state_derivative=self.state_derivative, state=self.state
-        )
-        # Clip angles to the turret's possibilities
-        new_state[1] = min(
-            self.conf["max_pitch_deg"], max(new_state[1], self.conf["min_pitch_deg"])
-        )
-        self.state = new_state
-
-        # Set angles on the model
-        self.set_yaw(self.state[0])
-        self.set_pitch(self.state[1])
-
-        # Compute remarkable directions of the turret cannon
-        cannon_quat = np.quaternion(
-            *self.turret_model.cannon_node.getQuat(self.game.root_node)
-        )
-        self.forward = rotate_single_vector(cannon_quat, FORWARD_BODY)
-        # Aim frame for the auto-aim firing solution (forward is the cannon's +Y)
-        self.orientation = quaternion.as_float_array(cannon_quat)
-        base_quat = np.quaternion(*self.node.getQuat(self.game.root_node))
-        self.base_forward = rotate_single_vector(base_quat, FORWARD_BODY)
-        self.base_right = rotate_single_vector(base_quat, RIGHT_BODY)
-        self.base_up = rotate_single_vector(base_quat, UP_BODY)
-
-        # Pull the current support from the ship's targeting system: auto-aim and
-        # a faster fire rate while one is alive, unassisted fire otherwise.
         self._apply_targeting_support()
+        self._fire_if_engaged()
+
+    def _fire_if_engaged(self):
+        """
+        Fire the cannons when the barrel is aligned with the navigator's lead
+        solution and the prey is within firing range.
+        """
+        fire = self.personality["navigator"]["fire"]
+        firing_alignment = np.dot(self.aim_direction, self.forward)
+        if (self.target_distance_m < fire["maximum_distance_m"]) and (
+            firing_alignment > fire["minimum_cos_angle"]
+        ):
+            self.laser_cannon.fire()
 
     def _active_targeting_system(self):
         """
@@ -223,7 +147,7 @@ class Turret(SubSystem):
 
     def clean(self):
         """
-        Cleans the turret's cannons, auto-aim and model, then the subsystem itself.
+        Cleans the turret's cannons and auto-aim, then the tracking mount itself.
         """
         if not self.is_clean:
             self.laser_cannon.clean()
@@ -231,6 +155,4 @@ class Turret(SubSystem):
             self._auto_aim.clean()
             self._auto_aim = None
             self.auto_aim = None
-            self.turret_model.clean()
-            self.turret_model = None
             super().clean()

@@ -1,8 +1,9 @@
 """
-Unit tests for TurretTactician (space_flight.ai.turret.turret_tactician).
+Unit tests for TrackingMountTactician
+(space_flight.ai.tracking_mount.tracking_mount_tactician).
 
-TurretTactician can be instantiated directly since its __init__ delegates to
-GenericTactician which only stores plain references.
+TrackingMountTactician can be instantiated directly since its __init__ delegates
+to GenericTactician which only stores plain references.
 """
 
 import uuid
@@ -11,20 +12,22 @@ from unittest.mock import MagicMock
 import numpy as np
 
 from space_flight.ai import Intent, Personality
-from space_flight.ai.turret.turret_tactician import TurretTactician
+from space_flight.ai.tracking_mount.tracking_mount_tactician import (
+    TrackingMountTactician,
+)
 
 
-def make_turret_tactician(mock_game) -> TurretTactician:
+def make_mount_tactician(mock_game) -> TrackingMountTactician:
     """
-    Build a TurretTactician with a mocked game and pawn.
+    Build a TrackingMountTactician with a mocked game and pawn.
 
     :param mock_game: the mocked game object
-    :return: a TurretTactician ready for testing
+    :return: a TrackingMountTactician ready for testing
     """
     pawn = MagicMock()
     pawn.team = 1
     pawn.formation = None
-    return TurretTactician(
+    return TrackingMountTactician(
         game=mock_game, pawn=pawn, personality=Personality.TURRET_DEFAULT
     )
 
@@ -76,13 +79,13 @@ def _configure_interactions_for_prey(
 # ---------------------------------------------------------------------------
 
 
-def test_turret_tactician_high_score_prey_returns_engage():
+def test_mount_tactician_high_score_prey_returns_engage():
     """
     When the highest-scoring prey exceeds min_engagement_score, update_intent
     must return ENGAGE with the prey's id.
     """
     mock_game = MagicMock()
-    tactician = make_turret_tactician(mock_game)
+    tactician = make_mount_tactician(mock_game)
 
     _configure_interactions_for_prey(
         mock_game,
@@ -104,13 +107,13 @@ def test_turret_tactician_high_score_prey_returns_engage():
 # ---------------------------------------------------------------------------
 
 
-def test_turret_tactician_no_prey_returns_idle():
+def test_mount_tactician_no_prey_returns_idle():
     """
     When no actor reaches the minimum engagement score, update_intent must
     return IDLE with an empty target dict.
     """
     mock_game = MagicMock()
-    tactician = make_turret_tactician(mock_game)
+    tactician = make_mount_tactician(mock_game)
 
     _configure_interactions_for_prey(
         mock_game,

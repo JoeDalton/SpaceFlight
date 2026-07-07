@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 import numpy as np
 
@@ -14,26 +13,30 @@ LOGGER = logging.getLogger()
 NO_DIRECTION = np.zeros(3)
 
 
-class TurretNavigator(GenericNavigator):
+class TrackingMountNavigator(GenericNavigator):
     """
-    A class to define the aim of a bot given an intent given by a tactician, and
-    passes its decision to a pilot that steers the turret.
+    Aim for a tracking mount (turret, tractor beam...).
 
-    Outputs a direction to point to and a reference distance
+    Turns the tactician's intent into a direction for the pilot to point at, using
+    lead pursuit so the barrel/antenna anticipates the prey. It is purely an aimer:
+    it does not fire or grab. Instead it *publishes* its result onto the pawn
+    (:attr:`Pawn.aim_direction` and :attr:`Pawn.target_distance_m`), so the pawn's
+    own per-frame action -- firing for a turret, grabbing for a tractor beam --
+    can key off the same lead solution.
     """
 
     def __init__(
         self,
         game,
         pawn: Pawn,
-        personality: dict = Personality.FIGHTER_DEFAULT,
+        personality: dict = Personality.TURRET_DEFAULT,
         debug: bool = False,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
 
     def navigate(self, intent: int, target_dict: dict) -> np.ndarray:
         """
-        Turns the tactician's intent into explicit directions
+        Turns the tactician's intent into an explicit aim direction.
 
         :param intent: The tactician's intent
         :param target_dict: A dictionary containing target info
@@ -41,24 +44,20 @@ class TurretNavigator(GenericNavigator):
         """
         if intent == Intent.IDLE:
             self.engage_phase = ""
+            self._publish_no_engagement()
             return NO_DIRECTION
         elif intent == Intent.ENGAGE:
             return self.engage_target(target_dict)
         else:
             return ValueError(f"Unknown intent: {intent}")
 
-    def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
+    def engage_target(self, target_dict: dict = {}) -> np.ndarray:
         """
-        Engages a target and tries to attack it
+        Aims at a target using lead pursuit and publishes the aim solution onto
+        the pawn for it to act upon.
 
-        Blends:
-        - A Constant Angle Pursuit for long distance approach
-        - Lead pursuit for hitting with lasers
-        - Lag pursuit for too close range (+ Waiting for energy TODO)
-
-        :param target_dict: A dictionary with the target's direction, distance,
-            alignment and relative velocity
-        :return: The direction to point to and the desired speed
+        :param target_dict: A dictionary with the target's info
+        :return: The direction to point to
         """
         # Case where there is no target (Should not happen, but you never know...)
         if target_dict == {}:
@@ -66,6 +65,7 @@ class TurretNavigator(GenericNavigator):
                 f"Navigator {self.pawn.parent.name} told to engage "
                 "but there's no attached target"
             )
+            self._publish_no_engagement()
             return NO_DIRECTION
 
         # Identify self and target in interactions
@@ -80,6 +80,7 @@ class TurretNavigator(GenericNavigator):
                     f"Navigator {self.pawn.parent.name}: "
                     "Target has been destroyed since last intent update."
                 )
+            self._publish_no_engagement()
             return NO_DIRECTION
 
         # Get necessary info from interactions and pre compute target properties
@@ -93,7 +94,7 @@ class TurretNavigator(GenericNavigator):
             my_actor_index, target_actor_index, :
         ]
 
-        # Compute lead pursuit direction necessary for firing solution
+        # Compute lead pursuit direction necessary for a firing/grab solution
         target_current_position = self.pawn.position + distance_m * direction
         target_current_speed = self.pawn.speed + relative_speed_vector
         aim_vector = self.compute_lead_pursuit(
@@ -102,20 +103,22 @@ class TurretNavigator(GenericNavigator):
             lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
 
-        # Decide whether to shoot
-        firing_alignment = np.dot(aim_vector, self.pawn.forward)
-        if (
-            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
-        ) and (
-            firing_alignment
-            > self.personality["navigator"]["fire"]["minimum_cos_angle"]
-        ):
-            self.pawn.laser_cannon.fire()
-
         aim_vector_norm = np.linalg.norm(aim_vector)
         if aim_vector_norm < EPSILON_TOLERANCE:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm
 
+        # Publish the aim solution so the pawn can decide whether to act on it.
+        self.pawn.aim_direction = aim_vector
+        self.pawn.target_distance_m = distance_m
+
         return aim_vector
+
+    def _publish_no_engagement(self):
+        """
+        Clear the published aim solution so the pawn does not act (no aim
+        direction, unreachable distance).
+        """
+        self.pawn.aim_direction = np.zeros(3)
+        self.pawn.target_distance_m = np.inf

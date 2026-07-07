@@ -21,43 +21,47 @@ def make_capital_ship_without_init(
     return capital_ship
 
 
-def make_capital_ship_with_turret_config(turrets: list):
+def make_capital_ship_with_sub_systems(sub_systems: dict):
     """
-    Build a CapitalShip (bypassing __init__) with just what
-    _spawn_mounted_turrets reads: the config, team and controlling bot name.
+    Build a CapitalShip (bypassing __init__) with just what _spawn_mounted_bots
+    reads: the config, team and controlling bot name.
     """
     capital_ship = object.__new__(CapitalShip)
     capital_ship.game = SimpleNamespace()
     capital_ship.team = 2
     capital_ship.parent = SimpleNamespace(name="enemy_frigate_0")
-    capital_ship.conf = {"sub_systems": {"turrets": turrets}}
+    capital_ship.conf = {"sub_systems": sub_systems}
     return capital_ship
 
 
 # ---------------------------
-# _spawn_mounted_turrets
+# _spawn_mounted_bots
 # ---------------------------
 
 
-def test_spawn_mounted_turrets_spawns_a_turret_bot_from_config():
+def test_spawn_mounted_bots_spawns_a_turret_bot_from_config():
     """
     Each turret entry becomes a bot-controlled turret mounted on the ship, on
     the ship's team, with the mounting placement forwarded from the config.
     """
-    capital_ship = make_capital_ship_with_turret_config(
-        [
-            {
-                "turret_type": "test",
-                "base_position": [0.0, 0.0, 20.0],
-                "base_orientation": [1.0, 0.0, 0.0, 0.0],
-                "ini_yaw_deg": 10.0,
-                "ini_pitch_deg": 45.0,
-            }
-        ]
+    capital_ship = make_capital_ship_with_sub_systems(
+        {
+            "turrets": [
+                {
+                    "turret_type": "test",
+                    "base_position": [0.0, 0.0, 20.0],
+                    "base_orientation": [1.0, 0.0, 0.0, 0.0],
+                    "ini_yaw_deg": 10.0,
+                    "ini_pitch_deg": 45.0,
+                }
+            ]
+        }
     )
 
     with patch("space_flight.actors.bot.spawn_bot") as mock_spawn_bot:
-        turret_bots = capital_ship._spawn_mounted_turrets()
+        bots = capital_ship._spawn_mounted_bots(
+            "turrets", bot_type="turret", model_key="turret_type"
+        )
 
     mock_spawn_bot.assert_called_once()
     kwargs = mock_spawn_bot.call_args.kwargs
@@ -68,20 +72,43 @@ def test_spawn_mounted_turrets_spawns_a_turret_bot_from_config():
     np.testing.assert_allclose(kwargs["base_position"], [0.0, 0.0, 20.0])
     assert kwargs["ini_yaw_deg"] == pytest.approx(10.0)
     assert kwargs["ini_pitch_deg"] == pytest.approx(45.0)
-    assert turret_bots == [mock_spawn_bot.return_value]
+    assert bots == [mock_spawn_bot.return_value]
 
 
-def test_spawn_mounted_turrets_with_no_turrets_returns_empty():
+def test_spawn_mounted_bots_spawns_a_tractor_beam_from_config():
     """
-    A ship declaring no turrets spawns none.
+    The same helper spawns tractor beams from their own config section, reading
+    the projector model from the given model key.
     """
-    capital_ship = make_capital_ship_with_turret_config([])
+    capital_ship = make_capital_ship_with_sub_systems(
+        {"tractor_beams": [{"tractor_beam_type": "test"}]}
+    )
 
     with patch("space_flight.actors.bot.spawn_bot") as mock_spawn_bot:
-        turret_bots = capital_ship._spawn_mounted_turrets()
+        bots = capital_ship._spawn_mounted_bots(
+            "tractor_beams", bot_type="tractor_beam", model_key="tractor_beam_type"
+        )
+
+    mock_spawn_bot.assert_called_once()
+    kwargs = mock_spawn_bot.call_args.kwargs
+    assert kwargs["bot_type"] == "tractor_beam"
+    assert kwargs["pawn_model"] == "test"
+    assert bots == [mock_spawn_bot.return_value]
+
+
+def test_spawn_mounted_bots_with_none_declared_returns_empty():
+    """
+    A ship declaring no mounts of the requested kind spawns none.
+    """
+    capital_ship = make_capital_ship_with_sub_systems({})
+
+    with patch("space_flight.actors.bot.spawn_bot") as mock_spawn_bot:
+        bots = capital_ship._spawn_mounted_bots(
+            "turrets", bot_type="turret", model_key="turret_type"
+        )
 
     mock_spawn_bot.assert_not_called()
-    assert turret_bots == []
+    assert bots == []
 
 
 # ---------------------------
