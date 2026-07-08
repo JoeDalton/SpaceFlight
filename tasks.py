@@ -66,10 +66,13 @@ def cover(c):
 #     print(f"Moving {targz_to_move} to {dirty_packages_dir}/{targz_to_move.name}")
 #     shutil.move(str(targz_to_move), dirty_packages_dir)
 
-
 @task
-def doc(c, path=r"./docs"):
-    pass
+def doc(c, path=r"./docs/build"):
+    c.run("poetry install --with docs")
+    c.run(f'poetry run sphinx-build -M html docs/source "{path}/latest"')
+    print(f"Doc written in {path}/latest")
+    c.run(f'poetry run sphinx-build -M html docs/source "{path}/$(poetry version -s)"')
+    print(f"Doc written in {path}/$(poetry version -s)")
 
 @task
 def clean(c):

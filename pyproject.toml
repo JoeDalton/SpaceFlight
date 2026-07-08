@@ -2,7 +2,7 @@
 name = "space_flight"
 version = "0.0.0"
 description = "An arcade space flight simulator"
-authors = ["Joe Dalton"]
+authors = ["Guilhem Lavabre"]
 license = ""
 readme = "README.md"
 include = ["src/space_flight/_version.py", "resources","scripts"]
@@ -55,6 +55,15 @@ typing-extensions = "^4.15.0"
 # url = "http://tata.titi.toto.tata"
 # priority = "supplemental"
 
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.3.7"
+sphinx-book-theme = "^1.1.2"
+sphinx-autodoc2 = "^0.5.0"
+sphinx-copybutton = "^0.5.2"
+myst-parser = "^3.0.1"
 
 [tool.poetry-dynamic-versioning]
 enable = true
