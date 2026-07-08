@@ -7,7 +7,7 @@ from panda3d.core import NodePath
 
 from space_flight.actors.capital_ship.sub_system import SubSystem
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
-from space_flight.actors.turret import Turret
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.ai import Personality
 
 
@@ -161,8 +161,8 @@ def test_turret_is_a_subsystem_of_its_ship():
     bot = SimpleNamespace(name="turret_bot")
 
     with patch(
-        "space_flight.actors.tracking_mount.TurretModel"
-    ) as mock_model_cls, patch("space_flight.actors.turret.LaserCannon"):
+        "space_flight.actors.capital_ship.tracking_mount.TurretModel"
+    ) as mock_model_cls, patch("space_flight.actors.capital_ship.turret.LaserCannon"):
         mock_model_cls.return_value.set_yaw = MagicMock()
         mock_model_cls.return_value.set_pitch = MagicMock()
         mock_model_cls.return_value.cannon_node = NodePath("cannon")

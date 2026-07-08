@@ -4,7 +4,7 @@ Unit tests for the procedural capsule mesh used by tubular shields.
 
 import pytest
 
-from space_flight.actors.capital_ship.shield_geometry import make_capsule
+from space_flight.actors.capital_ship.shield_model import make_capsule
 
 
 def test_capsule_bounds_match_tube_extent():

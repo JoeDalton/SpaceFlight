@@ -16,79 +16,59 @@ from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTacti
 def make_capital_ship_tactician(
     mock_game,
     health: float = 1.0,
-    shield_generators=None,
+    shield_level=None,
 ) -> CapitalShipTactician:
     """
     Build a CapitalShipTactician with the given pawn state.
 
     :param mock_game: the mocked game object
     :param health: normalised pawn health value
-    :param shield_generators: list of shield generator stubs, or None to
-                              omit the attribute (simulating no shield
-                              subsystem)
+    :param shield_level: the shield's reported level, or None for a ship with no
+                         shield (``pawn.shield`` is None)
     :return: a CapitalShipTactician ready for testing
     """
     pawn = MagicMock()
     pawn.health = health
     pawn.team = 1
     pawn.formation = None
-    if shield_generators is None:
-        del pawn.shield_generators  # triggers AttributeError via spec removal
+    if shield_level is None:
+        pawn.shield = None
     else:
-        pawn.shield_generators = shield_generators
+        pawn.shield = MagicMock()
+        pawn.shield.get_shield_level.return_value = shield_level
     return CapitalShipTactician(
         game=mock_game, pawn=pawn, personality=Personality.CAPITAL_SHIP_DEFAULT
     )
 
 
 # ---------------------------------------------------------------------------
-# evaluate_fighting_shape — without shield generators
+# evaluate_fighting_shape — shield contribution
 # ---------------------------------------------------------------------------
 
 
-def test_evaluate_fighting_shape_without_shield_generators():
+def test_evaluate_fighting_shape_without_shield():
     """
-    When the pawn has no shield_generators attribute, evaluate_fighting_shape
+    When the pawn has no shield (``pawn.shield`` is None), evaluate_fighting_shape
     must return 0.5 * health with no error.
     """
     mock_game = MagicMock()
-    tactician = make_capital_ship_tactician(
-        mock_game, health=1.0, shield_generators=None
-    )
+    tactician = make_capital_ship_tactician(mock_game, health=1.0, shield_level=None)
 
     result = tactician.evaluate_fighting_shape()
 
     assert result == pytest.approx(0.5 * 1.0)
 
 
-# ---------------------------------------------------------------------------
-# evaluate_fighting_shape — with shield generators
-# ---------------------------------------------------------------------------
-
-
-def make_shield_generator(shield_level: float) -> MagicMock:
+def test_evaluate_fighting_shape_with_shield():
     """
-    Build a shield generator stub returning a fixed shield level.
-
-    :param shield_level: the value returned by get_shield_level()
-    :return: a MagicMock shield generator
-    """
-    gen = MagicMock()
-    gen.get_shield_level.return_value = shield_level
-    return gen
-
-
-def test_evaluate_fighting_shape_with_single_shield_generator():
-    """
-    With one shield generator the fighting shape must equal
-    0.5 * health + shield_level.
+    With a shield, the fighting shape must equal 0.5 * health + its level (the
+    shield already folds the pro-rata generator reduction into that level).
     """
     mock_game = MagicMock()
     health = 0.8
     shield_level = 0.6
-    generators = [make_shield_generator(shield_level)]
     tactician = make_capital_ship_tactician(
-        mock_game, health=health, shield_generators=generators
+        mock_game, health=health, shield_level=shield_level
     )
 
     result = tactician.evaluate_fighting_shape()
@@ -96,34 +76,13 @@ def test_evaluate_fighting_shape_with_single_shield_generator():
     assert result == pytest.approx(0.5 * health + shield_level)
 
 
-def test_evaluate_fighting_shape_with_multiple_shield_generators():
-    """
-    With multiple shield generators, the fighting shape must equal
-    0.5 * health + sum of all shield levels.
-    """
-    mock_game = MagicMock()
-    health = 0.6
-    shield_levels = [0.4, 0.3, 0.5]
-    generators = [make_shield_generator(level) for level in shield_levels]
-    tactician = make_capital_ship_tactician(
-        mock_game, health=health, shield_generators=generators
-    )
-
-    result = tactician.evaluate_fighting_shape()
-
-    assert result == pytest.approx(0.5 * health + sum(shield_levels))
-
-
 def test_evaluate_fighting_shape_fully_depleted():
     """
-    With health = 0 and all shield generators at zero, the fighting shape
-    must be 0.0.
+    With health = 0 and a shield reporting zero level, the fighting shape must
+    be 0.0.
     """
     mock_game = MagicMock()
-    generators = [make_shield_generator(0.0), make_shield_generator(0.0)]
-    tactician = make_capital_ship_tactician(
-        mock_game, health=0.0, shield_generators=generators
-    )
+    tactician = make_capital_ship_tactician(mock_game, health=0.0, shield_level=0.0)
 
     result = tactician.evaluate_fighting_shape()
 
@@ -160,9 +119,7 @@ def test_update_intent_scripted_prey_returns_engage():
     """
     mock_game = MagicMock()
     health = 10.0  # 0.5 * 10 = 5.0 > min_fighting_shape (2.0)
-    tactician = make_capital_ship_tactician(
-        mock_game, health=health, shield_generators=None
-    )
+    tactician = make_capital_ship_tactician(mock_game, health=health, shield_level=None)
     tactician.scripted_prey_dict = {"active": True, "target_id": "mock_target"}
 
     intent, target_dict = tactician.update_intent()
@@ -183,9 +140,7 @@ def test_update_intent_poor_fighting_shape_returns_disengage():
     """
     mock_game = MagicMock()
     health = 0.0  # fighting shape = 0.0 < min_fighting_shape
-    tactician = make_capital_ship_tactician(
-        mock_game, health=health, shield_generators=None
-    )
+    tactician = make_capital_ship_tactician(mock_game, health=health, shield_level=None)
     tactician.scripted_prey_dict = {"active": True, "target_id": "mock_target"}
 
     mock_game.interactions.live_actors = []

@@ -1,6 +1,6 @@
 """
 Unit tests for the generic TrackingMount base
-(space_flight.actors.tracking_mount).
+(space_flight.actors.capital_ship.tracking_mount).
 
 Instances are built with object.__new__ so move()'s aim integration can be
 exercised without Panda3D assets. move() is fed a mocked integrator and model.
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.tracking_mount import TrackingMount
+from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 
 
 def make_tracking_mount_without_init(

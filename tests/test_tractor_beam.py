@@ -1,5 +1,6 @@
 """
-Unit tests for the TractorBeamProjector (space_flight.actors.tractor_beam).
+Unit tests for the TractorBeamProjector
+(space_flight.actors.capital_ship.tractor_beam).
 
 Instances are built with object.__new__ so the grab state machine and force
 model can be exercised without Panda3D assets or a running game.
@@ -11,7 +12,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.tractor_beam import TractorBeamProjector
+from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
 from space_flight.ai import Personality
 
 GRAB = Personality.TRACTOR_BEAM_DEFAULT["tractor_beam"]
@@ -298,6 +299,31 @@ def test_release_resets_state_and_starts_cooldown():
     assert tractor.grabbed_prey_id is None
     assert tractor.grab_start_time is None
     assert tractor.last_release_time == pytest.approx(7.0)
+
+
+def test_release_plays_sfx_when_freeing_the_player():
+    """
+    Releasing the player cues the placeholder ungrab SFX.
+    """
+    prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0], prey_id="p1")
+    tractor = _grabbing_tractor(prey)
+    tractor.game.player.pawn.id = prey.id  # the grabbed prey is the player
+
+    tractor._release(now=7.0)
+
+    tractor.game.app.sfx.tractor_beam_release.assert_called_once()
+
+
+def test_release_no_sfx_for_non_player_prey():
+    """
+    Releasing a non-player prey does not cue the player ungrab SFX.
+    """
+    prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
+    tractor = _grabbing_tractor(prey)  # player id is "the_player" != prey.id
+
+    tractor._release(now=7.0)
+
+    tractor.game.app.sfx.tractor_beam_release.assert_not_called()
 
 
 def test_resolve_prey_rejects_ungrabbable_actor():
