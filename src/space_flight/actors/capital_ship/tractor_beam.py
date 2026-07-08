@@ -4,7 +4,7 @@ import numpy as np
 import yaml
 
 from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
-from space_flight.actors.tracking_mount import TrackingMount
+from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 
 LOGGER = logging.getLogger()
@@ -188,11 +188,18 @@ class TractorBeamProjector(TrackingMount):
 
     def _release(self, now: float):
         """
-        Release the current prey and start the re-grab cooldown. The prey's
-        external force clears itself once we stop applying it.
+        Release the current prey and start the re-grab cooldown, cueing the
+        player-release SFX if the freed prey was the player. The prey's external
+        force clears itself once we stop applying it.
 
         :param now: The current game time
         """
+        try:
+            if self.grabbed_prey_id == self.game.player.pawn.id:
+                self.game.app.sfx.tractor_beam_release(game=self.game)
+        except AttributeError:
+            # No player yet (e.g. headless), or SFX not wired: release still works
+            pass
         self.is_grabbing = False
         self.grabbed_prey_id = None
         self.grab_start_time = None

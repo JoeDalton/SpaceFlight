@@ -328,8 +328,14 @@ class CollisionSystem:
         if DEBUG_COLLISION:
             LOGGER.info("laser into shield")
 
-        # The shield absorbs the hit
-        shield.take_hit(damage=laser.power, normal_world_vector=normal)
+        # The shield absorbs the hit. Pass the world-space impact point so the
+        # bubble can flash where the laser struck.
+        hit_point = entry.getSurfacePoint(self.game.root_node)
+        shield.take_hit(
+            damage=laser.power,
+            normal_world_vector=normal,
+            hit_world_point=hit_point,
+        )
 
         # Delete laser
         laser.shot.removeNode()

@@ -6,7 +6,7 @@ from panda3d.core import Quat
 
 from space_flight import FORWARD_BODY, RIGHT_BODY, UP_BODY
 from space_flight.actors.capital_ship.sub_system import SubSystem
-from space_flight.actors.turret_model import TurretModel
+from space_flight.actors.capital_ship.turret_model import TurretModel
 from space_flight.ai import Personality
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
@@ -18,8 +18,9 @@ class TrackingMount(SubSystem):
     A ship-mounted subsystem that swivels in yaw and pitch to track a target.
 
     This is the generic base shared by the laser :class:`~space_flight.actors.
-    turret.Turret` and the :class:`~space_flight.actors.tractor_beam.
-    TractorBeamProjector`: everything about *aiming* lives here (mounting,
+    capital_ship.turret.Turret` and the :class:`~space_flight.actors.
+    capital_ship.tractor_beam.TractorBeamProjector`: everything about *aiming*
+    lives here (mounting,
     yaw/pitch state, the swivelling model, the remarkable directions), while what
     the mount *does* once aimed is deferred to :meth:`_operate`, which subclasses
     override (fire cannons, grab a prey...).

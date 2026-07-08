@@ -5,8 +5,8 @@ import yaml
 
 from space_flight import DATAFILES_PATH
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
+from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.actors.laser_cannon import LaserCannon
-from space_flight.actors.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
 

@@ -20,27 +20,37 @@ exterior_engine_sound: sounds/engines/capital_ships/test_capital_ext.ogg
 # interior_engine_sound: sounds/test_interior.ogg
 
 sub_systems:
-  # Shield generators: external subsystems, each projecting a protective bubble.
-  # relative_position is relative to the ship node; radius/health values are
-  # tunable placeholders until the hull dimensions are pinned down.
+  # Shield generators: external subsystems that TOGETHER project the single
+  # shared shield defined below. Every generator contributes an equal share of
+  # the shield's perks, so destroying one scales the shield's strength and regen
+  # down pro rata (remaining / initial); destroying the last one drops it for
+  # good. relative_position is relative to the ship node; radius/health values
+  # are tunable placeholders until the hull dimensions are pinned down.
   shield_generators:
     - relative_position: [0.0, 0.0, 15.0]
       hit_box_radius_m: 6.0
       health: 1.0
       explosion_scale: 20.0
-      shield:
-        # Geometry: a "sphere" or "tube" primitive, or a shared "model" path.
-        # The visible bubble and the collision solid share this geometry.
-        # Tube = capsule between point_a and point_b (ship-local); dimensions
-        # here are placeholders until the hull is measured.
-        shape:
-          type: tube
-          point_a: [0.0, -40.0, 0.0]
-          point_b: [0.0, 40.0, 0.0]
-          radius_m: 50.0
-        health: 8000.0
-        regen_rate: 25.0
-        color: [0.4, 0.8, 1.0, 0.15]
+    - relative_position: [0.0, 0.0, -15.0]
+      hit_box_radius_m: 6.0
+      health: 1.0
+      explosion_scale: 20.0
+
+  # The one shared shield the generators above project. Its full-strength perks
+  # (health, regen_rate) apply while all generators are alive.
+  shield:
+    # Geometry: a "sphere" or "tube" primitive, or a shared "model" path.
+    # The visible bubble and the collision solid share this geometry.
+    # Tube = capsule between point_a and point_b (ship-local); dimensions
+    # here are placeholders until the hull is measured.
+    shape:
+      type: tube
+      point_a: [0.0, -40.0, 0.0]
+      point_b: [0.0, 40.0, 0.0]
+      radius_m: 50.0
+    health: 8000.0
+    regen_rate: 25.0
+    color: [0.4, 0.8, 1.0, 0.15]
 
   # Targeting systems: fire-control subsystems. While alive, they give every
   # turret on this ship auto-aim and a faster rate of fire; destroying one (or
@@ -65,5 +75,11 @@ sub_systems:
     - turret_type: test
       base_position: [0.0, 0.0, 20.0]  # on top of the hull
       base_orientation: [1.0, 0.0, 0.0, 0.0]
+      ini_yaw_deg: 0.0
+      ini_pitch_deg: 30.0
+
+    - turret_type: test
+      base_position: [0.0, 0.0, -20.0]  # on top of the hull
+      base_orientation: [0.0, 1.0, 0.0, 0.0]
       ini_yaw_deg: 0.0
       ini_pitch_deg: 30.0

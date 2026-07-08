@@ -17,7 +17,8 @@ class TargetingSystem(SubSystem):
     - a faster rate of fire, scaled by :attr:`fire_rate_multiplier`.
 
     The boosts are *pulled* by the turrets each frame (see
-    :meth:`~space_flight.actors.turret.Turret._active_targeting_system`), so the
+    :meth:`~space_flight.actors.capital_ship.turret.Turret._active_targeting_system`),
+    so the
     coupling is one-way: the targeting system only exposes its multiplier and its
     alive/dead state, and need not know its turrets. Destroying it (directly, or
     together with its ship) makes it report as dead, and the boosts vanish on the

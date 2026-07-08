@@ -151,6 +151,17 @@ class SFX:
         """
         LOGGER.info("Tractor beam locked onto the player (placeholder SFX)")
 
+    def tractor_beam_release(self, game):
+        """
+        Placeholder cue for a tractor beam releasing the player.
+
+        TODO: play a release/power-down sound (and stop the grab hum started by
+        tractor_beam_grab). For now this only logs.
+
+        :param game: The game object
+        """
+        LOGGER.info("Tractor beam released the player (placeholder SFX)")
+
     def laser_impact_hit_on_player(
         self, game, relative_hit_point: np.ndarray, is_shield: bool
     ):

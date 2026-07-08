@@ -6,10 +6,10 @@ import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.actors.capital_ship import CapitalShip
+from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
-from space_flight.actors.tractor_beam import TractorBeamProjector
-from space_flight.actors.turret import Turret
 from space_flight.ai import Personality
 from space_flight.ai.capital_ship.capital_ship_navigator import CapitalShipNavigator
 from space_flight.ai.capital_ship.capital_ship_pilot import CapitalShipPilot

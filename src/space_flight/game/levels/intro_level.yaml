@@ -11,7 +11,7 @@ waves:
 
   transports:
     size: 3
-    ship_model: gr-75
+    ship_model: cr-90 #gr-75
     bot_type: capital_ship
     team: 1
     spawn_point: [0, -2000, 200]
