@@ -6,7 +6,10 @@ the ``ship_into_subsystem`` pushback, which is built without ``__init__`` and fe
 a mocked collision entry so no ShowBase/traversal is needed.
 """
 
+from __future__ import annotations
+
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -19,12 +22,18 @@ from space_flight.game.collisions import (
     owners_share_vehicle,
 )
 
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship.shield import Shield
+    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.laser_cannon import LaserShot
+    from space_flight.actors.ship import Ship
+
 # ---------------------------
 # define_collision_masks
 # ---------------------------
 
 
-def test_subsystem_masks_are_into_only():
+def test_subsystem_masks_are_into_only() -> None:
     """
     A "subsystem" collider is into-only (like terrain): it never initiates
     collisions and is not added to the collision handler, but it is hit by
@@ -41,7 +50,7 @@ def test_subsystem_masks_are_into_only():
     assert add_to_handler is False
 
 
-def test_unknown_collider_type_raises():
+def test_unknown_collider_type_raises() -> None:
     """
     An unrecognised collider type is rejected.
     """
@@ -54,7 +63,7 @@ def test_unknown_collider_type_raises():
 # ---------------------------
 
 
-def test_same_object_shares_vehicle():
+def test_same_object_shares_vehicle() -> None:
     """
     An owner always shares a vehicle with itself.
     """
@@ -63,7 +72,7 @@ def test_same_object_shares_vehicle():
     assert owners_share_vehicle(owner, owner) is True
 
 
-def test_subsystem_shares_vehicle_with_its_ship_both_orders():
+def test_subsystem_shares_vehicle_with_its_ship_both_orders() -> None:
     """
     A subsystem and the ship it is mounted on are the same vehicle, whichever
     way round the collision is reported.
@@ -75,7 +84,7 @@ def test_subsystem_shares_vehicle_with_its_ship_both_orders():
     assert owners_share_vehicle(ship, subsystem) is True
 
 
-def test_sibling_subsystems_share_vehicle():
+def test_sibling_subsystems_share_vehicle() -> None:
     """
     Two subsystems bolted onto the same ship are the same vehicle.
     """
@@ -86,7 +95,7 @@ def test_sibling_subsystems_share_vehicle():
     assert owners_share_vehicle(generator, turret) is True
 
 
-def test_unrelated_ships_do_not_share_vehicle():
+def test_unrelated_ships_do_not_share_vehicle() -> None:
     """
     Two independent ships (and a subsystem vs a foreign ship) are not exempt.
     """
@@ -98,7 +107,7 @@ def test_unrelated_ships_do_not_share_vehicle():
     assert owners_share_vehicle(subsystem_a, ship_b) is False
 
 
-def test_standalone_mountables_do_not_share_vehicle():
+def test_standalone_mountables_do_not_share_vehicle() -> None:
     """
     Two owners that are mounted on nothing (mounted_on=None) are not exempt just
     because they both stand alone.
@@ -109,7 +118,7 @@ def test_standalone_mountables_do_not_share_vehicle():
     assert owners_share_vehicle(standalone_a, standalone_b) is False
 
 
-def test_none_owner_never_shares_vehicle():
+def test_none_owner_never_shares_vehicle() -> None:
     """
     A missing owner (mid-removal) never shares a vehicle.
     """
@@ -119,7 +128,7 @@ def test_none_owner_never_shares_vehicle():
     assert owners_share_vehicle(owner, None) is False
 
 
-def test_owner_without_mounted_on_attribute_is_safe():
+def test_owner_without_mounted_on_attribute_is_safe() -> None:
     """
     Owners that predate the mounted_on convention are treated as unmounted.
     """
@@ -134,23 +143,28 @@ def test_owner_without_mounted_on_attribute_is_safe():
 # ---------------------------
 
 
-def make_collision_system_without_init():
+def make_collision_system_without_init() -> CollisionSystem:
     """
     Build a CollisionSystem that bypasses __init__ (no ShowBase/traverser) with
     just enough game state for the handlers under test.
+
+    :return: A bare :class:`CollisionSystem` with a mocked ``game``.
     """
     system = object.__new__(CollisionSystem)
     system.game = MagicMock()
     return system
 
 
-def make_pushback_entry(ship, subsystem, surface_normal):
+def make_pushback_entry(
+    ship: Ship, subsystem: SubSystem, surface_normal: Vec3
+) -> MagicMock:
     """
     Fake a Panda3D collision entry for a ship-into-subsystem collision.
 
     :param ship: The incoming ship (from-owner)
     :param subsystem: The subsystem being hit (into-owner)
     :param surface_normal: The outward surface normal the entry reports
+    :return: A mock collision entry wired with those owners and normal.
     """
     entry = MagicMock()
     entry.from_node_path.python_tags = {"owner": ship}
@@ -159,7 +173,7 @@ def make_pushback_entry(ship, subsystem, surface_normal):
     return entry
 
 
-def test_ship_into_subsystem_pushes_parent_not_subsystem():
+def test_ship_into_subsystem_pushes_parent_not_subsystem() -> None:
     """
     A ship ramming a subsystem pushes the incoming ship and the subsystem's
     parent ship apart, damages the incoming ship and the subsystem, but never
@@ -209,7 +223,7 @@ def test_ship_into_subsystem_pushes_parent_not_subsystem():
     )
 
 
-def test_ship_into_subsystem_ignores_own_ship():
+def test_ship_into_subsystem_ignores_own_ship() -> None:
     """
     A ship never collides with its own subsystems: the handler bails out with no
     pushback or damage.
@@ -229,7 +243,7 @@ def test_ship_into_subsystem_ignores_own_ship():
     subsystem.apply_damage.assert_not_called()
 
 
-def test_ship_into_subsystem_no_pushback_when_separating():
+def test_ship_into_subsystem_no_pushback_when_separating() -> None:
     """
     If the ship is already moving away from the subsystem, no impulse is applied,
     though the (zero-speed) grazing contact still registers no damage push.
@@ -263,7 +277,7 @@ def test_ship_into_subsystem_no_pushback_when_separating():
 # ---------------------------
 
 
-def test_shield_masks_are_laser_only_into():
+def test_shield_masks_are_laser_only_into() -> None:
     """
     A "shield" collider is into-only and only lasers hit it: its into-mask is the
     SHIELD bit alone, so ships/sensors (whose from-masks lack SHIELD) pass through.
@@ -277,7 +291,7 @@ def test_shield_masks_are_laser_only_into():
     assert add_to_handler is False
 
 
-def test_lasers_test_against_shields_but_ships_do_not():
+def test_lasers_test_against_shields_but_ships_do_not() -> None:
     """
     Only lasers interact with a shield: the laser from-mask carries SHIELD while
     the ship/sensor from-masks do not.
@@ -292,13 +306,16 @@ def test_lasers_test_against_shields_but_ships_do_not():
 # ---------------------------
 
 
-def make_laser_and_shield(velocity, enabled=True, power=60.0):
+def make_laser_and_shield(
+    velocity: list[float], enabled: bool = True, power: float = 60.0
+) -> tuple[MagicMock, MagicMock]:
     """
     Build mock laser (from-owner) and shield (into-owner) for the handler.
 
     :param velocity: The laser's world velocity
     :param enabled: Whether the shield is currently up
     :param power: The laser's damage
+    :return: A ``(laser, shield)`` pair of mocks.
     """
     laser = MagicMock()
     laser.speed = np.asarray(velocity, dtype=float)
@@ -306,12 +323,23 @@ def make_laser_and_shield(velocity, enabled=True, power=60.0):
 
     shield = MagicMock()
     shield.is_enabled = enabled
+    # A shield has no velocity of its own; it rides the ship it is mounted on.
+    # Sparks spawned on a blocked hit read that velocity via _hit_velocity.
+    shield.speed = None
+    shield.mounted_on = SimpleNamespace(speed=np.zeros(3))
     return laser, shield
 
 
-def make_shield_entry(laser, shield, surface_normal):
+def make_shield_entry(
+    laser: LaserShot, shield: Shield, surface_normal: Vec3
+) -> MagicMock:
     """
     Fake a Panda3D collision entry for a laser-into-shield collision.
+
+    :param laser: The laser (from-owner).
+    :param shield: The shield being hit (into-owner).
+    :param surface_normal: The outward surface normal the entry reports.
+    :return: A mock collision entry wired with those owners and normal.
     """
     entry = MagicMock()
     entry.from_node_path.python_tags = {"owner": laser}
@@ -320,7 +348,7 @@ def make_shield_entry(laser, shield, surface_normal):
     return entry
 
 
-def test_laser_from_outside_is_blocked():
+def test_laser_from_outside_is_blocked() -> None:
     """
     A laser crossing inward (velocity opposed to the outward normal, dot < 0) is
     absorbed by the shield and removed.
@@ -336,7 +364,7 @@ def test_laser_from_outside_is_blocked():
     laser.shot.removeNode.assert_called_once()
 
 
-def test_laser_from_inside_passes_through():
+def test_laser_from_inside_passes_through() -> None:
     """
     A laser fired from inside, crossing outward (dot > 0), is not blocked.
     """
@@ -350,7 +378,7 @@ def test_laser_from_inside_passes_through():
     laser.shot.removeNode.assert_not_called()
 
 
-def test_laser_with_degenerate_normal_passes_through():
+def test_laser_with_degenerate_normal_passes_through() -> None:
     """
     A segment originating inside the solid yields a degenerate (zero) normal;
     dot == 0 is treated as a pass, so the laser is not blocked.
@@ -365,7 +393,7 @@ def test_laser_with_degenerate_normal_passes_through():
     laser.shot.removeNode.assert_not_called()
 
 
-def test_disabled_shield_lets_lasers_through():
+def test_disabled_shield_lets_lasers_through() -> None:
     """
     A downed (disabled) shield stops nothing, even a laser crossing inward.
     """
@@ -379,7 +407,7 @@ def test_disabled_shield_lets_lasers_through():
     laser.shot.removeNode.assert_not_called()
 
 
-def test_laser_into_shield_ignores_missing_owners():
+def test_laser_into_shield_ignores_missing_owners() -> None:
     """
     A laser or shield removed mid-frame (owner None) is handled without error.
     """
@@ -395,7 +423,7 @@ def test_laser_into_shield_ignores_missing_owners():
     shield.take_hit.assert_not_called()
 
 
-def test_laser_does_not_hit_its_own_ships_shield():
+def test_laser_does_not_hit_its_own_ships_shield() -> None:
     """
     A laser fired by a turret mounted on a ship passes through that ship's own
     shield, even crossing inward (which would otherwise be blocked).
@@ -420,9 +448,18 @@ def test_laser_does_not_hit_its_own_ships_shield():
 # ---------------------------
 
 
-def make_destructible_entry(laser, destructible, surface_normal=Vec3(1.0, 0.0, 0.0)):
+def make_destructible_entry(
+    laser: LaserShot,
+    destructible: Ship | SubSystem,
+    surface_normal: Vec3 = Vec3(1.0, 0.0, 0.0),
+) -> MagicMock:
     """
     Fake a Panda3D collision entry for a laser-into-destructible collision.
+
+    :param laser: The laser (from-owner).
+    :param destructible: The ship or subsystem being hit (into-owner).
+    :param surface_normal: The outward surface normal the entry reports.
+    :return: A mock collision entry wired with those owners and normal.
     """
     entry = MagicMock()
     entry.from_node_path.python_tags = {"owner": laser}
@@ -431,7 +468,7 @@ def make_destructible_entry(laser, destructible, surface_normal=Vec3(1.0, 0.0, 0
     return entry
 
 
-def test_laser_does_not_hit_the_ship_it_was_fired_from():
+def test_laser_does_not_hit_the_ship_it_was_fired_from() -> None:
     """
     A turret's laser passes through the very ship it is mounted on.
     """
@@ -450,7 +487,7 @@ def test_laser_does_not_hit_the_ship_it_was_fired_from():
     laser.shot.removeNode.assert_not_called()
 
 
-def test_laser_does_not_hit_a_sibling_subsystem():
+def test_laser_does_not_hit_a_sibling_subsystem() -> None:
     """
     A turret's laser passes through another subsystem bolted onto the same ship
     (e.g. a shield generator or a second turret).

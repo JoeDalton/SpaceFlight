@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import logging
+import random
+from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import (
     BitMask32,
+    CollisionEntry,
     CollisionHandlerEvent,
     CollisionNode,
     CollisionPlane,
@@ -10,17 +15,51 @@ from panda3d.core import (
     CollisionSphere,
     CollisionTraverser,
     CollisionTube,
+    LPoint3,
     NodePath,
     Plane,
     Vec3,
 )
 
 from space_flight import DEBUG_COLLISION
+from space_flight.fx import spark_fx
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship.shield import Shield
+    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.laser_cannon import LaserShot
+    from space_flight.actors.ship import Ship
+    from space_flight.ai.collision_sensor import CollisionSensor
+    from space_flight.game.flight_state import FlightState
+    from space_flight.scenes.asteroid_field import AsteroidField
+    from space_flight.scenes.ocean import Ocean
+
+    # Any object that can own a collider (stored as its "owner" python tag).
+    ColliderOwner = (
+        Ship | SubSystem | Shield | Ocean | AsteroidField | LaserShot | CollisionSensor
+    )
+    # Owners that are part of a vehicle (the share-vehicle / hit-velocity logic
+    # only ever sees ships, their subsystems, and their shields).
+    VehicleOwner = Ship | SubSystem | Shield
 
 SOLID_COLLISION_ELASTICITY = 0.3  # 0 = inelastic, 1 = elastic
 POSITION_CORRECTION_RATIO = 0.1
 PENETRATION_TOLERANCE_M = 0.1
 COLLISION_DAMAGE_FACTOR = 0.05  # TODO configurable with difficulty
+
+#: Fraction of destructible (hull) hits that also spawn a small secondary
+#: explosion on top of the sparks. Knob — set to 0 to disable, 1 for every hit.
+HIT_EXPLOSION_CHANCE = 1.0 / 3.0
+
+#: Terrain material → spark preset. Each terrain object declares a ``material``
+#: attribute (e.g. ``Ocean.material == "water"``, ``AsteroidField.material ==
+#: "rock"``); water reads as ice, rock as gray-brown, metal as metal. Terrain
+#: with no/unknown material falls back to rock.
+_TERRAIN_SPARK_PRESET = {
+    "water": spark_fx.ICE,
+    "rock": spark_fx.ROCK,
+    "metal": spark_fx.METAL,
+}
 
 LOGGER = logging.getLogger()
 
@@ -101,7 +140,9 @@ class CollisionLayers:
         return from_mask_bit, into_mask_bit, add_to_collision_handler
 
 
-def owners_share_vehicle(owner_a, owner_b) -> bool:
+def owners_share_vehicle(
+    owner_a: VehicleOwner | None, owner_b: VehicleOwner | None
+) -> bool:
     """
     Whether two collision owners belong to the same vehicle and, therefore,
     should not collide with one another.
@@ -135,8 +176,30 @@ def owners_share_vehicle(owner_a, owner_b) -> bool:
     return False
 
 
+def _hit_velocity(obj: VehicleOwner | None) -> np.ndarray:
+    """
+    World velocity of a hit object, for sparks to inherit its motion.
+
+    Ships expose their own ``speed``; a subsystem or shield rides its mount's
+    ``speed`` (``mounted_on.speed``); static terrain has neither, giving zero.
+
+    :param obj: The hit object (destructible, shield, or ``None`` for terrain)
+    :return: A 3-vector world velocity (zeros when the object has none)
+    """
+    speed = getattr(obj, "speed", None)
+    if speed is None:
+        mount = getattr(obj, "mounted_on", None)
+        speed = getattr(mount, "speed", None) if mount is not None else None
+    return np.asarray(speed, dtype=float) if speed is not None else np.zeros(3)
+
+
 class CollisionSystem:
-    def __init__(self, game):
+    def __init__(self, game: FlightState) -> None:
+        """
+        Set up the collision traverser and register the collision-event handlers.
+
+        :param game: The game whose render tree is traversed for collisions.
+        """
         self.game = game
         self.traverser = CollisionTraverser()
         if DEBUG_COLLISION:
@@ -170,14 +233,14 @@ class CollisionSystem:
         self.game.app.accept("sensor-into-subsystem", self.sensor_into_obstacle)
         self.game.app.accept("sensor-again-subsystem", self.sensor_into_obstacle)
 
-    def update_collisions(self):
+    def update_collisions(self) -> None:
         """
         Computes collisions via panda3d internal methods
         it triggers the "%fn-into-%in" events
         """
         self.traverser.traverse(self.game.app.render)
 
-    def laser_into_destructible(self, entry):
+    def laser_into_destructible(self, entry: CollisionEntry) -> None:
         """
         Handles the case where a laser hits a destructible object:
         Damages the destructible object and remove the laser.
@@ -234,21 +297,33 @@ class CollisionSystem:
             )
         else:
             # TODO: Mute bots shooting on bots ?
-            # hit_point = entry.getSurfacePoint(entry.getIntoNodePath())
-            # TODO: Add a hit sprite
             self.game.app.sfx.distant_impact_hit(
                 game=self.game,
                 player_ship_pos=self.game.player.pawn.position,
                 hit_pos=entry.into_node_path.parent.getPos(),
                 impact_type="target",
             )
+            hit_point = entry.getSurfacePoint(self.game.root_node)
+            hit_velocity = _hit_velocity(destructible)
+            # Metal sparks at the impact point, inheriting the target's motion.
+            self.game.spark_fx_pool.spawn(
+                position=hit_point,
+                normal=normal,
+                base_velocity=hit_velocity,
+                preset=spark_fx.METAL,
+            )
+            # Occasionally add a small secondary explosion for extra punch.
+            if random.random() < HIT_EXPLOSION_CHANCE:
+                self.game.explosion_fx_pool.spawn_hit(
+                    position=hit_point,
+                    normal=normal,
+                    base_velocity=hit_velocity,
+                )
 
-    def laser_into_terrain(self, entry):
+    def laser_into_terrain(self, entry: CollisionEntry) -> None:
         """
         Handles the case where a laser hits a terrain object:
-        Removes the laser.
-
-        TODO: Add a hit sprite
+        Removes the laser and throws magic sparks at the impact point.
 
         :param entry: Panda3d's description of the collision
         """
@@ -271,10 +346,34 @@ class CollisionSystem:
             impact_type="terrain",
         )
 
+        # Sparks coloured by the terrain type (water → ice, rock → gray-brown).
+        # Terrain is static, so no inherited velocity. An infinite-plane terrain
+        # collider reports a surface normal but not always a surface point, so
+        # fall back to the laser's own position/direction when either is missing.
+        if entry.hasSurfaceNormal():
+            normal = entry.getSurfaceNormal(self.game.root_node)
+        else:
+            normal = Vec3(-laser.speed[0], -laser.speed[1], -laser.speed[2])
+        if not normal.almostEqual(Vec3(0, 0, 0)):
+            normal.normalize()
+        if entry.hasSurfacePoint():
+            hit_point = entry.getSurfacePoint(self.game.root_node)
+        else:
+            hit_point = laser.shot.getPos(self.game.root_node)
+        terrain = entry.into_node_path.python_tags["owner"]
+        material = getattr(terrain, "material", None)
+        preset = _TERRAIN_SPARK_PRESET.get(material, spark_fx.ROCK)
+        self.game.spark_fx_pool.spawn(
+            position=hit_point,
+            normal=normal,
+            base_velocity=np.zeros(3),
+            preset=preset,
+        )
+
         # Delete laser
         laser.shot.removeNode()
 
-    def laser_into_shield(self, entry):
+    def laser_into_shield(self, entry: CollisionEntry) -> None:
         """
         Handle a laser crossing a shield bubble.
 
@@ -337,6 +436,15 @@ class CollisionSystem:
             hit_world_point=hit_point,
         )
 
+        # Ice sparks where the laser struck the bubble, on top of the shield's
+        # own impact flash (driven from take_hit). They ride the ship's motion.
+        self.game.spark_fx_pool.spawn(
+            position=hit_point,
+            normal=normal,
+            base_velocity=_hit_velocity(shield),
+            preset=spark_fx.ICE,
+        )
+
         # Delete laser
         laser.shot.removeNode()
 
@@ -348,7 +456,7 @@ class CollisionSystem:
             impact_type="target",
         )
 
-    def ship_into_terrain(self, entry):
+    def ship_into_terrain(self, entry: CollisionEntry) -> None:
         """
         Handles the case where a ship hits immobile terrain.
         If ship_from is the player, plays a crash sfx
@@ -382,7 +490,7 @@ class CollisionSystem:
                 game=self.game, relative_hit_point=relative_hit_point, in_terrain=True
             )
 
-    def ship_again_terrain(self, entry):
+    def ship_again_terrain(self, entry: CollisionEntry) -> None:
         """
         Handles the case where a ship hits immobile terrain, and it already has
         at the last frame : calls ship_into_terrain_pushback
@@ -391,7 +499,7 @@ class CollisionSystem:
         """
         self.ship_into_terrain_pushback(entry)
 
-    def ship_into_terrain_pushback(self, entry):
+    def ship_into_terrain_pushback(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits immobile terrain.
         We don't use collision forces because they are too stiff.
@@ -438,7 +546,7 @@ class CollisionSystem:
             position_correction=np.zeros(3),
         )
 
-    def ship_into_ship(self, entry):
+    def ship_into_ship(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits another ship for the first time
         If ship_from is the player, play a crash sfx
@@ -477,7 +585,7 @@ class CollisionSystem:
             )
         self.ship_into_ship_pushback(entry)
 
-    def ship_again_ship(self, entry):
+    def ship_again_ship(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits another ship, and it already has
         at the last frame : call ship_into_ship_pushback
@@ -486,7 +594,7 @@ class CollisionSystem:
         """
         self.ship_into_ship_pushback(entry)
 
-    def ship_into_ship_pushback(self, entry):
+    def ship_into_ship_pushback(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits another ship:
         The collisions is registered on both sides.
@@ -556,7 +664,7 @@ class CollisionSystem:
             position_correction=position_correction,
         )
 
-    def ship_into_massive_actor(self, entry):
+    def ship_into_massive_actor(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits a massive actor for the first time
         If ship_from is the player, play a crash sfx
@@ -592,7 +700,7 @@ class CollisionSystem:
             )
         self.ship_into_massive_actor_pushback(entry)
 
-    def ship_again_massive_actor(self, entry):
+    def ship_again_massive_actor(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits a massive actor, and it already has
         at the last frame : call ship_into_massive_actor_pushback
@@ -601,7 +709,7 @@ class CollisionSystem:
         """
         self.ship_into_massive_actor_pushback(entry)
 
-    def ship_into_massive_actor_pushback(self, entry):
+    def ship_into_massive_actor_pushback(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits massive actor.
         We don't use collision forces because they are too stiff.
@@ -648,7 +756,7 @@ class CollisionSystem:
         # Apply damage to the massive actor
         massive_actor_into.apply_damage(damage=damage, damage_type="physical")
 
-    def ship_into_subsystem(self, entry):
+    def ship_into_subsystem(self, entry: CollisionEntry) -> None:
         """
         Handle a ship hitting a subsystem for the first time.
         Play a crash sfx if the incoming ship is the player, then push back.
@@ -680,7 +788,7 @@ class CollisionSystem:
             )
         self.ship_into_subsystem_pushback(entry)
 
-    def ship_again_subsystem(self, entry):
+    def ship_again_subsystem(self, entry: CollisionEntry) -> None:
         """
         Handle a ship still touching a subsystem from a previous frame:
         call ship_into_subsystem_pushback.
@@ -689,7 +797,7 @@ class CollisionSystem:
         """
         self.ship_into_subsystem_pushback(entry)
 
-    def ship_into_subsystem_pushback(self, entry):
+    def ship_into_subsystem_pushback(self, entry: CollisionEntry) -> None:
         """
         Resolve a ship hitting a subsystem bolted onto another ship.
 
@@ -763,7 +871,7 @@ class CollisionSystem:
         # The subsystem itself takes the collision damage
         subsystem_into.apply_damage(damage=damage, damage_type="physical")
 
-    def sensor_into_obstacle(self, entry):
+    def sensor_into_obstacle(self, entry: CollisionEntry) -> None:
         """
         Handles the case where a sensor hits an obstacle
         Register the hit in the sensor
@@ -799,7 +907,7 @@ class CollisionSystem:
         hit_point = entry.getSurfacePoint(self.game.root_node)
         sensor.obstacles.append({"normal": normal, "hit_point": hit_point})
 
-    def clean(self):
+    def clean(self) -> None:
         """
         Cleans the CollisionSystem object
         """
@@ -828,13 +936,13 @@ class CollisionSystem:
 
 
 def attach_collision_sphere(
-    game,
+    game: FlightState,
     name: str,
     radius: float,
     collider_type: str,
-    parent_node,
-    parent_object,
-    relative_position=[0, 0, 0],
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
+    relative_position: list[float] = [0, 0, 0],
 ) -> NodePath:
     """
     Attach a collision sphere to an existing node.
@@ -879,14 +987,14 @@ def attach_collision_sphere(
 
 
 def attach_collision_tube(
-    game,
+    game: FlightState,
     name: str,
-    point_a,
-    point_b,
+    point_a: list[float],
+    point_b: list[float],
     radius: float,
     collider_type: str,
-    parent_node,
-    parent_object,
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
 ) -> NodePath:
     """
     Attach a collision tube (a capsule: a cylinder capped by two hemispheres) to
@@ -939,13 +1047,13 @@ def attach_collision_tube(
 
 
 def attach_collision_segment(
-    game,
+    game: FlightState,
     name: str,
     collider_type: str,
-    parent_node,
-    parent_object,
-    relative_start_position,
-    relative_end_position,
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
+    relative_start_position: LPoint3,
+    relative_end_position: LPoint3,
 ) -> NodePath:
     """
     Attach a collision segment to an existing node. Great for lasers
@@ -985,11 +1093,11 @@ def attach_collision_segment(
 
 
 def attach_collision_plane(
-    game,
+    game: FlightState,
     name: str,
     collider_type: str,
-    parent_node,
-    parent_object,
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
 ) -> NodePath:
     """
     Attach a collision plane to an existing node facing this node's z-up

@@ -170,12 +170,58 @@ Driven by
     `uDeath` and the sink points; every visual detail of the collapse lives
     here.
 
+## Explosion particle shaders
+
+Driven by the GPU particle system in
+[`fx/explosion_fx.py`](../src/space_flight/fx/explosion_fx.py) /
+[`fx/__init__.py`](../src/space_flight/fx/__init__.py) (see [docs/fx.md](fx.md)).
+One shader pair, shared by both the fire and smoke buffers (they differ only
+by the `uFadein` uniform):
+
+- **[`explosion.vert`](../src/space_flight/datafiles/shaders/explosion.vert)**
+  reconstructs each billboard particle's current state on the GPU from its
+  spawn-time parameters — read straight from dedicated vertex columns
+  (`velocity`, `size`, `spin`, `spawn_time`, `lifetime`, `tile_rect`), with no
+  bit-packing to undo. It derives age from `uTime - spawn_time`, moves the
+  particle linearly, grows the billboard over its life, spins the quad,
+  projects the corner onto the camera's right/up axes to face the screen, and
+  outputs a combined fade-out/fade-in/alive alpha. No vertex data is touched
+  after spawn, so hundreds of live particles cost only the three per-frame
+  uniforms (`uTime`, `uCamRight`, `uCamUp`).
+- **[`explosion.frag`](../src/space_flight/datafiles/shaders/explosion.frag)**
+  samples the sprite atlas for this particle's tile and multiplies by the
+  vertex-computed alpha (early-discarding fully transparent fragments). The
+  tile's UV rect arrives per-particle as the `vTileRect` varying, so — unlike
+  a uniform-array-of-rects approach — the fragment shader needs neither a
+  tile-count cap nor dynamic array indexing to pick the right sprite.
+
+## Spark particle shaders
+
+Driven by the GPU particle system in
+[`fx/spark_fx.py`](../src/space_flight/fx/spark_fx.py) (see [docs/fx.md](fx.md))
+for laser hit sparks. One shader pair, shared by every burst regardless of
+preset (metal / ice / magic):
+
+- **[`spark.vert`](../src/space_flight/datafiles/shaders/spark.vert)**
+  reconstructs each spark from its spawn-time vertex columns (`velocity`,
+  `size`, `spawn_time`, `lifetime`, `gravity`, `spark_color`). Unlike the
+  explosion, it follows a **ballistic** path — linear velocity plus a
+  per-particle downward `gravity` — and shrinks the billboard as it ages.
+  Colour and gravity are per-particle (not uniforms) so bursts of different
+  hit types stay independent in one buffer.
+- **[`spark.frag`](../src/space_flight/datafiles/shaders/spark.frag)** renders
+  each quad as a round glowing spark: an SDF circle discards the corners, a
+  soft glow plus a hard core build the shape (floored by the `spark.png` red
+  channel so it still reads if the texture is flat), and the per-spark
+  `vColor` tints it. Additive-blended for a bright glow.
+
 ## Where things live
 
 Every shader in this page lives directly under
 [`src/space_flight/datafiles/shaders/`](../src/space_flight/datafiles/shaders/):
 the hyperspace overlay's three phase shaders plus shared vertex passthrough,
-the render-scale/AA composite pair, the ocean's vertex/fragment pair, and the
-shield's vertex/fragment pair. Each is loaded and driven by the Python module
-named in its section above — there is no separate shader-only reference,
-since GLSL isn't covered by the docstring-generated [code reference](docs/).
+the render-scale/AA composite pair, the ocean's vertex/fragment pair, the
+shield's vertex/fragment pair, and the explosion and spark particle
+vertex/fragment pairs. Each is loaded and driven by the Python module named in
+its section above — there is no separate shader-only reference, since GLSL
+isn't covered by the docstring-generated [code reference](docs/).

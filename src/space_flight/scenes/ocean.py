@@ -9,8 +9,12 @@ Usage:
     self.ocean.update(camera_pos, t)
 """
 
+from __future__ import annotations
+
 import math
 import uuid
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import (
@@ -39,6 +43,9 @@ from space_flight import DATAFILES_PATH
 from space_flight.game.collisions import attach_collision_plane
 from space_flight.utils import compute_next_power_of_2
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 # Fraction of the camera far distance used as the ocean plane's half-size.
 # >1 so the plane's edges always lie beyond the far clip and are never visible.
 _PLANE_FAR_FACTOR = 3.0
@@ -51,13 +58,18 @@ _OCEAN_BIT = BitMask32.bit(1)
 _MAX_WAVE_ITER = 64
 
 
-def compute_wave_dirs(wind_dir: LVecBase2f, wind_strength: float):
+def compute_wave_dirs(wind_dir: LVecBase2f, wind_strength: float) -> PTA_LVecBase2f:
     """Precompute the per-iteration wave directions the fragment shader uses.
 
     These depend only on the iteration index and the wind, not on the pixel, so
     we build them once on the CPU and pass them as a uniform array instead of
     recomputing sin/cos/normalize/mix per pixel per iteration in the shader.
     Mirrors the original in-shader formula exactly.
+
+    :param wind_dir: Wind direction in the XY plane (normalised).
+    :param wind_strength: How strongly directions align to the wind; 0 =
+        random, 1 = fully aligned.
+    :return: One normalised wave direction per shader iteration.
     """
     pta = PTA_LVecBase2f()
     it = 0.0
@@ -73,7 +85,7 @@ def compute_wave_dirs(wind_dir: LVecBase2f, wind_strength: float):
     return pta
 
 
-def make_plane_mesh(size: float):
+def make_plane_mesh(size: float) -> GeomNode:
     """
     Single flat XY quad of the given world size, centred on the origin.
 
@@ -82,6 +94,9 @@ def make_plane_mesh(size: float):
     position.  Across a flat triangle that interpolation is exact, so a single
     quad is pixel-identical to any tessellation: no subdivision is needed, and
     the vertex carries only its position (no unused normal/texcoord).
+
+    :param size: Edge length of the quad, in world units.
+    :return: A :class:`GeomNode` holding the flat quad.
     """
     fmt = GeomVertexFormat.getV3()
     vdata = GeomVertexData("ocean_plane", fmt, Geom.UHStatic)
@@ -103,7 +118,7 @@ def make_plane_mesh(size: float):
     return node
 
 
-def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float):
+def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float) -> GeomNode:
     """
     Mesh for the geometric-swell prototype: a dense uniform grid of half-size
     ``grid_half`` (where the vertex shader displaces the surface by the swell),
@@ -111,6 +126,11 @@ def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float):
     the ocean still covers the view to the horizon.  The displacement is tapered
     to zero before ``grid_half`` (in the shader), so the flat border joins
     seamlessly — no projected-grid / clipmap machinery needed.
+
+    :param grid_half: Half-size of the dense inner grid, in world units.
+    :param subdivs: Number of subdivisions across the dense inner grid.
+    :param outer_half: Half-size of the flat outer border, in world units.
+    :return: A :class:`GeomNode` holding the grid mesh.
     """
     # Per-axis coordinates: outer border, then the uniform inner span, then the
     # far border.  The two border steps are huge but stay flat (taper → 0).
@@ -164,46 +184,64 @@ def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float):
 
 
 class Ocean:
+    #: Terrain material, read at laser-hit time to pick a spark colour.
+    material = "water"
+
     def __init__(
         self,
-        game,
-        water_color=LVecBase3f(0.02, 0.06, 0.14),
-        ripple_strength=0.02,
-        wind_dir=LVecBase2f(1.0, 0.0),  # normalised XY
-        wind_strength=0.5,  # 0=random, 1=fully aligned
-        wave_iterations=36,  # wave-detail quality knob;
-        # higher = sharper, costlier 16, 36
-        geometric_swell=False,  # prototype: geometrically displace
-        # the surface by the swell
-        swell_grid_subdivs=512,  # tessellation of the dense centre grid
-        # swell_grid_subdivs=256,  # tessellation of the dense centre grid
-        # (geometric_swell)
-        swell_grid_half=4000.0,  # half-size of the dense grid in world units
-        swell_amplitude=20.0,  # vertical swell displacement in world units
-        swell_scale=0.004,  # swell spatial frequency (shared vert/frag); long
-        # wavelength so the geometric-swell mesh samples it without aliasing
-        swell_drift=0.1,  # swell scroll speed along the wind (shared vert/frag)
-        fm_depth=0.2,  # small-wave frequency-modulation depth (radians); the swell
-        # field modulates the wave phase to break the dominant octave's tiling
-        # (0 = off). Frag-only; does not affect the geometric-swell displacement.
-        wave_fade_near=300.0,  # distance (world units) below which
-        # small waves are at full detail
-        wave_fade_far=5000.0,  # distance (world units) beyond which
-        # small waves are fully suppressed
-        wave_fade_k2=0.001,  # exponential decay rate for iteration count:
-        # iter = max_iter * exp(-k2 * dist)
-        vert_shader=DATAFILES_PATH / "shaders/ocean.vert",
-        frag_shader=DATAFILES_PATH / "shaders/ocean.frag",
-    ):
+        game: FlightState,
+        water_color: LVecBase3f = LVecBase3f(0.02, 0.06, 0.14),
+        ripple_strength: float = 0.02,
+        wind_dir: LVecBase2f = LVecBase2f(1.0, 0.0),
+        wind_strength: float = 0.5,
+        wave_iterations: int = 36,
+        geometric_swell: bool = False,
+        swell_grid_subdivs: int = 512,
+        swell_grid_half: float = 4000.0,
+        swell_amplitude: float = 20.0,
+        swell_scale: float = 0.004,
+        swell_drift: float = 0.1,
+        fm_depth: float = 0.2,
+        wave_fade_near: float = 300.0,
+        wave_fade_far: float = 5000.0,
+        wave_fade_k2: float = 0.001,
+        vert_shader: Path = DATAFILES_PATH / "shaders/ocean.vert",
+        frag_shader: Path = DATAFILES_PATH / "shaders/ocean.frag",
+    ) -> None:
         """
-        Parameters
-        ----------
-        game            : The game instance
-        refl_scale      : reflection buffer resolution relative to window
-        water_color     : deep water scatter colour
-        ripple_strength : normal-based UV perturbation strength
-        vert_shader     : path to ocean.vert
-        frag_shader     : path to ocean.frag
+        Build the ocean surface, its shared reflection buffer, and shader.
+
+        :param game: The game instance.
+        :param water_color: Deep-water scatter colour.
+        :param ripple_strength: Normal-based UV perturbation strength.
+        :param wind_dir: Wind direction in the XY plane (normalised).
+        :param wind_strength: How strongly the waves align to the wind; 0 =
+            random, 1 = fully aligned.
+        :param wave_iterations: Wave-detail quality knob; higher is sharper but
+            costlier (e.g. 16 or 36).
+        :param geometric_swell: Prototype mode that geometrically displaces the
+            surface by the swell rather than only shading it.
+        :param swell_grid_subdivs: Tessellation of the dense centre grid used by
+            the geometric-swell mode.
+        :param swell_grid_half: Half-size of the dense grid, in world units.
+        :param swell_amplitude: Vertical swell displacement, in world units.
+        :param swell_scale: Swell spatial frequency, shared by the vertex and
+            fragment shaders; a long wavelength so the geometric-swell mesh
+            samples it without aliasing.
+        :param swell_drift: Swell scroll speed along the wind, shared by the
+            vertex and fragment shaders.
+        :param fm_depth: Small-wave frequency-modulation depth, in radians; the
+            swell field modulates the wave phase to break the dominant octave's
+            tiling (0 = off). Fragment-only; does not affect the geometric-swell
+            displacement.
+        :param wave_fade_near: Distance, in world units, below which small waves
+            are at full detail.
+        :param wave_fade_far: Distance, in world units, beyond which small waves
+            are fully suppressed.
+        :param wave_fade_k2: Exponential decay rate for the iteration count
+            (``iter = max_iter * exp(-k2 * dist)``).
+        :param vert_shader: Path to ``ocean.vert``.
+        :param frag_shader: Path to ``ocean.frag``.
         """
         self.game = game
         self.id = uuid.uuid4()
@@ -278,7 +316,7 @@ class Ocean:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def update(self):
+    def update(self) -> None:
         """Call every frame from your update task."""
         current_time = self.game.game_time.get_current_time()
         camera_pos = self.game.app.camera.getPos(self.base_node)
@@ -316,11 +354,14 @@ class Ocean:
         self.ocean_node.setShaderInput("iCameraPos", camera_pos)
         self.ocean_node.setShaderInput("uReflMVP", mvp)
 
-    def set_wave_iterations(self, iterations: int):
+    def set_wave_iterations(self, iterations: int) -> None:
         """Adjust wave-detail quality at runtime (e.g. from a settings menu).
 
         Higher = sharper waves up close but more expensive per pixel; lower =
         smoother and cheaper.  Far/grazing water already uses fewer iterations.
+
+        :param iterations: Wave-detail iteration count, clamped to the shader's
+            maximum.
         """
         self.ocean_node.setShaderInput(
             "iIterationsNormal", min(int(iterations), _MAX_WAVE_ITER)
@@ -328,7 +369,19 @@ class Ocean:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
-    def make_reflection_buffer(self, refl_scale, water_color):
+    def make_reflection_buffer(
+        self, refl_scale: float, water_color: LVecBase3f
+    ) -> tuple[Texture, LVecBase2f]:
+        """
+        Create the offscreen buffer and mirrored camera for planar reflections.
+
+        :param refl_scale: Reflection resolution as a fraction of the 3D render
+            size (< 1 renders reflections cheaper than the main view).
+        :param water_color: Colour the buffer is cleared to, seen where the
+            reflection camera renders nothing.
+        :return: The reflection :class:`Texture` and the provisional UV scale
+            (buffer size / padded texture size) for the first frame.
+        """
         # Size off the 3D render resolution (which may be a downscale of the
         # window when render-scale is active) rather than the window itself, so
         # the reflection cost scales with the chosen internal resolution.
@@ -397,13 +450,14 @@ class Ocean:
         )
         return refl_tex, uv_scale
 
-    def mirror_camera(self):
+    def mirror_camera(self) -> None:
+        """Mirror the reflection camera across the water plane (Z = 0)."""
         pos = self.game.app.camera.getPos(self.base_node)
         hpr = self.game.app.camera.getHpr(self.base_node)
         self.refl_cam.setPos(self.base_node, pos.x, pos.y, -pos.z)
         self.refl_cam.setHpr(self.base_node, hpr.x, -hpr.y, -hpr.z)
 
-    def clean(self):
+    def clean(self) -> None:
         """
         Cleans the Ocean object
         """

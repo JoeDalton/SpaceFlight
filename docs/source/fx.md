@@ -8,7 +8,7 @@ tour; the per-class API is generated from the docstrings in the
 
 ## Mental model
 
-- Particle effects (explosions, and eventually hit sparks) are **GPU-driven**:
+- Particle effects (explosions and hit sparks) are **GPU-driven**:
   a particle is written once at spawn time into a pre-allocated vertex
   buffer, and a GLSL vertex shader reconstructs its position/size/alpha every
   frame from those spawn-time parameters. The CPU's only recurring work is
@@ -26,55 +26,49 @@ tour; the per-class API is generated from the docstrings in the
 [`fx/__init__.py`](../src/space_flight/fx/__init__.py) is a small framework,
 not just package glue: it defines the vertex format and base class every
 particle effect builds on, documented at length in its own module docstring
-(worth reading directly for the exact packing bit-layout).
+(worth reading directly for the exact vertex-column layout).
 
-- **`make_geom_vertex_format()` / `FMT`** — one interleaved vertex format
-  shared by every particle buffer: `vertex` (spawn position), `color.xyz`
-  (velocity) + `color.w` (an effect-specific packed payload), `texcoord.xy`
-  (billboard corner selector) + `texcoord.z` (spawn time) + `texcoord.w`
-  (a second effect-specific packed payload).
+- **`make_particle_format(columns)`** — builds one interleaved vertex format
+  **per effect**: the shared billboard columns (`vertex`, `corner`,
+  `spawn_time`) plus the effect's own per-particle columns. Explosion adds
+  `velocity`, `size`, `spin`, `lifetime`, `tile_rect`; spark adds `velocity`,
+  `size`, `lifetime`, `gravity`, `spark_color`. Each custom column is read in
+  GLSL directly by name — no bit-packing, and no repurposing of the semantic
+  `color`/`texcoord` columns.
 - **`ParticleBuffer`** — owns one `GeomNode` of `POOL_SIZE` (512) billboard
   quads, plus the shader and render state (additive or alpha blending,
   no depth-write, always-visible bounds so it skips frustum culling cheaply).
   Slots are tracked CPU-side as `(spawn_time, duration)` pairs so
   `alloc_slot()` can find or reclaim a free slot without reading back GPU
-  memory; `write_slot()` writes one quad's four identical vertices (only the
-  `corner.xy` selector differs) and reserves its slot for `delay + duration`.
-  `update()` runs once per frame per buffer, pushing `uTime`, `uCamRight`,
-  `uCamUp` — everything else (position, size, spin, fade) is computed
-  entirely on the GPU from those spawn-time values, so a live particle never
-  touches the CPU again after `write_slot`.
+  memory. It takes a ready-compiled `Shader` and a `columns` spec (sub-classes
+  supply both); `write_slot()` writes one quad's four identical vertices (only
+  the `corner` selector differs), taking each effect column as a keyword
+  argument (`velocity=…`, `size=…`, …) and reserving its slot for
+  `delay + duration`. `update()` runs once per frame per buffer, pushing
+  `uTime`, `uCamRight`, `uCamUp` — everything else (position, size, motion,
+  fade) is computed entirely on the GPU from those spawn-time values, so a
+  live particle never touches the CPU again after `write_slot`.
 - **`load_atlas()`** — loads a sprite-atlas PNG plus its companion JSON rect
   descriptor into a `(Texture, rects)` pair, ready to be bound and indexed
   by a shader.
-
-Two packing schemes reuse the same two "spare" floats (`color.w`,
-`texcoord.w`) differently per effect — explosion packs two values per float
-(size+spin, tile+lifetime) to fit everything in the fixed vertex layout,
-while the (currently unimplemented) sparkle effect described in the module
-docstring would store size and lifetime raw, unpacked. Only the explosion
-side of this design is implemented today (see below); the docstring's mention
-of a Sparkle hit-spark effect is a design placeholder, not yet backed by
-code.
 
 ## `explosion_fx.py` — fire and smoke bursts
 
 [`explosion_fx.py`](../src/space_flight/fx/explosion_fx.py) builds one
 concrete effect on top of `ParticleBuffer`:
 
-- **`build_expl_vert()` / `build_expl_frag()`** generate the explosion's GLSL
-  source as Python-formatted strings (so `Shader.make` can cache the exact
-  text) rather than using runtime `#define`s. The vertex shader unpacks
-  `size_spin`/`tile_life` back out of `color.w`/`texcoord.w`, computes particle
-  age from `uTime - spawn_time`, and derives billboard size from a
-  caller-supplied GLSL size-curve expression (e.g. `"base_size * (0.3 + frac
-  * 0.7)"` — grows over the particle's life) plus a fade-in ramp. The
-  fragment shader picks the right atlas tile via an `if/else` chain — GLSL
-  140 forbids dynamically indexing a uniform array, so each atlas rect is
-  its own uniform (`uTileRect0`, `uTileRect1`, …).
-- **`_ExplosionBuffer`** is a thin `ParticleBuffer` subclass: it uploads the
-  atlas rects as uniforms once at construction, and `spawn_particle()` does
-  the size/spin and tile/lifetime packing before calling `write_slot`.
+- **`_explosion_shader()`** lazily loads the shared GLSL shader from
+  [`datafiles/shaders/explosion.{vert,frag}`](../src/space_flight/datafiles/shaders/)
+  (see [shaders.md](shaders.md)) via `Shader.load`. The vertex shader reads
+  each per-particle value straight from its own vertex column, computes
+  particle age from `uTime - spawn_time`, grows the billboard over its life,
+  and applies a fade-in ramp whose length is the `uFadein` uniform. The
+  fragment shader samples the atlas tile whose UV rect arrived in the
+  `tile_rect` column — no uniform array or dynamic indexing needed.
+- **`_ExplosionBuffer`** is a thin `ParticleBuffer` subclass: it applies the
+  shared shader, sets its layer's `uFadein`, and `spawn_particle()` resolves
+  the particle's `tile_index` to its atlas UV rect before calling
+  `write_slot` (fire and smoke differ only by `uFadein`).
 - **`ExplosionPool`** is the object the rest of the game actually talks to
   (see `Bot.play_death`, `docs/actors.md`). It owns two `_ExplosionBuffer`s —
   fire and smoke, each its own atlas and shader — and `spawn()` emits one
@@ -85,6 +79,48 @@ concrete effect on top of `ParticleBuffer`:
   size/speed/lifetime values are randomised within tunable ranges and scaled
   by the caller's `scale` parameter, so a fighter's death and a capital
   ship's death can reuse the same pool with different burst sizes.
+- **`spawn_hit()`** is a thin wrapper over `spawn()` for the small secondary
+  explosion on laser hits (see `spark_fx.py` below): it passes the
+  `HIT_EXPLOSION_*` knobs — a low billboard count, reduced speed, a small scale
+  multiplier and a jet-angle multiplier — so hit bursts stay cheap and contained
+  next to the much larger death explosions. `spawn()` grew keyword overrides
+  (`fire_count`, `smoke_count`, `speed_scale`, `jet_angle_scale`) for this, and
+  the fire/smoke emission is now factored into one `_emit_layer` helper driven
+  by a `_Layer` config per layer.
+
+## `spark_fx.py` — laser hit sparks
+
+[`spark_fx.py`](../src/space_flight/fx/spark_fx.py) is the second concrete
+particle effect: a short, bright burst of round glowing sparks thrown out of a
+laser impact (distinct from the death-triggered explosion).
+
+- **`SparkPool`** is a `ParticleBuffer` subclass (one shared buffer for every
+  spark) loading `datafiles/shaders/spark.{vert,frag}` via `_spark_shader()`
+  and the single `spark.png` sprite via the asset manager, with additive
+  blending. `spawn(position, normal, base_velocity, preset)` emits a cone of
+  sparks around the surface normal, each on a ballistic (gravity-pulled)
+  trajectory and shrinking as it ages.
+- **`SparkPreset`** (`METAL`, `ICE`, `ROCK`, `MAGIC`) bundles the per-hit look:
+  two colours, count, speed, cone spread, gravity, lifetime and size. Crucially,
+  colour and gravity are written **per particle** (not as uniforms) so bursts
+  of different presets can be alive together in the one buffer without
+  repainting each other — each spark's tint is premixed CPU-side from its size
+  (a proxy for launch speed). Global tuning knobs at the top of the module
+  (`SPARK_SIZE_SCALE`, `SPARK_SPEED_SCALE`, `SPARK_JET_ANGLE_SCALE`) scale every
+  preset at once.
+- The pool is created in `FlightState` as `game.spark_fx_pool` (beside
+  `explosion_fx_pool`) and driven from the laser collision handlers in
+  [`collisions.py`](../src/space_flight/game/collisions.py): `METAL` on
+  destructible (bot) hits, `ICE` on shield hits (on top of the shield's own
+  impact flash), and a material-dependent preset on terrain hits — chosen from
+  the `_TERRAIN_SPARK_PRESET` map by the terrain object's declarative
+  `material` attribute (`Ocean.material == "water"` → `ICE`,
+  `AsteroidField.material == "rock"` → `ROCK`, `"metal"` → `METAL`). Each burst
+  inherits the hit object's velocity so sparks ride a moving target.
+- On a fraction of destructible hits (`HIT_EXPLOSION_CHANCE`, default 1/3), a
+  small secondary explosion is also spawned via `ExplosionPool.spawn_hit()` —
+  a contained, low-billboard-count burst (its own `HIT_EXPLOSION_*` knobs in
+  `explosion_fx.py`) sharing the sparks' impact point, normal and velocity.
 
 ## `speed_dust_cloud.py` — engine speed feel
 
