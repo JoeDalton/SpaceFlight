@@ -25,6 +25,7 @@ def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     bot = object.__new__(Bot)
     bot.name = "test_bot"
     bot.bot_type = bot_type
+    bot.record = False
     bot.pawn = MagicMock()
     bot.pilot = MagicMock()
     bot.navigator = MagicMock()

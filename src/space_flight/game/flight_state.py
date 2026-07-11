@@ -28,7 +28,7 @@ from space_flight.ui.hud import HUD, TargetHUD
 from space_flight.ui.input_context import FlightInputContext, HyperspaceInputContext
 
 if TYPE_CHECKING:
-    from direct.task.Task import Task
+    from direct.task import Task
 
 LOGGER = logging.getLogger()
 

@@ -1,5 +1,5 @@
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import Intent, Personality
+from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
 
 # TODO Add an intent to go back to the fight area if too far
@@ -53,6 +53,9 @@ class FighterTactician(GenericTactician):
             best_prey_dict["score"]
             >= self.personality["tactician"]["min_engagement_score"]
         ):
+            best_prey_dict["attack_mode"] = self._select_attack_mode(
+                best_prey_dict["target_id"]
+            )
             return Intent.ENGAGE, best_prey_dict
 
         # Check if bot has patrol orders
@@ -69,9 +72,32 @@ class FighterTactician(GenericTactician):
         friends_center_dict["target_id"] = Intent.REGROUP
         return Intent.REGROUP, friends_center_dict
 
-    def evaluate_fighting_shape(self) -> float:
+    # evaluate_fighting_shape is inherited from GenericTactician (uniform
+    # health/shield_level).
+
+    def _select_attack_mode(self, target_id) -> AttackMode:
         """
-        Evaluates the fighting shape of the bot
-        TODO: add an "energy" mechanic ?
+        Choose how to attack the prey: a STRAFE run against a slow/immobile target,
+        otherwise the PURSUIT chase. The decision is on the target's (class-based)
+        mobility, not its instantaneous speed.
+
+        With guns the only Phase-1 weapon, this is purely the geometry choice; the
+        BOMB weapon and its suitability scoring arrive in Phase 2.
+
+        :param target_id: The chosen prey's id
+        :return: The attack mode to carry in the target dict
         """
-        return 0.5 * self.pawn.health + self.pawn.shield
+        try:
+            target_index = self.game.interactions.get_actor_index_from_id(target_id)
+            target = self.game.interactions.actors[target_index]
+        except (ValueError, KeyError, TypeError):
+            return AttackMode.PURSUIT
+
+        mobility = getattr(target, "mobility", 1.0)
+        threshold = self.personality["tactician"]["strafe_mobility_threshold"]
+        try:
+            is_slow = mobility <= threshold
+        except TypeError:
+            # Non-numeric mobility (e.g. a mocked target): default to the chase.
+            return AttackMode.PURSUIT
+        return AttackMode.STRAFE if is_slow else AttackMode.PURSUIT

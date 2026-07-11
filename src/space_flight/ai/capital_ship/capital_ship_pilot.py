@@ -48,16 +48,18 @@ class CapitalShipPilot(GenericShipPilot):
             # Find angle errors
             yaw_error = np.arctan2(target_x, target_y)
             pitch_error = np.arctan2(target_z, target_y)
-            # Capital ships only roll for the scene orientation
+            # Capital ships only roll for the scene orientation. Clamp the dot to
+            # [-1, 1] before arccos: right and up are unit vectors so it is
+            # mathematically in range, but float error can nudge it just past ±1,
+            # which would make arccos return NaN and poison the whole state.
+            right_dot_up = np.clip(
+                np.dot(self.pawn.right, self.game.scene.up_direction), -1.0, 1.0
+            )
             is_up = np.dot(self.pawn.up, self.game.scene.up_direction) >= 0
             if is_up:
-                roll_error = HALF_PI - np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+                roll_error = HALF_PI - np.arccos(right_dot_up)
             else:
-                roll_error = HALF_PI + np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+                roll_error = HALF_PI + np.arccos(right_dot_up)
             # Debug output
             cos_angle_to_target = np.dot(ship_y, target_direction)
 

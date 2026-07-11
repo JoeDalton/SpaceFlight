@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import DirectFrame, DirectLabel
 
+from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.menu_utils import CustomButton
 
@@ -103,6 +104,9 @@ class LevelEndState(BaseState):
         """
         Clear the state stack and return to the main menu.
         """
+        if RECORD_GAME:
+            # Record game logs
+            self.app.state_manager.stack[-2].record.save()
         self.app.state_manager.clear()
         self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
 
@@ -110,6 +114,9 @@ class LevelEndState(BaseState):
         """
         Quit the application.
         """
+        if RECORD_GAME:
+            # Record game logs
+            self.app.state_manager.stack[-2].record.save()
         sys.exit()
 
     def exit(self) -> None:

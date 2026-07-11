@@ -3,8 +3,9 @@ from typing import Tuple
 
 import numpy as np
 
+from space_flight import RECORD_GAME
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
@@ -69,15 +70,15 @@ class FighterNavigator(GenericShipNavigator):
 
     def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
-        Engages a target and tries to attack it
+        Engages a target with the attack mode the tactician chose (carried in
+        ``target_dict["attack_mode"]``):
 
-        Blends:
-        - A Constant Angle Pursuit for long distance approach
-        - Lead pursuit for hitting with lasers
-        - Lag pursuit for too close range (+ Waiting for energy TODO)
+        - ``PURSUIT`` (default): constant-angle chase, good against agile prey.
+        - ``STRAFE``: a committed ingress -> attack -> break -> reposition run for
+          slow or immobile targets.
 
-        :param target_dict: A dictionary with the target's direction, distance,
-            alignment and relative velocity
+        :param target_dict: A dictionary with the target id, attack mode and
+            (for surface-mounted preys) surface normal/hit point
         :return: The direction to point to and the desired speed
         """
         # Case where there is no target (Should not happen, but you never know...)
@@ -88,7 +89,24 @@ class FighterNavigator(GenericShipNavigator):
             )
             return NO_DIRECTION
 
-        # Identify self and target in interactions
+        if not self._resolve_engagement(target_dict):
+            return NO_DIRECTION
+
+        attack_mode = target_dict.get("attack_mode", AttackMode.PURSUIT)
+        if attack_mode == AttackMode.STRAFE:
+            return self.strafe_target(target_dict)
+        return self.pursue_target(target_dict)
+
+    def _resolve_engagement(self, target_dict: dict) -> bool:
+        """
+        Enrich ``target_dict`` in place with the per-frame engagement geometry
+        shared by every attack mode, so all pattern methods take the single
+        ``target_dict``.
+
+        :param target_dict: The tactician's target info (needs ``target_id``);
+            mutated with the resolved geometry keys
+        :return: True if resolved, False if the target is gone
+        """
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
         try:
             target_actor_index = self.game.interactions.get_actor_index_from_id(
@@ -100,9 +118,8 @@ class FighterNavigator(GenericShipNavigator):
                     f"Navigator {self.pawn.parent.name}: "
                     "Target has been destroyed since last intent update."
                 )
-            return NO_DIRECTION
+            return False
 
-        # Get necessary info from interactions and pre compute target properties
         distance_m = self.game.interactions.distances[
             my_actor_index, target_actor_index
         ]
@@ -112,11 +129,53 @@ class FighterNavigator(GenericShipNavigator):
         relative_speed_vector = self.game.interactions.rel_velocities[
             my_actor_index, target_actor_index, :
         ]
-        longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
+        target_dict["distance_m"] = distance_m
+        target_dict["direction"] = direction
+        target_dict["relative_speed_vector"] = relative_speed_vector
+        target_dict["longitudinal_speed_scalar_mps"] = np.dot(
+            relative_speed_vector, direction
+        )
+        target_dict["target_current_position"] = (
+            self.pawn.position + distance_m * direction
+        )
+        target_dict["target_current_speed"] = self.pawn.speed + relative_speed_vector
+        return True
+
+    def _record_firing(self, distance_m: float, firing_alignment: float, fired: bool):
+        """
+        Step-by-step recording of the firing solution (for post-hoc analysis of
+        why a bot does or does not land hits). Inert unless recording is on for
+        this bot.
+        """
+        if not RECORD_GAME or not getattr(self.pawn.parent, "record", False):
+            return
+        name = self.pawn.parent.name
+        self.game.record.record(f"{name}_firing_alignment", float(firing_alignment))
+        self.game.record.record(
+            f"{name}_in_fire_range",
+            bool(
+                distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
+            ),
+        )
+        self.game.record.record(f"{name}_fired", bool(fired))
+
+    def pursue_target(self, target_dict: dict) -> Tuple[np.ndarray, float]:
+        """
+        The constant-angle-pursuit chase (CAP + lead + lag) with the reposition and
+        extend escape behaviours. Good against agile prey.
+
+        :param target_dict: The target info enriched with the engagement geometry
+            (see _resolve_engagement)
+        :return: The direction to point to and the desired speed
+        """
+        distance_m = target_dict["distance_m"]
+        direction = target_dict["direction"]
+        relative_speed_vector = target_dict["relative_speed_vector"]
+        longitudinal_speed_scalar_mps = target_dict["longitudinal_speed_scalar_mps"]
+        target_current_position = target_dict["target_current_position"]
+        target_current_speed = target_dict["target_current_speed"]
 
         # Compute lead pursuit direction necessary for firing solution
-        target_current_position = self.pawn.position + distance_m * direction
-        target_current_speed = self.pawn.speed + relative_speed_vector
         lead_direction = self.compute_lead_pursuit(
             target_current_position=target_current_position,
             target_current_speed=target_current_speed,
@@ -125,13 +184,19 @@ class FighterNavigator(GenericShipNavigator):
 
         # Decide whether to shoot
         firing_alignment = np.dot(lead_direction, self.pawn.forward)
-        if (
+        in_range = (
             distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
-        ) and (
+        )
+        aligned = (
             firing_alignment
             > self.personality["navigator"]["fire"]["minimum_cos_angle"]
-        ):
+        )
+        fired = in_range and aligned
+        if fired:
             self.pawn.laser_cannon.fire()
+        self._record_firing(
+            distance_m=distance_m, firing_alignment=firing_alignment, fired=fired
+        )
 
         # Check if we risk passing ahead of the target
         if self.check_overshoot_risk(
@@ -198,6 +263,264 @@ class FighterNavigator(GenericShipNavigator):
         )
 
         return aim_vector, pursuit_speed_mps
+
+    # %% ==== STRAFE ====
+
+    def strafe_target(self, target_dict: dict) -> Tuple[np.ndarray, float]:
+        """
+        Strafing run against a slow or immobile target: a committed phase cycle
+        ``ingress -> attack -> break -> reposition -> ingress`` that runs in fast,
+        fires, peels off and comes around again, instead of spiralling like a chase.
+
+        For a surface-mounted prey (``surface_normal``/``surface_hit_point`` in
+        ``target_dict``) the ingress becomes a low-altitude corridor (a run at a set
+        altitude above the surface, then a dive), the break climbs along the normal,
+        and a hard altitude floor forces recovery. Without surface info it is a
+        straight open-space pass.
+
+        :param target_dict: The target info enriched with the engagement geometry
+            (see _resolve_engagement); surface fields optional
+        :return: The direction to point to and the desired speed
+        """
+        strafe = self.personality["navigator"]["strafe"]
+        distance_m = target_dict["distance_m"]
+        direction = target_dict["direction"]
+        target_position = target_dict["target_current_position"]
+        target_speed = target_dict["target_current_speed"]
+        closing_speed_mps = -target_dict["longitudinal_speed_scalar_mps"]
+        surface_normal = target_dict.get("surface_normal")
+        surface_hit_point = target_dict.get("surface_hit_point")
+
+        # Lead the target: fly at where it will be when we arrive, i.e. lead by the
+        # closing time (distance / closing_speed), so a moving target is met head-on
+        # instead of chased from behind.
+        lead_time_s = 0.0
+        if closing_speed_mps > 1e-3:
+            lead_time_s = min(distance_m / closing_speed_mps, strafe["max_lead_time_s"])
+        lead_target_position = target_position + target_speed * lead_time_s
+        lead_direction = self.compute_lead_pursuit(
+            target_current_position=target_position,
+            target_current_speed=target_speed,
+            lead_time_s=lead_time_s,
+        )
+
+        # Fire whenever aligned and in range, in any phase.
+        self._strafe_try_fire(
+            target_position=target_position,
+            target_speed=target_speed,
+            distance_m=distance_m,
+        )
+
+        # Hard altitude floor: force a recovery break if we drop too low.
+        if self._below_altitude_floor(surface_normal, surface_hit_point, strafe):
+            self.record_behaviour(behaviour="strafe_break")
+
+        phase = (
+            self.behaviour if self.behaviour.startswith("strafe_") else "strafe_ingress"
+        )
+
+        if phase == "strafe_ingress":
+            if distance_m < strafe["attack_distance_m"]:
+                self.record_behaviour(behaviour="strafe_attack")
+                return self._strafe_attack(lead_direction=lead_direction, strafe=strafe)
+            self.record_behaviour(behaviour="strafe_ingress")
+            return self._strafe_ingress(
+                lead_direction=lead_direction,
+                lead_target_position=lead_target_position,
+                distance_m=distance_m,
+                surface_normal=surface_normal,
+                strafe=strafe,
+            )
+
+        if phase == "strafe_attack":
+            # Press in until point-blank; peel off early only on a geometry-driven
+            # escape (about to overshoot, or stalled and unable to close) rather
+            # than an arbitrary timer.
+            reached_standoff = distance_m < strafe["break_distance_m"]
+            overshooting = self.check_overshoot_risk(
+                closing_speed_mps=closing_speed_mps, distance_m=distance_m
+            )
+            stalled = (
+                self.behaviour_duration_s > strafe["stall_time_s"]
+                and closing_speed_mps < strafe["minimum_closing_speed_mps"]
+            )
+            if reached_standoff or overshooting or stalled:
+                self.record_behaviour(behaviour="strafe_break")
+                return self._strafe_break(
+                    direction=direction, surface_normal=surface_normal, strafe=strafe
+                )
+            self.record_behaviour(behaviour="strafe_attack")
+            return self._strafe_attack(lead_direction=lead_direction, strafe=strafe)
+
+        if phase == "strafe_break":
+            if self.behaviour_duration_s > strafe["break_duration_s"]:
+                self.record_behaviour(behaviour="strafe_reposition")
+                return self._strafe_reposition(direction=direction, strafe=strafe)
+            self.record_behaviour(behaviour="strafe_break")
+            return self._strafe_break(
+                direction=direction, surface_normal=surface_normal, strafe=strafe
+            )
+
+        # strafe_reposition: extend to standoff, then re-enter the ingress. Commit
+        # for a minimum time as well as a minimum distance, so the run flies out and
+        # swings around for a clean next pass instead of snapping back too early.
+        repositioned_far_enough = distance_m > strafe["reposition_distance_m"]
+        repositioned_long_enough = (
+            self.behaviour_duration_s > strafe["reposition_min_duration_s"]
+        )
+        if repositioned_far_enough and repositioned_long_enough:
+            self.record_behaviour(behaviour="strafe_ingress")
+            return self._strafe_ingress(
+                lead_direction=lead_direction,
+                lead_target_position=lead_target_position,
+                distance_m=distance_m,
+                surface_normal=surface_normal,
+                strafe=strafe,
+            )
+        self.record_behaviour(behaviour="strafe_reposition")
+        return self._strafe_reposition(direction=direction, strafe=strafe)
+
+    def _strafe_try_fire(
+        self,
+        target_position: np.ndarray,
+        target_speed: np.ndarray,
+        distance_m: float,
+    ):
+        """
+        Fire the guns if the (near-pure-pursuit) firing solution is aligned with
+        the nose and the target is in range.
+        """
+        lead_direction = self.compute_lead_pursuit(
+            target_current_position=target_position,
+            target_current_speed=target_speed,
+            lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
+        )
+        firing_alignment = np.dot(lead_direction, self.pawn.forward)
+        fire = self.personality["navigator"]["fire"]
+        strafe = self.personality["navigator"]["strafe"]
+        # Range from the shared fire config, but a wider (strafe-specific) cone: a
+        # fast pass rarely holds the nose within the 5deg pursuit cone, and auto-aim
+        # bends the shot the rest of the way.
+        fired = (distance_m < fire["maximum_distance_m"]) and (
+            firing_alignment > strafe["fire_min_cos_angle"]
+        )
+        if fired:
+            self.pawn.laser_cannon.fire()
+        self._record_firing(
+            distance_m=distance_m, firing_alignment=firing_alignment, fired=fired
+        )
+
+    def _below_altitude_floor(
+        self,
+        surface_normal: np.ndarray,
+        surface_hit_point: np.ndarray,
+        strafe: dict,
+    ) -> bool:
+        """
+        Whether the ship has dropped below the corridor's hard altitude floor.
+
+        Only meaningful for surface-mounted preys; without surface info there is
+        no floor (open-space pass).
+
+        :return: True if too low and a recovery break must be forced
+        """
+        if surface_normal is None or surface_hit_point is None:
+            return False
+        altitude_m = np.dot(self.pawn.position - surface_hit_point, surface_normal)
+        return bool(altitude_m < strafe["altitude_floor_m"])
+
+    def _strafe_ingress(
+        self,
+        lead_direction: np.ndarray,
+        lead_target_position: np.ndarray,
+        distance_m: float,
+        surface_normal: np.ndarray,
+        strafe: dict,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Run in fast toward the target's lead (intercept) point (a low corridor for
+        surface preys), weaving to spoil defensive fire. The weave amplitude ramps
+        down with distance, so the nose is steady by the time the attack/dive begins.
+        """
+        # Reseed the weave phase on a fresh ingress so runs are not predictable.
+        if self.behaviour_duration_s <= 0.0:
+            self.weave_phase_rad = float(np.random.uniform(0.0, 2 * np.pi))
+
+        if surface_normal is not None:
+            # Corridor: aim a run altitude above the lead point, which becomes a
+            # shallow dive as we close. Deliberately fly low, so dwarf avoidance.
+            corridor_point = (
+                lead_target_position + surface_normal * strafe["run_altitude_m"]
+            )
+            base_direction = corridor_point - self.pawn.position
+            base_norm = np.linalg.norm(base_direction)
+            if base_norm > TARGET_DISTANCE_TOLERANCE_M:
+                base_direction = base_direction / base_norm
+            else:
+                base_direction = lead_direction
+            up_reference = surface_normal
+            self.avoidance_weight_factor = strafe["corridor_avoidance_factor"]
+        else:
+            base_direction = lead_direction
+            up_reference = self.game.scene.up_direction
+
+        amplitude = strafe["swivel_amplitude"] * min(
+            distance_m / strafe["swivel_distance_scale_m"], 1.0
+        )
+        weaved_direction = self.compute_evasive_weave(
+            base_direction=base_direction,
+            up_reference=up_reference,
+            amplitude=amplitude,
+            frequency_hz=strafe["swivel_frequency_hz"],
+        )
+        return weaved_direction, self._strafe_speed(strafe, "ingress_speed_factor")
+
+    def _strafe_speed(self, strafe: dict, factor_key: str) -> float:
+        """
+        A strafe phase speed as a fraction of the ship's own top speed.
+
+        :param strafe: The strafe personality sub-dict
+        :param factor_key: The fraction key (e.g. ``"attack_speed_factor"``)
+        :return: The desired speed in m/s
+        """
+        return strafe[factor_key] * self.pawn.max_speed_mps
+
+    def _strafe_attack(
+        self, lead_direction: np.ndarray, strafe: dict
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Hold the run-in line straight onto the target's lead point (a dive, for
+        surface preys), nose steady for the guns. Firing is handled by
+        _strafe_try_fire.
+        """
+        return lead_direction, self._strafe_speed(strafe, "attack_speed_factor")
+
+    def _strafe_break(
+        self, direction: np.ndarray, surface_normal: np.ndarray, strafe: dict
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Peel hard away from the target: climb along the surface normal (biased away
+        from the target) for surface preys, else simply turn back the way we came.
+        """
+        if surface_normal is not None:
+            break_direction = surface_normal - direction
+        else:
+            break_direction = -direction
+        break_norm = np.linalg.norm(break_direction)
+        if break_norm > 1e-4:
+            break_direction = break_direction / break_norm
+        else:
+            break_direction = -direction
+        return break_direction, self._strafe_speed(strafe, "break_speed_factor")
+
+    def _strafe_reposition(
+        self, direction: np.ndarray, strafe: dict
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Extend away to rebuild distance (and speed) before coming around for the
+        next run.
+        """
+        return -direction, self._strafe_speed(strafe, "reposition_speed_factor")
 
     def compute_engage_weights(self, distance_m: float):
         """

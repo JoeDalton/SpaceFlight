@@ -24,6 +24,13 @@ RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 WEAPON_DAMAGE_TO_FORCE_FACTOR = 2.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
+# Reference scales normalising the placeholder mobility blend (see _compute_mobility)
+MOBILITY_REFERENCE_SPEED_MPS = 200.0
+MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
+# A speed above this multiple of the ship's own max is not physical (terminal
+# velocity is max_speed_mps); it only happens when the explicit integrator
+# diverges. Detected here and snapped back to terminal before it overflows.
+DIVERGENCE_SPEED_FACTOR = 4.0
 
 
 class Ship(Pawn):
@@ -96,6 +103,11 @@ class Ship(Pawn):
         )
         self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
 
+        # Manoeuverability signal in [0, 1] read by attackers' tacticians to pick
+        # PURSUIT vs STRAFE (and, later, whether a target is bomb-able). Blended
+        # once here from the kinematic limits.
+        self.mobility = self._compute_mobility()
+
         # Setup health
         self.max_health = self.conf["health"]
         self.health = self.max_health
@@ -112,6 +124,10 @@ class Ship(Pawn):
         self.position = ini_position.copy()
         self.orientation = ini_orientation.copy()
         self.speed = ini_speed.copy()
+        # Last known finite pose, used by the physics circuit-breaker to recover
+        # from a numerical divergence without crashing the renderer.
+        self._last_finite_position = self.position.copy()
+        self._last_finite_orientation = self.orientation.copy()
         self.state = np.zeros(10)  # position (3), orientation (4), speed (3)
         self.state[:3] = ini_position
         self.state[3:7] = ini_orientation
@@ -144,6 +160,13 @@ class Ship(Pawn):
             ship_type=ship_type,
             is_cockpit=is_cockpit,
         )
+
+        # Precompute a model-space (relative) bounding box for AI that needs the
+        # target's extents (the capital-ship orbit's oriented bounding box). It is
+        # computed once here in the ship's own body frame and rotated by the ship's
+        # orientation at runtime by the reader. Falls back to the collision-sphere
+        # radius when the render bounds are unavailable/degenerate.
+        self.bounding_box_half_extents = self._compute_bounding_box_half_extents()
 
         # Initialize engine sound
         if self.parent.name == "player":
@@ -179,6 +202,51 @@ class Ship(Pawn):
             name="Play_engine_sound",
             method=self.sound.play,
         )
+
+    def _compute_mobility(self) -> float:
+        """
+        Blend the ship's kinematic limits into a manoeuverability score in [0, 1].
+
+        PLACEHOLDER blend (the exact weighting is left for a later pass, see the
+        design doc): normalise the top speed and the mean turn rate against
+        reference scales and average them. Fighters land near 1, capital ships near
+        0, which is all the tactician's PURSUIT-vs-STRAFE choice needs for now.
+
+        :return: The mobility score, clamped to [0, 1]
+        """
+        speed_term = min(self.max_speed_mps / MOBILITY_REFERENCE_SPEED_MPS, 1.0)
+        mean_turn_rate_radps = (
+            self.max_pitch_rate_radps
+            + self.max_yaw_rate_radps
+            + self.max_roll_rate_radps
+        ) / 3.0
+        turn_term = min(mean_turn_rate_radps / MOBILITY_REFERENCE_TURN_RATE_RADPS, 1.0)
+        return float(0.5 * speed_term + 0.5 * turn_term)
+
+    def _compute_bounding_box_half_extents(self) -> np.ndarray:
+        """
+        Measure the render model's tight bounds in the ship's own body frame and
+        return the half-extents (X right, Y forward, Z up), in metres.
+
+        :return: The model-space bounding-box half-extents
+        """
+        fallback = float(self.conf.get("hit_box_radius_m", 10.0))
+        try:
+            bounds = self.model.model.getTightBounds(self.node)
+        except Exception:
+            bounds = None
+        if not bounds:
+            return np.array([fallback, fallback, fallback])
+        min_point, max_point = bounds
+        half_extents = 0.5 * np.array(
+            [
+                max_point[0] - min_point[0],
+                max_point[1] - min_point[1],
+                max_point[2] - min_point[2],
+            ]
+        )
+        # Guard degenerate axes (e.g. a flat model) with the collision radius.
+        return np.where(half_extents > 1e-3, half_extents, fallback)
 
     def set_inputs(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -305,8 +373,11 @@ class Ship(Pawn):
                 angle_of_attack_deg = -np.rad2deg(
                     np.arctan2(-airflow_speed_body[2], -airflow_speed_body[1])
                 )
+                # Clamp before arcsin: the ratio is mathematically in [-1, 1]
+                # (a velocity component over the speed norm) but float error can
+                # push it just past ±1, making arcsin return NaN.
                 side_slip_angle_deg = np.rad2deg(
-                    np.arcsin(airflow_speed_body[0] / speed_norm)
+                    np.arcsin(np.clip(airflow_speed_body[0] / speed_norm, -1.0, 1.0))
                 )
                 self.lift_body_n = (
                     self.lift_factor
@@ -386,6 +457,11 @@ class Ship(Pawn):
         self.orientation = self.state[3:7]
         self.speed = self.state[7:10]
 
+        # Circuit-breaker against numerical divergence (stiff manoeuvres, collision
+        # impulses): never let non-finite or runaway state reach the renderer, which
+        # would assert on a NaN/inf node transform.
+        self._sanitize_state()
+
         # Prepare next integration step
         self.compute_derivatives()
         self.integrator_idx = self.game.integrator.set_state_variables(
@@ -393,6 +469,47 @@ class Ship(Pawn):
             partial_x_dot=self.state_dot,
             partial_x_dot_previous=self.state_dot_previous,
         )
+
+    def _sanitize_state(self):
+        """
+        Physics circuit-breaker: keep non-finite or runaway state out of the
+        renderer.
+
+        Numerically stiff manoeuvres or large collision impulses can, rarely, blow
+        the integrated state up to inf/NaN, which then asserts in Panda3D when the
+        node transform is set. Rather than crash, recover: a still-finite but
+        runaway speed is clamped, and a non-finite state is reverted to the last
+        known-good pose with zeroed velocity. Both cases are logged so the
+        underlying divergence can be investigated.
+        """
+        if np.all(np.isfinite(self.state)):
+            speed_norm = np.linalg.norm(self.speed)
+            if speed_norm > DIVERGENCE_SPEED_FACTOR * self.max_speed_mps:
+                LOGGER.warning(
+                    "Ship %s speed %.3g m/s is diverging; snapping to terminal.",
+                    getattr(self.parent, "name", "?"),
+                    speed_norm,
+                )
+                # Snap the (diverging) speed back to the physical terminal speed,
+                # keeping its direction, so the ship stays in the fight.
+                self.speed = self.speed * (self.max_speed_mps / speed_norm)
+                self.state[7:10] = self.speed
+            # Record this pose as the last known-good one.
+            self._last_finite_position = self.position.copy()
+            self._last_finite_orientation = self.orientation.copy()
+            return
+
+        # Non-finite state: revert to the last good pose and stop.
+        LOGGER.warning(
+            "Non-finite state for ship %s; recovering to last finite pose.",
+            getattr(self.parent, "name", "?"),
+        )
+        self.position = self._last_finite_position.copy()
+        self.orientation = self._last_finite_orientation.copy()
+        self.speed = np.zeros(3)
+        self.state[:3] = self.position
+        self.state[3:7] = self.orientation
+        self.state[7:10] = self.speed
 
     def move(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float

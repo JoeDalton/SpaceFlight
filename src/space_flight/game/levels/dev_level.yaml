@@ -9,12 +9,13 @@
 
 waves:
   allied_patrol:
-    size: 7
+    size: 3
     ship_model: y-wing
     bot_type: fighter
     team: 1
     spawn_point: [0, -2100, 500]
     spawn_orientation: [1, 0, 0, 0]
+    record: true
     formation: { scale_m: 30, shape: arrowhead }
     waypoints:
       - [0, 0, 500]
@@ -37,20 +38,21 @@ waves:
     ship_model: gr-75
     bot_type: capital_ship
     team: 2
-    spawn_point: [0, 3000, 500]
+    spawn_point: [0, 1500, 500]
     spawn_orientation: [1, 0, 0, 0]
+    record: true
 triggers:
   # --- the original timed waves -------------------------------------------
-  # - name: allied_patrol
-  #   when: { after_seconds: 2 }
-  #   then:
-  #     all:
-  #       - { hud_text: "Allies have arrived" }
-  #       - { spawn: allied_patrol }
-  #       - speech:
-  #           speaker: "Gold Leader"
-  #           text: "Gold squadron reporting in. We've got your back."
-  #           display_time_s: 5
+  - name: allied_patrol
+    when: { after_seconds: 2 }
+    then:
+      all:
+        - { hud_text: "Allies have arrived" }
+        - { spawn: allied_patrol }
+        - speech:
+            speaker: "Gold Leader"
+            text: "Gold squadron reporting in. We've got your back."
+            display_time_s: 5
   - name: enemy_frigate
     when: { after_seconds: 3 }
     then:

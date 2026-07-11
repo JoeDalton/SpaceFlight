@@ -54,16 +54,18 @@ class FighterPilot(GenericShipPilot):
             # Clip roll error to zero if pitch and roll errors are small enough
             if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
                 roll_error = 0.0
-            # Take into account the scene's orientation
+            # Take into account the scene's orientation. Clamp the dot to [-1, 1]
+            # before arccos: right and up are unit vectors so it is mathematically
+            # in range, but float error can nudge it just past ±1, which would make
+            # arccos return NaN and poison the whole state.
+            right_dot_up = np.clip(
+                np.dot(self.pawn.right, self.game.scene.up_direction), -1.0, 1.0
+            )
             is_up = np.dot(self.pawn.up, self.game.scene.up_direction) >= 0
             if is_up:
-                scene_roll_error = HALF_PI - np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+                scene_roll_error = HALF_PI - np.arccos(right_dot_up)
             else:
-                scene_roll_error = HALF_PI + np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+                scene_roll_error = HALF_PI + np.arccos(right_dot_up)
             roll_error += SCENE_ROLL_MULTIPLIER * scene_roll_error
             # Debug output
             cos_angle_to_target = np.dot(ship_y, target_direction)

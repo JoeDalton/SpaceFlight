@@ -228,6 +228,18 @@ class CapitalShip(Ship):
             roll_rate=roll_rate,
         )
 
+    @property
+    def shield_level(self) -> float:
+        """
+        A capital ship's shield is a :class:`Shield` object (or ``None`` when the
+        ship has no shield generators); expose its strength as a plain scalar.
+
+        :return: The current shield strength, or 0 when unshielded
+        """
+        if self.shield is None:
+            return 0.0
+        return self.shield.get_shield_level()
+
     def apply_damage(self, damage: float, damage_type: str):
         """
         Apply damage to the ship

@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-from space_flight import DEBUG_DELETION
+from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
 
@@ -29,6 +29,13 @@ class GenericNavigator:
         self.behaviour = "idle"
         self.behaviour_duration_s = 0.0
         self.last_update_time = self.game.game_time.get_current_time()
+        # Sub-state of an ENGAGE (e.g. the strafe run's phase). Reset to "" by the
+        # non-engage intents. Initialised here so it is always defined.
+        self.engage_phase = ""
+        # Per-run phase offset for the evasive weave, so successive runs (and the
+        # weave itself) are not a predictable clean sinusoid. Reseeded when a run
+        # starts (see the strafe ingress).
+        self.weave_phase_rad = 0.0
 
     def navigate(self, intent: int, target_dict: dict):
         """
@@ -63,6 +70,14 @@ class GenericNavigator:
                     f"to behaviour {behaviour}"
                 )
         self.last_update_time = current_time
+
+        # Step-by-step recording of the navigator phase, for forensic analysis.
+        if RECORD_GAME and getattr(self.pawn.parent, "record", False):
+            name = self.pawn.parent.name
+            self.game.record.record(f"{name}_behaviour", self.behaviour)
+            self.game.record.record(
+                f"{name}_behaviour_duration_s", float(self.behaviour_duration_s)
+            )
 
     def compute_constant_angle_pursuit(
         self, direction: np.ndarray, distance_m: float, lateral_speed_vector: np.ndarray
@@ -113,6 +128,46 @@ class GenericNavigator:
             target_future_direction /= target_future_distance_m
 
         return target_future_direction
+
+    def compute_evasive_weave(
+        self,
+        base_direction: np.ndarray,
+        up_reference: np.ndarray,
+        amplitude: float,
+        frequency_hz: float,
+    ) -> np.ndarray:
+        """
+        Superimpose a lateral weave on an approach direction so the ship is a
+        harder firing solution while still net-closing.
+
+        The weave is in the plane perpendicular to ``up_reference`` (so it does not
+        change altitude when that reference is the surface normal), oscillates with
+        ``behaviour_duration_s`` plus the per-run :attr:`weave_phase_rad`, and its
+        strength is set by ``amplitude`` (the caller ramps that down as the target
+        nears, which also steadies the nose for firing).
+
+        :param base_direction: The unit approach direction to weave around
+        :param up_reference: The axis kept free of weave (world up or surface normal)
+        :param amplitude: Lateral strength added to the unit direction
+        :param frequency_hz: Weave frequency
+        :return: The weaved unit direction (or ``base_direction`` if degenerate)
+        """
+        if amplitude <= 0.0:
+            return base_direction
+        lateral = np.cross(base_direction, up_reference)
+        lateral_norm = np.linalg.norm(lateral)
+        if lateral_norm < 1e-4:
+            return base_direction
+        lateral /= lateral_norm
+
+        offset = amplitude * np.sin(
+            2 * np.pi * frequency_hz * self.behaviour_duration_s + self.weave_phase_rad
+        )
+        weaved = base_direction + offset * lateral
+        weaved_norm = np.linalg.norm(weaved)
+        if weaved_norm < 1e-4:
+            return base_direction
+        return weaved / weaved_norm
 
     def clean(self):
         self.pawn = None

@@ -45,7 +45,8 @@ def spawn_wave(cfg: dict) -> Action:
     stalls the simulation on a single long loading frame.
 
     Expected ``cfg`` keys: ``id``, ``size``, ``ship_model``, ``spawn_point``.
-    Optional: ``bot_type``, ``team``, ``spawn_orientation``, ``formation``
+    Optional: ``bot_type``, ``team``, ``spawn_orientation``, ``formation``,
+    ``record`` (step-by-step-record every bot of this wave via ``game.record``)
     (``{scale_m, shape}``), ``waypoints``, ``loop``, ``target``, ``hud_text``,
     ``hud_time_s``, ``allow_respawn``.
 
@@ -124,6 +125,7 @@ def _spawn_wave_job(game: FlightState, cfg: dict) -> Iterator[None]:
             ini_orientation=orientation,
             team=cfg.get("team", 2),
             debug_decisions=False,
+            record=cfg.get("record", False),
         )
         if formation is not None:
             formation.add_ship(ship=bot.pawn)

@@ -91,6 +91,15 @@ class Fighter(Ship):
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
 
+    @property
+    def shield_level(self) -> float:
+        """
+        A fighter's shield is a plain scalar pool.
+
+        :return: The current shield strength
+        """
+        return self.shield
+
     def apply_damage(self, damage: float, damage_type: str):
         """
         Apply damage to the ship

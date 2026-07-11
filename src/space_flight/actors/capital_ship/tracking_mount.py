@@ -117,25 +117,6 @@ class TrackingMount(SubSystem):
         self.set_yaw(self.state[0])
         self.set_pitch(self.state[1])
 
-    @property
-    def speed(self):
-        """
-        The mount's velocity: it is bolted to a moving ship, so it *is* the host
-        ship's velocity, read live rather than mirrored.
-
-        This keeps kinematics-dependent effects matched to the ship without any
-        per-frame bookkeeping: the death explosion carries the ship's velocity
-        (the mount is a Bot *and* a subsystem, so it is the Bot's ``play_death``,
-        reading ``pawn.speed``, that fires it), and a turret's shots inherit the
-        ship's motion. It is consistent with the interaction velocities, so lead
-        aim is unaffected.
-
-        :return: The host ship's velocity, or zeros once detached (cleaned)
-        """
-        if getattr(self, "mounted_on", None) is None:
-            return np.zeros(3)
-        return np.asarray(getattr(self.mounted_on, "speed", np.zeros(3)), dtype=float)
-
     def move(self, yaw_rate: float, pitch_rate: float):
         """
         Moves the mount given its turn rates.

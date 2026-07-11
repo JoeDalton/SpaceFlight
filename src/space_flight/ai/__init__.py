@@ -26,6 +26,24 @@ class Intent(Enum):
     IDLE = auto()
 
 
+class AttackMode(Enum):
+    """
+    How a bot attacks a target once its tactician has chosen ``Intent.ENGAGE``.
+
+    Carried in ``target_dict["attack_mode"]`` (the tactician decides, the
+    navigator executes). ``PURSUIT`` is the historical constant-angle chase,
+    good against agile prey; ``STRAFE`` is a committed run-in/fire/break/reposition
+    cycle for slow or immobile targets; ``ORBIT`` keeps a target abeam on a capital
+    ship's turret flank. ``BOMB`` is reserved for Phase 2 (the bomb weapon does not
+    exist yet).
+    """
+
+    PURSUIT = auto()
+    STRAFE = auto()
+    ORBIT = auto()
+    BOMB = auto()  # Phase 2, not yet implemented
+
+
 class Personality:
     """
     Definition of pre-baked bot personalities
@@ -42,6 +60,9 @@ class Personality:
             "hunter_angular_focus": 0.3,
             "prey_cutoff_distance": 800.0,
             "prey_angular_focus": 1.0,
+            # Below this target mobility, engage with a STRAFE run rather than a
+            # PURSUIT chase (a slow/immobile prey can't be chased sensibly).
+            "strafe_mobility_threshold": 0.35,
             "intent_update_delay": 0.5,
             "commitment_times": {
                 Intent.ENGAGE: 10.0,
@@ -103,6 +124,42 @@ class Personality:
                 "maximal_lateral_speed_mps": 50.0,
             },
             "reposition": {"minimum_time_to_overshoot_s": 0.5},
+            # Strafing run: a committed ingress -> attack -> break -> reposition
+            # cycle for slow/immobile targets. The corridor + altitude-floor keys
+            # only take effect when the target carries surface info (surface-mounted
+            # preys); otherwise the run is a straight open-space pass.
+            "strafe": {
+                "attack_distance_m": 700.0,  # ingress -> attack transition
+                "break_distance_m": 150.0,  # attack -> break (reached point-blank)
+                # The attack presses in until point-blank; it only peels off early
+                # if it is about to overshoot or has stalled (can't close). There is
+                # no fixed attack timer.
+                "stall_time_s": 2.5,  # grace before the stall check applies
+                "minimum_closing_speed_mps": 30.0,  # below this = stalled -> break
+                # Fly at where the target will be on arrival: lead by the closing
+                # time (distance / closing_speed), capped so a slow closure at long
+                # range doesn't aim wildly ahead (it converges to the exact lead as
+                # the gap shrinks).
+                "max_lead_time_s": 5.0,
+                "break_duration_s": 1.5,  # committed break, no immediate re-lock
+                "reposition_distance_m": 900.0,  # reposition -> ingress when beyond
+                "reposition_min_duration_s": 3.0,  # ...and committed at least this long
+                #   so the run flies out and swings around before the next pass
+                # Speeds are fractions of the ship's own max_speed_mps: absolute
+                # values well above it just pin the throttle and push the explicit
+                # integrator into divergence (see Ship._sanitize_state).
+                "ingress_speed_factor": 1.0,
+                "attack_speed_factor": 0.85,
+                "break_speed_factor": 0.6,
+                "reposition_speed_factor": 1.0,
+                "fire_min_cos_angle": np.cos(np.deg2rad(15)),  # wider than pursuit
+                "run_altitude_m": 150.0,  # corridor altitude above the surface
+                "altitude_floor_m": 60.0,  # hard recovery floor (surface targets)
+                "corridor_avoidance_factor": 0.1,  # down-weight sensor in corridor
+                "swivel_amplitude": 0.0,  # lateral weave strength (added to dir)
+                "swivel_frequency_hz": 0.5,
+                "swivel_distance_scale_m": 800.0,  # amplitude ramps within this range
+            },
         },
         "pilot": {
             "sample_time_s": 0.1,
@@ -230,6 +287,21 @@ class Personality:
                 "relative_direction": np.array([0, 1, 0]),
                 "distance_m": 500,
                 "speed_mps": 50,
+            },
+            # Orbit: hold a constant standoff from the target's oriented bounding
+            # box and drive tangentially, so the shape follows the target (a circle
+            # for compact targets, a racetrack for long ones) and the target stays
+            # abeam on the turret flank.
+            "orbit": {
+                "standoff_clearance_m": 300.0,  # added to the target half-width
+                "orbit_speed_mps": 40.0,
+                "radial_gain": 0.01,  # how hard to correct the standoff distance
+                "direction": 1.0,  # orbit sense s in {+1, -1}, sets the turret side
+                "altitude_stagger_m": 50.0,  # sit off the exact target plane
+                "vertical_gain": 0.01,
+                # Placeholder floor keeping the bow/stern caps flyable for a slow
+                # ship. TODO derive from the ship's real min turn radius at speed.
+                "min_turn_radius_m": 400.0,
             },
         },
         "pilot": {

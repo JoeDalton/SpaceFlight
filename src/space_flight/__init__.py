@@ -17,7 +17,7 @@ CACHE_PATH = Path(__file__).parent.parent.parent / ".cache"
 
 DEBUG_DELETION = False
 DEBUG_COLLISION = False
-RECORD_GAME = False
+RECORD_GAME = True
 FLIGHT_MODEL = "airplane"  # "airplane", "space"
 
 FORWARD_BODY = np.array([0.0, 1.0, 0.0])

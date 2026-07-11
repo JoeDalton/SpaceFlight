@@ -31,11 +31,9 @@ def make_capital_ship_tactician(
     pawn.health = health
     pawn.team = 1
     pawn.formation = None
-    if shield_level is None:
-        pawn.shield = None
-    else:
-        pawn.shield = MagicMock()
-        pawn.shield.get_shield_level.return_value = shield_level
+    # shield_level is the uniform property read by evaluate_fighting_shape; a ship
+    # with no shield reports 0.
+    pawn.shield_level = 0.0 if shield_level is None else shield_level
     return CapitalShipTactician(
         game=mock_game, pawn=pawn, personality=Personality.CAPITAL_SHIP_DEFAULT
     )

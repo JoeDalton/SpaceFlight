@@ -77,6 +77,9 @@ class PauseMenuState(BaseState):
         self.quit_button.show()
 
     def return_to_main(self):
+        if RECORD_GAME:
+            # Record game logs
+            self.app.state_manager.stack[-2].record.save()
         self.app.state_manager.clear()
         self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
 

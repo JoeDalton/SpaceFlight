@@ -41,7 +41,7 @@ def build_dev_upfront(game: FlightState) -> None:
         # ship_type="tie-fighter",
         # ship_type="tie-bomber",
         ini_position=np.array([100, -800, 505]),
-        is_neutral=False,
+        is_neutral=True,
         has_ai=False,
         record=True,
     )
