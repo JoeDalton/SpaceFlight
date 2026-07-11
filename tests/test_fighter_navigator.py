@@ -13,6 +13,24 @@ import pytest
 
 from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
+from space_flight.utils.state_machine import StateMachine
+
+
+class _Clock:
+    """A controllable time source for the behaviour state machine."""
+
+    def __init__(self, t: float = 0.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def _enter_behaviour(nav, name: str, duration_s: float = 0.0):
+    """Put the navigator in *name* with the given time-in-state on its clock."""
+    nav._clock.t = 0.0
+    nav.behaviour_sm.request(name, force=True)
+    nav._clock.t = duration_s
 
 
 def make_fighter_navigator(
@@ -30,15 +48,16 @@ def make_fighter_navigator(
         personality = Personality.FIGHTER_DEFAULT
     nav = object.__new__(FighterNavigator)
     nav.game = MagicMock()
-    nav.game.game_time.get_current_time.return_value = 0.0
+    clock = _Clock()
+    nav._clock = clock
+    nav.game.game_time.get_current_time.side_effect = clock
     nav.pawn = MagicMock()
     nav.pawn.position = np.zeros(3) if pawn_position is None else pawn_position.copy()
     nav.pawn.max_speed_mps = 500.0
     nav.pawn.parent = MagicMock()
     nav.personality = personality
     nav.debug = False
-    nav.behaviour = "idle"
-    nav.behaviour_duration_s = 0.0
+    nav.behaviour_sm = StateMachine("idle", clock=clock)
     nav.last_update_time = 0.0
     nav.waypoints = []
     nav.next_waypoint_idx = 0
@@ -123,8 +142,7 @@ def test_check_extend_conditions_velocity_condition_not_met_returns_false():
     already-extending condition holds, check_extend_conditions returns False.
     """
     nav = make_fighter_navigator()
-    nav.behaviour = "pursuit"
-    nav.behaviour_duration_s = 10.0
+    _enter_behaviour(nav, "pursuit", 10.0)
     nav.time_in_spiral_s = 0.0
 
     result = nav.check_extend_conditions(
@@ -141,9 +159,8 @@ def test_check_extend_conditions_already_extending_not_long_enough_returns_true(
     the minimum required duration, the condition must remain True.
     """
     nav = make_fighter_navigator()
-    nav.behaviour = "extend"
     minimum_duration = nav.personality["navigator"]["extend"]["minimum_duration_s"]
-    nav.behaviour_duration_s = minimum_duration * 0.3  # too short
+    _enter_behaviour(nav, "extend", minimum_duration * 0.3)  # too short
 
     result = nav.check_extend_conditions(
         longitudinal_speed_scalar_mps=500.0,
@@ -160,9 +177,8 @@ def test_check_extend_conditions_already_extending_long_enough_returns_false():
     (assuming velocity conditions are not met).
     """
     nav = make_fighter_navigator()
-    nav.behaviour = "extend"
     minimum_duration = nav.personality["navigator"]["extend"]["minimum_duration_s"]
-    nav.behaviour_duration_s = minimum_duration * 2.0  # long enough
+    _enter_behaviour(nav, "extend", minimum_duration * 2.0)  # long enough
     nav.time_in_spiral_s = 0.0
 
     result = nav.check_extend_conditions(
@@ -317,7 +333,7 @@ def test_compute_evasive_weave_stays_in_plane_and_unit():
     unit vector in the horizontal plane (no vertical component introduced).
     """
     nav = make_fighter_navigator()
-    nav.behaviour_duration_s = 0.3
+    nav._clock.t = 0.3  # behaviour_duration_s -> 0.3
     nav.weave_phase_rad = 1.0
 
     result = nav.compute_evasive_weave(
@@ -508,8 +524,7 @@ def test_strafe_attack_presses_in_while_closing():
     nav = make_fighter_navigator()
     _augment_pawn_for_strafe(nav)
     strafe = nav.personality["navigator"]["strafe"]
-    nav.behaviour = "strafe_attack"
-    nav.behaviour_duration_s = 10.0  # well past the old timer
+    _enter_behaviour(nav, "strafe_attack", 10.0)  # well past the old timer
     target_dict = _strafe_target_dict(400.0)
     target_dict["longitudinal_speed_scalar_mps"] = -200.0  # closing at 200 m/s
 
@@ -553,8 +568,7 @@ def test_strafe_attack_breaks_when_stalled():
     nav = make_fighter_navigator()
     _augment_pawn_for_strafe(nav)
     strafe = nav.personality["navigator"]["strafe"]
-    nav.behaviour = "strafe_attack"
-    nav.behaviour_duration_s = strafe["stall_time_s"] + 1.0
+    _enter_behaviour(nav, "strafe_attack", strafe["stall_time_s"] + 1.0)
     # longitudinal 0 -> closing 0 (stalled)
     target_dict = _strafe_target_dict(400.0)
 

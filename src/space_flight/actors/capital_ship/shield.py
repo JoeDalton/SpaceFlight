@@ -9,6 +9,7 @@ from space_flight.game.collisions import (
     attach_collision_sphere,
     attach_collision_tube,
 )
+from space_flight.utils.state_machine import Cooldown, StateMachine
 
 LOGGER = logging.getLogger()
 
@@ -111,14 +112,22 @@ class Shield(Destructible):
         self.is_enabled = True
 
         # --- Animation / lifecycle state ---
-        self.state = _UP
+        self.state_sm = StateMachine(
+            initial_state=_UP, clock=self.game.game_time.get_current_time
+        )
         # uDeath in [0, 1]: 0 fully materialised (alive), 1 fully drained (gone).
+        # Kept as an explicit float (not derived from time-in-state) so it stays
+        # continuous when a death animation is interrupted by an appearance.
         self._u = 0.0
         # True once every generator/the ship is destroyed: we keep get_health
         # positive until the death animation finishes, then report zero.
         self._final_death = False
-        # Time of the last absorbed hit; regeneration waits a cooldown past it.
-        self._last_hit_time = -1.0e9
+        # Regeneration waits a cooldown past the last absorbed hit (doubled while
+        # the shield is down); ready before any hit is taken.
+        self.regen_cooldown = Cooldown(
+            duration_s=_REGEN_COOLDOWN_S,
+            clock=self.game.game_time.get_current_time,
+        )
 
         # Anchor node centred on the ship, holding both the visible bubble and the
         # collision solid so the two geometries coincide.
@@ -139,6 +148,11 @@ class Shield(Destructible):
 
         # Regenerate and refresh our state every frame (we are our own Destructible)
         self.add_task(method=self.update)
+
+    @property
+    def state(self) -> str:
+        """The shield lifecycle state (up / dying / down / appearing)."""
+        return self.state_sm.state
 
     def _build_collision(self, model: str):
         """
@@ -200,7 +214,7 @@ class Shield(Destructible):
             place the shader's impact flash (optional)
         """
         now = self.game.game_time.get_current_time()
-        self._last_hit_time = now
+        self.regen_cooldown.trigger()
         self.apply_damage(damage=damage, damage_type="physical")
         if hit_world_point is not None:
             self.model.add_impact(hit_world_point, self.game.root_node, now)
@@ -251,13 +265,14 @@ class Shield(Destructible):
     def _begin_death(self):
         """Start the fluid retraction (shield collapsing while still alive)."""
         self.model.place_sinks()
-        self.state = _DYING  # _u continues from its current value (0 when up)
+        # _u continues from its current value (0 when up)
+        self.state_sm.request(_DYING, force=True)
 
     def _begin_appear(self):
         """Start the appearance animation (death played in reverse)."""
         self.model.place_sinks()
         self._u = 1.0
-        self.state = _APPEARING
+        self.state_sm.request(_APPEARING, force=True)
 
     def _begin_final_death(self):
         """
@@ -280,7 +295,7 @@ class Shield(Destructible):
         # mid-animation, to avoid a discontinuity.
         if self.state == _UP:
             self.model.place_sinks()
-        self.state = _DYING
+        self.state_sm.request(_DYING, force=True)
 
     def update(self):
         """
@@ -303,11 +318,11 @@ class Shield(Destructible):
         if self.state == _DYING:
             self._u = min(1.0, self._u + dt / _DEATH_DURATION_S)
             if self._u >= 1.0:
-                self.state = _DOWN
+                self.state_sm.request(_DOWN, force=True)
         elif self.state == _APPEARING:
             self._u = max(0.0, self._u - dt / _APPEAR_DURATION_S)
             if self._u <= 0.0:
-                self.state = _UP
+                self.state_sm.request(_UP, force=True)
 
         if not self._final_death:
             # Pro-rata perks: scale the maximum strength and regeneration by the
@@ -326,10 +341,8 @@ class Shield(Destructible):
             # Regenerate, but only after a cooldown since the last hit (doubled
             # while the shield is down).
             if self.regen_rate > 0.0 and self.health < self.max_health:
-                cooldown = _REGEN_COOLDOWN_S * (
-                    _DOWN_COOLDOWN_MULT if self.state != _UP else 1.0
-                )
-                if now - self._last_hit_time >= cooldown:
+                multiplier = _DOWN_COOLDOWN_MULT if self.state != _UP else 1.0
+                if self.regen_cooldown.ready(multiplier=multiplier):
                     self.health = min(
                         self.max_health, self.health + self.regen_rate * dt
                     )

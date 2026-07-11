@@ -5,6 +5,7 @@ import numpy as np
 from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
+from space_flight.utils.state_machine import StateMachine
 
 LOGGER = logging.getLogger()
 
@@ -26,8 +27,11 @@ class GenericNavigator:
         self.pawn: Pawn = pawn
         self.personality: dict = personality
         self.debug = debug
-        self.behaviour = "idle"
-        self.behaviour_duration_s = 0.0
+        # The current behaviour is the navigator's FSM state ("idle", "pursuit",
+        # "strafe_ingress", ...); behaviour_duration_s is its time-in-state.
+        self.behaviour_sm = StateMachine(
+            initial_state="idle", clock=self.game.game_time.get_current_time
+        )
         self.last_update_time = self.game.game_time.get_current_time()
         # Sub-state of an ENGAGE (e.g. the strafe run's phase). Reset to "" by the
         # non-engage intents. Initialised here so it is always defined.
@@ -36,6 +40,16 @@ class GenericNavigator:
         # weave itself) are not a predictable clean sinusoid. Reseeded when a run
         # starts (see the strafe ingress).
         self.weave_phase_rad = 0.0
+
+    @property
+    def behaviour(self) -> str:
+        """The current behaviour (the behaviour state machine's state)."""
+        return self.behaviour_sm.state
+
+    @property
+    def behaviour_duration_s(self) -> float:
+        """How long the current behaviour has been running."""
+        return self.behaviour_sm.time_in_state_s
 
     def navigate(self, intent: int, target_dict: dict):
         """
@@ -57,26 +71,24 @@ class GenericNavigator:
         :param behaviour: A str describing the behaviour currently in play
         """
         current_time = self.game.game_time.get_current_time()
-        if behaviour == self.behaviour:
-            # Increment time since last navigator update
-            self.behaviour_duration_s += current_time - self.last_update_time
-        else:
-            # Reset counter and record new behaviour
-            self.behaviour_duration_s = 0.0
-            self.behaviour = behaviour
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name} switched "
-                    f"to behaviour {behaviour}"
-                )
+        # The state machine resets time-in-state on an actual change and accrues it
+        # otherwise; a request for the current behaviour is a no-op.
+        changed = self.behaviour_sm.request(behaviour)
+        if changed and self.debug:
+            LOGGER.info(
+                f"Navigator {self.pawn.parent.name} switched to behaviour {behaviour}"
+            )
+        # Kept for the spiral accumulator in check_extend_conditions, which measures
+        # time between navigator frames.
         self.last_update_time = current_time
 
         # Step-by-step recording of the navigator phase, for forensic analysis.
         if RECORD_GAME and getattr(self.pawn.parent, "record", False):
             name = self.pawn.parent.name
-            self.game.record.record(f"{name}_behaviour", self.behaviour)
+            self.game.record.record(f"{name}_behaviour", self.behaviour_sm.state)
             self.game.record.record(
-                f"{name}_behaviour_duration_s", float(self.behaviour_duration_s)
+                f"{name}_behaviour_duration_s",
+                float(self.behaviour_sm.time_in_state_s),
             )
 
     def compute_constant_angle_pursuit(

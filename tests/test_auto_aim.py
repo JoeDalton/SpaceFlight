@@ -12,7 +12,18 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.ai.auto_aim import AutoAim
+from space_flight.ai.auto_aim import _ACQUIRING, AutoAim
+from space_flight.utils.state_machine import StateMachine
+
+
+class _Clock:
+    """A controllable time source for the acquisition state machine."""
+
+    def __init__(self, t: float = 0.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
 
 
 def make_auto_aim(
@@ -32,9 +43,11 @@ def make_auto_aim(
     auto_aim.game = MagicMock()
     auto_aim.parent = MagicMock()
     auto_aim.previous_target_id = None
-    auto_aim.is_target_acquired = False
+    clock = _Clock()
+    auto_aim._clock = clock
+    auto_aim.acquisition_sm = StateMachine(initial_state=_ACQUIRING, clock=clock)
+    auto_aim.game.game_time.get_current_time.side_effect = clock
     auto_aim.target_lock_delay_s = target_lock_delay_s
-    auto_aim.acquisition_elapsed_time_s = 0.0
     auto_aim.min_acquisition_alignment = np.cos(np.deg2rad(acquisition_cone_angle_deg))
     auto_aim.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
     auto_aim.inv_max_assist_tan_angle = 1.0 / np.tan(np.deg2rad(max_assist_angle_deg))
@@ -97,7 +110,7 @@ def test_compute_acquisition_no_target_resets_elapsed_time():
     target.
     """
     auto_aim = make_auto_aim()
-    auto_aim.acquisition_elapsed_time_s = 0.8
+    auto_aim._clock.t = 0.8  # some acquisition progress
     auto_aim.parent.target_id = None
 
     auto_aim.compute_acquisition()
@@ -120,7 +133,7 @@ def test_compute_acquisition_new_target_resets_elapsed_time():
     auto_aim = make_auto_aim()
     auto_aim.previous_target_id = old_id
     auto_aim.parent.target_id = new_id
-    auto_aim.acquisition_elapsed_time_s = 0.9
+    auto_aim._clock.t = 0.9  # some progress on the old target
 
     auto_aim.compute_acquisition()
 
@@ -160,7 +173,7 @@ def test_compute_acquisition_target_in_cone_not_yet_acquired_after_short_time():
     auto_aim.parent.target_id = target_id
     auto_aim.previous_target_id = target_id
     auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim.game.game_time.get_time_step.return_value = 0.5
+    auto_aim._clock.t = 0.5  # held for 0.5s, below the 2.0s lock delay
 
     _set_up_interactions_for_acquisition(
         auto_aim, target_direction=np.array([0.0, 1.0, 0.0])
@@ -181,9 +194,8 @@ def test_compute_acquisition_target_in_cone_acquired_after_sufficient_time():
     auto_aim = make_auto_aim(target_lock_delay_s=1.0)
     auto_aim.parent.target_id = target_id
     auto_aim.previous_target_id = target_id
-    auto_aim.acquisition_elapsed_time_s = 0.8
     auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim.game.game_time.get_time_step.return_value = 0.5
+    auto_aim._clock.t = 1.3  # held past the 1.0s lock delay
 
     _set_up_interactions_for_acquisition(
         auto_aim, target_direction=np.array([0.0, 1.0, 0.0])
@@ -208,10 +220,9 @@ def test_compute_acquisition_target_outside_cone_resets_elapsed_time():
     auto_aim = make_auto_aim(acquisition_cone_angle_deg=5.0)
     auto_aim.parent.target_id = target_id
     auto_aim.previous_target_id = target_id
-    auto_aim.acquisition_elapsed_time_s = 0.9
+    auto_aim._clock.t = 0.9  # some progress before it drifts out of the cone
     # Target is 90° to the side — well outside a 5° cone
     auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim.game.game_time.get_time_step.return_value = 0.1
 
     _set_up_interactions_for_acquisition(
         auto_aim, target_direction=np.array([1.0, 0.0, 0.0])
@@ -235,8 +246,7 @@ def test_compute_shot_speed_without_acquisition_fires_forward():
     """
     from space_flight.actors.laser_cannon import LASER_SPEED_MPS
 
-    auto_aim = make_auto_aim()
-    auto_aim.is_target_acquired = False
+    auto_aim = make_auto_aim()  # starts unlocked (acquiring)
     forward = np.array([0.0, 1.0, 0.0])
     parent_speed = np.array([10.0, 0.0, 0.0])
     auto_aim.parent.forward = forward

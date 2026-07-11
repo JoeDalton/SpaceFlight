@@ -15,6 +15,7 @@ import pytest
 from space_flight.ai import Intent, Personality
 from space_flight.ai.capital_ship.capital_ship_navigator import CapitalShipNavigator
 from space_flight.ai.generic.generic_ship_navigator import NO_DIRECTION
+from space_flight.utils.state_machine import StateMachine
 
 
 def make_capital_ship_navigator(
@@ -35,8 +36,7 @@ def make_capital_ship_navigator(
     nav.pawn.parent = MagicMock()
     nav.personality = Personality.CAPITAL_SHIP_DEFAULT
     nav.debug = False
-    nav.behaviour = "idle"
-    nav.behaviour_duration_s = 0.0
+    nav.behaviour_sm = StateMachine("idle", clock=nav.game.game_time.get_current_time)
     nav.last_update_time = 0.0
     nav.waypoints = []
     nav.next_waypoint_idx = 0

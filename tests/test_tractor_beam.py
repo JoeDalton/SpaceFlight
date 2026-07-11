@@ -12,10 +12,25 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
+from space_flight.actors.capital_ship.tractor_beam import (
+    _GRABBING,
+    _SEARCHING,
+    TractorBeamProjector,
+)
 from space_flight.ai import Personality
+from space_flight.utils.state_machine import Cooldown, StateMachine
 
 GRAB = Personality.TRACTOR_BEAM_DEFAULT["tractor_beam"]
+
+
+class _Clock:
+    """A controllable time source for the grab state machine / cooldown."""
+
+    def __init__(self, t: float = 0.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
 
 
 def make_prey(position, speed, prey_id="prey"):
@@ -46,13 +61,15 @@ def make_tractor(prey=None, host_speed=(0.0, 0.0, 0.0)):
     tractor.forward = np.array([0.0, 1.0, 0.0])
     tractor.mounted_on = SimpleNamespace(speed=np.array(host_speed, dtype=float))
 
-    tractor.is_grabbing = False
+    clock = _Clock()
+    tractor._clock = clock
+    tractor.grab_sm = StateMachine(initial_state=_SEARCHING, clock=clock)
     tractor.grabbed_prey_id = None
-    tractor.grab_start_time = None
-    tractor.last_release_time = None
+    tractor.regrab_cooldown = Cooldown(GRAB["regrab_cooldown_s"], clock=clock)
     tractor.target_id = prey.id if prey is not None else None
 
     tractor.game = MagicMock()
+    tractor.game.game_time.get_current_time.side_effect = clock
     if prey is not None:
         tractor.game.interactions.get_actor_index_from_id.return_value = 0
         tractor.game.interactions.actors = [prey]
@@ -95,7 +112,7 @@ def test_acquire_when_prey_in_cone_and_range():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = make_tractor(prey=prey)
 
-    tractor._try_acquire(now=0.0)
+    tractor._try_acquire()
 
     assert tractor.is_grabbing is True
     assert tractor.grabbed_prey_id == prey.id
@@ -109,7 +126,7 @@ def test_no_acquire_when_prey_outside_cone():
     prey = make_prey(position=[100.0, 0.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = make_tractor(prey=prey)
 
-    tractor._try_acquire(now=0.0)
+    tractor._try_acquire()
 
     assert tractor.is_grabbing is False
 
@@ -121,7 +138,7 @@ def test_no_acquire_when_prey_out_of_range():
     prey = make_prey(position=[0.0, 900.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = make_tractor(prey=prey)
 
-    tractor._try_acquire(now=0.0)
+    tractor._try_acquire()
 
     assert tractor.is_grabbing is False
 
@@ -132,9 +149,10 @@ def test_no_acquire_during_regrab_cooldown():
     """
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = make_tractor(prey=prey)
-    tractor.last_release_time = 0.0
+    tractor.regrab_cooldown.trigger()  # just released, at t=0
 
-    tractor._try_acquire(now=GRAB["regrab_cooldown_s"] - 0.5)
+    tractor._clock.t = GRAB["regrab_cooldown_s"] - 0.5  # still cooling down
+    tractor._try_acquire()
 
     assert tractor.is_grabbing is False
 
@@ -170,9 +188,9 @@ def test_apply_tractor_forces_drag_and_attraction():
 
 def _grabbing_tractor(prey, start_time=0.0):
     tractor = make_tractor(prey=prey)
-    tractor.is_grabbing = True
+    tractor._clock.t = start_time
+    tractor.grab_sm.request(_GRABBING, force=True)
     tractor.grabbed_prey_id = prey.id
-    tractor.grab_start_time = start_time
     return tractor
 
 
@@ -183,7 +201,8 @@ def test_service_grab_applies_forces_while_held():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 5.0, 0.0])
     tractor = _grabbing_tractor(prey)
 
-    tractor._service_grab(now=1.0)  # before min_grab_time, still holding
+    tractor._clock.t = 1.0  # before min_grab_time, still holding
+    tractor._service_grab()
 
     assert tractor.is_grabbing is True
     prey.apply_external_force.assert_called_once()
@@ -196,7 +215,8 @@ def test_service_grab_releases_after_max_time():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = _grabbing_tractor(prey)
 
-    tractor._service_grab(now=GRAB["max_grab_time_s"] + 0.1)
+    tractor._clock.t = GRAB["max_grab_time_s"] + 0.1
+    tractor._service_grab()
 
     assert tractor.is_grabbing is False
     prey.apply_external_force.assert_not_called()
@@ -211,7 +231,8 @@ def test_service_grab_releases_when_fast_after_min_time():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, fast, 0.0])
     tractor = _grabbing_tractor(prey)
 
-    tractor._service_grab(now=GRAB["min_grab_time_s"] + 0.1)
+    tractor._clock.t = GRAB["min_grab_time_s"] + 0.1
+    tractor._service_grab()
 
     assert tractor.is_grabbing is False
 
@@ -224,7 +245,8 @@ def test_service_grab_holds_fast_prey_before_min_time():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, fast, 0.0])
     tractor = _grabbing_tractor(prey)
 
-    tractor._service_grab(now=GRAB["min_grab_time_s"] - 0.5)
+    tractor._clock.t = GRAB["min_grab_time_s"] - 0.5
+    tractor._service_grab()
 
     assert tractor.is_grabbing is True
     prey.apply_external_force.assert_called_once()
@@ -237,7 +259,8 @@ def test_service_grab_releases_when_out_of_range():
     prey = make_prey(position=[0.0, 900.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = _grabbing_tractor(prey)
 
-    tractor._service_grab(now=1.0)
+    tractor._clock.t = 1.0
+    tractor._service_grab()
 
     assert tractor.is_grabbing is False
 
@@ -251,7 +274,8 @@ def test_service_grab_releases_when_prey_gone():
     # Prey no longer resolvable.
     tractor.game.interactions.get_actor_index_from_id.side_effect = ValueError
 
-    tractor._service_grab(now=1.0)
+    tractor._clock.t = 1.0
+    tractor._service_grab()
 
     assert tractor.is_grabbing is False
 
@@ -269,7 +293,7 @@ def test_start_grab_plays_sfx_when_grabbing_the_player():
     tractor = make_tractor(prey=prey)
     tractor.game.player.pawn.id = prey.id  # the prey is the player
 
-    tractor._start_grab(prey, now=0.0)
+    tractor._start_grab(prey)
 
     tractor.game.app.sfx.tractor_beam_grab.assert_called_once()
 
@@ -281,7 +305,7 @@ def test_start_grab_no_sfx_for_non_player_prey():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = make_tractor(prey=prey)  # player id is "the_player" != prey.id
 
-    tractor._start_grab(prey, now=0.0)
+    tractor._start_grab(prey)
 
     tractor.game.app.sfx.tractor_beam_grab.assert_not_called()
 
@@ -293,12 +317,12 @@ def test_release_resets_state_and_starts_cooldown():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = _grabbing_tractor(prey)
 
-    tractor._release(now=7.0)
+    tractor._release()
 
     assert tractor.is_grabbing is False
     assert tractor.grabbed_prey_id is None
-    assert tractor.grab_start_time is None
-    assert tractor.last_release_time == pytest.approx(7.0)
+    # The re-grab cooldown was just started, so it is not ready yet.
+    assert tractor.regrab_cooldown.ready() is False
 
 
 def test_release_plays_sfx_when_freeing_the_player():
@@ -309,7 +333,7 @@ def test_release_plays_sfx_when_freeing_the_player():
     tractor = _grabbing_tractor(prey)
     tractor.game.player.pawn.id = prey.id  # the grabbed prey is the player
 
-    tractor._release(now=7.0)
+    tractor._release()
 
     tractor.game.app.sfx.tractor_beam_release.assert_called_once()
 
@@ -321,7 +345,7 @@ def test_release_no_sfx_for_non_player_prey():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = _grabbing_tractor(prey)  # player id is "the_player" != prey.id
 
-    tractor._release(now=7.0)
+    tractor._release()
 
     tractor.game.app.sfx.tractor_beam_release.assert_not_called()
 
