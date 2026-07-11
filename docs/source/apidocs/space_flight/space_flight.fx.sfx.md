@@ -195,6 +195,14 @@
 
 ````
 
+````{py:method} tractor_beam_release(game)
+:canonical: space_flight.fx.sfx.SFX.tractor_beam_release
+
+```{autodoc2-docstring} space_flight.fx.sfx.SFX.tractor_beam_release
+```
+
+````
+
 ````{py:method} laser_impact_hit_on_player(game, relative_hit_point: numpy.ndarray, is_shield: bool)
 :canonical: space_flight.fx.sfx.SFX.laser_impact_hit_on_player
 

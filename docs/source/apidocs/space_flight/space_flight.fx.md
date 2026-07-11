@@ -16,6 +16,7 @@
 space_flight.fx.sfx
 space_flight.fx.speed_dust_cloud
 space_flight.fx.explosion_fx
+space_flight.fx.spark_fx
 ```
 
 ## Package Contents
@@ -38,8 +39,12 @@ space_flight.fx.explosion_fx
 :class: autosummary longtable
 :align: left
 
-* - {py:obj}`make_geom_vertex_format <space_flight.fx.make_geom_vertex_format>`
-  - ```{autodoc2-docstring} space_flight.fx.make_geom_vertex_format
+* - {py:obj}`make_particle_format <space_flight.fx.make_particle_format>`
+  - ```{autodoc2-docstring} space_flight.fx.make_particle_format
+    :summary:
+    ```
+* - {py:obj}`_add_column_data <space_flight.fx._add_column_data>`
+  - ```{autodoc2-docstring} space_flight.fx._add_column_data
     :summary:
     ```
 * - {py:obj}`load_atlas <space_flight.fx.load_atlas>`
@@ -66,8 +71,12 @@ space_flight.fx.explosion_fx
   - ```{autodoc2-docstring} space_flight.fx.TRIS
     :summary:
     ```
-* - {py:obj}`FMT <space_flight.fx.FMT>`
-  - ```{autodoc2-docstring} space_flight.fx.FMT
+* - {py:obj}`_BASE_COLUMNS <space_flight.fx._BASE_COLUMNS>`
+  - ```{autodoc2-docstring} space_flight.fx._BASE_COLUMNS
+    :summary:
+    ```
+* - {py:obj}`_ZERO_BY_WIDTH <space_flight.fx._ZERO_BY_WIDTH>`
+  - ```{autodoc2-docstring} space_flight.fx._ZERO_BY_WIDTH
     :summary:
     ```
 ````
@@ -104,24 +113,41 @@ space_flight.fx.explosion_fx
 
 ````
 
-````{py:function} make_geom_vertex_format() -> panda3d.core.GeomVertexFormat
-:canonical: space_flight.fx.make_geom_vertex_format
-
-```{autodoc2-docstring} space_flight.fx.make_geom_vertex_format
-```
-````
-
-````{py:data} FMT
-:canonical: space_flight.fx.FMT
+````{py:data} _BASE_COLUMNS
+:canonical: space_flight.fx._BASE_COLUMNS
 :value: >
-   'make_geom_vertex_format(...)'
+   [(), (), ()]
 
-```{autodoc2-docstring} space_flight.fx.FMT
+```{autodoc2-docstring} space_flight.fx._BASE_COLUMNS
 ```
 
 ````
 
-`````{py:class} ParticleBuffer(game, vert_src: str, frag_src: str, texture: panda3d.core.Texture | None = None, additive: bool = False, bin_order: int = 20, task_name: str = 'particle_buffer_update')
+````{py:data} _ZERO_BY_WIDTH
+:canonical: space_flight.fx._ZERO_BY_WIDTH
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.fx._ZERO_BY_WIDTH
+```
+
+````
+
+````{py:function} make_particle_format(columns: list[tuple[str, int]]) -> panda3d.core.GeomVertexFormat
+:canonical: space_flight.fx.make_particle_format
+
+```{autodoc2-docstring} space_flight.fx.make_particle_format
+```
+````
+
+````{py:function} _add_column_data(writer: panda3d.core.GeomVertexWriter, width: int, value: object) -> None
+:canonical: space_flight.fx._add_column_data
+
+```{autodoc2-docstring} space_flight.fx._add_column_data
+```
+````
+
+`````{py:class} ParticleBuffer(game: space_flight.game.flight_state.FlightState, shader: panda3d.core.Shader, columns: list[tuple[str, int]], texture: panda3d.core.Texture | None = None, additive: bool = False, bin_order: int = 20, task_name: str = 'particle_buffer_update')
 :canonical: space_flight.fx.ParticleBuffer
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer
@@ -141,7 +167,7 @@ space_flight.fx.explosion_fx
 
 ````
 
-````{py:method} write_slot(slot_index: int, pos: panda3d.core.Point3, vel: panda3d.core.Vec3, color_w: float, texcoord_w: float, spawn_delay: float = 0.0, slot_duration: float | None = None)
+````{py:method} write_slot(slot_index: int, pos: panda3d.core.Point3, spawn_delay: float = 0.0, slot_duration: float | None = None, **columns: object) -> None
 :canonical: space_flight.fx.ParticleBuffer.write_slot
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.write_slot
@@ -149,7 +175,7 @@ space_flight.fx.explosion_fx
 
 ````
 
-````{py:method} update()
+````{py:method} update() -> None
 :canonical: space_flight.fx.ParticleBuffer.update
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.update
@@ -157,7 +183,7 @@ space_flight.fx.explosion_fx
 
 ````
 
-````{py:method} set_input(name: str, value)
+````{py:method} set_input(name: str, value: object) -> None
 :canonical: space_flight.fx.ParticleBuffer.set_input
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.set_input
@@ -165,7 +191,7 @@ space_flight.fx.explosion_fx
 
 ````
 
-````{py:method} set_texture(texture: panda3d.core.Texture)
+````{py:method} set_texture(texture: panda3d.core.Texture) -> None
 :canonical: space_flight.fx.ParticleBuffer.set_texture
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.set_texture
@@ -173,7 +199,7 @@ space_flight.fx.explosion_fx
 
 ````
 
-````{py:method} clean()
+````{py:method} clean() -> None
 :canonical: space_flight.fx.ParticleBuffer.clean
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.clean
@@ -183,7 +209,7 @@ space_flight.fx.explosion_fx
 
 `````
 
-````{py:function} load_atlas(game, texture_path: pathlib.Path, json_path: pathlib.Path) -> tuple[panda3d.core.Texture, list]
+````{py:function} load_atlas(game: space_flight.game.flight_state.FlightState, texture_path: pathlib.Path, json_path: pathlib.Path) -> tuple[panda3d.core.Texture, list]
 :canonical: space_flight.fx.load_atlas
 
 ```{autodoc2-docstring} space_flight.fx.load_atlas
