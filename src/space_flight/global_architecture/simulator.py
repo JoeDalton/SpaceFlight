@@ -22,7 +22,7 @@ from space_flight.menus.radial_menu_state import RadialMenuState
 from space_flight.menus.settings_menu_state import SettingsMenuState
 from space_flight.menus.splash_state import SplashState
 from space_flight.ui.input_context import InputContextStack
-from space_flight.ui.input_reader import reader_factory
+from space_flight.ui.input_reader import load_bindings, reader_factory
 
 LOGGER = logging.getLogger()
 
@@ -155,7 +155,13 @@ class SpaceFlightSimulator(ShowBase):
     the state manager to begin the application flow.
     """
 
-    def __init__(self):
+    def __init__(self, headless: bool = False):
+        """
+        :param headless: when True, skip the splash screen/menus (which need a
+            real window) and leave the state stack empty. Intended for
+            optimization-loop callers, which push :class:`FlightState` with
+            ``headless=True`` themselves once the app is built.
+        """
         ShowBase.__init__(self)
         self.disableMouse()
 
@@ -167,16 +173,26 @@ class SpaceFlightSimulator(ShowBase):
         self.graphics_manager = GraphicsManager(app=self)
         self.state_manager = StateManager(app=self)
         self.input_context_stack = InputContextStack()
-        self.input_reader = reader_factory(app=self)
-        self.taskMgr.add(self.input_task, "input_task", sort=-100)
+        # Real input (keyboard/mouse) needs a window (mouseWatcherNode);
+        # skipped headless, where actors are driven by AI or a scripted
+        # scenario instead of a live player. `bindings` is still loaded, since
+        # input contexts (e.g. FlightInputContext) read binding names/labels
+        # even when nothing will ever dispatch input through them.
+        if headless:
+            self.bindings = load_bindings()
+        else:
+            self.input_reader = reader_factory(app=self)
+            self.taskMgr.add(self.input_task, "input_task", sort=-100)
         self.asset_manager = AssetManager(app=self)
         self.menu_models = MenuModels(app=self)
         self.sfx = SFX(app=self)
 
         self.configuration = {}
 
-        # Start with splash screen
-        self.state_manager.push(SplashState)
+        # Start with splash screen (skipped headless: it needs a real window,
+        # and there is no menu flow to lead into)
+        if not headless:
+            self.state_manager.push(SplashState)
 
     def input_task(self, task):
         state = self.input_reader.poll()

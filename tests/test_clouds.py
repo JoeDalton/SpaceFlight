@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 from panda3d.core import NodePath, Vec3, loadPrcFileData
 
-from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.scenes.cloud import (
     CloudField,
     CloudLayer,
@@ -40,8 +39,6 @@ from space_flight.scenes.cloud.field import _assemble
 loadPrcFileData("", "window-type none")
 loadPrcFileData("", "audio-library-name null")
 
-from direct.showbase.ShowBase import ShowBase  # noqa E402
-
 SUN_DIR = np.array([0.2, 1.0, 0.1])
 SUN_COLOR = np.array([1.0, 0.8, 0.2])
 AMBIENT_COLOR = np.array([0.4, 0.1, 0.4])
@@ -51,15 +48,14 @@ AMBIENT_COLOR = np.array([0.4, 0.1, 0.4])
 
 
 @pytest.fixture(scope="session")
-def app():
-    """One headless ShowBase for the whole module (ShowBase is a singleton).
-
-    The cloud atlas now loads through ``asset_manager`` (like every other
-    particle atlas), so the headless app needs one attached.
+def app(spaceflight_app):
     """
-    base = ShowBase()
-    base.asset_manager = AssetManager(base)
-    return base
+    The shared headless app (``ShowBase`` is a singleton — see
+    ``conftest.py::spaceflight_app``). It already carries an ``asset_manager``
+    (built by ``SpaceFlightSimulator.__init__``), which is all the cloud atlas
+    loader needs.
+    """
+    return spaceflight_app
 
 
 @pytest.fixture(scope="session")

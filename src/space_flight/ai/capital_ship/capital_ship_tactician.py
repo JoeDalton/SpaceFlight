@@ -60,10 +60,8 @@ class CapitalShipTactician(GenericTactician):
         Evaluates the fighting shape of the bot
         TODO: add an "energy" mechanic ? Health of subsytems ?
         """
-        shield_level = 0
-        try:
-            for shield_generator in self.pawn.shield_generators:
-                shield_level += shield_generator.get_shield_level()
-        except AttributeError:
-            pass
+        shield_level = 0.0
+        shield = getattr(self.pawn, "shield", None)
+        if shield is not None:
+            shield_level = shield.get_shield_level()
         return 0.5 * self.pawn.health + shield_level

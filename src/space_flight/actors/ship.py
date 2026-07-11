@@ -69,6 +69,11 @@ class Ship(Pawn):
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
         self.additional_force_n = np.zeros(3)  # e.g. for gravity if applicable
         self.impact_force_n = np.zeros(3)  # e.g. for collisions and laser hits
+        # Transient world-frame forces applied by other actors this frame (e.g. a
+        # tractor beam's drag and attraction). Accumulated via apply_external_force
+        # and consumed (then zeroed) by compute_derivatives, so the force simply
+        # disappears the moment nothing applies it any more.
+        self.external_force_n = np.zeros(3)
         self.formation = None
 
         self.drag_factor = (
@@ -195,12 +200,19 @@ class Ship(Pawn):
                 (throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)
             ) ** 2 * self.max_thrust_n
         else:
-            # Ship is braking, propotionally to its forward speed
-            brake_intensity = (ZERO_THRUST_POSITION - throttle) / ZERO_THRUST_POSITION
-            forward_speed_mps = max(0.0, np.dot(self.speed, self.forward))
-            scalar_thrust_n = (
-                -forward_speed_mps * self.brake_factor_nspm * brake_intensity
-            )
+            if FLIGHT_MODEL == "airplane":
+                # Ship is braking, propotionally to its forward speed
+                brake_intensity = (
+                    ZERO_THRUST_POSITION - throttle
+                ) / ZERO_THRUST_POSITION
+                forward_speed_mps = max(0.0, np.dot(self.speed, self.forward))
+                scalar_thrust_n = (
+                    -forward_speed_mps * self.brake_factor_nspm * brake_intensity
+                )
+            elif FLIGHT_MODEL == "space":
+                scalar_thrust_n = 0
+            else:
+                raise Exception
 
         pqr = np.array(
             [
@@ -333,8 +345,13 @@ class Ship(Pawn):
             + self.lift_n
             + self.additional_force_n
             + self.impact_force_n
+            + self.external_force_n
         ) / self.mass_kg
         self.state_dot[7:10] = self.acceleration_mps2
+        # Consume the external force: it is re-applied every frame for as long as
+        # another actor (e.g. a tractor beam) keeps holding this ship, and drops
+        # to zero on the first frame nothing applies it.
+        self.external_force_n = np.zeros(3)
 
     def move_ship_physics(self):
         """
@@ -469,6 +486,20 @@ class Ship(Pawn):
         :param damage_type: the type of damage to apply (physical, energy)
         """
         raise NotImplementedError
+
+    def apply_external_force(self, force_world_n: np.ndarray):
+        """
+        Accumulate a transient world-frame force applied by another actor for the
+        current frame (e.g. a tractor beam's drag and attraction).
+
+        The force is consumed and cleared by :meth:`compute_derivatives`, so it
+        must be re-applied each frame it should act; several sources add up.
+
+        :param force_world_n: The force to apply this frame, in world coordinates
+        """
+        self.external_force_n = self.external_force_n + np.asarray(
+            force_world_n, dtype=float
+        )
 
     def remove_hit_force(self, hit_force_world_n: np.ndarray):
         """

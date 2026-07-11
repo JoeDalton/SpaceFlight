@@ -1,66 +1,44 @@
 """
 Unified GPU-driven particle system for Panda3D.
-Provides two effects that were previously in separate modules:
 
-- **Explosion** — fire + smoke billboards, sprite-atlas animated.
-- **Sparkle** — hit sparks, procedural SDF circle with glow.
+Currently powers the **explosion** effect (fire + smoke billboards,
+sprite-atlas animated). The base class is effect-agnostic, so further
+billboard effects can reuse it.
 
-Both effects share:
+Each effect gets:
 
-- A single custom vertex format (:data:`_FMT`).
-- A single base class :class:`ParticleBuffer` that owns the GeomNode,
-  manages slot allocation, writes vertex data, and drives the per-frame
-  uniform update.
-- Identical billboard quad topology (:data:`_CORNERS`, :data:`_TRIS`,
-  :data:`_POOL_SIZE`).
+- Its own custom vertex format built by :func:`make_particle_format`: the
+  shared billboard columns (``vertex``, ``corner``, ``spawn_time``) plus the
+  effect's own per-particle columns. Every column is read in GLSL directly by
+  name (``in vec3 velocity;`` etc.) — no bit-packing, and no repurposing of
+  the semantic ``color`` / ``texcoord`` columns.
+- A :class:`ParticleBuffer` (or subclass) that owns the GeomNode, manages slot
+  allocation, writes vertex data, and drives the per-frame uniform update.
+- Identical billboard quad topology (:data:`CORNERS`, :data:`TRIS`,
+  :data:`POOL_SIZE`).
 
 
-Vertex layout (shared by all buffers)
---------------------------------------
-Each particle is one billboard quad = 4 vertices.
-All four vertices of a quad carry identical simulation data; only
-``corner.xy`` differs so the vertex shader can expand the quad.
+Vertex layout
+-------------
+Each particle is one billboard quad = 4 vertices. All four vertices of a quad
+carry identical simulation data; only ``corner`` differs so the vertex shader
+can expand the quad. The shared billboard columns every format includes:
 
-============================  =====  =============================================
-Column                        Type   Content
-============================  =====  =============================================
-``vertex``                    vec3   World-space spawn position (bias applied
-                                     CPU-side before writing).
-``color.xyz``                 vec3   Initial velocity (world units / s).
-``color.w``                   float  **Effect-specific packed payload** — see
-                                     each effect's packing note below.
-``texcoord.xy``               vec2   Corner selector: one of
-                                     (-1,-1) (1,-1) (1,1) (-1,1).
-``texcoord.z``                float  ``spawn_time`` — absolute value of the
-                                     buffer clock when the particle becomes
-                                     active (includes any delay offset).
-``texcoord.w``                float  **Effect-specific packed payload** — see
-                                     each effect's packing note below.
-============================  =====  =============================================
+==============  =====  ===========================================================
+Column          Type   Content
+==============  =====  ===========================================================
+``vertex``      vec3   World-space spawn position (bias applied CPU-side).
+``corner``      vec2   Corner selector: one of (-1,-1) (1,-1) (1,1) (-1,1).
+``spawn_time``  float  Absolute value of the buffer clock when the particle
+                       becomes active (includes any delay offset).
+==============  =====  ===========================================================
 
-Packing schemes
----------------
-Both effects reuse the same two "spare" floats (``color.w`` and
-``texcoord.w``) but interpret them differently.
-
-**Explosion** — two values packed per float using integer / fractional parts:
-
-.. code-block:: text
-
-    color.w    →  size_spin
-        int  part = round(size * 100)            # size in world units × 100
-        frac part = (spin_rate / SPIN_MAX + 1) / 2   # spin mapped to [0, 1)
-
-    texcoord.w →  tile_life
-        int  part = tile_index                   # atlas sprite index
-        frac part = lifetime / 10.0              # lifetime in [0, 9.99] s
-
-**Sparkle** — values stored directly, no packing needed:
-
-.. code-block:: text
-
-    color.w    →  size        # billboard half-size in world units
-    texcoord.w →  lifetime    # particle lifetime in seconds
+Each effect appends its own columns. The explosion effect
+(:mod:`space_flight.fx.explosion_fx`) adds ``velocity`` (vec3), ``size``
+(float), ``spin`` (float), ``lifetime`` (float) and ``tile_rect`` (vec4, the
+atlas tile UV rect); the spark effect (:mod:`space_flight.fx.spark_fx`) adds
+``velocity``, ``size``, ``lifetime``, ``gravity`` (float) and ``spark_color``
+(vec4).
 
 GPU animation
 -------------
@@ -73,7 +51,7 @@ the particle's current state each frame from the stored spawn parameters:
     float frac = clamp(t / lifetime, 0.0, 1.0);
     float alive = (t >= 0.0 && t < lifetime) ? 1.0 : 0.0;
 
-    vec3 pos = spawn_pos + velocity * max(t, 0.0);  // linear motion
+    vec3 pos = vertex + velocity * max(t, 0.0);  // linear motion
     // size, alpha, spin etc. derived from frac …
 
 Three uniforms are updated every frame by :meth:`ParticleBuffer.update`:
@@ -85,18 +63,19 @@ Implementation notes
   or Panda3D's auto-shader generation interferes.
 - Atlas textures must be bound via ``setTexture(TextureStage.getDefault(), tex)``
   for the shader to see them as ``p3d_Texture0``.
-- ``p3d_MultiTexCoord0`` arrives in the shader as a ``vec4``; UVs are in ``.xy``.
-- GLSL 140 forbids dynamic array indexing, so atlas rects are uploaded as
-  individual uniforms (``uTileRect0``, ``uTileRect1``, …) and selected via
-  an ``if / else`` chain in the fragment shader.
+- Custom vertex columns are exposed to GLSL by their exact column name (no
+  ``p3d_`` prefix); the built-in ``vertex`` column is read as ``p3d_Vertex``.
+- The atlas tile is selected per-particle by carrying its UV rect in the
+  ``tile_rect`` column, so the fragment shader needs neither a uniform array
+  nor dynamic indexing to sample the right sprite.
 """
 
 from __future__ import annotations
 
 import json
-import math
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from panda3d.core import (
     BitMask32,
@@ -119,6 +98,9 @@ from panda3d.core import (
     Vec3,
 )
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 # ---------------------------------------------------------------------------
 # Shared geometry constants
 # ---------------------------------------------------------------------------
@@ -136,32 +118,65 @@ CORNERS = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
 TRIS = [0, 1, 2, 0, 2, 3]
 
 
-def make_geom_vertex_format() -> GeomVertexFormat:
+#: Billboard-machinery columns present in every particle format, regardless of
+#: effect. ``vertex`` is the standard position column; ``corner`` and
+#: ``spawn_time`` are custom columns read in GLSL by name. Effect-specific
+#: columns (velocity, size, lifetime, and any extras) are appended per effect.
+_BASE_COLUMNS = [
+    (InternalName.getVertex(), 3, Geom.CPoint),
+    (InternalName.make("corner"), 2, Geom.COther),
+    (InternalName.make("spawn_time"), 1, Geom.COther),
+]
+
+#: Zero fill values keyed by column width, for zero-initialising dead slots.
+_ZERO_BY_WIDTH = {1: 0.0, 2: (0.0, 0.0), 3: (0.0, 0.0, 0.0), 4: (0.0, 0.0, 0.0, 0.0)}
+
+
+def make_particle_format(columns: list[tuple[str, int]]) -> GeomVertexFormat:
     """
-    Build and register the shared custom vertex format.
+    Build and register a particle vertex format for one effect.
 
-    The format has **one interleaved array** with three columns:
+    The format has **one interleaved array** holding the shared billboard
+    columns (:data:`_BASE_COLUMNS`) followed by the effect-specific *columns*.
+    Each effect column is a custom-named ``COther`` float column, read in GLSL
+    directly by name (``in vec3 velocity;`` etc.).
 
-    - ``vertex``   (3 * float32, CPoint)   — spawn position.
-    - ``color``    (4 * float32, CColor)   — velocity + packed payload.
-    - ``texcoord`` (4 * float32, CTexcoord)— corner + spawn_time + packed payload.
+    Registering the format deduplicates it globally, so two buffers built from
+    the same *columns* share one registered object.
 
-    Registering the format deduplicates it globally; calling this function
-    more than once returns the same registered object.
-
-    :returns: The registered :class:`GeomVertexFormat`.
+    :param columns: Effect-specific columns as ``(name, num_components)`` pairs
+                    (e.g. ``[("velocity", 3), ("size", 1), ("lifetime", 1)]``).
+    :return: The registered :class:`GeomVertexFormat`.
     """
     arr = GeomVertexArrayFormat()
-    arr.addColumn(InternalName.getVertex(), 3, Geom.NTFloat32, Geom.CPoint)
-    arr.addColumn(InternalName.getColor(), 4, Geom.NTFloat32, Geom.CColor)
-    arr.addColumn(InternalName.getTexcoord(), 4, Geom.NTFloat32, Geom.CTexcoord)
+    for name, num_components, contents in _BASE_COLUMNS:
+        arr.addColumn(name, num_components, Geom.NTFloat32, contents)
+    for name, num_components in columns:
+        arr.addColumn(
+            InternalName.make(name), num_components, Geom.NTFloat32, Geom.COther
+        )
     fmt = GeomVertexFormat()
     fmt.addArray(arr)
     return GeomVertexFormat.registerFormat(fmt)
 
 
-# Registered vertex format, shared by all particle buffers.
-FMT = make_geom_vertex_format()
+def _add_column_data(writer: GeomVertexWriter, width: int, value: object) -> None:
+    """
+    Append one column value of *width* components to *writer*.
+
+    :param writer: The column's :class:`GeomVertexWriter`.
+    :param width:  Number of components (1-4).
+    :param value:  A scalar for a 1-component column, or an indexable
+                   (``Vec3``/``Vec4``/tuple) for a wider one.
+    """
+    if width == 1:
+        writer.addData1(float(value))
+    elif width == 2:
+        writer.addData2(value[0], value[1])
+    elif width == 3:
+        writer.addData3(value[0], value[1], value[2])
+    else:
+        writer.addData4(value[0], value[1], value[2], value[3])
 
 
 # ---------------------------------------------------------------------------
@@ -181,12 +196,17 @@ class ParticleBuffer:
     ``(spawn_time, total_duration)`` pairs so :meth:`alloc_slot` can find a
     free slot without reading back GPU memory.
 
-    Sub-classes supply effect-specific GLSL sources and call
-    :meth:`write_slot` to spawn individual particles.
+    Sub-classes supply an effect-specific :class:`Shader` and column layout and
+    call :meth:`write_slot` to spawn individual particles.
 
     :param game:      Parent game object
-    :param vert_src:  GLSL vertex shader source string.
-    :param frag_src:  GLSL fragment shader source string.
+    :param shader:    Compiled :class:`Shader` (typically loaded from files via
+                      ``Shader.load``) applied to the particle geometry.
+    :param columns:   Effect-specific vertex columns as ``(name, num_components)``
+                      pairs, appended to the shared billboard columns to build
+                      this buffer's format (see :func:`make_particle_format`).
+                      Must include a ``lifetime`` column (used for the default
+                      slot reservation in :meth:`write_slot`).
     :param texture:   Optional :class:`Texture` bound to the default
                       :class:`TextureStage` (accessible as ``p3d_Texture0``
                       in the shader). Pass ``None`` if the effect uses a
@@ -201,14 +221,14 @@ class ParticleBuffer:
 
     def __init__(
         self,
-        game,
-        vert_src: str,
-        frag_src: str,
+        game: FlightState,
+        shader: Shader,
+        columns: list[tuple[str, int]],
         texture: Texture | None = None,
         additive: bool = False,
         bin_order: int = 20,
         task_name: str = "particle_buffer_update",
-    ):
+    ) -> None:
         self.game = game
         self.id = uuid.uuid4()
         self.game.method_lists[self.id] = []
@@ -218,21 +238,27 @@ class ParticleBuffer:
         #         self.time - spawn_time >= reserved_duration.
         self.slots: list[tuple | None] = [None] * POOL_SIZE
 
+        # Column-width lookup, used by write_slot to dispatch on component count.
+        self._column_widths = dict(columns)
+
         # --- Vertex buffer ---
         # UHDynamic because the CPU writes individual slots at spawn time.
-        vdata = GeomVertexData("pb", FMT, Geom.UHDynamic)
+        vdata = GeomVertexData("pb", make_particle_format(columns), Geom.UHDynamic)
         vdata.setNumRows(POOL_SIZE * 4)  # 4 vertices per quad
         self.vdata = vdata
 
-        # Zero-initialise all vertices. Dead particles have spawn_time far in
-        # the past so the shader's alive flag is 0 → quad collapses to size 0.
-        wp = GeomVertexWriter(vdata, "vertex")
-        wc = GeomVertexWriter(vdata, "color")
-        wt = GeomVertexWriter(vdata, "texcoord")
+        # Zero-initialise all vertices. Dead particles have lifetime 0 so the
+        # shader's alive flag is 0 → the quad collapses to size 0.
+        w_vertex = GeomVertexWriter(vdata, "vertex")
+        w_corner = GeomVertexWriter(vdata, "corner")
+        w_spawn = GeomVertexWriter(vdata, "spawn_time")
+        col_writers = [(GeomVertexWriter(vdata, name), w) for name, w in columns]
         for _ in range(POOL_SIZE * 4):
-            wp.addData3(0, 0, 0)
-            wc.addData4(0, 0, 0, 0)
-            wt.addData4(0, 0, 0, 0)
+            w_vertex.addData3(0, 0, 0)
+            w_corner.addData2(0, 0)
+            w_spawn.addData1(0)
+            for writer, width in col_writers:
+                _add_column_data(writer, width, _ZERO_BY_WIDTH[width])
 
         # --- Index buffer (static — triangle topology never changes) ---
         tris = GeomTriangles(Geom.UHStatic)
@@ -254,7 +280,7 @@ class ParticleBuffer:
         # Panda3D's automatic shader generator activates and conflicts with
         # the custom shader.
         self.node_path.setTransparency(TransparencyAttrib.MAlpha)
-        self.node_path.setShader(Shader.make(Shader.SL_GLSL, vert_src, frag_src))
+        self.node_path.setShader(shader)
         if texture is not None:
             # Binding to the default TextureStage makes the texture accessible
             # as p3d_Texture0 in the shader without any manual sampler setup.
@@ -310,7 +336,7 @@ class ParticleBuffer:
         - Enough buffer-clock time has elapsed since its spawn that its
           particle has fully expired (``_time - spawn_time >= duration``).
 
-        :returns: A free slot index in ``[0, _POOL_SIZE)``, or ``None``
+        :return: A free slot index in ``[0, _POOL_SIZE)``, or ``None``
                   if the pool is completely full.
         """
         now = self.time
@@ -323,55 +349,35 @@ class ParticleBuffer:
         self,
         slot_index: int,
         pos: Point3,
-        vel: Vec3,
-        color_w: float,
-        texcoord_w: float,
         spawn_delay: float = 0.0,
         slot_duration: float | None = None,
-    ):
+        **columns: object,
+    ) -> None:
         """
         Write one particle quad into *slot_index*.
 
-        All four corners receive identical simulation data; only ``corner.xy``
-        differs (the four values from :data:`_CORNERS`). The vertex shader
-        uses the corner to offset the billboard along the camera axes.
+        All four corners receive identical simulation data; only ``corner``
+        differs (the four values from :data:`CORNERS`). The vertex shader uses
+        the corner to offset the billboard along the camera axes.
 
-        **Packing contracts** (caller's responsibility):
+        The billboard-machinery columns (``vertex``, ``corner``, ``spawn_time``)
+        are written here; every other column is supplied as a keyword argument
+        matching an effect column name (see :func:`make_particle_format`), e.g.
+        ``velocity=Vec3(...)``, ``size=1.5``, ``lifetime=2.0``. Scalars fill
+        1-component columns; indexables (``Vec3``/``Vec4``/tuples) fill wider
+        ones. There is no packing to undo on the GPU side.
 
-        *Explosion effect*:
-
-        .. code-block:: text
-
-            color_w    = float(round(size * 100)) + clamp((spin/SPIN_MAX+1)/2, 0, 0.999)
-                         └─ int part: size * 100  └─ frac part: normalised spin
-
-            texcoord_w = float(tile_index) + clamp(lifetime / 10.0, 0, 0.999)
-                         └─ int part: atlas tile  └─ frac part: lifetime / 10 s
-
-        *Sparkle effect*:
-
-        .. code-block:: text
-
-            color_w    = size       (raw float, no packing)
-            texcoord_w = lifetime   (raw float, no packing)
-
-        :param slot_i:        Index into ``_slots`` / vertex buffer to overwrite.
+        :param slot_index:    Index into ``slots`` / vertex buffer to overwrite.
         :param pos:           World-space spawn position (positional bias already
                               applied by the caller).
-        :param vel:           Initial velocity in world units per second.
-        :param color_w:       Effect-specific value for ``color.w``
-                              (see packing contracts above).
-        :param texcoord_w:    Effect-specific value for ``texcoord.w``
-                              (see packing contracts above).
         :param spawn_delay:   Seconds before the particle becomes visible.
-                              The stored ``spawn_time = _time + spawn_delay``
+                              The stored ``spawn_time = time + spawn_delay``
                               makes ``t = uTime - spawn_time`` negative during
                               the delay window, keeping the quad invisible.
         :param slot_duration: How long to reserve this slot (seconds, excluding
-                              *spawn_delay*). Defaults to
-                              ``fract(texcoord_w) * 10``, which is valid for
-                              the explosion packing scheme. Pass explicitly for
-                              sparkles (where ``texcoord_w`` is raw lifetime).
+                              *spawn_delay*). Defaults to the ``lifetime`` column.
+        :param columns:       One value per effect column, keyed by column name.
+                              Must include ``lifetime``.
         """
         now = self.time
         base_v = slot_index * 4
@@ -379,26 +385,24 @@ class ParticleBuffer:
         # t = uTime - spawn_time, which is negative while the delay is pending.
         spawn_t = now + spawn_delay
 
-        wp = GeomVertexWriter(self.vdata, "vertex")
-        wp.setRow(base_v)
-        wc = GeomVertexWriter(self.vdata, "color")
-        wc.setRow(base_v)
-        wt = GeomVertexWriter(self.vdata, "texcoord")
-        wt.setRow(base_v)
+        w_vertex = GeomVertexWriter(self.vdata, "vertex")
+        w_vertex.setRow(base_v)
+        w_corner = GeomVertexWriter(self.vdata, "corner")
+        w_corner.setRow(base_v)
+        w_spawn = GeomVertexWriter(self.vdata, "spawn_time")
+        w_spawn.setRow(base_v)
+        col_writers = {name: GeomVertexWriter(self.vdata, name) for name in columns}
+        for writer in col_writers.values():
+            writer.setRow(base_v)
 
         for cx, cy in CORNERS:
-            wp.addData3(pos)
-            wc.addData4(vel.x, vel.y, vel.z, color_w)
-            # texcoord.z carries spawn_time; texcoord.xy is the corner selector
-            wt.addData4(cx, cy, spawn_t, texcoord_w)
+            w_vertex.addData3(pos)
+            w_corner.addData2(cx, cy)
+            w_spawn.addData1(spawn_t)
+            for name, value in columns.items():
+                _add_column_data(col_writers[name], self._column_widths[name], value)
 
-        # Default duration decodes the explosion packing (frac part × 10 s).
-        # Callers using raw lifetime in texcoord_w must pass slot_duration explicitly.
-        duration = (
-            slot_duration
-            if slot_duration is not None
-            else math.fmod(texcoord_w, 1.0) * 10.0
-        )
+        duration = slot_duration if slot_duration is not None else columns["lifetime"]
         # Reserve the slot for delay + lifetime so alloc_slot() does not reclaim
         # it before the particle has even appeared on screen.
         self.slots[slot_index] = (now, duration + spawn_delay)
@@ -407,7 +411,7 @@ class ParticleBuffer:
     # Per-frame update
     # ------------------------------------------------------------------
 
-    def update(self):
+    def update(self) -> None:
         """
         Push the three per-frame uniforms to the GPU.
 
@@ -416,6 +420,10 @@ class ParticleBuffer:
         remembering to call ``super().update()``.
         """
         self.time = self.game.game_time.get_current_time()
+        # Billboard orientation is a pure rendering concern (there is no
+        # camera, and nothing to render, headless).
+        if self.game.headless:
+            return
         cam_mat = self.game.app.camera.getMat(self.game.root_node)
         cam_right, cam_up = cam_mat.getRow3(0), cam_mat.getRow3(2)
         # Row 0 = camera right axis, row 2 = camera up axis
@@ -428,7 +436,7 @@ class ParticleBuffer:
     # Convenience wrappers
     # ------------------------------------------------------------------
 
-    def set_input(self, name: str, value):
+    def set_input(self, name: str, value: object) -> None:
         """
         Set a shader uniform by name.
 
@@ -437,15 +445,15 @@ class ParticleBuffer:
         """
         self.node_path.setShaderInput(name, value)
 
-    def set_texture(self, texture: Texture):
+    def set_texture(self, texture: Texture) -> None:
         """
         Replace the texture bound to the default :class:`TextureStage`.
 
-        :param tex: New :class:`Texture` to bind.
+        :param texture: New :class:`Texture` to bind.
         """
         self.node_path.setTexture(TextureStage.getDefault(), texture)
 
-    def clean(self):
+    def clean(self) -> None:
         """
         Remove the update task and destroy the geometry node.
         """
@@ -462,7 +470,9 @@ class ParticleBuffer:
 # ---------------------------------------------------------------------------
 
 
-def load_atlas(game, texture_path: Path, json_path: Path) -> tuple[Texture, list]:
+def load_atlas(
+    game: FlightState, texture_path: Path, json_path: Path
+) -> tuple[Texture, list]:
     """
     Load a sprite atlas from a PNG and its companion JSON descriptor.
 
@@ -473,7 +483,7 @@ def load_atlas(game, texture_path: Path, json_path: Path) -> tuple[Texture, list
     :param game: The parent game object
     :param texture_path:  Path to the atlas PNG file.
     :param json_path: Path to the JSON rect descriptor.
-    :returns: A ``(texture, rects)`` tuple where *rects* is a list of
+    :return: A ``(texture, rects)`` tuple where *rects* is a list of
               ``(u, v, uw, vh)`` tuples, one per sprite frame.
     """
     with open(json_path) as f:

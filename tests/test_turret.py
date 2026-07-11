@@ -1,6 +1,14 @@
-import pytest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
-from space_flight.actors.turret import Turret
+import numpy as np
+import pytest
+from panda3d.core import NodePath
+
+from space_flight.actors.capital_ship.sub_system import SubSystem
+from space_flight.actors.capital_ship.targeting_system import TargetingSystem
+from space_flight.actors.capital_ship.turret import Turret
+from space_flight.ai import Personality
 
 
 def make_turret_without_init(
@@ -99,39 +107,265 @@ def test_apply_damage_parametrized(initial_health, damage, expected_health):
 
 
 # ---------------------------
-# turret_handle_health
+# handle_health (inherited from SubSystem)
 # ---------------------------
 
 
-def test_turret_handle_health_clamps_health_to_max():
+def test_handle_health_clamps_health_to_max():
     """
-    turret_handle_health reduces health to max_health when health somehow
-    exceeds the maximum.
+    A turret inherits SubSystem.handle_health, which clamps health to its maximum
+    while its ship lives and refreshes its world position.
     """
     turret = make_turret_without_init(max_health=150.0, current_health=200.0)
+    turret.mounted_on = SimpleNamespace(is_dead=False)
+    turret.game = MagicMock()
+    turret.node = MagicMock()
+    turret.node.getPos.return_value = (0.0, 0.0, 0.0)
 
-    turret.turret_handle_health()
+    turret.handle_health()
 
     assert turret.health == pytest.approx(150.0)
 
 
-def test_turret_handle_health_leaves_health_unchanged_when_below_max():
+def test_handle_health_zeroes_health_when_ship_dead():
     """
-    turret_handle_health does not modify health when it is already within bounds.
+    A turret whose ship is destroyed drops its health to zero so it is cleaned up.
     """
-    turret = make_turret_without_init(max_health=150.0, current_health=100.0)
+    turret = make_turret_without_init(max_health=150.0, current_health=150.0)
+    turret.mounted_on = SimpleNamespace(is_dead=True)
 
-    turret.turret_handle_health()
-
-    assert turret.health == pytest.approx(100.0)
-
-
-def test_turret_handle_health_does_not_raise_when_health_is_zero():
-    """
-    turret_handle_health handles a fully depleted turret without raising.
-    """
-    turret = make_turret_without_init(max_health=150.0, current_health=0.0)
-
-    turret.turret_handle_health()
+    turret.handle_health()
 
     assert turret.health == pytest.approx(0.0)
+
+
+# ---------------------------
+# turret is a subsystem (real __init__, asset-heavy parts patched)
+# ---------------------------
+
+
+def test_turret_is_a_subsystem_of_its_ship():
+    """
+    A turret builds as a SubSystem of the ship it is mounted on: it takes the
+    ship's team, keeps the bot as its controller, exposes the "sub_system"
+    category, and registers itself with the interaction actors.
+    """
+    game = MagicMock()
+    game.destructibles.alive_objects = []
+    game.method_lists = {}
+    game.root_node = NodePath("root")
+    ship = SimpleNamespace(
+        team=2, node=NodePath("ship"), is_dead=False, speed=np.zeros(3)
+    )
+    ship.node.reparentTo(game.root_node)
+    bot = SimpleNamespace(name="turret_bot")
+
+    with patch(
+        "space_flight.actors.capital_ship.tracking_mount.TurretModel"
+    ) as mock_model_cls, patch("space_flight.actors.capital_ship.turret.LaserCannon"):
+        mock_model_cls.return_value.set_yaw = MagicMock()
+        mock_model_cls.return_value.set_pitch = MagicMock()
+        mock_model_cls.return_value.cannon_node = NodePath("cannon")
+        turret = Turret(game=game, parent=bot, turret_type="test", mounted_on=ship)
+
+    assert isinstance(turret, SubSystem)
+    assert turret.mounted_on is ship
+    assert turret.parent is bot  # the bot stays the controller
+    assert turret.team == 2  # taken from the ship
+    assert turret.category == "sub_system"
+    game.interactions.add_actor.assert_called_once_with(turret)
+    # Directions the turret AI reads exist from the start
+    for attr in ("forward", "base_forward", "base_right", "base_up"):
+        assert hasattr(turret, attr)
+
+
+# ---------------------------
+# targeting-system boosts (auto-aim + rate of fire)
+# ---------------------------
+
+
+def make_targeting_system(
+    is_dead: bool = False,
+    fire_rate_multiplier: float = 2.0,
+    auto_aim_params: dict = None,
+):
+    """
+    Build a TargetingSystem stub (bypassing __init__) that satisfies the turret's
+    isinstance check and exposes the alive/dead flag, multiplier and auto-aim
+    tuning it reads.
+    """
+    targeting_system = object.__new__(TargetingSystem)
+    targeting_system.is_dead = is_dead
+    targeting_system.fire_rate_multiplier = fire_rate_multiplier
+    targeting_system.auto_aim_params = auto_aim_params or {}
+    return targeting_system
+
+
+def make_boostable_turret(base_fire_delay: float = 1.0):
+    """
+    Build a Turret (bypassing __init__) with just the attributes the targeting
+    support logic touches.
+    """
+    turret = make_turret_without_init()
+    turret._auto_aim = MagicMock(name="auto_aim")
+    turret.auto_aim = None
+    turret._targeting_source = None
+    turret.base_fire_delay = base_fire_delay
+    turret.laser_cannon = SimpleNamespace(fire_delay=base_fire_delay)
+    return turret
+
+
+def test_active_targeting_system_found_when_alive():
+    """
+    _active_targeting_system returns a live targeting system mounted on the ship.
+    """
+    turret = make_boostable_turret()
+    targeting_system = make_targeting_system(is_dead=False)
+    turret.mounted_on = SimpleNamespace(sub_systems=[targeting_system])
+
+    assert turret._active_targeting_system() is targeting_system
+
+
+def test_active_targeting_system_ignores_dead_and_other_subsystems():
+    """
+    A dead targeting system (or any non-targeting subsystem) does not count.
+    """
+    turret = make_boostable_turret()
+    turret.mounted_on = SimpleNamespace(
+        sub_systems=[make_targeting_system(is_dead=True), SimpleNamespace()]
+    )
+
+    assert turret._active_targeting_system() is None
+
+
+def test_apply_targeting_support_grants_autoaim_and_faster_fire():
+    """
+    With a live targeting system, the turret retunes and exposes its auto-aim to
+    the cannon, refreshes acquisition, and speeds up its fire rate by the
+    multiplier.
+    """
+    turret = make_boostable_turret(base_fire_delay=1.0)
+    params = {"max_assist_angle_deg": 8.0, "target_lock_delay_s": 0.5}
+    turret.mounted_on = SimpleNamespace(
+        sub_systems=[
+            make_targeting_system(
+                is_dead=False, fire_rate_multiplier=2.0, auto_aim_params=params
+            )
+        ]
+    )
+
+    turret._apply_targeting_support()
+
+    assert turret.auto_aim is turret._auto_aim
+    turret._auto_aim.configure.assert_called_once_with(**params)
+    turret._auto_aim.compute_acquisition.assert_called_once()
+    assert turret.laser_cannon.fire_delay == pytest.approx(0.5)
+
+
+def test_apply_targeting_support_reconfigures_only_when_source_changes():
+    """
+    The auto-aim is retuned when a targeting system comes online, but not again
+    on the next frame while the same system keeps boosting the turret.
+    """
+    turret = make_boostable_turret(base_fire_delay=1.0)
+    targeting_system = make_targeting_system(is_dead=False)
+    turret.mounted_on = SimpleNamespace(sub_systems=[targeting_system])
+
+    turret._apply_targeting_support()
+    turret._apply_targeting_support()
+
+    turret._auto_aim.configure.assert_called_once()
+    assert turret._targeting_source is targeting_system
+
+
+def test_apply_targeting_support_reverts_when_no_targeting_system():
+    """
+    With no live targeting system, auto-aim is disabled (None, so the cannon
+    fires straight) and the fire delay returns to its base value.
+    """
+    turret = make_boostable_turret(base_fire_delay=1.0)
+    # Start from a boosted state to prove it is undone
+    turret.auto_aim = turret._auto_aim
+    turret.laser_cannon.fire_delay = 0.5
+    turret._targeting_source = make_targeting_system()
+    turret.mounted_on = SimpleNamespace(sub_systems=[])
+
+    turret._apply_targeting_support()
+
+    assert turret.auto_aim is None
+    assert turret.laser_cannon.fire_delay == pytest.approx(1.0)
+    assert turret._targeting_source is None
+    turret._auto_aim.compute_acquisition.assert_not_called()
+
+
+# ---------------------------
+# fire condition (_fire_if_engaged), lead-vector based
+# ---------------------------
+
+
+def make_firing_turret(aim_direction, forward, target_distance_m):
+    """
+    Build a Turret (bypassing __init__) with just the state the fire gate reads:
+    the navigator's published lead solution, the barrel direction, and a cannon.
+    """
+    turret = make_turret_without_init()
+    turret.personality = Personality.TURRET_DEFAULT
+    turret.aim_direction = np.array(aim_direction, dtype=float)
+    turret.forward = np.array(forward, dtype=float)
+    turret.target_distance_m = target_distance_m
+    turret.laser_cannon = MagicMock()
+    return turret
+
+
+def test_fire_when_barrel_aligned_with_lead_and_in_range():
+    """
+    The turret fires when its barrel is aligned with the published lead direction
+    and the prey is within firing range.
+    """
+    turret = make_firing_turret(
+        aim_direction=[0.0, 1.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=500.0
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_called_once()
+
+
+def test_no_fire_when_barrel_not_aligned_with_lead():
+    """
+    A barrel pointing away from the lead direction does not fire, even in range.
+    """
+    turret = make_firing_turret(
+        aim_direction=[1.0, 0.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=500.0
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_not_called()
+
+
+def test_no_fire_when_out_of_range():
+    """
+    An aligned barrel still holds fire when the prey is beyond firing range.
+    """
+    turret = make_firing_turret(
+        aim_direction=[0.0, 1.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=5000.0
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_not_called()
+
+
+def test_no_fire_when_navigator_published_no_engagement():
+    """
+    When the navigator published no engagement (zero aim, infinite distance), the
+    turret does not fire.
+    """
+    turret = make_firing_turret(
+        aim_direction=[0.0, 0.0, 0.0], forward=[0.0, 1.0, 0.0], target_distance_m=np.inf
+    )
+
+    turret._fire_if_engaged()
+
+    turret.laser_cannon.fire.assert_not_called()

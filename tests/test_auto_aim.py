@@ -250,6 +250,49 @@ def test_compute_shot_speed_without_acquisition_fires_forward():
 
 
 # ---------------------------------------------------------------------------
+# configure — runtime retuning
+# ---------------------------------------------------------------------------
+
+
+def test_configure_recomputes_derived_thresholds():
+    """
+    configure() recomputes the cached alignment/assist thresholds from the given
+    angles, so a targeting system can retune the assist quality at runtime.
+    """
+    auto_aim = make_auto_aim()
+
+    auto_aim.configure(
+        target_lock_delay_s=0.5,
+        acquisition_cone_angle_deg=45.0,
+        max_assist_angle_deg=10.0,
+        max_assist_distance_m=1500.0,
+    )
+
+    assert auto_aim.target_lock_delay_s == pytest.approx(0.5)
+    assert auto_aim.max_assist_distance_m == pytest.approx(1500.0)
+    assert auto_aim.min_acquisition_alignment == pytest.approx(np.cos(np.deg2rad(45.0)))
+    assert auto_aim.min_assist_alignment == pytest.approx(np.cos(np.deg2rad(10.0)))
+    assert auto_aim.inv_max_assist_tan_angle == pytest.approx(
+        1.0 / np.tan(np.deg2rad(10.0))
+    )
+
+
+def test_configure_tighter_assist_raises_alignment_threshold():
+    """
+    A smaller assist angle (tighter aim) demands closer alignment before the
+    shot is clamped, i.e. a higher min_assist_alignment.
+    """
+    auto_aim = make_auto_aim()
+
+    auto_aim.configure(max_assist_angle_deg=3.0)
+    tight = auto_aim.min_assist_alignment
+    auto_aim.configure(max_assist_angle_deg=10.0)
+    loose = auto_aim.min_assist_alignment
+
+    assert tight > loose
+
+
+# ---------------------------------------------------------------------------
 # clean
 # ---------------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
 """
-Unit tests for TurretModel (space_flight.actors.turret_model).
+Unit tests for TurretModel (space_flight.actors.capital_ship.turret_model).
 
 Tests use a fully-mocked game so no 3-D assets or ShowBase instance are
 required.  The MagicMock returned by game.root_node.attachNewNode stands
@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.turret_model import TurretModel
+from space_flight.actors.capital_ship.turret_model import TurretModel
 
 
 @pytest.fixture

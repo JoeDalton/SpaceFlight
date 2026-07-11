@@ -1,0 +1,28 @@
+# Test tractor beam projector.
+# Reuses the turret "test" antenna model (model_type) and the same swivel agility.
+# The grab hardware specs (cone, range, force strengths) live here; the grab
+# behaviour (min/max grab time, release speed, cooldown) lives in the
+# TRACTOR_BEAM_DEFAULT personality.
+model_type: test
+
+# Swivel agility (shared shape with turrets)
+max_pitch_rate_degps: 30.0
+max_yaw_rate_degps: 30.0
+physics_filter_time_s: 0.3
+min_pitch_deg: 5.0
+max_pitch_deg: 70.0
+
+# Subsystem (destructible) specs
+health: 4000.0
+hit_box_radius_m: 10
+explosion_scale: 30
+
+# Grab hardware. Placeholders until tuned in-game:
+# - the cone (turning with the antenna) that can acquire a prey,
+# - the reach of the beam,
+# - the drag strength k in F_drag = -k * ||v_rel|| * v_rel,
+# - the constant "light" attraction pulling the prey toward the projector.
+cone_half_angle_deg: 20.0
+range_m: 800.0
+drag_coefficient: 20.0
+attraction_force_n: 2000.0

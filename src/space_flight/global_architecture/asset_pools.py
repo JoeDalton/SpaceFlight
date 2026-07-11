@@ -85,9 +85,14 @@ class SoundPool:
         :return: A sound object, ready to be played
         """
         for sound in self.pool:
-            # Must use a non-currently-playing sound, otherwise it will restart
-            if sound not in self.in_use:
-                self.in_use.add(sound)
+            # Must use a non-currently-playing sound, otherwise it will restart.
+            # Tracked by `id()`, not the sound object itself: under the null
+            # audio backend (headless runs), every AudioSound instance compares
+            # equal and hashes equal to every other one, so a plain `in`/`set`
+            # membership check on the objects themselves would treat any sound
+            # as already in use the moment one was taken.
+            if id(sound) not in self.in_use:
+                self.in_use.add(id(sound))
                 if randomize_pitch:
                     # Randomize the pitch of the sound to get a more realistic feeling
                     sound.setPlayRate(random.uniform(0.9, 1.1))
@@ -103,7 +108,7 @@ class SoundPool:
         :param sound: _description_
         """
         sound.stop()
-        self.in_use.discard(sound)
+        self.in_use.discard(id(sound))
 
 
 def build_sound_pool(app, directory: Path, pattern: str, is_3d: bool) -> list:

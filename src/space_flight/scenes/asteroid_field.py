@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import random
 import uuid
+from typing import TYPE_CHECKING
 
 import numpy as np
 import quaternion
@@ -7,6 +10,9 @@ from panda3d.core import Quat
 
 from space_flight import DATAFILES_PATH
 from space_flight.game.collisions import attach_collision_sphere
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class AsteroidField:
@@ -24,14 +30,27 @@ class AsteroidField:
     TODO: if I want asteroids to be destructible, I may need to isolate them :(
     """
 
+    #: Terrain material, read at laser-hit time to pick a spark colour.
+    material = "rock"
+
     def __init__(
         self,
-        game,
+        game: FlightState,
         n_asteroids: int = 40,
         field_size: float = 200,
         scale_factor: float = 1.0,
         is_moving: bool = True,
-    ):
+    ) -> None:
+        """
+        Populate the field with randomly placed, sized, and oriented asteroids.
+
+        :param game: The game instance.
+        :param n_asteroids: Number of asteroids to create.
+        :param field_size: Edge length of the cube (centred on the origin) the
+            asteroids are scattered in, in world units.
+        :param scale_factor: Multiplier applied to each asteroid's random scale.
+        :param is_moving: Whether the asteroids slowly rotate over time.
+        """
         self.game = game
         self.id = uuid.uuid4()
         self.n_asteroids = n_asteroids
@@ -108,7 +127,7 @@ class AsteroidField:
             )
             self.game.method_lists[self.id] = [self.move_asteriods_task]
 
-    def compute_derivatives(self):
+    def compute_derivatives(self) -> None:
         """
         Computes the derivative of the asteroids' states
         """
@@ -122,7 +141,7 @@ class AsteroidField:
                 quat_dot
             )
 
-    def move_asteriods_task(self):
+    def move_asteriods_task(self) -> None:
         """
         Gets the asteroids' states from the integrator and
         update rendered instances, then prepare the next
@@ -151,7 +170,7 @@ class AsteroidField:
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-    def clean(self):
+    def clean(self) -> None:
         """
         Cleans the AsteroidField object
         """

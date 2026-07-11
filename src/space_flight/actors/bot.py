@@ -6,18 +6,24 @@ import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.actors.capital_ship import CapitalShip
+from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
-from space_flight.actors.turret import Turret
+from space_flight.ai import Personality
 from space_flight.ai.capital_ship.capital_ship_navigator import CapitalShipNavigator
 from space_flight.ai.capital_ship.capital_ship_pilot import CapitalShipPilot
 from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTactician
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
-from space_flight.ai.turret.turret_navigator import TurretNavigator
-from space_flight.ai.turret.turret_pilot import TurretPilot
-from space_flight.ai.turret.turret_tactician import TurretTactician
+from space_flight.ai.tracking_mount.tracking_mount_navigator import (
+    TrackingMountNavigator,
+)
+from space_flight.ai.tracking_mount.tracking_mount_pilot import TrackingMountPilot
+from space_flight.ai.tracking_mount.tracking_mount_tactician import (
+    TrackingMountTactician,
+)
 
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
@@ -59,26 +65,63 @@ class Bot(Destructible):
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
         elif self.bot_type == "turret":
+            # A turret is a subsystem of the ship it is mounted on (its team is
+            # taken from that ship); the bot only controls it.
             self.pawn = Turret(
                 game=self.game,
                 parent=self,
                 turret_type=pawn_model,
-                parent_object=kwargs.get("parent_object", self.game.root_node),
+                mounted_on=kwargs.get("parent_object"),
                 base_position=kwargs.get("base_position", np.zeros(3)),
                 base_orientation=kwargs.get(
                     "base_orientation", np.array([1.0, 0.0, 0.0, 0.0])
                 ),
                 ini_yaw_deg=kwargs.get("ini_yaw_deg", 0.0),
                 ini_pitch_deg=kwargs.get("ini_pitch_deg", -30),
-                team=team,
+                personality=Personality.TURRET_DEFAULT,
             )
 
-            self.pilot = TurretPilot(game=self.game, pawn=self.pawn)
-            self.navigator = TurretNavigator(
+            self.pilot = TrackingMountPilot(game=self.game, pawn=self.pawn)
+            self.navigator = TrackingMountNavigator(
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
-            self.tactician = TurretTactician(
+            self.tactician = TrackingMountTactician(
                 game=self.game, pawn=self.pawn, debug=debug_decisions
+            )
+        elif self.bot_type == "tractor_beam":
+            # A tractor beam projector is, like a turret, a subsystem of its ship
+            # driven by this bot. It shares the generic tracking-mount AI; only its
+            # personality (grab behaviour) and its pawn differ.
+            self.pawn = TractorBeamProjector(
+                game=self.game,
+                parent=self,
+                projector_type=pawn_model,
+                mounted_on=kwargs.get("parent_object"),
+                base_position=kwargs.get("base_position", np.zeros(3)),
+                base_orientation=kwargs.get(
+                    "base_orientation", np.array([1.0, 0.0, 0.0, 0.0])
+                ),
+                ini_yaw_deg=kwargs.get("ini_yaw_deg", 0.0),
+                ini_pitch_deg=kwargs.get("ini_pitch_deg", -30),
+                personality=Personality.TRACTOR_BEAM_DEFAULT,
+            )
+
+            self.pilot = TrackingMountPilot(
+                game=self.game,
+                pawn=self.pawn,
+                personality=Personality.TRACTOR_BEAM_DEFAULT,
+            )
+            self.navigator = TrackingMountNavigator(
+                game=self.game,
+                pawn=self.pawn,
+                personality=Personality.TRACTOR_BEAM_DEFAULT,
+                debug=debug_decisions,
+            )
+            self.tactician = TrackingMountTactician(
+                game=self.game,
+                pawn=self.pawn,
+                personality=Personality.TRACTOR_BEAM_DEFAULT,
+                debug=debug_decisions,
             )
         elif self.bot_type == "capital_ship":
             self.pawn = CapitalShip(
@@ -109,8 +152,12 @@ class Bot(Destructible):
 
         self.add_task(method=self.move_bot_task)
 
-        # Add self to the interacting actors
-        self.game.interactions.add_actor(self.pawn)
+        # Add the pawn to the interacting actors. A subsystem pawn (e.g. a
+        # turret) already registered itself, so skip the duplicate.
+        try:
+            self.game.interactions.add_actor(self.pawn)
+        except ValueError:
+            pass
 
     def move_bot_task(self):
         """
@@ -137,7 +184,7 @@ class Bot(Destructible):
                 pitch_rate=pitch_rate,
                 roll_rate=roll_rate,
             )
-        elif self.bot_type == "turret":
+        elif self.bot_type in ("turret", "tractor_beam"):
             intent, target_dict = self.tactician.think()
 
             target_direction = self.navigator.navigate(
@@ -198,8 +245,9 @@ class Bot(Destructible):
             pass
         try:
             self.game.interactions.remove_actor(self.pawn)
-        except AttributeError:
-            # In level cleanup, game.interactions no longer exist at this point
+        except (KeyError, AttributeError):
+            # Already removed (a subsystem pawn deregisters itself), or
+            # game.interactions is gone during level cleanup
             pass
         self.pilot.clean()
         self.pilot = None

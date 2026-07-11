@@ -561,3 +561,43 @@ def test_clean_nulls_all_references(interactions):
     assert interactions.directions is None
     assert interactions.alignments is None
     assert interactions.rel_velocities is None
+
+
+# ---------------------------------------------------------------------------
+# Actors without kinematics (e.g. subsystems)
+# ---------------------------------------------------------------------------
+
+
+class BareActor:
+    """
+    A targetable actor with no ``speed`` and no ``forward`` (like a subsystem),
+    exercising the interactions' tolerance for missing kinematics.
+    """
+
+    def __init__(self, team, position):
+        self.id = uuid.uuid4()
+        self.name = f"bare_{str(self.id)[:8]}"
+        self.team = team
+        self.position = np.array(position, dtype=float)
+
+
+def test_update_interactions_tolerates_missing_speed_and_forward(interactions):
+    """
+    An actor lacking ``speed`` and ``forward`` still takes part in interactions:
+    its velocity and facing default to zero rather than raising.
+    """
+    ship = MockActor(team=1, position=[0.0, 0.0, 0.0])
+    subsystem = BareActor(team=2, position=[10.0, 0.0, 0.0])
+    interactions.add_actor(ship)
+    interactions.add_actor(subsystem)
+
+    interactions.update_interactions()  # must not raise
+
+    i_ship = interactions.get_actor_index_from_id(ship.id)
+    i_sub = interactions.get_actor_index_from_id(subsystem.id)
+    # Opposing teams within range => they interact
+    assert interactions.interact[i_ship, i_sub]
+    # The unoriented subsystem contributes a zero alignment (no facing)
+    assert interactions.alignments[i_sub, i_ship] == pytest.approx(0.0)
+    # Relative velocity falls back to zero for the speed-less subsystem
+    np.testing.assert_allclose(interactions.rel_velocities[i_ship, i_sub], 0.0)

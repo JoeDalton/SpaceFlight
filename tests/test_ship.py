@@ -10,7 +10,65 @@ def make_ship_without_init():
     """
     ship = object.__new__(Ship)
     ship.impact_force_n = np.zeros(3)
+    ship.external_force_n = np.zeros(3)
     return ship
+
+
+# ---------------------------
+# external forces (tractor beam and friends)
+# ---------------------------
+
+
+def test_apply_external_force_accumulates():
+    """
+    apply_external_force sums the forces applied this frame, so several sources
+    (e.g. two tractor beams) add up.
+    """
+    ship = make_ship_without_init()
+
+    ship.apply_external_force(np.array([10.0, 0.0, 0.0]))
+    ship.apply_external_force(np.array([0.0, -5.0, 2.0]))
+
+    np.testing.assert_allclose(ship.external_force_n, [10.0, -5.0, 2.0])
+
+
+def test_compute_derivatives_consumes_and_zeroes_external_force():
+    """
+    compute_derivatives feeds the external force into the acceleration (F / m)
+    and then clears it, so the force disappears the moment nothing re-applies it.
+    """
+
+    class ConcreteShip(Ship):
+        def apply_damage(self, damage, damage_type):
+            pass
+
+        def ship_handle_health(self):
+            pass
+
+    ship = object.__new__(ConcreteShip)
+    ship.state = np.zeros(10)
+    ship.state[3:7] = np.array([1.0, 0.0, 0.0, 0.0])
+    ship.state_dot = np.zeros(10)
+    ship.state_dot_previous = np.zeros(10)
+    ship.speed = np.zeros(3)  # no drag/lift at rest, whatever the flight model
+    ship.orientation = np.array([1.0, 0.0, 0.0, 0.0])
+    ship.pqr = np.zeros(3)
+    ship.scalar_thrust_n = 0.0
+    ship.mass_kg = 2.0
+    ship.additional_force_n = np.zeros(3)
+    ship.impact_force_n = np.zeros(3)
+    ship.external_force_n = np.array([10.0, 0.0, 0.0])
+    ship.drag_factor = 0.0
+    ship.lift_factor = 0.0
+    ship.lateral_lift_factor = 0.0
+    ship.max_thrust_n = 1000.0
+
+    ship.compute_derivatives()
+
+    # F / m ended up in the linear acceleration slots of the state derivative...
+    np.testing.assert_allclose(ship.state_dot[7:10], [5.0, 0.0, 0.0])
+    # ... and the external force was consumed so it does not persist.
+    np.testing.assert_array_equal(ship.external_force_n, np.zeros(3))
 
 
 # ---------------------------

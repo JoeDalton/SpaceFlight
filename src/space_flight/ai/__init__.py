@@ -155,6 +155,50 @@ class Personality:
         },
     }
 
+    TRACTOR_BEAM_DEFAULT = {
+        # Aiming (target selection / lead aim / steering) is identical to a
+        # turret's: a tractor beam is just another tracking mount.
+        "tactician": {
+            "min_engagement_score": 0.5,
+            "primary_target_engagement_multiplier": 5.0,
+            "hunter_cutoff_distance": 900.0,
+            "hunter_angular_focus": 0.3,
+            "intent_update_delay": 0.5,
+            "commitment_times": {
+                Intent.ENGAGE: 10.0,
+                Intent.IDLE: 0.1,
+            },
+        },
+        "navigator": {
+            "fire": {
+                "maximum_distance_m": 1000,
+                "maximum_angle_rad": np.deg2rad(5),
+                "minimum_cos_angle": np.cos(np.deg2rad(5)),
+            },
+            "attack": {
+                "lead_time_s": 0.1,
+            },
+        },
+        "pilot": {
+            "sample_time_s": 0.1,
+            "yaw_kp": 3.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -3.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
+        },
+        # Grab behaviour (as opposed to the projector's fixed hardware specs, which
+        # live in its model config): how long it commits to and holds a prey, and
+        # the relative speed at which the prey wrenches free.
+        "tractor_beam": {
+            "min_grab_time_s": 2.0,
+            "max_grab_time_s": 15.0,
+            "release_speed_mps": 150.0,
+            "regrab_cooldown_s": 3.0,
+        },
+    }
+
     CAPITAL_SHIP_DEFAULT = {
         "tactician": {
             "min_fighting_shape": 2,

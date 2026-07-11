@@ -1,3 +1,4 @@
+import logging
 import random
 from pathlib import Path
 from typing import List
@@ -6,6 +7,8 @@ import numpy as np
 from direct.showbase import Audio3DManager
 
 from space_flight import DATAFILES_PATH
+
+LOGGER = logging.getLogger()
 
 SOUND_VOLUME_REFERENCE_DISTANCE_M = 500
 MAX_SOUND_DISTANCE_M = 2000
@@ -105,6 +108,9 @@ class SFX:
         :param impact_type: The type of impact (target, terrain, etc.)
 
         """
+        # No one to hear it, and no camera to hang a 3D sound off of, headless.
+        if game.headless:
+            return
         # Set the volume according to the distance fromm the impact to the player
         impact_distance = np.linalg.norm(hit_pos - player_ship_pos)
 
@@ -136,6 +142,29 @@ class SFX:
             extra_args=[sound],
         )
 
+    def tractor_beam_grab(self, game):
+        """
+        Placeholder cue for a tractor beam locking onto the player.
+
+        TODO: play a looping tractor-beam hum for the duration of the grab. For
+        now this only logs, so the grab mechanic can be wired and exercised
+        without a dedicated audio asset.
+
+        :param game: The game object
+        """
+        LOGGER.info("Tractor beam locked onto the player (placeholder SFX)")
+
+    def tractor_beam_release(self, game):
+        """
+        Placeholder cue for a tractor beam releasing the player.
+
+        TODO: play a release/power-down sound (and stop the grab hum started by
+        tractor_beam_grab). For now this only logs.
+
+        :param game: The game object
+        """
+        LOGGER.info("Tractor beam released the player (placeholder SFX)")
+
     def laser_impact_hit_on_player(
         self, game, relative_hit_point: np.ndarray, is_shield: bool
     ):
@@ -146,6 +175,9 @@ class SFX:
         :param relative_hit_point: The position of the hit relative to the player node
         :param is_shield: Whether the player's shield is active
         """
+        # No one to hear it, and no camera to hang a 3D sound off of, headless.
+        if game.headless:
+            return
         if is_shield:
             sound_pool = self.player_shield_laser_hit_sound_pool
         else:
@@ -188,6 +220,9 @@ class SFX:
         :param relative_hit_point: The position of the hit relative to the player node
         :param in_rock: Whether the player has crashed in terrain shield is active
         """
+        # No one to hear it, and no camera to hang a 3D sound off of, headless.
+        if game.headless:
+            return
         # Create ad-hoc dummy node to place the sound
         dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)  # slightly to the right
@@ -242,6 +277,9 @@ class SFX:
         :param sound_pool: The sound pool from which to draw the sound
         :param node: The node to attach the sound to
         """
+        # No one to hear it, headless.
+        if game.headless:
+            return
         sound = sound_pool.get_sound(randomize_pitch=True)
         self.audio3d.attachSoundToObject(sound, node)
         sound.play()
