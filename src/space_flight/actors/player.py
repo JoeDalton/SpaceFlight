@@ -84,13 +84,18 @@ class Player:
                 game=self.game, pawn=self.pawn, debug=True
             )
 
-        # Initialize rear view mirror
-        self.rear_view_mirror = RearViewMirror(
-            game=self.game, player_node=self.pawn.node
-        )
+        # Initialize rear view mirror (needs a real window to render into;
+        # skipped headless, where there is nothing to display it on)
+        if not self.game.headless:
+            self.rear_view_mirror = RearViewMirror(
+                game=self.game, player_node=self.pawn.node
+            )
+        else:
+            self.rear_view_mirror = None
 
-        # Anchor camera to player ship node
-        self.initialize_camera()
+        # Anchor camera to player ship node (there is no camera headless)
+        if not self.game.headless:
+            self.initialize_camera()
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
@@ -126,8 +131,9 @@ class Player:
             roll_rate=self.roll_rate,
         )
 
-        # Move camera relative to the ship node
-        self.move_camera()
+        # Move camera relative to the ship node (there is no camera headless)
+        if not self.game.headless:
+            self.move_camera()
 
         # Record state if needed
         if RECORD_GAME and self.record:
@@ -435,9 +441,10 @@ class Player:
         """
         Cleans the player object before it is deleted
         """
-        self.game.app.camera.reparentTo(self.game.app.render)
-        self.head_pivot.removeNode()
-        self.head_jolt.removeNode()
+        if not self.game.headless:
+            self.game.app.camera.reparentTo(self.game.app.render)
+            self.head_pivot.removeNode()
+            self.head_jolt.removeNode()
 
         if self.has_ai:
             self.pilot.clean()
@@ -447,7 +454,8 @@ class Player:
             self.navigator = None
             self.tactician = None
 
-        self.rear_view_mirror.clean()
+        if self.rear_view_mirror is not None:
+            self.rear_view_mirror.clean()
         self.rear_view_mirror = None
 
         self.game = None

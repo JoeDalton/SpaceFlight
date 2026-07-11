@@ -34,8 +34,8 @@ def build_race_upfront(game: FlightState) -> None:
     """
     game.player = Player(
         game=game,
-        ship_type="y-wing",
-        ini_position=np.array([0, -500, 500]),
+        ship_type="x-wing",
+        ini_position=np.array([0, -600, 550]),
         is_neutral=False,
         has_ai=False,
     )

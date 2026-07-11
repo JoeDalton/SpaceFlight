@@ -200,12 +200,19 @@ class Ship(Pawn):
                 (throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)
             ) ** 2 * self.max_thrust_n
         else:
-            # Ship is braking, propotionally to its forward speed
-            brake_intensity = (ZERO_THRUST_POSITION - throttle) / ZERO_THRUST_POSITION
-            forward_speed_mps = max(0.0, np.dot(self.speed, self.forward))
-            scalar_thrust_n = (
-                -forward_speed_mps * self.brake_factor_nspm * brake_intensity
-            )
+            if FLIGHT_MODEL == "airplane":
+                # Ship is braking, propotionally to its forward speed
+                brake_intensity = (
+                    ZERO_THRUST_POSITION - throttle
+                ) / ZERO_THRUST_POSITION
+                forward_speed_mps = max(0.0, np.dot(self.speed, self.forward))
+                scalar_thrust_n = (
+                    -forward_speed_mps * self.brake_factor_nspm * brake_intensity
+                )
+            elif FLIGHT_MODEL == "space":
+                scalar_thrust_n = 0
+            else:
+                raise Exception
 
         pqr = np.array(
             [

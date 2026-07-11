@@ -108,6 +108,9 @@ class SFX:
         :param impact_type: The type of impact (target, terrain, etc.)
 
         """
+        # No one to hear it, and no camera to hang a 3D sound off of, headless.
+        if game.headless:
+            return
         # Set the volume according to the distance fromm the impact to the player
         impact_distance = np.linalg.norm(hit_pos - player_ship_pos)
 
@@ -172,6 +175,9 @@ class SFX:
         :param relative_hit_point: The position of the hit relative to the player node
         :param is_shield: Whether the player's shield is active
         """
+        # No one to hear it, and no camera to hang a 3D sound off of, headless.
+        if game.headless:
+            return
         if is_shield:
             sound_pool = self.player_shield_laser_hit_sound_pool
         else:
@@ -214,6 +220,9 @@ class SFX:
         :param relative_hit_point: The position of the hit relative to the player node
         :param in_rock: Whether the player has crashed in terrain shield is active
         """
+        # No one to hear it, and no camera to hang a 3D sound off of, headless.
+        if game.headless:
+            return
         # Create ad-hoc dummy node to place the sound
         dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
         dummy_node.setPos(*relative_hit_point)  # slightly to the right
@@ -268,6 +277,9 @@ class SFX:
         :param sound_pool: The sound pool from which to draw the sound
         :param node: The node to attach the sound to
         """
+        # No one to hear it, headless.
+        if game.headless:
+            return
         sound = sound_pool.get_sound(randomize_pitch=True)
         self.audio3d.attachSoundToObject(sound, node)
         sound.play()

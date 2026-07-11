@@ -341,6 +341,10 @@ class Shield(Destructible):
         self.is_enabled = self.state == _UP
         self.set_visible(self.state != _DOWN)
 
+        # Pushing per-frame shader uniforms is a pure rendering concern: no
+        # camera and nothing to render headless.
+        if self.game.headless:
+            return
         health_frac = self.health / self.max_health if self.max_health > 0.0 else 0.0
         self.model.render(
             now=now,

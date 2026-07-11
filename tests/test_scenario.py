@@ -126,6 +126,7 @@ class FakeGame:
         self.hud = MockHud()
         self.scenario = scenario
         self.method_lists = {}
+        self.headless = False
 
 
 @pytest.fixture
@@ -478,36 +479,28 @@ def test_speech_action_bare_string(game):
 
 
 def _end_level_game():
-    """A minimal game whose state_manager records pushed states + kwargs."""
-    pushed = []
-
-    class StateManager:
-        LEVEL_END_STATE = "LEVEL_END"
-
-        def push(self, state_class, **kwargs):
-            pushed.append((state_class, kwargs))
-
-    class App:
-        state_manager = StateManager()
+    """A minimal game whose ``end_level`` records its call args."""
+    calls = []
 
     class Game:
-        app = App()
+        def end_level(self, outcome, text=""):
+            calls.append((outcome, text))
 
-    return Game(), pushed
+    return Game(), calls
 
 
 def test_end_level_action_pushes_level_end_state():
-    """end_level pushes the level-end state with outcome and text."""
-    game, pushed = _end_level_game()
+    """end_level forwards the outcome and text to game.end_level."""
+    game, calls = _end_level_game()
     end_level({"outcome": "victory", "text": "You won."})(game)
-    assert pushed == [("LEVEL_END", {"outcome": "victory", "text": "You won."})]
+    assert calls == [("victory", "You won.")]
 
 
 def test_end_level_action_bare_outcome_string():
     """A bare outcome string defaults the explanatory text to empty."""
-    game, pushed = _end_level_game()
+    game, calls = _end_level_game()
     end_level("defeat")(game)
-    assert pushed == [("LEVEL_END", {"outcome": "defeat", "text": ""})]
+    assert calls == [("defeat", "")]
 
 
 def test_player_waypoints_action_creates_route(monkeypatch):

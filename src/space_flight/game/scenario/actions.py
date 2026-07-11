@@ -108,7 +108,7 @@ def _spawn_wave_job(game: FlightState, cfg: dict) -> Iterator[None]:
         offsets = formation.relative_positions
         game.scenario.formations.append(formation)
 
-    if cfg.get("hud_text"):
+    if cfg.get("hud_text") and not game.headless:
         game.hud.set_event_text(
             text=cfg["hud_text"], display_time_s=cfg.get("hud_time_s", 2.5)
         )
@@ -165,7 +165,9 @@ def hud_text(text: str, display_time_s: float = 2.5) -> Action:
     """
 
     def action(game: FlightState) -> None:
-        game.hud.set_event_text(text=text, display_time_s=display_time_s)
+        # There is no HUD headless, and no one to read the message.
+        if not game.headless:
+            game.hud.set_event_text(text=text, display_time_s=display_time_s)
 
     return action
 
@@ -217,7 +219,9 @@ def speech(cfg: Union[str, dict]) -> Action:
 
     def action(game: FlightState) -> None:
         _play_speech_audio(cfg)
-        game.hud.set_chatter_text(text=subtitle, display_time_s=display_time_s)
+        # There is no HUD headless, and no one to read the subtitle.
+        if not game.headless:
+            game.hud.set_chatter_text(text=subtitle, display_time_s=display_time_s)
 
     return action
 
@@ -252,11 +256,7 @@ def end_level(cfg: Union[str, dict]) -> Action:
     text = cfg.get("text", "")
 
     def action(game: FlightState) -> None:
-        game.app.state_manager.push(
-            state_class=game.app.state_manager.LEVEL_END_STATE,
-            outcome=outcome,
-            text=text,
-        )
+        game.end_level(outcome=outcome, text=text)
 
     return action
 
