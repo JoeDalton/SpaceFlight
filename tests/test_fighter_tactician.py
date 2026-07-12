@@ -158,3 +158,89 @@ def test_select_attack_mode_missing_target_defaults_to_pursuit(mock_game):
     mock_game.interactions.get_actor_index_from_id.side_effect = ValueError
 
     assert tactician._select_attack_mode(target_id="t") == AttackMode.PURSUIT
+
+
+# ---------------------------------------------------------------------------
+# _select_attack_mode / _choose_weapon — bomb suitability
+# ---------------------------------------------------------------------------
+
+
+def _wire_numeric_target(
+    mock_game, tactician, mobility, health, shield_level, target_id="t", primary=False
+):
+    """Point the interactions at one fully-numeric target for the bomb scoring."""
+    target = MagicMock()
+    target.mobility = mobility
+    target.health = health
+    target.shield_level = shield_level
+    target.id = target_id
+    mock_game.interactions.get_actor_index_from_id.return_value = 0
+    mock_game.interactions.actors = [target]
+    tactician.primary_target_ids = [target_id] if primary else []
+    return target
+
+
+def test_select_bomb_for_hard_stationary_primary_target(mock_game):
+    """
+    A tough, valuable (primary), stationary target with ordnance in hand is
+    attacked with a BOMB.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    tactician.pawn.bomb_supply = 6
+    _wire_numeric_target(
+        mock_game,
+        tactician,
+        mobility=0.05,
+        health=8000.0,  # clearly past the hardness_step (5000) "hard" threshold
+        shield_level=0.0,
+        primary=True,
+    )
+
+    assert tactician._select_attack_mode(target_id="t") == AttackMode.BOMB
+
+
+def test_select_strafe_not_bomb_for_soft_target(mock_game):
+    """
+    A soft target is not worth a bomb even if stationary and primary: guns, and
+    (being slow) a STRAFE run.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    tactician.pawn.bomb_supply = 6
+    _wire_numeric_target(
+        mock_game,
+        tactician,
+        mobility=0.05,
+        health=100.0,
+        shield_level=0.0,
+        primary=True,
+    )
+
+    assert tactician._select_attack_mode(target_id="t") == AttackMode.STRAFE
+
+
+def test_select_no_bomb_without_supply(mock_game):
+    """
+    With no bombs left, even the ideal bomb target falls to guns (STRAFE).
+    """
+    tactician = make_fighter_tactician(mock_game)
+    tactician.pawn.bomb_supply = 0
+    _wire_numeric_target(
+        mock_game,
+        tactician,
+        mobility=0.05,
+        health=2000.0,
+        shield_level=0.0,
+        primary=True,
+    )
+
+    assert tactician._select_attack_mode(target_id="t") == AttackMode.STRAFE
+
+
+def test_choose_weapon_falls_back_to_guns_on_non_numeric(mock_game):
+    """
+    A mocked/non-numeric target must not crash the scoring; it falls back to guns.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    target = MagicMock()  # mobility/health/shield_level are MagicMocks
+
+    assert tactician._choose_weapon(target) == "guns"

@@ -57,6 +57,8 @@ class GenericShipNavigator(GenericNavigator):
         # Reset the per-phase avoidance factor; the intent may lower it (formation,
         # strafe corridor) before we apply it below.
         self.avoidance_weight_factor = 1.0
+        # Reset the pilot up-reference; a bomb run sets it to aim the belly.
+        self.up_reference = None
         # Compute intentional component
         intent_direction, intent_speed = self.navigate_intent(
             intent=intent, target_dict=target_dict

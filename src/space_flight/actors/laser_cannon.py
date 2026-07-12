@@ -1,37 +1,36 @@
-import logging
-import uuid
 from typing import Tuple
 
 import numpy as np
 import quaternion
-from direct.interval.IntervalGlobal import LerpPosInterval
 from panda3d.core import (
     CardMaker,
     LPoint3,
-    LVector3,
     NodePath,
     PointLight,
     Quat,
     TransparencyAttrib,
 )
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight import DATAFILES_PATH
+from space_flight.actors.weapon import Munition, Weapon
 from space_flight.game.collisions import attach_collision_segment
 from space_flight.utils import build_axis_billboard_quat
-
-LOGGER = logging.getLogger()
 
 LASER_SPEED_MPS = 2000.0
 SQT2_S = np.sqrt(2.0) / 2.0
 LIGHT_ATTENUATION = (1, 0.05, 0)
 
 
-class LaserCannon:
+class LaserCannon(Weapon):
+    """
+    A rate-limited multi-cannon gun. Cycles through its cannon nodes, aims each
+    shot via the parent's auto-aim (falling back to nose-forward), spawns a
+    :class:`LaserShot` and plays the fire sound.
+    """
+
     def __init__(self, game, parent, parent_node=None):
-        self.parent = parent
-        self.game = game
-        if parent_node is None:
-            parent_node = self.parent.node
+        fire_delay = 1.0 / parent.conf["laser_fire_rate"]
+        super().__init__(game, parent, parent_node, fire_delay=fire_delay)
 
         # Cannon configuration
         cannon_positions = self.parent.conf["cannon_positions"]
@@ -40,7 +39,7 @@ class LaserCannon:
         for cannon_idx in range(self.n_cannon):
             # Create a dummy node to attach models
             node = NodePath("player_node")
-            node.reparentTo(parent_node)
+            node.reparentTo(self.parent_node)
             node.set_pos(*cannon_positions[cannon_idx])
             self.cannon_nodes.append(node)
 
@@ -48,7 +47,6 @@ class LaserCannon:
         self.shot_power = self.parent.conf["shot_power"]
         self.laser_base_range_m = self.parent.conf["laser_base_range_m"]
         self.life_time_s = self.laser_base_range_m / LASER_SPEED_MPS
-        self.fire_delay = 1.0 / self.parent.conf["laser_fire_rate"]
         color = self.parent.conf["laser_color"]
 
         # Sound initialization
@@ -73,14 +71,12 @@ class LaserCannon:
             path=DATAFILES_PATH / f"sprites/lasers/laser_{color}.png",
         ).get_texture()
 
-        # Initialize cannon
+        # Initialize cannon cycling
         self.current_next_cannon_idx = 0
-        self.last_fire_time = self.game.game_time.get_current_time()
 
     def fire(self):
-        # Fire at prescribed rate
-        current_time = self.game.game_time.get_current_time()
-        if current_time - self.last_fire_time < self.fire_delay:
+        # Fire at the prescribed rate (reload gate on the Weapon base)
+        if not self._ready_to_fire():
             return
 
         # Compute start position
@@ -99,16 +95,14 @@ class LaserCannon:
             )
 
         # Spawn laser shot
-        _ = LaserShot(
-            game=self.game,
-            origin_ship_id=self.parent.id,
-            origin_ship=self.parent,
+        self._spawn_munition(
+            LaserShot,
+            start_position,
+            shot_speed,
+            self.shot_power,
+            self.life_time_s,
             texture=self.laser_texture,
-            power=self.shot_power,
-            life_time_s=self.life_time_s,
             light_color=self.light_color,
-            speed=shot_speed,
-            start_position=start_position,
         )
 
         # Attach sound to the cannon currently firing
@@ -122,25 +116,17 @@ class LaserCannon:
         self.current_next_cannon_idx = (
             self.current_next_cannon_idx + 1
         ) % self.n_cannon
-        self.last_fire_time = current_time
 
     def clean(self):
         for node in self.cannon_nodes:
             node.remove_node()
         self.cannon_nodes = []
         self.sound_pool = []
-        self.parent = None
         self.laser_texture = None
-        self.game = None
-        if DEBUG_DELETION:
-            LOGGER.info("Cleaned laser cannon")
-
-    def __del__(self):
-        if DEBUG_DELETION:
-            LOGGER.info("Deleted laser cannon")
+        super().clean()
 
 
-class LaserShot:
+class LaserShot(Munition):
     """
     A class for laser shot objects
 
@@ -161,23 +147,24 @@ class LaserShot:
         start_position,
         origin_ship=None,
     ):
-        self.game = game
-        self.id = uuid.uuid4()
-        self.power = power
-        self.origin_ship_id = origin_ship_id
-        # The emitter object itself (a ship pawn or a mounted turret). Read by the
-        # laser collision handlers to spare the whole firing vehicle -- the
-        # emitter, the ship it is mounted on, and that ship's other subsystems --
-        # via owners_share_vehicle, so a turret cannot hit its own ship or shield.
-        self.origin_ship = origin_ship
-        # World-space velocity, read by laser_into_shield to tell an inward
-        # crossing (blocked) from an outward one (passes through).
-        self.speed = np.asarray(speed, dtype=float)
+        # Store the visual parameters before the base __init__ calls _build_visual.
+        self.texture = texture
+        self.light_color = light_color
+        super().__init__(
+            game=game,
+            origin_ship_id=origin_ship_id,
+            power=power,
+            life_time_s=life_time_s,
+            speed=speed,
+            start_position=start_position,
+            origin_ship=origin_ship,
+        )
 
+    def _build_visual(self, start_position) -> NodePath:
         # Create flat quad
         cm = CardMaker("laser")
         cm.set_frame(-0.5, 0.5, -4.0, 4.0)
-        self.shot = self.game.root_node.attach_new_node(cm.generate())
+        shot = self.game.root_node.attach_new_node(cm.generate())
 
         # Compute orientation
         # A preset orientation is ok since lasers have short lifetimes. For longer-lived
@@ -185,45 +172,39 @@ class LaserShot:
         camera_position = self.game.app.camera.get_pos(self.game.root_node)
         to_camera_vector = camera_position - start_position
         billboard_quat = build_axis_billboard_quat(
-            forward=speed, up_hint=to_camera_vector
+            forward=self.speed, up_hint=to_camera_vector
         ) * np.quaternion(SQT2_S, SQT2_S, 0, 0)
-        self.shot.set_quat(Quat(*quaternion.as_float_array(billboard_quat)))
-
-        my_range = speed * life_time_s
-
-        end_position = start_position + LVector3(*my_range)
+        shot.set_quat(Quat(*quaternion.as_float_array(billboard_quat)))
 
         # Don't rely on scene lighting since lasers emit their own light
-        self.shot.set_light_off()
+        shot.set_light_off()
         # Set texture
-        self.shot.set_texture(texture)
+        shot.set_texture(self.texture)
         # Allow to be seen from both sides
-        self.shot.set_two_sided(True)
+        shot.set_two_sided(True)
         # Allow transparency
-        self.shot.set_transparency(TransparencyAttrib.MAlpha)
+        shot.set_transparency(TransparencyAttrib.MAlpha)
 
-        # Preset movement
-        self.shot.set_pos(start_position)
-        laser_movement_interval = LerpPosInterval(self.shot, life_time_s, end_position)
-        self.game.interval_manager.play_interval(laser_movement_interval)
-
-        # Add light source on laser
+        # Add light source on the laser (it is self-lit)
         self.plight = PointLight("plight")
-        self.plight.setColor(light_color)
+        self.plight.setColor(self.light_color)
         self.plight.set_attenuation(LIGHT_ATTENUATION)
-        self.plnp = self.shot.attachNewNode(self.plight)
+        self.plnp = shot.attachNewNode(self.plight)
         self.plnp.setPos(0, 0, 0)
         self.game.app.render.setLight(self.plnp)
 
+        return shot
+
+    def _attach_collider(self) -> NodePath:
         # Initialize collision segment
         # The length of the segment is the typical frame time
         # multiplied by the laser speed to cover the space spanned by the laser
         # between two frames
         dt = 1 / self.game.game_time.get_average_frame_rate()
         relative_start_position = np.zeros(3)
-        length = np.linalg.norm(speed) * dt * np.array([0.0, 0.0, 1.0])
+        length = np.linalg.norm(self.speed) * dt * np.array([0.0, 0.0, 1.0])
         relative_end_position = relative_start_position + length
-        self.laser_col_np = attach_collision_segment(
+        return attach_collision_segment(
             game=self.game,
             name="laser",
             collider_type="laser",
@@ -233,51 +214,11 @@ class LaserShot:
             relative_end_position=LPoint3(*relative_end_position),
         )
 
-        # Register self in temporary game objects
-        self.game.game_objects[self.id] = self
-
-        # Clean laser at the end of its life
-        # Make it disappear at the end of range
-        self.game.delayed_methods.do_method_later(
-            delay_s=life_time_s,
-            name="CleanLaserShot",
-            method=self.clean,
-        )
-
-    def clean(self, remove_from_game_objects: bool = True):
-        """
-        Cleans a LaserShot object
-        """
-        # Clear light
+    def _clean_extra(self) -> None:
+        # Clear the laser's own light before the shared teardown removes the node.
         try:
             self.game.app.render.clear_light(self.plnp)
         except AttributeError:
             pass
         self.plnp.removeNode()
-        # Remove collision sphere reference to self
-        try:
-            self.laser_col_np.setPythonTag("owner", None)
-        except AttributeError:
-            pass
-        self.laser_col_np = None
-        # Remove shot node
-        try:
-            self.shot.removeNode()
-        except AttributeError:
-            pass
-        self.shot = None
-        # Remove shot from the temporary game objects
-        if remove_from_game_objects:
-            # Do not do it at the final game cleanup
-            # Otherwise it messes up with the loop
-            if self.game.method_lists:
-                try:
-                    self.game.method_lists.pop(self.id)
-                except KeyError:
-                    pass
-
-        self.game = None
-
-    def __del__(self):
-        if DEBUG_DELETION:
-            LOGGER.info("Deleted laser")
+        self.plnp = None

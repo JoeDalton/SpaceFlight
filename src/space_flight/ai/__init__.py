@@ -31,17 +31,17 @@ class AttackMode(Enum):
     How a bot attacks a target once its tactician has chosen ``Intent.ENGAGE``.
 
     Carried in ``target_dict["attack_mode"]`` (the tactician decides, the
-    navigator executes). ``PURSUIT`` is the historical constant-angle chase,
-    good against agile prey; ``STRAFE`` is a committed run-in/fire/break/reposition
-    cycle for slow or immobile targets; ``ORBIT`` keeps a target abeam on a capital
-    ship's turret flank. ``BOMB`` is reserved for Phase 2 (the bomb weapon does not
-    exist yet).
+    navigator executes). ``PURSUIT`` is the constant-angle chase, good against
+    agile prey; ``STRAFE`` is a committed run-in/fire/break/reposition cycle for
+    slow or immobile targets; ``BOMB`` overflies a slow/immobile target and drops
+    a bomb along the belly; ``ORBIT`` keeps a target abeam on a capital ship's
+    turret flank.
     """
 
     PURSUIT = auto()
     STRAFE = auto()
     ORBIT = auto()
-    BOMB = auto()  # Phase 2, not yet implemented
+    BOMB = auto()
 
 
 class Personality:
@@ -63,6 +63,21 @@ class Personality:
             # Below this target mobility, engage with a STRAFE run rather than a
             # PURSUIT chase (a slow/immobile prey can't be chased sensibly).
             "strafe_mobility_threshold": 0.35,
+            # Weapon-suitability scoring: spend a limited bomb only on a target
+            # that is BOTH tough and valuable (worth = hardness * value), when
+            # stationary enough and supply allows. S_bomb > S_gun -> BOMB.
+            # (Ramps use smooth_step_up.)
+            "bomb_scoring": {
+                "hardness_step": 5000.0,  # health+shield read as "hard" beyond this
+                "hardness_slope": 0.005,
+                "value_step": 3.0,  # on the primary-target multiplier (1 vs 5)
+                "value_slope": 1.0,
+                "supply_step": 2.0,  # bombs remaining for a strong supply factor
+                "supply_slope": 1.0,
+                "gun_base": 0.3,  # guns are always somewhat suitable
+                "gun_soft": 0.7,  # ...and great against soft targets
+                "bomb_scale": 1.5,  # overall bomb eagerness
+            },
             "intent_update_delay": 0.5,
             "commitment_times": {
                 Intent.ENGAGE: 10.0,
@@ -159,6 +174,24 @@ class Personality:
                 "swivel_amplitude": 0.0,  # lateral weave strength (added to dir)
                 "swivel_frequency_hz": 0.5,
                 "swivel_distance_scale_m": 800.0,  # amplitude ramps within this range
+            },
+            # Bombing run: overfly a slow/immobile target and release a bomb along
+            # the belly (-Z). A committed straight, wings-level leg is flown for
+            # accuracy; the release solver times the drop off the bomb's (linear,
+            # no-gravity) velocity. Belly-aiming uses the pilot up-reference.
+            "bomb": {
+                "run_distance_m": 600.0,  # ingress -> run (straight leg begins)
+                # (bomb launch speed is the BOMB_SPEED_MPS global in bomb_launcher,
+                # shared with the release solver.)
+                "min_cos_release": np.cos(np.deg2rad(12)),  # bomb-velocity cone
+                "max_release_distance_m": 300.0,  # only release within this range
+                "break_duration_s": 1.5,  # committed climbing break
+                "reposition_distance_m": 900.0,
+                "reposition_min_duration_s": 3.0,
+                "ingress_speed_factor": 1.0,
+                "run_speed_factor": 0.85,  # steady leg, a touch slower
+                "break_speed_factor": 0.6,
+                "reposition_speed_factor": 1.0,
             },
         },
         "pilot": {

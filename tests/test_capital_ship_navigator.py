@@ -37,7 +37,6 @@ def make_capital_ship_navigator(
     nav.personality = Personality.CAPITAL_SHIP_DEFAULT
     nav.debug = False
     nav.behaviour_sm = StateMachine("idle", clock=nav.game.game_time.get_current_time)
-    nav.last_update_time = 0.0
     nav.waypoints = []
     nav.next_waypoint_idx = 0
     nav.distance_to_waypoint_m = 0.0

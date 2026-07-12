@@ -4,7 +4,7 @@ from pathlib import Path
 
 LOGGER = logging.getLogger()
 
-SOUND_POOL_LENGTH = 200
+SOUND_POOL_LENGTH = 1000
 
 
 class TexturePool:
@@ -98,7 +98,7 @@ class SoundPool:
                     sound.setPlayRate(random.uniform(0.9, 1.1))
                 return sound
         # If this state is reached, no ready-to-play sound is available
-        LOGGER.warning("No sound ready to play")
+        LOGGER.error("No sound ready to play in pool: ")
         raise RuntimeError("No sound ready to play")
 
     def release_sound(self, sound):

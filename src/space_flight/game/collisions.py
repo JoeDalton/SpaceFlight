@@ -27,8 +27,8 @@ from space_flight.fx import spark_fx
 if TYPE_CHECKING:
     from space_flight.actors.capital_ship.shield import Shield
     from space_flight.actors.capital_ship.sub_system import SubSystem
-    from space_flight.actors.laser_cannon import LaserShot
     from space_flight.actors.ship import Ship
+    from space_flight.actors.weapon import Munition
     from space_flight.ai.collision_sensor import CollisionSensor
     from space_flight.game.flight_state import FlightState
     from space_flight.scenes.asteroid_field import AsteroidField
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     # Any object that can own a collider (stored as its "owner" python tag).
     ColliderOwner = (
-        Ship | SubSystem | Shield | Ocean | AsteroidField | LaserShot | CollisionSensor
+        Ship | SubSystem | Shield | Ocean | AsteroidField | Munition | CollisionSensor
     )
     # Owners that are part of a vehicle (the share-vehicle / hit-velocity logic
     # only ever sees ships, their subsystems, and their shields).
@@ -65,42 +65,42 @@ LOGGER = logging.getLogger()
 
 
 class CollisionLayers:
-    LASER = BitMask32.bit(0)
+    MUNITION = BitMask32.bit(0)
     SENSOR = BitMask32.bit(0)
     SHIELD = BitMask32.bit(1)
     DESTRUCTIBLE = BitMask32.bit(2)
     ENVIRONMENT = BitMask32.bit(3)
 
-    # Lasers hit environment, destructibles and shields
+    # Munitions hit environment, destructibles and shields
     # Nothing hits them
-    LASER_FROM = DESTRUCTIBLE | ENVIRONMENT | SHIELD
-    LASER_INTO = BitMask32.allOff()
+    MUNITION_FROM = DESTRUCTIBLE | ENVIRONMENT | SHIELD
+    MUNITION_INTO = BitMask32.allOff()
 
     # Same for sensors
     SENSOR_FROM = DESTRUCTIBLE | ENVIRONMENT
     SENSOR_INTO = BitMask32.allOff()
 
     # Destructibles hit environment and other destructibles.
-    # They are only hit by lasers, sensors and other destructibles
+    # They are only hit by munitions, sensors and other destructibles
     DESTRUCTIBLE_FROM = DESTRUCTIBLE | ENVIRONMENT
-    DESTRUCTIBLE_INTO = LASER | SENSOR | DESTRUCTIBLE
+    DESTRUCTIBLE_INTO = MUNITION | SENSOR | DESTRUCTIBLE
 
     # Terrain cannot hit anything
-    # It is hit by lasers, sensors and destructibles
+    # It is hit by munitions, sensors and destructibles
     TERRAIN_FROM = BitMask32.allOff()
-    TERRAIN_INTO = LASER | SENSOR | DESTRUCTIBLE
+    TERRAIN_INTO = MUNITION | SENSOR | DESTRUCTIBLE
 
     # Subsystems are chunks bolted onto a ship (shield generators, turrets...).
     # Like terrain they never initiate collisions (they are rigid parts of their
     # parent ship), they are only hit. They carry their own name so that ship
     # collisions push the *parent* ship rather than the subsystem itself.
     SUBSYSTEM_FROM = BitMask32.allOff()
-    SUBSYSTEM_INTO = LASER | SENSOR | DESTRUCTIBLE
+    SUBSYSTEM_INTO = MUNITION | SENSOR | DESTRUCTIBLE
 
-    # A shield bubble is a barrier only lasers interact with: ships, sensors and
+    # A shield bubble is a barrier only munitions interact with: ships, sensors and
     # other destructibles fly straight through it (their from-masks lack SHIELD),
-    # and it never initiates collisions itself. Whether a laser is blocked or
-    # passes is decided in laser_into_shield by the crossing direction.
+    # and it never initiates collisions itself. Whether a munition is blocked or
+    # passes is decided in munition_into_shield by the crossing direction.
     SHIELD_FROM = BitMask32.allOff()
     SHIELD_INTO = SHIELD
 
@@ -114,9 +114,9 @@ class CollisionLayers:
             the collision handler
         """
         add_to_collision_handler = True
-        if collider_type == "laser":
-            from_mask_bit = CollisionLayers.LASER_FROM
-            into_mask_bit = CollisionLayers.LASER_INTO
+        if collider_type == "laser" or collider_type == "bomb":
+            from_mask_bit = CollisionLayers.MUNITION_FROM
+            into_mask_bit = CollisionLayers.MUNITION_INTO
         elif collider_type == "sensor":
             from_mask_bit = CollisionLayers.SENSOR_FROM
             into_mask_bit = CollisionLayers.SENSOR_INTO
@@ -209,11 +209,17 @@ class CollisionSystem:
         self.handler.addAgainPattern("%fn-again-%in")
 
         # Weapon hit = one time events
-        self.game.app.accept("laser-into-ship", self.laser_into_destructible)
-        self.game.app.accept("laser-into-terrain", self.laser_into_terrain)
-        self.game.app.accept("laser-into-turret", self.laser_into_destructible)
-        self.game.app.accept("laser-into-subsystem", self.laser_into_destructible)
-        self.game.app.accept("laser-into-shield", self.laser_into_shield)
+        self.game.app.accept("laser-into-ship", self.munition_into_destructible)
+        self.game.app.accept("laser-into-terrain", self.munition_into_terrain)
+        self.game.app.accept("laser-into-turret", self.munition_into_destructible)
+        self.game.app.accept("laser-into-subsystem", self.munition_into_destructible)
+        self.game.app.accept("laser-into-shield", self.munition_into_shield)
+        # Bomb hits reuse the laser damage handlers (same projectile interface).
+        self.game.app.accept("bomb-into-ship", self.munition_into_destructible)
+        self.game.app.accept("bomb-into-terrain", self.munition_into_terrain)
+        self.game.app.accept("bomb-into-turret", self.munition_into_destructible)
+        self.game.app.accept("bomb-into-subsystem", self.munition_into_destructible)
+        self.game.app.accept("bomb-into-shield", self.munition_into_shield)
         # Collision physics = detected at each frame
         self.game.app.accept("ship-into-ship", self.ship_into_ship)
         self.game.app.accept("ship-again-ship", self.ship_again_ship)
@@ -240,20 +246,20 @@ class CollisionSystem:
         """
         self.traverser.traverse(self.game.app.render)
 
-    def laser_into_destructible(self, entry: CollisionEntry) -> None:
+    def munition_into_destructible(self, entry: CollisionEntry) -> None:
         """
-        Handles the case where a laser hits a destructible object:
-        Damages the destructible object and remove the laser.
+        Handles the case where a munition hits a destructible object:
+        Damages the destructible object and remove the munition.
 
         :param entry: Panda3d's description of the collision
         """
-        laser = entry.from_node_path.python_tags["owner"]
+        munition = entry.from_node_path.python_tags["owner"]
         destructible = entry.into_node_path.python_tags["owner"]
 
-        if laser is None:
+        if munition is None:
             if DEBUG_COLLISION:
                 LOGGER.info(
-                    "laser juuuuust out of range and being removed while it hits. "
+                    "munition juuuuust out of range and being removed while it hits. "
                     "Ignoring."
                 )
             return
@@ -262,21 +268,21 @@ class CollisionSystem:
                 LOGGER.info("destructible being removed while it hits. Ignoring.")
             return
 
-        # Check if the laser as encountered its own emitter => no "real" collision
+        # Check if the munition as encountered its own emitter => no "real" collision
         try:
             destructible_id = destructible.id
         except AttributeError:
             destructible_id = ""
-        if laser.origin_ship_id == destructible_id:
+        if munition.origin_ship_id == destructible_id:
             return
-        # A laser never hits the vehicle it was fired from: not the emitter's
+        # A munition never hits the vehicle it was fired from: not the emitter's
         # ship, nor a sibling subsystem (so a ship-mounted turret cannot shoot its
         # own hull, generators or other turrets).
-        if owners_share_vehicle(laser.origin_ship, destructible):
+        if owners_share_vehicle(munition.origin_ship, destructible):
             return
 
         if DEBUG_COLLISION:
-            LOGGER.info("laser into destructible")
+            LOGGER.info("munition into destructible")
 
         # Apply damage to the destructible object
         normal = entry.getSurfaceNormal(self.game.root_node)
@@ -284,10 +290,10 @@ class CollisionSystem:
         # object was scaled. It's dumb, but it is what it is...
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
-        destructible.take_hit(damage=laser.power, normal_world_vector=normal)
+        destructible.take_hit(damage=munition.power, normal_world_vector=normal)
 
-        # Delete laser
-        laser.shot.removeNode()
+        # Delete munition
+        munition.shot.removeNode()
 
         # Apply hit effect depending on player or bot
         if destructible_id == self.game.player.pawn.id:
@@ -320,21 +326,21 @@ class CollisionSystem:
                     base_velocity=hit_velocity,
                 )
 
-    def laser_into_terrain(self, entry: CollisionEntry) -> None:
+    def munition_into_terrain(self, entry: CollisionEntry) -> None:
         """
-        Handles the case where a laser hits a terrain object:
-        Removes the laser and throws magic sparks at the impact point.
+        Handles the case where a munition hits a terrain object:
+        Removes the munition and throws magic sparks at the impact point.
 
         :param entry: Panda3d's description of the collision
         """
         if DEBUG_COLLISION:
-            LOGGER.info("laser into terrain")
-        laser = entry.from_node_path.python_tags["owner"]
+            LOGGER.info("munition into terrain")
+        munition = entry.from_node_path.python_tags["owner"]
 
-        if laser is None:
+        if munition is None:
             if DEBUG_COLLISION:
                 LOGGER.info(
-                    "laser juuuuust out of range and being removed while it hits. "
+                    "munition juuuuust out of range and being removed while it hits. "
                     "Ignoring."
                 )
             return
@@ -349,17 +355,17 @@ class CollisionSystem:
         # Sparks coloured by the terrain type (water → ice, rock → gray-brown).
         # Terrain is static, so no inherited velocity. An infinite-plane terrain
         # collider reports a surface normal but not always a surface point, so
-        # fall back to the laser's own position/direction when either is missing.
+        # fall back to the munition's own position/direction when either is missing.
         if entry.hasSurfaceNormal():
             normal = entry.getSurfaceNormal(self.game.root_node)
         else:
-            normal = Vec3(-laser.speed[0], -laser.speed[1], -laser.speed[2])
+            normal = Vec3(-munition.speed[0], -munition.speed[1], -munition.speed[2])
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
         if entry.hasSurfacePoint():
             hit_point = entry.getSurfacePoint(self.game.root_node)
         else:
-            hit_point = laser.shot.getPos(self.game.root_node)
+            hit_point = munition.shot.getPos(self.game.root_node)
         terrain = entry.into_node_path.python_tags["owner"]
         material = getattr(terrain, "material", None)
         preset = _TERRAIN_SPARK_PRESET.get(material, spark_fx.ROCK)
@@ -370,20 +376,20 @@ class CollisionSystem:
             preset=preset,
         )
 
-        # Delete laser
-        laser.shot.removeNode()
+        # Delete munition
+        munition.shot.removeNode()
 
-    def laser_into_shield(self, entry: CollisionEntry) -> None:
+    def munition_into_shield(self, entry: CollisionEntry) -> None:
         """
-        Handle a laser crossing a shield bubble.
+        Handle a munition crossing a shield bubble.
 
-        A laser fired from *outside* the shield impacts it (and is absorbed); a
-        laser fired from *inside* passes straight through, so a ship sheltering
+        A munition fired from *outside* the shield impacts it (and is absorbed); a
+        munition fired from *inside* passes straight through, so a ship sheltering
         in its own bubble can still shoot out. The two are told apart by the sign
-        of the laser's velocity dotted with the shield's outward surface normal:
+        of the munition's velocity dotted with the shield's outward surface normal:
 
-        - crossing inward (dot < 0) -> the laser came from outside -> blocked,
-        - anything else (dot >= 0): a laser exiting, a grazing contact, or the
+        - crossing inward (dot < 0) -> the munition came from outside -> blocked,
+        - anything else (dot >= 0): a munition exiting, a grazing contact, or the
           degenerate zero normal panda3d returns for a segment that started
           inside the solid -> it passes through.
 
@@ -391,13 +397,13 @@ class CollisionSystem:
 
         :param entry: Panda3d's description of the collision
         """
-        laser = entry.from_node_path.python_tags["owner"]
+        munition = entry.from_node_path.python_tags["owner"]
         shield = entry.into_node_path.python_tags["owner"]
 
-        if laser is None:
+        if munition is None:
             if DEBUG_COLLISION:
                 LOGGER.info(
-                    "laser juuuuust out of range and being removed while it hits. "
+                    "munition juuuuust out of range and being removed while it hits. "
                     "Ignoring."
                 )
             return
@@ -409,34 +415,34 @@ class CollisionSystem:
         # A turret sitting inside its ship's bubble must not hit that bubble: the
         # crossing-direction rule below already lets a shot fired from inside pass,
         # but skip the emitter's own vehicle outright to be unambiguous.
-        if owners_share_vehicle(laser.origin_ship, shield):
+        if owners_share_vehicle(munition.origin_ship, shield):
             return
 
         # A downed (disabled) shield stops nothing
         if not shield.is_enabled:
             return
 
-        # Block only lasers crossing inward (see docstring)
+        # Block only munitions crossing inward (see docstring)
         normal = entry.getSurfaceNormal(self.game.root_node)
         # Normalize: a scaled parent can give a non-unit normal.
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
-        if np.dot(laser.speed, normal) >= 0.0:
+        if np.dot(munition.speed, normal) >= 0.0:
             return  # exiting or originating inside => pass through
 
         if DEBUG_COLLISION:
-            LOGGER.info("laser into shield")
+            LOGGER.info("munition into shield")
 
         # The shield absorbs the hit. Pass the world-space impact point so the
-        # bubble can flash where the laser struck.
+        # bubble can flash where the munition struck.
         hit_point = entry.getSurfacePoint(self.game.root_node)
         shield.take_hit(
-            damage=laser.power,
+            damage=munition.power,
             normal_world_vector=normal,
             hit_world_point=hit_point,
         )
 
-        # Ice sparks where the laser struck the bubble, on top of the shield's
+        # Ice sparks where the munition struck the bubble, on top of the shield's
         # own impact flash (driven from take_hit). They ride the ship's motion.
         self.game.spark_fx_pool.spawn(
             position=hit_point,
@@ -445,8 +451,8 @@ class CollisionSystem:
             preset=spark_fx.ICE,
         )
 
-        # Delete laser
-        laser.shot.removeNode()
+        # Delete munition
+        munition.shot.removeNode()
 
         # Impact feedback
         self.game.app.sfx.distant_impact_hit(
@@ -921,6 +927,10 @@ class CollisionSystem:
         self.game.app.ignore("laser-into-terrain")
         self.game.app.ignore("laser-into-subsystem")
         self.game.app.ignore("laser-into-shield")
+        self.game.app.ignore("bomb-into-ship")
+        self.game.app.ignore("bomb-into-terrain")
+        self.game.app.ignore("bomb-into-subsystem")
+        self.game.app.ignore("bomb-into-shield")
         self.game.app.ignore("ship-into-terrain")
         self.game.app.ignore("ship-into-ship")
         self.game.app.ignore("ship-into-subsystem")

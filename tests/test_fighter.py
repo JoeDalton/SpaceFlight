@@ -120,6 +120,54 @@ def test_apply_damage_parametrized(
 
 
 # ---------------------------
+# drop_bomb
+# ---------------------------
+
+
+def _fighter_with_bombs(bomb_supply: int):
+    fighter = make_fighter_without_init()
+    fighter.bomb_supply = bomb_supply
+    fighter.bomb_launcher = MagicMock()
+    fighter.parent = MagicMock()
+    fighter.parent.name = "bomber"
+    return fighter
+
+
+def test_drop_bomb_spends_one_launches_and_reports_success():
+    """
+    Dropping a bomb decrements the supply, launches a bomb, and returns True.
+    """
+    fighter = _fighter_with_bombs(bomb_supply=3)
+
+    assert fighter.drop_bomb() is True
+    assert fighter.bomb_supply == 2
+    fighter.bomb_launcher.launch.assert_called_once()
+
+
+def test_drop_bomb_out_of_ordnance_returns_false():
+    """
+    With no bombs left, drop_bomb releases nothing and returns False.
+    """
+    fighter = _fighter_with_bombs(bomb_supply=0)
+
+    assert fighter.drop_bomb() is False
+    assert fighter.bomb_supply == 0
+    fighter.bomb_launcher.launch.assert_not_called()
+
+
+def test_drop_bomb_empties_supply_then_refuses():
+    """
+    The supply floors at zero: draining it makes further drops fail.
+    """
+    fighter = _fighter_with_bombs(bomb_supply=1)
+
+    assert fighter.drop_bomb() is True
+    assert fighter.drop_bomb() is False
+    assert fighter.bomb_supply == 0
+    fighter.bomb_launcher.launch.assert_called_once()
+
+
+# ---------------------------
 # ship_handle_health
 # ---------------------------
 

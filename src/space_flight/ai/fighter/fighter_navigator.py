@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 
 from space_flight import RECORD_GAME
+from space_flight.actors.bomb_launcher import BOMB_SPEED_MPS
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_ship_navigator import (
@@ -76,6 +77,7 @@ class FighterNavigator(GenericShipNavigator):
         - ``PURSUIT`` (default): constant-angle chase, good against agile prey.
         - ``STRAFE``: a committed ingress -> attack -> break -> reposition run for
           slow or immobile targets.
+        - ``BOMB``: overfly a slow/immobile target and drop a bomb along the belly.
 
         :param target_dict: A dictionary with the target id, attack mode and
             (for surface-mounted preys) surface normal/hit point
@@ -93,6 +95,8 @@ class FighterNavigator(GenericShipNavigator):
             return NO_DIRECTION
 
         attack_mode = target_dict.get("attack_mode", AttackMode.PURSUIT)
+        if attack_mode == AttackMode.BOMB:
+            return self.bomb_target(target_dict)
         if attack_mode == AttackMode.STRAFE:
             return self.strafe_target(target_dict)
         return self.pursue_target(target_dict)
@@ -202,7 +206,7 @@ class FighterNavigator(GenericShipNavigator):
         if self.check_overshoot_risk(
             closing_speed_mps=-longitudinal_speed_scalar_mps, distance_m=distance_m
         ):
-            self.record_behaviour(behaviour="reposition")
+            self.behaviour_sm.request("reposition")
             return self.reposition(direction=direction)
 
         # Check if we need to extend the trajectory to avoid a spiral of death
@@ -214,11 +218,11 @@ class FighterNavigator(GenericShipNavigator):
             longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
             lateral_speed_scalar_mps=lateral_speed_scalar_mps,
         ):
-            self.record_behaviour(behaviour="extend")
+            self.behaviour_sm.request("extend")
             return self.extend()
 
         # Pursue target
-        self.record_behaviour(behaviour="pursuit")
+        self.behaviour_sm.request("pursuit")
 
         # Compute CAP contribution
         cap_direction = self.compute_constant_angle_pursuit(
@@ -313,7 +317,7 @@ class FighterNavigator(GenericShipNavigator):
 
         # Hard altitude floor: force a recovery break if we drop too low.
         if self._below_altitude_floor(surface_normal, surface_hit_point, strafe):
-            self.record_behaviour(behaviour="strafe_break")
+            self.behaviour_sm.request("strafe_break")
 
         phase = (
             self.behaviour if self.behaviour.startswith("strafe_") else "strafe_ingress"
@@ -321,9 +325,9 @@ class FighterNavigator(GenericShipNavigator):
 
         if phase == "strafe_ingress":
             if distance_m < strafe["attack_distance_m"]:
-                self.record_behaviour(behaviour="strafe_attack")
+                self.behaviour_sm.request("strafe_attack")
                 return self._strafe_attack(lead_direction=lead_direction, strafe=strafe)
-            self.record_behaviour(behaviour="strafe_ingress")
+            self.behaviour_sm.request("strafe_ingress")
             return self._strafe_ingress(
                 lead_direction=lead_direction,
                 lead_target_position=lead_target_position,
@@ -345,18 +349,18 @@ class FighterNavigator(GenericShipNavigator):
                 and closing_speed_mps < strafe["minimum_closing_speed_mps"]
             )
             if reached_standoff or overshooting or stalled:
-                self.record_behaviour(behaviour="strafe_break")
+                self.behaviour_sm.request("strafe_break")
                 return self._strafe_break(
                     direction=direction, surface_normal=surface_normal, strafe=strafe
                 )
-            self.record_behaviour(behaviour="strafe_attack")
+            self.behaviour_sm.request("strafe_attack")
             return self._strafe_attack(lead_direction=lead_direction, strafe=strafe)
 
         if phase == "strafe_break":
             if self.behaviour_duration_s > strafe["break_duration_s"]:
-                self.record_behaviour(behaviour="strafe_reposition")
+                self.behaviour_sm.request("strafe_reposition")
                 return self._strafe_reposition(direction=direction, strafe=strafe)
-            self.record_behaviour(behaviour="strafe_break")
+            self.behaviour_sm.request("strafe_break")
             return self._strafe_break(
                 direction=direction, surface_normal=surface_normal, strafe=strafe
             )
@@ -369,7 +373,7 @@ class FighterNavigator(GenericShipNavigator):
             self.behaviour_duration_s > strafe["reposition_min_duration_s"]
         )
         if repositioned_far_enough and repositioned_long_enough:
-            self.record_behaviour(behaviour="strafe_ingress")
+            self.behaviour_sm.request("strafe_ingress")
             return self._strafe_ingress(
                 lead_direction=lead_direction,
                 lead_target_position=lead_target_position,
@@ -377,7 +381,7 @@ class FighterNavigator(GenericShipNavigator):
                 surface_normal=surface_normal,
                 strafe=strafe,
             )
-        self.record_behaviour(behaviour="strafe_reposition")
+        self.behaviour_sm.request("strafe_reposition")
         return self._strafe_reposition(direction=direction, strafe=strafe)
 
     def _strafe_try_fire(
@@ -522,6 +526,169 @@ class FighterNavigator(GenericShipNavigator):
         """
         return -direction, self._strafe_speed(strafe, "reposition_speed_factor")
 
+    # %% ==== BOMB ====
+
+    def bomb_target(self, target_dict: dict) -> Tuple[np.ndarray, float]:
+        """
+        Bombing run against a slow/immobile target: overfly it and release a bomb
+        along the belly (-Z). A committed cycle
+        ``ingress -> run -> break -> reposition -> ingress``: line up, fly a straight
+        belly-aimed leg while the release solver times the drop, then peel off.
+
+        The belly is aimed via the pilot up-reference (the surface normal for a
+        surface-mounted prey, otherwise the line of sight to the target).
+
+        :param target_dict: The target info enriched with engagement geometry
+        :return: The direction to point to and the desired speed
+        """
+        bomb = self.personality["navigator"]["bomb"]
+        distance_m = target_dict["distance_m"]
+        direction = target_dict["direction"]
+        target_position = target_dict["target_current_position"]
+        target_speed = target_dict["target_current_speed"]
+        closing_speed_mps = -target_dict["longitudinal_speed_scalar_mps"]
+        surface_normal = target_dict.get("surface_normal")
+
+        # Roll so the belly (-Z) faces the target: +Z toward the surface normal for
+        # a surface prey, else away from the target along the line of sight.
+        belly_up_reference = (
+            surface_normal if surface_normal is not None else -direction
+        )
+
+        phase = self.behaviour if self.behaviour.startswith("bomb_") else "bomb_ingress"
+
+        if phase == "bomb_ingress":
+            if distance_m < bomb["run_distance_m"]:
+                self.behaviour_sm.request("bomb_run")
+                return self._bomb_run(
+                    direction, target_position, target_speed, belly_up_reference, bomb
+                )
+            self.behaviour_sm.request("bomb_ingress")
+            return self._bomb_ingress(direction, bomb)
+
+        if phase == "bomb_run":
+            # Release once the bomb's velocity lines up with the target, then break.
+            if self.compute_release_condition(target_position, target_speed, bomb):
+                self.pawn.drop_bomb()
+                self.behaviour_sm.request("bomb_break")
+                return self._bomb_break(direction, surface_normal, bomb)
+            # Overflew (or can't close) without a solution -> break and re-attack.
+            if closing_speed_mps <= 0.0:
+                self.behaviour_sm.request("bomb_break")
+                return self._bomb_break(direction, surface_normal, bomb)
+            self.behaviour_sm.request("bomb_run")
+            return self._bomb_run(
+                direction, target_position, target_speed, belly_up_reference, bomb
+            )
+
+        if phase == "bomb_break":
+            if self.behaviour_duration_s > bomb["break_duration_s"]:
+                self.behaviour_sm.request("bomb_reposition")
+                return self._bomb_reposition(direction, bomb)
+            self.behaviour_sm.request("bomb_break")
+            return self._bomb_break(direction, surface_normal, bomb)
+
+        # bomb_reposition: extend out, then come around for another run.
+        if (
+            distance_m > bomb["reposition_distance_m"]
+            and self.behaviour_duration_s > bomb["reposition_min_duration_s"]
+        ):
+            self.behaviour_sm.request("bomb_ingress")
+            return self._bomb_ingress(direction, bomb)
+        self.behaviour_sm.request("bomb_reposition")
+        return self._bomb_reposition(direction, bomb)
+
+    def compute_release_condition(
+        self, target_position: np.ndarray, target_speed: np.ndarray, bomb: dict
+    ) -> bool:
+        """
+        Whether a bomb dropped this frame would hit the target.
+
+        The bomb travels in a straight line (no gravity) at ``v_bomb = ship.speed -
+        launch_speed * ship.up`` (i.e. the belly -Z plus inherited ship velocity),
+        so it is forward-and-down. Release when the (lead-adjusted) target lies
+        along that velocity within a tolerance cone and range -- mirroring the gun
+        fire check, on the bomb's velocity axis instead of the nose.
+
+        :param target_position: The target's world position
+        :param target_speed: The target's world velocity
+        :param bomb: The bomb personality sub-dict
+        :return: True if a drop is on target now
+        """
+        v_bomb = self.pawn.speed - BOMB_SPEED_MPS * self.pawn.up
+        v_bomb_norm = np.linalg.norm(v_bomb)
+        if v_bomb_norm < 1e-6:
+            return False
+        bomb_direction = v_bomb / v_bomb_norm
+
+        # Lead the target by the bomb's closing time (straight-line intercept).
+        to_target = target_position - self.pawn.position
+        approach = v_bomb - target_speed
+        approach_norm = np.linalg.norm(approach)
+        if approach_norm > 1e-6:
+            lead_time_s = np.linalg.norm(to_target) / approach_norm
+            to_target = (
+                target_position + target_speed * lead_time_s
+            ) - self.pawn.position
+
+        distance_m = np.linalg.norm(to_target)
+        if distance_m < TARGET_DISTANCE_TOLERANCE_M:
+            return False
+        aligned = (
+            np.dot(to_target / distance_m, bomb_direction) > bomb["min_cos_release"]
+        )
+        in_range = distance_m < bomb["max_release_distance_m"]
+        return bool(aligned and in_range)
+
+    def _bomb_ingress(
+        self, direction: np.ndarray, bomb: dict
+    ) -> Tuple[np.ndarray, float]:
+        """Close on the target (normal flight) until the straight run begins."""
+        return direction, bomb["ingress_speed_factor"] * self.pawn.max_speed_mps
+
+    def _bomb_run(
+        self,
+        direction: np.ndarray,
+        target_position: np.ndarray,
+        target_speed: np.ndarray,
+        belly_up_reference: np.ndarray,
+        bomb: dict,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        The straight, belly-aimed overfly leg. Aims the nose at the target, rolls
+        the belly onto it (via the up-reference) and dwarfs collision avoidance so
+        the leg stays stable for the release.
+        """
+        self.up_reference = belly_up_reference
+        self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
+            "corridor_avoidance_factor"
+        ]
+        return direction, bomb["run_speed_factor"] * self.pawn.max_speed_mps
+
+    def _bomb_break(
+        self, direction: np.ndarray, surface_normal: np.ndarray, bomb: dict
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Peel hard away after the drop: climb along the surface normal for a
+        surface prey, else turn back the way we came.
+        """
+        if surface_normal is not None:
+            break_direction = surface_normal - direction
+        else:
+            break_direction = -direction
+        break_norm = np.linalg.norm(break_direction)
+        if break_norm > 1e-4:
+            break_direction = break_direction / break_norm
+        else:
+            break_direction = -direction
+        return break_direction, bomb["break_speed_factor"] * self.pawn.max_speed_mps
+
+    def _bomb_reposition(
+        self, direction: np.ndarray, bomb: dict
+    ) -> Tuple[np.ndarray, float]:
+        """Extend away to rebuild distance before coming around for the next run."""
+        return -direction, bomb["reposition_speed_factor"] * self.pawn.max_speed_mps
+
     def compute_engage_weights(self, distance_m: float):
         """
         Compute weights of the pursuit strategies as a function of
@@ -576,10 +743,8 @@ class FighterNavigator(GenericShipNavigator):
             lateral_speed_scalar_mps
             > self.personality["navigator"]["extend"]["maximal_lateral_speed_mps"]
         ):
-            # Velocity condition met
-            # Register time in spiral
-            current_time = self.game.game_time.get_current_time()
-            self.time_in_spiral_s += current_time - self.last_update_time
+            # Velocity condition met: accrue this frame's time in the spiral.
+            self.time_in_spiral_s += self.game.game_time.get_time_step()
             # Result depends on time condition
             return (
                 self.time_in_spiral_s

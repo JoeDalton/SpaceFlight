@@ -104,7 +104,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         target = self.game.interactions.actors[target_actor_index]
         target_position = self.pawn.position + distance_m * direction
 
-        self.record_behaviour(behaviour="orbit")
+        self.behaviour_sm.request("orbit")
         return self.orbit_target(target=target, target_position=target_position)
 
     def orbit_target(self, target, target_position: np.ndarray) -> tuple:

@@ -70,6 +70,10 @@ class GenericTactician:
                     target_dict.get("formation_index")
                     != self.target_dict.get("formation_index")
                 )
+                or (  # Switching weapon (e.g. bombs depleted -> guns)
+                    target_dict.get("attack_mode")
+                    != self.target_dict.get("attack_mode")
+                )
             ):
                 if self.debug:
                     LOGGER.info(

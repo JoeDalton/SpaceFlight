@@ -29,7 +29,7 @@ waves:
       - [7000, 3000, 200]
 
   escort:
-    size: 4
+    size: 6
     ship_model: x-wing
     bot_type: fighter
     team: 1
@@ -46,25 +46,6 @@ waves:
       - [6200, 4500, 300]
       - [6700, 4000, 300]
       - [7200, 3000, 300]
-
-  allied_patrol:
-    size: 4
-    ship_model: y-wing
-    bot_type: fighter
-    team: 1
-    spawn_point: [0, -2100, 500]
-    spawn_orientation: [1, 0, 0, 0]
-    formation: { scale_m: 30, shape: arrowhead }
-    waypoints:
-      - [0000, 0000, 500]
-      - [0000, 3000, 500]
-      - [0500, 4000, 500]
-      - [1000, 4500, 500]
-      - [2000, 5000, 500]
-      - [5000, 5000, 500]
-      - [6000, 4500, 500]
-      - [6500, 4000, 500]
-      - [7000, 3000, 500]
 
   first_wave:
     size: 5
@@ -91,7 +72,7 @@ waves:
     waypoints:
       - [300, 0, 500]
       - [300, -6000, 500]
-    target: transports
+    target: escort
 
   third_wave:
     size: 8
@@ -114,7 +95,7 @@ triggers:
       spawn: transports
 
   - name: escort
-    when: { after_seconds: 0.5 }
+    when: { after_seconds: 99999 }
     then:
       all:
         - { spawn: escort }
@@ -123,18 +104,7 @@ triggers:
             text: "Red squadron standing by."
             display_time_s: 5
 
-  # --- the original timed waves -------------------------------------------
-  - name: allied_patrol
-    when: { after_seconds: 2 }
-    then:
-      all:
-        - { hud_text: "Allies have arrived" }
-        - { spawn: allied_patrol }
-        - speech:
-            speaker: "Gold Leader"
-            text: "Gold squadron reporting in. We've got your back."
-            display_time_s: 5
-
+  # --- Timed waves -------------------------------------------
   - name: first_wave
     when: { after_seconds: 10 }
     then:

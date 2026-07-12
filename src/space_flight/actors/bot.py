@@ -182,7 +182,9 @@ class Bot(Destructible):
                     desired_speed_mps=desired_speed_mps,
                 )
             throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
-                target_direction=target_direction, desired_speed_mps=desired_speed_mps
+                target_direction=target_direction,
+                desired_speed_mps=desired_speed_mps,
+                up_reference=self.navigator.up_reference,
             )
             self.pawn.move(
                 throttle=throttle,

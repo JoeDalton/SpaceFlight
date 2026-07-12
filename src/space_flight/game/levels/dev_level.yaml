@@ -16,6 +16,10 @@ waves:
     spawn_point: [0, -2100, 500]
     spawn_orientation: [1, 0, 0, 0]
     record: true
+    # Make the enemy frigate their primary target: tough + valuable + slow, so
+    # the tactician's suitability scoring picks a BOMB run against it. (The
+    # frigate must already be spawned for this to resolve -- see trigger order.)
+    target: enemy_frigate
     formation: { scale_m: 30, shape: arrowhead }
     waypoints:
       - [0, 0, 500]
@@ -43,8 +47,15 @@ waves:
     record: true
 triggers:
   # --- the original timed waves -------------------------------------------
-  - name: allied_patrol
+  # Spawn the frigate first so the patrol can take it as a primary target.
+  - name: enemy_frigate
     when: { after_seconds: 2 }
+    then:
+      all:
+        - { hud_text: "Enemy frigate inbound" }
+        - { spawn: enemy_frigate }
+  - name: allied_patrol
+    when: { after_seconds: 3 }
     then:
       all:
         - { hud_text: "Allies have arrived" }
@@ -53,9 +64,3 @@ triggers:
             speaker: "Gold Leader"
             text: "Gold squadron reporting in. We've got your back."
             display_time_s: 5
-  - name: enemy_frigate
-    when: { after_seconds: 3 }
-    then:
-      all:
-        - { hud_text: "Enemy frigate inbound" }
-        - { spawn: enemy_frigate }

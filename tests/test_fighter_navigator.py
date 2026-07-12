@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from space_flight.actors.bomb_launcher import BOMB_SPEED_MPS
 from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.utils.state_machine import StateMachine
@@ -58,7 +59,7 @@ def make_fighter_navigator(
     nav.personality = personality
     nav.debug = False
     nav.behaviour_sm = StateMachine("idle", clock=clock)
-    nav.last_update_time = 0.0
+    nav.game.game_time.get_time_step.return_value = 0.1
     nav.waypoints = []
     nav.next_waypoint_idx = 0
     nav.distance_to_waypoint_m = 0.0
@@ -575,3 +576,137 @@ def test_strafe_attack_breaks_when_stalled():
     nav.strafe_target(target_dict=target_dict)
 
     assert nav.behaviour == "strafe_break"
+
+
+# ---------------------------------------------------------------------------
+# bombing run
+# ---------------------------------------------------------------------------
+
+
+def _augment_pawn_for_bomb(nav):
+    """Give the mocked pawn what the bomb run + release solver read."""
+    nav.pawn.position = np.zeros(3)
+    nav.pawn.up = np.array([0.0, 0.0, 1.0])
+    nav.pawn.speed = np.array([0.0, 100.0, 0.0])
+    nav.pawn.drop_bomb = MagicMock(return_value=True)
+    nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+
+
+def _bomb_engagement(distance_m, direction, target_position, longitudinal=0.0):
+    return {
+        "distance_m": distance_m,
+        "direction": direction,
+        "relative_speed_vector": np.zeros(3),
+        "longitudinal_speed_scalar_mps": longitudinal,
+        "target_current_position": target_position,
+        "target_current_speed": np.zeros(3),
+    }
+
+
+def _bomb_velocity_dir(nav):
+    """The bomb's launch direction for the current pawn (speed - launch * up)."""
+    v_bomb = nav.pawn.speed - BOMB_SPEED_MPS * nav.pawn.up
+    return v_bomb / np.linalg.norm(v_bomb)
+
+
+def test_compute_release_condition_aligned_in_range_returns_true():
+    """
+    A target lying along the bomb's (forward-and-down) velocity within range
+    yields a release.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = _bomb_velocity_dir(nav) * 100.0  # on the bomb line, 100 m
+
+    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is True
+
+
+def test_compute_release_condition_out_of_range_returns_false():
+    """
+    On the bomb line but beyond the release range: no drop.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = _bomb_velocity_dir(nav) * 500.0  # aligned but too far
+
+    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
+
+
+def test_compute_release_condition_misaligned_returns_false():
+    """
+    A target dead ahead (not under the belly) is not on the bomb's velocity.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = np.array([0.0, 100.0, 0.0])  # straight ahead, level
+
+    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
+
+
+def test_bomb_target_far_runs_ingress():
+    """
+    Beyond the run distance the bombing run is in its ingress phase.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    far = bomb["run_distance_m"] * 2.0
+    engagement = _bomb_engagement(
+        distance_m=far,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=np.array([0.0, far, 0.0]),
+    )
+
+    _, speed = nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_ingress"
+    assert speed == pytest.approx(bomb["ingress_speed_factor"] * nav.pawn.max_speed_mps)
+
+
+def test_bomb_run_releases_and_breaks():
+    """
+    In the run phase, once the release solution is met the bomb is dropped and
+    the run breaks off.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_run")
+    direction = _bomb_velocity_dir(nav)
+    target_position = direction * 100.0  # aligned, in range
+    engagement = _bomb_engagement(
+        distance_m=100.0,
+        direction=direction,
+        target_position=target_position,
+        longitudinal=-55.0,  # closing (~ -dot; positive closing)
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_break"
+    nav.pawn.drop_bomb.assert_called_once()
+
+
+def test_bomb_run_without_solution_holds_and_aims_belly():
+    """
+    While closing but not yet lined up, the run continues and publishes an
+    up-reference so the pilot rolls the belly onto the target.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_run")
+    direction = np.array([0.0, 1.0, 0.0])  # target dead ahead -> no solution yet
+    engagement = _bomb_engagement(
+        distance_m=400.0,
+        direction=direction,
+        target_position=np.array([0.0, 400.0, 0.0]),
+        longitudinal=-100.0,  # still closing
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_run"
+    assert nav.up_reference is not None  # belly aim published
+    nav.pawn.drop_bomb.assert_not_called()
