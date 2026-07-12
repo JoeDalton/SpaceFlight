@@ -58,7 +58,7 @@ class AutoAim:
         """
         Sets the auto-aim tuning parameters, recomputing the derived thresholds.
 
-        Splitting this out of ``__init__`` lets the assist quality be retuned at
+        Splitting this out of __init__ lets the assist quality be retuned at
         runtime: a turret reconfigures its auto-aim from the parameters of the
         targeting system currently boosting it, so a better targeting system
         yields a tighter firing solution.

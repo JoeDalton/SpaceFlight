@@ -51,9 +51,9 @@ COLLISION_DAMAGE_FACTOR = 0.05  # TODO configurable with difficulty
 #: explosion on top of the sparks. Knob — set to 0 to disable, 1 for every hit.
 HIT_EXPLOSION_CHANCE = 1.0 / 3.0
 
-#: Terrain material → spark preset. Each terrain object declares a ``material``
-#: attribute (e.g. ``Ocean.material == "water"``, ``AsteroidField.material ==
-#: "rock"``); water reads as ice, rock as gray-brown, metal as metal. Terrain
+#: Terrain material → spark preset. Each terrain object declares a material
+#: attribute (e.g. Ocean.material == "water", AsteroidField.material ==
+#: "rock"); water reads as ice, rock as gray-brown, metal as metal. Terrain
 #: with no/unknown material falls back to rock.
 _TERRAIN_SPARK_PRESET = {
     "water": spark_fx.ICE,
@@ -149,12 +149,12 @@ def owners_share_vehicle(
 
     This is the "owner" mechanic that spares a ship from colliding with the
     subsystems (shield generators, ship-mounted turrets, etc.) bolted onto it.
-    A mountable exposes ``mounted_on``: the ship it is attached to (``None`` when
-    it stands alone). Reading the ``owner`` python-tags off a collision entry,
+    A mountable exposes mounted_on: the ship it is attached to (None when
+    it stands alone). Reading the owner python-tags off a collision entry,
     two owners share a vehicle when:
 
     - both owners are the same object,
-    - one is mounted on the other (its ``mounted_on`` is the other owner),
+    - one is mounted on the other (its mounted_on is the other owner),
     - both are mounted on the same ship (siblings, e.g. two subsystems).
 
     :param owner_a: The owner python-tag of one collider
@@ -180,10 +180,10 @@ def _hit_velocity(obj: VehicleOwner | None) -> np.ndarray:
     """
     World velocity of a hit object, for sparks to inherit its motion.
 
-    Ships expose their own ``speed``; a subsystem or shield rides its mount's
-    ``speed`` (``mounted_on.speed``); static terrain has neither, giving zero.
+    Ships expose their own speed; a subsystem or shield rides its mount's
+    speed (mounted_on.speed); static terrain has neither, giving zero.
 
-    :param obj: The hit object (destructible, shield, or ``None`` for terrain)
+    :param obj: The hit object (destructible, shield, or None for terrain)
     :return: A 3-vector world velocity (zeros when the object has none)
     """
     speed = getattr(obj, "speed", None)
@@ -1008,7 +1008,7 @@ def attach_collision_tube(
 ) -> NodePath:
     """
     Attach a collision tube (a capsule: a cylinder capped by two hemispheres) to
-    an existing node. ``point_a`` and ``point_b`` are the centres of the two end
+    an existing node. point_a and point_b are the centres of the two end
     hemispheres, in the parent node's frame.
 
     :param game: The game stage

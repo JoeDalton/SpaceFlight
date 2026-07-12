@@ -34,8 +34,8 @@ class Shield(Destructible):
     A protective bubble projected by a *group* of :class:`ShieldGenerator`\\ s.
 
     One shield is shared by all of a capital ship's shield generators. Its perks
-    scale **pro rata** with the surviving generators: with ``initial`` generators
-    and ``alive`` still standing, the fraction ``alive / initial`` multiplies both
+    scale **pro rata** with the surviving generators: with initial generators
+    and alive still standing, the fraction alive / initial multiplies both
     the maximum strength and the regeneration rate (so its current strength is
     clamped down as generators are destroyed). When the last generator -- or the
     ship itself -- is destroyed, the shield dies for good.
@@ -61,7 +61,7 @@ class Shield(Destructible):
       reverse), coming back online.
 
     While either animation plays the shield is **not functional** (it blocks no
-    lasers and is skipped in ``laser_into_shield`` via :attr:`is_enabled`).
+    lasers and is skipped in laser_into_shield via :attr:`is_enabled`).
 
     :param game: The game/flight state
     :param ship: The ship this shield is mounted on and protects
@@ -71,11 +71,11 @@ class Shield(Destructible):
     :param regen_rate: Full-strength regeneration per second (after the cooldown)
     :param color: RGBA of the bubble -- RGB is the full-health tint, A the
         calm-interior opacity
-    :param shape: Primitive geometry spec, e.g. ``{"type": "sphere",
-        "radius_m": 90}`` or ``{"type": "tube", "point_a": [...], "point_b":
-        [...], "radius_m": 40}``. Ignored when ``model`` is given.
+    :param shape: Primitive geometry spec, e.g. {"type": "sphere",
+        "radius_m": 90} or {"type": "tube", "point_a": [...], "point_b":
+        [...], "radius_m": 40}. Ignored when model is given.
     :param model: Path to a 3D model providing both the visible mesh and its
-        (baked) collision geometry. Overrides ``shape`` when set.
+        (baked) collision geometry. Overrides shape when set.
     """
 
     def __init__(
@@ -159,7 +159,7 @@ class Shield(Destructible):
         Attach the shield's collision solid, coinciding with the visible bubble.
 
         The dimensions come from :attr:`model` (resolved once when it built the
-        mesh), so the collider always matches the visuals. A shared 3D ``model``
+        mesh), so the collider always matches the visuals. A shared 3D model
         carries its own (baked) collision geometry, which is re-masked as a shield
         collider and tagged with this shield as owner.
 
@@ -369,7 +369,7 @@ class Shield(Destructible):
     def set_visible(self, visible: bool):
         """
         Show or hide the shield bubble. Hiding does not disable the collider; a
-        downed shield is instead ignored in ``laser_into_shield`` via
+        downed shield is instead ignored in laser_into_shield via
         :attr:`is_enabled`.
 
         :param visible: Whether the bubble should be rendered

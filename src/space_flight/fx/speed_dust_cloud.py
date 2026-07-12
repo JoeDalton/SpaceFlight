@@ -60,7 +60,7 @@ class SpeedDustCloud:
         """
         Create the dust particles a chunk at a time, yielding after each chunk,
         then register the per-frame update once they all exist. Use with
-        ``defer_build=True`` to spread the node creation across frames::
+        defer_build=True to spread the node creation across frames::
 
             self.speed_dust = SpeedDustCloud(game, defer_build=True, ...)
             yield from self.speed_dust.build()

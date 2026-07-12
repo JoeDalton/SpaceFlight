@@ -44,7 +44,7 @@ class StateManager:
     Only one state is active at any given time; every other entry on the
     stack is either paused or acting as an inactive background state.
     All concrete state classes are declared as class attributes so that
-    any module in the project can reference them through ``StateManager``
+    any module in the project can reference them through StateManager
     without needing direct imports of individual state modules.
     """
 
@@ -70,7 +70,7 @@ class StateManager:
         Pushes a new state onto the stack and activates it.
 
         Pauses the current top state first, unless *state_class* declares
-        ``PAUSES_BELOW = False`` (e.g. overlays that keep game time running).
+        PAUSES_BELOW = False (e.g. overlays that keep game time running).
         Extra *kwargs* are forwarded to the state constructor.
 
         :param state_class:
@@ -89,8 +89,8 @@ class StateManager:
         """
         Exits and removes the current top state, then resumes the one below it.
 
-        Calls ``exit()`` on the state that is removed. If the stack is not
-        empty afterwards, calls ``resume()`` on the new top state. Logs a
+        Calls exit() on the state that is removed. If the stack is not
+        empty afterwards, calls resume() on the new top state. Logs a
         warning and returns early when the stack is already empty.
         """
         if not self.stack:
@@ -123,7 +123,7 @@ class StateManager:
         Returns the state currently at the top of the stack.
 
         :return:
-            The active :class:`BaseState` instance, or ``None`` if the stack
+            The active :class:`BaseState` instance, or None if the stack
             is empty.
         """
         return self.stack[-1] if self.stack else None
@@ -133,7 +133,7 @@ class StateManager:
         Exits and discard every state below the current top state.
 
         The topmost state is preserved and remains active. All other entries
-        have their ``exit()`` method called before being removed from the
+        have their exit() method called before being removed from the
         stack.
         """
         if self.stack:
@@ -160,7 +160,7 @@ class SpaceFlightSimulator(ShowBase):
         :param headless: when True, skip the splash screen/menus (which need a
             real window) and leave the state stack empty. Intended for
             optimization-loop callers, which push :class:`FlightState` with
-            ``headless=True`` themselves once the app is built.
+            headless=True themselves once the app is built.
         """
         ShowBase.__init__(self)
         self.disableMouse()

@@ -3,18 +3,18 @@ Generic weapon / munition base classes.
 
 Ship weapons (the :class:`~space_flight.actors.laser_cannon.LaserCannon`, the
 :class:`~space_flight.actors.bomb_launcher.BombLauncher`) and their projectiles
-(``LaserShot``, ``Bomb``) share the same skeleton:
+(LaserShot, Bomb) share the same skeleton:
 
 * a *weapon* holds the emitter references, enforces a reload (rate) limit, and
   spawns munitions;
 * a *munition* is a short-lived object that carries damage + world velocity, shows
-  a visual node, drags a child collider, registers in ``game.game_objects`` and
+  a visual node, drags a child collider, registers in game.game_objects and
   self-cleans at the end of its life.
 
 Only two things differ between munitions -- the **visual** (a camera-facing laser
 quad vs. a pink bomb sphere) and the **collider** (a swept segment vs. a sphere) --
-so :class:`Munition` is a template: subclasses fill in ``_build_visual`` and
-``_attach_collider`` (and optionally ``_clean_extra``) and inherit the whole
+so :class:`Munition` is a template: subclasses fill in _build_visual and
+_attach_collider (and optionally _clean_extra) and inherit the whole
 lifecycle. Weapons differ more (multi-cannon cycling + auto-aim + sound vs. a
 single supply-gated drop), so :class:`Weapon` only owns what is genuinely shared:
 the emitter refs, the reload gate, and the munition-spawn call.
@@ -36,10 +36,10 @@ class Weapon:
     """
     Base class for ship weapons that spawn munitions.
 
-    Holds the emitter (``parent`` / ``parent_node``), a shared reload gate so a
-    weapon cannot fire faster than ``fire_delay`` allows, and the common
+    Holds the emitter (parent / parent_node), a shared reload gate so a
+    weapon cannot fire faster than fire_delay allows, and the common
     munition-construction call. Subclasses implement the trigger itself
-    (``fire`` / ``launch``) and pass the munition class they spawn.
+    (fire / launch) and pass the munition class they spawn.
     """
 
     def __init__(self, game, parent, parent_node=None, fire_delay: float = 0.0):
@@ -63,8 +63,8 @@ class Weapon:
         """
         Check-and-consume the reload gate.
 
-        :return: True if ``fire_delay`` has elapsed since the last shot -- and, in
-            that case, stamps the current time as the new ``last_fire_time`` so the
+        :return: True if fire_delay has elapsed since the last shot -- and, in
+            that case, stamps the current time as the new last_fire_time so the
             caller can proceed to fire. False (without stamping) while reloading.
         """
         current_time = self.game.game_time.get_current_time()
@@ -125,10 +125,10 @@ class Munition:
     Base class for weapon projectiles.
 
     Owns the whole projectile lifecycle -- identity, damage, emitter, world
-    velocity, a straight-line coast for its lifetime, ``game.game_objects``
+    velocity, a straight-line coast for its lifetime, game.game_objects
     registration and a timed self-clean -- and exposes the interface the collision
-    handlers read (``origin_ship`` / ``origin_ship_id`` / ``power`` / ``speed`` /
-    ``shot``). Subclasses supply only the visual and the collider.
+    handlers read (origin_ship / origin_ship_id / power / speed /
+    shot). Subclasses supply only the visual and the collider.
     """
 
     def __init__(
@@ -149,7 +149,7 @@ class Munition:
         :param speed: World-space velocity
         :param start_position: World-space emission point
         :param origin_ship: The emitter object itself; read by the damage handlers
-            (via ``owners_share_vehicle``) to spare the whole firing vehicle
+            (via owners_share_vehicle) to spare the whole firing vehicle
         """
         self.game = game
         self.id = uuid.uuid4()
@@ -183,13 +183,13 @@ class Munition:
         """
         Build and return the visual node (reparented to the scene, oriented and
         textured), without setting its position -- the base places it. Subclasses
-        may store extra render nodes (e.g. a light) on ``self`` for ``_clean_extra``.
+        may store extra render nodes (e.g. a light) on self for _clean_extra.
         """
         raise NotImplementedError
 
     def _attach_collider(self) -> NodePath:
         """
-        Attach a collider as a child of ``self.shot`` and return its NodePath.
+        Attach a collider as a child of self.shot and return its NodePath.
         """
         raise NotImplementedError
 
@@ -202,7 +202,7 @@ class Munition:
     def clean(self, remove_from_game_objects: bool = True) -> None:
         """
         Tear down the munition: extra render state, collider, visual node and the
-        ``game.game_objects`` registration.
+        game.game_objects registration.
 
         :param remove_from_game_objects: Skip the registry pop during the final
             game cleanup, which iterates that registry itself.

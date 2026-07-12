@@ -25,7 +25,7 @@ class TractorBeamProjector(TrackingMount):
     projector locks on and, every frame, applies two world-frame forces to the
     prey via :meth:`~space_flight.actors.ship.Ship.apply_external_force`:
 
-    - a drag ``-k * ||v_rel|| * v_rel`` opposing the prey's velocity *relative to
+    - a drag -k * ||v_rel|| * v_rel opposing the prey's velocity *relative to
       the projector's ship*,
     - a light attraction pulling the prey toward the projector.
 
@@ -208,10 +208,10 @@ class TractorBeamProjector(TrackingMount):
     def _resolve_prey(self, prey_id):
         """
         Resolve a prey id to a live, grabbable actor (one that can receive a
-        force), or ``None``.
+        force), or None.
 
         :param prey_id: The prey's actor id
-        :return: The prey actor, or ``None`` if gone or not grabbable
+        :return: The prey actor, or None if gone or not grabbable
         """
         if prey_id is None:
             return None

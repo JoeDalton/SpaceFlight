@@ -1,8 +1,8 @@
 """
 Unit tests for the ocean's procedural swell-grid mesh
-(``space_flight.scenes.ocean.make_swell_grid_mesh``).
+(space_flight.scenes.ocean.make_swell_grid_mesh).
 
-These build CPU-side geometry only (a ``GeomVertexData`` and its index buffer),
+These build CPU-side geometry only (a GeomVertexData and its index buffer),
 so they run fully headless with no window, GPU context or ShowBase — safe for CI.
 """
 

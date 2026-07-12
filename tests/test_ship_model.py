@@ -3,7 +3,7 @@ Unit tests for ShipModel (space_flight.actors.ship_model).
 
 All tests use a fully-mocked game object so that no 3-D assets or ShowBase
 instance are required.  The asset_manager's
-``instantiate_3d_model_to_node`` is replaced by a MagicMock no-op, which
+instantiate_3d_model_to_node is replaced by a MagicMock no-op, which
 means the scene-graph node exists but carries no geometry — enough to
 exercise the positioning and cleanup logic.
 """

@@ -91,7 +91,7 @@ def sample_unit_sphere() -> np.ndarray:
 
     Uses rejection sampling: draw a point from the unit cube and discard it
     if it falls outside the sphere. The expected number of draws before
-    acceptance is ``8 / (4π/3) ≈ 1.91``.
+    acceptance is 8 / (4π/3) ≈ 1.91.
 
     :returns: A random vector in the unit sphere.
     """
@@ -110,9 +110,9 @@ def build_orthogonal_basis(
     """
     Builds an orthonormal basis around *normal*.
 
-    Returns three mutually perpendicular unit vectors ``(n, tangent, bitangent)``
+    Returns three mutually perpendicular unit vectors (n, tangent, bitangent)
     suitable for expressing arbitrary directions in the hemisphere defined by
-    *normal*. Handles degenerate (near-zero) input by falling back to ``+Z``.
+    *normal*. Handles degenerate (near-zero) input by falling back to +Z.
 
     :param normal: Preferred axis of the frame (need not be normalised).
     :returns: (normal, tangent, bitangent) — three orthonormal vectors

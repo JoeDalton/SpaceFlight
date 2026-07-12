@@ -85,8 +85,8 @@ class Integrator:
         A 2nd order Adams-Bashforth integrator.
         For the first step, a 1st order forward Euler (=AB1) is used.
 
-        Integration is computed in-place on the live slice ``[:next_idx]`` only.
-        ``x`` and ``x_dot`` are zeroed in-place after the step; ``x_dot_previous``
+        Integration is computed in-place on the live slice [:next_idx] only.
+        x and x_dot are zeroed in-place after the step; x_dot_previous
         is left untouched because every actor overwrites it during re-registration
         before the next step reads it.
 

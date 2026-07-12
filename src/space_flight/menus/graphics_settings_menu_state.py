@@ -71,7 +71,7 @@ class GraphicsSettingsMenuState(BaseState):
     """
     Full-screen overlay for viewing and editing graphics options.
 
-    Save writes the working config to ``graphics.yaml`` and applies the window
+    Save writes the working config to graphics.yaml and applies the window
     mode live; Cancel discards; Default reloads factory settings (unsaved).
     """
 

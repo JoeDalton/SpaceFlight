@@ -3,7 +3,7 @@ Manually run a level headlessly — no window, no audio device, no menus.
 
 Meant as a smoke test / template for optimization loops (bot personality
 tuning, navigator strategy search, ...) that drive many simulation runs
-without ever opening a display. See ``scripts/launcher.py`` for the normal,
+without ever opening a display. See scripts/launcher.py for the normal,
 windowed entry point.
 
 Usage:

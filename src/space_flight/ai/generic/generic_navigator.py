@@ -125,17 +125,17 @@ class GenericNavigator:
         Superimpose a lateral weave on an approach direction so the ship is a
         harder firing solution while still net-closing.
 
-        The weave is in the plane perpendicular to ``up_reference`` (so it does not
+        The weave is in the plane perpendicular to up_reference (so it does not
         change altitude when that reference is the surface normal), oscillates with
-        ``behaviour_duration_s`` plus the per-run :attr:`weave_phase_rad`, and its
-        strength is set by ``amplitude`` (the caller ramps that down as the target
+        behaviour_duration_s plus the per-run :attr:`weave_phase_rad`, and its
+        strength is set by amplitude (the caller ramps that down as the target
         nears, which also steadies the nose for firing).
 
         :param base_direction: The unit approach direction to weave around
         :param up_reference: The axis kept free of weave (world up or surface normal)
         :param amplitude: Lateral strength added to the unit direction
         :param frequency_hz: Weave frequency
-        :return: The weaved unit direction (or ``base_direction`` if degenerate)
+        :return: The weaved unit direction (or base_direction if degenerate)
         """
         if amplitude <= 0.0:
             return base_direction

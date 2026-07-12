@@ -34,7 +34,7 @@ class TargetingSystem(SubSystem):
         turrets (e.g. 2.0 makes them fire twice as fast)
     :param auto_aim_params: Auto-aim tuning passed to
         :meth:`~space_flight.ai.auto_aim.AutoAim.configure` on boosted turrets
-        (e.g. ``target_lock_delay_s``, ``max_assist_angle_deg``). Empty falls
+        (e.g. target_lock_delay_s, max_assist_angle_deg). Empty falls
         back to the auto-aim defaults.
     :param name: Node and display name of the targeting system
     """

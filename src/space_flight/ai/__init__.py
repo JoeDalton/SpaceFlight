@@ -28,13 +28,13 @@ class Intent(Enum):
 
 class AttackMode(Enum):
     """
-    How a bot attacks a target once its tactician has chosen ``Intent.ENGAGE``.
+    How a bot attacks a target once its tactician has chosen Intent.ENGAGE.
 
-    Carried in ``target_dict["attack_mode"]`` (the tactician decides, the
-    navigator executes). ``PURSUIT`` is the constant-angle chase, good against
-    agile prey; ``STRAFE`` is a committed run-in/fire/break/reposition cycle for
-    slow or immobile targets; ``BOMB`` overflies a slow/immobile target and drops
-    a bomb along the belly; ``ORBIT`` keeps a target abeam on a capital ship's
+    Carried in target_dict["attack_mode"] (the tactician decides, the
+    navigator executes). PURSUIT is the constant-angle chase, good against
+    agile prey; STRAFE is a committed run-in/fire/break/reposition cycle for
+    slow or immobile targets; BOMB overflies a slow/immobile target and drops
+    a bomb along the belly; ORBIT keeps a target abeam on a capital ship's
     turret flank.
     """
 

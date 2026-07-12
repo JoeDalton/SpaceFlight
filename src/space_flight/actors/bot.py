@@ -213,7 +213,7 @@ class Bot(Destructible):
         analysis of an engagement.
 
         :param intent: The tactician's chosen intent
-        :param target_dict: The tactician's target info (may hold ``attack_mode``)
+        :param target_dict: The tactician's target info (may hold attack_mode)
         :param desired_speed_mps: The navigator's desired speed
         """
         name = self.name

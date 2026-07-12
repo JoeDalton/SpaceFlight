@@ -8,10 +8,10 @@ billboard effects can reuse it.
 Each effect gets:
 
 - Its own custom vertex format built by :func:`make_particle_format`: the
-  shared billboard columns (``vertex``, ``corner``, ``spawn_time``) plus the
+  shared billboard columns (vertex, corner, spawn_time) plus the
   effect's own per-particle columns. Every column is read in GLSL directly by
-  name (``in vec3 velocity;`` etc.) — no bit-packing, and no repurposing of
-  the semantic ``color`` / ``texcoord`` columns.
+  name (in vec3 velocity; etc.) — no bit-packing, and no repurposing of
+  the semantic color / texcoord columns.
 - A :class:`ParticleBuffer` (or subclass) that owns the GeomNode, manages slot
   allocation, writes vertex data, and drives the per-frame uniform update.
 - Identical billboard quad topology (:data:`CORNERS`, :data:`TRIS`,
@@ -21,23 +21,23 @@ Each effect gets:
 Vertex layout
 -------------
 Each particle is one billboard quad = 4 vertices. All four vertices of a quad
-carry identical simulation data; only ``corner`` differs so the vertex shader
+carry identical simulation data; only corner differs so the vertex shader
 can expand the quad. The shared billboard columns every format includes:
 
 ==============  =====  ===========================================================
 Column          Type   Content
 ==============  =====  ===========================================================
-``vertex``      vec3   World-space spawn position (bias applied CPU-side).
-``corner``      vec2   Corner selector: one of (-1,-1) (1,-1) (1,1) (-1,1).
-``spawn_time``  float  Absolute value of the buffer clock when the particle
+vertex      vec3   World-space spawn position (bias applied CPU-side).
+corner      vec2   Corner selector: one of (-1,-1) (1,-1) (1,1) (-1,1).
+spawn_time  float  Absolute value of the buffer clock when the particle
                        becomes active (includes any delay offset).
 ==============  =====  ===========================================================
 
 Each effect appends its own columns. The explosion effect
-(:mod:`space_flight.fx.explosion_fx`) adds ``velocity`` (vec3), ``size``
-(float), ``spin`` (float), ``lifetime`` (float) and ``tile_rect`` (vec4, the
+(:mod:`space_flight.fx.explosion_fx`) adds velocity (vec3), size
+(float), spin (float), lifetime (float) and tile_rect (vec4, the
 atlas tile UV rect); the spark effect (:mod:`space_flight.fx.spark_fx`) adds
-``velocity``, ``size``, ``lifetime``, ``gravity`` (float) and ``spark_color``
+velocity, size, lifetime, gravity (float) and spark_color
 (vec4).
 
 GPU animation
@@ -55,18 +55,18 @@ the particle's current state each frame from the stored spawn parameters:
     // size, alpha, spin etc. derived from frac …
 
 Three uniforms are updated every frame by :meth:`ParticleBuffer.update`:
-``uTime``, ``uCamRight``, ``uCamUp``.
+uTime, uCamRight, uCamUp.
 
 Implementation notes
 --------------------
-- ``setTransparency(MAlpha)`` must be called **before** ``setShader()``
+- setTransparency(MAlpha) must be called **before** setShader()
   or Panda3D's auto-shader generation interferes.
-- Atlas textures must be bound via ``setTexture(TextureStage.getDefault(), tex)``
-  for the shader to see them as ``p3d_Texture0``.
+- Atlas textures must be bound via setTexture(TextureStage.getDefault(), tex)
+  for the shader to see them as p3d_Texture0.
 - Custom vertex columns are exposed to GLSL by their exact column name (no
-  ``p3d_`` prefix); the built-in ``vertex`` column is read as ``p3d_Vertex``.
+  p3d_ prefix); the built-in vertex column is read as p3d_Vertex.
 - The atlas tile is selected per-particle by carrying its UV rect in the
-  ``tile_rect`` column, so the fragment shader needs neither a uniform array
+  tile_rect column, so the fragment shader needs neither a uniform array
   nor dynamic indexing to sample the right sprite.
 """
 
@@ -119,8 +119,8 @@ TRIS = [0, 1, 2, 0, 2, 3]
 
 
 #: Billboard-machinery columns present in every particle format, regardless of
-#: effect. ``vertex`` is the standard position column; ``corner`` and
-#: ``spawn_time`` are custom columns read in GLSL by name. Effect-specific
+#: effect. vertex is the standard position column; corner and
+#: spawn_time are custom columns read in GLSL by name. Effect-specific
 #: columns (velocity, size, lifetime, and any extras) are appended per effect.
 _BASE_COLUMNS = [
     (InternalName.getVertex(), 3, Geom.CPoint),
@@ -138,14 +138,14 @@ def make_particle_format(columns: list[tuple[str, int]]) -> GeomVertexFormat:
 
     The format has **one interleaved array** holding the shared billboard
     columns (:data:`_BASE_COLUMNS`) followed by the effect-specific *columns*.
-    Each effect column is a custom-named ``COther`` float column, read in GLSL
-    directly by name (``in vec3 velocity;`` etc.).
+    Each effect column is a custom-named COther float column, read in GLSL
+    directly by name (in vec3 velocity; etc.).
 
     Registering the format deduplicates it globally, so two buffers built from
     the same *columns* share one registered object.
 
-    :param columns: Effect-specific columns as ``(name, num_components)`` pairs
-                    (e.g. ``[("velocity", 3), ("size", 1), ("lifetime", 1)]``).
+    :param columns: Effect-specific columns as (name, num_components) pairs
+                    (e.g. [("velocity", 3), ("size", 1), ("lifetime", 1)]).
     :return: The registered :class:`GeomVertexFormat`.
     """
     arr = GeomVertexArrayFormat()
@@ -167,7 +167,7 @@ def _add_column_data(writer: GeomVertexWriter, width: int, value: object) -> Non
     :param writer: The column's :class:`GeomVertexWriter`.
     :param width:  Number of components (1-4).
     :param value:  A scalar for a 1-component column, or an indexable
-                   (``Vec3``/``Vec4``/tuple) for a wider one.
+                   (Vec3Vec4/tuple) for a wider one.
     """
     if width == 1:
         writer.addData1(float(value))
@@ -190,10 +190,10 @@ class ParticleBuffer:
 
     All particle animation runs on the GPU in the vertex shader. The CPU's
     only per-frame work is pushing three lightweight uniforms
-    (``uTime``, ``uCamRight``, ``uCamUp``) via :meth:`update`.
+    (uTime, uCamRight, uCamUp) via :meth:`update`.
 
-    Slots are reused as particles expire. The CPU-side ``_slots`` list tracks
-    ``(spawn_time, total_duration)`` pairs so :meth:`alloc_slot` can find a
+    Slots are reused as particles expire. The CPU-side _slots list tracks
+    (spawn_time, total_duration) pairs so :meth:`alloc_slot` can find a
     free slot without reading back GPU memory.
 
     Sub-classes supply an effect-specific :class:`Shader` and column layout and
@@ -201,20 +201,20 @@ class ParticleBuffer:
 
     :param game:      Parent game object
     :param shader:    Compiled :class:`Shader` (typically loaded from files via
-                      ``Shader.load``) applied to the particle geometry.
-    :param columns:   Effect-specific vertex columns as ``(name, num_components)``
+                      Shader.load) applied to the particle geometry.
+    :param columns:   Effect-specific vertex columns as (name, num_components)
                       pairs, appended to the shared billboard columns to build
                       this buffer's format (see :func:`make_particle_format`).
-                      Must include a ``lifetime`` column (used for the default
+                      Must include a lifetime column (used for the default
                       slot reservation in :meth:`write_slot`).
     :param texture:   Optional :class:`Texture` bound to the default
-                      :class:`TextureStage` (accessible as ``p3d_Texture0``
-                      in the shader). Pass ``None`` if the effect uses a
+                      :class:`TextureStage` (accessible as p3d_Texture0
+                      in the shader). Pass None if the effect uses a
                       procedural shader with no texture.
-    :param additive:  If ``True``, use additive blending
-                      ``(src * alpha + dst * 1)`` for a bright glow effect.
-                      If ``False``, use standard alpha blending.
-    :param bin_order: Sort order within the ``"transparent"`` render bin.
+    :param additive:  If True, use additive blending
+                      (src * alpha + dst * 1) for a bright glow effect.
+                      If False, use standard alpha blending.
+    :param bin_order: Sort order within the "transparent" render bin.
     :param task_name: Unique name for the Panda3D per-frame update task.
                       Must differ between simultaneous buffers.
     """
@@ -332,11 +332,11 @@ class ParticleBuffer:
 
         A slot is considered free when:
 
-        - It has never been used (``_slots[i] is None``), or
+        - It has never been used (_slots[i] is None), or
         - Enough buffer-clock time has elapsed since its spawn that its
-          particle has fully expired (``_time - spawn_time >= duration``).
+          particle has fully expired (_time - spawn_time >= duration).
 
-        :return: A free slot index in ``[0, _POOL_SIZE)``, or ``None``
+        :return: A free slot index in [0, _POOL_SIZE), or None
                   if the pool is completely full.
         """
         now = self.time
@@ -356,28 +356,28 @@ class ParticleBuffer:
         """
         Write one particle quad into *slot_index*.
 
-        All four corners receive identical simulation data; only ``corner``
+        All four corners receive identical simulation data; only corner
         differs (the four values from :data:`CORNERS`). The vertex shader uses
         the corner to offset the billboard along the camera axes.
 
-        The billboard-machinery columns (``vertex``, ``corner``, ``spawn_time``)
+        The billboard-machinery columns (vertex, corner, spawn_time)
         are written here; every other column is supplied as a keyword argument
         matching an effect column name (see :func:`make_particle_format`), e.g.
-        ``velocity=Vec3(...)``, ``size=1.5``, ``lifetime=2.0``. Scalars fill
-        1-component columns; indexables (``Vec3``/``Vec4``/tuples) fill wider
+        velocity=Vec3(...), size=1.5, lifetime=2.0. Scalars fill
+        1-component columns; indexables (Vec3Vec4/tuples) fill wider
         ones. There is no packing to undo on the GPU side.
 
-        :param slot_index:    Index into ``slots`` / vertex buffer to overwrite.
+        :param slot_index:    Index into slots / vertex buffer to overwrite.
         :param pos:           World-space spawn position (positional bias already
                               applied by the caller).
         :param spawn_delay:   Seconds before the particle becomes visible.
-                              The stored ``spawn_time = time + spawn_delay``
-                              makes ``t = uTime - spawn_time`` negative during
+                              The stored spawn_time = time + spawn_delay
+                              makes t = uTime - spawn_time negative during
                               the delay window, keeping the quad invisible.
         :param slot_duration: How long to reserve this slot (seconds, excluding
-                              *spawn_delay*). Defaults to the ``lifetime`` column.
+                              *spawn_delay*). Defaults to the lifetime column.
         :param columns:       One value per effect column, keyed by column name.
-                              Must include ``lifetime``.
+                              Must include lifetime.
         """
         now = self.time
         base_v = slot_index * 4
@@ -417,7 +417,7 @@ class ParticleBuffer:
 
         Called automatically by the games task manager
         Override in a sub-class to push additional per-frame uniforms,
-        remembering to call ``super().update()``.
+        remembering to call super().update().
         """
         self.time = self.game.game_time.get_current_time()
         # Billboard orientation is a pure rendering concern (there is no
@@ -476,15 +476,15 @@ def load_atlas(
     """
     Load a sprite atlas from a PNG and its companion JSON descriptor.
 
-    The JSON is a list of dicts with keys ``u_min``, ``v_min``, ``u_size``,
-    ``v_size`` (all in 0-1 UV space, already flipped for OpenGL's bottom-left
+    The JSON is a list of dicts with keys u_min, v_min, u_size,
+    v_size (all in 0-1 UV space, already flipped for OpenGL's bottom-left
     origin by the atlas build tool).
 
     :param game: The parent game object
     :param texture_path:  Path to the atlas PNG file.
     :param json_path: Path to the JSON rect descriptor.
-    :return: A ``(texture, rects)`` tuple where *rects* is a list of
-              ``(u, v, uw, vh)`` tuples, one per sprite frame.
+    :return: A (texture, rects) tuple where *rects* is a list of
+              (u, v, uw, vh) tuples, one per sprite frame.
     """
     with open(json_path) as f:
         data = json.load(f)

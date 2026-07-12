@@ -142,10 +142,10 @@ class CapitalShip(Ship):
         config (turrets, tractor beams, ...).
 
         Each mount is a Bot (it has its own tracking AI) whose pawn is bolted onto
-        this ship. ``spawn_bot`` is imported here rather than at module level to
-        break the ``bot`` <-> ``capital_ship`` import cycle.
+        this ship. spawn_bot is imported here rather than at module level to
+        break the bot <-> capital_ship import cycle.
 
-        :param config_key: The ``sub_systems`` config section listing the mounts
+        :param config_key: The sub_systems config section listing the mounts
         :param bot_type: The bot type to spawn for each entry
         :param model_key: The config field naming each mount's model/config
         :return: The spawned mount bots
@@ -184,10 +184,10 @@ class CapitalShip(Ship):
 
         A ship with **no** shield generators gets **no** shield: the shield is an
         effect of the generator hardware, so without generators there is nothing
-        to project it (a ``shield`` spec on such a ship is ignored, with a
-        warning). Sets :attr:`shield` to the shield or ``None``.
+        to project it (a shield spec on such a ship is ignored, with a
+        warning). Sets :attr:`shield` to the shield or None.
 
-        :param sub_systems_conf: The ship's ``sub_systems`` config section
+        :param sub_systems_conf: The ship's sub_systems config section
         """
         self.shield = None
         if not self.shield_generators:
@@ -231,7 +231,7 @@ class CapitalShip(Ship):
     @property
     def shield_level(self) -> float:
         """
-        A capital ship's shield is a :class:`Shield` object (or ``None`` when the
+        A capital ship's shield is a :class:`Shield` object (or None when the
         ship has no shield generators); expose its strength as a plain scalar.
 
         :return: The current shield strength, or 0 when unshielded

@@ -72,12 +72,12 @@ class FighterNavigator(GenericShipNavigator):
     def engage_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Engages a target with the attack mode the tactician chose (carried in
-        ``target_dict["attack_mode"]``):
+        target_dict["attack_mode"]):
 
-        - ``PURSUIT`` (default): constant-angle chase, good against agile prey.
-        - ``STRAFE``: a committed ingress -> attack -> break -> reposition run for
+        - PURSUIT (default): constant-angle chase, good against agile prey.
+        - STRAFE: a committed ingress -> attack -> break -> reposition run for
           slow or immobile targets.
-        - ``BOMB``: overfly a slow/immobile target and drop a bomb along the belly.
+        - BOMB: overfly a slow/immobile target and drop a bomb along the belly.
 
         :param target_dict: A dictionary with the target id, attack mode and
             (for surface-mounted preys) surface normal/hit point
@@ -103,11 +103,11 @@ class FighterNavigator(GenericShipNavigator):
 
     def _resolve_engagement(self, target_dict: dict) -> bool:
         """
-        Enrich ``target_dict`` in place with the per-frame engagement geometry
+        Enrich target_dict in place with the per-frame engagement geometry
         shared by every attack mode, so all pattern methods take the single
-        ``target_dict``.
+        target_dict.
 
-        :param target_dict: The tactician's target info (needs ``target_id``);
+        :param target_dict: The tactician's target info (needs target_id);
             mutated with the resolved geometry keys
         :return: True if resolved, False if the target is gone
         """
@@ -273,11 +273,11 @@ class FighterNavigator(GenericShipNavigator):
     def strafe_target(self, target_dict: dict) -> Tuple[np.ndarray, float]:
         """
         Strafing run against a slow or immobile target: a committed phase cycle
-        ``ingress -> attack -> break -> reposition -> ingress`` that runs in fast,
+        ingress -> attack -> break -> reposition -> ingress that runs in fast,
         fires, peels off and comes around again, instead of spiralling like a chase.
 
-        For a surface-mounted prey (``surface_normal``/``surface_hit_point`` in
-        ``target_dict``) the ingress becomes a low-altitude corridor (a run at a set
+        For a surface-mounted prey (surface_normalsurface_hit_point in
+        target_dict) the ingress becomes a low-altitude corridor (a run at a set
         altitude above the surface, then a dive), the break climbs along the normal,
         and a hard altitude floor forces recovery. Without surface info it is a
         straight open-space pass.
@@ -484,7 +484,7 @@ class FighterNavigator(GenericShipNavigator):
         A strafe phase speed as a fraction of the ship's own top speed.
 
         :param strafe: The strafe personality sub-dict
-        :param factor_key: The fraction key (e.g. ``"attack_speed_factor"``)
+        :param factor_key: The fraction key (e.g. "attack_speed_factor")
         :return: The desired speed in m/s
         """
         return strafe[factor_key] * self.pawn.max_speed_mps
@@ -532,7 +532,7 @@ class FighterNavigator(GenericShipNavigator):
         """
         Bombing run against a slow/immobile target: overfly it and release a bomb
         along the belly (-Z). A committed cycle
-        ``ingress -> run -> break -> reposition -> ingress``: line up, fly a straight
+        ingress -> run -> break -> reposition -> ingress: line up, fly a straight
         belly-aimed leg while the release solver times the drop, then peel off.
 
         The belly is aimed via the pilot up-reference (the surface normal for a
@@ -604,8 +604,8 @@ class FighterNavigator(GenericShipNavigator):
         """
         Whether a bomb dropped this frame would hit the target.
 
-        The bomb travels in a straight line (no gravity) at ``v_bomb = ship.speed -
-        launch_speed * ship.up`` (i.e. the belly -Z plus inherited ship velocity),
+        The bomb travels in a straight line (no gravity) at v_bomb = ship.speed -
+        launch_speed * ship.up (i.e. the belly -Z plus inherited ship velocity),
         so it is forward-and-down. Release when the (lead-adjusted) target lies
         along that velocity within a tolerance cone and range -- mirroring the gun
         fire check, on the bomb's velocity axis instead of the nose.

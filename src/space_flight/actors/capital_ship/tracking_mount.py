@@ -26,8 +26,8 @@ class TrackingMount(SubSystem):
     override (fire cannons, grab a prey...).
 
     A tracking mount is a :class:`SubSystem` (destructible, targetable, dies with
-    its ship) driven by a Bot: the bot is its ``parent`` (controller), while
-    ``mounted_on`` is the ship it sits on. Its generic AI
+    its ship) driven by a Bot: the bot is its parent (controller), while
+    mounted_on is the ship it sits on. Its generic AI
     (:mod:`space_flight.ai.tracking_mount`) selects a prey and steers the barrel;
     the navigator publishes its lead solution onto :attr:`aim_direction` /
     :attr:`target_distance_m` for :meth:`_operate` to act upon.

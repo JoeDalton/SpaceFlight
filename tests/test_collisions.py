@@ -2,7 +2,7 @@
 Unit tests for the collision helpers and the subsystem collision handling.
 
 These exercise pure logic (bitmask selection, the same-vehicle owner test) and
-the ``ship_into_subsystem`` pushback, which is built without ``__init__`` and fed
+the ship_into_subsystem pushback, which is built without __init__ and fed
 a mocked collision entry so no ShowBase/traversal is needed.
 """
 
@@ -148,7 +148,7 @@ def make_collision_system_without_init() -> CollisionSystem:
     Build a CollisionSystem that bypasses __init__ (no ShowBase/traverser) with
     just enough game state for the handlers under test.
 
-    :return: A bare :class:`CollisionSystem` with a mocked ``game``.
+    :return: A bare :class:`CollisionSystem` with a mocked game.
     """
     system = object.__new__(CollisionSystem)
     system.game = MagicMock()
@@ -315,7 +315,7 @@ def make_laser_and_shield(
     :param velocity: The laser's world velocity
     :param enabled: Whether the shield is currently up
     :param power: The laser's damage
-    :return: A ``(laser, shield)`` pair of mocks.
+    :return: A (laser, shield) pair of mocks.
     """
     laser = MagicMock()
     laser.speed = np.asarray(velocity, dtype=float)

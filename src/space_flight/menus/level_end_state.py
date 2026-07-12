@@ -33,11 +33,11 @@ class LevelEndState(BaseState):
     """
     Terminal screen shown when a level ends, for any outcome.
 
-    The outcome (``victory``, ``defeat`` or ``death``) selects the title and its
-    tint; an optional ``text`` gives the level-specific explanation beneath it.
+    The outcome (victory, defeat or death) selects the title and its
+    tint; an optional text gives the level-specific explanation beneath it.
 
     :param app: The ShowBase application
-    :param outcome: One of ``victory``, ``defeat`` or ``death``
+    :param outcome: One of victory, defeat or death
     :param text: Explanatory text shown beneath the title
     """
 

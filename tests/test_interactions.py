@@ -70,7 +70,7 @@ def test_add_duplicate_actor_raises(interactions):
 
 def test_max_actors_exceeded_raises():
     """
-    Attempting to add a third actor to an instance created with ``max_actors=2``
+    Attempting to add a third actor to an instance created with max_actors=2
     must raise a :exc:`RuntimeError`.
     """
     ix = Interactions(max_actors=2)
@@ -99,8 +99,8 @@ def test_remove_actor_frees_slot(interactions):
 
 def test_remove_actor_zeroes_interact_row_and_col(interactions):
     """
-    After removal, the entire ``interact`` row and column for the freed slot
-    must be ``False`` so that no other actor can appear to interact with it.
+    After removal, the entire interact row and column for the freed slot
+    must be False so that no other actor can appear to interact with it.
     """
     a = MockActor(team=1, position=[0, 0, 0])
     b = MockActor(team=2, position=[100, 0, 0])
@@ -117,7 +117,7 @@ def test_remove_actor_zeroes_interact_row_and_col(interactions):
 
 def test_remove_actor_zeroes_distances(interactions):
     """
-    After removal, the entire ``distances`` row and column for the freed slot
+    After removal, the entire distances row and column for the freed slot
     must be zero to prevent stale distance values from leaking into AI queries.
     """
     a = MockActor(team=1, position=[0, 0, 0])
@@ -163,7 +163,7 @@ def test_slot_stable_across_other_removals(interactions):
     Removing actor B must not shift the slot indices of A or C.
 
     This is the key correctness guarantee of the pre-allocated design:
-    stable slot indices eliminate the stale ``target_idx`` bug that existed
+    stable slot indices eliminate the stale target_idx bug that existed
     in the previous compact-list implementation.
     """
     a = MockActor(team=1, position=[0, 0, 0])
@@ -196,7 +196,7 @@ def test_n_actors_initially_zero(interactions):
 
 def test_n_actors_after_add(interactions):
     """
-    ``n_actors`` must equal the number of actors that have been added.
+    n_actors must equal the number of actors that have been added.
     """
     interactions.add_actor(MockActor(team=1, position=[0, 0, 0]))
     interactions.add_actor(MockActor(team=2, position=[100, 0, 0]))
@@ -205,7 +205,7 @@ def test_n_actors_after_add(interactions):
 
 def test_n_actors_after_remove(interactions):
     """
-    ``n_actors`` must decrement by one after a removal.
+    n_actors must decrement by one after a removal.
     """
     a = MockActor(team=1, position=[0, 0, 0])
     b = MockActor(team=2, position=[100, 0, 0])
@@ -219,7 +219,7 @@ def test_n_actors_after_remove(interactions):
 
 def test_live_actors_contains_no_nones(interactions):
     """
-    ``live_actors`` must never contain ``None`` entries regardless of how
+    live_actors must never contain None entries regardless of how
     many slots are occupied.
     """
     interactions.add_actor(MockActor(team=1, position=[0, 0, 0]))
@@ -229,7 +229,7 @@ def test_live_actors_contains_no_nones(interactions):
 
 def test_live_actors_returns_correct_set(interactions):
     """
-    ``live_actors`` must return exactly the set of actors that were added
+    live_actors must return exactly the set of actors that were added
     and not yet removed.
     """
     a = MockActor(team=1, position=[0, 0, 0])
@@ -242,7 +242,7 @@ def test_live_actors_returns_correct_set(interactions):
 
 def test_live_actors_excludes_removed(interactions):
     """
-    ``live_actors`` must not include actors that have been removed.
+    live_actors must not include actors that have been removed.
     """
     a = MockActor(team=1, position=[0, 0, 0])
     b = MockActor(team=2, position=[100, 0, 0])
@@ -260,7 +260,7 @@ def test_live_actors_excludes_removed(interactions):
 
 def test_get_actor_index_returns_stable_slot(interactions):
     """
-    An actor's slot index returned by ``get_actor_index_from_id`` must remain
+    An actor's slot index returned by get_actor_index_from_id must remain
     unchanged after a different actor is removed.
     """
     a = MockActor(team=1, position=[0, 0, 0])
@@ -301,7 +301,7 @@ def test_get_actor_index_after_removal_raises(interactions):
 
 def test_update_empty_does_not_crash(interactions):
     """
-    Calling ``update_interactions`` on an empty instance must not raise.
+    Calling update_interactions on an empty instance must not raise.
     """
     interactions.update_interactions()
 
@@ -365,7 +365,7 @@ def test_different_teams_interact(interactions):
 
 def test_beyond_max_distance_does_not_interact(interactions):
     """
-    Two opposing actors separated by more than ``INTERACT_MAX_DISTANCE_M``
+    Two opposing actors separated by more than INTERACT_MAX_DISTANCE_M
     must not interact.
     """
     a = MockActor(team=1, position=[0, 0, 0])
@@ -422,7 +422,7 @@ def test_directions_are_unit_vectors_and_antisymmetric(interactions):
 def test_relative_velocity_computed(interactions):
     """
     The relative velocity stored for the pair (A, B) must equal
-    ``b.speed - a.speed``, and the inverse entry must be its negation.
+    b.speed - a.speed, and the inverse entry must be its negation.
     """
     a = MockActor(team=1, position=[0, 0, 0], speed=[10, 0, 0])
     b = MockActor(team=2, position=[300, 0, 0], speed=[0, 0, 0])
@@ -473,8 +473,8 @@ def test_alignment_zero_for_perpendicular(interactions):
 
 def test_dead_slot_not_selectable_as_target(interactions):
     """
-    After an actor is removed its slot's entire ``interact`` row must be
-    ``False``, so it can never appear in ``np.where(interact_mask)`` and
+    After an actor is removed its slot's entire interact row must be
+    False, so it can never appear in np.where(interact_mask) and
     therefore can never be selected as a target by the player or a bot.
 
     This is the primary regression guard for the pre-allocated refactor.
@@ -497,7 +497,7 @@ def test_dead_slot_not_selectable_as_target(interactions):
 def test_new_actor_in_reused_slot_is_selectable(interactions):
     """
     After slot reuse the replacement actor must interact correctly with
-    existing actors, and ``actors[recycled_slot]`` must point to the new actor.
+    existing actors, and actors[recycled_slot] must point to the new actor.
     """
     player = MockActor(team=1, position=[0, 0, 0])
     first_enemy = MockActor(team=2, position=[100, 0, 0])
@@ -521,8 +521,8 @@ def test_new_actor_in_reused_slot_is_selectable(interactions):
 
 def test_interact_mask_width_is_max_actors(interactions):
     """
-    The ``interact`` row used for target selection must always be ``MAX_ACTORS``
-    wide with all unused slots forced to ``False``, so that score arrays remain
+    The interact row used for target selection must always be MAX_ACTORS
+    wide with all unused slots forced to False, so that score arrays remain
     consistently sized across the lifetime of the simulation.
     """
     player = MockActor(team=1, position=[0, 0, 0])
@@ -546,7 +546,7 @@ def test_interact_mask_width_is_max_actors(interactions):
 
 def test_clean_nulls_all_references(interactions):
     """
-    After ``clean()`` every attribute must be ``None`` so that the garbage
+    After clean() every attribute must be None so that the garbage
     collector can reclaim the pre-allocated numpy arrays.
     """
     interactions.add_actor(MockActor(team=1, position=[0, 0, 0]))
@@ -570,7 +570,7 @@ def test_clean_nulls_all_references(interactions):
 
 class BareActor:
     """
-    A targetable actor with no ``speed`` and no ``forward`` (like a subsystem),
+    A targetable actor with no speed and no forward (like a subsystem),
     exercising the interactions' tolerance for missing kinematics.
     """
 
@@ -583,7 +583,7 @@ class BareActor:
 
 def test_update_interactions_tolerates_missing_speed_and_forward(interactions):
     """
-    An actor lacking ``speed`` and ``forward`` still takes part in interactions:
+    An actor lacking speed and forward still takes part in interactions:
     its velocity and facing default to zero rather than raising.
     """
     ship = MockActor(team=1, position=[0.0, 0.0, 0.0])

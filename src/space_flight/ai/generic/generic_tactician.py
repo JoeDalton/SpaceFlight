@@ -25,7 +25,7 @@ class GenericTactician:
     ):
         self.game = game
         self.pawn = pawn
-        # The intent is the FSM state; the personality's ``commitment_times`` are
+        # The intent is the FSM state; the personality's commitment_times are
         # its per-state minimum dwell (hysteresis), checked dynamically in think()
         # so a runtime personality swap takes effect.
         self.intent_sm = StateMachine(
@@ -284,7 +284,7 @@ class GenericTactician:
     def evaluate_fighting_shape(self) -> float:
         """
         The bot's fitness to keep fighting: half its health plus its shield. Reads
-        the uniform ``health``/``shield_level`` exposed by every pawn, so it works
+        the uniform healthshield_level exposed by every pawn, so it works
         the same for fighters and capital ships.
 
         TODO: add an "energy" mechanic ? Health of subsystems ?

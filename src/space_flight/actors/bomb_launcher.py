@@ -27,7 +27,7 @@ class BombLauncher(Weapon):
     Launches bombs from a ship. The counterpart of :class:`~space_flight.actors.
     laser_cannon.LaserCannon` for the bomb weapon: it spawns a slow :class:`Bomb`
     dropped along the belly, rate-limited by a reload delay. Supply is tracked on
-    the ship (``Fighter.bomb_supply``); this only spawns the projectile.
+    the ship (Fighter.bomb_supply); this only spawns the projectile.
     """
 
     def __init__(self, game, parent, parent_node=None):
@@ -67,7 +67,7 @@ class Bomb(Munition):
     A bomb projectile: a slow, short-lived pink sphere with a small collision
     sphere. It inherits the whole projectile lifecycle from :class:`Munition` and
     only supplies its visual and collider, so it reuses the laser collision-damage
-    handlers (via the shared ``origin_ship``/``power``/``speed``/``shot`` interface).
+    handlers (via the shared origin_shippowerspeedshot interface).
     """
 
     def _build_visual(self, start_position):

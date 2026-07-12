@@ -8,7 +8,7 @@ loaded, actors spawned, physics stepped — with no window, no audio device, no
 menus and no HUD, exactly as an optimization loop (bot personality tuning,
 navigator strategy search, ...) would use it.
 
-Reuses the session-wide ``spaceflight_app`` fixture (see conftest.py):
+Reuses the session-wide spaceflight_app fixture (see conftest.py):
 ShowBase is a per-process singleton, so this cannot construct its own app if
 other test modules (e.g. test_clouds.py) already share one.
 """

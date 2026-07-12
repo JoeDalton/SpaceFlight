@@ -20,7 +20,7 @@ def make_tracking_mount_without_init(
 ):
     """
     Build a TrackingMount that bypasses __init__ with the minimum needed by
-    move(): aim state/agility, a mocked integrator returning ``new_state``, a
+    move(): aim state/agility, a mocked integrator returning new_state, a
     mocked swivelling model, and mocked node quats.
     """
     mount = object.__new__(TrackingMount)

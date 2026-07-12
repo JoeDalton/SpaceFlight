@@ -48,7 +48,7 @@ def make_prey(position, speed, prey_id="prey"):
 def make_tractor(prey=None, host_speed=(0.0, 0.0, 0.0)):
     """
     Build a TractorBeamProjector (bypassing __init__) aimed down +Y, with the
-    grab hardware set and its game wired to resolve ``prey`` from interactions.
+    grab hardware set and its game wired to resolve prey from interactions.
     """
     tractor = object.__new__(TractorBeamProjector)
     tractor.personality = Personality.TRACTOR_BEAM_DEFAULT

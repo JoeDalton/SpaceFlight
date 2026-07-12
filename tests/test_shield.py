@@ -2,8 +2,8 @@
 Unit tests for the Shield's strength/animation/lifecycle logic and geometry
 dispatch.
 
-Instances bypass ``__init__`` so the pure logic is testable without a loader or
-scene graph. The shader/visual and game are mocked; ``update`` drives the
+Instances bypass __init__ so the pure logic is testable without a loader or
+scene graph. The shader/visual and game are mocked; update drives the
 state machine (up -> dying -> down -> appearing -> up) and cooldown-gated
 regeneration.
 """
@@ -57,7 +57,7 @@ def make_shield_without_init(
 
     The visual/shader side (the :class:`ShieldModel`), the anchor node and the
     game clock are mocked, so only the game-logic state machine is exercised.
-    ``generators`` is the *full* projecting group (pass some as dead to exercise
+    generators is the *full* projecting group (pass some as dead to exercise
     the pro-rata perks); it defaults to a single live generator.
     """
     if generators is None:

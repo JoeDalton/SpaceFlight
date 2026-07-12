@@ -34,7 +34,7 @@ class StateMachine:
         :param initial_state: the starting state key (enum / str / bool / any hashable)
         :param clock: a callable returning the current time in seconds
         :param commit_times: minimum dwell before *leaving* a state -- a scalar
-            applied to every state, a ``{state: seconds}`` dict, or None for no dwell
+            applied to every state, a {state: seconds} dict, or None for no dwell
         :param name: optional label for debugging
         """
         self._clock = clock

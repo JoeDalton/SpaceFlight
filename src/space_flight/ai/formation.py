@@ -69,7 +69,7 @@ class Formation:
         else:
             raise NotImplementedError(f"Unknown formation shape {shape}")
 
-        # Build fresh, scaled position arrays. ``position * scale_m`` allocates a
+        # Build fresh, scaled position arrays. position * scale_m allocates a
         # new array per slot, so the shared class-level templates are never
         # mutated (scaling them in place would compound across every Formation).
         self.relative_positions = [position * scale_m for position in template]

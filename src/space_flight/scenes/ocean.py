@@ -121,10 +121,10 @@ def make_plane_mesh(size: float) -> GeomNode:
 def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float) -> GeomNode:
     """
     Mesh for the geometric-swell prototype: a dense uniform grid of half-size
-    ``grid_half`` (where the vertex shader displaces the surface by the swell),
-    surrounded by a single ring of huge border cells reaching ``outer_half`` so
+    grid_half (where the vertex shader displaces the surface by the swell),
+    surrounded by a single ring of huge border cells reaching outer_half so
     the ocean still covers the view to the horizon.  The displacement is tapered
-    to zero before ``grid_half`` (in the shader), so the flat border joins
+    to zero before grid_half (in the shader), so the flat border joins
     seamlessly — no projected-grid / clipmap machinery needed.
 
     :param grid_half: Half-size of the dense inner grid, in world units.
@@ -239,9 +239,9 @@ class Ocean:
         :param wave_fade_far: Distance, in world units, beyond which small waves
             are fully suppressed.
         :param wave_fade_k2: Exponential decay rate for the iteration count
-            (``iter = max_iter * exp(-k2 * dist)``).
-        :param vert_shader: Path to ``ocean.vert``.
-        :param frag_shader: Path to ``ocean.frag``.
+            (iter = max_iter * exp(-k2 * dist)).
+        :param vert_shader: Path to ocean.vert.
+        :param frag_shader: Path to ocean.frag.
         """
         self.game = game
         self.id = uuid.uuid4()

@@ -519,7 +519,7 @@ def make_radial_ctx(
 
     :param input_type: Active device type.
     :param device_bindings: Flight context device bindings.
-    :param radial_bindings: ``radial_menu`` context bindings (direction keys /
+    :param radial_bindings: radial_menu context bindings (direction keys /
         axes).
     :param n_slices: Number of radial slices.
     :param trigger_hw: Hardware name of the trigger button.

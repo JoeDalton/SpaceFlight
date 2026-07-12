@@ -127,8 +127,8 @@ class FlightInputContext(InputContext):
     In-game flight context.  Maps hardware input onto ship controls, weapon
     fire, boost, targeting, and camera look.
 
-    Bindings are loaded from the ``contexts.flight.<input_type>`` section of
-    ``configuration.yaml`` so that every action can be remapped without
+    Bindings are loaded from the contexts.flight.<input_type> section of
+    configuration.yaml so that every action can be remapped without
     touching code.
 
     Keyboard throttle is accumulated (+=) each frame the key is held.
@@ -144,7 +144,7 @@ class FlightInputContext(InputContext):
         :param game: Active :class:`~space_flight.game.flight_state.FlightState`.
         :param player: The human :class:`~space_flight.actors.player.Player`.
         :param radial_menu_factory: Zero-argument callable that opens the radial
-            menu when the ``radial_menu`` binding is pressed.  ``None`` disables
+            menu when the radial_menu binding is pressed.  None disables
             the trigger.
         """
         self.game = game
@@ -340,9 +340,9 @@ class PauseMenuInputContext(InputContext):
     """
     Pushed onto the stack when the game is paused.
 
-    Blocks all flight inputs (``FlightInputContext`` is below and not ticked).
-    Pressing the pause key again calls ``state_manager.pop()``, which triggers
-    ``FlightState.resume()`` and pops this context.
+    Blocks all flight inputs (FlightInputContext is below and not ticked).
+    Pressing the pause key again calls state_manager.pop(), which triggers
+    FlightState.resume() and pops this context.
 
     Both the device-specific pause binding and the global one are checked so
     that escape always works regardless of the active input type.
@@ -392,7 +392,7 @@ class HyperspaceInputContext(InputContext):
     """
     Pushed while the hyperspace loading screen waits for the player to drop out.
 
-    It is a thin trigger: the first time the ``drop_hyperspace`` key is pressed
+    It is a thin trigger: the first time the drop_hyperspace key is pressed
     it calls *on_trigger* once and then ignores further input (the level reveal
     pops it). Being on top of the stack, it also blocks the flight context below
     so the ship cannot be controlled until the world is revealed.
@@ -412,7 +412,7 @@ class HyperspaceInputContext(InputContext):
 
     @staticmethod
     def _resolve_keys(app) -> frozenset[str]:
-        """Collect the device-specific and global ``drop_hyperspace`` keys."""
+        """Collect the device-specific and global drop_hyperspace keys."""
         input_type = app.bindings["input_type"]
         device = (
             app.bindings.get("contexts", {}).get("hyperspace", {}).get(input_type, {})
@@ -467,14 +467,14 @@ class RadialMenuInputContext(InputContext):
     Input context active while a radial menu is open.
 
     Reads a 2-D direction vector each frame (from analog axes or keyboard
-    directional keys, as configured in the ``radial_menu`` YAML context) and
+    directional keys, as configured in the radial_menu YAML context) and
     determines which slice the player is pointing at.  When the trigger button
-    is released the ``on_select`` callback receives the chosen slice index (or
-    ``None`` if the vector magnitude was below ``min_magnitude``).
+    is released the on_select callback receives the chosen slice index (or
+    None if the vector magnitude was below min_magnitude).
 
-    The context pops itself by calling ``state_manager.pop()`` on release,
+    The context pops itself by calling state_manager.pop() on release,
     which causes :class:`~space_flight.menus.radial_menu_state.RadialMenuState`
-    to call ``exit()`` and clean up the visual overlay.
+    to call exit() and clean up the visual overlay.
 
     The context never touches game time, so the simulation keeps running while
     the menu is open.
@@ -492,12 +492,12 @@ class RadialMenuInputContext(InputContext):
         """
         :param game: Active game state.
         :param n_slices: Number of radial slices.
-        :param on_select: Called with the selected slice index (or ``None``)
+        :param on_select: Called with the selected slice index (or None)
             when the trigger is released.
         :param trigger_hw_name: Hardware name of the button that opened the
             menu.  Release of this button closes the menu.
         :param on_hover: Optional callback called every frame with the
-            currently highlighted slice index (or ``None``); used to update
+            currently highlighted slice index (or None); used to update
             the visual overlay.
         :param min_magnitude: Direction vector magnitude below which no slice
             is selected.
@@ -553,10 +553,10 @@ class RadialMenuInputContext(InputContext):
 
     def read_direction(self, state) -> tuple[float, float]:
         """
-        Return ``(x, y)`` in ``[-1, 1]`` from analog axes or keyboard keys.
+        Return (x, y) in [-1, 1] from analog axes or keyboard keys.
 
         :param state: Current input state.
-        :return: ``(x, y)`` direction tuple.
+        :return: (x, y) direction tuple.
         """
         ax = self.bindings.get("axis_x")
         ay = self.bindings.get("axis_y")

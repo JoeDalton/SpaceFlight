@@ -204,13 +204,13 @@ class CustomButton:
         :param text_scale: Scale of the text relative to the button geometry.
             Defaults to 0.25.
         :param layout: Controls text alignment and horizontal anchor.
-            ``"left"`` aligns text to the left edge, ``"center"`` centres it,
-            and ``"right"`` aligns it to the right edge. Raises
-            ``NotImplementedError`` for any other value.
+            "left" aligns text to the left edge, "center" centres it,
+            and "right" aligns it to the right edge. Raises
+            NotImplementedError for any other value.
         :param extraArgs: Additional positional arguments forwarded to
             *command* when the button is clicked.
         :param parent: Panda3D node to attach the button to. Defaults to the
-            global aspect2d when ``None``.
+            global aspect2d when None.
         """
         self.app = app
 
@@ -311,7 +311,7 @@ class CustomEntry:
         :param width: Visible width of the entry field in character units.
         :param scale: Uniform scale applied to the entry node.
         :param parent: Panda3D node to attach the entry to. Defaults to the
-            global aspect2d when ``None``.
+            global aspect2d when None.
         """
         self.entry = DirectEntry(
             parent=parent,
@@ -370,10 +370,10 @@ class CustomSlider:
         Create the underlying DirectSlider with game-standard styling.
 
         :param app: The running ShowBase application; used to retrieve the
-            shared thumb geometry from ``app.menu_models``.
+            shared thumb geometry from app.menu_models.
         :param pos: 3-tuple (x, y, z) of the slider's position.
         :param value: Initial value of the slider.
-        :param value_range: ``(min, max)`` range of the slider.
+        :param value_range: (min, max) range of the slider.
         :param command: Callable invoked (with *extraArgs*) on every change.
         :param extraArgs: Additional positional arguments forwarded to *command*.
         :param parent: Panda3D node to attach to. Defaults to aspect2d.
@@ -439,8 +439,8 @@ class CustomCheckButton:
             consistency with the other custom widgets).
         :param pos: 3-tuple (x, y, z) of the checkbox position.
         :param value: Initial checked state.
-        :param command: Callable invoked as ``command(status, *extraArgs)`` on
-            toggle, where *status* is ``1`` (checked) or ``0`` (unchecked).
+        :param command: Callable invoked as command(status, *extraArgs) on
+            toggle, where *status* is 1 (checked) or 0 (unchecked).
         :param extraArgs: Additional positional arguments forwarded to *command*.
         :param parent: Panda3D node to attach to. Defaults to aspect2d.
         :param scale: Uniform scale applied to the checkbox node.

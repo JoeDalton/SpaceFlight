@@ -24,7 +24,7 @@ def make_capital_ship_tactician(
     :param mock_game: the mocked game object
     :param health: normalised pawn health value
     :param shield_level: the shield's reported level, or None for a ship with no
-                         shield (``pawn.shield`` is None)
+                         shield (pawn.shield is None)
     :return: a CapitalShipTactician ready for testing
     """
     pawn = MagicMock()
@@ -46,7 +46,7 @@ def make_capital_ship_tactician(
 
 def test_evaluate_fighting_shape_without_shield():
     """
-    When the pawn has no shield (``pawn.shield`` is None), evaluate_fighting_shape
+    When the pawn has no shield (pawn.shield is None), evaluate_fighting_shape
     must return 0.5 * health with no error.
     """
     mock_game = MagicMock()

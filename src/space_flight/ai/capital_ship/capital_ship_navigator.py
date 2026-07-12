@@ -176,7 +176,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         self, target, center: np.ndarray, point: np.ndarray
     ) -> np.ndarray:
         """
-        Closest point to ``point`` on the target's horizontal oriented bounding box
+        Closest point to point on the target's horizontal oriented bounding box
         footprint (the box's right/forward extents, projected into the horizontal
         plane). Falls back to a square footprint from the collision radius when the
         target exposes no bounding box (e.g. a subsystem).

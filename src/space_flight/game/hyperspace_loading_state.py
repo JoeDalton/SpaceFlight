@@ -9,8 +9,8 @@ Plays a hyperspace jump animation while the level builds underneath it:
       -> outof  (dropping out, fixed duration)
       -> reveal (fade the overlay out into the live game scene), then pops.
 
-The build is driven *by this state*: it calls ``build_step`` once per frame
-during the ``inside`` phase only. Keeping all heavy work out of ``into`` (and
+The build is driven *by this state*: it calls build_step once per frame
+during the inside phase only. Keeping all heavy work out of into (and
 out of every cross-fade) means those parts stay smooth; the unavoidable
 per-step stutter is confined to the looping tunnel, which has no fixed
 endpoint and so never "ends too soon".
@@ -19,7 +19,7 @@ Cross-fades render two phase shaders simultaneously on stacked fullscreen
 quads. The back quad stays fully opaque (so the half-built world never shows
 through); only the incoming front quad fades in, eased with a smoothstep.
 
-This state declares ``PAUSES_BELOW = False`` so the :class:`FlightState`
+This state declares PAUSES_BELOW = False so the :class:`FlightState`
 below it stays alive (its game tasks are created during the build and only
 start simulating once we trigger the reveal).
 """
@@ -94,14 +94,14 @@ class HyperspaceLoadingState(BaseState):
         :param app: the ShowBase application
         :param build_step: callable advancing the level build by one step;
             returns True while steps remain, False once the build is complete.
-            Called once per frame during the ``inside`` phase. If None, the
+            Called once per frame during the inside phase. If None, the
             overlay behaves as if the build is already finished.
         :param on_build_complete: called once, on the frame the build finishes
-            (still during ``inside``). Good place to wire up input/HUD/tasks.
+            (still during inside). Good place to wire up input/HUD/tasks.
         :param on_reveal: called once, when the final reveal fade begins — i.e.
             as the world becomes visible. Good place to start the simulation.
         :param wait_for_key: when True, hold the looping tunnel after the build
-            finishes (showing ``await_prompt``) until :meth:`request_jump_out`
+            finishes (showing await_prompt) until :meth:`request_jump_out`
             is called, instead of dropping out of hyperspace automatically.
         :param await_prompt: message shown while waiting for the jump-out key;
             empty for no on-screen text.
@@ -223,7 +223,7 @@ class HyperspaceLoadingState(BaseState):
         Ask the overlay to drop out of hyperspace now.
 
         Only has an effect while the overlay is waiting for the jump-out key
-        (``wait_for_key``); the ``outof`` transition then begins on the next
+        (wait_for_key); the outof transition then begins on the next
         frame. Wired to the player's input via the hyperspace input context.
         """
         if self._awaiting_jump:

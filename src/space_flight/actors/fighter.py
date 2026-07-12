@@ -112,7 +112,7 @@ class Fighter(Ship):
 
         The launcher is rate-limited (reload), so a drop can be refused while it is
         reloading even with ordnance to spare; supply is only spent on an actual
-        release. Mirrors ``laser_cannon.fire()`` as the hook the bombing-run
+        release. Mirrors laser_cannon.fire() as the hook the bombing-run
         navigator calls, and lets the tactician's ammo accounting work against a
         real, depleting supply.
 
