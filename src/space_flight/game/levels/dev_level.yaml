@@ -19,7 +19,7 @@ waves:
     # Make the enemy frigate their primary target: tough + valuable + slow, so
     # the tactician's suitability scoring picks a BOMB run against it. (The
     # frigate must already be spawned for this to resolve -- see trigger order.)
-    target: enemy_frigate
+    #target: enemy_frigate
     formation: { scale_m: 30, shape: arrowhead }
     waypoints:
       - [0, 0, 500]

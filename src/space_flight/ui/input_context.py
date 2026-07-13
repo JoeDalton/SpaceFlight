@@ -238,6 +238,12 @@ class FlightInputContext(InputContext):
         if self.active(state, "fire"):
             self.player.pawn.laser_cannon.fire()
 
+        # Drop a bomb (bombers only). drop_bomb is self-guarding: it refuses while
+        # reloading or out of ordnance, so holding the key just drops at the reload
+        # rate, and a ship with no bomb supply is a harmless no-op.
+        if self.active(state, "drop_bomb"):
+            self.player.pawn.drop_bomb()
+
         # Boost
         if self.pressed(state, "boost_on"):
             self.is_boost = True
