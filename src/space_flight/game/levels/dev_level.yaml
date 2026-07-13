@@ -42,9 +42,23 @@ waves:
     ship_model: gr-75
     bot_type: capital_ship
     team: 2
-    spawn_point: [0, 1500, 500]
+    spawn_point: [0, -1500, 500]
     spawn_orientation: [1, 0, 0, 0]
     record: true
+    waypoints:
+      - [0, 0, 500]
+      - [200, 1000, 500]
+      - [500, 2000, 500]
+      - [1000, 3000, 500]
+      - [1000, 2000, 500]
+      - [500, 1000, 500]
+      - [0, 0, 500]
+      - [-200, -1000, 500]
+      - [-500, -2000, 500]
+      - [-1000, -3000, 500]
+      - [-1000, -2000, 500]
+      - [-500, -1000, 500]
+      - [0, 0, 500]
 triggers:
   # --- the original timed waves -------------------------------------------
   # Spawn the frigate first so the patrol can take it as a primary target.

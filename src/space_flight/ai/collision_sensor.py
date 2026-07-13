@@ -30,6 +30,13 @@ class CollisionSensor:
         self.obstacles = []
         self.ship = ship
         self.collision_reference_distance_m = collision_reference_distance_m
+        # The three look-ahead spheres, numbered from the innermost (1) to the
+        # outermost (3). A navigator can shorten the sensor's reach by lowering
+        # active_range (e.g. a bomb run disables the outer sphere so it can overfly
+        # a big target without being pushed off it, while the inner spheres remain
+        # a genuine anti-crash net). Reset to n_spheres each frame by the navigator.
+        self.n_spheres = 3
+        self.active_range = self.n_spheres
         self.sphere_1 = attach_collision_sphere(
             game=game,
             name="sensor",
@@ -40,6 +47,7 @@ class CollisionSensor:
             relative_position=[0, ship_distance_1_m, 0],
         )
         self.sphere_1.setPythonTag("owner", self)
+        self.sphere_1.setPythonTag("sensor_range", 1)
         self.sphere_2 = attach_collision_sphere(
             game=game,
             name="sensor",
@@ -50,6 +58,7 @@ class CollisionSensor:
             relative_position=[0, ship_distance_2_m, 0],
         )
         self.sphere_2.setPythonTag("owner", self)
+        self.sphere_2.setPythonTag("sensor_range", 2)
         self.sphere_3 = attach_collision_sphere(
             game=game,
             name="sensor",
@@ -60,6 +69,7 @@ class CollisionSensor:
             relative_position=[0, ship_distance_3_m, 0],
         )
         self.sphere_3.setPythonTag("owner", self)
+        self.sphere_3.setPythonTag("sensor_range", 3)
 
     def compute_repulsion(self) -> tuple[np.ndarray, float]:
         """
@@ -70,9 +80,14 @@ class CollisionSensor:
         """
         repulsion_vector = np.zeros(3)
         total_weight = 0.0
+        n_contributing = 0
         self_position = self.ship.position
 
         for obstacle in self.obstacles:
+            # Skip obstacles seen only by a sphere beyond the current reach (e.g. the
+            # outer sphere while a bomb run has shortened active_range).
+            if obstacle.get("range", 1) > self.active_range:
+                continue
             normal = obstacle["normal"]
             hit_point = obstacle["hit_point"]
 
@@ -87,9 +102,10 @@ class CollisionSensor:
                 weight = self.collision_reference_distance_m / distance_m
                 repulsion_vector += weight * normal
                 total_weight += weight
+                n_contributing += 1
 
-        if len(self.obstacles) > 0:
-            total_weight /= len(self.obstacles)
+        if n_contributing > 0:
+            total_weight /= n_contributing
 
         self.obstacles = []
 

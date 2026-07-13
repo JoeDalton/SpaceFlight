@@ -586,20 +586,24 @@ def test_strafe_attack_breaks_when_stalled():
 def _augment_pawn_for_bomb(nav):
     """Give the mocked pawn what the bomb run + release solver read."""
     nav.pawn.position = np.zeros(3)
+    nav.pawn.forward = np.array([0.0, 1.0, 0.0])
     nav.pawn.up = np.array([0.0, 0.0, 1.0])
     nav.pawn.speed = np.array([0.0, 100.0, 0.0])
     nav.pawn.drop_bomb = MagicMock(return_value=True)
     nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    nav.up_reference = None
 
 
-def _bomb_engagement(distance_m, direction, target_position, longitudinal=0.0):
+def _bomb_engagement(
+    distance_m, direction, target_position, longitudinal=0.0, target_speed=None
+):
     return {
         "distance_m": distance_m,
         "direction": direction,
         "relative_speed_vector": np.zeros(3),
         "longitudinal_speed_scalar_mps": longitudinal,
         "target_current_position": target_position,
-        "target_current_speed": np.zeros(3),
+        "target_current_speed": (np.zeros(3) if target_speed is None else target_speed),
     }
 
 
@@ -646,24 +650,174 @@ def test_compute_release_condition_misaligned_returns_false():
     assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
 
 
-def test_bomb_target_far_runs_ingress():
+def test_bomb_target_not_yet_behind_runs_ingress():
     """
-    Beyond the run distance the bombing run is in its ingress phase.
+    When not yet on the target's tail (here abeam a target crossing +X), the bombing
+    run is in its ingress phase, banking toward the entry point.
     """
     nav = make_fighter_navigator()
     _augment_pawn_for_bomb(nav)
     bomb = nav.personality["navigator"]["bomb"]
-    far = bomb["run_distance_m"] * 2.0
     engagement = _bomb_engagement(
-        distance_m=far,
+        distance_m=1000.0,
         direction=np.array([0.0, 1.0, 0.0]),
-        target_position=np.array([0.0, far, 0.0]),
+        target_position=np.array([0.0, 1000.0, 0.0]),
+        target_speed=np.array([50.0, 0.0, 0.0]),  # crossing +X -> bomber is abeam
     )
 
     _, speed = nav.bomb_target(engagement)
 
     assert nav.behaviour == "bomb_ingress"
     assert speed == pytest.approx(bomb["ingress_speed_factor"] * nav.pawn.max_speed_mps)
+    assert nav.up_reference is None  # ingress banks, no belly aim
+
+
+def test_bomb_ingress_aims_at_entry_point_along_target_track():
+    """
+    The ingress flies to the entry point: entry_distance_m behind the target along
+    its velocity track, at run altitude above it (and publishes no up-reference).
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = np.array([0.0, 1000.0, 0.0])
+    target_speed = np.array([50.0, 0.0, 0.0])  # crossing +X -> bomber is abeam
+    engagement = _bomb_engagement(
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        target_speed=target_speed,
+    )
+
+    desired_direction, _ = nav.bomb_target(engagement)
+
+    up = nav.game.scene.up_direction
+    expected_entry = (
+        target_position
+        - np.array([1.0, 0.0, 0.0]) * bomb["entry_distance_m"]
+        + up * bomb["run_altitude_m"]
+    )
+    expected_dir = expected_entry / np.linalg.norm(expected_entry)
+    assert nav.behaviour == "bomb_ingress"
+    assert np.allclose(desired_direction, expected_dir, atol=1e-6)
+    assert nav.up_reference is None
+
+
+def test_bomb_ingress_reaches_entry_transitions_to_approach():
+    """
+    Once within entry_tolerance_m of the entry point the ingress hands off to the
+    approach run.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    up = nav.game.scene.up_direction
+    target_position = np.array([0.0, 3000.0, 0.0])
+    target_speed = np.array([0.0, 50.0, 0.0])
+    entry_point = (
+        target_position
+        - np.array([0.0, 1.0, 0.0]) * bomb["entry_distance_m"]
+        + up * bomb["run_altitude_m"]
+    )
+    nav.pawn.position = entry_point.copy()  # sitting at the entry point
+    engagement = _bomb_engagement(
+        distance_m=float(np.linalg.norm(target_position - nav.pawn.position)),
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-30.0,
+        target_speed=target_speed,
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_approach"
+
+
+def test_bomb_approach_follows_track_line_belly_down():
+    """
+    In the approach the bomber follows the target's track line (carrot pure-pursuit at
+    run altitude, run_lookahead ahead of its own along-track position), flown
+    belly-down (publishes the up-reference).
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_approach")
+    bomb = nav.personality["navigator"]["bomb"]
+    up = nav.game.scene.up_direction
+    track = np.array([0.0, 1.0, 0.0])
+    target_position = np.array([0.0, 800.0, 0.0])
+    target_speed = track * 50.0  # moving +Y, bomber on the line behind it
+    engagement = _bomb_engagement(
+        distance_m=800.0,  # behind, beyond lock distance -> stays in approach
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-30.0,
+        target_speed=target_speed,
+    )
+
+    desired_direction, speed = nav.bomb_target(engagement)
+
+    along = float(np.dot(nav.pawn.position - target_position, track))
+    carrot = (
+        target_position
+        + track * (along + bomb["run_lookahead_m"])
+        + up * bomb["run_altitude_m"]
+    )
+    expected_dir = carrot / np.linalg.norm(carrot)
+    assert nav.behaviour == "bomb_approach"
+    assert np.allclose(desired_direction, expected_dir, atol=1e-6)
+    assert nav.up_reference is not None  # approach flies belly-down
+    assert speed == pytest.approx(
+        bomb["approach_speed_factor"] * nav.pawn.max_speed_mps
+    )
+
+
+def test_bomb_approach_lost_tail_falls_back_to_ingress():
+    """
+    If the target is no longer ahead along its track (tail lost), the belly-down
+    approach drops back to the banking ingress to swing around and re-acquire it.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_approach")
+    # Target moving +Y but now BEHIND the bomber (it overshot ahead of the target):
+    # to_target points -Y while the track is +Y -> not behind -> tail lost.
+    target_position = np.array([0.0, -300.0, 0.0])
+    target_speed = np.array([0.0, 50.0, 0.0])
+    engagement = _bomb_engagement(
+        distance_m=300.0,
+        direction=np.array([0.0, -1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-30.0,
+        target_speed=target_speed,
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_ingress"
+
+
+def test_bomb_approach_locks_to_run_when_close():
+    """
+    When the target is within lock_time_s of flight (at the bomber's speed) the
+    approach locks into the belly-down run and publishes the up-reference.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_approach")
+    # Bomber speed 100 m/s, lock_time_s 2 s -> lock within ~200 m.
+    engagement = _bomb_engagement(
+        distance_m=80.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=np.array([0.0, 80.0, 0.0]),
+        longitudinal=-100.0,
+        target_speed=np.array([0.0, 50.0, 0.0]),
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_run"
+    assert nav.up_reference is not None  # belly aim published for the run
 
 
 def test_bomb_run_releases_and_breaks():
@@ -710,3 +864,39 @@ def test_bomb_run_without_solution_holds_and_aims_belly():
     assert nav.behaviour == "bomb_run"
     assert nav.up_reference is not None  # belly aim published
     nav.pawn.drop_bomb.assert_not_called()
+
+
+def test_bomb_run_follows_track_line_and_publishes_up_reference():
+    """
+    The run follows the target's track line (carrot pure-pursuit at run altitude --
+    above the diving line of sight to the target) and publishes the belly-aim
+    up-reference so the fighter pilot flies belly-down.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_run")
+    bomb = nav.personality["navigator"]["bomb"]
+    up = nav.game.scene.up_direction
+    track = np.array([0.0, 1.0, 0.0])
+    target_position = np.array([0.0, 500.0, 0.0])
+    target_speed = track * 50.0
+    engagement = _bomb_engagement(
+        distance_m=500.0,  # beyond release range -> no drop, stays in the run
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-100.0,  # closing
+        target_speed=target_speed,
+    )
+
+    desired_direction, _ = nav.bomb_target(engagement)
+
+    along = float(np.dot(nav.pawn.position - target_position, track))
+    carrot = (
+        target_position
+        + track * (along + bomb["run_lookahead_m"])
+        + up * bomb["run_altitude_m"]
+    )
+    expected_dir = carrot / np.linalg.norm(carrot)
+    assert np.allclose(desired_direction, expected_dir, atol=1e-6)
+    assert desired_direction[2] > 0.0  # aims up toward the run altitude
+    assert nav.up_reference is not None  # belly aim published for the run

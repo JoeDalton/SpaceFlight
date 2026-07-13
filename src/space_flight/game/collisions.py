@@ -908,10 +908,14 @@ class CollisionSystem:
         if DEBUG_COLLISION:
             LOGGER.info(f"sensor into obstacle: {obstacle} with id: {obstacle.id}")
 
-        # Register collision in sensor
+        # Register collision in sensor, tagged with which look-ahead sphere saw it
+        # (so the sensor can ignore the outer sphere when its reach is shortened).
         normal = entry.getSurfaceNormal(self.game.root_node)
         hit_point = entry.getSurfacePoint(self.game.root_node)
-        sensor.obstacles.append({"normal": normal, "hit_point": hit_point})
+        sensor_range = entry.from_node_path.python_tags.get("sensor_range", 1)
+        sensor.obstacles.append(
+            {"normal": normal, "hit_point": hit_point, "range": sensor_range}
+        )
 
     def clean(self) -> None:
         """

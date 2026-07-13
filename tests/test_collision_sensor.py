@@ -26,6 +26,8 @@ def make_collision_sensor(
     sensor = object.__new__(CollisionSensor)
     sensor.obstacles = []
     sensor.collision_reference_distance_m = reference_distance_m
+    sensor.n_spheres = 3
+    sensor.active_range = 3
 
     class FakeShip:
         pass
@@ -202,3 +204,48 @@ def test_compute_repulsion_two_opposing_obstacles_cancel_vectors():
     repulsion_vector, _ = sensor.compute_repulsion()
 
     assert np.linalg.norm(repulsion_vector) == pytest.approx(0.0, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Shortened reach (active_range)
+# ---------------------------------------------------------------------------
+
+
+def test_compute_repulsion_ignores_spheres_beyond_active_range():
+    """
+    An obstacle seen only by a sphere beyond active_range is ignored -- e.g. the
+    outer sphere while a bomb run has shortened the sensor's reach.
+    """
+    sensor = make_collision_sensor(self_position=np.zeros(3))
+    outer = {
+        "normal": np.array([0.0, -1.0, 0.0]),
+        "hit_point": np.array([0.0, 100.0, 0.0]),
+        "range": 3,
+    }
+    sensor.obstacles = [outer]
+    sensor.active_range = 2  # outer sphere disabled
+
+    repulsion_vector, total_weight = sensor.compute_repulsion()
+
+    np.testing.assert_array_equal(repulsion_vector, np.zeros(3))
+    assert total_weight == 0.0
+
+
+def test_compute_repulsion_keeps_spheres_within_active_range():
+    """An inner-sphere obstacle still repels when the outer reach is dropped."""
+    sensor = make_collision_sensor(self_position=np.zeros(3))
+    inner = {
+        "normal": np.array([0.0, -1.0, 0.0]),
+        "hit_point": np.array([0.0, 50.0, 0.0]),
+        "range": 1,
+    }
+    sensor.obstacles = [inner]
+    sensor.active_range = 2  # outer disabled, inner still active
+
+    repulsion_vector, total_weight = sensor.compute_repulsion()
+
+    assert total_weight > 0.0
+    np.testing.assert_allclose(
+        repulsion_vector / np.linalg.norm(repulsion_vector),
+        inner["normal"],
+    )

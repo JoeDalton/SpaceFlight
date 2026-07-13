@@ -235,6 +235,9 @@ class Bot(Destructible):
         distance_to_target_m = float("nan")
         target_speed_mps = float("nan")
         target_mobility = float("nan")
+        nan3 = np.full(3, float("nan"))
+        target_position_m = nan3
+        target_velocity_mps = nan3
         try:
             target_index = self.game.interactions.get_actor_index_from_id(target_id)
             my_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
@@ -247,10 +250,14 @@ class Bot(Destructible):
             distance_to_target_m = float(
                 self.game.interactions.distances[my_index, target_index]
             )
-            target_speed_mps = float(
-                np.linalg.norm(getattr(target_actor, "speed", np.zeros(3)))
+            target_velocity_mps = np.asarray(
+                getattr(target_actor, "speed", nan3), dtype=float
             )
+            target_speed_mps = float(np.linalg.norm(target_velocity_mps))
             target_mobility = float(getattr(target_actor, "mobility", float("nan")))
+            target_position_m = np.asarray(
+                getattr(target_actor, "position", nan3), dtype=float
+            )
         except (ValueError, KeyError, TypeError, AttributeError):
             pass
 
@@ -260,6 +267,17 @@ class Bot(Destructible):
         record.record(f"{name}_target_mobility", target_mobility)
         record.record(f"{name}_desired_speed_mps", float(desired_speed_mps))
         record.record(f"{name}_speed_mps", float(np.linalg.norm(self.pawn.speed)))
+
+        # Full kinematics (like the player's) so a bomb run's geometry -- overfly
+        # position, belly aim, lead/cone alignment -- can be reconstructed offline.
+        record.record(
+            f"{name}_behaviour", str(getattr(self.navigator, "behaviour", ""))
+        )
+        record.record(f"{name}_position_m", self.pawn.position.copy())
+        record.record(f"{name}_orientation_quat", self.pawn.orientation.copy())
+        record.record(f"{name}_velocity_mps", self.pawn.speed.copy())
+        record.record(f"{name}_target_position_m", target_position_m)
+        record.record(f"{name}_target_velocity_mps", target_velocity_mps)
 
     @property
     def health(self) -> float:

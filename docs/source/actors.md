@@ -72,8 +72,9 @@ Key responsibilities:
 ### `Fighter`
 
 Adds a self-contained regenerating shield (damage drains the shield before
-health), a `LaserCannon`, and `AutoAim` for target leading. Its collision
-sphere is sized from `hit_box_radius_m` in its config.
+health), a `LaserCannon`, a `BombLauncher` fed from a limited `bomb_supply`
+(`drop_bomb` spends one unit per release), and `AutoAim` for target leading.
+Its collision sphere is sized from `hit_box_radius_m` in its config.
 
 ### `CapitalShip`
 
@@ -100,16 +101,38 @@ per-type offset/orientation/scale tables. It knows nothing about physics or
 health — `Ship` drives its position/orientation each frame by moving the
 node it's parented to.
 
-## `LaserCannon` and `LaserShot`
+## Weapons and munitions
 
-[`laser_cannon.py`](../src/space_flight/actors/laser_cannon.py) fires one of
+[`weapon.py`](../src/space_flight/actors/weapon.py) holds two base classes the
+concrete weapons share:
+
+- **`Weapon`** — the emitter (`parent`/`parent_node`), a reload gate
+  (`fire_delay` + `_ready_to_fire`, an atomic check-and-consume so a weapon
+  cannot fire faster than its rate), and the munition-spawn call. Subclasses
+  define the trigger itself.
+- **`Munition`** — the whole projectile lifecycle: identity, damage, emitter,
+  world velocity, a straight-line coast for its lifetime, registration in
+  `game.game_objects`, and a timed self-clean. It exposes the interface the
+  collision handlers read (`origin_ship`/`origin_ship_id`/`power`/`speed`/
+  `shot`). Subclasses fill in only two hooks — `_build_visual` and
+  `_attach_collider` — plus an optional `_clean_extra`.
+
+**`LaserCannon` / `LaserShot`**
+([`laser_cannon.py`](../src/space_flight/actors/laser_cannon.py)) fires one of
 a ship's configured cannon positions in round-robin, rate-limited by
 `laser_fire_rate`. It defers to the parent's `AutoAim` for shot leading if
 present, otherwise fires straight down the parent's forward vector plus its
-own velocity. Each shot is a short-lived `LaserShot`: a camera-facing quad
-billboard with a point light and a collision segment (long enough to bridge
-one frame's travel at laser speed), self-destructing after its configured
-lifetime.
+own velocity. Each `LaserShot` is a camera-facing quad billboard with a point
+light and a collision segment (long enough to bridge one frame's travel at
+laser speed).
+
+**`BombLauncher` / `Bomb`**
+([`bomb_launcher.py`](../src/space_flight/actors/bomb_launcher.py)) drops a
+bomb along the ship's belly (`-Z`) at `BOMB_SPEED_MPS` plus the ship's
+inherited velocity, rate-limited by a reload delay; `launch()` returns whether
+a bomb was actually released so the fighter only spends supply on a real drop.
+Each `Bomb` is a slow pink sphere with a small collision sphere, and reuses the
+laser collision-damage handlers through the shared munition interface.
 
 ## `Destructible` and `Destructibles` — central death handling
 
@@ -185,7 +208,8 @@ top. Not part of the gameplay actor hierarchy — a visualisation aid only.
 
 ## Where things live
 
-`Pawn`, `Ship`/`ShipModel`, `Fighter`, `LaserCannon`, `Bot`, `Player`,
+`Pawn`, `Ship`/`ShipModel`, `Fighter`, `Weapon`/`Munition` (with
+`LaserCannon`/`LaserShot` and `BombLauncher`/`Bomb`), `Bot`, `Player`,
 `Destructible(s)` and `Trihedron` live directly under
 [`src/space_flight/actors/`](../src/space_flight/actors/). `CapitalShip`
 and everything it's built from (subsystems, shields, tracking mounts,

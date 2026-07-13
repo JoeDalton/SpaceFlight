@@ -530,13 +530,25 @@ class FighterNavigator(GenericShipNavigator):
 
     def bomb_target(self, target_dict: dict) -> Tuple[np.ndarray, float]:
         """
-        Bombing run against a slow/immobile target: overfly it and release a bomb
-        along the belly (-Z). A committed cycle
-        ingress -> run -> break -> reposition -> ingress: line up, fly a straight
-        belly-aimed leg while the release solver times the drop, then peel off.
+        Bombing run against a slow/immobile target: a committed cycle
+        ingress -> approach -> run -> break -> reposition.
 
-        The belly is aimed via the pilot up-reference (the surface normal for a
-        surface-mounted prey, otherwise the line of sight to the target).
+        - The ingress is normal (banking) flight that gets the bomber onto the
+          target's track line: it swings to an entry point ``entry_distance_m`` behind
+          the target when ahead/abeam, then follows the track line in (pure-pursuit on
+          a carrot up the line) at ``run_altitude_m``, using fast banked turns to null
+          the cross-track offset the belly-down run could never remove.
+        - The approach flies belly-down (the up-reference turns the fighter pilot into
+          the capital-ship pilot: roll +Z to the reference up, yaw+pitch to aim)
+          following the track line in (carrot pure-pursuit at run altitude), so the
+          belly is settled and on the line before the run. It is entered only once on
+          the line; if the bomber drifts off, it drops back to the ingress.
+        - The run keeps that belly-down attitude, still following the (curving) track
+          line over the target at run altitude; the belly (-Z) bomb velocity sweeps
+          through the target and the cone release fires. Then it peels off.
+
+        The up-reference (approach/run) is the surface normal for a surface-mounted
+        prey, otherwise world up.
 
         :param target_dict: The target info enriched with engagement geometry
         :return: The direction to point to and the desired speed
@@ -549,36 +561,118 @@ class FighterNavigator(GenericShipNavigator):
         closing_speed_mps = -target_dict["longitudinal_speed_scalar_mps"]
         surface_normal = target_dict.get("surface_normal")
 
-        # Roll so the belly (-Z) faces the target: +Z toward the surface normal for
-        # a surface prey, else away from the target along the line of sight.
-        belly_up_reference = (
-            surface_normal if surface_normal is not None else -direction
+        # Belly (-Z) points down the up-reference during the RUN: the surface normal
+        # for a surface prey, else world up (a level drop straight down).
+        up_reference = (
+            surface_normal
+            if surface_normal is not None
+            else self.game.scene.up_direction
         )
+
+        # Entry point: entry_distance_m behind the target along its track, at run
+        # altitude. "Behind" follows the target's velocity when it is moving, else the
+        # bomber's own bearing to a stationary target (see _bomb_track_direction).
+        track_direction = self._bomb_track_direction(
+            target_speed, direction, up_reference, bomb
+        )
+        entry_point = (
+            target_position
+            - track_direction * bomb["entry_distance_m"]
+            + up_reference * bomb["run_altitude_m"]
+        )
+
+        # Along-track position (negative = behind the target) and the horizontal
+        # cross-track offset from the target's track line -- the two quantities that
+        # decide when the bomber is lined up for a clean overfly.
+        relative = self.pawn.position - target_position
+        along_track_m = float(np.dot(relative, track_direction))
+        cross_track_m = self._bomb_cross_track(relative, track_direction, up_reference)
 
         phase = self.behaviour if self.behaviour.startswith("bomb_") else "bomb_ingress"
 
         if phase == "bomb_ingress":
-            if distance_m < bomb["run_distance_m"]:
-                self.behaviour_sm.request("bomb_run")
-                return self._bomb_run(
-                    direction, target_position, target_speed, belly_up_reference, bomb
+            # Hand off to the belly-down approach only once actually lined up: behind
+            # the target AND on its track line (small cross-track). Until then the
+            # ingress banks -- fast turns the belly-down run can't make -- to null the
+            # cross-track, which is the whole point of the ingress.
+            if along_track_m < 0.0 and cross_track_m < bomb["lateral_tolerance_m"]:
+                self.behaviour_sm.request("bomb_approach")
+                return self._bomb_approach(
+                    target_position,
+                    track_direction,
+                    up_reference,
+                    along_track_m,
+                    bomb,
                 )
             self.behaviour_sm.request("bomb_ingress")
-            return self._bomb_ingress(direction, bomb)
+            return self._bomb_ingress(
+                entry_point,
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb,
+            )
+
+        if phase == "bomb_approach":
+            # Lost the line (no longer behind, or drifted off the track beyond the
+            # recovery band): the belly-down approach yaws too slowly to re-acquire, so
+            # drop back to the fast-banking ingress line-follow.
+            if along_track_m >= 0.0 or cross_track_m > bomb["lateral_recovery_m"]:
+                self.behaviour_sm.request("bomb_ingress")
+                return self._bomb_ingress(
+                    entry_point,
+                    target_position,
+                    track_direction,
+                    up_reference,
+                    along_track_m,
+                    bomb,
+                )
+            # Lock onto the belly-down run once within lock_time_s of flight to the
+            # target (at the bomber's current speed) AND still on the line, so the run
+            # only commits from a clean overfly setup.
+            lock_distance_m = max(
+                np.linalg.norm(self.pawn.speed) * bomb["lock_time_s"],
+                TARGET_DISTANCE_TOLERANCE_M,
+            )
+            if (
+                distance_m <= lock_distance_m
+                and cross_track_m < bomb["lateral_tolerance_m"]
+            ):
+                self.behaviour_sm.request("bomb_run")
+                return self._bomb_run(
+                    target_position,
+                    track_direction,
+                    up_reference,
+                    along_track_m,
+                    bomb,
+                )
+            self.behaviour_sm.request("bomb_approach")
+            return self._bomb_approach(
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb,
+            )
 
         if phase == "bomb_run":
-            # Release once the bomb's velocity lines up with the target, then break.
+            # Release once the bomb's velocity sweeps the target, then break.
             if self.compute_release_condition(target_position, target_speed, bomb):
                 self.pawn.drop_bomb()
                 self.behaviour_sm.request("bomb_break")
-                return self._bomb_break(direction, surface_normal, bomb)
+                return self._bomb_break(direction, bomb)
             # Overflew (or can't close) without a solution -> break and re-attack.
             if closing_speed_mps <= 0.0:
                 self.behaviour_sm.request("bomb_break")
-                return self._bomb_break(direction, surface_normal, bomb)
+                return self._bomb_break(direction, bomb)
             self.behaviour_sm.request("bomb_run")
             return self._bomb_run(
-                direction, target_position, target_speed, belly_up_reference, bomb
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb,
             )
 
         if phase == "bomb_break":
@@ -586,7 +680,7 @@ class FighterNavigator(GenericShipNavigator):
                 self.behaviour_sm.request("bomb_reposition")
                 return self._bomb_reposition(direction, bomb)
             self.behaviour_sm.request("bomb_break")
-            return self._bomb_break(direction, surface_normal, bomb)
+            return self._bomb_break(direction, bomb)
 
         # bomb_reposition: extend out, then come around for another run.
         if (
@@ -594,7 +688,14 @@ class FighterNavigator(GenericShipNavigator):
             and self.behaviour_duration_s > bomb["reposition_min_duration_s"]
         ):
             self.behaviour_sm.request("bomb_ingress")
-            return self._bomb_ingress(direction, bomb)
+            return self._bomb_ingress(
+                entry_point,
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb,
+            )
         self.behaviour_sm.request("bomb_reposition")
         return self._bomb_reposition(direction, bomb)
 
@@ -606,9 +707,10 @@ class FighterNavigator(GenericShipNavigator):
 
         The bomb travels in a straight line (no gravity) at v_bomb = ship.speed -
         launch_speed * ship.up (i.e. the belly -Z plus inherited ship velocity),
-        so it is forward-and-down. Release when the (lead-adjusted) target lies
-        along that velocity within a tolerance cone and range -- mirroring the gun
-        fire check, on the bomb's velocity axis instead of the nose.
+        so it is forward-and-down. Release when the target -- led by the bomb's
+        flight time to it (distance / |v_bomb|, the closing time at the bomb's true
+        speed) -- lies within a tight cone of that velocity and in range. The lead
+        makes the cone track the intercept point, so it can stay tight (accurate).
 
         :param target_position: The target's world position
         :param target_speed: The target's world velocity
@@ -621,67 +723,216 @@ class FighterNavigator(GenericShipNavigator):
             return False
         bomb_direction = v_bomb / v_bomb_norm
 
-        # Lead the target by the bomb's closing time (straight-line intercept).
         to_target = target_position - self.pawn.position
-        approach = v_bomb - target_speed
-        approach_norm = np.linalg.norm(approach)
-        if approach_norm > 1e-6:
-            lead_time_s = np.linalg.norm(to_target) / approach_norm
-            to_target = (
-                target_position + target_speed * lead_time_s
-            ) - self.pawn.position
-
         distance_m = np.linalg.norm(to_target)
-        if distance_m < TARGET_DISTANCE_TOLERANCE_M:
+        if distance_m > bomb["max_release_distance_m"]:
+            return False
+
+        # Lead the target by the bomb's flight time to it (distance / true bomb
+        # speed), then aim the cone at that intercept point.
+        flight_time_s = distance_m / v_bomb_norm
+        to_intercept = (
+            target_position + target_speed * flight_time_s
+        ) - self.pawn.position
+        to_intercept_norm = np.linalg.norm(to_intercept)
+        if to_intercept_norm < TARGET_DISTANCE_TOLERANCE_M:
             return False
         aligned = (
-            np.dot(to_target / distance_m, bomb_direction) > bomb["min_cos_release"]
+            np.dot(to_intercept / to_intercept_norm, bomb_direction)
+            > bomb["min_cos_release"]
         )
-        in_range = distance_m < bomb["max_release_distance_m"]
-        return bool(aligned and in_range)
+        return bool(aligned)
+
+    def _bomb_aim(self, point: np.ndarray) -> np.ndarray:
+        """Unit direction from the bomber to a world point (nose target)."""
+        to_point = point - self.pawn.position
+        to_point_norm = np.linalg.norm(to_point)
+        if to_point_norm > TARGET_DISTANCE_TOLERANCE_M:
+            return to_point / to_point_norm
+        return self.pawn.forward
+
+    def _bomb_track_direction(
+        self,
+        target_speed: np.ndarray,
+        direction: np.ndarray,
+        up_reference: np.ndarray,
+        bomb: dict,
+    ) -> np.ndarray:
+        """
+        The (horizontal) track direction used to place the entry point "behind" the
+        target: the target's velocity direction when it is moving, else the bomber's
+        current bearing to it so a stationary target still has a well-defined behind.
+        Flattened against the reference up so the entry point sits purely at the run
+        altitude, not tilted by a climbing target.
+        """
+        target_speed_norm = np.linalg.norm(target_speed)
+        if target_speed_norm >= bomb["min_track_speed_mps"]:
+            track = target_speed / target_speed_norm
+        else:
+            track = direction
+        track = track - np.dot(track, up_reference) * up_reference
+        track_norm = np.linalg.norm(track)
+        # track is a (near-)unit vector, so compare against a small epsilon, not the
+        # metres-scale distance tolerance: only fall back to the nose when the track
+        # is (near-)parallel to the reference up (nothing horizontal left).
+        if track_norm > 1e-6:
+            return track / track_norm
+        return self.pawn.forward
+
+    def _bomb_cross_track(
+        self,
+        relative: np.ndarray,
+        track_direction: np.ndarray,
+        up_reference: np.ndarray,
+    ) -> float:
+        """
+        The bomber's horizontal cross-track offset from the target's track line: the
+        component of ``relative`` (bomber minus target) perpendicular to both the track
+        and the reference up. This is the lateral miss that must be nulled before the
+        belly-down run, since belly-down yaw is too slow to remove it during the pass.
+        """
+        cross = (
+            relative
+            - np.dot(relative, track_direction) * track_direction
+            - np.dot(relative, up_reference) * up_reference
+        )
+        return float(np.linalg.norm(cross))
+
+    def _bomb_line_carrot(
+        self,
+        target_position: np.ndarray,
+        track_direction: np.ndarray,
+        up_reference: np.ndarray,
+        along_track_m: float,
+        lookahead_m: float,
+    ) -> np.ndarray:
+        """
+        Aim direction for a pure-pursuit follow of the target's track line: a carrot
+        ``lookahead_m`` further up the line than the bomber's own along-track position,
+        at run altitude. Because the track is the target's *instantaneous* velocity
+        direction (recomputed every frame), the carrot swings with the target as it
+        turns, so following it keeps the bomber on the curving track -- unlike a fixed
+        linear lead, which points off the outside of the turn.
+        """
+        carrot = (
+            target_position
+            + track_direction * (along_track_m + lookahead_m)
+            + up_reference * self.personality["navigator"]["bomb"]["run_altitude_m"]
+        )
+        return self._bomb_aim(carrot)
 
     def _bomb_ingress(
-        self, direction: np.ndarray, bomb: dict
-    ) -> Tuple[np.ndarray, float]:
-        """Close on the target (normal flight) until the straight run begins."""
-        return direction, bomb["ingress_speed_factor"] * self.pawn.max_speed_mps
-
-    def _bomb_run(
         self,
-        direction: np.ndarray,
+        entry_point: np.ndarray,
         target_position: np.ndarray,
-        target_speed: np.ndarray,
-        belly_up_reference: np.ndarray,
+        track_direction: np.ndarray,
+        up_reference: np.ndarray,
+        along_track_m: float,
         bomb: dict,
     ) -> Tuple[np.ndarray, float]:
         """
-        The straight, belly-aimed overfly leg. Aims the nose at the target, rolls
-        the belly onto it (via the up-reference) and dwarfs collision avoidance so
-        the leg stays stable for the release.
+        Positioning leg (normal, banking flight -- NO up-reference, so it can turn fast
+        to null the cross-track).
+
+        When ahead of / abeam the target (along_track >= 0) it swings to the entry
+        point behind the target to get onto the tail. Once behind, it follows the
+        target's track line (carrot pure-pursuit) so the belly-down run can start on
+        the line. The outer sensor sphere is dropped so the long-range look-ahead
+        doesn't push the bomber off its own target.
         """
-        self.up_reference = belly_up_reference
+        self.collision_sensor.active_range = self.collision_sensor.n_spheres - 1
+        speed = bomb["ingress_speed_factor"] * self.pawn.max_speed_mps
+        if along_track_m >= 0.0:
+            # Ahead / abeam: swing around to the entry point on the tail.
+            return self._bomb_aim(entry_point), speed
+        # Behind: follow the track line in.
+        return (
+            self._bomb_line_carrot(
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb["line_lookahead_m"],
+            ),
+            speed,
+        )
+
+    def _bomb_approach(
+        self,
+        target_position: np.ndarray,
+        track_direction: np.ndarray,
+        up_reference: np.ndarray,
+        along_track_m: float,
+        bomb: dict,
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Approach run: fly belly-down (publishes the up-reference, so the fighter pilot
+        rolls +Z to the reference up and yaws/pitches to aim) following the target's
+        track line in (carrot pure-pursuit at run altitude). Flying belly-down here --
+        rather than banking in -- keeps the belly settled so the run starts clean;
+        following the line (not a fixed lead) keeps it tracking a turning target. If
+        the tail/line is lost, the caller falls back to the banking ingress. Avoidance
+        is dwarfed and the outer sensor dropped for the close overfly.
+        """
+        self.up_reference = up_reference
         self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
             "corridor_avoidance_factor"
         ]
-        return direction, bomb["run_speed_factor"] * self.pawn.max_speed_mps
+        self.collision_sensor.active_range = self.collision_sensor.n_spheres - 1
+        return (
+            self._bomb_line_carrot(
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb["run_lookahead_m"],
+            ),
+            bomb["approach_speed_factor"] * self.pawn.max_speed_mps,
+        )
 
-    def _bomb_break(
-        self, direction: np.ndarray, surface_normal: np.ndarray, bomb: dict
+    def _bomb_run(
+        self,
+        target_position: np.ndarray,
+        track_direction: np.ndarray,
+        up_reference: np.ndarray,
+        along_track_m: float,
+        bomb: dict,
     ) -> Tuple[np.ndarray, float]:
         """
-        Peel hard away after the drop: climb along the surface normal for a
-        surface prey, else turn back the way we came.
+        The committed delivery leg. Locks the roll to the reference up (publishes the
+        up-reference, so the fighter pilot flies belly-down: roll only to level the
+        wings to up_reference, yaw+pitch to aim, no banking) and follows the target's
+        track line over it (carrot pure-pursuit at run altitude, short lookahead so it
+        tracks a turning target tightly). The steady belly (-Z) bomb velocity sweeps
+        through the target as it overflies -> the cone release fires. Dwarfs avoidance
+        and drops the outer sensor sphere so it can overfly closely.
         """
-        if surface_normal is not None:
-            break_direction = surface_normal - direction
-        else:
-            break_direction = -direction
-        break_norm = np.linalg.norm(break_direction)
-        if break_norm > 1e-4:
-            break_direction = break_direction / break_norm
-        else:
-            break_direction = -direction
-        return break_direction, bomb["break_speed_factor"] * self.pawn.max_speed_mps
+        self.up_reference = up_reference
+        self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
+            "corridor_avoidance_factor"
+        ]
+        self.collision_sensor.active_range = self.collision_sensor.n_spheres - 1
+        return (
+            self._bomb_line_carrot(
+                target_position,
+                track_direction,
+                up_reference,
+                along_track_m,
+                bomb["run_lookahead_m"],
+            ),
+            bomb["run_speed_factor"] * self.pawn.max_speed_mps,
+        )
+
+    def _bomb_break(
+        self, direction: np.ndarray, bomb: dict
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Peel away after the drop by turning back the way we came. Deliberately does
+        NOT climb: a climbing break would ratchet the run altitude up pass after
+        pass, so the bomber would end up bombing from far too high. Altitude is
+        re-established by the ingress on the next pass.
+        """
+        return -direction, bomb["break_speed_factor"] * self.pawn.max_speed_mps
 
     def _bomb_reposition(
         self, direction: np.ndarray, bomb: dict

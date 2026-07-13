@@ -7,11 +7,11 @@ from space_flight.game.collisions import attach_collision_sphere
 # inherited velocity is the bomb's initial world velocity. Kept as a module global
 # so the release solver (FighterNavigator.compute_release_condition) uses the exact
 # same value the launcher does.
-BOMB_SPEED_MPS = 100.0
+BOMB_SPEED_MPS = 75.0
 # How far a bomb travels before expiring; sets its lifetime (range / speed).
-BOMB_RANGE_M = 300.0
+BOMB_RANGE_M = 500.0
 # Damage dealt on impact (heavy ordnance).
-BOMB_DAMAGE = 1500.0
+BOMB_DAMAGE = 4000.0
 # Minimum time between two bomb drops (reload), so drops are spaced out rather than
 # released on consecutive frames.
 BASE_RELOAD_S = 0.5

@@ -46,7 +46,7 @@ def build_dev_upfront(game: FlightState) -> None:
         record=True,
     )
     # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
-    game.scene = scene_factory(game=game, scene_name="asteroids")
+    game.scene = scene_factory(game=game, scene_name="debug")
     game.scene.build_upfront()
 
 

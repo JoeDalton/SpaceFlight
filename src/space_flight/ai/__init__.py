@@ -175,21 +175,62 @@ class Personality:
                 "swivel_frequency_hz": 0.5,
                 "swivel_distance_scale_m": 800.0,  # amplitude ramps within this range
             },
-            # Bombing run: overfly a slow/immobile target and release a bomb along
-            # the belly (-Z). A committed straight, wings-level leg is flown for
-            # accuracy; the release solver times the drop off the bomb's (linear,
-            # no-gravity) velocity. Belly-aiming uses the pilot up-reference.
+            # Bombing run: a committed ingress -> approach -> run -> break ->
+            # reposition cycle against a slow/immobile target.
+            # - INGRESS: normal (banking) flight that gets onto the target's track
+            #   line -- swinging to an entry point entry_distance_m behind the target
+            #   when ahead/abeam, then a pure-pursuit line-follow along the track at
+            #   run_altitude -- using fast banked turns to null the cross-track offset.
+            # - APPROACH: belly-down flight (the up-reference turns the fighter pilot
+            #   into the capital-ship pilot: roll +Z to the reference up, yaw+pitch to
+            #   aim) following the track line in (carrot pure-pursuit at run altitude),
+            #   so the belly is settled and on the line before the run. Entered only
+            #   once on the line; if the bomber drifts off, it reverts to the ingress.
+            # - RUN: same belly-down attitude, still following the (curving) track line
+            #   over the target at run altitude; the belly (-Z) bomb velocity sweeps
+            #   through the target -> the cone release fires. up-reference is world up
+            #   (or the surface normal).
             "bomb": {
-                "run_distance_m": 600.0,  # ingress -> run (straight leg begins)
+                # Entry point: entry_distance_m behind the target along its velocity
+                # track (or the bomber's bearing to a stationary target), at
+                # run_altitude above. The ingress flies to it to swing around onto the
+                # tail from ahead/abeam, then follows the track line in.
+                "entry_distance_m": 750.0,
+                # Carrot look-ahead for the pure-pursuit track line-follow: how far
+                # further up the line than the bomber's own along-track position it
+                # aims. The ingress uses a long carrot (a gentle cut onto the line); the
+                # belly-down approach/run use a short one so they track a turning
+                # target's curving line tightly instead of overshooting the outside.
+                "line_lookahead_m": 300.0,
+                "run_lookahead_m": 150.0,
+                # The bomber is "on the line" (ready to hand off to the belly-down
+                # approach / lock the run) when its horizontal cross-track offset is
+                # under lateral_tolerance_m; the approach falls back to the banking
+                # ingress if it drifts past lateral_recovery_m. The tolerance must be
+                # tight enough that the release cone still contains the target at run
+                # altitude (~sin(cone)*slant range).
+                "lateral_tolerance_m": 30.0,
+                "lateral_recovery_m": 80.0,
+                # Overfly height above the target. Must stay below the bomb's own
+                # vertical fall over its lifetime (BOMB_SPEED_MPS * life_time_s) or the
+                # bomb expires before reaching the target.
+                "run_altitude_m": 100.0,
+                # Below min_track_speed the target has no usable velocity track, so the
+                # bomber's own bearing to it defines the track direction instead.
+                "min_track_speed_mps": 5.0,
+                # Approach -> run (lock) when the target is within lock_time_s of
+                # flight away at the bomber's current speed (and still on the line).
+                "lock_time_s": 2.0,
                 # (bomb launch speed is the BOMB_SPEED_MPS global in bomb_launcher,
                 # shared with the release solver.)
-                "min_cos_release": np.cos(np.deg2rad(12)),  # bomb-velocity cone
-                "max_release_distance_m": 300.0,  # only release within this range
-                "break_duration_s": 1.5,  # committed climbing break
-                "reposition_distance_m": 900.0,
+                "min_cos_release": np.cos(np.deg2rad(25)),  # bomb-velocity cone
+                "max_release_distance_m": 450.0,  # only release within this range
+                "break_duration_s": 1.0,  # committed break after the drop
+                "reposition_distance_m": 1000.0,
                 "reposition_min_duration_s": 3.0,
                 "ingress_speed_factor": 1.0,
-                "run_speed_factor": 0.85,  # steady leg, a touch slower
+                "approach_speed_factor": 1.0,
+                "run_speed_factor": 1.0,
                 "break_speed_factor": 0.6,
                 "reposition_speed_factor": 1.0,
             },
