@@ -14,6 +14,7 @@
 :maxdepth: 3
 
 space_flight.global_architecture
+space_flight.weapons
 space_flight.ai
 space_flight.fx
 ```
@@ -177,7 +178,7 @@ space_flight._version
 ````{py:data} RECORD_GAME
 :canonical: space_flight.RECORD_GAME
 :value: >
-   False
+   True
 
 ```{autodoc2-docstring} space_flight.RECORD_GAME
 ```

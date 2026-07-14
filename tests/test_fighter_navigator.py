@@ -11,10 +11,10 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.bomb_launcher import BOMB_SPEED_MPS
 from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.utils.state_machine import StateMachine
+from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
 
 class _Clock:

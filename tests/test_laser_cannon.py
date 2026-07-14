@@ -1,5 +1,5 @@
 """
-Unit tests for LaserCannon (space_flight.actors.laser_cannon).
+Unit tests for LaserCannon (space_flight.weapons.laser_cannon).
 
 LaserCannon.__init__ requires live Panda3D nodes and asset pools, so tests
 that exercise post-construction logic use object.__new__() to bypass it and
@@ -14,8 +14,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from panda3d.core import Vec3
 
-from space_flight.actors.laser_cannon import LaserCannon
+from space_flight.weapons.laser_cannon import LaserCannon
 
 FIRE_DELAY_S = 0.5
 N_CANNONS = 2
@@ -36,7 +37,7 @@ def laser_cannon():
     cannon.shot_power = 10.0
     cannon.life_time_s = 1.0
     cannon.light_color = (1.0, 0.0, 0.0, 1.0)
-    cannon.laser_texture = MagicMock()
+    cannon.laser_color_rgb = Vec3(1.0, 0.05, 0.05)
     cannon.sound_pool = MagicMock()
 
     # Parent ship stub: no auto_aim so fire() falls back to speed + forward
@@ -81,7 +82,7 @@ def test_fire_proceeds_exactly_at_cooldown_boundary(laser_cannon):
         laser_cannon.last_fire_time + FIRE_DELAY_S
     )
 
-    with patch("space_flight.actors.laser_cannon.LaserShot") as mock_laser_shot:
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
         laser_cannon.fire()
 
     mock_laser_shot.assert_called_once()
@@ -95,7 +96,7 @@ def test_fire_proceeds_after_cooldown_expires(laser_cannon):
         laser_cannon.last_fire_time + FIRE_DELAY_S * 2
     )
 
-    with patch("space_flight.actors.laser_cannon.LaserShot") as mock_laser_shot:
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
         laser_cannon.fire()
 
     mock_laser_shot.assert_called_once()
@@ -112,7 +113,7 @@ def test_fire_advances_cannon_index_after_shot(laser_cannon):
     """
     laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
 
-    with patch("space_flight.actors.laser_cannon.LaserShot"):
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
         laser_cannon.fire()
 
     assert laser_cannon.current_next_cannon_idx == 1
@@ -125,7 +126,7 @@ def test_fire_wraps_cannon_index_around_after_last_cannon(laser_cannon):
     laser_cannon.current_next_cannon_idx = N_CANNONS - 1
     laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
 
-    with patch("space_flight.actors.laser_cannon.LaserShot"):
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
         laser_cannon.fire()
 
     assert laser_cannon.current_next_cannon_idx == 0
@@ -138,7 +139,7 @@ def test_fire_uses_current_cannon_node_for_shot_origin(laser_cannon):
     laser_cannon.current_next_cannon_idx = 1
     laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
 
-    with patch("space_flight.actors.laser_cannon.LaserShot"):
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
         laser_cannon.fire()
 
     laser_cannon.cannon_nodes[1].get_pos.assert_called_once_with(
@@ -154,7 +155,7 @@ def test_fire_updates_last_fire_time(laser_cannon):
     fire_time = 7.3
     laser_cannon.game.game_time.get_current_time.return_value = fire_time
 
-    with patch("space_flight.actors.laser_cannon.LaserShot"):
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
         laser_cannon.fire()
 
     assert laser_cannon.last_fire_time == pytest.approx(fire_time)
@@ -184,7 +185,7 @@ def test_fire_cycles_through_all_cannon_indices(laser_cannon):
     Firing once per cannon cycles through indices 0 → 1 → 0 for a two-cannon
     configuration.
     """
-    with patch("space_flight.actors.laser_cannon.LaserShot"):
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
         for shot_number in range(N_CANNONS * 2):
             laser_cannon.last_fire_time = 0.0
             laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
@@ -235,10 +236,10 @@ def test_clean_clears_game_reference(laser_cannon):
     assert laser_cannon.game is None
 
 
-def test_clean_clears_laser_texture_reference(laser_cannon):
+def test_clean_clears_laser_color_reference(laser_cannon):
     """
-    clean() sets laser_texture to None.
+    clean() sets laser_color_rgb to None.
     """
     laser_cannon.clean()
 
-    assert laser_cannon.laser_texture is None
+    assert laser_cannon.laser_color_rgb is None

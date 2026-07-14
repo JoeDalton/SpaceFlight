@@ -95,7 +95,7 @@ triggers:
       spawn: transports
 
   - name: escort
-    when: { after_seconds: 99999 }
+    when: { after_seconds: 1.0 }
     then:
       all:
         - { spawn: escort }

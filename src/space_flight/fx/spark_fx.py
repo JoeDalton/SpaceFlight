@@ -113,7 +113,7 @@ class SparkPreset:
     size: float
 
 
-#: Bright yellow-orange metal sparks, used for hull (destructible) hits.
+#: Bright yellow-orange metal sparks, used for bare-hull (unshielded) hits.
 METAL = SparkPreset(
     color_inner=(1.0, 0.95, 0.5, 1.0),
     color_outer=(1.0, 0.25, 0.0, 1.0),
@@ -125,7 +125,8 @@ METAL = SparkPreset(
     size=0.12,
 )
 
-#: Cool blue-white sparks, used for shield hits.
+#: Cool blue-white sparks, used for shield hits: capital-ship shield bubbles and
+#: still-shielded fighters (and water terrain).
 ICE = SparkPreset(
     color_inner=(0.8, 1.0, 0.9, 1.0),
     color_outer=(0.0, 0.3, 1.0, 1.0),

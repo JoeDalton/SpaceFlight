@@ -1,7 +1,7 @@
 import numpy as np
 
-from space_flight.actors.weapon import Munition, Weapon
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.weapons import Munition, Weapon
 
 # Bombs are launched slowly along the belly (-Z); this base speed plus the ship's
 # inherited velocity is the bomb's initial world velocity. Kept as a module global

@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 from panda3d.core import BitMask32, Vec3
 
+from space_flight.fx import spark_fx
 from space_flight.game.collisions import (
     CollisionLayers,
     CollisionSystem,
@@ -25,8 +26,8 @@ from space_flight.game.collisions import (
 if TYPE_CHECKING:
     from space_flight.actors.capital_ship.shield import Shield
     from space_flight.actors.capital_ship.sub_system import SubSystem
-    from space_flight.actors.laser_cannon import LaserShot
     from space_flight.actors.ship import Ship
+    from space_flight.weapons.laser_cannon import LaserShot
 
 # ---------------------------
 # define_collision_masks
@@ -507,3 +508,74 @@ def test_laser_does_not_hit_a_sibling_subsystem() -> None:
 
     sibling.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()
+
+
+# ---------------------------
+# munition_into_destructible — shielded vs bare-hull spark colour
+# ---------------------------
+
+
+def make_target_fighter(shield_level: float) -> SimpleNamespace:
+    """
+    A minimal enemy fighter for the destructible handler's spark-colour branch.
+
+    Its take_hit depletes the shield, so a test that still expects ICE proves the
+    handler samples the shield state BEFORE applying the hit.
+
+    :param shield_level: Shield strength at the moment of impact.
+    :return: A fighter stand-in with id, speed, shield_level and take_hit.
+    """
+    fighter = SimpleNamespace(
+        id="target-id",
+        mounted_on=None,
+        speed=np.zeros(3),
+        shield_level=shield_level,
+    )
+    fighter.take_hit = lambda damage, normal_world_vector: setattr(
+        fighter, "shield_level", max(0.0, fighter.shield_level - damage)
+    )
+    return fighter
+
+
+def make_enemy_laser() -> MagicMock:
+    """A laser fired by some other ship (so it is a genuine hit on the target)."""
+    laser = MagicMock()
+    laser.origin_ship = SimpleNamespace(mounted_on=None)
+    laser.origin_ship_id = "shooter-id"
+    laser.power = 10.0
+    return laser
+
+
+def spawned_spark_preset(system: CollisionSystem) -> object:
+    """Return the preset passed to the single expected spark spawn."""
+    system.game.spark_fx_pool.spawn.assert_called_once()
+    return system.game.spark_fx_pool.spawn.call_args.kwargs["preset"]
+
+
+def test_hit_on_shielded_fighter_sparks_ice() -> None:
+    """
+    A laser hitting an enemy fighter whose shield is still up throws blue ICE
+    sparks -- even though take_hit then drains that shield (state read first).
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    fighter = make_target_fighter(shield_level=50.0)
+    entry = make_destructible_entry(make_enemy_laser(), fighter)
+
+    system.munition_into_destructible(entry)
+
+    assert spawned_spark_preset(system) is spark_fx.ICE
+
+
+def test_hit_on_bare_hull_sparks_metal() -> None:
+    """
+    A laser hitting an enemy fighter with no shield left throws metal sparks.
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    fighter = make_target_fighter(shield_level=0.0)
+    entry = make_destructible_entry(make_enemy_laser(), fighter)
+
+    system.munition_into_destructible(entry)
+
+    assert spawned_spark_preset(system) is spark_fx.METAL

@@ -6,11 +6,11 @@ from typing import Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.actors.bomb_launcher import BombLauncher
-from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.ship import Ship
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.weapons.bomb_launcher import BombLauncher
+from space_flight.weapons.laser_cannon import LaserCannon
 
 LOGGER = logging.getLogger()
 

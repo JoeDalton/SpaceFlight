@@ -122,9 +122,11 @@ concrete weapons share:
 a ship's configured cannon positions in round-robin, rate-limited by
 `laser_fire_rate`. It defers to the parent's `AutoAim` for shot leading if
 present, otherwise fires straight down the parent's forward vector plus its
-own velocity. Each `LaserShot` is a camera-facing quad billboard with a point
-light and a collision segment (long enough to bridge one frame's travel at
-laser speed).
+own velocity. Each `LaserShot` renders as an analytic capsule impostor — a
+camera-facing quad whose shader draws a glowing 3D capsule (see
+[docs/shaders.md](shaders.md)) — with a collision segment (long enough to bridge
+one frame's travel at laser speed) and an optional self-cast point light behind
+a global toggle (`EMIT_LASER_LIGHT`).
 
 **`BombLauncher` / `Bomb`**
 ([`bomb_launcher.py`](../src/space_flight/actors/bomb_launcher.py)) drops a

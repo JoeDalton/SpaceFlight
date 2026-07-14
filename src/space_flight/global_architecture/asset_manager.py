@@ -83,10 +83,6 @@ COMMON_ASSETS_TO_LOAD = [
     ("texture", DATAFILES_PATH / "sprites/dust/dust_pink.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_white.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_yellow.png", ""),
-    # Laser textures
-    ("texture", DATAFILES_PATH / "sprites/lasers/laser_red.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/lasers/laser_green.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/lasers/laser_blue.png", ""),
     # Explosion textures
     ("texture", DATAFILES_PATH / "sprites/particles/fire_atlas.png", ""),
     ("texture", DATAFILES_PATH / "sprites/particles/smoke_atlas.png", ""),

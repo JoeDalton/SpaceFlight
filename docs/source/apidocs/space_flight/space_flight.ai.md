@@ -40,6 +40,10 @@ space_flight.ai.auto_aim
   - ```{autodoc2-docstring} space_flight.ai.Intent
     :summary:
     ```
+* - {py:obj}`AttackMode <space_flight.ai.AttackMode>`
+  - ```{autodoc2-docstring} space_flight.ai.AttackMode
+    :summary:
+    ```
 * - {py:obj}`Personality <space_flight.ai.Personality>`
   - ```{autodoc2-docstring} space_flight.ai.Personality
     :summary:
@@ -220,6 +224,62 @@ Bases: {py:obj}`enum.Enum`
    'auto(...)'
 
 ```{autodoc2-docstring} space_flight.ai.Intent.IDLE
+```
+
+````
+
+`````
+
+`````{py:class} AttackMode(*args, **kwds)
+:canonical: space_flight.ai.AttackMode
+
+Bases: {py:obj}`enum.Enum`
+
+```{autodoc2-docstring} space_flight.ai.AttackMode
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} space_flight.ai.AttackMode.__init__
+```
+
+````{py:attribute} PURSUIT
+:canonical: space_flight.ai.AttackMode.PURSUIT
+:value: >
+   'auto(...)'
+
+```{autodoc2-docstring} space_flight.ai.AttackMode.PURSUIT
+```
+
+````
+
+````{py:attribute} STRAFE
+:canonical: space_flight.ai.AttackMode.STRAFE
+:value: >
+   'auto(...)'
+
+```{autodoc2-docstring} space_flight.ai.AttackMode.STRAFE
+```
+
+````
+
+````{py:attribute} ORBIT
+:canonical: space_flight.ai.AttackMode.ORBIT
+:value: >
+   'auto(...)'
+
+```{autodoc2-docstring} space_flight.ai.AttackMode.ORBIT
+```
+
+````
+
+````{py:attribute} BOMB
+:canonical: space_flight.ai.AttackMode.BOMB
+:value: >
+   'auto(...)'
+
+```{autodoc2-docstring} space_flight.ai.AttackMode.BOMB
 ```
 
 ````
