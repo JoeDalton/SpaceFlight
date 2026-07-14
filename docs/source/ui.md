@@ -127,13 +127,22 @@ classes, both driven from a per-frame `game.method_lists` task:
   (see [docs/game.md](game.md)) drive these two lines.
 - **`TargetHUD`** projects the player's current target's world position into
   screen space each frame (`cam.getRelativePoint` + `lens.project`) to
-  position a target-box indicator and a distance/name label. When the
-  target is *behind* the camera, the projected point is renormalized and
-  clamped to the screen edge instead of showing the (mathematically valid
-  but visually wrong) in-front projection, so the indicator reads as
-  "off-screen behind you" rather than snapping to the wrong side. Falls back
-  to the target's own name when it has no named parent (used for
-  subsystems, which aren't bot-controlled).
+  position a target-box indicator and a distance/name label. While the target
+  is in view the raw projection is used, so the box encircles it. Once it goes
+  off-screen — out of the field of view *or* behind the camera — the indicator
+  is pinned to the screen border along the true bearing to the target, by
+  scaling the projected direction vector until it meets the edge rectangle
+  (ray-to-rectangle intersection, rather than clamping each axis
+  independently, which would snap the card to a corner near the camera's XZ
+  plane). Two correctness details make this robust across a full turn: when
+  the target is behind the camera the perspective divide is by a negative
+  depth, mirroring the projection through the screen centre, so its sign is
+  negated to recover the correct side (the indicator then switches sides only
+  once, as the target passes directly behind); and the forward depth is
+  clamped to a small non-zero magnitude so the projection stays finite when
+  the target crosses the camera's XZ plane. Falls back to the target's own
+  name when it has no named parent (used for subsystems, which aren't
+  bot-controlled).
 
 ## `rear_view_mirror.py`
 

@@ -17,6 +17,12 @@ from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
 
+# Smallest camera-space depth (forward distance) we let the projection see.
+# When the target sits in the camera's XZ plane the true depth is ~0 and the
+# perspective divide explodes, making the card jitter; clamping the depth to
+# this non-zero magnitude keeps the projection finite and stable.
+MIN_PROJECTION_DEPTH = 1e-3
+
 
 class HUD:
     """
@@ -302,30 +308,70 @@ class TargetHUD:
 
             # Convert to camera space
             cam_space_pos = cam.getRelativePoint(self.game.root_node, world_pos)
+
+            # Guard against the degenerate projection when the target lies in
+            # the camera's XZ plane (depth ~ 0): clamp the forward depth to a
+            # small non-zero magnitude, preserving its sign so the behind-camera
+            # handling below still triggers correctly.
+            if abs(cam_space_pos.y) < MIN_PROJECTION_DEPTH:
+                cam_space_pos.y = (
+                    MIN_PROJECTION_DEPTH
+                    if cam_space_pos.y >= 0
+                    else -MIN_PROJECTION_DEPTH
+                )
+
             screen_pos = Point2()
             lens.project(cam_space_pos, screen_pos)
 
             # Default case: target is ahead, just take the projection
             indic_x = screen_pos.x
             indic_z = screen_pos.y
-            if cam_space_pos.y <= 0:
-                # Target is behind, so the projection could fall inside the screen,
-                # but we want the indicator to stay clamped to the edges of the screen
-                norm = np.sqrt(indic_x**2 + indic_z**2)
-                if norm > EPSILON_TOLERANCE:
-                    two_norm_inv = 2 / norm
-                    indic_x *= two_norm_inv
-                    indic_z *= two_norm_inv
+
+            behind = cam_space_pos.y <= 0
+            if behind:
+                # Target is behind the camera. The perspective divide in
+                # lens.project() is by a negative depth (cam_space_pos.y < 0),
+                # which mirrors the projection through the screen centre: both
+                # indic_x and indic_z come out with the wrong sign. Negate them
+                # to recover the true on-screen direction (sign(cam_x),
+                # sign(cam_z)), so the indicator sits on the correct edge and
+                # only ever switches sides once, when the target passes directly
+                # behind.
+                indic_x = -indic_x
+                indic_z = -indic_z
+
+            inside = (
+                not behind
+                and abs(indic_x) <= EDGE_HORIZONTAL
+                and abs(indic_z) <= EDGE_VERTICAL
+            )
+            if not inside:
+                # Target is off-screen (out of the FoV or behind): pin the
+                # indicator to the screen border along the direction to the
+                # target. We intersect the (indic_x, indic_z) ray with the edge
+                # rectangle by scaling the whole vector by a single factor, so
+                # the position varies smoothly as the direction rotates.
+                #
+                # Clamping each axis independently instead would drive both
+                # components to their maxima whenever the projection is large on
+                # both axes (which happens as the depth approaches zero, near
+                # the camera's XZ plane), snapping the card to a corner that
+                # flips around as the target wobbles -> jitter. Ray-to-rectangle
+                # scaling avoids that and is continuous with the in-view
+                # projection (the scale is exactly 1 at the border).
+                ax = abs(indic_x)
+                az = abs(indic_z)
+                scale_x = EDGE_HORIZONTAL / ax if ax > EPSILON_TOLERANCE else np.inf
+                scale_z = EDGE_VERTICAL / az if az > EPSILON_TOLERANCE else np.inf
+                scale = min(scale_x, scale_z)
+                if np.isfinite(scale):
+                    indic_x *= scale
+                    indic_z *= scale
                 else:
+                    # Direction undefined (target dead centre while behind):
+                    # park the indicator on one side rather than at the origin.
                     indic_x = EDGE_HORIZONTAL
                     indic_z = 0.0
-                # TODO: This does not work as I want it. the indicator changes edges
-                # 3 times in one loop, when it should change only once.
-                # To be investigated, although it's not absolutely critical
-
-            # Clamp to edges of screen
-            indic_x = max(min(indic_x, EDGE_HORIZONTAL), -EDGE_HORIZONTAL)
-            indic_z = max(min(indic_z, EDGE_VERTICAL), -EDGE_VERTICAL)
 
             self.root.setPos(indic_x, 0, indic_z)
 
