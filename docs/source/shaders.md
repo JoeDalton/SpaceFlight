@@ -215,13 +215,42 @@ preset (metal / ice / magic):
   channel so it still reads if the texture is flat), and the per-spark
   `vColor` tints it. Additive-blended for a bright glow.
 
+## Laser bolt shaders
+
+Driven by `LaserShot` in
+[`actors/laser_cannon.py`](../src/space_flight/actors/laser_cannon.py) (see
+[docs/actors.md](actors.md)). Each bolt is a single camera-facing quad that the
+fragment shader turns into a glowing 3D capsule — an *analytic capsule
+impostor*. There is no mesh and no surface, so it reads as a solid glowing tube
+from any angle, including straight down its own axis (as when the player fires
+forward), where it shows as a bright disc rather than a flat sliver.
+
+- **[`laser.vert`](../src/space_flight/datafiles/shaders/laser.vert)** billboards
+  the card to face the camera. It works in the projectile node's **model space**
+  (the `Munition` base translates the node every frame and orients its local +Z
+  along the bolt's travel, which is also where the swept collision segment
+  lives), so the core is the fixed model-space segment `[uA, uB]` along local Z.
+  The camera position comes from column 3 of `p3d_ViewMatrixInverse` — the eye
+  of *whatever* camera is drawing the current pass — so bolts are correct in the
+  main view, the rear-view mirror and the ocean reflection alike, with no
+  per-frame CPU work and no shared uniforms. (Column 3 is the world position,
+  unambiguous in any convention; the basis columns are deliberately avoided.)
+- **[`laser.frag`](../src/space_flight/datafiles/shaders/laser.frag)** casts a
+  ray from the eye through each pixel and measures its distance to the core
+  segment (a signed-distance field): distance → a white-hot core plus a soft
+  coloured (`uColor`) halo. Correct at every angle — a long streak side-on, a
+  round disc head-on. Additive-blended with depth-write off; it writes
+  `gl_FragDepth` from the point nearest the core so opaque geometry occludes
+  bolts correctly while they never occlude each other or translucent geometry.
+
 ## Where things live
 
 Every shader in this page lives directly under
 [`src/space_flight/datafiles/shaders/`](../src/space_flight/datafiles/shaders/):
 the hyperspace overlay's three phase shaders plus shared vertex passthrough,
 the render-scale/AA composite pair, the ocean's vertex/fragment pair, the
-shield's vertex/fragment pair, and the explosion and spark particle
-vertex/fragment pairs. Each is loaded and driven by the Python module named in
+shield's vertex/fragment pair, the laser bolt's vertex/fragment pair, and the
+explosion and spark particle vertex/fragment pairs. Each is loaded and driven by
+the Python module named in
 its section above — there is no separate shader-only reference, since GLSL
 isn't covered by the docstring-generated [code reference](docs/).

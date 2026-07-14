@@ -84,7 +84,7 @@
 ````{py:data} SOUND_POOL_LENGTH
 :canonical: space_flight.global_architecture.asset_pools.SOUND_POOL_LENGTH
 :value: >
-   200
+   1000
 
 ```{autodoc2-docstring} space_flight.global_architecture.asset_pools.SOUND_POOL_LENGTH
 ```

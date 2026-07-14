@@ -244,7 +244,7 @@ def test_compute_shot_speed_without_acquisition_fires_forward():
     When no target is acquired, the shot must travel in the parent's forward
     direction plus the parent's speed.
     """
-    from space_flight.actors.laser_cannon import LASER_SPEED_MPS
+    from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
 
     auto_aim = make_auto_aim()  # starts unlocked (acquiring)
     forward = np.array([0.0, 1.0, 0.0])

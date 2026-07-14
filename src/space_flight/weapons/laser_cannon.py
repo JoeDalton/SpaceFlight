@@ -3,22 +3,64 @@ from typing import Tuple
 import numpy as np
 import quaternion
 from panda3d.core import (
+    BoundingSphere,
     CardMaker,
+    ColorBlendAttrib,
+    CullFaceAttrib,
     LPoint3,
     NodePath,
     PointLight,
     Quat,
-    TransparencyAttrib,
+    Shader,
+    Vec3,
 )
 
 from space_flight import DATAFILES_PATH
-from space_flight.actors.weapon import Munition, Weapon
 from space_flight.game.collisions import attach_collision_segment
 from space_flight.utils import build_axis_billboard_quat
+from space_flight.weapons import Munition, Weapon
 
 LASER_SPEED_MPS = 2000.0
 SQT2_S = np.sqrt(2.0) / 2.0
 LIGHT_ATTENUATION = (1, 0.05, 0)
+
+# --- Capsule-impostor look -------------------------------------------------- #
+#: Length of the glowing bolt core, world units.
+LASER_LENGTH = 15.0
+#: Radius of the white-hot core, world units.
+CORE_RADIUS = 0.05
+#: Radius of the soft coloured halo around the core, world units.
+GLOW_RADIUS = 0.2
+
+#: GLOBAL TOGGLE — whether each bolt carries its own dynamic PointLight.
+#: The capsule impostor already looks self-lit, so the light only matters for
+#: casting coloured light onto nearby hulls. Hundreds of live bolts means
+#: hundreds of dynamic lights, which is the real cost here (far more than the
+#: geometry), so flip this to False to drop them wholesale.
+EMIT_LASER_LIGHT = False
+
+#: Halo tint per configured laser colour (a touch off-primary reads better as a
+#: glow than a pure primary).
+GLOW_TINTS = {
+    "red": Vec3(1.0, 0.05, 0.05),
+    "green": Vec3(0.1, 1.0, 0.15),
+    "blue": Vec3(0.2, 0.45, 1.0),
+}
+
+#: The laser shader is shared by every bolt; load it once, lazily.
+_LASER_SHADER = None
+
+
+def _laser_shader() -> Shader:
+    """Load (once) and return the shared laser capsule-impostor GLSL shader."""
+    global _LASER_SHADER
+    if _LASER_SHADER is None:
+        _LASER_SHADER = Shader.load(
+            Shader.SL_GLSL,
+            vertex=DATAFILES_PATH / "shaders/laser.vert",
+            fragment=DATAFILES_PATH / "shaders/laser.frag",
+        )
+    return _LASER_SHADER
 
 
 class LaserCannon(Weapon):
@@ -56,7 +98,7 @@ class LaserCannon(Weapon):
             path=sound_file,
         )
 
-        # Prepare laser model
+        # Prepare laser look
         laser_intensity = 1.0
         if color == "red":
             self.light_color = (laser_intensity, 0, 0, 1)
@@ -66,10 +108,8 @@ class LaserCannon(Weapon):
             self.light_color = (0, 0, laser_intensity, 1)
         else:
             raise ValueError
-        self.laser_texture = self.game.app.asset_manager.get_asset(
-            asset_type="texture",
-            path=DATAFILES_PATH / f"sprites/lasers/laser_{color}.png",
-        ).get_texture()
+        # Halo tint fed to the capsule shader (self-lit; no sprite texture).
+        self.laser_color_rgb = GLOW_TINTS[color]
 
         # Initialize cannon cycling
         self.current_next_cannon_idx = 0
@@ -101,7 +141,7 @@ class LaserCannon(Weapon):
             shot_speed,
             self.shot_power,
             self.life_time_s,
-            texture=self.laser_texture,
+            color=self.laser_color_rgb,
             light_color=self.light_color,
         )
 
@@ -122,24 +162,27 @@ class LaserCannon(Weapon):
             node.remove_node()
         self.cannon_nodes = []
         self.sound_pool = []
-        self.laser_texture = None
+        self.laser_color_rgb = None
         super().clean()
 
 
 class LaserShot(Munition):
     """
-    A class for laser shot objects
+    A class for laser shot objects.
 
-    The render is a custom camera-facing quad whose long axis is the laser velocity
-    direction.
-    A native panda3d billboard must not be used since it rotates freely
+    The render is an analytic *capsule impostor*: a single camera-facing quad
+    whose fragment shader measures each pixel's distance to the bolt's core line
+    segment and turns it into a glowing capsule (see ``shaders/laser.frag``). It
+    reads as a solid 3D glowing tube from any angle, including looking straight
+    down its own axis (as when the player fires forward), where it shows as a
+    bright disc rather than collapsing to a sliver.
     """
 
     def __init__(
         self,
         game,
         origin_ship_id: str,
-        texture,
+        color: Vec3,
         power: float,
         life_time_s: float,
         light_color: Tuple,
@@ -148,7 +191,7 @@ class LaserShot(Munition):
         origin_ship=None,
     ):
         # Store the visual parameters before the base __init__ calls _build_visual.
-        self.texture = texture
+        self.color = color
         self.light_color = light_color
         super().__init__(
             game=game,
@@ -161,37 +204,64 @@ class LaserShot(Munition):
         )
 
     def _build_visual(self, start_position) -> NodePath:
-        # Create flat quad
+        # Camera-facing card; the shader expands it and draws the capsule.
         cm = CardMaker("laser")
-        cm.set_frame(-0.5, 0.5, -4.0, 4.0)
+        cm.set_frame(-1.0, 1.0, -1.0, 1.0)
         shot = self.game.root_node.attach_new_node(cm.generate())
 
-        # Compute orientation
-        # A preset orientation is ok since lasers have short lifetimes. For longer-lived
-        # objects, I would have to reset the orientation at each frame.
+        # Orient the node so its local +Z runs along the bolt's travel direction.
+        # This is what the swept collision segment (built along local Z in
+        # _attach_collider) relies on; the capsule core is likewise placed along
+        # local Z below. The roll about that axis is irrelevant (the capsule is
+        # axially symmetric and the shader re-faces the card every frame), so the
+        # preset up_hint from the spawn-time camera is only there to pin one.
         camera_position = self.game.app.camera.get_pos(self.game.root_node)
         to_camera_vector = camera_position - start_position
-        billboard_quat = build_axis_billboard_quat(
+        orientation_quat = build_axis_billboard_quat(
             forward=self.speed, up_hint=to_camera_vector
         ) * np.quaternion(SQT2_S, SQT2_S, 0, 0)
-        shot.set_quat(Quat(*quaternion.as_float_array(billboard_quat)))
+        shot.set_quat(Quat(*quaternion.as_float_array(orientation_quat)))
 
-        # Don't rely on scene lighting since lasers emit their own light
+        # Capsule core: the fixed model-space segment along local Z.
+        half_len = LASER_LENGTH * 0.5
+        shot.set_shader(_laser_shader())
+        shot.set_shader_input("uA", Vec3(0.0, 0.0, -half_len))
+        shot.set_shader_input("uB", Vec3(0.0, 0.0, half_len))
+        shot.set_shader_input("uColor", self.color)
+        shot.set_shader_input("uCoreRadius", CORE_RADIUS)
+        shot.set_shader_input("uGlowRadius", GLOW_RADIUS)
+
+        # Additive glow (ONE, ONE): order-independent w.r.t. other bolts and the
+        # translucent shields / clouds it flies through, so no sorting needed.
+        shot.set_attrib(
+            ColorBlendAttrib.make(
+                ColorBlendAttrib.MAdd, ColorBlendAttrib.OOne, ColorBlendAttrib.OOne
+            )
+        )
+        # Seen from any side; self-lit; no depth write (test only, via the
+        # shader's gl_FragDepth) so it never occludes other transparent geometry.
+        shot.set_attrib(CullFaceAttrib.make(CullFaceAttrib.MCullNone))
         shot.set_light_off()
-        # Set texture
-        shot.set_texture(self.texture)
-        # Allow to be seen from both sides
-        shot.set_two_sided(True)
-        # Allow transparency
-        shot.set_transparency(TransparencyAttrib.MAlpha)
+        shot.set_depth_write(False)
+        shot.set_bin("fixed", 20)  # drawn after the sorted "transparent" bin
 
-        # Add light source on the laser (it is self-lit)
-        self.plight = PointLight("plight")
-        self.plight.setColor(self.light_color)
-        self.plight.set_attenuation(LIGHT_ATTENUATION)
-        self.plnp = shot.attachNewNode(self.plight)
-        self.plnp.setPos(0, 0, 0)
-        self.game.app.render.setLight(self.plnp)
+        # The vertex shader expands the unit card to half_size, so give the node
+        # matching bounds or the frustum culler (which only sees the card's own
+        # extent) would clip the bolt at the screen edge.
+        half_size = half_len + 3.0 * GLOW_RADIUS
+        shot.node().set_bounds(BoundingSphere(LPoint3(0, 0, 0), half_size))
+        shot.node().set_final(True)
+
+        # Optional self-cast dynamic light (see EMIT_LASER_LIGHT).
+        if EMIT_LASER_LIGHT:
+            self.plight = PointLight("laser_light")
+            self.plight.set_color(self.light_color)
+            self.plight.set_attenuation(LIGHT_ATTENUATION)
+            self.plnp = shot.attach_new_node(self.plight)
+            self.plnp.set_pos(0, 0, 0)
+            self.game.app.render.set_light(self.plnp)
+        else:
+            self.plnp = None
 
         return shot
 
@@ -215,10 +285,12 @@ class LaserShot(Munition):
         )
 
     def _clean_extra(self) -> None:
-        # Clear the laser's own light before the shared teardown removes the node.
-        try:
-            self.game.app.render.clear_light(self.plnp)
-        except AttributeError:
-            pass
-        self.plnp.removeNode()
-        self.plnp = None
+        # Clear the laser's own light (if any) before the shared teardown removes
+        # the node.
+        if self.plnp is not None:
+            try:
+                self.game.app.render.clear_light(self.plnp)
+            except AttributeError:
+                pass
+            self.plnp.removeNode()
+            self.plnp = None

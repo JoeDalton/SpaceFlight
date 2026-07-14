@@ -28,11 +28,11 @@ if TYPE_CHECKING:
     from space_flight.actors.capital_ship.shield import Shield
     from space_flight.actors.capital_ship.sub_system import SubSystem
     from space_flight.actors.ship import Ship
-    from space_flight.actors.weapon import Munition
     from space_flight.ai.collision_sensor import CollisionSensor
     from space_flight.game.flight_state import FlightState
     from space_flight.scenes.asteroid_field import AsteroidField
     from space_flight.scenes.ocean import Ocean
+    from space_flight.weapons import Munition
 
     # Any object that can own a collider (stored as its "owner" python tag).
     ColliderOwner = (
@@ -290,6 +290,13 @@ class CollisionSystem:
         # object was scaled. It's dumb, but it is what it is...
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
+
+        # Was the target's shield still up when the shot landed? Fighters carry a
+        # scalar shield (capital ships instead stop hits at their bubble, handled
+        # in munition_into_shield). Read it BEFORE take_hit spends the shield, so a
+        # shielded hit sparks blue (ICE) rather than the hull's metal sparks.
+        target_shield_up = getattr(destructible, "shield_level", 0.0) > 0.0
+
         destructible.take_hit(damage=munition.power, normal_world_vector=normal)
 
         # Delete munition
@@ -311,12 +318,13 @@ class CollisionSystem:
             )
             hit_point = entry.getSurfacePoint(self.game.root_node)
             hit_velocity = _hit_velocity(destructible)
-            # Metal sparks at the impact point, inheriting the target's motion.
+            # Blue ice sparks off a still-raised shield, metal sparks off bare
+            # hull; both inherit the target's motion.
             self.game.spark_fx_pool.spawn(
                 position=hit_point,
                 normal=normal,
                 base_velocity=hit_velocity,
-                preset=spark_fx.METAL,
+                preset=spark_fx.ICE if target_shield_up else spark_fx.METAL,
             )
             # Occasionally add a small secondary explosion for extra punch.
             if random.random() < HIT_EXPLOSION_CHANCE:

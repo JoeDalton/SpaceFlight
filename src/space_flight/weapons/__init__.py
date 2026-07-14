@@ -1,8 +1,8 @@
 """
 Generic weapon / munition base classes.
 
-Ship weapons (the :class:`~space_flight.actors.laser_cannon.LaserCannon`, the
-:class:`~space_flight.actors.bomb_launcher.BombLauncher`) and their projectiles
+Ship weapons (the :class:`~space_flight.wepaons.laser_cannon.LaserCannon`, the
+:class:`~space_flight.weapons.bomb_launcher.BombLauncher`) and their projectiles
 (LaserShot, Bomb) share the same skeleton:
 
 * a *weapon* holds the emitter references, enforces a reload (rate) limit, and

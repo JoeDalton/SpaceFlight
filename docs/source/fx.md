@@ -110,9 +110,10 @@ laser impact (distinct from the death-triggered explosion).
   preset at once.
 - The pool is created in `FlightState` as `game.spark_fx_pool` (beside
   `explosion_fx_pool`) and driven from the laser collision handlers in
-  [`collisions.py`](../src/space_flight/game/collisions.py): `METAL` on
-  destructible (bot) hits, `ICE` on shield hits (on top of the shield's own
-  impact flash), and a material-dependent preset on terrain hits — chosen from
+  [`collisions.py`](../src/space_flight/game/collisions.py): on destructible
+  (bot) hits, `ICE` when the target fighter's shield is still up else `METAL`;
+  `ICE` on capital-ship shield-bubble hits (on top of the shield's own impact
+  flash); and a material-dependent preset on terrain hits — chosen from
   the `_TERRAIN_SPARK_PRESET` map by the terrain object's declarative
   `material` attribute (`Ocean.material == "water"` → `ICE`,
   `AsteroidField.material == "rock"` → `ROCK`, `"metal"` → `METAL`). Each burst

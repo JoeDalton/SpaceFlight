@@ -1,5 +1,5 @@
 """
-Unit tests for BombLauncher (space_flight.actors.bomb_launcher).
+Unit tests for BombLauncher (space_flight.weapons.bomb_launcher).
 
 BombLauncher.__init__ needs no Panda3D nodes, so it is constructed directly.
 Bomb spawning inside launch() is monkeypatched out so the launch geometry can be
@@ -12,7 +12,11 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from space_flight.actors.bomb_launcher import BOMB_RANGE_M, BOMB_SPEED_MPS, BombLauncher
+from space_flight.weapons.bomb_launcher import (
+    BOMB_RANGE_M,
+    BOMB_SPEED_MPS,
+    BombLauncher,
+)
 
 
 @pytest.fixture
@@ -45,7 +49,7 @@ def test_life_time_is_range_over_speed():
 
 def test_launch_spawns_a_bomb(bomb_launcher):
     """launch() spawns exactly one Bomb."""
-    with patch("space_flight.actors.bomb_launcher.Bomb") as mock_bomb:
+    with patch("space_flight.weapons.bomb_launcher.Bomb") as mock_bomb:
         bomb_launcher.launch()
 
     mock_bomb.assert_called_once()
@@ -56,7 +60,7 @@ def test_launch_velocity_is_belly_down_plus_ship_speed(bomb_launcher):
     The bomb's velocity is the ship's velocity minus base_speed along +Z (i.e.
     launched down the belly, carrying the ship's motion).
     """
-    with patch("space_flight.actors.bomb_launcher.Bomb") as mock_bomb:
+    with patch("space_flight.weapons.bomb_launcher.Bomb") as mock_bomb:
         bomb_launcher.launch()
 
     speed = mock_bomb.call_args.kwargs["speed"]
@@ -65,7 +69,7 @@ def test_launch_velocity_is_belly_down_plus_ship_speed(bomb_launcher):
 
 def test_launch_passes_origin_power_and_lifetime(bomb_launcher):
     """launch() forwards the emitter, damage and lifetime to the Bomb."""
-    with patch("space_flight.actors.bomb_launcher.Bomb") as mock_bomb:
+    with patch("space_flight.weapons.bomb_launcher.Bomb") as mock_bomb:
         bomb_launcher.launch()
 
     kwargs = mock_bomb.call_args.kwargs
@@ -77,7 +81,7 @@ def test_launch_passes_origin_power_and_lifetime(bomb_launcher):
 
 def test_launch_reports_success(bomb_launcher):
     """launch() returns True when a bomb is actually released."""
-    with patch("space_flight.actors.bomb_launcher.Bomb"):
+    with patch("space_flight.weapons.bomb_launcher.Bomb"):
         assert bomb_launcher.launch() is True
 
 
@@ -89,7 +93,7 @@ def test_launch_is_rate_limited(bomb_launcher):
     bomb_launcher.fire_delay = 2.0
     bomb_launcher.last_fire_time = 0.0
 
-    with patch("space_flight.actors.bomb_launcher.Bomb") as mock_bomb:
+    with patch("space_flight.weapons.bomb_launcher.Bomb") as mock_bomb:
         # t=2.0: 2.0s since the last fire (t=0) == reload -> allowed.
         bomb_launcher.game.game_time.get_current_time.return_value = 2.0
         assert bomb_launcher.launch() is True

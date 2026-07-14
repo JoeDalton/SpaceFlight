@@ -4,7 +4,6 @@ from typing import Tuple
 import numpy as np
 
 from space_flight import RECORD_GAME
-from space_flight.actors.bomb_launcher import BOMB_SPEED_MPS
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_ship_navigator import (
@@ -12,6 +11,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     GenericShipNavigator,
 )
 from space_flight.utils import smooth_step_down, smooth_step_up
+from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
 LOGGER = logging.getLogger()
 

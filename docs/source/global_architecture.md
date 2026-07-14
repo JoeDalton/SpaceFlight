@@ -83,7 +83,7 @@ loading.
 it on first request, so every caller (levels, actors, UI) that references the
 same file gets one shared instance rather than reloading it. `COMMON_ASSETS_TO_LOAD`
 is the fixed list of assets always worth preloading at boot regardless of
-level (ship models, common sounds, dust/laser/explosion textures — see the
+level (ship models, common sounds, dust/explosion textures — see the
 inline comments on *why* specific heavy assets like capital ship glTFs and
 the cloud atlas are preloaded, to avoid mid-level load stalls);
 `load_game_assets`/`load_assets_task` drain that list one asset per frame
