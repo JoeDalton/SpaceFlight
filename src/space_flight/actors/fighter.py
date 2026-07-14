@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION
+from space_flight.actors.bomb_launcher import BombLauncher
 from space_flight.actors.laser_cannon import LaserCannon
 from space_flight.actors.ship import Ship
 from space_flight.ai.auto_aim import AutoAim
@@ -53,6 +54,11 @@ class Fighter(Ship):
         self.auto_aim = AutoAim(game=self.game, parent=self)
         self.laser_cannon = LaserCannon(game=self.game, parent=self)
 
+        # Limited bomb ordnance + its launcher. drop_bomb spends one unit and
+        # releases a bomb; supply gates how many can be dropped.
+        self.bomb_supply = self.conf.get("bomb_supply", 0)
+        self.bomb_launcher = BombLauncher(game=self.game, parent=self)
+
         # Initialize collisions
         self.hit_box_radius_m = self.conf["hit_box_radius_m"]
         self.collision_sphere_np = attach_collision_sphere(
@@ -90,6 +96,36 @@ class Fighter(Ship):
 
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
+
+    @property
+    def shield_level(self) -> float:
+        """
+        A fighter's shield is a plain scalar pool.
+
+        :return: The current shield strength
+        """
+        return self.shield
+
+    def drop_bomb(self) -> bool:
+        """
+        Release one bomb from the limited supply.
+
+        The launcher is rate-limited (reload), so a drop can be refused while it is
+        reloading even with ordnance to spare; supply is only spent on an actual
+        release. Mirrors laser_cannon.fire() as the hook the bombing-run
+        navigator calls, and lets the tactician's ammo accounting work against a
+        real, depleting supply.
+
+        :return: True if a bomb was released, False if out of ordnance or reloading
+        """
+        if self.bomb_supply <= 0:
+            return False
+        if not self.bomb_launcher.launch():
+            # Still reloading -- do not spend a unit of ordnance.
+            return False
+        self.bomb_supply -= 1
+        LOGGER.info("%s dropped a bomb (%d left)", self.parent.name, self.bomb_supply)
+        return True
 
     def apply_damage(self, damage: float, damage_type: str):
         """
@@ -130,6 +166,8 @@ class Fighter(Ship):
             self.auto_aim = None
             self.laser_cannon.clean()
             self.laser_cannon = None
+            self.bomb_launcher.clean()
+            self.bomb_launcher = None
 
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")

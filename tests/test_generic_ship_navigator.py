@@ -16,6 +16,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.utils.state_machine import StateMachine
 
 
 def make_ship_navigator(
@@ -42,9 +43,7 @@ def make_ship_navigator(
     nav.pawn.parent = MagicMock()
     nav.personality = personality
     nav.debug = False
-    nav.behaviour = "idle"
-    nav.behaviour_duration_s = 0.0
-    nav.last_update_time = 0.0
+    nav.behaviour_sm = StateMachine("idle", clock=nav.game.game_time.get_current_time)
     nav.waypoints = []
     nav.next_waypoint_idx = 0
     nav.distance_to_waypoint_m = 0.0

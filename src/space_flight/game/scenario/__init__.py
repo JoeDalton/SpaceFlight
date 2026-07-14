@@ -5,7 +5,7 @@ the engine here turns that into triggers (when -> then) that run each frame.
 - :func:`load_scenario` builds a :class:`Scenario` from a YAML file.
 - :class:`Scenario` runs the triggers, owns group membership, and resolves group
   names to live actors.
-- :class:`Trigger` is one ``when condition: then action`` rule.
+- :class:`Trigger` is one when condition: then action rule.
 
 Conditions live in :mod:`space_flight.game.scenario.conditions` and actions in
 :mod:`space_flight.game.scenario.actions`.
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger()
 
-#: A condition callable, evaluated every frame: ``condition(game) -> bool``.
+#: A condition callable, evaluated every frame: condition(game) -> bool.
 Condition = Callable[["FlightState"], bool]
-#: An action callable, run when a trigger fires: ``action(game) -> None``.
+#: An action callable, run when a trigger fires: action(game) -> None.
 Action = Callable[["FlightState"], None]
 #: A live, targetable game object — a ship pawn or a waypoint marker.
 Actor = Any
@@ -37,16 +37,16 @@ Actor = Any
 
 class Trigger:
     """
-    A single mission rule: when ``condition`` becomes true, run ``action``.
+    A single mission rule: when condition becomes true, run action.
 
     The trigger owns its one-shot state (:attr:`_fired`), so a rule fires its
-    action only once by default. Set ``once=False`` for a rule that should fire
+    action only once by default. Set once=False for a rule that should fire
     every frame its condition holds.
 
-    :param condition: Called each frame; the action runs when it returns ``True``
+    :param condition: Called each frame; the action runs when it returns True
     :param action: Run when the condition is met
     :param once: Whether the action fires only the first time the condition holds
-    :param name: Optional label, used for logging and by the ``fired`` condition
+    :param name: Optional label, used for logging and by the fired condition
     """
 
     def __init__(
@@ -81,7 +81,7 @@ class Scenario:
     """
     Runs a level's scripted events and owns group membership.
 
-    One instance lives on ``game.scenario`` for the duration of a level. Each
+    One instance lives on game.scenario for the duration of a level. Each
     frame it fires every due :class:`Trigger` and advances any running jobs. It
     also creates actors while recording their group membership (:meth:`spawn`),
     and resolves a symbolic group name to its live actors (:meth:`resolve`).
@@ -92,7 +92,7 @@ class Scenario:
     def __init__(self, triggers: Iterable[Trigger] = ()) -> None:
         self.triggers: list[Trigger] = list(triggers)
         # Named triggers, for conditions that depend on another trigger having
-        # fired (see :meth:`has_fired` and the ``fired`` condition).
+        # fired (see :meth:`has_fired` and the fired condition).
         self.triggers_by_name: dict[str, Trigger] = {
             t.name: t for t in self.triggers if t.name
         }
@@ -139,8 +139,8 @@ class Scenario:
         """
         Register a generator to be advanced one step per frame.
 
-        The job runs to its next ``yield`` on each :meth:`update`, and is dropped
-        once it raises ``StopIteration``. Use this for work an action wants to
+        The job runs to its next yield on each :meth:`update`, and is dropped
+        once it raises StopIteration. Use this for work an action wants to
         spread over several frames.
 
         :param job: A generator that yields once per frame of work
@@ -164,13 +164,13 @@ class Scenario:
 
     def has_fired(self, name: str) -> bool:
         """
-        Whether the trigger called ``name`` has already fired.
+        Whether the trigger called name has already fired.
 
-        Lets one trigger depend on another having run (see the ``fired``
-        condition). An unknown name warns and reports ``False``.
+        Lets one trigger depend on another having run (see the fired
+        condition). An unknown name warns and reports False.
 
         :param name: The trigger name
-        :return: ``True`` once that trigger's action has run
+        :return: True once that trigger's action has run
         """
         trigger = self.triggers_by_name.get(name)
         if trigger is None:
@@ -222,7 +222,7 @@ class Scenario:
         """
         Register a derived group computed live from a predicate.
 
-        :param name: The group name (e.g. ``"enemies"``)
+        :param name: The group name (e.g. "enemies")
         :param predicate: Tested against each live actor to decide membership
         """
         self.queries[name] = predicate
@@ -258,11 +258,11 @@ class Scenario:
 
     def resolve_one(self, game: FlightState, name: str) -> Optional[Actor]:
         """
-        Resolve to the first live actor in a group, or ``None``.
+        Resolve to the first live actor in a group, or None.
 
         :param game: The game/flight state
         :param name: The group name
-        :return: A single live actor, or ``None`` if the group has none
+        :return: A single live actor, or None if the group has none
         """
         actors = self.resolve(game, name)
         return actors[0] if actors else None
@@ -273,7 +273,7 @@ class Scenario:
 
         :param game: The game/flight state
         :param name: The group name
-        :return: ``True`` if at least one member is alive
+        :return: True if at least one member is alive
         """
         return bool(self.resolve(game, name))
 
@@ -281,13 +281,13 @@ class Scenario:
         """
         Whether an identity group has spawned and now has no live members.
 
-        Returns ``False`` for a group that has not spawned yet, so a chained
-        ``all_destroyed`` event cannot fire before its target ever existed. For a
+        Returns False for a group that has not spawned yet, so a chained
+        all_destroyed event cannot fire before its target ever existed. For a
         query group, reports whether the query is currently empty.
 
         :param game: The game/flight state
         :param name: The group name
-        :return: ``True`` once a spawned group has lost every member
+        :return: True once a spawned group has lost every member
         """
         if name in self.queries:
             return not self.resolve(game, name)

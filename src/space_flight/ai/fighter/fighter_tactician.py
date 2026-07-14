@@ -1,6 +1,7 @@
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import Intent, Personality
+from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
+from space_flight.utils import smooth_step_up
 
 # TODO Add an intent to go back to the fight area if too far
 
@@ -53,6 +54,9 @@ class FighterTactician(GenericTactician):
             best_prey_dict["score"]
             >= self.personality["tactician"]["min_engagement_score"]
         ):
+            best_prey_dict["attack_mode"] = self._select_attack_mode(
+                best_prey_dict["target_id"]
+            )
             return Intent.ENGAGE, best_prey_dict
 
         # Check if bot has patrol orders
@@ -69,9 +73,74 @@ class FighterTactician(GenericTactician):
         friends_center_dict["target_id"] = Intent.REGROUP
         return Intent.REGROUP, friends_center_dict
 
-    def evaluate_fighting_shape(self) -> float:
+    # evaluate_fighting_shape is inherited from GenericTactician (uniform
+    # health/shield_level).
+
+    def _select_attack_mode(self, target_id) -> AttackMode:
         """
-        Evaluates the fighting shape of the bot
-        TODO: add an "energy" mechanic ?
+        Choose how to attack the prey. First the weapon (guns vs. a limited bomb,
+        by suitability scoring), then the geometry: bomb -> BOMB; guns + a
+        slow/immobile target -> STRAFE; guns + an agile target -> PURSUIT.
+
+        :param target_id: The chosen prey's id
+        :return: The attack mode to carry in the target dict
         """
-        return 0.5 * self.pawn.health + self.pawn.shield
+        try:
+            target_index = self.game.interactions.get_actor_index_from_id(target_id)
+            target = self.game.interactions.actors[target_index]
+        except (ValueError, KeyError, TypeError):
+            return AttackMode.PURSUIT
+
+        if self._choose_weapon(target) == "bomb":
+            return AttackMode.BOMB
+
+        mobility = getattr(target, "mobility", 1.0)
+        threshold = self.personality["tactician"]["strafe_mobility_threshold"]
+        try:
+            is_slow = mobility <= threshold
+        except TypeError:
+            # Non-numeric mobility (e.g. a mocked target): default to the chase.
+            return AttackMode.PURSUIT
+        return AttackMode.STRAFE if is_slow else AttackMode.PURSUIT
+
+    def _choose_weapon(self, target) -> str:
+        """
+        Pick the weapon system for a target by suitability: a limited bomb only
+        beats guns on a target that is stationary, tough AND valuable, with supply
+        to spare. Any non-numeric input (e.g. a mocked target) or no supply falls
+        back to guns.
+
+        :param target: The prey actor
+        :return: "bomb" or "guns"
+        """
+        bomb_supply = getattr(self.pawn, "bomb_supply", 0)
+        scoring = self.personality["tactician"]["bomb_scoring"]
+        try:
+            if bomb_supply <= 0:
+                return "guns"
+            mobility = float(getattr(target, "mobility", 1.0))
+            hardness_input = float(getattr(target, "health", 0.0)) + float(
+                target.shield_level
+            )
+            hardness = smooth_step_up(
+                hardness_input, scoring["hardness_step"], scoring["hardness_slope"]
+            )
+            is_primary = getattr(target, "id", None) in self.primary_target_ids
+            value_raw = (
+                self.personality["tactician"]["primary_target_engagement_multiplier"]
+                if is_primary
+                else 1.0
+            )
+            value = smooth_step_up(
+                value_raw, scoring["value_step"], scoring["value_slope"]
+            )
+            supply_factor = smooth_step_up(
+                float(bomb_supply), scoring["supply_step"], scoring["supply_slope"]
+            )
+            stationarity = 1.0 - mobility
+            worth = hardness * value
+            s_gun = scoring["gun_base"] + scoring["gun_soft"] * (1.0 - hardness)
+            s_bomb = scoring["bomb_scale"] * stationarity * worth * supply_factor
+            return "bomb" if s_bomb > s_gun else "guns"
+        except (TypeError, ValueError, AttributeError):
+            return "guns"

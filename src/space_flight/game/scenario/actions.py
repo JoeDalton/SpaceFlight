@@ -1,7 +1,7 @@
 """
 Action factories for scenario triggers.
 
-An action is any callable ``action(game) -> None``. Actions are the imperative
+An action is any callable action(game) -> None. Actions are the imperative
 part that stays in Python: they create actors, assign targets, drive the HUD.
 The declarative part (sizes, models, spawn points, times) lives in the level's
 YAML and reaches these factories as a plain config value.
@@ -34,9 +34,9 @@ def spawn_wave(cfg: dict) -> Action:
     """
     Build a wave of bots from a config dict, one ship per frame.
 
-    The wave's ``id`` doubles as its group name, so ``all_destroyed(id)`` and
+    The wave's id doubles as its group name, so all_destroyed(id) and
     targeting-by-name work against it with no extra bookkeeping. When the wave
-    declares a ``formation``, the leader spawns at ``spawn_point`` and each
+    declares a formation, the leader spawns at spawn_point and each
     wingman at its formation slot offset from there; the formation is created per
     wave and kept alive on the scenario so it is not garbage collected once
     spawning finishes.
@@ -44,14 +44,15 @@ def spawn_wave(cfg: dict) -> Action:
     Spawning is spread across frames via a scenario job, so a large wave never
     stalls the simulation on a single long loading frame.
 
-    Expected ``cfg`` keys: ``id``, ``size``, ``ship_model``, ``spawn_point``.
-    Optional: ``bot_type``, ``team``, ``spawn_orientation``, ``formation``
-    (``{scale_m, shape}``), ``waypoints``, ``loop``, ``target``, ``hud_text``,
-    ``hud_time_s``, ``allow_respawn``.
+    Expected cfg keys: id, size, ship_model, spawn_point.
+    Optional: bot_type, team, spawn_orientation, formation,
+    record (step-by-step-record every bot of this wave via game.record)
+    ({scale_m, shape}), waypoints, loop, target, hud_text,
+    hud_time_s, allow_respawn.
 
     A wave id is an identity group, so by default it spawns at most once even if
     several triggers point at it: a second attempt is skipped with a warning. Set
-    ``allow_respawn: true`` for the rare case where re-spawning the same
+    allow_respawn: true for the rare case where re-spawning the same
     composition into the same group is intended.
 
     :param cfg: The wave configuration
@@ -124,6 +125,7 @@ def _spawn_wave_job(game: FlightState, cfg: dict) -> Iterator[None]:
             ini_orientation=orientation,
             team=cfg.get("team", 2),
             debug_decisions=False,
+            record=cfg.get("record", False),
         )
         if formation is not None:
             formation.add_ship(ship=bot.pawn)
@@ -145,7 +147,7 @@ def _wave_offset(offsets: Optional[list[np.ndarray]], i: int, size: int) -> np.n
     centred line for waves with no formation, or for ships beyond the formation's
     capacity.
 
-    :param offsets: The formation's scaled relative positions, or ``None``
+    :param offsets: The formation's scaled relative positions, or None
     :param i: The ship index within the wave
     :param size: The total wave size
     :return: A world-space offset from the spawn point
@@ -177,8 +179,8 @@ def player_waypoints(cfg: Union[list, dict]) -> Action:
     Give the player a route to follow, shown as targetable waypoint spheres.
 
     Only the next waypoint is visible at a time; reaching it reveals the next.
-    ``cfg`` is either a bare list of points, or a mapping with ``points``
-    (required) and the optional ``arrival_radius_m`` / ``marker_radius_m``.
+    cfg is either a bare list of points, or a mapping with points
+    (required) and the optional arrival_radius_m / marker_radius_m.
 
     :param cfg: The list of waypoints, or a mapping describing the route
     :return: The action callable
@@ -202,9 +204,9 @@ def speech(cfg: Union[str, dict]) -> Action:
     """
     Play a line of speech and show it as a subtitle at the bottom of the screen.
 
-    ``cfg`` may be a bare string (the line of text) or a mapping with keys
-    ``text`` (required), ``speaker`` (optional, prefixed to the subtitle), and
-    ``display_time_s`` (optional). The audio side is stubbed for now (see
+    cfg may be a bare string (the line of text) or a mapping with keys
+    text (required), speaker (optional, prefixed to the subtitle), and
+    display_time_s (optional). The audio side is stubbed for now (see
     :func:`_play_speech_audio`); only the subtitle is rendered.
 
     :param cfg: The speech text, or a mapping describing the line
@@ -233,7 +235,7 @@ def _play_speech_audio(cfg: dict) -> None:
     No-op for now: real voice-line playback is not wired up yet, so we only log
     the intent. Replace this with actual audio playback later.
 
-    :param cfg: The speech configuration (``text``, optional ``speaker``)
+    :param cfg: The speech configuration (text, optional speaker)
     """
     speaker = cfg.get("speaker", "narrator")
     LOGGER.info("speech [%s]: %s", speaker, cfg.get("text", ""))
@@ -243,9 +245,9 @@ def end_level(cfg: Union[str, dict]) -> Action:
     """
     End the level, summoning the level-end screen for the given outcome.
 
-    Pauses the game beneath it. ``cfg`` may be a bare string (the outcome) or a
-    mapping with ``outcome`` (``victory``, ``defeat`` or ``death``) and an
-    optional ``text`` explaining the result.
+    Pauses the game beneath it. cfg may be a bare string (the outcome) or a
+    mapping with outcome (victory, defeat or death) and an
+    optional text explaining the result.
 
     :param cfg: The outcome string, or a mapping describing the ending
     :return: The action callable
@@ -278,7 +280,7 @@ def all(actions: list[Action]) -> Action:
 
 def _assign_targets(game: FlightState, bot: Bot, group: str) -> None:
     """
-    Make every live member of ``group`` a primary target of ``bot``.
+    Make every live member of group a primary target of bot.
 
     Dead targets are simply not in the resolved list, so there is nothing to
     guard against.

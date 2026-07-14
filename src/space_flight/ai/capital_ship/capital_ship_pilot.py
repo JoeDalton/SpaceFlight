@@ -18,11 +18,13 @@ class CapitalShipPilot(GenericShipPilot):
     def compute_angular_error(
         self,
         target_direction: np.ndarray = np.zeros(3),
+        up_reference: np.ndarray = None,
     ):
         """
         Computes the angular error of the ship. Adapted to capital ships
 
         :param target_direction: Direction of the target
+        :param up_reference: World "up" to roll +Z toward; defaults to scene up
         :return: the yaw, pitch and roll error, and the alignment error
         """
 
@@ -48,16 +50,20 @@ class CapitalShipPilot(GenericShipPilot):
             # Find angle errors
             yaw_error = np.arctan2(target_x, target_y)
             pitch_error = np.arctan2(target_z, target_y)
-            # Capital ships only roll for the scene orientation
-            is_up = np.dot(self.pawn.up, self.game.scene.up_direction) >= 0
+            # Capital ships only roll to level with the reference up (scene up by
+            # default). Clamp the dot to [-1, 1] before arccos: right and up are
+            # unit vectors so it is mathematically in range, but float error can
+            # nudge it just past ±1, which would make arccos return NaN and poison
+            # the whole state.
+            level_reference = (
+                self.game.scene.up_direction if up_reference is None else up_reference
+            )
+            right_dot_up = np.clip(np.dot(self.pawn.right, level_reference), -1.0, 1.0)
+            is_up = np.dot(self.pawn.up, level_reference) >= 0
             if is_up:
-                roll_error = HALF_PI - np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+                roll_error = HALF_PI - np.arccos(right_dot_up)
             else:
-                roll_error = HALF_PI + np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+                roll_error = HALF_PI + np.arccos(right_dot_up)
             # Debug output
             cos_angle_to_target = np.dot(ship_y, target_direction)
 

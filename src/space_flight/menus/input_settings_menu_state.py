@@ -1,7 +1,7 @@
 """
 Input settings menu — lets the player view and remap all input bindings.
 
-Reads ``configuration/configuration.yaml`` on entry, keeps an in-memory
+Reads configuration/configuration.yaml on entry, keeps an in-memory
 working copy while the menu is open, and writes changes back on *Save*.
 After saving the active :class:`~space_flight.ui.input_reader.InputReader`
 is rebuilt so the new bindings take effect immediately without a restart.
@@ -41,16 +41,16 @@ def format_binding(input_type: str, value: str, forced_type: str | None = None) 
     """
     Format a raw binding value for display in the UI.
 
-    Returns a string such as ``"Axis: Left X"`` or ``"Button: Space"`` based
+    Returns a string such as "Axis: Left X" or "Button: Space" based
     on whether *value* is recognised as an axis name for *input_type*.
     When *forced_type* is given it overrides the heuristic lookup.
 
-    :param input_type: Active input type (``"keyboard"``, ``"gamepad"``, or
-        ``"joystick"``).
+    :param input_type: Active input type ("keyboard", "gamepad", or
+        "joystick").
     :param value: Raw hardware name stored in the YAML configuration.
-    :param forced_type: ``"axis"`` or ``"button"`` to bypass the heuristic;
-        ``None`` to auto-detect.
-    :return: Human-readable binding string, or ``"Unmapped"`` if *value* is
+    :param forced_type: "axis" or "button" to bypass the heuristic;
+        None to auto-detect.
+    :return: Human-readable binding string, or "Unmapped" if *value* is
         empty.
     """
     if not value:
@@ -74,12 +74,12 @@ class ChangeBindingDialog(object):
     Modal dialog that captures the next key press or axis movement and reports
     it to a callback.
 
-    The implementation mirrors the ``ChangeActionDialog`` / ``changeMapping`` /
-    ``closeDialog`` / ``watchControls`` pattern from
-    ``panda3d_samples/gamepad/mappingGUI.py``.
+    The implementation mirrors the ChangeActionDialog / changeMapping /
+    closeDialog / watchControls pattern from
+    panda3d_samples/gamepad/mappingGUI.py.
 
     While the dialog is open, all Panda3D button throwers are redirected to two
-    generic events (``"keyListenEvent"`` / ``"deviceListenEvent"``) so that any
+    generic events ("keyListenEvent" / "deviceListenEvent") so that any
     hardware input can be captured as a raw string.  Throwers are restored to
     their original state in :meth:`onClose`.
 
@@ -99,15 +99,15 @@ class ChangeBindingDialog(object):
         :param app: The Panda3D application instance.
         :param action: Human-readable name of the action being remapped; passed
             back unchanged to the command callback.
-        :param input_type: Active device type (``"keyboard"``, ``"gamepad"``, or
-            ``"joystick"``); used to apply the ``"gamepad_"`` prefix required by
+        :param input_type: Active device type ("keyboard", "gamepad", or
+            "joystick"); used to apply the "gamepad_" prefix required by
             the YAML convention for gamepad button names.
         :param button_geom: Four-state geom tuple for the OK / Cancel buttons,
             obtained from :class:`~space_flight.menus.menu_utils.MenuModels`.
         :param command: Callback invoked on close with the signature
-            ``(action, input_type, input_value)`` where *input_type* is
-            ``"button"`` or ``"axis"`` and *input_value* is the hardware name
-            to store.  Both are ``None`` if the user cancelled or pressed OK
+            (action, input_type, input_value) where *input_type* is
+            "button" or "axis" and *input_value* is the hardware name
+            to store.  Both are None if the user cancelled or pressed OK
             without selecting any input.
         """
         self.app = app
@@ -192,10 +192,10 @@ class ChangeBindingDialog(object):
         mouse click from being registered as the new binding.
 
         :param button: The :class:`~panda3d.core.ButtonHandle` that was pressed.
-        :param from_device: ``True`` when the event came from a device button
-            thrower (gamepad / joystick) via ``"deviceListenEvent"``; ``False``
-            for keyboard events via ``"keyListenEvent"``.  Controls whether the
-            ``"gamepad_"`` prefix is prepended.
+        :param from_device: True when the event came from a device button
+            thrower (gamepad / joystick) via "deviceListenEvent"; False
+            for keyboard events via "keyListenEvent".  Controls whether the
+            "gamepad_" prefix is prepended.
         """
         if any(btn.guiItem.getState() == 1 for btn in self.dialog.buttonList):
             # Ignore events while dialog OK/Cancel buttons are active (mouse clicks).
@@ -220,7 +220,7 @@ class ChangeBindingDialog(object):
         is detected.
 
         :param axis: The :class:`~panda3d.core.InputDevice.Axis` enum value that
-            moved; its ``.name`` attribute is used as the stored binding string.
+            moved; its .name attribute is used as the stored binding string.
         """
         text = axis.name.replace("_", " ").title()
         self.dialog["text"] = "New event will be:\n\nAxis: " + text
@@ -233,14 +233,14 @@ class ChangeBindingDialog(object):
         when movement exceeds the dead zone.
 
         Compares each axis value against the baseline snapshot taken in
-        ``__init__`` and updates the snapshot on any significant movement, so
+        __init__ and updates the snapshot on any significant movement, so
         only fresh inputs are reported rather than the same held position.
 
         Mouse devices are skipped because their axes do not represent discrete
         flight controls.
 
         :param task: Panda3D task object.
-        :return: ``task.cont`` to keep the task running.
+        :return: task.cont to keep the task running.
         """
         DEAD_ZONE = 0.33
         for device in self.attachedDevices:
@@ -300,7 +300,7 @@ class InputSettingsMenuState(BaseState):
     """
     Full-screen overlay for viewing and editing all input bindings.
 
-    Loads ``configuration/configuration.yaml`` on entry and keeps an unsaved
+    Loads configuration/configuration.yaml on entry and keeps an unsaved
     working copy in memory.  Three bottom buttons govern the outcome:
 
     - **Save** — flush dead-zone edits, write the YAML, rebuild the
@@ -308,7 +308,7 @@ class InputSettingsMenuState(BaseState):
       main menu.
     - **Cancel** — discard all edits and return to the main menu.
     - **Default** — reload the working copy from
-      ``configuration/default_configuration.yaml`` without writing to disk.
+      configuration/default_configuration.yaml without writing to disk.
 
     Individual bindings are changed through :class:`ChangeBindingDialog`,
     which is opened by the *Change* button on each binding row.
@@ -577,8 +577,8 @@ class InputSettingsMenuState(BaseState):
         Add a blue section-header label to the scroll canvas.
 
         :param canvas: The scroll canvas node to parent the label to.
-        :param text: Header text displayed in the label (e.g. ``"Flight
-            Bindings"``).
+        :param text: Header text displayed in the label (e.g. "Flight
+            Bindings").
         :param y: Vertical position on the canvas (more negative = further down).
         """
         left = self.app.a2dLeft + 0.14
@@ -604,8 +604,8 @@ class InputSettingsMenuState(BaseState):
         that :meth:`_flush_dead_zones` can read back the edited value.
 
         :param canvas: The scroll canvas node to parent the widgets to.
-        :param row: Row descriptor dict with ``"label"``, ``"path"``, and
-            ``"value"`` keys.
+        :param row: Row descriptor dict with "label", "path", and
+            "value" keys.
         :param y: Vertical position on the canvas.
         """
         DirectLabel(
@@ -637,14 +637,14 @@ class InputSettingsMenuState(BaseState):
         Add an action-binding row to the scroll canvas.
 
         Each row contains the action name, the current binding formatted as
-        ``"Axis: …"`` or ``"Button: …"``, and a *Change* button that opens
+        "Axis: …" or "Button: …", and a *Change* button that opens
         :class:`ChangeBindingDialog`.  The value label is stored in
         :attr:`_binding_labels` keyed by *row["path"]* so it can be updated
         in place when the user confirms a new binding.
 
         :param canvas: The scroll canvas node to parent the widgets to.
-        :param row: Row descriptor dict with ``"label"``, ``"path"``, and
-            ``"value"`` keys.
+        :param row: Row descriptor dict with "label", "path", and
+            "value" keys.
         :param y: Vertical position on the canvas.
         """
         inp = self.working_config.get("input_type", "keyboard")
@@ -686,7 +686,7 @@ class InputSettingsMenuState(BaseState):
     def refresh_input_type_buttons(self):
         """
         Visually mark the active input-type button as pressed and reset the
-        others so the selector reflects ``_working_config["input_type"]``.
+        others so the selector reflects _working_config["input_type"].
         """
         cur = self.working_config.get("input_type", "keyboard")
         for name, btn in self.input_type_buttons.items():
@@ -703,13 +703,13 @@ class InputSettingsMenuState(BaseState):
         """
         Build the ordered list of row descriptors for the scrollable area.
 
-        Returns a flat list of dicts, each with a ``"kind"`` key that is one of:
+        Returns a flat list of dicts, each with a "kind" key that is one of:
 
-        - ``"header"`` — section separator with a ``"text"`` key.
-        - ``"deadzone"`` — editable numeric field with ``"label"``, ``"path"``,
-          and ``"value"`` keys.
-        - ``"binding"`` — remappable action with ``"label"``, ``"path"``, and
-          ``"value"`` keys.
+        - "header" — section separator with a "text" key.
+        - "deadzone" — editable numeric field with "label", "path",
+          and "value" keys.
+        - "binding" — remappable action with "label", "path", and
+          "value" keys.
 
         Order: dead zones, then global bindings, then one section per context
         (flight, radial menu, …) filtered to the currently selected input type.
@@ -781,7 +781,7 @@ class InputSettingsMenuState(BaseState):
         Write current entry widget values back into :attr:`_working_config`.
 
         Called before saving or switching the input type so that typed dead-zone
-        edits are not silently discarded.  Values are converted to ``float`` when
+        edits are not silently discarded.  Values are converted to float when
         the original YAML value was a float; strings that cannot be parsed are
         kept as strings.
         """
@@ -809,7 +809,7 @@ class InputSettingsMenuState(BaseState):
         Silently ignored if a dialog is already open, preventing stacked dialogs.
 
         :param path: Config-tree path tuple identifying the binding (e.g.
-            ``("contexts", "flight", "keyboard", "fire")``).
+            ("contexts", "flight", "keyboard", "fire")).
         :param label: Human-readable action name shown inside the dialog.
         """
         if self.active_dialog is not None:
@@ -829,13 +829,13 @@ class InputSettingsMenuState(BaseState):
         new binding.
 
         Updates :attr:`_working_config` and refreshes the binding's display label
-        in place.  Does nothing when *new_value* is ``None`` (the user cancelled).
+        in place.  Does nothing when *new_value* is None (the user cancelled).
 
         :param path: Config-tree path tuple of the binding that changed.
-        :param new_type: ``"button"`` or ``"axis"``; drives the display prefix in
+        :param new_type: "button" or "axis"; drives the display prefix in
             :func:`_format_binding`.
-        :param new_value: Hardware name to store (e.g. ``"space"`` or
-            ``"gamepad_lshoulder"``), or ``None`` on cancel.
+        :param new_value: Hardware name to store (e.g. "space" or
+            "gamepad_lshoulder"), or None on cancel.
         """
         self.active_dialog = None
         if new_value is None:
@@ -859,7 +859,7 @@ class InputSettingsMenuState(BaseState):
         Silently ignored when a dialog is open so wheel events do not interfere
         with binding capture.
 
-        :param direction: ``-1`` to scroll toward the top, ``+1`` toward the
+        :param direction: -1 to scroll toward the top, +1 toward the
             bottom.
         """
         if self.active_dialog is not None or self.v_scrollbar is None:
@@ -875,8 +875,8 @@ class InputSettingsMenuState(BaseState):
         Flushes unsaved dead-zone edits before rebuilding so they are not lost.
         Silently ignored if a dialog is open.
 
-        :param input_type: One of ``"keyboard"``, ``"gamepad"``, or
-            ``"joystick"``.
+        :param input_type: One of "keyboard", "gamepad", or
+            "joystick".
         """
         if self.active_dialog is not None:
             return
@@ -889,7 +889,7 @@ class InputSettingsMenuState(BaseState):
         """
         Flush edits, write the configuration to disk, and rebuild the reader.
 
-        Writes :attr:`_working_config` to ``configuration/configuration.yaml``
+        Writes :attr:`_working_config` to configuration/configuration.yaml
         then reinitialises the running
         :class:`~space_flight.ui.input_reader.InputReader` so the new bindings
         are active in the current session without a restart.  Finally navigates
@@ -924,7 +924,7 @@ class InputSettingsMenuState(BaseState):
         """
         Replace the working configuration with the factory defaults.
 
-        Reads from ``configuration/default_configuration.yaml`` and rebuilds the
+        Reads from configuration/default_configuration.yaml and rebuilds the
         binding list.  Changes are not written to disk until the user clicks
         *Save*.  Silently ignored if a dialog is open.
         """

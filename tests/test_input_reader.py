@@ -61,28 +61,28 @@ def reader():
 
 def test_input_state_buttons_empty():
     """
-    ``buttons`` must be an empty dict on construction.
+    buttons must be an empty dict on construction.
     """
     assert InputState().buttons == {}
 
 
 def test_input_state_repeats_empty():
     """
-    ``repeats`` must be an empty dict on construction.
+    repeats must be an empty dict on construction.
     """
     assert InputState().repeats == {}
 
 
 def test_input_state_releases_empty():
     """
-    ``releases`` must be an empty dict on construction.
+    releases must be an empty dict on construction.
     """
     assert InputState().releases == {}
 
 
 def test_input_state_axes_empty():
     """
-    ``axes`` must be an empty dict on construction.
+    axes must be an empty dict on construction.
     """
     assert InputState().axes == {}
 
@@ -95,7 +95,7 @@ def test_input_state_axes_empty():
 def test_poll_first_press_goes_to_buttons(reader):
     """
     A button that was up last frame and is down this frame must appear in
-    ``state.buttons`` and nowhere else.
+    state.buttons and nowhere else.
     """
     reader.hw_state = {"fire": True}
     state = reader.poll()
@@ -107,7 +107,7 @@ def test_poll_first_press_goes_to_buttons(reader):
 def test_poll_held_button_goes_to_repeats(reader):
     """
     A button that was down last frame and is still down this frame must
-    appear in ``state.repeats`` and not in ``state.buttons``.
+    appear in state.repeats and not in state.buttons.
     """
     reader.hw_state = {"fire": True}
     reader.poll()  # frame 1 — press
@@ -119,7 +119,7 @@ def test_poll_held_button_goes_to_repeats(reader):
 def test_poll_released_button_goes_to_releases(reader):
     """
     A button that was down last frame and is up this frame must appear in
-    ``state.releases`` and not in ``state.buttons`` or ``state.repeats``.
+    state.releases and not in state.buttons or state.repeats.
     """
     reader.hw_state = {"fire": True}
     reader.poll()
@@ -144,7 +144,7 @@ def test_poll_unpressed_button_absent_from_all_dicts(reader):
 
 def test_poll_stale_state_cleared_each_frame(reader):
     """
-    A button that was pressed on frame N must not appear in ``buttons`` on
+    A button that was pressed on frame N must not appear in buttons on
     frame N+1 even if the hardware dict no longer contains it.
     """
     reader.hw_state = {"fire": True}
@@ -157,7 +157,7 @@ def test_poll_stale_state_cleared_each_frame(reader):
 
 def test_poll_multiple_buttons_independent(reader):
     """
-    Pressing several buttons simultaneously must place each in ``buttons``
+    Pressing several buttons simultaneously must place each in buttons
     independently.
     """
     reader.hw_state = {"fire": True, "boost": True, "pause": False}
@@ -169,7 +169,7 @@ def test_poll_multiple_buttons_independent(reader):
 
 def test_poll_safety_net_pressed_merges_into_buttons(reader):
     """
-    A name in ``_ev_pressed`` must be merged into ``state.buttons`` even if
+    A name in _ev_pressed must be merged into state.buttons even if
     polling does not see the button down this frame (brief tap between frames).
     """
     reader.ev_pressed.add("fire")
@@ -180,7 +180,7 @@ def test_poll_safety_net_pressed_merges_into_buttons(reader):
 
 def test_poll_safety_net_released_merges_into_releases(reader):
     """
-    A name in ``_ev_released`` must be merged into ``state.releases``.
+    A name in _ev_released must be merged into state.releases.
     """
     reader.ev_released.add("fire")
     reader.hw_state = {}
@@ -190,7 +190,7 @@ def test_poll_safety_net_released_merges_into_releases(reader):
 
 def test_poll_safety_net_ev_pressed_cleared_after_poll(reader):
     """
-    ``_ev_pressed`` must be empty after poll() so events are not replayed
+    _ev_pressed must be empty after poll() so events are not replayed
     on the next frame.
     """
     reader.ev_pressed.add("fire")
@@ -200,7 +200,7 @@ def test_poll_safety_net_ev_pressed_cleared_after_poll(reader):
 
 def test_poll_safety_net_ev_released_cleared_after_poll(reader):
     """
-    ``_ev_released`` must be empty after poll() so events are not replayed
+    _ev_released must be empty after poll() so events are not replayed
     on the next frame.
     """
     reader.ev_released.add("fire")
@@ -211,7 +211,7 @@ def test_poll_safety_net_ev_released_cleared_after_poll(reader):
 def test_poll_safety_net_and_polling_agree_no_duplicate(reader):
     """
     When both polling and a safety-net event report the same button down,
-    ``buttons`` must contain the button exactly once (True, not duplicated).
+    buttons must contain the button exactly once (True, not duplicated).
     """
     reader.hw_state = {"fire": True}
     reader.ev_pressed.add("fire")
@@ -222,7 +222,7 @@ def test_poll_safety_net_and_polling_agree_no_duplicate(reader):
 
 def test_poll_axes_populated(reader):
     """
-    Axis values returned by ``_read_axes`` must appear in ``state.axes``.
+    Axis values returned by _read_axes must appear in state.axes.
     """
     reader.hw_axes = {"throttle": 0.75, "yaw": -0.3}
     reader.hw_state = {}
@@ -247,7 +247,7 @@ def test_poll_axes_cleared_between_frames(reader):
 def test_poll_release_then_press_is_fresh_press(reader):
     """
     After a button is released (frame N) and pressed again (frame N+1), it
-    must appear in ``buttons`` on the second press frame.
+    must appear in buttons on the second press frame.
     """
     reader.hw_state = {"fire": True}
     reader.poll()  # press

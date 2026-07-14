@@ -2,7 +2,7 @@
 Unit tests for the graphics / settings menu logic.
 
 Only the pure data + callback methods are exercised (mock app, no DirectGui),
-mirroring ``tests/test_input_settings.py``. UI construction (sliders, checkbox)
+mirroring tests/test_input_settings.py. UI construction (sliders, checkbox)
 needs a real window and is verified manually / via integration.
 
 Covers:

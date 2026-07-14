@@ -26,6 +26,24 @@ class Intent(Enum):
     IDLE = auto()
 
 
+class AttackMode(Enum):
+    """
+    How a bot attacks a target once its tactician has chosen Intent.ENGAGE.
+
+    Carried in target_dict["attack_mode"] (the tactician decides, the
+    navigator executes). PURSUIT is the constant-angle chase, good against
+    agile prey; STRAFE is a committed run-in/fire/break/reposition cycle for
+    slow or immobile targets; BOMB overflies a slow/immobile target and drops
+    a bomb along the belly; ORBIT keeps a target abeam on a capital ship's
+    turret flank.
+    """
+
+    PURSUIT = auto()
+    STRAFE = auto()
+    ORBIT = auto()
+    BOMB = auto()
+
+
 class Personality:
     """
     Definition of pre-baked bot personalities
@@ -42,6 +60,24 @@ class Personality:
             "hunter_angular_focus": 0.3,
             "prey_cutoff_distance": 800.0,
             "prey_angular_focus": 1.0,
+            # Below this target mobility, engage with a STRAFE run rather than a
+            # PURSUIT chase (a slow/immobile prey can't be chased sensibly).
+            "strafe_mobility_threshold": 0.35,
+            # Weapon-suitability scoring: spend a limited bomb only on a target
+            # that is BOTH tough and valuable (worth = hardness * value), when
+            # stationary enough and supply allows. S_bomb > S_gun -> BOMB.
+            # (Ramps use smooth_step_up.)
+            "bomb_scoring": {
+                "hardness_step": 5000.0,  # health+shield read as "hard" beyond this
+                "hardness_slope": 0.005,
+                "value_step": 3.0,  # on the primary-target multiplier (1 vs 5)
+                "value_slope": 1.0,
+                "supply_step": 2.0,  # bombs remaining for a strong supply factor
+                "supply_slope": 1.0,
+                "gun_base": 0.3,  # guns are always somewhat suitable
+                "gun_soft": 0.7,  # ...and great against soft targets
+                "bomb_scale": 1.5,  # overall bomb eagerness
+            },
             "intent_update_delay": 0.5,
             "commitment_times": {
                 Intent.ENGAGE: 10.0,
@@ -103,6 +139,101 @@ class Personality:
                 "maximal_lateral_speed_mps": 50.0,
             },
             "reposition": {"minimum_time_to_overshoot_s": 0.5},
+            # Strafing run: a committed ingress -> attack -> break -> reposition
+            # cycle for slow/immobile targets. The corridor + altitude-floor keys
+            # only take effect when the target carries surface info (surface-mounted
+            # preys); otherwise the run is a straight open-space pass.
+            "strafe": {
+                "attack_distance_m": 700.0,  # ingress -> attack transition
+                "break_distance_m": 150.0,  # attack -> break (reached point-blank)
+                # The attack presses in until point-blank; it only peels off early
+                # if it is about to overshoot or has stalled (can't close). There is
+                # no fixed attack timer.
+                "stall_time_s": 2.5,  # grace before the stall check applies
+                "minimum_closing_speed_mps": 30.0,  # below this = stalled -> break
+                # Fly at where the target will be on arrival: lead by the closing
+                # time (distance / closing_speed), capped so a slow closure at long
+                # range doesn't aim wildly ahead (it converges to the exact lead as
+                # the gap shrinks).
+                "max_lead_time_s": 5.0,
+                "break_duration_s": 1.5,  # committed break, no immediate re-lock
+                "reposition_distance_m": 900.0,  # reposition -> ingress when beyond
+                "reposition_min_duration_s": 3.0,  # ...and committed at least this long
+                #   so the run flies out and swings around before the next pass
+                # Speeds are fractions of the ship's own max_speed_mps: absolute
+                # values well above it just pin the throttle and push the explicit
+                # integrator into divergence (see Ship._sanitize_state).
+                "ingress_speed_factor": 1.0,
+                "attack_speed_factor": 0.85,
+                "break_speed_factor": 0.6,
+                "reposition_speed_factor": 1.0,
+                "fire_min_cos_angle": np.cos(np.deg2rad(15)),  # wider than pursuit
+                "run_altitude_m": 150.0,  # corridor altitude above the surface
+                "altitude_floor_m": 60.0,  # hard recovery floor (surface targets)
+                "corridor_avoidance_factor": 0.1,  # down-weight sensor in corridor
+                "swivel_amplitude": 0.0,  # lateral weave strength (added to dir)
+                "swivel_frequency_hz": 0.5,
+                "swivel_distance_scale_m": 800.0,  # amplitude ramps within this range
+            },
+            # Bombing run: a committed ingress -> approach -> run -> break ->
+            # reposition cycle against a slow/immobile target.
+            # - INGRESS: normal (banking) flight that gets onto the target's track
+            #   line -- swinging to an entry point entry_distance_m behind the target
+            #   when ahead/abeam, then a pure-pursuit line-follow along the track at
+            #   run_altitude -- using fast banked turns to null the cross-track offset.
+            # - APPROACH: belly-down flight (the up-reference turns the fighter pilot
+            #   into the capital-ship pilot: roll +Z to the reference up, yaw+pitch to
+            #   aim) following the track line in (carrot pure-pursuit at run altitude),
+            #   so the belly is settled and on the line before the run. Entered only
+            #   once on the line; if the bomber drifts off, it reverts to the ingress.
+            # - RUN: same belly-down attitude, still following the (curving) track line
+            #   over the target at run altitude; the belly (-Z) bomb velocity sweeps
+            #   through the target -> the cone release fires. up-reference is world up
+            #   (or the surface normal).
+            "bomb": {
+                # Entry point: entry_distance_m behind the target along its velocity
+                # track (or the bomber's bearing to a stationary target), at
+                # run_altitude above. The ingress flies to it to swing around onto the
+                # tail from ahead/abeam, then follows the track line in.
+                "entry_distance_m": 750.0,
+                # Carrot look-ahead for the pure-pursuit track line-follow: how far
+                # further up the line than the bomber's own along-track position it
+                # aims. The ingress uses a long carrot (a gentle cut onto the line); the
+                # belly-down approach/run use a short one so they track a turning
+                # target's curving line tightly instead of overshooting the outside.
+                "line_lookahead_m": 300.0,
+                "run_lookahead_m": 150.0,
+                # The bomber is "on the line" (ready to hand off to the belly-down
+                # approach / lock the run) when its horizontal cross-track offset is
+                # under lateral_tolerance_m; the approach falls back to the banking
+                # ingress if it drifts past lateral_recovery_m. The tolerance must be
+                # tight enough that the release cone still contains the target at run
+                # altitude (~sin(cone)*slant range).
+                "lateral_tolerance_m": 30.0,
+                "lateral_recovery_m": 80.0,
+                # Overfly height above the target. Must stay below the bomb's own
+                # vertical fall over its lifetime (BOMB_SPEED_MPS * life_time_s) or the
+                # bomb expires before reaching the target.
+                "run_altitude_m": 100.0,
+                # Below min_track_speed the target has no usable velocity track, so the
+                # bomber's own bearing to it defines the track direction instead.
+                "min_track_speed_mps": 5.0,
+                # Approach -> run (lock) when the target is within lock_time_s of
+                # flight away at the bomber's current speed (and still on the line).
+                "lock_time_s": 2.0,
+                # (bomb launch speed is the BOMB_SPEED_MPS global in bomb_launcher,
+                # shared with the release solver.)
+                "min_cos_release": np.cos(np.deg2rad(25)),  # bomb-velocity cone
+                "max_release_distance_m": 450.0,  # only release within this range
+                "break_duration_s": 1.0,  # committed break after the drop
+                "reposition_distance_m": 1000.0,
+                "reposition_min_duration_s": 3.0,
+                "ingress_speed_factor": 1.0,
+                "approach_speed_factor": 1.0,
+                "run_speed_factor": 1.0,
+                "break_speed_factor": 0.6,
+                "reposition_speed_factor": 1.0,
+            },
         },
         "pilot": {
             "sample_time_s": 0.1,
@@ -230,6 +361,21 @@ class Personality:
                 "relative_direction": np.array([0, 1, 0]),
                 "distance_m": 500,
                 "speed_mps": 50,
+            },
+            # Orbit: hold a constant standoff from the target's oriented bounding
+            # box and drive tangentially, so the shape follows the target (a circle
+            # for compact targets, a racetrack for long ones) and the target stays
+            # abeam on the turret flank.
+            "orbit": {
+                "standoff_clearance_m": 300.0,  # added to the target half-width
+                "orbit_speed_mps": 40.0,
+                "radial_gain": 0.01,  # how hard to correct the standoff distance
+                "direction": 1.0,  # orbit sense s in {+1, -1}, sets the turret side
+                "altitude_stagger_m": 50.0,  # sit off the exact target plane
+                "vertical_gain": 0.01,
+                # Placeholder floor keeping the bow/stern caps flyable for a slow
+                # ship. TODO derive from the ship's real min turn radius at speed.
+                "min_turn_radius_m": 400.0,
             },
         },
         "pilot": {

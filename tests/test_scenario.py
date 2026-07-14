@@ -4,7 +4,7 @@ Tests for the scenario scripting engine (:mod:`space_flight.game.scenario`).
 These exercise the engine logic in isolation: triggers, group membership and
 resolution, conditions/combinators, the YAML loader, and the wave-spawning
 action. Real :class:`Bot` construction needs a running Panda3D engine, so
-``spawn_bot`` is monkeypatched with a lightweight stub.
+spawn_bot is monkeypatched with a lightweight stub.
 """
 
 import uuid
@@ -49,7 +49,7 @@ class FakeInteractions:
     """
     Minimal stand-in for :class:`Interactions` exposing only what
     :meth:`Scenario.resolve` reads: a slot list, an id->slot dict, and
-    ``live_actors``.
+    live_actors.
     """
 
     def __init__(self):
@@ -118,7 +118,7 @@ class MockHud:
 
 
 class FakeGame:
-    """Bundles the few attributes conditions/actions reach through ``game``."""
+    """Bundles the few attributes conditions/actions reach through game."""
 
     def __init__(self, scenario):
         self.game_time = FakeGameTime()
@@ -132,7 +132,7 @@ class FakeGame:
 @pytest.fixture
 def patch_spawn_bot(monkeypatch):
     """
-    Replace ``spawn_bot`` (as imported into the scenario module) with a stub
+    Replace spawn_bot (as imported into the scenario module) with a stub
     that builds a :class:`MockBot` and registers its pawn in the fake
     interactions, returning the live list of spawned bots.
     """
@@ -180,7 +180,7 @@ def test_trigger_does_not_fire_while_condition_false(game):
 
 
 def test_trigger_repeats_when_not_once(game):
-    """A trigger with ``once=False`` fires every frame its condition holds."""
+    """A trigger with once=False fires every frame its condition holds."""
     calls = []
     t = Trigger(condition=lambda g: True, action=lambda g: calls.append(1), once=False)
     for _ in range(3):
@@ -242,7 +242,7 @@ def test_all_destroyed_lifecycle(game):
 def test_all_destroyed_false_while_wave_mid_spawn(game, patch_spawn_bot):
     """
     A wave whose spawn has been scheduled but whose ships have not yet appeared
-    must NOT read as destroyed. Otherwise a chained ``all_destroyed`` condition
+    must NOT read as destroyed. Otherwise a chained all_destroyed condition
     would fire the instant the wave is scheduled, before any ship exists.
     """
     spawn_wave(WAVE_CFG)(game)  # scheduled, but the job has not run yet
@@ -479,7 +479,7 @@ def test_speech_action_bare_string(game):
 
 
 def _end_level_game():
-    """A minimal game whose ``end_level`` records its call args."""
+    """A minimal game whose end_level records its call args."""
     calls = []
 
     class Game:
@@ -576,7 +576,7 @@ def test_player_waypoints_advances_and_finishes(monkeypatch, game):
 def test_target_filter_selects_by_category():
     """
     The "Waypoints" filter masks to waypoint-category actors; "All" excludes
-    them. Exercises Player.update_target_mask against the marker's ``category``.
+    them. Exercises Player.update_target_mask against the marker's category.
     """
     from types import SimpleNamespace
 
@@ -702,7 +702,7 @@ def test_loader_builds_player_waypoints(tmp_path):
 
 
 def test_loader_builds_fired_condition_in_delay(tmp_path):
-    """``delay.after`` takes an explicit ``{fired: <name>}`` condition node."""
+    """delay.after takes an explicit {fired: <name>} condition node."""
     path = _write_yaml(
         tmp_path,
         """

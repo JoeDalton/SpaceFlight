@@ -2,21 +2,21 @@
 field.py — A field of in-scene billboard clouds: geometry, shaders, sorting,
 wind/recycling, plus the game-facing wrapper.
 
-Clouds are ordinary 3D geometry parented under a node in ``render``.  They
+Clouds are ordinary 3D geometry parented under a node in render.  They
 depth-test against whatever is already in the depth buffer, so occlusion by
 ships / terrain / cockpit is handled by the hardware — no depth prepass, no
 composite, no power-of-two handling, no scene-depth plumbing, no near/far
 coupling.
 
 Configuration lives in ONE place: :class:`CloudField`'s constructor (and the
-per-type :class:`CloudLayer` records it takes).  ``cloud.py`` builds the cloud
+per-type :class:`CloudLayer` records it takes).  cloud.py builds the cloud
 *shapes* (data + CPU shading); this module turns them into a drawable, animated
 field.  :class:`Clouds` is a thin game adapter over :class:`CloudField`.
 
 Transparency model
 ------------------
-Particles use premultiplied-alpha "over" blending (``frag = vec4(rgb*a, a)`` with
-``M_add, O_one, O_one_minus_incoming_alpha``).  "over" is order-dependent, so the
+Particles use premultiplied-alpha "over" blending (frag = vec4(rgb*a, a) with
+M_add, O_one, O_one_minus_incoming_alpha).  "over" is order-dependent, so the
 particles must be drawn back-to-front; the order is kept correct by sorting:
 
   * Every particle of every cloud lives in ONE Geom (4 verts each); the static
@@ -26,13 +26,13 @@ particles must be drawn back-to-front; the order is kept correct by sorting:
     particles within a cloud by distance.  Intra- and inter-cloud ordering are
     both correct; cross-cloud interleaving is only approximate where two clouds
     physically intersect.
-  * The sort + index gather is spread across ``resort_frames`` frames in a
+  * The sort + index gather is spread across resort_frames frames in a
     round-robin (see :meth:`CloudField._restage`): one atomic index upload per
     cycle — no per-frame spike, at the cost of a few frames' draw-order latency.
 
 Particle positions are stored RELATIVE to their cloud centroid; the centroids are
-moved each frame by ``wind`` and recycled toroidally around the camera within the
-``domain`` box, so the heavy vertex data never changes — only a small per-cloud
+moved each frame by wind and recycled toroidally around the camera within the
+domain box, so the heavy vertex data never changes — only a small per-cloud
 centroid texture is re-uploaded.  The billboard is built in the vertex shader, so
 the only per-frame CPU work is the incremental restage.
 
@@ -262,13 +262,13 @@ def _assemble(templates, placements):
 
     Every cloud is padded to the largest template's particle count with
     zero-radius particles (which render nothing), so the per-frame draw-order sort
-    can be one vectorised segmented argsort over a ``(n_clouds, n_per)`` array.
+    can be one vectorised segmented argsort over a (n_clouds, n_per) array.
 
     :param templates: template dicts from :func:`cloud.build_templates`
-    :param placements: list of ``(template_index, offset_xyz)``
-    :returns: ``(local, radii, colors, uv_rects, cloud_centres, n_per)`` — the
-        per-particle arrays shaped ``(n_clouds, n_per, …)`` (``local`` is each
-        particle's offset from its cloud centroid), the ``(n_clouds, 3)`` centroids,
+    :param placements: list of (template_index, offset_xyz)
+    :returns: (local, radii, colors, uv_rects, cloud_centres, n_per) — the
+        per-particle arrays shaped (n_clouds, n_per, …) (local is each
+        particle's offset from its cloud centroid), the (n_clouds, 3) centroids,
         and the padded per-cloud particle count
     """
     n_clouds = len(placements)
@@ -294,7 +294,7 @@ class CloudField:
     """A drawable, wind-driven, depth-sorted field of mixed-type billboard clouds.
 
     All field settings live here (the single configuration surface).  Construct
-    with a ``parent`` NodePath, a ``loader`` (for the atlas), and a list of
+    with a parent NodePath, a loader (for the atlas), and a list of
     :class:`CloudLayer`; then call :meth:`update` once per frame.
     """
 
@@ -335,7 +335,7 @@ class CloudField:
         :param back_strength: diffuse boost when the sun is behind the viewer
         :param resort_frames: frames to spread one full re-sort over (de-spike)
         :param wrap_fade_band: metres of fade at the recycle box face
-            (defaults to 12% of ``domain``)
+            (defaults to 12% of domain)
         :param seed: RNG seed for shapes and placement
         :param defer_build: if True, do not build in the constructor; the caller
             must drive :meth:`build` (a generator) instead, one step per frame.
@@ -591,7 +591,7 @@ class CloudField:
     def _restage(self, cam_xyz):
         """Re-sort and re-upload one round-robin slice of the index buffer.
 
-        Each frame handles ``n_clouds / resort_frames`` clouds; a fresh cloud
+        Each frame handles n_clouds / resort_frames clouds; a fresh cloud
         draw-order is snapshotted at the start of each cycle, and the index buffer
         is uploaded once per completed cycle.  This spreads both the sort and the
         index gather, so there is no per-frame spike.
@@ -637,8 +637,8 @@ class CloudField:
 
 class Clouds:
     """Drops a :class:`CloudField` into a level following the scene convention:
-    construct with the ``game``, register a per-frame ``update`` in
-    ``game.method_lists``, expose ``clean``.  All ``CloudField`` settings (layers,
+    construct with the game, register a per-frame update in
+    game.method_lists, expose clean.  All CloudField settings (layers,
     domain, wind, sun, lighting, …) pass straight through as keyword arguments.
 
     Usage::
@@ -668,7 +668,7 @@ class Clouds:
     def build(self):
         """
         Drive the deferred field build a chunk per frame, then register the
-        per-frame update once the field is ready. Use with ``defer_build=True``::
+        per-frame update once the field is ready. Use with defer_build=True::
 
             self.clouds = Clouds(game, defer_build=True, ...)
             yield from self.clouds.build()

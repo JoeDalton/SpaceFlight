@@ -31,7 +31,7 @@ class Destructible:
         """
         Remove all tasks linked to this object
 
-        Tolerates an already-torn-down object (``game`` set to ``None`` by a prior
+        Tolerates an already-torn-down object (game set to None by a prior
         clean): a bot-controlled subsystem such as a turret is a Destructible both
         as its Bot and as its pawn, so the death handler may reach the pawn after
         the Bot has already cleaned it. Clearing tasks then is a safe no-op.

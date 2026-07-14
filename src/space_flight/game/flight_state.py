@@ -28,7 +28,7 @@ from space_flight.ui.hud import HUD, TargetHUD
 from space_flight.ui.input_context import FlightInputContext, HyperspaceInputContext
 
 if TYPE_CHECKING:
-    from direct.task.Task import Task
+    from direct.task import Task
 
 LOGGER = logging.getLogger()
 
@@ -101,7 +101,7 @@ class FlightState(BaseState):
         (no per-frame animation) and start the simulation immediately.
 
         Skips the hyperspace overlay and HUD entirely, since both require a
-        real window (``app.win``) that does not exist headless.
+        real window (app.win) that does not exist headless.
         """
         self.initialize_game_structure()
         self.flight_context = None
@@ -119,7 +119,7 @@ class FlightState(BaseState):
     def _jump_prompt(self) -> str:
         """
         Build the "press [key] to drop out of hyperspace" prompt from the
-        active ``drop_hyperspace`` binding.
+        active drop_hyperspace binding.
 
         :return: the prompt string shown by the loading overlay
         """
@@ -292,7 +292,7 @@ class FlightState(BaseState):
         Advance the game world by one frame (a no-op while paused).
 
         :param task: The Panda3D task driving this per-frame update.
-        :return: ``task.cont`` so the task keeps running next frame.
+        :return: task.cont so the task keeps running next frame.
         """
         # Do nothing if paused
         if self.is_paused:
@@ -328,7 +328,7 @@ class FlightState(BaseState):
         Record the level's terminal outcome and, unless headless, show the
         level-end screen.
 
-        :param outcome: one of ``"victory"``, ``"defeat"`` or ``"death"``
+        :param outcome: one of "victory", "defeat" or "death"
         :param text: explanatory text shown beneath the outcome title
             (ignored headless)
         """
@@ -345,7 +345,7 @@ class FlightState(BaseState):
         Advance the scenario by one frame (a no-op while paused).
 
         :param task: The Panda3D task driving this per-frame update.
-        :return: ``task.cont`` so the task keeps running next frame.
+        :return: task.cont so the task keeps running next frame.
         """
         # Do nothing if paused
         if self.is_paused:

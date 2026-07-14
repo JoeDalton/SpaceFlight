@@ -3,14 +3,14 @@ cloud.py — A cloud's data: procedural generation, CPU self-shadow shading, and
 the packaged sprite atlas.
 
 This module owns the data side of a cloud (no GPU): it scatters a procedural set
-of billboard particles for a given cloud type (``build_cloud_particles``), bakes
+of billboard particles for a given cloud type (build_cloud_particles), bakes
 a per-particle RGB colour by a one-off CPU ray-cast self-shadow trace
-(``_shade_particles``), and packs distinct shaded cloud *shapes* into reusable
-render-ready templates (``build_templates``).  The GPU side — geometry, shaders,
-sorting, wind/recycling — lives in ``field.py``.
+(_shade_particles), and packs distinct shaded cloud *shapes* into reusable
+render-ready templates (build_templates).  The GPU side — geometry, shaders,
+sorting, wind/recycling — lives in field.py.
 
-Each particle is a dict: ``pos`` (metres), ``radius``, ``density``, ``albedo``.
-``CloudType`` selects a shape preset from ``DEFAULTS`` (overridable per call).
+Each particle is a dict: pos (metres), radius, density, albedo.
+CloudType selects a shape preset from DEFAULTS (overridable per call).
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ def _envelope_radius(height_frac: float, cloud_type: CloudType, cfg: dict) -> fl
 
     Shapes the silhouette per type: a rounded cumulus dome, a flat stratus slab,
     a tapered cirrus sheet, or a cumulonimbus that flares into an anvil near the
-    top.  ``height_frac`` is the normalised height z / cloud_h in [0,1].
+    top.  height_frac is the normalised height z / cloud_h in [0,1].
 
     :param height_frac: normalised height within the cloud, 0 (base) … 1 (top)
     :param cloud_type: cloud type being shaped
@@ -281,7 +281,7 @@ def _apply_cirrus_warp(points, cfg, seed):
     :param points: (P,3) candidate positions
     :param cfg: the resolved preset dict (for warp amplitude/frequency)
     :param seed: RNG seed (offset so it differs from the placement seed)
-    :returns: (P,3) warped copy of ``points``
+    :returns: (P,3) warped copy of points
     """
     amplitude = cfg.get("fiber_warp_amp", 0.35) * cfg["base_w"]
     frequency = cfg.get("fiber_warp_freq", 0.004)
@@ -302,12 +302,12 @@ def build_cloud_particles(
 
     Candidates are rejection-sampled inside the type's envelope (denser toward
     convective tower centres and the cloud core), carved by a Worley field, then
-    sub-sampled to ``n_particles``.
+    sub-sampled to n_particles.
 
     :param cloud_type: which DEFAULTS preset to draw shape/optical params from
     :param seed: RNG seed (distinct seeds give distinct cloud shapes)
     :param overrides: per-key overrides of the type's DEFAULTS
-    :returns: list of particle dicts with ``pos``, ``radius``, ``density``, ``albedo``
+    :returns: list of particle dicts with pos, radius, density, albedo
     """
     cfg = {**DEFAULTS[cloud_type], **overrides}
     base_w, base_d, cloud_h = cfg["base_w"], cfg["base_d"], cfg["cloud_h"]
@@ -436,8 +436,8 @@ def _shade_particles(
     For each particle, accumulates optical depth from the particles between it and
     the sun, converts that to a brightness, and blends sun vs. ambient colour.
 
-    Sign convention: ``sun_dir`` points FROM the scene TOWARD the sun.  The
-    ordering (sun-side particles first) and the occluder test (``proj > 0``,
+    Sign convention: sun_dir points FROM the scene TOWARD the sun.  The
+    ordering (sun-side particles first) and the occluder test (proj > 0,
     selecting occluders on the sunward side) both assume that; passing the light's
     travel direction (-sun_dir) would invert the trace (lit shadow side, dark
     sun side).
@@ -506,10 +506,10 @@ def build_templates(
     are built and reused across many placements.  Each shape is centred at the
     origin, so a placement's world centroid is just its offset.
 
-    A particle's RGB comes from the self-shadow trace (where ``albedo`` belongs);
-    its alpha is its optical ``density`` x ``density_scale``.  So opacity follows
+    A particle's RGB comes from the self-shadow trace (where albedo belongs);
+    its alpha is its optical density x density_scale.  So opacity follows
     density — a type's own density range makes it naturally faint or solid (cirrus
-    wispy, cumulus solid) with no per-type opacity knob.  ``density_scale`` is the
+    wispy, cumulus solid) with no per-type opacity knob.  density_scale is the
     single global trim that stops hundreds of overlapping particles compounding to
     fully opaque.
 
@@ -523,8 +523,8 @@ def build_templates(
     :param base_seed: seed of the first template (template t uses base_seed + t)
     :param uv_seed: seed for the random sprite-rect assignment
     :param overrides: per-key overrides of the type's DEFAULTS
-    :returns: list of template dicts with ``pos`` (m,3), ``radii`` (m,),
-        ``colors`` (m,4 RGBA) and ``uv`` (m,4) arrays
+    :returns: list of template dicts with pos (m,3), radii (m,),
+        colors (m,4 RGBA) and uv (m,4) arrays
     """
     return list(
         build_templates_iter(
@@ -705,10 +705,10 @@ def load_cloud_atlas(game):
     """Load the packaged cloud sprite atlas.
 
     Delegates to :func:`space_flight.fx.load_atlas`, so the texture is loaded
-    (and cached) through the game's ``asset_manager`` like every other particle
+    (and cached) through the game's asset_manager like every other particle
     atlas, instead of going straight to the Panda3D loader.
 
-    :param game: the game object (exposes ``app.asset_manager``)
-    :returns: ``(Texture, rects)`` where rects is a list of (u, v, du, dv) tuples
+    :param game: the game object (exposes app.asset_manager)
+    :returns: (Texture, rects) where rects is a list of (u, v, du, dv) tuples
     """
     return load_atlas(game, ATLAS_PNG, ATLAS_JSON)

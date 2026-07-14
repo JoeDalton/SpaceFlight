@@ -5,8 +5,13 @@ import numpy as np
 from space_flight import DEBUG_DELETION
 from space_flight.actors.laser_cannon import LASER_SPEED_MPS
 from space_flight.utils import rotate_single_vector
+from space_flight.utils.state_machine import StateMachine
 
 LOGGER = logging.getLogger()
+
+# Target-lock states.
+_ACQUIRING = "acquiring"  # holding the target in the cone, not yet locked
+_LOCKED = "locked"  # held long enough; shots lead the target
 
 
 class AutoAim:
@@ -30,8 +35,12 @@ class AutoAim:
         self.game = game
         self.parent = parent
         self.previous_target_id = None
-        self.is_target_acquired = False
-        self.acquisition_elapsed_time_s = 0.0
+        # Target lock is a two-state machine: the target must stay in the cone for
+        # target_lock_delay_s (time-in-state of "acquiring") before it "locks".
+        self.acquisition_sm = StateMachine(
+            initial_state=_ACQUIRING,
+            clock=self.game.game_time.get_current_time,
+        )
         self.configure(
             target_lock_delay_s=target_lock_delay_s,
             acquisition_cone_angle_deg=acquisition_cone_angle_deg,
@@ -49,7 +58,7 @@ class AutoAim:
         """
         Sets the auto-aim tuning parameters, recomputing the derived thresholds.
 
-        Splitting this out of ``__init__`` lets the assist quality be retuned at
+        Splitting this out of __init__ lets the assist quality be retuned at
         runtime: a turret reconfigures its auto-aim from the parameters of the
         targeting system currently boosting it, so a better targeting system
         yields a tighter firing solution.
@@ -169,6 +178,27 @@ class AutoAim:
         shot_speed = LASER_SPEED_MPS * np.array(shot_dir) + self.parent.speed
         return shot_speed
 
+    @property
+    def is_target_acquired(self) -> bool:
+        """Whether the target lock is confirmed (shots lead the target)."""
+        return self.acquisition_sm.state == _LOCKED
+
+    @property
+    def acquisition_elapsed_time_s(self) -> float:
+        """How long the current target has been continuously held in the cone."""
+        return self.acquisition_sm.time_in_state_s
+
+    def _reset_acquisition(self):
+        """
+        Drop any lock and restart the acquiring dwell. Called on any disturbance
+        (no target, target changed/gone, or the target leaving the cone), so a
+        lock requires *continuous* alignment.
+        """
+        if self.acquisition_sm.state == _LOCKED:
+            self.acquisition_sm.request(_ACQUIRING, force=True)
+        else:
+            self.acquisition_sm.reset_timer()
+
     def compute_acquisition(self):
         """
         Identifies the ship's target and determines whether it has been acquired
@@ -176,53 +206,42 @@ class AutoAim:
         if not self.parent.target_id:
             # Parent has no target => Nothing to acquire
             self.previous_target_id = None
-            self.acquisition_elapsed_time_s = 0.0
-            self.is_target_acquired = False
+            self._reset_acquisition()
             return
-        elif self.parent.target_id != self.previous_target_id:
+        if self.parent.target_id != self.previous_target_id:
             # Target has changed since last frame => Not acquired yet
             self.previous_target_id = self.parent.target_id
-            self.acquisition_elapsed_time_s = 0.0
-            self.is_target_acquired = False
+            self._reset_acquisition()
             return
-        else:
-            # Target should exist and is the same as last time
 
-            # Identify self and target in interactions
-            my_actor_index = self.game.interactions.get_actor_index_from_id(
-                self.parent.id
+        # Target should exist and is the same as last time.
+        my_actor_index = self.game.interactions.get_actor_index_from_id(self.parent.id)
+        try:
+            target_actor_index = self.game.interactions.get_actor_index_from_id(
+                self.parent.target_id
             )
-            try:
-                target_actor_index = self.game.interactions.get_actor_index_from_id(
-                    self.parent.target_id
-                )
-            except ValueError:
-                # Parent has no target => Nothing to acquire
-                self.previous_target_id = None
-                self.acquisition_elapsed_time_s = 0.0
-                self.is_target_acquired = False
-                return
+        except ValueError:
+            # Target gone => Nothing to acquire
+            self.previous_target_id = None
+            self._reset_acquisition()
+            return
 
-            # Is the target inside the cone of acquisition ?
-            target_direction = self.game.interactions.directions[
-                my_actor_index, target_actor_index, :
-            ]
-            alignment = np.dot(target_direction, self.parent.forward)
-            if alignment < self.min_acquisition_alignment:
-                # Not aligned enough for acquisition => Not acquired yet
-                # + Reset acqusition delay
-                self.acquisition_elapsed_time_s = 0.0
-                self.is_target_acquired = False
-                return
-            # Is the target in the acquisition time for long enough ?
-            self.acquisition_elapsed_time_s += self.game.game_time.get_time_step()
-            if self.acquisition_elapsed_time_s < self.target_lock_delay_s:
-                # Not acquired yet, but getting there !
-                self.is_target_acquired = False
-                return
-            else:
-                # Alignement and elapsed time are satisfactory => target lock !
-                self.is_target_acquired = True
+        # Is the target inside the cone of acquisition ?
+        target_direction = self.game.interactions.directions[
+            my_actor_index, target_actor_index, :
+        ]
+        alignment = np.dot(target_direction, self.parent.forward)
+        if alignment < self.min_acquisition_alignment:
+            # Not aligned enough => restart the acquisition dwell
+            self._reset_acquisition()
+            return
+
+        # Aligned: lock once the target has been held in the cone long enough.
+        if (
+            self.acquisition_sm.state != _LOCKED
+            and self.acquisition_sm.time_in_state_s >= self.target_lock_delay_s
+        ):
+            self.acquisition_sm.request(_LOCKED, force=True)
 
     def clean(self):
         """

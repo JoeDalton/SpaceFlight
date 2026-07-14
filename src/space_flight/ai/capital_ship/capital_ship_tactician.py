@@ -1,5 +1,5 @@
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import Intent, Personality
+from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
 
 # TODO Add an intent to go back to the fight area if too far
@@ -37,8 +37,12 @@ class CapitalShipTactician(GenericTactician):
             foes_center_dict["target_id"] = Intent.DISENGAGE
             return Intent.DISENGAGE, foes_center_dict
 
-        # Check if bot has a prey
+        # Check if bot has a prey.
+        # Placeholder trigger: engagement is still scenario-scripted. Deriving it
+        # from threat scoring (so capital ships pick their own orbit targets) is
+        # left for a later pass, see the design doc.
         if self.scripted_prey_dict["active"]:
+            self.scripted_prey_dict["attack_mode"] = AttackMode.ORBIT
             return Intent.ENGAGE, self.scripted_prey_dict
 
         # Check if bot has patrol orders
@@ -55,13 +59,5 @@ class CapitalShipTactician(GenericTactician):
         friends_center_dict["target_id"] = Intent.REGROUP
         return Intent.REGROUP, friends_center_dict
 
-    def evaluate_fighting_shape(self) -> float:
-        """
-        Evaluates the fighting shape of the bot
-        TODO: add an "energy" mechanic ? Health of subsytems ?
-        """
-        shield_level = 0.0
-        shield = getattr(self.pawn, "shield", None)
-        if shield is not None:
-            shield_level = shield.get_shield_level()
-        return 0.5 * self.pawn.health + shield_level
+    # evaluate_fighting_shape is inherited from GenericTactician (uniform
+    # health/shield_level).

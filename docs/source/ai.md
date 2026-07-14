@@ -87,25 +87,46 @@ Both free-flying ship types share
 `evaluate_fighting_shape` (health + shield) is too low, engage the best-scored
 prey (`evaluate_preys`, boosted for `primary_target_ids`), follow patrol
 waypoints, hold formation, or regroup with allies — falling through a
-priority list rather than a weighted blend.
+priority list rather than a weighted blend. When it engages it also picks an
+`AttackMode` (carried in `target_dict["attack_mode"]`): a weapon-suitability
+score decides guns vs. a limited bomb (`_choose_weapon` — a bomb is only worth
+it against a target both tough and valuable, when stationary enough and supply
+allows), then the geometry decides the mode — `BOMB`, or for guns `STRAFE` vs.
+`PURSUIT` by the target's mobility.
 
-**`FighterNavigator.engage_target`** is the most elaborate behaviour in the
-codebase: it blends Constant Angle Pursuit, lead pursuit and lag pursuit with
-distance-dependent weights (`compute_engage_weights`, overlapping smooth
-step functions), fires the laser cannon itself once aligned and in range,
-and can override pursuit entirely to `reposition` (hard turn away to avoid
-overshooting a closing target) or `extend` (break off if stuck in a
-low-closing-speed "spiral of death" for too long).
+**`FighterNavigator.engage_target`** dispatches on that attack mode:
+- **`PURSUIT`** — the constant-angle chase: it blends Constant Angle Pursuit,
+  lead pursuit and lag pursuit with distance-dependent weights
+  (`compute_engage_weights`, overlapping smooth step functions), fires the
+  laser cannon once aligned and in range, and can override pursuit entirely to
+  `reposition` (hard turn away to avoid overshooting a closing target) or
+  `extend` (break off if stuck in a low-closing-speed "spiral of death" for too
+  long). Good against agile prey.
+- **`STRAFE`** — a committed `ingress → attack → break → reposition` run for a
+  slow or immobile target: press in firing, peel off at point-blank, extend,
+  and come around for another pass.
+- **`BOMB`** — a committed `ingress → approach → run → break → reposition` cycle
+  that overflies a slow/immobile target and drops a bomb along the belly (`-Z`).
+  The ingress banks onto the target's track line (swinging to an entry point
+  behind it, then a pure-pursuit line-follow) so the belly-down run starts on the
+  line; the approach and run then fly belly-down (via the pilot's up-reference,
+  which makes the fighter fly like the capital ship — roll only to level to the
+  reference up), following the target's *instantaneous* track line so they stay
+  with it through a turn. `compute_release_condition` times the drop off the
+  bomb's linear (no-gravity) velocity: it releases when the flight-time-led
+  intercept falls inside a cone of that velocity, then breaks and comes around.
 
 **`CapitalShipTactician`** mirrors the fighter's priority list minus
 per-target engagement scoring (a capital ship engages a scripted/assigned
 prey rather than hunting, via `scripted_prey_dict`) and reads shield level
 through `Shield.get_shield_level()` for its fighting-shape estimate.
-**`CapitalShipNavigator.engage_target`** is currently a stub
-(`NotImplementedError`) — capital-ship-vs-target manoeuvring isn't
-implemented yet, only patrol/regroup/disengage/formation. **`CapitalShipPilot`**
-only corrects yaw/pitch toward a target and rolls purely to stay upright with
-the scene (no roll-to-target, unlike the more acrobatic fighter).
+**`CapitalShipNavigator.engage_target`** flies an **orbit**: it holds a
+constant standoff off the nearest point of the target's oriented bounding box
+and drives tangentially, so the target stays abeam on the side-mounted
+turrets' flank (round targets give a circle, long/thin ones a racetrack).
+**`CapitalShipPilot`** only corrects yaw/pitch toward a target and rolls
+purely to stay upright with the scene (no roll-to-target, unlike the more
+acrobatic fighter).
 
 ## Tracking-mount trio: turrets and tractor beams
 

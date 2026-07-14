@@ -1,7 +1,7 @@
 """
-Unit tests for the in-scene cloud system (``space_flight.scenes.cloud``).
+Unit tests for the in-scene cloud system (space_flight.scenes.cloud).
 
-These run fully headless: a single ``window-type none`` ShowBase gives a loader
+These run fully headless: a single window-type none ShowBase gives a loader
 and a scene graph without opening a window or needing a GPU context, since the
 tests build geometry and step the per-frame CPU logic but never render.  That
 makes them safe for the GitHub CI runners.
@@ -50,9 +50,9 @@ AMBIENT_COLOR = np.array([0.4, 0.1, 0.4])
 @pytest.fixture(scope="session")
 def app(spaceflight_app):
     """
-    The shared headless app (``ShowBase`` is a singleton — see
-    ``conftest.py::spaceflight_app``). It already carries an ``asset_manager``
-    (built by ``SpaceFlightSimulator.__init__``), which is all the cloud atlas
+    The shared headless app (ShowBase is a singleton — see
+    conftest.py::spaceflight_app). It already carries an asset_manager
+    (built by SpaceFlightSimulator.__init__), which is all the cloud atlas
     loader needs.
     """
     return spaceflight_app
@@ -60,7 +60,7 @@ def app(spaceflight_app):
 
 @pytest.fixture(scope="session")
 def game(app):
-    """Minimal game stub exposing ``app`` for the atlas loader / field."""
+    """Minimal game stub exposing app for the atlas loader / field."""
     return types.SimpleNamespace(app=app)
 
 

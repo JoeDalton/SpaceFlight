@@ -8,7 +8,7 @@ Responsibilities:
 * **Render scale** — the 3D scene can be rendered into an offscreen buffer at a
   fraction of the window resolution and upscaled to the window, so old hardware
   can render fewer pixels while the window stays at native resolution. The 2D
-  layers (``render2d`` / ``aspect2d`` — HUD, menus) are *not* routed through the
+  layers (render2d / aspect2d — HUD, menus) are *not* routed through the
   buffer, so they stay crisp at full window resolution.
 * **Anti-aliasing** — MSAA (hardware multisampling, applied to the offscreen
   render buffer) and/or FXAA (a post-process pass on the composited result).
@@ -219,7 +219,7 @@ class GraphicsManager:
         target.
 
         The GSG may pad the offscreen render target up to a power of two; the
-        usable region (``tex.getTexScale()``) is only known after the first
+        usable region (tex.getTexScale()) is only known after the first
         render and is fixed thereafter, but we refresh it every frame so the
         composite stays correct across any re-preparation of the texture.
         """

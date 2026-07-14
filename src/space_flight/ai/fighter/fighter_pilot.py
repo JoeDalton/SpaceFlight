@@ -20,11 +20,16 @@ class FighterPilot(GenericShipPilot):
     def compute_angular_error(
         self,
         target_direction: np.ndarray = np.zeros(3),
+        up_reference: np.ndarray = None,
     ) -> tuple[float]:
         """
         Computes the angular error of the ship. Adapted to fighter ships
 
         :param target_direction: Direction of the target
+        :param up_reference: World "up" to roll +Z toward. When None (normal flight)
+            the fighter banks into turns and slowly levels to scene up; when given
+            (a bomb run's belly-aim) banking is suppressed and it rolls fully to the
+            reference so the belly (-Z) faces the target.
         :return: the yaw, pitch and roll error, and the alignment error
         """
 
@@ -50,21 +55,33 @@ class FighterPilot(GenericShipPilot):
             # Find angle errors
             yaw_error = np.arctan2(target_x, target_y)
             pitch_error = np.arctan2(target_z, target_y)
-            roll_error = np.arctan2(target_x, target_z)
-            # Clip roll error to zero if pitch and roll errors are small enough
-            if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
-                roll_error = 0.0
-            # Take into account the scene's orientation
-            is_up = np.dot(self.pawn.up, self.game.scene.up_direction) >= 0
-            if is_up:
-                scene_roll_error = HALF_PI - np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
+
+            # The vector to level +Z toward: the caller's up-reference (bomb belly
+            # aim) or, by default, scene up.
+            if up_reference is None:
+                level_reference = self.game.scene.up_direction
+                # Normal flight: bank into the turn, then add a light scene-leveling.
+                roll_error = np.arctan2(target_x, target_z)
+                if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
+                    roll_error = 0.0
+                level_weight = SCENE_ROLL_MULTIPLIER
             else:
-                scene_roll_error = HALF_PI + np.arccos(
-                    np.dot(self.pawn.right, self.game.scene.up_direction)
-                )
-            roll_error += SCENE_ROLL_MULTIPLIER * scene_roll_error
+                level_reference = up_reference
+                # Commanded attitude (bomb run): no banking, roll fully to level.
+                roll_error = 0.0
+                level_weight = 1.0
+
+            # Clamp the dot to [-1, 1] before arccos: right and the reference are
+            # unit vectors so it is mathematically in range, but float error can
+            # nudge it just past ±1, which would make arccos return NaN and poison
+            # the whole state.
+            right_dot_ref = np.clip(np.dot(self.pawn.right, level_reference), -1.0, 1.0)
+            is_up = np.dot(self.pawn.up, level_reference) >= 0
+            if is_up:
+                level_roll_error = HALF_PI - np.arccos(right_dot_ref)
+            else:
+                level_roll_error = HALF_PI + np.arccos(right_dot_ref)
+            roll_error += level_weight * level_roll_error
             # Debug output
             cos_angle_to_target = np.dot(ship_y, target_direction)
 

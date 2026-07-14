@@ -3,9 +3,9 @@ from typing import List, Tuple
 
 import numpy as np
 
-from space_flight import EPSILON_TOLERANCE
+from space_flight import EPSILON_TOLERANCE, RECORD_GAME
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
 from space_flight.ai.collision_sensor import CollisionSensor
 from space_flight.ai.generic.generic_navigator import GenericNavigator
 from space_flight.utils import smooth_step_down
@@ -38,6 +38,12 @@ class GenericShipNavigator(GenericNavigator):
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
         self.time_in_spiral_s = 0.0
+        # Per-phase scaling of the collision-avoidance contribution, reset each
+        # frame and lowered by phases that deliberately fly close (formation, the
+        # strafe corridor). The surface altitude floor is a *separate* mechanism
+        # (the sensor lumps all obstacles into one repulsion, so a single scalar
+        # can't keep the floor while dropping lateral avoidance).
+        self.avoidance_weight_factor = 1.0
         self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
 
     def navigate(self, intent: int, target_dict: dict) -> tuple[np.ndarray, float]:
@@ -48,6 +54,14 @@ class GenericShipNavigator(GenericNavigator):
         :param target_dict: A dictionary containing target info
         :return: The direction to point to and the desired speed
         """
+        # Reset the per-phase avoidance factor; the intent may lower it (formation,
+        # strafe corridor) before we apply it below.
+        self.avoidance_weight_factor = 1.0
+        # Reset the sensor reach to full; a bomb run may shorten it (drop the outer
+        # sphere) so it can overfly a big target without being pushed off it.
+        self.collision_sensor.active_range = self.collision_sensor.n_spheres
+        # Reset the pilot up-reference; a bomb run sets it to aim the belly.
+        self.up_reference = None
         # Compute intentional component
         intent_direction, intent_speed = self.navigate_intent(
             intent=intent, target_dict=target_dict
@@ -58,11 +72,9 @@ class GenericShipNavigator(GenericNavigator):
             avoidance_speed,
             avoidance_weight,
         ) = self.navigate_avoidance()
-        # Dwarf collision avoidance component when flying in formation
-        if intent == Intent.FORMATION:
-            avoidance_weight *= self.personality["navigator"]["formation"][
-                "collision_avoidance_contribution_factor"
-            ]
+        # Scale the avoidance contribution by the phase factor (e.g. dwarfed in
+        # formation or during a low corridor pass).
+        avoidance_weight *= self.avoidance_weight_factor
 
         direction = (intent_direction + avoidance_weight * avoidance_direction) / (
             1 + avoidance_weight
@@ -70,6 +82,23 @@ class GenericShipNavigator(GenericNavigator):
         speed = (intent_speed + avoidance_weight * avoidance_speed) / (
             1 + avoidance_weight
         )
+
+        # Step-by-step recording of how much collision avoidance is bending the
+        # steering away from the tactician's intent (for forensic analysis).
+        if RECORD_GAME and getattr(self.pawn.parent, "record", False):
+            name = self.pawn.parent.name
+            self.game.record.record(f"{name}_avoidance_weight", float(avoidance_weight))
+            intent_norm = np.linalg.norm(intent_direction)
+            blended_norm = np.linalg.norm(direction)
+            if intent_norm > EPSILON_TOLERANCE and blended_norm > EPSILON_TOLERANCE:
+                deflection = float(
+                    np.dot(intent_direction / intent_norm, direction / blended_norm)
+                )
+            else:
+                deflection = float("nan")
+            self.game.record.record(
+                f"{name}_intent_vs_blended_collision_alignment", deflection
+            )
 
         return direction, speed
 
@@ -212,6 +241,11 @@ class GenericShipNavigator(GenericNavigator):
                 "but there's no attached target"
             )
             return NO_DIRECTION
+
+        # Fly close in formation: dwarf the collision-avoidance contribution.
+        self.avoidance_weight_factor = self.personality["navigator"]["formation"][
+            "collision_avoidance_contribution_factor"
+        ]
 
         # Identify leader in interactions
         try:

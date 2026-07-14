@@ -7,9 +7,9 @@ keyboard so the transitions are easy to inspect:
     into  (entering, fixed)  ->  inside (seamless looping tunnel)
         --[SPACE]-->  outof (dropping out)  ->  quit
 
-It loads the real shaders from ``space_flight/datafiles/shaders`` (not local
+It loads the real shaders from space_flight/datafiles/shaders (not local
 copies), so it doubles as a quick visual check of those files. Run it from a
-project environment where ``space_flight`` is importable::
+project environment where space_flight is importable::
 
     python scripts/demo_transition.py
 

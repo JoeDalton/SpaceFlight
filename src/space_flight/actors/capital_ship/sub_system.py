@@ -15,24 +15,24 @@ class SubSystem(Destructible):
 
     Subsystems are :class:`Destructible` objects in their own right: they own
     their health and their own collision geometry, and they explode when their
-    health is depleted. The collider uses the ``"subsystem"`` name and type: like
+    health is depleted. The collider uses the "subsystem" name and type: like
     terrain it never initiates collisions (a subsystem is a rigid part of its
     ship), it is only hit. Lasers hitting it damage it, and a ship ramming it is
-    handled by ``ship_into_subsystem``, which pushes the subsystem's *parent* ship
+    handled by ship_into_subsystem, which pushes the subsystem's *parent* ship
     (not the subsystem, which cannot move) while the subsystem takes the damage.
 
-    The collider's ``owner`` python-tag is set to the subsystem itself, and
+    The collider's owner python-tag is set to the subsystem itself, and
     :attr:`mounted_on` points at the parent ship. A subsystem therefore never
     collides with the ship it is mounted on: the collision handlers skip
     same-vehicle pairs through
     :func:`~space_flight.game.collisions.owners_share_vehicle`, which reads
-    ``mounted_on``.
+    mounted_on.
 
     :param game: The game/flight state
     :param parent: The subsystem's owner. Usually the ship it is on, but for a
         turret it is the controlling Bot (see :attr:`mounted_on`).
     :param mounted_on: The ship this subsystem is bolted onto. Defaults to
-        ``parent`` (correct when the parent *is* the ship, e.g. shield
+        parent (correct when the parent *is* the ship, e.g. shield
         generators); a turret passes the ship explicitly since its parent is a Bot
     :param relative_position: Mounting position relative to the ship node
     :param hit_box_radius_m: Radius of the subsystem's spherical collider
@@ -65,6 +65,10 @@ class SubSystem(Destructible):
         self.team = self.mounted_on.team
         # Actor category, so target filters can single subsystems out.
         self.category = "sub_system"
+        # A mounted subsystem is as manoeuverable as the ship it rides: a turret on
+        # a nimble fighter is a poor STRAFE/bomb target, one on a slow capital ship
+        # a good one. Inherited once from the host (which exists by now).
+        self.mobility = getattr(self.mounted_on, "mobility", 0.0)
         self.is_dead = False
         self.is_clean = False
 
@@ -102,6 +106,24 @@ class SubSystem(Destructible):
 
         # Register as a targetable actor, so bots and the player can lock onto us
         self.game.interactions.add_actor(self)
+
+    @property
+    def speed(self) -> np.ndarray:
+        """
+        The subsystem's velocity: it is bolted to its ship, so it *is* the host
+        ship's velocity, read live rather than mirrored.
+
+        Exposing this (rather than leaving a mounted part apparently stationary)
+        keeps the interaction velocities correct, so an attacker's lead-pursuit and
+        closing solutions against a subsystem on a moving ship aim at where it
+        actually is. Turrets/tractor beams inherit this; the death explosion and a
+        turret's shots also pick up the host's motion through it.
+
+        :return: The host ship's velocity, or zeros once detached (cleaned)
+        """
+        if getattr(self, "mounted_on", None) is None:
+            return np.zeros(3)
+        return np.asarray(getattr(self.mounted_on, "speed", np.zeros(3)), dtype=float)
 
     def take_hit(self, damage: float, normal_world_vector: np.ndarray):
         """
@@ -148,6 +170,15 @@ class SubSystem(Destructible):
         :return: The current health of the subsystem
         """
         return self.health
+
+    @property
+    def shield_level(self) -> float:
+        """
+        Subsystems carry no shield of their own.
+
+        :return: 0.0
+        """
+        return 0.0
 
     def play_death(self):
         """

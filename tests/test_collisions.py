@@ -2,7 +2,7 @@
 Unit tests for the collision helpers and the subsystem collision handling.
 
 These exercise pure logic (bitmask selection, the same-vehicle owner test) and
-the ``ship_into_subsystem`` pushback, which is built without ``__init__`` and fed
+the ship_into_subsystem pushback, which is built without __init__ and fed
 a mocked collision entry so no ShowBase/traversal is needed.
 """
 
@@ -45,7 +45,7 @@ def test_subsystem_masks_are_into_only() -> None:
 
     assert from_mask == BitMask32.allOff()
     assert into_mask == (
-        CollisionLayers.LASER | CollisionLayers.SENSOR | CollisionLayers.DESTRUCTIBLE
+        CollisionLayers.MUNITION | CollisionLayers.SENSOR | CollisionLayers.DESTRUCTIBLE
     )
     assert add_to_handler is False
 
@@ -148,7 +148,7 @@ def make_collision_system_without_init() -> CollisionSystem:
     Build a CollisionSystem that bypasses __init__ (no ShowBase/traverser) with
     just enough game state for the handlers under test.
 
-    :return: A bare :class:`CollisionSystem` with a mocked ``game``.
+    :return: A bare :class:`CollisionSystem` with a mocked game.
     """
     system = object.__new__(CollisionSystem)
     system.game = MagicMock()
@@ -296,13 +296,13 @@ def test_lasers_test_against_shields_but_ships_do_not() -> None:
     Only lasers interact with a shield: the laser from-mask carries SHIELD while
     the ship/sensor from-masks do not.
     """
-    assert bool(CollisionLayers.LASER_FROM & CollisionLayers.SHIELD)
+    assert bool(CollisionLayers.MUNITION_FROM & CollisionLayers.SHIELD)
     assert not bool(CollisionLayers.DESTRUCTIBLE_FROM & CollisionLayers.SHIELD)
     assert not bool(CollisionLayers.SENSOR_FROM & CollisionLayers.SHIELD)
 
 
 # ---------------------------
-# laser_into_shield
+# munition_into_shield
 # ---------------------------
 
 
@@ -315,7 +315,7 @@ def make_laser_and_shield(
     :param velocity: The laser's world velocity
     :param enabled: Whether the shield is currently up
     :param power: The laser's damage
-    :return: A ``(laser, shield)`` pair of mocks.
+    :return: A (laser, shield) pair of mocks.
     """
     laser = MagicMock()
     laser.speed = np.asarray(velocity, dtype=float)
@@ -357,7 +357,7 @@ def test_laser_from_outside_is_blocked() -> None:
     laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
     entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
 
-    system.laser_into_shield(entry)
+    system.munition_into_shield(entry)
 
     shield.take_hit.assert_called_once()
     assert shield.take_hit.call_args.kwargs["damage"] == pytest.approx(60.0)
@@ -372,7 +372,7 @@ def test_laser_from_inside_passes_through() -> None:
     laser, shield = make_laser_and_shield(velocity=[10.0, 0.0, 0.0])
     entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
 
-    system.laser_into_shield(entry)
+    system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()
@@ -387,7 +387,7 @@ def test_laser_with_degenerate_normal_passes_through() -> None:
     laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
     entry = make_shield_entry(laser, shield, Vec3(0.0, 0.0, 0.0))
 
-    system.laser_into_shield(entry)
+    system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()
@@ -401,13 +401,13 @@ def test_disabled_shield_lets_lasers_through() -> None:
     laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0], enabled=False)
     entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
 
-    system.laser_into_shield(entry)
+    system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()
 
 
-def test_laser_into_shield_ignores_missing_owners() -> None:
+def test_munition_into_shield_ignores_missing_owners() -> None:
     """
     A laser or shield removed mid-frame (owner None) is handled without error.
     """
@@ -417,8 +417,8 @@ def test_laser_into_shield_ignores_missing_owners() -> None:
     entry_no_laser = make_shield_entry(None, shield, Vec3(1.0, 0.0, 0.0))
     entry_no_shield = make_shield_entry(laser, None, Vec3(1.0, 0.0, 0.0))
 
-    system.laser_into_shield(entry_no_laser)
-    system.laser_into_shield(entry_no_shield)
+    system.munition_into_shield(entry_no_laser)
+    system.munition_into_shield(entry_no_shield)
 
     shield.take_hit.assert_not_called()
 
@@ -437,14 +437,14 @@ def test_laser_does_not_hit_its_own_ships_shield() -> None:
     shield.mounted_on = ship
     entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
 
-    system.laser_into_shield(entry)
+    system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()
 
 
 # ---------------------------
-# laser_into_destructible — friendly fire
+# munition_into_destructible — friendly fire
 # ---------------------------
 
 
@@ -481,7 +481,7 @@ def test_laser_does_not_hit_the_ship_it_was_fired_from() -> None:
     laser.origin_ship_id = turret.id
     entry = make_destructible_entry(laser, ship)
 
-    system.laser_into_destructible(entry)
+    system.munition_into_destructible(entry)
 
     ship.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()
@@ -503,7 +503,7 @@ def test_laser_does_not_hit_a_sibling_subsystem() -> None:
     laser.origin_ship_id = turret.id
     entry = make_destructible_entry(laser, sibling)
 
-    system.laser_into_destructible(entry)
+    system.munition_into_destructible(entry)
 
     sibling.take_hit.assert_not_called()
     laser.shot.removeNode.assert_not_called()

@@ -2,8 +2,8 @@
 Unit tests for the Shield's strength/animation/lifecycle logic and geometry
 dispatch.
 
-Instances bypass ``__init__`` so the pure logic is testable without a loader or
-scene graph. The shader/visual and game are mocked; ``update`` drives the
+Instances bypass __init__ so the pure logic is testable without a loader or
+scene graph. The shader/visual and game are mocked; update drives the
 state machine (up -> dying -> down -> appearing -> up) and cooldown-gated
 regeneration.
 """
@@ -23,6 +23,17 @@ from space_flight.actors.capital_ship.shield import (
     _UP,
     Shield,
 )
+from space_flight.utils.state_machine import Cooldown, StateMachine
+
+
+class _Clock:
+    """A controllable time source for the shield state machine / cooldown."""
+
+    def __init__(self, t: float = 0.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
 
 
 def make_generator(is_dead: bool = False, health: float = 1000.0):
@@ -46,7 +57,7 @@ def make_shield_without_init(
 
     The visual/shader side (the :class:`ShieldModel`), the anchor node and the
     game clock are mocked, so only the game-logic state machine is exercised.
-    ``generators`` is the *full* projecting group (pass some as dead to exercise
+    generators is the *full* projecting group (pass some as dead to exercise
     the pro-rata perks); it defaults to a single live generator.
     """
     if generators is None:
@@ -68,11 +79,18 @@ def make_shield_without_init(
     shield.is_dead = False
     shield.is_clean = False
 
-    # Lifecycle / animation state
-    shield.state = state
+    # Lifecycle / animation state, on a controllable clock.
+    clock = _Clock(now)
+    shield._clock = clock
+    shield.state_sm = StateMachine(initial_state=state, clock=clock)
     shield._u = 1.0 if state in (_DOWN, _APPEARING) else 0.0
     shield._final_death = False
-    shield._last_hit_time = last_hit_time
+    shield.regen_cooldown = Cooldown(_REGEN_COOLDOWN_S, clock=clock)
+    # Place the last hit at last_hit_time (unless the sentinel "never hit").
+    if last_hit_time > -1.0e8:
+        clock.t = last_hit_time
+        shield.regen_cooldown.trigger()
+        clock.t = now
 
     # Mocked presentation (ShieldModel), anchor node, and game clock.
     shield.model = MagicMock()
@@ -80,7 +98,7 @@ def make_shield_without_init(
     shield.node = MagicMock()
     shield.node.isEmpty.return_value = False
     shield.game = MagicMock()
-    shield.game.game_time.get_current_time.return_value = now
+    shield.game.game_time.get_current_time.side_effect = clock
     shield.game.game_time.get_time_step.return_value = time_step
     return shield
 
@@ -115,7 +133,8 @@ def test_take_hit_absorbs_and_stamps_cooldown():
     shield.take_hit(damage=200.0, normal_world_vector=[1.0, 0.0, 0.0])
 
     assert shield.health == pytest.approx(300.0)
-    assert shield._last_hit_time == pytest.approx(42.0)
+    # The hit stamped the regen cooldown, so regeneration is now gated.
+    assert shield.regen_cooldown.ready() is False
 
 
 def test_take_hit_with_point_forwards_impact_to_model():

@@ -26,8 +26,8 @@ class TrackingMount(SubSystem):
     override (fire cannons, grab a prey...).
 
     A tracking mount is a :class:`SubSystem` (destructible, targetable, dies with
-    its ship) driven by a Bot: the bot is its ``parent`` (controller), while
-    ``mounted_on`` is the ship it sits on. Its generic AI
+    its ship) driven by a Bot: the bot is its parent (controller), while
+    mounted_on is the ship it sits on. Its generic AI
     (:mod:`space_flight.ai.tracking_mount`) selects a prey and steers the barrel;
     the navigator publishes its lead solution onto :attr:`aim_direction` /
     :attr:`target_distance_m` for :meth:`_operate` to act upon.
@@ -116,25 +116,6 @@ class TrackingMount(SubSystem):
         self.set_pitch = self.turret_model.set_pitch
         self.set_yaw(self.state[0])
         self.set_pitch(self.state[1])
-
-    @property
-    def speed(self):
-        """
-        The mount's velocity: it is bolted to a moving ship, so it *is* the host
-        ship's velocity, read live rather than mirrored.
-
-        This keeps kinematics-dependent effects matched to the ship without any
-        per-frame bookkeeping: the death explosion carries the ship's velocity
-        (the mount is a Bot *and* a subsystem, so it is the Bot's ``play_death``,
-        reading ``pawn.speed``, that fires it), and a turret's shots inherit the
-        ship's motion. It is consistent with the interaction velocities, so lead
-        aim is unaffected.
-
-        :return: The host ship's velocity, or zeros once detached (cleaned)
-        """
-        if getattr(self, "mounted_on", None) is None:
-            return np.zeros(3)
-        return np.asarray(getattr(self.mounted_on, "speed", np.zeros(3)), dtype=float)
 
     def move(self, yaw_rate: float, pitch_rate: float):
         """

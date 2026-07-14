@@ -16,9 +16,9 @@ The file has two sections::
       - when: { delay: { after: { all_destroyed: first_wave }, seconds: 3 } }
         then: { spawn: second_wave }
 
-Each ``when``/``then`` node is a single-key dict whose key selects a factory from
-:mod:`scenario.conditions` / :mod:`scenario.actions`. ``when`` is parsed
-recursively so combinators (``delay``, ``all_of``, ``any_of``) nest naturally.
+Each when / then node is a single-key dict whose key selects a factory from
+:mod:`scenario.conditions` / :mod:`scenario.actions`. when is parsed
+recursively so combinators (delay, all_of, any_of) nest naturally.
 
 Requires PyYAML.
 """
@@ -71,7 +71,7 @@ def load_scenario(path: Union[str, Path]) -> Scenario:
 
 def _single(node: dict) -> tuple[str, Any]:
     """
-    Unpack a single-key ``{kind: arg}`` node.
+    Unpack a single-key {kind: arg} node.
 
     :param node: The mapping to unpack
     :return: The node's key and its value
@@ -84,10 +84,10 @@ def _single(node: dict) -> tuple[str, Any]:
 
 def _build_condition(node: dict) -> Condition:
     """
-    Recursively build a condition callable from a ``when`` node.
+    Recursively build a condition callable from a when node.
 
-    Every condition is a single-key mapping (e.g. ``{after_seconds: 10}``,
-    ``{fired: blockade_past}``) — including the inner ``after`` of a ``delay``.
+    Every condition is a single-key mapping (e.g. {after_seconds: 10},
+    {fired: blockade_past}) — including the inner after of a delay.
 
     :param node: A condition node
     :return: The condition callable
@@ -118,13 +118,13 @@ def _build_condition(node: dict) -> Condition:
 
 def _build_action(node: dict, waves: dict) -> Action:
     """
-    Build an action callable from a ``then`` node.
+    Build an action callable from a then node.
 
-    Every action is a single-key mapping (e.g. ``{spawn: first_wave}``,
-    ``{end_level: victory}``).
+    Every action is a single-key mapping (e.g. {spawn: first_wave},
+    {end_level: victory}).
 
     :param node: An action node
-    :param waves: The file's ``waves`` section, for ``spawn`` to look up
+    :param waves: The file's waves section, for spawn to look up
     :return: The action callable
     """
     kind, arg = _single(node)

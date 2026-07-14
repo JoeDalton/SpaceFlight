@@ -11,8 +11,27 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from space_flight.actors.bomb_launcher import BOMB_SPEED_MPS
 from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
+from space_flight.utils.state_machine import StateMachine
+
+
+class _Clock:
+    """A controllable time source for the behaviour state machine."""
+
+    def __init__(self, t: float = 0.0):
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def _enter_behaviour(nav, name: str, duration_s: float = 0.0):
+    """Put the navigator in *name* with the given time-in-state on its clock."""
+    nav._clock.t = 0.0
+    nav.behaviour_sm.request(name, force=True)
+    nav._clock.t = duration_s
 
 
 def make_fighter_navigator(
@@ -30,16 +49,17 @@ def make_fighter_navigator(
         personality = Personality.FIGHTER_DEFAULT
     nav = object.__new__(FighterNavigator)
     nav.game = MagicMock()
-    nav.game.game_time.get_current_time.return_value = 0.0
+    clock = _Clock()
+    nav._clock = clock
+    nav.game.game_time.get_current_time.side_effect = clock
     nav.pawn = MagicMock()
     nav.pawn.position = np.zeros(3) if pawn_position is None else pawn_position.copy()
     nav.pawn.max_speed_mps = 500.0
     nav.pawn.parent = MagicMock()
     nav.personality = personality
     nav.debug = False
-    nav.behaviour = "idle"
-    nav.behaviour_duration_s = 0.0
-    nav.last_update_time = 0.0
+    nav.behaviour_sm = StateMachine("idle", clock=clock)
+    nav.game.game_time.get_time_step.return_value = 0.1
     nav.waypoints = []
     nav.next_waypoint_idx = 0
     nav.distance_to_waypoint_m = 0.0
@@ -123,8 +143,7 @@ def test_check_extend_conditions_velocity_condition_not_met_returns_false():
     already-extending condition holds, check_extend_conditions returns False.
     """
     nav = make_fighter_navigator()
-    nav.behaviour = "pursuit"
-    nav.behaviour_duration_s = 10.0
+    _enter_behaviour(nav, "pursuit", 10.0)
     nav.time_in_spiral_s = 0.0
 
     result = nav.check_extend_conditions(
@@ -141,9 +160,8 @@ def test_check_extend_conditions_already_extending_not_long_enough_returns_true(
     the minimum required duration, the condition must remain True.
     """
     nav = make_fighter_navigator()
-    nav.behaviour = "extend"
     minimum_duration = nav.personality["navigator"]["extend"]["minimum_duration_s"]
-    nav.behaviour_duration_s = minimum_duration * 0.3  # too short
+    _enter_behaviour(nav, "extend", minimum_duration * 0.3)  # too short
 
     result = nav.check_extend_conditions(
         longitudinal_speed_scalar_mps=500.0,
@@ -160,9 +178,8 @@ def test_check_extend_conditions_already_extending_long_enough_returns_false():
     (assuming velocity conditions are not met).
     """
     nav = make_fighter_navigator()
-    nav.behaviour = "extend"
     minimum_duration = nav.personality["navigator"]["extend"]["minimum_duration_s"]
-    nav.behaviour_duration_s = minimum_duration * 2.0  # long enough
+    _enter_behaviour(nav, "extend", minimum_duration * 2.0)  # long enough
     nav.time_in_spiral_s = 0.0
 
     result = nav.check_extend_conditions(
@@ -287,3 +304,599 @@ def test_compute_engage_weights_returns_three_values():
     result = nav.compute_engage_weights(500.0)
 
     assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# compute_evasive_weave
+# ---------------------------------------------------------------------------
+
+
+def test_compute_evasive_weave_zero_amplitude_returns_base():
+    """
+    With zero amplitude the weave is a no-op and returns the base direction.
+    """
+    nav = make_fighter_navigator()
+    base = np.array([0.0, 1.0, 0.0])
+
+    result = nav.compute_evasive_weave(
+        base_direction=base,
+        up_reference=np.array([0.0, 0.0, 1.0]),
+        amplitude=0.0,
+        frequency_hz=0.5,
+    )
+
+    np.testing.assert_array_equal(result, base)
+
+
+def test_compute_evasive_weave_stays_in_plane_and_unit():
+    """
+    Weaving a forward direction about the world-up reference keeps the result a
+    unit vector in the horizontal plane (no vertical component introduced).
+    """
+    nav = make_fighter_navigator()
+    nav._clock.t = 0.3  # behaviour_duration_s -> 0.3
+    nav.weave_phase_rad = 1.0
+
+    result = nav.compute_evasive_weave(
+        base_direction=np.array([0.0, 1.0, 0.0]),
+        up_reference=np.array([0.0, 0.0, 1.0]),
+        amplitude=0.6,
+        frequency_hz=0.5,
+    )
+
+    assert np.linalg.norm(result) == pytest.approx(1.0, abs=1e-6)
+    assert result[2] == pytest.approx(0.0, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# strafe helpers
+# ---------------------------------------------------------------------------
+
+
+def test_below_altitude_floor_no_surface_info_returns_false():
+    """
+    Without surface info there is no altitude floor (open-space pass).
+    """
+    nav = make_fighter_navigator()
+    strafe = nav.personality["navigator"]["strafe"]
+
+    assert (
+        nav._below_altitude_floor(
+            surface_normal=None, surface_hit_point=None, strafe=strafe
+        )
+        is False
+    )
+
+
+def test_below_altitude_floor_true_when_too_low():
+    """
+    With the ship below the floor above the surface, the floor is breached.
+    """
+    nav = make_fighter_navigator()
+    strafe = nav.personality["navigator"]["strafe"]
+    normal = np.array([0.0, 0.0, 1.0])
+    hit_point = np.zeros(3)
+    nav.pawn.position = np.array([0.0, 0.0, strafe["altitude_floor_m"] * 0.5])
+
+    assert (
+        nav._below_altitude_floor(
+            surface_normal=normal, surface_hit_point=hit_point, strafe=strafe
+        )
+        is True
+    )
+
+
+def test_below_altitude_floor_false_when_high_enough():
+    """
+    Well above the floor, it is not breached.
+    """
+    nav = make_fighter_navigator()
+    strafe = nav.personality["navigator"]["strafe"]
+    normal = np.array([0.0, 0.0, 1.0])
+    hit_point = np.zeros(3)
+    nav.pawn.position = np.array([0.0, 0.0, strafe["altitude_floor_m"] * 3.0])
+
+    assert (
+        nav._below_altitude_floor(
+            surface_normal=normal, surface_hit_point=hit_point, strafe=strafe
+        )
+        is False
+    )
+
+
+def test_strafe_break_open_space_returns_negated_direction():
+    """
+    Without surface info the break simply turns back the way we came.
+    """
+    nav = make_fighter_navigator()
+    strafe = nav.personality["navigator"]["strafe"]
+    direction = np.array([0.0, 1.0, 0.0])
+
+    break_direction, speed = nav._strafe_break(
+        direction=direction, surface_normal=None, strafe=strafe
+    )
+
+    np.testing.assert_allclose(break_direction, -direction, atol=1e-9)
+    assert speed == pytest.approx(strafe["break_speed_factor"] * nav.pawn.max_speed_mps)
+
+
+def test_strafe_break_surface_climbs_along_normal():
+    """
+    With a surface normal the break has a positive component along it (climbs
+    away from the surface) and is a unit vector.
+    """
+    nav = make_fighter_navigator()
+    strafe = nav.personality["navigator"]["strafe"]
+    normal = np.array([0.0, 0.0, 1.0])
+    direction = np.array([0.0, 1.0, 0.0])
+
+    break_direction, _ = nav._strafe_break(
+        direction=direction, surface_normal=normal, strafe=strafe
+    )
+
+    assert np.dot(break_direction, normal) > 0.0
+    assert np.linalg.norm(break_direction) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_strafe_reposition_extends_away_at_speeding_speed():
+    """
+    Reposition extends directly away from the target at the speeding speed.
+    """
+    nav = make_fighter_navigator()
+    strafe = nav.personality["navigator"]["strafe"]
+    direction = np.array([0.0, 1.0, 0.0])
+
+    reposition_direction, speed = nav._strafe_reposition(
+        direction=direction, strafe=strafe
+    )
+
+    np.testing.assert_allclose(reposition_direction, -direction, atol=1e-9)
+    assert speed == pytest.approx(
+        strafe["reposition_speed_factor"] * nav.pawn.max_speed_mps
+    )
+
+
+def _augment_pawn_for_strafe(nav):
+    """Give the navigator's mocked pawn the attributes strafe_target reads."""
+    nav.pawn.forward = np.array([0.0, 1.0, 0.0])
+    nav.pawn.speed = np.zeros(3)
+    nav.pawn.position = np.zeros(3)
+    nav.pawn.laser_cannon = MagicMock()
+    nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+
+
+def _strafe_target_dict(distance_m):
+    """Build a target_dict (with engagement geometry) for a stationary target
+    straight ahead (+Y)."""
+    return {
+        "distance_m": distance_m,
+        "direction": np.array([0.0, 1.0, 0.0]),
+        "relative_speed_vector": np.zeros(3),
+        "longitudinal_speed_scalar_mps": 0.0,
+        "target_current_position": np.array([0.0, distance_m, 0.0]),
+        "target_current_speed": np.zeros(3),
+    }
+
+
+def test_strafe_target_far_runs_ingress():
+    """
+    Beyond the attack distance the strafe run is in its ingress phase, at the
+    ingress speed, with a unit direction.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_strafe(nav)
+    strafe = nav.personality["navigator"]["strafe"]
+
+    direction, speed = nav.strafe_target(
+        target_dict=_strafe_target_dict(strafe["attack_distance_m"] * 2.0),
+    )
+
+    assert nav.behaviour == "strafe_ingress"
+    assert speed == pytest.approx(
+        strafe["ingress_speed_factor"] * nav.pawn.max_speed_mps
+    )
+    assert np.linalg.norm(direction) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_strafe_target_in_range_attacks_and_fires():
+    """
+    Inside the attack distance (but beyond the break standoff) the run enters the
+    attack phase, at the attack speed, and fires the guns (nose on target).
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_strafe(nav)
+    strafe = nav.personality["navigator"]["strafe"]
+    distance = 0.5 * (strafe["break_distance_m"] + strafe["attack_distance_m"])
+
+    _, speed = nav.strafe_target(target_dict=_strafe_target_dict(distance))
+
+    assert nav.behaviour == "strafe_attack"
+    assert speed == pytest.approx(
+        strafe["attack_speed_factor"] * nav.pawn.max_speed_mps
+    )
+    nav.pawn.laser_cannon.fire.assert_called_once()
+
+
+def test_strafe_attack_presses_in_while_closing():
+    """
+    In the attack phase, a fast-closing fighter that is not near point-blank keeps
+    attacking however long it has been in the phase (no fixed timer).
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_strafe(nav)
+    strafe = nav.personality["navigator"]["strafe"]
+    _enter_behaviour(nav, "strafe_attack", 10.0)  # well past the old timer
+    target_dict = _strafe_target_dict(400.0)
+    target_dict["longitudinal_speed_scalar_mps"] = -200.0  # closing at 200 m/s
+
+    _, speed = nav.strafe_target(target_dict=target_dict)
+
+    assert nav.behaviour == "strafe_attack"
+    assert speed == pytest.approx(
+        strafe["attack_speed_factor"] * nav.pawn.max_speed_mps
+    )
+
+
+def test_strafe_ingress_leads_a_moving_target():
+    """
+    Against a laterally-moving target the ingress aims at the intercept (lead)
+    point, so the flown direction gains a component in the target's motion
+    direction rather than pointing at its current position.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_strafe(nav)
+    target_dict = {
+        "distance_m": 800.0,  # beyond attack_distance -> ingress phase
+        "direction": np.array([0.0, 1.0, 0.0]),
+        "relative_speed_vector": np.array([50.0, -100.0, 0.0]),
+        "longitudinal_speed_scalar_mps": -100.0,  # closing at 100 m/s
+        "target_current_position": np.array([0.0, 800.0, 0.0]),
+        "target_current_speed": np.array([50.0, 0.0, 0.0]),  # moving +X
+    }
+
+    direction, _ = nav.strafe_target(target_dict=target_dict)
+
+    assert nav.behaviour == "strafe_ingress"
+    # Pure line-of-sight would be +Y only; leading tilts it toward +X.
+    assert direction[0] > 0.05
+
+
+def test_strafe_attack_breaks_when_stalled():
+    """
+    In the attack phase, a fighter that cannot close (near-zero closing speed) for
+    longer than the stall grace peels off into the break.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_strafe(nav)
+    strafe = nav.personality["navigator"]["strafe"]
+    _enter_behaviour(nav, "strafe_attack", strafe["stall_time_s"] + 1.0)
+    # longitudinal 0 -> closing 0 (stalled)
+    target_dict = _strafe_target_dict(400.0)
+
+    nav.strafe_target(target_dict=target_dict)
+
+    assert nav.behaviour == "strafe_break"
+
+
+# ---------------------------------------------------------------------------
+# bombing run
+# ---------------------------------------------------------------------------
+
+
+def _augment_pawn_for_bomb(nav):
+    """Give the mocked pawn what the bomb run + release solver read."""
+    nav.pawn.position = np.zeros(3)
+    nav.pawn.forward = np.array([0.0, 1.0, 0.0])
+    nav.pawn.up = np.array([0.0, 0.0, 1.0])
+    nav.pawn.speed = np.array([0.0, 100.0, 0.0])
+    nav.pawn.drop_bomb = MagicMock(return_value=True)
+    nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    nav.up_reference = None
+
+
+def _bomb_engagement(
+    distance_m, direction, target_position, longitudinal=0.0, target_speed=None
+):
+    return {
+        "distance_m": distance_m,
+        "direction": direction,
+        "relative_speed_vector": np.zeros(3),
+        "longitudinal_speed_scalar_mps": longitudinal,
+        "target_current_position": target_position,
+        "target_current_speed": (np.zeros(3) if target_speed is None else target_speed),
+    }
+
+
+def _bomb_velocity_dir(nav):
+    """The bomb's launch direction for the current pawn (speed - launch * up)."""
+    v_bomb = nav.pawn.speed - BOMB_SPEED_MPS * nav.pawn.up
+    return v_bomb / np.linalg.norm(v_bomb)
+
+
+def test_compute_release_condition_aligned_in_range_returns_true():
+    """
+    A target lying along the bomb's (forward-and-down) velocity within range
+    yields a release.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = _bomb_velocity_dir(nav) * 100.0  # on the bomb line, 100 m
+
+    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is True
+
+
+def test_compute_release_condition_out_of_range_returns_false():
+    """
+    On the bomb line but beyond the release range: no drop.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = _bomb_velocity_dir(nav) * 500.0  # aligned but too far
+
+    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
+
+
+def test_compute_release_condition_misaligned_returns_false():
+    """
+    A target dead ahead (not under the belly) is not on the bomb's velocity.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = np.array([0.0, 100.0, 0.0])  # straight ahead, level
+
+    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
+
+
+def test_bomb_target_not_yet_behind_runs_ingress():
+    """
+    When not yet on the target's tail (here abeam a target crossing +X), the bombing
+    run is in its ingress phase, banking toward the entry point.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    engagement = _bomb_engagement(
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=np.array([0.0, 1000.0, 0.0]),
+        target_speed=np.array([50.0, 0.0, 0.0]),  # crossing +X -> bomber is abeam
+    )
+
+    _, speed = nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_ingress"
+    assert speed == pytest.approx(bomb["ingress_speed_factor"] * nav.pawn.max_speed_mps)
+    assert nav.up_reference is None  # ingress banks, no belly aim
+
+
+def test_bomb_ingress_aims_at_entry_point_along_target_track():
+    """
+    The ingress flies to the entry point: entry_distance_m behind the target along
+    its velocity track, at run altitude above it (and publishes no up-reference).
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    target_position = np.array([0.0, 1000.0, 0.0])
+    target_speed = np.array([50.0, 0.0, 0.0])  # crossing +X -> bomber is abeam
+    engagement = _bomb_engagement(
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        target_speed=target_speed,
+    )
+
+    desired_direction, _ = nav.bomb_target(engagement)
+
+    up = nav.game.scene.up_direction
+    expected_entry = (
+        target_position
+        - np.array([1.0, 0.0, 0.0]) * bomb["entry_distance_m"]
+        + up * bomb["run_altitude_m"]
+    )
+    expected_dir = expected_entry / np.linalg.norm(expected_entry)
+    assert nav.behaviour == "bomb_ingress"
+    assert np.allclose(desired_direction, expected_dir, atol=1e-6)
+    assert nav.up_reference is None
+
+
+def test_bomb_ingress_reaches_entry_transitions_to_approach():
+    """
+    Once within entry_tolerance_m of the entry point the ingress hands off to the
+    approach run.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    bomb = nav.personality["navigator"]["bomb"]
+    up = nav.game.scene.up_direction
+    target_position = np.array([0.0, 3000.0, 0.0])
+    target_speed = np.array([0.0, 50.0, 0.0])
+    entry_point = (
+        target_position
+        - np.array([0.0, 1.0, 0.0]) * bomb["entry_distance_m"]
+        + up * bomb["run_altitude_m"]
+    )
+    nav.pawn.position = entry_point.copy()  # sitting at the entry point
+    engagement = _bomb_engagement(
+        distance_m=float(np.linalg.norm(target_position - nav.pawn.position)),
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-30.0,
+        target_speed=target_speed,
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_approach"
+
+
+def test_bomb_approach_follows_track_line_belly_down():
+    """
+    In the approach the bomber follows the target's track line (carrot pure-pursuit at
+    run altitude, run_lookahead ahead of its own along-track position), flown
+    belly-down (publishes the up-reference).
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_approach")
+    bomb = nav.personality["navigator"]["bomb"]
+    up = nav.game.scene.up_direction
+    track = np.array([0.0, 1.0, 0.0])
+    target_position = np.array([0.0, 800.0, 0.0])
+    target_speed = track * 50.0  # moving +Y, bomber on the line behind it
+    engagement = _bomb_engagement(
+        distance_m=800.0,  # behind, beyond lock distance -> stays in approach
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-30.0,
+        target_speed=target_speed,
+    )
+
+    desired_direction, speed = nav.bomb_target(engagement)
+
+    along = float(np.dot(nav.pawn.position - target_position, track))
+    carrot = (
+        target_position
+        + track * (along + bomb["run_lookahead_m"])
+        + up * bomb["run_altitude_m"]
+    )
+    expected_dir = carrot / np.linalg.norm(carrot)
+    assert nav.behaviour == "bomb_approach"
+    assert np.allclose(desired_direction, expected_dir, atol=1e-6)
+    assert nav.up_reference is not None  # approach flies belly-down
+    assert speed == pytest.approx(
+        bomb["approach_speed_factor"] * nav.pawn.max_speed_mps
+    )
+
+
+def test_bomb_approach_lost_tail_falls_back_to_ingress():
+    """
+    If the target is no longer ahead along its track (tail lost), the belly-down
+    approach drops back to the banking ingress to swing around and re-acquire it.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_approach")
+    # Target moving +Y but now BEHIND the bomber (it overshot ahead of the target):
+    # to_target points -Y while the track is +Y -> not behind -> tail lost.
+    target_position = np.array([0.0, -300.0, 0.0])
+    target_speed = np.array([0.0, 50.0, 0.0])
+    engagement = _bomb_engagement(
+        distance_m=300.0,
+        direction=np.array([0.0, -1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-30.0,
+        target_speed=target_speed,
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_ingress"
+
+
+def test_bomb_approach_locks_to_run_when_close():
+    """
+    When the target is within lock_time_s of flight (at the bomber's speed) the
+    approach locks into the belly-down run and publishes the up-reference.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_approach")
+    # Bomber speed 100 m/s, lock_time_s 2 s -> lock within ~200 m.
+    engagement = _bomb_engagement(
+        distance_m=80.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=np.array([0.0, 80.0, 0.0]),
+        longitudinal=-100.0,
+        target_speed=np.array([0.0, 50.0, 0.0]),
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_run"
+    assert nav.up_reference is not None  # belly aim published for the run
+
+
+def test_bomb_run_releases_and_breaks():
+    """
+    In the run phase, once the release solution is met the bomb is dropped and
+    the run breaks off.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_run")
+    direction = _bomb_velocity_dir(nav)
+    target_position = direction * 100.0  # aligned, in range
+    engagement = _bomb_engagement(
+        distance_m=100.0,
+        direction=direction,
+        target_position=target_position,
+        longitudinal=-55.0,  # closing (~ -dot; positive closing)
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_break"
+    nav.pawn.drop_bomb.assert_called_once()
+
+
+def test_bomb_run_without_solution_holds_and_aims_belly():
+    """
+    While closing but not yet lined up, the run continues and publishes an
+    up-reference so the pilot rolls the belly onto the target.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_run")
+    direction = np.array([0.0, 1.0, 0.0])  # target dead ahead -> no solution yet
+    engagement = _bomb_engagement(
+        distance_m=400.0,
+        direction=direction,
+        target_position=np.array([0.0, 400.0, 0.0]),
+        longitudinal=-100.0,  # still closing
+    )
+
+    nav.bomb_target(engagement)
+
+    assert nav.behaviour == "bomb_run"
+    assert nav.up_reference is not None  # belly aim published
+    nav.pawn.drop_bomb.assert_not_called()
+
+
+def test_bomb_run_follows_track_line_and_publishes_up_reference():
+    """
+    The run follows the target's track line (carrot pure-pursuit at run altitude --
+    above the diving line of sight to the target) and publishes the belly-aim
+    up-reference so the fighter pilot flies belly-down.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    _enter_behaviour(nav, "bomb_run")
+    bomb = nav.personality["navigator"]["bomb"]
+    up = nav.game.scene.up_direction
+    track = np.array([0.0, 1.0, 0.0])
+    target_position = np.array([0.0, 500.0, 0.0])
+    target_speed = track * 50.0
+    engagement = _bomb_engagement(
+        distance_m=500.0,  # beyond release range -> no drop, stays in the run
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=target_position,
+        longitudinal=-100.0,  # closing
+        target_speed=target_speed,
+    )
+
+    desired_direction, _ = nav.bomb_target(engagement)
+
+    along = float(np.dot(nav.pawn.position - target_position, track))
+    carrot = (
+        target_position
+        + track * (along + bomb["run_lookahead_m"])
+        + up * bomb["run_altitude_m"]
+    )
+    expected_dir = carrot / np.linalg.norm(carrot)
+    assert np.allclose(desired_direction, expected_dir, atol=1e-6)
+    assert desired_direction[2] > 0.0  # aims up toward the run altitude
+    assert nav.up_reference is not None  # belly aim published for the run

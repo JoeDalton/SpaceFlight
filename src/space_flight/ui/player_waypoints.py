@@ -34,9 +34,9 @@ class WaypointMarker:
 
     Plays the role of a "pawn" in the targeting system: it is added to
     :class:`Interactions` as a team-0 actor and exposes the small attribute
-    contract the targeting HUD and interaction maths read (``id``, ``team``,
-    ``position``, ``speed``, ``forward``, ``is_dead``, ``parent.name``), plus a
-    ``category`` of :data:`WAYPOINT_CATEGORY` so target filters can pick it out.
+    contract the targeting HUD and interaction maths read (id, team,
+    position, speed, forward, is_dead, parent.name), plus a
+    category of :data:`WAYPOINT_CATEGORY` so target filters can pick it out.
 
     :param game: The game/flight state
     :param radius_m: Visual radius of the sphere, in metres
@@ -49,7 +49,7 @@ class WaypointMarker:
         self.game = game
         self.id = uuid.uuid4()
         self.name = name
-        # The target HUD reads ``target.parent.name``; a marker is its own parent.
+        # The target HUD reads target.parent.name; a marker is its own parent.
         self.parent = self
         self.team = 0  # neutral: bots never target it
         self.is_dead = False
@@ -76,7 +76,7 @@ class WaypointMarker:
 
     def move_to(self, position: Sequence[float]) -> None:
         """
-        Move the marker to ``position`` (without changing its visibility).
+        Move the marker to position (without changing its visibility).
 
         :param position: World-space position
         """
@@ -117,7 +117,7 @@ class PlayerWaypoints:
     Drives the player through an ordered list of waypoints.
 
     Shows the next waypoint as a :class:`WaypointMarker`; once the player flies
-    within ``arrival_radius_m`` of it, the next one is revealed. When the last
+    within arrival_radius_m of it, the next one is revealed. When the last
     waypoint is reached the marker is removed.
 
     :param game: The game/flight state

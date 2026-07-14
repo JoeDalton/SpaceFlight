@@ -37,7 +37,7 @@ def deploy(c):
 
 
 @task
-def cover(c):
+def coverage(c):
     c.run(
         "poetry run pytest tests -v --cov-report term --cov-report html:htmlcov --cov-report xml --cov=./src/"
     )

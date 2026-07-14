@@ -86,7 +86,7 @@ def test_formation_default_scale_leader_position_is_zero():
 
 def test_formation_scales_template_by_scale_m():
     """
-    Each slot is the template position multiplied by ``scale_m``. The arrowhead
+    Each slot is the template position multiplied by scale_m. The arrowhead
     template is [1, -2, 0] at index 1, so at scale 30 it must be [30, -60, 0].
     """
     formation = Formation(scale_m=30, shape="arrowhead")

@@ -6,6 +6,7 @@ from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent
 from space_flight.utils import smooth_step_down
+from space_flight.utils.state_machine import StateMachine
 
 LOGGER = logging.getLogger()
 
@@ -24,11 +25,16 @@ class GenericTactician:
     ):
         self.game = game
         self.pawn = pawn
-        self.intent = Intent.IDLE  # Current state
+        # The intent is the FSM state; the personality's commitment_times are
+        # its per-state minimum dwell (hysteresis), checked dynamically in think()
+        # so a runtime personality swap takes effect.
+        self.intent_sm = StateMachine(
+            initial_state=Intent.IDLE,
+            clock=self.game.game_time.get_current_time,
+        )
         self.target_dict = {}  # Current target
         self.primary_target_ids = []  # Assigned by squad tactics or level scenario
         self.time_since_update_s = 0.0
-        self.time_since_commitment_s = 1000.0  # A new intent is chosen right away
         # Bot personality/role:
         # - commitment times (hysteresis)
         # - transition thresholds (aggresivity/recklessness)
@@ -36,29 +42,37 @@ class GenericTactician:
         self.personality = personality
         self.debug = debug
 
+    @property
+    def intent(self):
+        """The current intent (the intent state machine's state)."""
+        return self.intent_sm.state
+
     def think(self):
         """
         Evaluates the intent of the bot at the correct frequency
         """
         dt = self.game.game_time.get_time_step()
         self.time_since_update_s += dt
-        self.time_since_commitment_s += dt
+        commitment_time_s = self.personality["tactician"]["commitment_times"][
+            self.intent_sm.state
+        ]
         # TODO make this probabilistic to avoid everyone update at the same time ?
         if (
             self.time_since_update_s
             >= self.personality["tactician"]["intent_update_delay"]
-        ) and (
-            self.time_since_commitment_s
-            >= self.personality["tactician"]["commitment_times"][self.intent]
-        ):
+        ) and (self.intent_sm.time_in_state_s >= commitment_time_s):
             self.time_since_update_s = 0.0
             intent, target_dict = self.update_intent()
             if (
-                (intent != self.intent)
+                (intent != self.intent_sm.state)
                 or (target_dict.get("target_id") != self.target_dict.get("target_id"))
                 or (  # Changing formation position, for ships only
                     target_dict.get("formation_index")
                     != self.target_dict.get("formation_index")
+                )
+                or (  # Switching weapon (e.g. bombs depleted -> guns)
+                    target_dict.get("attack_mode")
+                    != self.target_dict.get("attack_mode")
                 )
             ):
                 if self.debug:
@@ -66,17 +80,21 @@ class GenericTactician:
                         f"Tactician {self.pawn.parent.name} switched to intent "
                         f"{intent}, target {target_dict}"
                     )
-                self.time_since_commitment_s = 0.0
-                self.intent = intent
+                if intent != self.intent_sm.state:
+                    # New intent: transition (resets the commitment timer).
+                    self.intent_sm.request(intent, force=True)
+                else:
+                    # Same intent, new target/formation: recommit to the decision.
+                    self.intent_sm.reset_timer()
                 self.target_dict = target_dict
 
         # Register target_id if in offensive mode so the auto-aim can do its job
-        if self.intent == Intent.ENGAGE:
+        if self.intent_sm.state == Intent.ENGAGE:
             self.pawn.target_id = self.target_dict["target_id"]
         else:
             self.pawn.target_id = None
 
-        return self.intent, self.target_dict
+        return self.intent_sm.state, self.target_dict
 
     def update_intent(self):
         """
@@ -262,6 +280,18 @@ class GenericTactician:
                     formation_index
                 ],
             }
+
+    def evaluate_fighting_shape(self) -> float:
+        """
+        The bot's fitness to keep fighting: half its health plus its shield. Reads
+        the uniform healthshield_level exposed by every pawn, so it works
+        the same for fighters and capital ships.
+
+        TODO: add an "energy" mechanic ? Health of subsystems ?
+
+        :return: The fighting-shape score
+        """
+        return 0.5 * self.pawn.health + self.pawn.shield_level
 
     def clean(self):
         self.pawn = None

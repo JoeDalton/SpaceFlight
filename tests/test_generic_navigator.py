@@ -36,57 +36,45 @@ def navigator(mock_game):
 
 
 # ---------------------------------------------------------------------------
-# record_behaviour
+# behaviour / behaviour_duration_s (the behaviour state machine's accessors)
 # ---------------------------------------------------------------------------
 
 
-def test_record_behaviour_same_behaviour_increments_duration(mock_game, navigator):
+def test_same_behaviour_accumulates_duration(mock_game, navigator):
     """
-    Calling record_behaviour with the same behaviour name accumulates time
-    since the last update.
+    Re-requesting the current behaviour is a no-op, so its time-in-state keeps
+    accumulating.
     """
     mock_game.game_time.get_current_time.return_value = 1.0
-    navigator.record_behaviour("patrol")
+    navigator.behaviour_sm.request("patrol")
 
     mock_game.game_time.get_current_time.return_value = 2.5
-    navigator.record_behaviour("patrol")
+    navigator.behaviour_sm.request("patrol")
 
     assert navigator.behaviour_duration_s == pytest.approx(1.5)
 
 
-def test_record_behaviour_different_behaviour_resets_duration(mock_game, navigator):
+def test_switching_behaviour_resets_duration(mock_game, navigator):
     """
     Switching to a different behaviour resets behaviour_duration_s to zero.
     """
     mock_game.game_time.get_current_time.return_value = 1.0
-    navigator.record_behaviour("patrol")
+    navigator.behaviour_sm.request("patrol")
 
     mock_game.game_time.get_current_time.return_value = 3.0
-    navigator.record_behaviour("engage")
+    navigator.behaviour_sm.request("engage")
 
     assert navigator.behaviour_duration_s == pytest.approx(0.0)
 
 
-def test_record_behaviour_different_behaviour_updates_behaviour_name(
-    mock_game, navigator
-):
+def test_switching_behaviour_updates_behaviour_name(mock_game, navigator):
     """
-    After switching, the behaviour attribute holds the new name.
+    After switching, the behaviour property holds the new name.
     """
-    navigator.record_behaviour("patrol")
-    navigator.record_behaviour("engage")
+    navigator.behaviour_sm.request("patrol")
+    navigator.behaviour_sm.request("engage")
 
     assert navigator.behaviour == "engage"
-
-
-def test_record_behaviour_updates_last_update_time(mock_game, navigator):
-    """
-    After each call, last_update_time must equal the current time.
-    """
-    mock_game.game_time.get_current_time.return_value = 5.0
-    navigator.record_behaviour("idle")
-
-    assert navigator.last_update_time == pytest.approx(5.0)
 
 
 # ---------------------------------------------------------------------------

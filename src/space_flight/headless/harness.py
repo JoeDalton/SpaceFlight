@@ -37,11 +37,11 @@ class HeadlessHarness:
 
     def __init__(self, time_step: float = DEFAULT_TIME_STEP, app=None) -> None:
         """
-        :param time_step: fixed ``dt`` (seconds) applied to Panda3D's clock
+        :param time_step: fixed dt (seconds) applied to Panda3D's clock
             for every simulation step, so runs are deterministic and can go
             faster than real time.
         :param app: an existing headless :class:`SpaceFlightSimulator` to
-            reuse instead of constructing a new one. ``ShowBase`` is a
+            reuse instead of constructing a new one. ShowBase is a
             per-process singleton (a second instance raises), so callers that
             already hold one (e.g. a shared test fixture) must pass it in
             rather than letting the harness build its own.
@@ -68,11 +68,11 @@ class HeadlessHarness:
         clean it up.
 
         :param selected_level: level name, as read from
-            ``app.configuration["selected_level"]`` (e.g. ``"Dev"``)
+            app.configuration["selected_level"] (e.g. "Dev")
         :param max_steps: safety cap on simulation steps, in case the level
             never reaches an outcome (e.g. a deadlocked bot strategy)
         :return: a context manager yielding the :class:`FlightState`, stopped
-            at the moment ``outcome`` was set (or ``max_steps`` was hit)
+            at the moment outcome was set (or max_steps was hit)
         """
         self.app.configuration["selected_level"] = selected_level
         self.app.state_manager.push(StateManager.GAME_STATE, headless=True)

@@ -22,6 +22,9 @@ laser_fire_rate: 8
 cannon_positions: [[-3, 5, -1], [3, 5, -1]]
 laser_sound: sounds/weapons/YWING_BLASTER.wav
 shot_power: 60.0
+
+# Limited bomb ordnance (the bomb weapon itself is not implemented yet).
+bomb_supply: 6
 explosion_scale: 5.0
 
 exterior_engine_sound: sounds/engines/y-wing/yw_ext_med.ogg

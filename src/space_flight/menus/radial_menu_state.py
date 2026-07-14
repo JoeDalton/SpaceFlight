@@ -2,10 +2,10 @@
 Radial menu overlay state.
 
 Pushed on top of :class:`~space_flight.game.flight_state.FlightState` when the
-player holds the radial-menu trigger.  Game time keeps running (``PAUSES_BELOW
-= False``), so the simulation continues while the menu is visible.
+player holds the radial-menu trigger.  Game time keeps running (PAUSES_BELOW
+= False), so the simulation continues while the menu is visible.
 
-The menu is parameterised at push time via ``state_manager.push()`` kwargs::
+The menu is parameterised at push time via state_manager.push() kwargs::
 
     app.state_manager.push(
         state_class=app.state_manager.RADIAL_MENU_STATE,
@@ -49,7 +49,7 @@ class RadialMenuVisual:
 
     def __init__(self, app, slice_labels: list[str]) -> None:
         """
-        :param app: The simulator app (needed for ``aspect2d``).
+        :param app: The simulator app (needed for aspect2d).
         :param slice_labels: Display text for each slice
         """
         self.frame = DirectFrame(
@@ -80,7 +80,7 @@ class RadialMenuVisual:
         Highlight *selected* and dim all other slices.
 
         :param selected: Index of the slice the player is pointing at, or
-            ``None`` when the direction vector is within the dead zone.
+            None when the direction vector is within the dead zone.
         """
         for i, lbl in enumerate(self.labels):
             active = i == selected
@@ -105,8 +105,8 @@ class RadialMenuState(BaseState):
     """
     Overlay state for the radial menu.
 
-    ``PAUSES_BELOW = False`` means :class:`StateManager` will **not** call
-    ``pause()`` on the game state below, so physics and game logic keep
+    PAUSES_BELOW = False means :class:`StateManager` will **not** call
+    pause() on the game state below, so physics and game logic keep
     running while the menu is open.
 
     This state owns the visual overlay.  The input is handled by
@@ -126,10 +126,10 @@ class RadialMenuState(BaseState):
     ) -> None:
         """
         :param app: The simulator app.
-        :param on_select: Called with the selected slice index (``int``) or
-            ``None`` when the trigger is released without a valid direction.
-        :param slice_labels: Optional display labels; defaults to ``["0",
-            "1", ...]``.
+        :param on_select: Called with the selected slice index (int) or
+            None when the trigger is released without a valid direction.
+        :param slice_labels: Optional display labels; defaults to ["0",
+            "1", ...].
         :param min_magnitude: Direction vector magnitude below which no slice
             is considered selected.
         """

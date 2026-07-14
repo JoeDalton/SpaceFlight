@@ -48,7 +48,7 @@ FIRE_SIZE_MIN, FIRE_SIZE_MAX = 0.6, 1.5
 SMOKE_SIZE_MIN, SMOKE_SIZE_MAX = 0.8, 2.0
 
 #: Smoke particles become visible this many seconds after fire.
-#: Implemented as a future ``spawn_time`` offset in vertex data — no CPU
+#: Implemented as a future spawn_time offset in vertex data — no CPU
 #: bookkeeping required.
 SMOKE_DELAY = 0.3
 
@@ -60,7 +60,7 @@ SMOKE_POS_BIAS = 0.5
 
 #: Fade-in duration as a fraction of each particle's total lifetime.
 #: 0.3 means the particle reaches full opacity at 30% of its life.
-#: Uploaded to the shader as the ``uFadein`` uniform.
+#: Uploaded to the shader as the uFadein uniform.
 FIRE_FADEIN = 0.3
 SMOKE_FADEIN = 0.7
 
@@ -74,14 +74,14 @@ _JSON_SMOKE = DATAFILES_PATH / "sprites/particles/smoke_atlas.json"
 # Hit-explosion knobs
 # ---------------------------------------------------------------------------
 # A small secondary explosion triggered on *some* laser hits (see
-# ``ExplosionPool.spawn_hit`` and ``collisions.py``). Tune these to taste.
+# ExplosionPool.spawn_hit and collisions.py). Tune these to taste.
 
 #: Explosion scale multiplier for a hit burst. Multiplies the particle sizes /
 #: speeds / bias radii above; not a literal metre radius.
 HIT_EXPLOSION_SCALE = 2.0
 
 #: Billboard counts for a hit burst — kept well below a death explosion's
-#: (``FIRE_COUNT`` / ``SMOKE_COUNT``) because hits are frequent (performance).
+#: (FIRE_COUNT / SMOKE_COUNT) because hits are frequent (performance).
 HIT_EXPLOSION_FIRE_COUNT = 3
 HIT_EXPLOSION_SMOKE_COUNT = 2
 
@@ -99,7 +99,7 @@ HIT_EXPLOSION_JET_ANGLE_SCALE = 1.0
 # ---------------------------------------------------------------------------
 
 #: The explosion shader is shared by both buffers (fire and smoke); load it
-#: once, lazily. Fire and smoke differ only by the ``uFadein`` uniform.
+#: once, lazily. Fire and smoke differ only by the uFadein uniform.
 _EXPLOSION_SHADER = None
 
 
@@ -144,9 +144,9 @@ class _ExplosionBuffer(ParticleBuffer):
 
     :param game:       Parent game
     :param texture:    Sprite atlas :class:`Texture`.
-    :param tile_rects: List of ``(u, v, uw, vh)`` atlas rect tuples.
+    :param tile_rects: List of (u, v, uw, vh) atlas rect tuples.
     :param fadein:     Fraction of lifetime over which alpha ramps 0 → 1,
-                       uploaded as the ``uFadein`` uniform.
+                       uploaded as the uFadein uniform.
     :param bin_order:  Transparent bin sort order.
     :param additive:   Whether to use additive blending.
     :param task_name:  Unique Panda3D task name.
@@ -221,9 +221,9 @@ class _ExplosionBuffer(ParticleBuffer):
 # ---------------------------------------------------------------------------
 
 #: Bundles the constants that differ between the fire and smoke layers so a
-#: single :func:`_emit_layer` drives both. ``speed``/``size``/``life``/``spin``
-#: are ``(min, max)`` ranges; ``cone_half_angle`` is the emission-cone
-#: half-angle (radians); ``delay`` offsets the layer in time.
+#: single :func:`_emit_layer` drives both. speed / size / life / spin
+#: are (min, max) ranges; cone_half_angle is the emission-cone
+#: half-angle (radians); delay offsets the layer in time.
 _Layer = namedtuple("_Layer", "cone_half_angle speed size life spin pos_bias delay")
 
 _FIRE_LAYER = _Layer(
@@ -266,8 +266,8 @@ def _emit_layer(
     :param count:       Number of particles to emit.
     :param position:    World-space burst centre (numpy array).
     :param base_velocity: Inherited velocity added to every particle (array).
-    :param basis:       ``(normal, tangent, bitangent)`` from
-                        :func:`build_orthogonal_basis`. ``normal`` is ``None``
+    :param basis:       (normal, tangent, bitangent) from
+                        :func:`build_orthogonal_basis`. normal is None
                         for a death explosion (no impact surface): the cone
                         sampler then returns a zero direction, so the particles
                         carry only *base_velocity* plus positional bias and do
@@ -363,18 +363,18 @@ class ExplosionPool:
         """
         Emit one explosion burst.
 
-        :param position: World-space explosion centre (Panda ``Point3`` or a
+        :param position: World-space explosion centre (Panda Point3 or a
                          length-3 array).
         :param scale:    Overall size / speed multiplier applied to particle
                          sizes, speeds, and positional bias radii.
         :param base_velocity: Inherited velocity (length-3 array) added to all
                          particles, e.g. from a moving object at impact.
-        :param normal:   Surface normal at the impact point (``Point3``/``Vec3``
+        :param normal:   Surface normal at the impact point (Point3Vec3
                          or array); particles fan out in a cone around it. Pass
-                         ``None`` (the default, used by death explosions) for no
+                         None (the default, used by death explosions) for no
                          directional spread — see :func:`_emit_layer`.
-        :param fire_count:  Number of fire particles (defaults to ``FIRE_COUNT``).
-        :param smoke_count: Number of smoke particles (defaults to ``SMOKE_COUNT``).
+        :param fire_count:  Number of fire particles (defaults to FIRE_COUNT).
+        :param smoke_count: Number of smoke particles (defaults to SMOKE_COUNT).
         :param speed_scale: Extra multiplier on launch speed, on top of *scale*
                          (< 1 keeps the burst tighter — used by hit explosions).
         :param jet_angle_scale: Multiplier on the fire/smoke emission-cone
@@ -416,7 +416,7 @@ class ExplosionPool:
         Emit a small, cheap secondary explosion for a laser hit.
 
         A contained burst (few billboards, low speed) sized/shaped by the
-        ``HIT_EXPLOSION_*`` module knobs, biased along the impact *normal* like
+        HIT_EXPLOSION_* module knobs, biased along the impact *normal* like
         the hit sparks.
 
         :param position:      World-space impact point.

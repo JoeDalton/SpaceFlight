@@ -43,9 +43,9 @@ python ./scripts/launcher.py
 
     `invoke testall`
 
-* To check the code cover:
+* To check the code coverage:
 
-    `invoke cover`
+    `invoke coverage`
 
 * To run precommit hooks, to check the quality:
 

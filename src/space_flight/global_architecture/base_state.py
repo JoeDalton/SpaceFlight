@@ -49,7 +49,7 @@ class BaseState:
 
     def pause(self):
         """
-        Called when a new state with ``PAUSES_BELOW = True`` is pushed on
+        Called when a new state with PAUSES_BELOW = True is pushed on
         top of this one.
 
         Override to hide UI or stop tasks that should not run while the

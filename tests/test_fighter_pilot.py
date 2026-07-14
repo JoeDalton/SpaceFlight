@@ -53,6 +53,50 @@ def make_pilot_with_axes(
 
 
 # ---------------------------------------------------------------------------
+# compute_angular_error — up-reference (bomb-run belly aim)
+# ---------------------------------------------------------------------------
+
+
+def test_up_reference_suppresses_banking(mock_game):
+    """
+    A lateral target normally makes the fighter bank hard; with an up-reference
+    supplied (a bomb run's belly aim) banking is suppressed and the roll comes
+    only from levelling to the reference.
+    """
+    pilot = make_pilot_with_axes(mock_game)
+    lateral_target = np.array([0.5, np.sqrt(3) / 2, 0.0])  # 30 deg to the right
+
+    _, _, roll_no_ref, _ = pilot.compute_angular_error(lateral_target)
+    _, _, roll_with_ref, _ = pilot.compute_angular_error(
+        lateral_target, up_reference=np.array([0.0, 0.0, 1.0])
+    )
+
+    assert abs(roll_no_ref) > 1.0  # banks hard into the turn
+    assert roll_with_ref == pytest.approx(0.0, abs=1e-6)  # wings-level, no bank
+
+
+def test_up_reference_rolls_toward_reference(mock_game):
+    """
+    With the ship banked (right tilted away from the reference), an up-reference
+    produces a non-zero levelling roll to bring the belly back onto the target.
+    """
+    # Ship rolled 45 deg: right and up tilted in the X-Z plane.
+    s = np.sqrt(2) / 2
+    pilot = make_pilot_with_axes(
+        mock_game,
+        right=np.array([s, 0.0, s]),
+        forward=np.array([0.0, 1.0, 0.0]),
+        up=np.array([-s, 0.0, s]),
+    )
+
+    _, _, roll_error, _ = pilot.compute_angular_error(
+        np.array([0.0, 1.0, 0.0]), up_reference=np.array([0.0, 0.0, 1.0])
+    )
+
+    assert abs(roll_error) > 0.1  # not level with the reference -> corrects
+
+
+# ---------------------------------------------------------------------------
 # compute_angular_error — zero direction
 # ---------------------------------------------------------------------------
 

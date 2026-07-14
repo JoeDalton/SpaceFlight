@@ -39,6 +39,7 @@ contexts:
       view_right:          l
       # Actions
       fire:                space
+      drop_bomb:           x
       boost_on:            b
       boost_off:           b
       pause:               escape
@@ -56,6 +57,7 @@ contexts:
       roll:                right_x
       # Actions
       fire:                gamepad_lshoulder
+      drop_bomb:           gamepad_face_x
       boost_on:            gamepad_rshoulder
       boost_off:           gamepad_rshoulder
       pause:               gamepad_start
@@ -78,6 +80,7 @@ contexts:
       view_right:          stick_button_17
       # Actions
       fire:                stick_button_1
+      drop_bomb:           stick_button_2
       boost_on:            stick_button_8
       boost_off:           stick_button_8
       # pause: not bound — assign a stick_button_N when your stick has one

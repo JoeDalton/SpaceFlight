@@ -22,6 +22,9 @@ laser_fire_rate: 8
 cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 80.0
+
+# Limited bomb ordnance (the bomb weapon itself is not implemented yet).
+bomb_supply: 8
 explosion_scale: 5.0
 
 exterior_engine_sound: sounds/engines/tie_common/tie_ext_low.ogg

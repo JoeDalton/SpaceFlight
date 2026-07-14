@@ -203,7 +203,7 @@ class SparkPool(ParticleBuffer):
         """
         Emit one burst of hit sparks.
 
-        Each spark's colour is premixed here (``color_outer`` → ``color_inner``
+        Each spark's colour is premixed here (color_outer → color_inner
         by its size, a proxy for launch speed) and written per-particle, so
         concurrent bursts of different presets do not repaint each other.
 

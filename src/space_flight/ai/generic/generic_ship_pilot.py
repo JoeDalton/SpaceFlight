@@ -100,11 +100,15 @@ class GenericShipPilot(GenericPilot):
         self,
         target_direction: np.ndarray = np.zeros(3),
         desired_speed_mps: float = 0.0,
+        up_reference: np.ndarray = None,
     ):
         """
         Given a target direction and the current orientation of the ship, compute the
         yaw, pitch and roll rates that will be applied to the trajectory.
         Given a desired ship speed, compute the necessary throttle.
+
+        :param up_reference: Optional world "up" the ship should roll its +Z toward
+            (belly-aiming for a bomb run). None means level to world/scene up.
 
         TODO : take into account the speed vector instead of ship axes to account for
         nicer flight dynamics (sideslip, AoA) ?
@@ -117,7 +121,9 @@ class GenericShipPilot(GenericPilot):
             pitch_error,
             roll_error,
             cos_angle_to_target,
-        ) = self.compute_angular_error(target_direction=target_direction)
+        ) = self.compute_angular_error(
+            target_direction=target_direction, up_reference=up_reference
+        )
         self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Find velocity error
@@ -141,11 +147,14 @@ class GenericShipPilot(GenericPilot):
 
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
 
-    def compute_angular_error(self, target_direction: np.ndarray) -> tuple[float]:
+    def compute_angular_error(
+        self, target_direction: np.ndarray, up_reference: np.ndarray = None
+    ) -> tuple[float]:
         """
         Computes the angular error of the ship. Depends on the ship type.
 
         :param target_direction: Direction of the target
+        :param up_reference: Optional world "up" to roll +Z toward (default level)
         :return: the yaw, pitch and roll error, and the alignment error
         """
         raise NotImplementedError

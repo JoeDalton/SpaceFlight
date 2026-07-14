@@ -50,7 +50,7 @@ def build_intro_upfront(game: FlightState) -> None:
 def build_intro_level(game: FlightState) -> Iterator[str]:
     """
     A generator that builds the rest of the level one step at a time, DURING the
-    hyperspace animation. Each ``yield`` hands control back to the render loop so
+    hyperspace animation. Each yield hands control back to the render loop so
     the animation keeps playing; the loading overlay advances it once per frame.
 
     Assumes :func:`build_intro_upfront` has already created the player and the

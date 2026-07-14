@@ -32,12 +32,12 @@ sub_systems:
   # Bot-controlled tractor beam projectors. Each tracks a prey and, once it is in
   # the antenna's cone and range, reels it in with drag + attraction until the
   # prey breaks free or the grab times out. base_position/orientation ship-local.
-  tractor_beams:
-    - tractor_beam_type: test
-      base_position: [0.0, 0.0, -20.0]  # under the hull
-      base_orientation: [0.0, 1.0, 0.0, 0.0]
-      ini_yaw_deg: 0.0
-      ini_pitch_deg: 30.0
+  # tractor_beams:
+  #   - tractor_beam_type: test
+  #     base_position: [0.0, 0.0, -20.0]  # under the hull
+  #     base_orientation: [0.0, 1.0, 0.0, 0.0]
+  #     ini_yaw_deg: 0.0
+  #     ini_pitch_deg: 30.0
 
   # Shield generators: external subsystems that TOGETHER project the single
   # shared shield defined below. Every generator contributes an equal share of
@@ -67,6 +67,6 @@ sub_systems:
       point_a: [0.0, -40.0, 0.0]
       point_b: [0.0, 40.0, 0.0]
       radius_m: 50.0
-    health: 2000.0
+    health: 20000.0
     regen_rate: 25.0
     color: [0.4, 0.8, 1.0, 0.15]

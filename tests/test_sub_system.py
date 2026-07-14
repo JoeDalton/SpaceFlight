@@ -1,7 +1,7 @@
 """
 Unit tests for the generic SubSystem (shield generators, ship-mounted turrets).
 
-Instances are built with ``object.__new__`` so individual methods can be
+Instances are built with object.__new__ so individual methods can be
 exercised without Panda3D assets or a running game.
 """
 
@@ -17,7 +17,7 @@ from space_flight.actors.capital_ship.sub_system import SubSystem
 
 def make_game_and_parent(team: int = 2):
     """
-    Build a mock game and parent ship sufficient to run ``SubSystem.__init__``
+    Build a mock game and parent ship sufficient to run SubSystem.__init__
     (no loader/traverser needed: a subsystem collider is into-only).
     """
     game = MagicMock()

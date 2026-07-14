@@ -6,6 +6,11 @@ import yaml
 from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
 from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
+from space_flight.utils.state_machine import Cooldown, StateMachine
+
+# Grab state machine states.
+_SEARCHING = "searching"
+_GRABBING = "grabbing"
 
 LOGGER = logging.getLogger()
 
@@ -20,7 +25,7 @@ class TractorBeamProjector(TrackingMount):
     projector locks on and, every frame, applies two world-frame forces to the
     prey via :meth:`~space_flight.actors.ship.Ship.apply_external_force`:
 
-    - a drag ``-k * ||v_rel|| * v_rel`` opposing the prey's velocity *relative to
+    - a drag -k * ||v_rel|| * v_rel opposing the prey's velocity *relative to
       the projector's ship*,
     - a light attraction pulling the prey toward the projector.
 
@@ -84,35 +89,37 @@ class TractorBeamProjector(TrackingMount):
         self.drag_coefficient = conf["drag_coefficient"]
         self.attraction_force_n = conf["attraction_force_n"]
 
-        # Grab state
-        self.is_grabbing = False
+        # Grab state machine (searching <-> grabbing) + re-grab cooldown, both on
+        # the game clock so grab timing is uniform with the other subsystems.
+        clock = self.game.game_time.get_current_time
+        self.grab_sm = StateMachine(initial_state=_SEARCHING, clock=clock)
         self.grabbed_prey_id = None
-        self.grab_start_time = None
-        self.last_release_time = None
+        self.regrab_cooldown = Cooldown(
+            duration_s=self.personality["tractor_beam"]["regrab_cooldown_s"],
+            clock=clock,
+        )
+
+    @property
+    def is_grabbing(self) -> bool:
+        """Whether the beam is currently holding a prey."""
+        return self.grab_sm.state == _GRABBING
 
     def _operate(self):
         """
         Per-frame tractor action: keep reeling in the current prey, or try to
         acquire a new one.
         """
-        now = self.game.game_time.get_current_time()
-        if self.is_grabbing:
-            self._service_grab(now)
+        if self.grab_sm.state == _GRABBING:
+            self._service_grab()
         else:
-            self._try_acquire(now)
+            self._try_acquire()
 
-    def _try_acquire(self, now: float):
+    def _try_acquire(self):
         """
         Lock onto the tactician's prey if it sits inside the grab cone and within
         range, honouring the re-grab cooldown.
-
-        :param now: The current game time
         """
-        params = self.personality["tractor_beam"]
-        if (
-            self.last_release_time is not None
-            and now - self.last_release_time < params["regrab_cooldown_s"]
-        ):
+        if not self.regrab_cooldown.ready():
             return
         prey = self._resolve_prey(self.target_id)
         if prey is None:
@@ -120,37 +127,35 @@ class TractorBeamProjector(TrackingMount):
         distance_m, _, to_prey_dir = self._prey_kinematics(prey)
         in_cone = np.dot(to_prey_dir, self.forward) >= self.grab_cone_cos
         if distance_m <= self.range_m and in_cone:
-            self._start_grab(prey, now)
+            self._start_grab(prey)
 
-    def _service_grab(self, now: float):
+    def _service_grab(self):
         """
         Hold the grabbed prey: release it if a release condition is met, otherwise
         apply the tractor forces for this frame.
-
-        :param now: The current game time
         """
         params = self.personality["tractor_beam"]
         prey = self._resolve_prey(self.grabbed_prey_id)
         if prey is None:
-            self._release(now)
+            self._release()
             return
 
         distance_m, v_rel, to_prey_dir = self._prey_kinematics(prey)
-        elapsed_s = now - self.grab_start_time
+        elapsed_s = self.grab_sm.time_in_state_s
 
         # Out of reach, held too long, or -- once committed for the minimum time
         # -- wrenched free by going fast enough relative to us.
         if distance_m > self.range_m:
-            self._release(now)
+            self._release()
             return
         if elapsed_s >= params["max_grab_time_s"]:
-            self._release(now)
+            self._release()
             return
         if (
             elapsed_s >= params["min_grab_time_s"]
             and np.linalg.norm(v_rel) >= params["release_speed_mps"]
         ):
-            self._release(now)
+            self._release()
             return
 
         self._apply_tractor_forces(prey, v_rel, to_prey_dir)
@@ -169,16 +174,14 @@ class TractorBeamProjector(TrackingMount):
         attraction_force = -self.attraction_force_n * to_prey_dir
         prey.apply_external_force(drag_force + attraction_force)
 
-    def _start_grab(self, prey, now: float):
+    def _start_grab(self, prey):
         """
         Begin grabbing a prey, cueing the player-grab SFX if it is the player.
 
         :param prey: The prey to grab
-        :param now: The current game time
         """
-        self.is_grabbing = True
+        self.grab_sm.request(_GRABBING, force=True)
         self.grabbed_prey_id = prey.id
-        self.grab_start_time = now
         try:
             if prey.id == self.game.player.pawn.id:
                 self.game.app.sfx.tractor_beam_grab(game=self.game)
@@ -186,13 +189,11 @@ class TractorBeamProjector(TrackingMount):
             # No player yet (e.g. headless), or SFX not wired: grabbing still works
             pass
 
-    def _release(self, now: float):
+    def _release(self):
         """
         Release the current prey and start the re-grab cooldown, cueing the
         player-release SFX if the freed prey was the player. The prey's external
         force clears itself once we stop applying it.
-
-        :param now: The current game time
         """
         try:
             if self.grabbed_prey_id == self.game.player.pawn.id:
@@ -200,18 +201,17 @@ class TractorBeamProjector(TrackingMount):
         except AttributeError:
             # No player yet (e.g. headless), or SFX not wired: release still works
             pass
-        self.is_grabbing = False
+        self.grab_sm.request(_SEARCHING, force=True)
         self.grabbed_prey_id = None
-        self.grab_start_time = None
-        self.last_release_time = now
+        self.regrab_cooldown.trigger()
 
     def _resolve_prey(self, prey_id):
         """
         Resolve a prey id to a live, grabbable actor (one that can receive a
-        force), or ``None``.
+        force), or None.
 
         :param prey_id: The prey's actor id
-        :return: The prey actor, or ``None`` if gone or not grabbable
+        :return: The prey actor, or None if gone or not grabbable
         """
         if prey_id is None:
             return None
@@ -250,6 +250,5 @@ class TractorBeamProjector(TrackingMount):
         itself on the next physics step once we stop applying it.
         """
         if not self.is_clean:
-            self.is_grabbing = False
             self.grabbed_prey_id = None
             super().clean()

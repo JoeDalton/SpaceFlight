@@ -360,6 +360,42 @@ def test_flight_ctx_active_false_when_not_pressed_or_held():
     assert ctx.active(state, "fire") is False
 
 
+def test_flight_ctx_handle_actions_fires_on_fire_binding():
+    """
+    handle_actions must fire the laser cannon while the fire binding is active.
+    """
+    ctx, _, player = make_flight_ctx(
+        device_bindings={"fire": "space", "drop_bomb": "x"}
+    )
+    ctx.handle_actions(make_state(buttons={"space": True}))
+    player.pawn.laser_cannon.fire.assert_called_once()
+    player.pawn.drop_bomb.assert_not_called()
+
+
+def test_flight_ctx_handle_actions_drops_bomb_on_drop_bomb_binding():
+    """
+    handle_actions must drop a bomb while the drop_bomb binding is active, without
+    firing the guns.
+    """
+    ctx, _, player = make_flight_ctx(
+        device_bindings={"fire": "space", "drop_bomb": "x"}
+    )
+    ctx.handle_actions(make_state(buttons={"x": True}))
+    player.pawn.drop_bomb.assert_called_once()
+    player.pawn.laser_cannon.fire.assert_not_called()
+
+
+def test_flight_ctx_handle_actions_no_bomb_when_idle():
+    """
+    handle_actions must not drop a bomb when the drop_bomb binding is inactive.
+    """
+    ctx, _, player = make_flight_ctx(
+        device_bindings={"fire": "space", "drop_bomb": "x"}
+    )
+    ctx.handle_actions(make_state(buttons={}))
+    player.pawn.drop_bomb.assert_not_called()
+
+
 def test_flight_ctx_axis_returns_value():
     """
     axis must return the axis value from state.axes for the bound action.
@@ -519,7 +555,7 @@ def make_radial_ctx(
 
     :param input_type: Active device type.
     :param device_bindings: Flight context device bindings.
-    :param radial_bindings: ``radial_menu`` context bindings (direction keys /
+    :param radial_bindings: radial_menu context bindings (direction keys /
         axes).
     :param n_slices: Number of radial slices.
     :param trigger_hw: Hardware name of the trigger button.

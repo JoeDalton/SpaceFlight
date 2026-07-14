@@ -4,7 +4,7 @@ import sys
 
 import numpy as np
 
-from space_flight import DEBUG_DELETION
+from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.capital_ship import CapitalShip
 from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
 from space_flight.actors.capital_ship.turret import Turret
@@ -175,8 +175,16 @@ class Bot(Destructible):
             target_direction, desired_speed_mps = self.navigator.navigate(
                 intent=intent, target_dict=target_dict
             )
+            if RECORD_GAME and self.record:
+                self.record_state(
+                    intent=intent,
+                    target_dict=target_dict,
+                    desired_speed_mps=desired_speed_mps,
+                )
             throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
-                target_direction=target_direction, desired_speed_mps=desired_speed_mps
+                target_direction=target_direction,
+                desired_speed_mps=desired_speed_mps,
+                up_reference=self.navigator.up_reference,
             )
             self.pawn.move(
                 throttle=throttle,
@@ -197,6 +205,94 @@ class Bot(Destructible):
             )
         else:
             raise NotImplementedError(f"Unknown bot type {self.bot_type}")
+
+    def record_state(self, intent, target_dict: dict, desired_speed_mps: float):
+        """
+        Step-by-step recording of the bot's tactical decision (intent, attack mode,
+        target and the resulting kinematics), namespaced by bot name, for post-hoc
+        analysis of an engagement.
+
+        :param intent: The tactician's chosen intent
+        :param target_dict: The tactician's target info (may hold attack_mode)
+        :param desired_speed_mps: The navigator's desired speed
+        """
+        name = self.name
+        record = self.game.record
+
+        record.record(
+            f"{name}_intent", intent.name if hasattr(intent, "name") else str(intent)
+        )
+        attack_mode = target_dict.get("attack_mode")
+        record.record(
+            f"{name}_attack_mode",
+            attack_mode.name if attack_mode is not None else "",
+        )
+
+        # Resolve the target's readable name and current distance, when it is a
+        # real actor (some intents carry a sentinel target_id instead).
+        target_id = target_dict.get("target_id")
+        target_name = ""
+        distance_to_target_m = float("nan")
+        target_speed_mps = float("nan")
+        target_mobility = float("nan")
+        nan3 = np.full(3, float("nan"))
+        target_position_m = nan3
+        target_velocity_mps = nan3
+        try:
+            target_index = self.game.interactions.get_actor_index_from_id(target_id)
+            my_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
+            target_actor = self.game.interactions.actors[target_index]
+            target_name = getattr(
+                target_actor,
+                "name",
+                getattr(getattr(target_actor, "parent", None), "name", str(target_id)),
+            )
+            distance_to_target_m = float(
+                self.game.interactions.distances[my_index, target_index]
+            )
+            target_velocity_mps = np.asarray(
+                getattr(target_actor, "speed", nan3), dtype=float
+            )
+            target_speed_mps = float(np.linalg.norm(target_velocity_mps))
+            target_mobility = float(getattr(target_actor, "mobility", float("nan")))
+            target_position_m = np.asarray(
+                getattr(target_actor, "position", nan3), dtype=float
+            )
+        except (ValueError, KeyError, TypeError, AttributeError):
+            pass
+
+        record.record(f"{name}_target", str(target_name))
+        record.record(f"{name}_distance_to_target_m", distance_to_target_m)
+        record.record(f"{name}_target_speed_mps", target_speed_mps)
+        record.record(f"{name}_target_mobility", target_mobility)
+        record.record(f"{name}_desired_speed_mps", float(desired_speed_mps))
+        record.record(f"{name}_speed_mps", float(np.linalg.norm(self.pawn.speed)))
+
+        # Full kinematics (like the player's) so a bomb run's geometry -- overfly
+        # position, belly aim, lead/cone alignment -- can be reconstructed offline.
+        record.record(
+            f"{name}_behaviour", str(getattr(self.navigator, "behaviour", ""))
+        )
+        record.record(f"{name}_position_m", self.pawn.position.copy())
+        record.record(f"{name}_orientation_quat", self.pawn.orientation.copy())
+        record.record(f"{name}_velocity_mps", self.pawn.speed.copy())
+        record.record(f"{name}_target_position_m", target_position_m)
+        record.record(f"{name}_target_velocity_mps", target_velocity_mps)
+
+    @property
+    def health(self) -> float:
+        """
+        The bot's health, uniform with the other destructibles: it is its pawn's.
+        """
+        return self.pawn.health
+
+    @property
+    def shield_level(self) -> float:
+        """
+        The bot's shield strength, uniform with the other destructibles: it is its
+        pawn's.
+        """
+        return self.pawn.shield_level
 
     def get_health(self) -> float:
         """

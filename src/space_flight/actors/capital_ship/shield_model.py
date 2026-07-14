@@ -5,16 +5,16 @@ This module owns everything *visual* about a shield, kept separate from the
 game-logic :class:`~space_flight.actors.capital_ship.shield.Shield` (health,
 collision, lifecycle). It bundles two things:
 
-- :func:`make_capsule` -- the procedural capsule mesh used by ``tube`` shields
-  (there is no stock capsule model), whose surface matches a ``CollisionTube``.
+- :func:`make_capsule` -- the procedural capsule mesh used by tube shields
+  (there is no stock capsule model), whose surface matches a CollisionTube.
 - :class:`ShieldModel` -- the visible bubble: it builds the geometry
-  (``sphere`` / ``tube`` primitive or a shared ``model``), applies
-  ``datafiles/shaders/shield.{vert,frag}``, and drives its uniforms for the
+  (sphere / tube primitive or a shared model), applies
+  datafiles/shaders/shield.{vert,frag}, and drives its uniforms for the
   living look (morphing energy field, fresnel rim, health-driven tint), the
   impact flashes, and the fluid death/appearance retraction.
 
-:class:`ShieldModel` deliberately depends only on a Panda3D ``loader`` and a
-parent ``NodePath`` -- not on the game -- so the presentation can be reasoned
+:class:`ShieldModel` deliberately depends only on a Panda3D loader and a
+parent NodePath -- not on the game -- so the presentation can be reasoned
 about (and reused) in isolation. All per-frame state it needs (time, camera
 position, health fraction, death progress) is passed in by the owning Shield.
 """
@@ -114,11 +114,11 @@ def make_capsule(
     num_rings: int = 8,
 ) -> NodePath:
     """
-    Build a capsule mesh matching a ``CollisionTube``.
+    Build a capsule mesh matching a CollisionTube.
 
-    The capsule is a cylinder between ``point_a`` and ``point_b`` capped by a
-    hemisphere of ``radius`` at each end, i.e. the exact surface of the tube whose
-    hemisphere centres are ``point_a`` and ``point_b``.
+    The capsule is a cylinder between point_a and point_b capped by a
+    hemisphere of radius at each end, i.e. the exact surface of the tube whose
+    hemisphere centres are point_a and point_b.
 
     :param point_a: Centre of the first end hemisphere (x, y, z)
     :param point_b: Centre of the second end hemisphere (x, y, z)
@@ -188,8 +188,8 @@ class ShieldModel:
     """
     The visible shield bubble and its animated shader.
 
-    Builds the bubble geometry -- a ``sphere`` or ``tube`` primitive, or a shared
-    3D ``model`` -- under ``parent``, applies the shield shader, and exposes a
+    Builds the bubble geometry -- a sphere or tube primitive, or a shared
+    3D model -- under parent, applies the shield shader, and exposes a
     small API the owning Shield drives each frame:
 
     - :meth:`render` pushes the per-frame uniforms (time, camera, health tint,
@@ -202,16 +202,16 @@ class ShieldModel:
     :attr:`radius_m`, :attr:`point_a`, :attr:`point_b`) so the Shield can build a
     collision solid that coincides with this mesh without re-parsing the config.
 
-    :param loader: Panda3D loader (``game.app.loader``) for stock/shared models
+    :param loader: Panda3D loader (game.app.loader) for stock/shared models
     :param parent: Node to attach the visible bubble under (the Shield's anchor)
     :param color: RGBA of the bubble -- RGB is the full-health tint, A the
         calm-interior opacity. Defaults to :data:`_SHIELD_COLOR`.
-    :param shape: Primitive geometry spec, e.g. ``{"type": "sphere",
-        "radius_m": 90}`` or ``{"type": "tube", "point_a": [...],
-        "point_b": [...], "radius_m": 40}``. Ignored when ``model`` is given.
+    :param shape: Primitive geometry spec, e.g. {"type": "sphere",
+        "radius_m": 90} or {"type": "tube", "point_a": [...],
+        "point_b": [...], "radius_m": 40}. Ignored when model is given.
     :param model: Path to a 3D model providing both the visible mesh and its
-        (baked) collision geometry. Overrides ``shape`` when set.
-    :raises ValueError: if ``shape["type"]`` is not ``sphere`` or ``tube``.
+        (baked) collision geometry. Overrides shape when set.
+    :raises ValueError: if shape["type"] is not sphere or tube.
     """
 
     def __init__(
@@ -302,7 +302,7 @@ class ShieldModel:
     def _read_surface_points(self):
         """
         Read the bubble's surface vertices in the geometry's local space -- the
-        same space the shader sees as ``vObjPos`` and in which sinks/impacts are
+        same space the shader sees as vObjPos and in which sinks/impacts are
         expressed -- and derive the local radius. Records :attr:`geom_np` (used to
         map world hit points into that space). Down-samples to bound later cost.
         """
@@ -398,7 +398,7 @@ class ShieldModel:
     def place_sinks(self):
         """
         Pick random surface points as the retraction/emergence sinks, upload them,
-        and calibrate ``uMaxReach`` (the largest distance from any surface point
+        and calibrate uMaxReach (the largest distance from any surface point
         to its nearest sink) so death=0 is fully covered and death=1 fully gone.
         """
         points = self._surface_points
@@ -429,7 +429,7 @@ class ShieldModel:
 
         :param world_point: The impact point in world space
         :param root: The world root node (to convert the point into the
-            geometry-local space the shader's ``uImpacts`` expects)
+            geometry-local space the shader's uImpacts expects)
         :param now: Current time, stamped as the flash's start
         """
         if self.geom_np is None or self.geom_np.isEmpty():

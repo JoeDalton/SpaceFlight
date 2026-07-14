@@ -3,8 +3,8 @@ Graphics settings persistence.
 
 Mirrors the input-settings pattern (see
 :mod:`space_flight.menus.input_settings_menu_state`): a user-editable
-``configuration/graphics.yaml`` is layered over a read-only
-``configuration/default_graphics.yaml`` so that any missing or invalid key
+configuration/graphics.yaml is layered over a read-only
+configuration/default_graphics.yaml so that any missing or invalid key
 always falls back to a sane default.
 
 The parsed, sanitised settings are consumed by
@@ -61,7 +61,7 @@ class GraphicsSettings:
 
     @staticmethod
     def load_file(path) -> dict:
-        """Parse a YAML file and return its contents as a dict (``{}`` if empty)."""
+        """Parse a YAML file and return its contents as a dict ({} if empty)."""
         with open(path, "r") as f:
             return yaml.safe_load(f) or {}
 
@@ -82,7 +82,7 @@ class GraphicsSettings:
 
     def save(self, config: dict):
         """
-        Sanitise *config*, write it to ``graphics.yaml`` and store it on
+        Sanitise *config*, write it to graphics.yaml and store it on
         :attr:`config`.
         """
         config = self.sanitise(config)

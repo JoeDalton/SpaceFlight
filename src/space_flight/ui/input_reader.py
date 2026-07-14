@@ -41,23 +41,23 @@ DEFAULT_THROTTLE_DEAD_ZONE = 0.04
 def _patched_attachInputDevice(self, device, prefix=None, watch=False):
     """
     Monkey-patch for :meth:`ShowBase.attachInputDevice` that avoids a
-    ``UnicodeDecodeError`` on Windows.
+    UnicodeDecodeError on Windows.
 
-    Panda3D's original implementation reads ``device.name`` via a C++ property
+    Panda3D's original implementation reads device.name via a C++ property
     that can return a raw byte string containing non-UTF-8 characters for some
     controllers.  Accessing that property in Python then raises a
-    ``UnicodeDecodeError`` and crashes the game.  This replacement never
-    touches ``device.name`` directly; :func:`safe_device_name` is used
+    UnicodeDecodeError and crashes the game.  This replacement never
+    touches device.name directly; :func:`safe_device_name` is used
     wherever a printable name is needed.
 
     A second existing workaround is also preserved: when no *prefix* is
     supplied the :class:`~panda3d.core.InputDeviceNode` and its
-    :class:`~panda3d.core.ButtonThrower` are both named ``"gamepad"`` instead
+    :class:`~panda3d.core.ButtonThrower` are both named "gamepad" instead
     of falling back to the device's native name.
 
     :param device: The input device to attach.
     :param prefix: Optional event prefix string forwarded to
-        :class:`~panda3d.core.ButtonThrower`.  Defaults to ``None``.
+        :class:`~panda3d.core.ButtonThrower`.  Defaults to None.
 
     TODO Propose this as a contribution to panda3d
     """
@@ -79,15 +79,15 @@ ShowBase.attachInputDevice = _patched_attachInputDevice
 def _patched_detachInputDevice(self, device):
     """
     Monkey-patch for :meth:`ShowBase.detachInputDevice` that avoids a
-    ``UnicodeDecodeError`` on Windows.
+    UnicodeDecodeError on Windows.
 
-    Panda3D's original implementation reads ``device.name`` via a C++ property
+    Panda3D's original implementation reads device.name via a C++ property
     that can return a raw byte string containing non-UTF-8 characters for some
     controllers.  Accessing that property in Python then raises a
-    ``UnicodeDecodeError`` and crashes the game.  This replacement mirrors the
+    UnicodeDecodeError and crashes the game.  This replacement mirrors the
     original ShowBase logic exactly, with the single fix of routing all
     device-name access through :func:`safe_device_name` instead of
-    ``device.name``.
+    device.name.
 
     :param device: The input device to detach.
     """
@@ -115,15 +115,15 @@ def safe_device_name(device) -> str:
     Returns a printable name for *device*, working around a UTF-8 crash on
     Windows.
 
-    Panda3D's ``device.name`` C++ property can return bytes containing
+    Panda3D's device.name C++ property can return bytes containing
     non-UTF-8 characters for controllers with non-ASCII manufacturer strings.
     Three increasingly defensive strategies are attempted in order:
 
-    1. Read ``device.name`` directly (works for most controllers).
-    2. Re-encode via ``raw_unicode_escape`` and decode as Windows-1252.
-    3. Build a ``VID_xxxx&PID_xxxx`` string from the USB vendor / product IDs.
+    1. Read device.name directly (works for most controllers).
+    2. Re-encode via raw_unicode_escape and decode as Windows-1252.
+    3. Build a VID_xxxx&PID_xxxx string from the USB vendor / product IDs.
 
-    If all three fail, ``"Device (unknown)"`` is returned.
+    If all three fail, "Device (unknown)" is returned.
 
     :param device: The input device whose name is needed.
     :return: A printable device name string.
@@ -181,10 +181,10 @@ class InputState:
     """
     Snapshot of hardware input for one frame.
 
-    ``buttons``  — hardware names whose button transitioned up→down this frame.
-    ``repeats``  — hardware names that were held down both this frame and last.
-    ``releases`` — hardware names that transitioned down→up this frame.
-    ``axes``     — normalised, dead-zoned continuous axis values.
+    buttons  — hardware names whose button transitioned up→down this frame.
+    repeats  — hardware names that were held down both this frame and last.
+    releases — hardware names that transitioned down→up this frame.
+    axes     — normalised, dead-zoned continuous axis values.
 
     All dicts are rebuilt each frame by :class:`InputReader`.  Contexts must
     not mutate them.
@@ -210,14 +210,14 @@ class InputReader:
 
     Hybrid detection strategy
     -------------------------
-    * **Polling** (primary) — ``_read_all_buttons()`` returns the current
-      hardware state each frame.  Comparison with ``_previous`` gives
+    * **Polling** (primary) — _read_all_buttons() returns the current
+      hardware state each frame.  Comparison with _previous gives
       pressed / held / released without duplicates.
-    * **Events** (safety net) — ``accept()`` callbacks for press and release
-      write into ``_ev_pressed`` / ``_ev_released``.  After the comparison
-      pass these sets are OR-merged into ``buttons`` / ``releases`` to catch
+    * **Events** (safety net) — accept() callbacks for press and release
+      write into _ev_pressed / _ev_released.  After the comparison
+      pass these sets are OR-merged into buttons / releases to catch
       inputs that were pressed *and* released between two frames.
-    * ``event-repeat`` is intentionally **not** registered; repeated-held
+    * event-repeat is intentionally **not** registered; repeated-held
       state is derived from polling alone.
     """
 
@@ -226,11 +226,11 @@ class InputReader:
         Initialises shared polling buffers and register global key callbacks.
 
         Sets up the per-frame comparison state and event-safety-net sets, then
-        registers ``accept()`` callbacks for every key listed under
-        ``app.bindings["global"]`` so that short presses that polling might
+        registers accept() callbacks for every key listed under
+        app.bindings["global"] so that short presses that polling might
         miss between frames are still captured.
 
-        :param app: The Panda3D application instance; ``app.bindings`` must
+        :param app: The Panda3D application instance; app.bindings must
             already be populated (see :func:`reader_factory`).
         """
         self.app = app
@@ -259,11 +259,11 @@ class InputReader:
         Steps performed each call:
 
         1. :meth:`_read_all_buttons` returns the raw current button state.
-        2. Comparison with the previous frame produces ``buttons`` (newly
-           pressed), ``repeats`` (held), and ``releases`` (newly released).
+        2. Comparison with the previous frame produces buttons (newly
+           pressed), repeats (held), and releases (newly released).
         3. The event-safety-net sets are OR-merged to catch inputs that were
            both pressed and released between two polls.
-        4. :meth:`_read_axes` populates ``state.axes``.
+        4. :meth:`_read_axes` populates state.axes.
 
         :return: The updated :class:`InputState` for this frame.
         """
@@ -297,12 +297,12 @@ class InputReader:
 
     def clean(self) -> None:
         """
-        Unregisters all ``accept()`` callbacks and release held references.
+        Unregisters all accept() callbacks and release held references.
 
         Must be called before the reader is discarded — for example when the
         user saves new settings and the reader is rebuilt from the updated
         configuration.  Subclasses that register additional handlers must call
-        ``super().clean()`` after their own cleanup.
+        super().clean() after their own cleanup.
         """
         for hw_name in self.global_keys:
             self.app.ignore(hw_name)
@@ -320,7 +320,7 @@ class InputReader:
 
     def read_all_buttons(self) -> dict[str, bool]:
         """
-        Returns the current raw button state as a ``{hardware_name: is_down}``
+        Returns the current raw button state as a {hardware_name: is_down}
         mapping.
 
         Called once per :meth:`poll` call.  Subclasses implement this using
@@ -334,14 +334,14 @@ class InputReader:
 
     def read_axes(self, state: InputState) -> None:
         """
-        Populates ``state.axes`` with dead-zoned axis values for this frame.
+        Populates state.axes with dead-zoned axis values for this frame.
 
         Called at the end of :meth:`poll`.  Subclasses implement this using
         the appropriate hardware API.  Keyboard readers leave this as a no-op
         because virtual axes are synthesised by the input context layer.
 
         :param state: The :class:`InputState` being built; populate
-            ``state.axes`` in place.
+            state.axes in place.
         """
         raise NotImplementedError
 
@@ -378,7 +378,7 @@ class InputReader:
 class KeyboardReader(InputReader):
     """
     Reads keyboard state via Panda3D's MouseWatcher (polling) plus
-    ``accept()`` events as a safety net.
+    accept() events as a safety net.
     """
 
     def __init__(self, app) -> None:
@@ -386,7 +386,7 @@ class KeyboardReader(InputReader):
         Collects bound key names and register safety-net event callbacks.
 
         Calls :meth:`~InputReader.collect_button_names` with an empty axis
-        set (keyboards have no analogue axes), then registers ``accept()``
+        set (keyboards have no analogue axes), then registers accept()
         callbacks for every bound key so that short presses between polls are
         not missed.
 
@@ -404,7 +404,7 @@ class KeyboardReader(InputReader):
         """
         Polls every bound key via the MouseWatcher.
 
-        :return: Dict mapping hardware name → ``True`` if the key is
+        :return: Dict mapping hardware name → True if the key is
             currently held down.
         """
         result: dict[str, bool] = {}
@@ -454,9 +454,9 @@ class GamepadReader(InputReader):
         :meth:`_connect`.  If none is found, an on-screen warning label is
         shown.  Hot-plug events are accepted so the reader adapts at runtime.
 
-        Safety-net ``accept()`` callbacks are registered for every bound
-        button, mapping Panda3D's ``"gamepad-lshoulder"`` event names to the
-        ``"gamepad_lshoulder"`` hardware names used in the configuration.
+        Safety-net accept() callbacks are registered for every bound
+        button, mapping Panda3D's "gamepad-lshoulder" event names to the
+        "gamepad_lshoulder" hardware names used in the configuration.
 
         :param app: The Panda3D application instance.
         """
@@ -521,9 +521,9 @@ class GamepadReader(InputReader):
 
         Uses :data:`GAMEPAD_BUTTON_CODES` to map hardware names to Panda3D
         :class:`~panda3d.core.GamepadButton` handles, then reads the
-        ``pressed`` flag directly from the device.
+        pressed flag directly from the device.
 
-        :return: Dict mapping hardware name → ``True`` if the button is held.
+        :return: Dict mapping hardware name → True if the button is held.
         """
         if not self.gamepad:
             return {name: False for name in self.button_names}
@@ -556,12 +556,12 @@ class GamepadReader(InputReader):
 
     def read_axes(self, state: InputState) -> None:
         """
-        Reads and dead-zones all six gamepad axes into ``state.axes``.
+        Reads and dead-zones all six gamepad axes into state.axes.
 
         Left-stick X/Y axes are sign-inverted to match the flight control
         conventions used elsewhere in the game.
 
-        :param state: The :class:`InputState` being built; ``state.axes`` is
+        :param state: The :class:`InputState` being built; state.axes is
             populated in place.
         """
         if not self.gamepad:
@@ -620,7 +620,7 @@ class JoystickReader(InputReader):
     """
     Reads flight-stick state.  Buttons are polled directly because unnamed
     buttons on most sticks do not generate Panda3D events reliably; no
-    safety-net ``accept()`` is registered for them.
+    safety-net accept() is registered for them.
     """
 
     def __init__(self, app) -> None:
@@ -690,13 +690,13 @@ class JoystickReader(InputReader):
     @staticmethod
     def button_index(hw_name: str) -> int | None:
         """
-        Converts a ``"stick_button_N"`` name to a zero-based hardware index.
+        Converts a "stick_button_N" name to a zero-based hardware index.
 
         Joystick buttons are addressed by index in the device's button array.
-        The YAML convention uses 1-based names (``stick_button_1`` is index 0).
+        The YAML convention uses 1-based names (stick_button_1 is index 0).
 
-        :param hw_name: Hardware name such as ``"stick_button_3"``.
-        :return: Zero-based button index, or ``None`` if the trailing suffix
+        :param hw_name: Hardware name such as "stick_button_3".
+        :return: Zero-based button index, or None if the trailing suffix
             is not a digit string.
         """
         suffix = hw_name.rsplit("_", 1)[-1]
@@ -709,7 +709,7 @@ class JoystickReader(InputReader):
         Returns all-false when no stick is connected or when a button index
         is out of range for the attached device.
 
-        :return: Dict mapping hardware name → ``True`` if the button is held.
+        :return: Dict mapping hardware name → True if the button is held.
         """
         if not self.flightStick:
             return {name: False for name in self.button_names}
@@ -739,12 +739,12 @@ class JoystickReader(InputReader):
 
     def read_axes(self, state: InputState) -> None:
         """
-        Reads and dead-zone the four flight-stick axes into ``state.axes``.
+        Reads and dead-zone the four flight-stick axes into state.axes.
 
-        The throttle axis is inverted (``1 − raw``) so that pulling the lever
+        The throttle axis is inverted (1 − raw) so that pulling the lever
         towards the pilot increases the output value.
 
-        :param state: The :class:`InputState` being built; ``state.axes`` is
+        :param state: The :class:`InputState` being built; state.axes is
             populated in place.
         """
         if not self.flightStick:
@@ -787,7 +787,7 @@ class JoystickReader(InputReader):
 
 def load_bindings() -> dict:
     """
-    Reads and parses ``configuration/configuration.yaml``.
+    Reads and parses configuration/configuration.yaml.
 
     :return: Parsed configuration dict.
     """
@@ -798,7 +798,7 @@ def load_bindings() -> dict:
 
 def reader_factory(app) -> InputReader:
     """
-    Loads the configuration, stores it on ``app.bindings``, and instantiates the
+    Loads the configuration, stores it on app.bindings, and instantiates the
     appropriate :class:`InputReader` subclass for the configured input type.
 
     Called at application startup and again when the user saves new settings
@@ -808,8 +808,8 @@ def reader_factory(app) -> InputReader:
     :param app: The Panda3D application instance.
     :return: A :class:`KeyboardReader`, :class:`GamepadReader`, or
         :class:`JoystickReader` ready to be polled each frame.
-    :raises NotImplementedError: If ``input_type`` is not one of
-        ``"keyboard"``, ``"gamepad"``, or ``"joystick"``.
+    :raises NotImplementedError: If input_type is not one of
+        "keyboard", "gamepad", or "joystick".
     """
     app.bindings = load_bindings()
     input_type = app.bindings["input_type"]
