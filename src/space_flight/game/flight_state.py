@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructibles
 from space_flight.ai.interactions import Interactions
-from space_flight.fx.explosion_fx import ExplosionPool
+from space_flight.fx.fire_smoke_fx import FireSmokePool
 from space_flight.fx.spark_fx import SparkPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
@@ -264,7 +264,7 @@ class FlightState(BaseState):
         self.app.sfx.get_sounds_from_asset_manager()
 
         # Initialize special effects
-        self.explosion_fx_pool = ExplosionPool(game=self)
+        self.fire_smoke_pool = FireSmokePool(game=self)
         self.spark_fx_pool = SparkPool(game=self)
 
         # Initialize Collision system and Destructibles
@@ -318,9 +318,13 @@ class FlightState(BaseState):
         for method_list in self.method_lists.values():
             for method in method_list:
                 method()
-        # Handle the death of the player
+        # Handle the death of the player: send it into an out-of-control tumble
+        # first, and only show the level-end screen once the death spin finishes.
         if self.player.pawn.health <= 0:
-            self.end_level(outcome="death", text="Your ship was destroyed.")
+            if not self.player.is_dying:
+                self.player.begin_death()
+            elif self.player.death_spin_finished():
+                self.end_level(outcome="death", text="Your ship was destroyed.")
         return task.cont
 
     def end_level(self, outcome: str, text: str = "") -> None:
@@ -437,8 +441,8 @@ class FlightState(BaseState):
         self.collision_system = None
         self.destructibles.clean()
         self.destructibles = None
-        self.explosion_fx_pool.clean()
-        self.explosion_fx_pool = None
+        self.fire_smoke_pool.clean()
+        self.fire_smoke_pool = None
         self.spark_fx_pool.clean()
         self.spark_fx_pool = None
         self.delayed_methods.clean()

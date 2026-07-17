@@ -328,7 +328,7 @@ class CollisionSystem:
             )
             # Occasionally add a small secondary explosion for extra punch.
             if random.random() < HIT_EXPLOSION_CHANCE:
-                self.game.explosion_fx_pool.spawn_hit(
+                self.game.fire_smoke_pool.hit_burst(
                     position=hit_point,
                     normal=normal,
                     base_velocity=hit_velocity,

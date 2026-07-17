@@ -1,13 +1,14 @@
 """
-A small, dependency-free finite state machine and a cooldown timer, shared by the
-game's several FSM-shaped subsystems (tactician intent, navigator behaviour/phase,
-shield lifecycle, auto-aim lock, tractor-beam grab).
+Small, dependency-free, clock-injected mechanics shared by the game's several
+time-driven subsystems: a finite state machine (tactician intent, navigator
+behaviour/phase, shield lifecycle, auto-aim lock, tractor-beam grab), a cooldown
+timer (shield regen, tractor re-grab), and a one-way dying-phase timer (a
+destructible or the player playing out its death before it is reaped).
 
-The machine owns only the *mechanics* every one of those hand-rolls -- the current
-state, time-in-state (reset on entry), a minimum-dwell / commitment gate, and
-entry/exit hooks -- never the *policy* (how the next state is chosen), which stays
-in each owner's own logic. The time source is injected, so the machine is trivially
-testable without the game clock.
+Each owns only the *mechanics* its users would otherwise hand-roll -- never the
+*policy* (which state comes next, what animation plays), which stays with each
+owner. The time source is injected, so they are trivially testable without the
+game clock.
 """
 
 from typing import Callable, Hashable, Optional, Union
@@ -164,3 +165,61 @@ class Cooldown:
         :return: True if ready
         """
         return self.elapsed_s() >= self._duration_s * multiplier
+
+
+class DyingPhase:
+    """
+    A one-way, timed "dying" phase: the shared mechanics of an actor playing out
+    its death over time (a ship's spin-out, a subsystem's smoke) before it is
+    finally reaped.
+
+    Owns only the mechanics -- an is-dying flag, the (injected, pause-aware)
+    death clock, and a "has the phase run its course?" check -- never the policy
+    (what starts it, what animates, what happens when it ends). It is *composed*,
+    not inherited, so both a :class:`~space_flight.actors.destructibles.Destructible`
+    and the (non-Destructible) player can reuse it.
+    """
+
+    def __init__(self, clock: Callable[[], float]):
+        """
+        :param clock: a callable returning the current time in seconds
+        """
+        self._clock = clock
+        self.is_dying = False
+        self._started_at: Optional[float] = None
+
+    def begin(self) -> bool:
+        """
+        Enter the dying phase. Idempotent: a call while already dying is a no-op.
+
+        :return: True if this call actually started the phase
+        """
+        if self.is_dying:
+            return False
+        self.is_dying = True
+        self._started_at = self._clock()
+        return True
+
+    def elapsed_s(self) -> float:
+        """
+        Time since the phase began.
+
+        :return: seconds spent dying so far (0 before it began)
+        """
+        if self._started_at is None:
+            return 0.0
+        return self._clock() - self._started_at
+
+    def finished(self, duration_s: float) -> bool:
+        """
+        Whether the phase has lasted at least *duration_s*.
+
+        A non-positive duration finishes immediately and never reads the clock --
+        the legacy "reap the frame health hits zero" behaviour.
+
+        :param duration_s: how long the phase should last
+        :return: True once it should end
+        """
+        if duration_s <= 0.0:
+            return True
+        return self.elapsed_s() >= duration_s

@@ -23,6 +23,8 @@ cannon_positions: [[-3, 5, -1], [3, 5, -1]]
 laser_sound: sounds/weapons/XWING_BLASTER.wav
 shot_power: 60.0
 explosion_scale: 5.0
+death_spin_duration_s: 2.5
+death_max_tumble_rate_degps: 400.0
 
 exterior_engine_sound: sounds/engines/a-wing/aw_ext_med.ogg
 interior_engine_sound: sounds/engines/a-wing/aw_int_med.ogg

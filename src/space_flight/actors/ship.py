@@ -17,6 +17,7 @@ from space_flight import (
 )
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
+from space_flight.fx.damage_fx import DamageFX
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()
@@ -24,6 +25,15 @@ RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 WEAPON_DAMAGE_TO_FORCE_FACTOR = 2.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
+# Death spin ("play death") defaults, overridable per ship in configuration.yaml.
+# The ship cuts its engines and tumbles about a random body axis for
+# DEATH_SPIN_DURATION_S seconds before the terminal explosion; the spin rate ramps
+# up with the square root of the time since death (starts near zero, accelerates)
+# up to DEATH_MAX_TUMBLE_RATE_DEGPS. This ceiling is deliberately separate from the
+# flight max_*_rate limits, and is applied by writing self.pqr directly (bypassing
+# the input clamp / actuator low-pass) so a dramatic tumble is possible.
+DEATH_SPIN_DURATION_S = 2.5
+DEATH_MAX_TUMBLE_RATE_DEGPS = 400.0
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -114,6 +124,17 @@ class Ship(Pawn):
         # Shield setup is ship-type dependent
         self.parent.add_task(method=self.ship_handle_health)
 
+        # Death spin state. is_dying is a property mirroring the controlling
+        # object (Bot/Player); begin_tumble kicks off the spin the trail and the
+        # damage guard react to.
+        self.death_spin_duration_s = self.conf.get(
+            "death_spin_duration_s", DEATH_SPIN_DURATION_S
+        )
+        self.death_max_tumble_rate_radps = np.deg2rad(
+            self.conf.get("death_max_tumble_rate_degps", DEATH_MAX_TUMBLE_RATE_DEGPS)
+        )
+        self._tumble_axis = np.array([0.0, 1.0, 0.0])
+
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
         self.node.reparentTo(self.game.root_node)
@@ -160,6 +181,12 @@ class Ship(Pawn):
             ship_type=ship_type,
             is_cockpit=is_cockpit,
         )
+
+        # Damage / death smoke-and-fire trail: streams smoke as the ship's health
+        # drops, fire when it is critical, and burns at full intensity through the
+        # death spin (it reads is_dying). Registered once as a per-frame task.
+        self.damage_fx = DamageFX(game=self.game, owner=self)
+        self.parent.add_task(method=self.damage_fx.update)
 
         # Precompute a model-space (relative) bounding box for AI that needs the
         # target's extents (the capital-ship orbit's oriented bounding box). It is
@@ -539,6 +566,62 @@ class Ship(Pawn):
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
 
+    @property
+    def is_dying(self) -> bool:
+        """
+        Whether the ship is playing out its death (spin-out then explosion).
+
+        The death *lifecycle* is owned by the controlling object -- the Bot for a
+        crewed pawn, the Player for the player's -- so the ship simply reflects
+        its ``is_dying`` (read by the damage trail and the damage guard). Falls
+        back to False once the ship has been detached from its parent (cleaned).
+
+        :return: True while the controller has the ship in its dying phase
+        """
+        return getattr(self.parent, "is_dying", False)
+
+    def begin_tumble(self):
+        """
+        Enter the death spin: cut the engines and pick a random body axis to
+        tumble about.
+
+        The controller has already flagged its own ``is_dying`` (which this
+        ship's :attr:`is_dying` mirrors) before calling this. The ship keeps its
+        collider and integrator slot (it is not cleaned yet), so it stays
+        collidable and coasts on its last velocity + drag/gravity while it spins.
+        :meth:`tumble_step` then drives the spin each frame.
+        """
+        self.scalar_thrust_n = 0.0
+        axis = np.random.normal(size=3)
+        norm = np.linalg.norm(axis)
+        if norm > 1e-6:
+            self._tumble_axis = axis / norm
+
+    def tumble_step(self, elapsed_s: float):
+        """
+        Advance the death spin by one frame: an out-of-control tumble whose rate
+        ramps up with the square root of the time since death.
+
+        Drives the physics directly (dead engines, a commanded body-rate written
+        straight into ``pqr`` to bypass the flight-input clamp/low-pass), integrates
+        it, and writes the pose to the render node -- everything :meth:`move` does,
+        minus the AI/flight inputs.
+
+        :param elapsed_s: Seconds since the ship began dying
+        """
+        if self.death_spin_duration_s > 0.0:
+            ramp = min(max(elapsed_s, 0.0) / self.death_spin_duration_s, 1.0)
+        else:
+            ramp = 1.0
+        omega_radps = self.death_max_tumble_rate_radps * np.sqrt(ramp)
+        self.scalar_thrust_n = 0.0
+        self.pqr = self._tumble_axis * omega_radps
+
+        # Same physics + render update as move(), without set_inputs.
+        self.move_ship_physics()
+        self.node.setPos(*self.position)
+        self.node.setQuat(Quat(*self.orientation))
+
     def take_hit(self, damage: float, normal_world_vector: np.ndarray):
         """
         Take damage from hits and jolt from the impact
@@ -656,6 +739,10 @@ class Ship(Pawn):
             # Remove model
             self.model.clean()
             self.model = None
+            # Drop the damage/death trail (owns no scene nodes; its per-frame task
+            # is removed with the rest by clear_tasks)
+            self.damage_fx.clean()
+            self.damage_fx = None
             # Remove node
             self.node.remove_node()
             self.node = None

@@ -169,6 +169,13 @@ class Bot(Destructible):
         - The pilot steers the ship and adjusts the throttle to follow its aim
         - The ship moves according to the games physics
         """
+        # Dead ships fly no more: while dying, the AI is silenced and the pawn is
+        # driven by the out-of-control death spin instead (ships only; a mounted
+        # subsystem pawn cannot tumble and simply waits out its death).
+        if self.is_dying:
+            if hasattr(self.pawn, "tumble_step"):
+                self.pawn.tumble_step(elapsed_s=self.death_elapsed_s())
+            return
         if self.bot_type == "fighter" or self.bot_type == "capital_ship":
             intent, target_dict = self.tactician.think()
 
@@ -312,16 +319,47 @@ class Bot(Destructible):
         self.navigator.personality = personality
         self.pilot.personality = personality
 
+    def begin_death(self):
+        """
+        Enter the bot's dying phase: silence the AI, make the wreck untargetable,
+        and (for ships) start its out-of-control tumble.
+
+        The bot stays alive -- integrating and colliding -- for the length of the
+        pawn's death spin; :meth:`move_bot_task` then drives the tumble each frame
+        and :meth:`finish_death` fires the terminal explosion. A mounted subsystem
+        pawn (turret / tractor beam) cannot tumble, so it just waits out a zero-length
+        death and explodes at once, as before.
+        """
+        if self.is_dying:
+            return
+        super().begin_death()
+
+        # Drop the pawn from targeting/interactions immediately, so nothing can
+        # lock onto or keep shooting the wreck while it spins (it stays collidable
+        # -- the collider lives until clean()).
+        try:  # TODO to remove when the player no longer has its own targets
+            self.game.player.remove_target(target_to_remove=self.pawn)
+        except AttributeError:
+            pass
+        try:
+            self.game.interactions.remove_actor(self.pawn)
+        except (KeyError, AttributeError):
+            pass
+
+        # Ships tumble; the dying phase lasts their configured spin duration.
+        if hasattr(self.pawn, "begin_tumble"):
+            self.pawn.begin_tumble()
+            self.death_duration_s = self.pawn.death_spin_duration_s
+
     def play_death(self):
         """
         Plays the death animation of the ship
 
-        Procedural explosion at the ship's last location
+        Procedural explosion at the ship's last location, after the death spin.
         Pawn-type dependent ! TODO
         Associated sound TODO
-        Model spinning before explosing ? TODO
         """
-        self.game.explosion_fx_pool.spawn(
+        self.game.fire_smoke_pool.burst(
             position=self.pawn.position,
             scale=self.pawn.explosion_scale,
             base_velocity=self.pawn.speed,

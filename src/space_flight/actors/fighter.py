@@ -70,9 +70,6 @@ class Fighter(Ship):
             parent_object=self,
         )
 
-        # Handle ship health and shield
-        self.parent.add_task(method=self.ship_handle_health)
-
         # Set explosion size for death animation
         self.explosion_scale = self.conf["explosion_scale"]
 
@@ -133,6 +130,11 @@ class Fighter(Ship):
 
         :param damage_type: the type of damage to apply (physical, energy)
         """
+        # A ship playing out its death spin is inert: it takes no further damage
+        # (so extra hits/rams during the tumble cannot drive health further down or
+        # re-trigger death), though collision pushes still shove the wreck around.
+        if self.is_dying:
+            return
         # Apply damage to health and shield
         if damage_type == "physical":
             if self.shield - damage >= 0.0:

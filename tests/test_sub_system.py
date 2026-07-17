@@ -177,8 +177,8 @@ def test_play_death_spawns_explosion_at_position():
 
     sub_system.play_death()
 
-    sub_system.game.explosion_fx_pool.spawn.assert_called_once()
-    kwargs = sub_system.game.explosion_fx_pool.spawn.call_args.kwargs
+    sub_system.game.fire_smoke_pool.burst.assert_called_once()
+    kwargs = sub_system.game.fire_smoke_pool.burst.call_args.kwargs
     np.testing.assert_allclose(kwargs["position"], [10.0, 20.0, 30.0])
     assert kwargs["scale"] == pytest.approx(15.0)
     np.testing.assert_allclose(kwargs["base_velocity"], [5.0, 0.0, 0.0])

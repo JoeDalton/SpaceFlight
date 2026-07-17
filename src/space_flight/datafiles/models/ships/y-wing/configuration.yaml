@@ -26,6 +26,8 @@ shot_power: 60.0
 # Limited bomb ordnance (the bomb weapon itself is not implemented yet).
 bomb_supply: 6
 explosion_scale: 5.0
+death_spin_duration_s: 2.5
+death_max_tumble_rate_degps: 350.0
 
 exterior_engine_sound: sounds/engines/y-wing/yw_ext_med.ogg
 interior_engine_sound: sounds/engines/y-wing/yw_int_med.ogg

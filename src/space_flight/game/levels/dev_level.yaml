@@ -9,7 +9,7 @@
 
 waves:
   allied_patrol:
-    size: 3
+    size: 1
     ship_model: y-wing
     bot_type: fighter
     team: 1
@@ -22,7 +22,7 @@ waves:
     #target: enemy_frigate
     formation: { scale_m: 30, shape: arrowhead }
     waypoints:
-      - [0, 0, 500]
+      - [0, 50000, 500]
       - [200, 1000, 500]
       - [500, 2000, 500]
       - [1000, 3000, 500]
@@ -62,12 +62,12 @@ waves:
 triggers:
   # --- the original timed waves -------------------------------------------
   # Spawn the frigate first so the patrol can take it as a primary target.
-  - name: enemy_frigate
-    when: { after_seconds: 2 }
-    then:
-      all:
-        - { hud_text: "Enemy frigate inbound" }
-        - { spawn: enemy_frigate }
+  #- name: enemy_frigate
+  #  when: { after_seconds: 2 }
+  #  then:
+  #    all:
+  #      - { hud_text: "Enemy frigate inbound" }
+  #      - { spawn: enemy_frigate }
   - name: allied_patrol
     when: { after_seconds: 3 }
     then:

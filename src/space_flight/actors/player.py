@@ -10,6 +10,7 @@ from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
+from space_flight.utils.state_machine import DyingPhase
 
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
@@ -74,6 +75,12 @@ class Player:
         self.roll_rate = 0.0
         self.view_offset = np.zeros(2)
 
+        # Death state. The player is not a Destructible, so its death is handled
+        # in FlightState: when killed it tumbles out of control (camera and all)
+        # for the pawn's death-spin duration before the level-end screen shows.
+        # It reuses the same DyingPhase timer the destructibles compose.
+        self._dying = DyingPhase(clock=self.game.game_time.get_current_time)
+
         self.has_ai = has_ai
         if self.has_ai:
             self.pilot = FighterPilot(game=self.game, pawn=self.pawn)
@@ -111,6 +118,13 @@ class Player:
         The cockpit is linked to the camera, so it should move
         without being told to.
         """
+        # While dying, the controls are dead: the ship tumbles out of control and
+        # the camera tumbles with it until the level-end screen takes over.
+        if self.is_dying:
+            self.pawn.tumble_step(elapsed_s=self._dying.elapsed_s())
+            if not self.game.headless:
+                self.move_camera()
+            return
         if self.has_ai:
             intent, target_dict = self.tactician.think()
             target_direction, desired_speed_mps = self.navigator.navigate(
@@ -146,6 +160,32 @@ class Player:
         :param method: the method to be called by the task
         """
         self.game.method_lists[self.id].append(method)
+
+    @property
+    def is_dying(self) -> bool:
+        """Whether the player is playing out its death spin."""
+        return self._dying.is_dying
+
+    def begin_death(self):
+        """
+        Start the player's death: make the wreck untargetable and send it into an
+        out-of-control tumble. Called once by FlightState when the player is killed.
+
+        The pawn keeps its collider and integrator slot (it is not cleaned mid-level),
+        so it stays collidable and coasts while it spins; :meth:`move_player` drives
+        the tumble each frame.
+        """
+        if not self._dying.begin():
+            return
+        try:
+            self.game.interactions.remove_actor(self.pawn)
+        except (KeyError, AttributeError):
+            pass
+        self.pawn.begin_tumble()
+
+    def death_spin_finished(self) -> bool:
+        """Whether the death spin has run its course and the level may end."""
+        return self._dying.finished(self.pawn.death_spin_duration_s)
 
     def initialize_camera(self):
         """

@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from space_flight.actors.bot import Bot
+from space_flight.utils.state_machine import DyingPhase
 
 
 def make_bot_without_init(bot_type: str = "fighter") -> Bot:
@@ -32,6 +33,9 @@ def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     bot.tactician = MagicMock()
     bot.game = MagicMock()
     bot.tasks = []
+    # A live bot is not mid-death: move_bot_task checks is_dying (a property over
+    # the composed DyingPhase) to switch from AI control to the death tumble.
+    bot._dying = DyingPhase(clock=lambda: 0.0)
     return bot
 
 
@@ -134,9 +138,9 @@ def test_set_personality_propagates_same_object_to_all_three():
 # ---------------------------
 
 
-def test_play_death_calls_explosion_fx_pool_spawn():
+def test_play_death_calls_fire_smoke_pool_burst():
     """
-    play_death() calls game.explosion_fx_pool.spawn exactly once.
+    play_death() calls game.fire_smoke_pool.burst exactly once.
     """
     bot = make_bot_without_init()
     bot.pawn.position = np.array([10.0, 20.0, 30.0])
@@ -145,12 +149,12 @@ def test_play_death_calls_explosion_fx_pool_spawn():
 
     bot.play_death()
 
-    bot.game.explosion_fx_pool.spawn.assert_called_once()
+    bot.game.fire_smoke_pool.burst.assert_called_once()
 
 
 def test_play_death_passes_pawn_position_to_explosion():
     """
-    play_death() forwards the pawn's current position to the explosion spawner.
+    play_death() forwards the pawn's current position to the burst.
     """
     bot = make_bot_without_init()
     position = np.array([5.0, 10.0, -3.0])
@@ -160,8 +164,8 @@ def test_play_death_passes_pawn_position_to_explosion():
 
     bot.play_death()
 
-    spawn_kwargs = bot.game.explosion_fx_pool.spawn.call_args.kwargs
-    np.testing.assert_array_equal(spawn_kwargs["position"], position)
+    burst_kwargs = bot.game.fire_smoke_pool.burst.call_args.kwargs
+    np.testing.assert_array_equal(burst_kwargs["position"], position)
 
 
 def test_play_death_passes_pawn_speed_as_base_velocity():
@@ -176,8 +180,8 @@ def test_play_death_passes_pawn_speed_as_base_velocity():
 
     bot.play_death()
 
-    spawn_kwargs = bot.game.explosion_fx_pool.spawn.call_args.kwargs
-    np.testing.assert_array_equal(spawn_kwargs["base_velocity"], speed)
+    burst_kwargs = bot.game.fire_smoke_pool.burst.call_args.kwargs
+    np.testing.assert_array_equal(burst_kwargs["base_velocity"], speed)
 
 
 def test_play_death_passes_pawn_explosion_scale():
@@ -191,8 +195,8 @@ def test_play_death_passes_pawn_explosion_scale():
 
     bot.play_death()
 
-    spawn_kwargs = bot.game.explosion_fx_pool.spawn.call_args.kwargs
-    assert spawn_kwargs["scale"] == pytest.approx(3.5)
+    burst_kwargs = bot.game.fire_smoke_pool.burst.call_args.kwargs
+    assert burst_kwargs["scale"] == pytest.approx(3.5)
 
 
 # ---------------------------

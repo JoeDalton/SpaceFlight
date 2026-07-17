@@ -52,10 +52,12 @@ particle effect builds on, documented at length in its own module docstring
   descriptor into a `(Texture, rects)` pair, ready to be bound and indexed
   by a shader.
 
-## `explosion_fx.py` — fire and smoke bursts
+## `fire_smoke_fx.py` — fire and smoke
 
-[`explosion_fx.py`](../src/space_flight/fx/explosion_fx.py) builds one
-concrete effect on top of `ParticleBuffer`:
+[`fire_smoke_fx.py`](../src/space_flight/fx/fire_smoke_fx.py) is one shared
+fire/smoke billboard system on top of `ParticleBuffer`, fed by three effects:
+one-shot explosions, laser-hit puffs, and the continuous per-ship damage/death
+trail (`damage_fx.py`, below).
 
 - **`_explosion_shader()`** lazily loads the shared GLSL shader from
   [`datafiles/shaders/explosion.{vert,frag}`](../src/space_flight/datafiles/shaders/)
@@ -65,28 +67,32 @@ concrete effect on top of `ParticleBuffer`:
   and applies a fade-in ramp whose length is the `uFadein` uniform. The
   fragment shader samples the atlas tile whose UV rect arrived in the
   `tile_rect` column — no uniform array or dynamic indexing needed.
-- **`_ExplosionBuffer`** is a thin `ParticleBuffer` subclass: it applies the
+- **`_FireSmokeBuffer`** is a thin `ParticleBuffer` subclass: it applies the
   shared shader, sets its layer's `uFadein`, and `spawn_particle()` resolves
   the particle's `tile_index` to its atlas UV rect before calling
   `write_slot` (fire and smoke differ only by `uFadein`).
-- **`ExplosionPool`** is the object the rest of the game actually talks to
-  (see `Bot.play_death`, `docs/actors.md`). It owns two `_ExplosionBuffer`s —
-  fire and smoke, each its own atlas and shader — and `spawn()` emits one
-  burst: fire particles launch immediately in a wide cone around the impact
-  normal, smoke particles launch slightly later (`_SMOKE_DELAY`, via the
-  vertex shader's `spawn_delay` mechanism — no CPU timer needed) in a
-  narrower cone, so smoke visually trails the fire. All per-particle
-  size/speed/lifetime values are randomised within tunable ranges and scaled
-  by the caller's `scale` parameter, so a fighter's death and a capital
-  ship's death can reuse the same pool with different burst sizes.
-- **`spawn_hit()`** is a thin wrapper over `spawn()` for the small secondary
-  explosion on laser hits (see `spark_fx.py` below): it passes the
-  `HIT_EXPLOSION_*` knobs — a low billboard count, reduced speed, a small scale
-  multiplier and a jet-angle multiplier — so hit bursts stay cheap and contained
-  next to the much larger death explosions. `spawn()` grew keyword overrides
-  (`fire_count`, `smoke_count`, `speed_scale`, `jet_angle_scale`) for this, and
-  the fire/smoke emission is now factored into one `_emit_layer` helper driven
-  by a `_Layer` config per layer.
+- **`FireSmokePool`** is the object the rest of the game talks to (see
+  `Bot.play_death`, `docs/actors.md`). It owns two `_FireSmokeBuffer`s — fire
+  and smoke, each its own atlas and shader — and exposes intention-revealing
+  emitters that all share those buffers:
+  - **`burst()`** — one one-shot explosion (a ship/subsystem dying): fire
+    launches immediately in a wide cone around the normal, smoke slightly later
+    (`_SMOKE_DELAY`, via the vertex shader's `spawn_delay` — no CPU timer) in a
+    narrower cone, so smoke trails the fire. Sizes/speeds/lifetimes are
+    randomised within tunable ranges and scaled by the caller's `scale`, so a
+    fighter's and a capital ship's deaths reuse the pool at different sizes.
+  - **`hit_burst()`** — the small secondary explosion on laser hits (see
+    `spark_fx.py`): `burst()` with the `HIT_EXPLOSION_*` knobs (low count,
+    reduced speed, small scale/jet-angle) so hits stay cheap next to deaths.
+  - **`trail_smoke()` / `trail_fire()`** — one puff of the continuous damage
+    trail. They use dedicated short-lived layers (`_TRAIL_SMOKE_LAYER`,
+    `_TRAIL_FIRE_LAYER`) so that, emitted every frame across many damaged ships
+    into this shared pool, only a handful are alive at once — long-lived trail
+    particles would saturate the pool and flood the screen with transparent
+    overdraw.
+  Fire/smoke emission for every intent is factored into one `_emit_layer`
+  helper driven by a `_Layer` config (which carries each layer's explicit
+  lifetime range).
 
 ## `spark_fx.py` — laser hit sparks
 
@@ -109,7 +115,7 @@ laser impact (distinct from the death-triggered explosion).
   (`SPARK_SIZE_SCALE`, `SPARK_SPEED_SCALE`, `SPARK_JET_ANGLE_SCALE`) scale every
   preset at once.
 - The pool is created in `FlightState` as `game.spark_fx_pool` (beside
-  `explosion_fx_pool`) and driven from the laser collision handlers in
+  `fire_smoke_pool`) and driven from the laser collision handlers in
   [`collisions.py`](../src/space_flight/game/collisions.py): on destructible
   (bot) hits, `ICE` when the target fighter's shield is still up else `METAL`;
   `ICE` on capital-ship shield-bubble hits (on top of the shield's own impact
@@ -119,9 +125,31 @@ laser impact (distinct from the death-triggered explosion).
   `AsteroidField.material == "rock"` → `ROCK`, `"metal"` → `METAL`). Each burst
   inherits the hit object's velocity so sparks ride a moving target.
 - On a fraction of destructible hits (`HIT_EXPLOSION_CHANCE`, default 1/3), a
-  small secondary explosion is also spawned via `ExplosionPool.spawn_hit()` —
+  small secondary explosion is also spawned via `FireSmokePool.hit_burst()` —
   a contained, low-billboard-count burst (its own `HIT_EXPLOSION_*` knobs in
-  `explosion_fx.py`) sharing the sparks' impact point, normal and velocity.
+  `fire_smoke_fx.py`) sharing the sparks' impact point, normal and velocity.
+
+## `damage_fx.py` — damage & death smoke/fire trail
+
+[`damage_fx.py`](../src/space_flight/fx/damage_fx.py)'s `DamageFX` is a
+per-actor smoke-and-fire trail that tracks how badly the actor is hurt. It owns
+no geometry of its own — it emits into the shared `FireSmokePool` via
+`trail_smoke()` / `trail_fire()`.
+
+- **Severity-driven.** Each frame `update()` derives a `severity` (0 intact, 1
+  smoking below ~2/3 health, 2 on fire below ~1/3, 3 dying) from the owner's
+  `health / max_health`, forced to the maximum while `is_dying`. Because it is
+  re-derived from health every frame (not stored), the trail a wounded ship
+  streams keeps burning — and intensifies — straight through its death spin with
+  no visible restart. A `_SEVERITY` table bundles each level's knobs (emit
+  interval, count, puff scale) per layer.
+- **Duck-typed owner.** Any object exposing `position`, `speed`, `health`,
+  `max_health` and (optionally) `is_dying` works, so both ships and subsystems
+  carry one; it is registered as a per-frame task and cleaned with its owner.
+- **Cheap at scale.** Continuity comes from a few large overlapping puffs rather
+  than a dense stream of tiny ones, and the pool's trail layers are short-lived,
+  so dozens of ships can trail at once without saturating the shared pool or
+  drowning the GPU in transparent overdraw (see `fire_smoke_fx.py`).
 
 ## `speed_dust_cloud.py` — engine speed feel
 
@@ -172,6 +200,7 @@ creation cost across several frames instead of stalling on construction.
 
 All of it lives directly under
 [`src/space_flight/fx/`](../src/space_flight/fx/): the shared particle
-framework in `__init__.py`, the explosion effect in `explosion_fx.py`, the
+framework in `__init__.py`, the fire/smoke pool in `fire_smoke_fx.py`, the
+damage/death trail in `damage_fx.py`, the sparks in `spark_fx.py`, the
 non-particle dust cloud in `speed_dust_cloud.py`, and sound in `sfx.py`. The
 auto-generated [code reference](docs/) has the full per-class API.

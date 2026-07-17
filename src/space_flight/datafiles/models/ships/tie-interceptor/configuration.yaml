@@ -23,6 +23,8 @@ cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 75.0
 explosion_scale: 5.0
+death_spin_duration_s: 2.5
+death_max_tumble_rate_degps: 450.0
 
 exterior_engine_sound: sounds/engines/tie_common/tie_ext_high.ogg
 interior_engine_sound: sounds/engines/tie_common/tie_int_high.ogg
