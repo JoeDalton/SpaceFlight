@@ -234,6 +234,10 @@ class FlightInputContext(InputContext):
     # ------------------------------------------------------------------
 
     def handle_actions(self, state) -> None:
+        # Guard against actions while dying
+        if self.player.is_dying:
+            return
+
         # Fire weapons
         if self.active(state, "fire"):
             self.player.pawn.laser_cannon.fire()

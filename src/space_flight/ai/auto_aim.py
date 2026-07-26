@@ -90,9 +90,14 @@ class AutoAim:
             shot_dir = self.parent.forward
         else:
             # Identify self and target in interactions
-            my_actor_index = self.game.interactions.get_actor_index_from_id(
-                self.parent.id
-            )
+            try:
+                my_actor_index = self.game.interactions.get_actor_index_from_id(
+                    self.parent.id
+                )
+                parent_found = True
+            except ValueError:
+                # Parent has died during this frame, do nothing
+                parent_found = False
             try:
                 target_actor_index = self.game.interactions.get_actor_index_from_id(
                     self.parent.target_id
@@ -103,8 +108,9 @@ class AutoAim:
                 desired_shot_dir = self.parent.forward
                 target_found = False
 
-            if target_found:
-                # Target acquired and exists: fire in its predicted prediction
+            if target_found and parent_found:
+                # Parent exists, target acquired and exists:
+                # fire in its predicted prediction
 
                 # Get necessary info from interactions and pre compute target properties
                 distance_m = self.game.interactions.distances[
