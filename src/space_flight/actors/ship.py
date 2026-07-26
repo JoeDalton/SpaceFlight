@@ -34,6 +34,7 @@ ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
 # the input clamp / actuator low-pass) so a dramatic tumble is possible.
 DEATH_SPIN_DURATION_S = 2.5
 DEATH_MAX_TUMBLE_RATE_DEGPS = 400.0
+TUMBLE_RATE_FACTORS = np.array([0.2, 1.0, 0.2])
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -614,6 +615,7 @@ class Ship(Pawn):
         else:
             ramp = 1.0
         omega_radps = self.death_max_tumble_rate_radps * np.sqrt(ramp)
+        omega_radps *= TUMBLE_RATE_FACTORS
         self.scalar_thrust_n = 0.0
         self.pqr = self._tumble_axis * omega_radps
 
