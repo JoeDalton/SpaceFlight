@@ -36,12 +36,11 @@ mkdocs-material = "^9.4.14"
 mkdocstrings-python = {extras = ["python"], version = "^1.7.5"}
 mkdocs-gen-files = "^0.5.0"
 mkdocs-section-index = "^0.3.8"
-twine = "^4.0.2"
+twine = "^7.0.0"
 pre-commit = "^3.5.0"
 openpyxl = "^3.1.5"
 nptdms = "^1.10.0"
 plotly="^6.5.2"
-cryptography="^48.0.1"
 requests="^2.33.1"
 pygments="^2.20.0"
 
