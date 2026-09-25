@@ -109,26 +109,27 @@ class SceneOcean(Scene):
         )
         yield from self.speed_dust_cloud.build()
 
-        # Star destroyer
-        self.isd = self.game.root_node.attachNewNode("isd_instance")
-        isd_path = (
-            DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
-        )
-        self.game.app.asset_manager.instantiate_3d_model_to_node(
-            path=isd_path,
-            parent_node=self.isd,
-        )
-        self.isd.reparent_to(self.game.root_node)
-        self.isd.set_pos(2000, 3000, 1000)
-        self.isd.setP(90)
-        self.isd.set_scale(1)
-        yield "isd"
+        # # Star destroyer
+        # self.isd = self.game.root_node.attachNewNode("isd_instance")
+        # isd_path = (
+        #     DATAFILES_PATH
+        #     / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
+        # )
+        # self.game.app.asset_manager.instantiate_3d_model_to_node(
+        #     path=isd_path,
+        #     parent_node=self.isd,
+        # )
+        # self.isd.reparent_to(self.game.root_node)
+        # self.isd.set_pos(2000, 3000, 1000)
+        # self.isd.setP(90)
+        # self.isd.set_scale(1)
+        # yield "isd"
 
     def clean(self):
         """
         Cleans the SceneOcean
         """
-        self.isd.removeNode()
+        # self.isd.removeNode()
         self.clouds.clean()
         self.clouds = None
         self.speed_dust_cloud.clean()

@@ -23,6 +23,10 @@
   - ```{autodoc2-docstring} space_flight.utils.state_machine.Cooldown
     :summary:
     ```
+* - {py:obj}`DyingPhase <space_flight.utils.state_machine.DyingPhase>`
+  - ```{autodoc2-docstring} space_flight.utils.state_machine.DyingPhase
+    :summary:
+    ```
 ````
 
 ### API
@@ -148,6 +152,44 @@
 :canonical: space_flight.utils.state_machine.Cooldown.ready
 
 ```{autodoc2-docstring} space_flight.utils.state_machine.Cooldown.ready
+```
+
+````
+
+`````
+
+`````{py:class} DyingPhase(clock: typing.Callable[[], float])
+:canonical: space_flight.utils.state_machine.DyingPhase
+
+```{autodoc2-docstring} space_flight.utils.state_machine.DyingPhase
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} space_flight.utils.state_machine.DyingPhase.__init__
+```
+
+````{py:method} begin() -> bool
+:canonical: space_flight.utils.state_machine.DyingPhase.begin
+
+```{autodoc2-docstring} space_flight.utils.state_machine.DyingPhase.begin
+```
+
+````
+
+````{py:method} elapsed_s() -> float
+:canonical: space_flight.utils.state_machine.DyingPhase.elapsed_s
+
+```{autodoc2-docstring} space_flight.utils.state_machine.DyingPhase.elapsed_s
+```
+
+````
+
+````{py:method} finished(duration_s: float) -> bool
+:canonical: space_flight.utils.state_machine.DyingPhase.finished
+
+```{autodoc2-docstring} space_flight.utils.state_machine.DyingPhase.finished
 ```
 
 ````

@@ -216,7 +216,7 @@ entry.
 `FlightState` (`flight_state.py`) is the root object; its
 `initialize_game_structure`/`exit` pair is the definitive list of everything
 a session owns: `GameTimeManager`/`IntervalManager`/`DelayedMethodManager`
-(`time_keeping.py`), `ExplosionPool` (see [docs/fx.md](fx.md)),
+(`time_keeping.py`), `FireSmokePool` (see [docs/fx.md](fx.md)),
 `Destructibles` (see [docs/actors.md](actors.md)), `CollisionSystem`
 (`collisions.py`), `Interactions` (see [docs/ai.md](ai.md)), `Integrator`
 (`integrator.py`), and `Scenario` (`scenario/__init__.py`). Level definitions

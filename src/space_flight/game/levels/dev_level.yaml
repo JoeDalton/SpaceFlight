@@ -9,7 +9,7 @@
 
 waves:
   allied_patrol:
-    size: 3
+    size: 1
     ship_model: y-wing
     bot_type: fighter
     team: 1
@@ -22,7 +22,7 @@ waves:
     #target: enemy_frigate
     formation: { scale_m: 30, shape: arrowhead }
     waypoints:
-      - [0, 0, 500]
+      - [0, 50000, 500]
       - [200, 1000, 500]
       - [500, 2000, 500]
       - [1000, 3000, 500]
@@ -35,11 +35,11 @@ waves:
       - [-1000, -2000, 500]
       - [-500, -1000, 500]
       - [0, 0, 500]
-  # A lone enemy GR-75 frigate. It carries a bot-controlled turret on its hull
+  # A lone enemy CR-90 frigate. It carries a bot-controlled turret on its hull
   # (declared in the ship config), which spawns and fights along with it.
   enemy_frigate:
     size: 1
-    ship_model: gr-75
+    ship_model: cr-90
     bot_type: capital_ship
     team: 2
     spawn_point: [0, -1500, 500]
@@ -68,13 +68,13 @@ triggers:
       all:
         - { hud_text: "Enemy frigate inbound" }
         - { spawn: enemy_frigate }
-  - name: allied_patrol
-    when: { after_seconds: 3 }
-    then:
-      all:
-        - { hud_text: "Allies have arrived" }
-        - { spawn: allied_patrol }
-        - speech:
-            speaker: "Gold Leader"
-            text: "Gold squadron reporting in. We've got your back."
-            display_time_s: 5
+  # - name: allied_patrol
+  #   when: { after_seconds: 3 }
+  #   then:
+  #     all:
+  #       - { hud_text: "Allies have arrived" }
+  #       - { spawn: allied_patrol }
+  #       - speech:
+  #           speaker: "Gold Leader"
+  #           text: "Gold squadron reporting in. We've got your back."
+  #           display_time_s: 5

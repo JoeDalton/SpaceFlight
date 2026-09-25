@@ -34,7 +34,7 @@ spawn_time  float  Absolute value of the buffer clock when the particle
 ==============  =====  ===========================================================
 
 Each effect appends its own columns. The explosion effect
-(:mod:`space_flight.fx.explosion_fx`) adds velocity (vec3), size
+(:mod:`space_flight.fx.fire_smoke_fx`) adds velocity (vec3), size
 (float), spin (float), lifetime (float) and tile_rect (vec4, the
 atlas tile UV rect); the spark effect (:mod:`space_flight.fx.spark_fx`) adds
 velocity, size, lifetime, gravity (float) and spark_color

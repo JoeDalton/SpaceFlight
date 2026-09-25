@@ -173,7 +173,7 @@ Driven by
 ## Explosion particle shaders
 
 Driven by the GPU particle system in
-[`fx/explosion_fx.py`](../src/space_flight/fx/explosion_fx.py) /
+[`fx/fire_smoke_fx.py`](../src/space_flight/fx/fire_smoke_fx.py) /
 [`fx/__init__.py`](../src/space_flight/fx/__init__.py) (see [docs/fx.md](fx.md)).
 One shader pair, shared by both the fire and smoke buffers (they differ only
 by the `uFadein` uniform):

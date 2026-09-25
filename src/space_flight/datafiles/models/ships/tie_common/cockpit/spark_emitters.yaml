@@ -1,0 +1,20 @@
+# Cockpit spark emitters shared by every TIE variant (fighter / interceptor /
+# bomber). Positions and normals are in the ship BODY frame (X right, Y forward,
+# Z up), in metres, relative to the ship node. Sparks spawn at each position and
+# streak out along its normal.
+#
+# NOTE: placeholder layout -- tune the positions/normals to the actual TIE
+# cockpit geometry (they must sit ahead of the camera near-plane to be visible).
+emitters:
+  - position: [-0.45, 2.2, 0.30]   # upper-left console
+    normal: [0.5, -0.7, -0.5]
+  - position: [0.45, 2.2, 0.30]    # upper-right console
+    normal: [-0.5, -0.7, -0.5]
+  - position: [-0.35, 2.0, -0.35]  # lower-left panel
+    normal: [0.4, -0.6, 0.7]
+  - position: [0.35, 2.0, -0.35]   # lower-right panel
+    normal: [-0.4, -0.6, 0.7]
+  - position: [0.0, 2.1, -0.45]    # centre dash
+    normal: [0.0, -0.7, 0.7]
+  - position: [0.0, 2.4, 0.4]      # overhead
+    normal: [0.0, -0.6, -0.8]

@@ -4,9 +4,17 @@ import numpy as np
 from panda3d.core import NodePath
 
 from space_flight.actors.destructibles import Destructible
+from space_flight.fx.damage_fx import DamageFX
 from space_flight.game.collisions import attach_collision_sphere
 
 LOGGER = logging.getLogger()
+
+# A standalone subsystem (one whose owner is the ship it is bolted to, e.g. a
+# shield generator) smokes at full intensity for this long before it explodes --
+# it cannot tumble like a free-flying ship, so it just billows out. Bot-controlled
+# subsystems (turrets, tractor beams) are reaped by their Bot and keep the legacy
+# immediate death (zero duration).
+SUBSYSTEM_DEATH_SMOKE_DURATION_S = 0.6
 
 
 class SubSystem(Destructible):
@@ -101,6 +109,16 @@ class SubSystem(Destructible):
         # Set explosion size for the death animation
         self.explosion_scale = explosion_scale
 
+        # Smoke/fire trail as the subsystem is worn down, burning at full
+        # intensity through its (smoke-only) death. A standalone subsystem is
+        # reaped by the central death handler, so it can billow before it blows;
+        # a bot-controlled one (turret / tractor beam) is cleaned by its Bot, so
+        # it keeps the legacy immediate death.
+        self.damage_fx = DamageFX(game=self.game, owner=self)
+        self.add_task(method=self.damage_fx.update)
+        if self.parent is self.mounted_on:
+            self.death_duration_s = SUBSYSTEM_DEATH_SMOKE_DURATION_S
+
         # We are our own Destructible, so we monitor our own health each frame
         self.add_task(method=self.handle_health)
 
@@ -189,7 +207,7 @@ class SubSystem(Destructible):
         base_velocity = (
             self.mounted_on.speed if self.mounted_on is not None else np.zeros(3)
         )
-        self.game.explosion_fx_pool.spawn(
+        self.game.fire_smoke_pool.burst(
             position=self.position,
             scale=self.explosion_scale,
             base_velocity=base_velocity,
@@ -211,6 +229,10 @@ class SubSystem(Destructible):
             self.collision_sphere_np.setPythonTag("owner", None)
             self.collision_sphere_np.remove_node()
             self.collision_sphere_np = None
+            # Drop the damage/death trail (owns no scene nodes)
+            if getattr(self, "damage_fx", None) is not None:
+                self.damage_fx.clean()
+                self.damage_fx = None
             # Remove visible geometry, if a subclass attached one
             if getattr(self, "model", None) is not None:
                 self.model.remove_node()

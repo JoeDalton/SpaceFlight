@@ -308,6 +308,13 @@ class CollisionSystem:
             self.game.player.play_impact_sound(
                 relative_hit_point=relative_hit_point, kind="laser"
             )
+            # Directional, laser-coloured cockpit hit flash (display-only; no-op
+            # headless). The shot's velocity is its incoming direction; bombs
+            # carry no colour, so on_laser_hit falls back to a default tint.
+            self.game.player.on_laser_hit(
+                incoming_world_dir=munition.speed,
+                color=getattr(munition, "color", None),
+            )
         else:
             # TODO: Mute bots shooting on bots ?
             self.game.app.sfx.distant_impact_hit(
@@ -328,7 +335,7 @@ class CollisionSystem:
             )
             # Occasionally add a small secondary explosion for extra punch.
             if random.random() < HIT_EXPLOSION_CHANCE:
-                self.game.explosion_fx_pool.spawn_hit(
+                self.game.fire_smoke_pool.hit_burst(
                     position=hit_point,
                     normal=normal,
                     base_velocity=hit_velocity,

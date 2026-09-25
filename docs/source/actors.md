@@ -145,15 +145,36 @@ generic "has health, dies, gets cleaned up" contract, independent of the
 - **`Destructible`** registers itself with the game's single
   `Destructibles` tracker on construction. Subclasses implement
   `get_health`, `play_death` and `clean`.
-- **`Destructibles`** runs once per frame: it partitions tracked objects into
-  still-alive and newly-dead by `get_health() <= 0.0`, then for each
-  newly-dead object plays its death animation, clears its tasks and cleans
-  it up — all in one central sweep, so individual actors never need to poll
-  their own death.
+- Death is a **timed phase**, not instantaneous. Each object composes a
+  `DyingPhase` (see below) and exposes overridable hooks:
+  - `begin_death()` — entered once when `get_health()` first hits zero: kick
+    off the death animation (start a spin, cut engines, ramp up smoke, drop out
+    of targeting, ...).
+  - `update_death()` — polled each frame while dying; returns `True` once the
+    phase has lasted `death_duration_s`. The default duration `0` reaps the
+    same frame, which is the legacy instantaneous behaviour.
+  - `finish_death()` — the terminal effect, defaulting to `play_death`.
+- **`Destructibles`** runs once per frame: it moves objects whose health has
+  reached zero into a *dying* list (calling `begin_death`), advances every
+  dying object (`update_death`), and only when one reports finished does it
+  fire `finish_death`, clear its tasks and clean it up. So a killed ship can
+  spin out of control for a few seconds — still collidable — before it finally
+  explodes and is removed. (A guard skips objects already cleaned out-of-band,
+  e.g. a turret whose controlling `Bot` cleaned it first.)
 
 `Bot` and every capital-ship `SubSystem` are `Destructible`s. A `Ship` itself
 is not — it's cleaned up by whichever `Bot`/`Player` owns it as part of that
 owner's own teardown, rather than being tracked independently.
+
+The dying-phase *timer* is a small composable helper, **`DyingPhase`** in
+[`utils/state_machine.py`](../src/space_flight/utils/state_machine.py) (beside
+`StateMachine` and `Cooldown`): an is-dying flag plus an injected, pause-aware
+clock, exposing `begin()` / `elapsed_s()` / `finished(duration_s)`. It carries
+no policy, so both `Destructible` and the non-Destructible `Player` compose it
+to time their death identically. The spin-out animation itself lives on `Ship`
+(`begin_tumble` / `tumble_step`, a √time-ramped body-rate about a random axis)
+and its smoke/fire trail in [`DamageFX`](fx.md); a mounted `SubSystem`, which
+cannot tumble, just smokes for a short duration before exploding.
 
 ## `Bot` — the AI controller
 
@@ -200,7 +221,10 @@ adds everything specific to being watched by a human:
   `RECORD_GAME` flag.
 
 Unlike `Bot`, `Player` is not a `Destructible` — the player's ship dying ends
-the game rather than being cleaned up mid-session.
+the level rather than being cleaned up mid-session. It still plays the same
+spin-out death: it composes the same `DyingPhase` timer and, while dying, hands
+control to the pawn's tumble (camera and all) until the spin finishes, at which
+point `FlightState` shows the level-end screen.
 
 ## `Trihedron`
 

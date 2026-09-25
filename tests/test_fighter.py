@@ -22,6 +22,9 @@ def make_fighter_without_init(
     fighter.max_shield = max_shield
     fighter.shield = current_shield
     fighter.shield_regen_rate = shield_regen_rate
+    # apply_damage reads is_dying -- a property mirroring the controlling
+    # Bot/Player -- to make a dying wreck inert; give it a live controller.
+    fighter.parent = MagicMock(is_dying=False)
     return fighter
 
 

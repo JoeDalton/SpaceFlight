@@ -13,9 +13,11 @@
 :titlesonly:
 :maxdepth: 1
 
+space_flight.fx.cockpit_fx
+space_flight.fx.damage_fx
+space_flight.fx.fire_smoke_fx
 space_flight.fx.sfx
 space_flight.fx.speed_dust_cloud
-space_flight.fx.explosion_fx
 space_flight.fx.spark_fx
 ```
 

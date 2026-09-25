@@ -8,8 +8,13 @@ from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
+from space_flight.fx.cockpit_fx import CockpitFX, screen_direction_from_incoming
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
+from space_flight.utils.state_machine import DyingPhase
+
+# Fallback flash tint for a hit with no colour of its own (e.g. a bomb).
+_DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
 
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
@@ -74,6 +79,12 @@ class Player:
         self.roll_rate = 0.0
         self.view_offset = np.zeros(2)
 
+        # Death state. The player is not a Destructible, so its death is handled
+        # in FlightState: when killed it tumbles out of control (camera and all)
+        # for the pawn's death-spin duration before the level-end screen shows.
+        # It reuses the same DyingPhase timer the destructibles compose.
+        self._dying = DyingPhase(clock=self.game.game_time.get_current_time)
+
         self.has_ai = has_ai
         if self.has_ai:
             self.pilot = FighterPilot(game=self.game, pawn=self.pawn)
@@ -97,6 +108,12 @@ class Player:
         if not self.game.headless:
             self.initialize_camera()
 
+        # First-person low-health feedback (display-only; player pawn only).
+        if not self.game.headless:
+            self.cockpit_fx = CockpitFX(game=self.game, player=self)
+        else:
+            self.cockpit_fx = None
+
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
 
@@ -111,6 +128,13 @@ class Player:
         The cockpit is linked to the camera, so it should move
         without being told to.
         """
+        # While dying, the controls are dead: the ship tumbles out of control and
+        # the camera tumbles with it until the level-end screen takes over.
+        if self.is_dying:
+            self.pawn.tumble_step(elapsed_s=self._dying.elapsed_s())
+            if not self.game.headless:
+                self.move_camera()
+            return
         if self.has_ai:
             intent, target_dict = self.tactician.think()
             target_direction, desired_speed_mps = self.navigator.navigate(
@@ -146,6 +170,32 @@ class Player:
         :param method: the method to be called by the task
         """
         self.game.method_lists[self.id].append(method)
+
+    @property
+    def is_dying(self) -> bool:
+        """Whether the player is playing out its death spin."""
+        return self._dying.is_dying
+
+    def begin_death(self):
+        """
+        Start the player's death: make the wreck untargetable and send it into an
+        out-of-control tumble. Called once by FlightState when the player is killed.
+
+        The pawn keeps its collider and integrator slot (it is not cleaned mid-level),
+        so it stays collidable and coasts while it spins; :meth:`move_player` drives
+        the tumble each frame.
+        """
+        if not self._dying.begin():
+            return
+        try:
+            self.game.interactions.remove_actor(self.pawn)
+        except (KeyError, AttributeError):
+            pass
+        self.pawn.begin_tumble()
+
+    def death_spin_finished(self) -> bool:
+        """Whether the death spin has run its course and the level may end."""
+        return self._dying.finished(self.pawn.death_spin_duration_s)
 
     def initialize_camera(self):
         """
@@ -184,12 +234,19 @@ class Player:
         # Ship accelerating and taking hits
         self.compute_head_acceleration()
         self.compute_head_position()
-        self.head_jolt.setPos(*self.head_position_m)
+
+        # Battle-damage cockpit rattle, layered on top of the neck-spring pose.
+        if self.cockpit_fx is not None:
+            rattle_offset, rattle_roll = self.cockpit_fx.rattle_offset()
+        else:
+            rattle_offset, rattle_roll = np.zeros(3), 0.0
+        self.head_jolt.setPos(*(self.head_position_m + rattle_offset))
 
         # Set head angular position proportional and opposite to ship roll rate
         roll_rate_radps = self.pawn.pqr[1]
         self.head_jolt.setR(
             roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
+            + rattle_roll
         )
 
         # Pilot turning their head TODO smoother system, independent of framerate
@@ -258,6 +315,25 @@ class Player:
             )
         else:
             raise NotImplementedError
+
+    def on_laser_hit(self, incoming_world_dir, color):
+        """
+        React to a laser hitting the player with a directional, laser-coloured
+        cockpit flash (called from the collision handler). No-op headless or
+        before the cockpit FX exist.
+
+        :param incoming_world_dir: the shot's world-space travel direction
+        :param color: the laser's RGB tint, or None (e.g. a bomb) for the default
+        """
+        if self.cockpit_fx is None:
+            return
+        screen_dir = screen_direction_from_incoming(
+            incoming_world_dir, self.pawn.right, self.pawn.up
+        )
+        self.cockpit_fx.flash(
+            color=color if color is not None else _DEFAULT_HIT_COLOR,
+            screen_dir=screen_dir,
+        )
 
     def loop_target(self, increment: int = 1):
         """
@@ -457,6 +533,10 @@ class Player:
         if self.rear_view_mirror is not None:
             self.rear_view_mirror.clean()
         self.rear_view_mirror = None
+
+        if self.cockpit_fx is not None:
+            self.cockpit_fx.clean()
+        self.cockpit_fx = None
 
         self.game = None
 
