@@ -8,9 +8,13 @@ from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
+from space_flight.fx.cockpit_fx import CockpitFX, screen_direction_from_incoming
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
 from space_flight.utils.state_machine import DyingPhase
+
+# Fallback flash tint for a hit with no colour of its own (e.g. a bomb).
+_DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
 
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
@@ -103,6 +107,12 @@ class Player:
         # Anchor camera to player ship node (there is no camera headless)
         if not self.game.headless:
             self.initialize_camera()
+
+        # First-person low-health feedback (display-only; player pawn only).
+        if not self.game.headless:
+            self.cockpit_fx = CockpitFX(game=self.game, player=self)
+        else:
+            self.cockpit_fx = None
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
@@ -224,12 +234,19 @@ class Player:
         # Ship accelerating and taking hits
         self.compute_head_acceleration()
         self.compute_head_position()
-        self.head_jolt.setPos(*self.head_position_m)
+
+        # Battle-damage cockpit rattle, layered on top of the neck-spring pose.
+        if self.cockpit_fx is not None:
+            rattle_offset, rattle_roll = self.cockpit_fx.rattle_offset()
+        else:
+            rattle_offset, rattle_roll = np.zeros(3), 0.0
+        self.head_jolt.setPos(*(self.head_position_m + rattle_offset))
 
         # Set head angular position proportional and opposite to ship roll rate
         roll_rate_radps = self.pawn.pqr[1]
         self.head_jolt.setR(
             roll_rate_radps * HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD
+            + rattle_roll
         )
 
         # Pilot turning their head TODO smoother system, independent of framerate
@@ -298,6 +315,25 @@ class Player:
             )
         else:
             raise NotImplementedError
+
+    def on_laser_hit(self, incoming_world_dir, color):
+        """
+        React to a laser hitting the player with a directional, laser-coloured
+        cockpit flash (called from the collision handler). No-op headless or
+        before the cockpit FX exist.
+
+        :param incoming_world_dir: the shot's world-space travel direction
+        :param color: the laser's RGB tint, or None (e.g. a bomb) for the default
+        """
+        if self.cockpit_fx is None:
+            return
+        screen_dir = screen_direction_from_incoming(
+            incoming_world_dir, self.pawn.right, self.pawn.up
+        )
+        self.cockpit_fx.flash(
+            color=color if color is not None else _DEFAULT_HIT_COLOR,
+            screen_dir=screen_dir,
+        )
 
     def loop_target(self, increment: int = 1):
         """
@@ -497,6 +533,10 @@ class Player:
         if self.rear_view_mirror is not None:
             self.rear_view_mirror.clean()
         self.rear_view_mirror = None
+
+        if self.cockpit_fx is not None:
+            self.cockpit_fx.clean()
+        self.cockpit_fx = None
 
         self.game = None
 

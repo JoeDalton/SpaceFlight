@@ -28,6 +28,7 @@ bomb_supply: 6
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 350.0
+cockpit_spark_emitters: models/ships/y-wing/cockpit/spark_emitters.yaml
 
 exterior_engine_sound: sounds/engines/y-wing/yw_ext_med.ogg
 interior_engine_sound: sounds/engines/y-wing/yw_int_med.ogg

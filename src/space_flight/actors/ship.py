@@ -34,7 +34,9 @@ ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
 # the input clamp / actuator low-pass) so a dramatic tumble is possible.
 DEATH_SPIN_DURATION_S = 2.5
 DEATH_MAX_TUMBLE_RATE_DEGPS = 400.0
-TUMBLE_RATE_FACTORS = np.array([0.2, 1.0, 0.2])
+# Deepest play-rate cut of the player's interior engine at a full damage stutter
+# (see Ship._engine_sputter_factor, driven by CockpitFX's shared stutter events).
+ENGINE_SPUTTER_MAX_DEPTH = 0.6
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -615,7 +617,6 @@ class Ship(Pawn):
         else:
             ramp = 1.0
         omega_radps = self.death_max_tumble_rate_radps * np.sqrt(ramp)
-        omega_radps *= TUMBLE_RATE_FACTORS
         self.scalar_thrust_n = 0.0
         self.pqr = self._tumble_axis * omega_radps
 
@@ -678,7 +679,26 @@ class Ship(Pawn):
         :param throttle: The throttle value of the ship [0, 1]
         """
         pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
+        pitch_multiplier *= self._engine_sputter_factor()
         self.sound.setPlayRate(pitch_multiplier)
+
+    def _engine_sputter_factor(self) -> float:
+        """
+        A play-rate multiplier that cuts the player's interior engine in sync with
+        the cockpit's random damage stutters (see
+        :class:`~space_flight.fx.cockpit_fx.CockpitFX`): 1.0 when healthy or
+        between events, dipping to ``1 - ENGINE_SPUTTER_MAX_DEPTH`` at a full jolt.
+
+        Reads the same shared stutter envelope the camera jolt uses, so the engine
+        cut and the cockpit shake land together. Only the player carries a
+        ``cockpit_fx``, so bots (and headless) are unaffected.
+
+        :return: A multiplier in (0, 1], applied on top of the throttle pitch
+        """
+        cockpit_fx = getattr(self.parent, "cockpit_fx", None)
+        if cockpit_fx is None:
+            return 1.0
+        return 1.0 - ENGINE_SPUTTER_MAX_DEPTH * cockpit_fx.sputter_intensity()
 
     def apply_damage(self, damage: float, damage_type: str):
         """

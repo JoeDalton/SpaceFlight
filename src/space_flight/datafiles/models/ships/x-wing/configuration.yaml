@@ -25,6 +25,7 @@ shot_power: 60.0
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 400.0
+cockpit_spark_emitters: models/ships/x-wing/cockpit/spark_emitters.yaml
 
 exterior_engine_sound: sounds/engines/x-wing/xw_ext_med.ogg
 interior_engine_sound: sounds/engines/x-wing/xw_int_med.ogg

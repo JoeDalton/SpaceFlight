@@ -25,6 +25,7 @@ shot_power: 75.0
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 450.0
+cockpit_spark_emitters: models/ships/tie_common/cockpit/spark_emitters.yaml
 
 exterior_engine_sound: sounds/engines/tie_common/tie_ext_high.ogg
 interior_engine_sound: sounds/engines/tie_common/tie_int_high.ogg

@@ -151,6 +151,44 @@ no geometry of its own — it emits into the shared `FireSmokePool` via
   so dozens of ships can trail at once without saturating the shared pool or
   drowning the GPU in transparent overdraw (see `fire_smoke_fx.py`).
 
+## `cockpit_fx.py` — first-person low-health feedback
+
+[`cockpit_fx.py`](../src/space_flight/fx/cockpit_fx.py)'s `CockpitFX` is the
+player-only, display-only counterpart to `DamageFX`: since the exterior smoke/fire
+trail is emitted at the hull (i.e. at the camera) it is useless in first person, so
+this gives the pilot an in-cockpit read on their own ship. Built by `Player` **only
+when not headless** and cleaned with the player; everything keys off the same two
+health tiers as the exterior FX (`health_tier()` reuses `damage_fx`'s 2/3 and 1/3
+thresholds).
+
+- **Damage vignette + directional hit flash** share one fullscreen `render2d`
+  `CardMaker` quad with the `cockpit_overlay.{vert,frag}` shader (on the 2D layer, so
+  it composites regardless of the conditional `GraphicsManager` post pass). `update()`
+  drives the red vignette from the tier (pulsing when critical); `flash(color,
+  screen_dir)` triggers a transient bloom tinted the laser's colour, biased toward the
+  incoming direction — wired from the player branch of `munition_into_destructible`
+  ([collisions.py](../src/space_flight/game/collisions.py)) via `Player.on_laser_hit`,
+  whose direction math (`screen_direction_from_incoming`) projects the shot's world
+  velocity onto the pawn's `right`/`up` basis.
+- **Electrical sparks** reuse the hit-spark pool and shader directly
+  (`game.spark_fx_pool`, `spark.{vert,frag}`) — no separate cockpit pool — with a small
+  cockpit `SparkPreset` and `spawn(..., size_scale=, speed_scale=)` so the close-up
+  sparks are scaled down against the pool's distance-tuned globals. Each burst fires a
+  random subset of the ship's **authored cockpit emitters** — 3D positions + normals in
+  the ship body frame, loaded from `cockpit/spark_emitters.yaml` via the
+  `cockpit_spark_emitters` config key (the three TIE variants share one file under
+  `models/ships/tie_common/cockpit/`) — transformed to world through the ship node so
+  sparks fly out of fixed cockpit points.
+- **Cockpit rattle + engine sputter** are one synchronized effect: `update()` runs a
+  random damage-*stutter* scheduler (discrete jolt events at random intervals, more
+  frequent/stronger by tier — not a continuous vibration), exposing a single `[0,1]`
+  envelope via `sputter_intensity()`. `Player.move_camera` reads it through
+  `rattle_offset()`, which fades a fast multi-frequency camera vibration in and out by
+  that envelope; `Ship.adjust_engine_pitch` reads the *same* value to cut the interior
+  engine play-rate at the same instant. Computing
+  it once here keeps the shake and the engine cut in lockstep. `Ship` only sputters when
+  its controller carries a `cockpit_fx` (the player), so bots and headless are unaffected.
+
 ## `speed_dust_cloud.py` — engine speed feel
 
 [`speed_dust_cloud.py`](../src/space_flight/fx/speed_dust_cloud.py)'s
@@ -201,6 +239,7 @@ creation cost across several frames instead of stalling on construction.
 All of it lives directly under
 [`src/space_flight/fx/`](../src/space_flight/fx/): the shared particle
 framework in `__init__.py`, the fire/smoke pool in `fire_smoke_fx.py`, the
-damage/death trail in `damage_fx.py`, the sparks in `spark_fx.py`, the
-non-particle dust cloud in `speed_dust_cloud.py`, and sound in `sfx.py`. The
-auto-generated [code reference](docs/) has the full per-class API.
+damage/death trail in `damage_fx.py`, the cockpit low-health feedback in
+`cockpit_fx.py`, the sparks in `spark_fx.py`, the non-particle dust cloud in
+`speed_dust_cloud.py`, and sound in `sfx.py`. The auto-generated
+[code reference](docs/) has the full per-class API.

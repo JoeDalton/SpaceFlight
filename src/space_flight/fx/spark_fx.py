@@ -200,6 +200,8 @@ class SparkPool(ParticleBuffer):
         normal: Vec3,
         base_velocity: Vec3,
         preset: SparkPreset,
+        size_scale: float = 1.0,
+        speed_scale: float = 1.0,
     ) -> None:
         """
         Emit one burst of hit sparks.
@@ -215,6 +217,10 @@ class SparkPool(ParticleBuffer):
                               spark so they ride a moving target.
         :param preset:        Look + emission parameters (:data:`METAL`,
                               :data:`ICE`, :data:`ROCK`, :data:`MAGIC`).
+        :param size_scale:    Extra per-call multiplier on spark size, on top of
+                              the preset and the global scale -- e.g. the cockpit
+                              sparks, seen up close, use a small value.
+        :param speed_scale:   Extra per-call multiplier on launch speed, likewise.
         """
         if normal is None:
             return  # no impact surface to emit from
@@ -225,9 +231,10 @@ class SparkPool(ParticleBuffer):
         normal_np, tangent, bitangent = build_orthogonal_basis(normal_np)
 
         half_angle = preset.spread * (np.pi * 0.5) * SPARK_JET_ANGLE_SCALE
-        # Apply the global tuning multipliers on top of the preset.
-        base_size = preset.size * SPARK_SIZE_SCALE
-        base_speed = preset.speed * SPARK_SPEED_SCALE
+        # Apply the global tuning multipliers and the per-call scales on top of
+        # the preset.
+        base_size = preset.size * SPARK_SIZE_SCALE * size_scale
+        base_speed = preset.speed * SPARK_SPEED_SCALE * speed_scale
         max_size = base_size * 1.8
         inner = np.array(preset.color_inner)
         outer = np.array(preset.color_outer)

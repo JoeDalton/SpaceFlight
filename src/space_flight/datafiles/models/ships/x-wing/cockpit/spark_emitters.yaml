@@ -1,0 +1,17 @@
+# X-wing cockpit spark emitters. Positions and normals in the ship BODY frame
+# (X right, Y forward, Z up), metres, relative to the ship node; sparks spawn at
+# each position and streak out along its normal.
+#
+# NOTE: placeholder layout -- tune to the actual X-wing cockpit geometry (points
+# must sit ahead of the camera near-plane to be visible).
+emitters:
+  - position: [-0.4, 2.1, 0.25]
+    normal: [0.5, -0.7, -0.5]
+  - position: [0.4, 2.1, 0.25]
+    normal: [-0.5, -0.7, -0.5]
+  - position: [-0.3, 1.9, -0.35]
+    normal: [0.4, -0.6, 0.7]
+  - position: [0.3, 1.9, -0.35]
+    normal: [-0.4, -0.6, 0.7]
+  - position: [0.0, 2.0, -0.4]
+    normal: [0.0, -0.7, 0.7]
