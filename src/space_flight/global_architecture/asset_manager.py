@@ -1,8 +1,10 @@
+import importlib.metadata
+import platform
 from pathlib import Path
 
 from direct.showbase.ShowBase import ShowBase
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, LOGGER
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
 # TODO use bam files for faster loading of 3D models
@@ -176,7 +178,21 @@ class AssetManager:
                 app=self.app, path=path, pattern=pattern, is_3d=False
             )
         elif asset_type == "model":
-            self.assets[path] = self.app.loader.loadModel(path)
+            try:
+                self.assets[path] = self.app.loader.loadModel(path)
+            except Exception:
+                LOGGER.exception(
+                    "Failed to load model %s (resolved: %s, exists: %s, cwd: %s, "
+                    "platform: %s, panda3d: %s, panda3d-gltf: %s)",
+                    path,
+                    Path(path).resolve(),
+                    Path(path).exists(),
+                    Path.cwd(),
+                    platform.platform(),
+                    importlib.metadata.version("panda3d"),
+                    importlib.metadata.version("panda3d-gltf"),
+                )
+                raise
 
         elif asset_type == "texture":
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
