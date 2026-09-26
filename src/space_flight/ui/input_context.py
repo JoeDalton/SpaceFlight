@@ -58,6 +58,33 @@ class InputContext(ABC):
     def refresh_bindings(self, app) -> None:
         pass
 
+    @staticmethod
+    def key_label(bindings: dict, context: str, action: str, fallback: str = "") -> str:
+        """
+        Human-readable keybinding label for a bound action, e.g. "R" for the
+        keyboard's radial_menu binding under the "flight" context.
+
+        The one shared place for the "read the active device's raw binding
+        and uppercase it" pattern needed to show a keybinding to the player
+        (e.g. a HUD prompt or an on-screen hint) so it stays correct if they
+        rebind the key, instead of every caller hardcoding a key name or
+        re-deriving this lookup itself.
+
+        :param bindings: The parsed bindings config (``app.bindings``)
+        :param context: The bindings context the action lives under (e.g. "flight")
+        :param action: The action name within that context (e.g. "radial_menu")
+        :param fallback: Returned instead if the action has no binding
+        :return: The uppercased key label, or fallback
+        """
+        input_type = bindings.get("input_type", "keyboard")
+        key = (
+            bindings.get("contexts", {})
+            .get(context, {})
+            .get(input_type, {})
+            .get(action, "")
+        )
+        return key.upper() if key else fallback
+
 
 class InputContextStack:
     """

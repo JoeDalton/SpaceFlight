@@ -134,6 +134,56 @@ def test_set_personality_propagates_same_object_to_all_three():
 
 
 # ---------------------------
+# set_team
+# ---------------------------
+
+
+def test_set_team_reassigns_bot_and_pawn():
+    """
+    A lone fighter's team is read live every frame, so reassigning bot.team
+    and bot.pawn.team is enough for it.
+    """
+    bot = make_bot_without_init()
+    bot.pawn.sub_systems = []
+    bot.pawn.shield = None
+    bot.pawn.mounted_bots = []
+
+    bot.set_team(9)
+
+    assert bot.team == 9
+    assert bot.pawn.team == 9
+
+
+def test_set_team_cascades_to_capital_ship_dependents():
+    """
+    A capital ship's dependents cache team at construction time and never
+    re-read it: each sub_system (including shield generators), the shared
+    shield, and each mounted bot (turret / tractor beam -- itself a Bot with
+    its own pawn.team) must all be walked.
+    """
+    turret = make_bot_without_init(bot_type="turret")
+    turret.pawn.sub_systems = []
+    turret.pawn.shield = None
+    turret.pawn.mounted_bots = []
+
+    sub_system = MagicMock(team=2)
+    shield = MagicMock(team=2)
+    frigate = make_bot_without_init(bot_type="capital_ship")
+    frigate.pawn.sub_systems = [sub_system]
+    frigate.pawn.shield = shield
+    frigate.pawn.mounted_bots = [turret]
+
+    frigate.set_team(5)
+
+    assert frigate.team == 5
+    assert frigate.pawn.team == 5
+    assert sub_system.team == 5
+    assert shield.team == 5
+    assert turret.team == 5
+    assert turret.pawn.team == 5
+
+
+# ---------------------------
 # begin_death
 # ---------------------------
 

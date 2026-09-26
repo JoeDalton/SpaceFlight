@@ -13,11 +13,9 @@ from space_flight.fx.fire_smoke_fx import FireSmokePool
 from space_flight.fx.spark_fx import SparkPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
-from space_flight.game.levels.dev_level import build_dev_level, build_dev_upfront
-from space_flight.game.levels.intro_level import build_intro_level, build_intro_upfront
-from space_flight.game.levels.race_level import build_race_level, build_race_upfront
+from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
-from space_flight.game.scenario import Scenario
+from space_flight.game.scenario import Mission
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -25,10 +23,16 @@ from space_flight.game.time_keeping import (
 )
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.ui.hud import HUD, TargetHUD
-from space_flight.ui.input_context import FlightInputContext, HyperspaceInputContext
+from space_flight.ui.input_context import (
+    FlightInputContext,
+    HyperspaceInputContext,
+    InputContext,
+)
 
 if TYPE_CHECKING:
     from direct.task import Task
+
+    from space_flight.game.levels import LevelEntry
 
 LOGGER = logging.getLogger()
 
@@ -72,18 +76,20 @@ class FlightState(BaseState):
         self.initialize_game_structure()
         self.flight_context = None
 
+        entry = self._level_entry()
+
         # Phase 1 — on a black screen, BEFORE the animation: build the heavy
         # objects (player, ocean, cloud field) and force their one-time GPU
         # preparation now. A brief freeze on black is invisible, and it keeps the
         # one-time compile/upload spikes out of the animation.
         self.force_render()
-        self._build_upfront()
+        self._build_upfront(entry)
 
         # Phase 2 — play the hyperspace animation; the rest of the level is built
         # incrementally during its looping "inside" phase. The overlay declares
         # PAUSES_BELOW = False (so we stay alive) and pulls build steps via the
         # callbacks below, then reveals the live scene.
-        self._build_generator = self._make_build_generator()
+        self._build_generator = self._make_build_generator(entry)
         self._jump_context = None
         self.app.state_manager.push(
             state_class=self.app.state_manager.HYPERSPACE_LOADING_STATE,
@@ -108,8 +114,9 @@ class FlightState(BaseState):
         self.loading_overlay = None
         self._jump_context = None
 
-        self._build_upfront()
-        for _ in self._make_build_generator():
+        entry = self._level_entry()
+        self._build_upfront(entry)
+        for _ in self._make_build_generator(entry):
             pass
         self._build_generator = None
 
@@ -123,47 +130,48 @@ class FlightState(BaseState):
 
         :return: the prompt string shown by the loading overlay
         """
-        input_type = self.app.bindings.get("input_type", "keyboard")
-        key = (
-            self.app.bindings.get("contexts", {})
-            .get("hyperspace", {})
-            .get(input_type, {})
-            .get("drop_hyperspace", "")
+        label = InputContext.key_label(
+            self.app.bindings, "hyperspace", "drop_hyperspace", fallback="the jump key"
         )
-        label = key.upper() if key else "the jump key"
         return f"Press [{label}] to drop out of hyperspace"
 
-    def _build_upfront(self) -> None:
+    def _level_entry(self) -> LevelEntry:
+        """
+        The selected level's registry entry.
+
+        Resolved once by the caller (:meth:`enter` / :meth:`_enter_headless`)
+        and passed to both :meth:`_build_upfront` and
+        :meth:`_make_build_generator`, since they run back to back.
+
+        :return: The :class:`~space_flight.game.levels.LevelEntry`
+        """
+        selected_level = self.app.configuration["selected_level"]
+        entry = LEVELS.get(selected_level)
+        if entry is None:
+            raise NotImplementedError(f"Level `{selected_level}` does not exist.")
+        return entry
+
+    def _build_upfront(self, entry: LevelEntry) -> None:
         """
         Run the level's up-front (on-black) build phase, if it has one. This is
         where the heavy objects are created and GPU-prepared before the animation.
-        """
-        selected_level = self.app.configuration["selected_level"]
-        if selected_level == "Dev":
-            return build_dev_upfront(game=self)
-        elif selected_level == "Intro":
-            return build_intro_upfront(game=self)
-        elif selected_level == "Race":
-            return build_race_upfront(game=self)
-        else:
-            raise NotImplementedError(f"Level `{selected_level}` does not exist.")
 
-    def _make_build_generator(self) -> Iterator[str]:
+        :param entry: The selected level's registry entry (see :meth:`_level_entry`)
+        """
+        return entry.upfront(game=self)
+
+    def _make_build_generator(self, entry: LevelEntry) -> Iterator[str]:
         """
         Return a generator that yields once per build step for the rest of the
         level, advanced one step per frame during the animation.
 
+        :param entry: The selected level's registry entry (see :meth:`_level_entry`)
         :return: A generator yielding a short label once per build step.
         """
-        selected_level = self.app.configuration["selected_level"]
-        if selected_level == "Dev":
-            return build_dev_level(game=self)
-        elif selected_level == "Intro":
-            return build_intro_level(game=self)
-        elif selected_level == "Race":
-            return build_race_level(game=self)
-        else:
-            raise NotImplementedError(f"Level `{selected_level}` does not exist.")
+        yield from self.scene.build_decomposed()
+        self.mission = Mission(self)
+        self.mission.run(entry.mission)
+        yield "mission"
 
     def _advance_build(self) -> bool:
         """
@@ -206,8 +214,8 @@ class FlightState(BaseState):
         self.game_world_task = self.app.taskMgr.add(
             self.update_game_world_task, "update_game_world_task"
         )
-        self.scenario_task = self.app.taskMgr.add(
-            self.update_scenario_task, "update_scenario_task"
+        self.mission_task = self.app.taskMgr.add(
+            self.update_mission_task, "update_mission_task"
         )
 
         # If the loading screen waits for a key, capture it via an input context
@@ -279,8 +287,8 @@ class FlightState(BaseState):
         # (Player, bots, moving scene...)
         self.integrator = Integrator(game=self, max_state_size=5000)
 
-        # Empty scenario by default; levels replace it with a loaded one.
-        self.scenario = Scenario([])
+        # Empty mission by default; the level's build replaces it.
+        self.mission = Mission(self)
 
         # Initialize records
         if RECORD_GAME:
@@ -344,9 +352,9 @@ class FlightState(BaseState):
                 text=text,
             )
 
-    def update_scenario_task(self, task: Task) -> int:
+    def update_mission_task(self, task: Task) -> int:
         """
-        Advance the scenario by one frame (a no-op while paused).
+        Advance the mission by one frame (a no-op while paused).
 
         :param task: The Panda3D task driving this per-frame update.
         :return: task.cont so the task keeps running next frame.
@@ -354,7 +362,7 @@ class FlightState(BaseState):
         # Do nothing if paused
         if self.is_paused:
             return task.cont
-        self.scenario.update(self)
+        self.mission.update()
         return task.cont
 
     def set_pause(self) -> None:
@@ -404,9 +412,9 @@ class FlightState(BaseState):
         if getattr(self, "game_world_task", None) is not None:
             self.app.taskMgr.remove(self.game_world_task)
             self.game_world_task = None
-        if getattr(self, "scenario_task", None) is not None:
-            self.app.taskMgr.remove(self.scenario_task)
-            self.scenario_task = None
+        if getattr(self, "mission_task", None) is not None:
+            self.app.taskMgr.remove(self.mission_task)
+            self.mission_task = None
         # Drop references to the methods to run
         self.method_lists = None
 

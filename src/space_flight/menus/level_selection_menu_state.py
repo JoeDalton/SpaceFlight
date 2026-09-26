@@ -1,6 +1,7 @@
 from direct.gui.DirectGui import DirectFrame, DirectLabel, DirectScrolledFrame
 from panda3d.core import TextNode
 
+from space_flight.game.levels import LEVELS as LEVEL_REGISTRY
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.menu_utils import CustomButton
 
@@ -8,18 +9,11 @@ from space_flight.menus.menu_utils import CustomButton
 
 
 class LevelSelectionMenuState(BaseState):
+    # Built from the single level registry (space_flight.game.levels.LEVELS)
+    # so this menu and the level builder in FlightState can never drift apart.
     LEVELS = [
-        {
-            "name": "Dev",
-            "description": "A development level that usually "
-            "demonstrates the latest implemented features",
-        },
-        {"name": "Intro", "description": "The first `game ready` level."},
-        {
-            "name": "Race",
-            "description": "A friendly tutorial race: pass the checkpoints and "
-            "beat three rival pilots to the finish line.",
-        },
+        {"name": name, "description": entry.description}
+        for name, entry in LEVEL_REGISTRY.items()
     ]
 
     def enter(self):

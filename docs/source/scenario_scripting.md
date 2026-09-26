@@ -1,289 +1,270 @@
-# Scenario scripting
+# Mission scripting
 
-A level's scripted events — when enemy waves arrive, what they attack, mission
-objectives — are written declaratively in a YAML file next to the level, and run
-by a generic engine. You tune most things without touching Python.
+A level's scripted events — when enemy waves arrive, what they attack, the
+objectives and how the level ends — are written in plain Python, in the
+level's own module under
+[`game/levels/`](../../src/space_flight/game/levels/), using
+[`game/scenario/`](../../src/space_flight/game/scenario/).
 
-Each level points at its own file, e.g.
-[`intro_level.yaml`](../../src/space_flight/game/levels/intro_level.yaml) for the
-intro level.
+> [`all_features_example.py`](examples/all_features_example.py) exercises
+> every feature on this page in one file, and is run end-to-end by
+> [`tests/test_all_features_example.py`](../../tests/test_all_features_example.py).
+> It is not a shipped level: copy its patterns, not its story.
 
 ## Mental model
 
-The engine is built on three ideas:
+- A **mission body** is a generator function taking the `Mission`. It reads
+  top to bottom like a script, and `yield from`s the mission's waits to let
+  time pass.
+- A **reactive rule** (`m.on(condition, action)`) holds wherever the body
+  currently is: "defeat if all transports die — whenever that happens".
+- A **condition** is any zero-argument callable returning a bool, checked
+  once per frame. An **action** is a zero-argument callable, usually a
+  lambda calling the mission's action methods.
+- A **wave** is a group of bots: declared as a `WaveSpec` constant, spawned
+  through a `WaveHandle` that tracks its members.
 
-- **Trigger** — a rule: *when* a condition becomes true, run an *action*.
-- **Condition** — a question answered every frame: "has 50 s passed?", "is the
-  first wave wiped out?". Conditions compose.
-- **Action** — something that happens: spawn a wave, show a HUD message.
+Each frame, the mission first fires its due rules, then advances the body
+(and every spawning wave) by one step.
 
-Triggers fire **once** by default (set `once: false` to run the action every
-frame the condition holds). Membership and liveness are tracked for you, so you
-never write "has this already happened" flags.
+## A level, end to end
 
-## File structure
+Trimmed from [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py):
 
-```yaml
-waves:        # reusable spawn definitions, keyed by the group id they spawn into
-  first_wave:
-    size: 5
-    ship_model: tie-bomber
-    spawn_point: [300, 6000, 500]
-    # ...
+```python
+TRANSPORTS = WaveSpec(
+    name="transports",
+    ship_model="cr-90",
+    size=3,
+    bot_type="capital_ship",
+    team=1,
+    spawn_point=[0, -2000, 200],
+    formation="arrowhead",
+    formation_scale_m=150,
+    waypoints=[[0, 0, 200], [0, 3000, 200], [7000, 3000, 200]],
+)
+FIRST_WAVE = WaveSpec(name="first_wave", ship_model="tie-bomber", size=5, ...)
+THIRD_WAVE = WaveSpec(name="third_wave", ship_model="tie-bomber", size=8, ...)
 
-triggers:     # the mission rules
-  - name: first_wave            # optional; used in logs and by the fired condition
-    when: { after_seconds: 50 } # a condition
-    then: { spawn: first_wave } # an action
-    once: true                  # optional; set false to run the action every
-                                # frame the condition holds
+
+def build_intro_upfront(game):
+    game.player = Player(game=game, ship_type="a-wing", ...)
+    game.scene = scene_factory(game=game, scene_name="ocean_planet")
+    game.scene.build_upfront()
+
+
+def intro_mission(m: Mission) -> Iterator[None]:
+    # Handles first, so rules can refer to waves that haven't spawned yet.
+    transports = m.wave(TRANSPORTS)
+    first_wave = m.wave(FIRST_WAVE)
+    third_wave = m.wave(THIRD_WAVE)
+
+    # Reactive rules, live for the whole mission.
+    def spawn_third_wave():
+        m.hud("Enemy reinforcements detected!")
+        third_wave.spawn(target=transports)
+
+    m.on(any_of(m.after(200), m.delay(first_wave.all_destroyed, 3)), spawn_third_wave)
+    m.on(
+        m.delay(transports.all_destroyed, 3),
+        lambda: m.defeat("The convoy has been destroyed."),
+    )
+
+    # The sequential part.
+    yield from m.wait(0.1)
+    transports.spawn()
+    yield from m.wait(10)
+    m.hud("First wave")
+    first_wave.spawn(target=transports)
 ```
 
-A `when` or `then` node is always a **single-key mapping**: the key chooses the
-condition/action, the value is its argument.
+The level is then registered in
+[`game/levels/__init__.py`](../../src/space_flight/game/levels/__init__.py):
+
+```python
+"Mission 2: Escort": LevelEntry(
+    upfront=build_intro_upfront,
+    mission=intro_mission,
+    description="...",
+),
+```
+
+`FlightState` calls the upfront function on a black screen, builds the rest
+of the scene during the hyperspace animation, then creates the level's
+`Mission` (`game.mission`) and starts the body.
 
 ## Waves
 
-A wave entry describes a group of bots. Its **key is the group id** — that same
-name is what conditions and targets refer to elsewhere.
+### `WaveSpec`
 
-```yaml
-waves:
-  first_wave:
-    size: 5                       # number of ships
-    ship_model: tie-bomber        # pawn model
-    bot_type: fighter             # fighter | capital_ship (default: fighter)
-    team: 2                       # default: 2
-    spawn_point: [300, 6000, 500] # world position of the formation leader
-    spawn_orientation: [0, 0, 0, 1]  # quaternion (w, x, y, z); this is the default
-    formation: { scale_m: 30, shape: arrowhead }  # arrowhead | diamond | around_diamond
-    waypoints:                    # optional patrol path
-      - [300, 0, 500]
-      - [300, -6000, 500]
-    loop: true                    # loop the waypoints (default: true)
-    target: transports            # group name to attack (optional)
-    hud_text: "Enemy ships incoming!"  # shown when the wave begins (optional)
-    hud_time_s: 2.5               # how long hud_text shows
-    allow_respawn: false          # see "Spawning once", below
-    record: false                 # record each bot via game.record
-```
+A frozen dataclass: an unknown field raises `TypeError`, and a missing
+`size` raises `ValueError`, as soon as the level module is imported.
 
-Only `id` (the key), `size`, `ship_model`, and `spawn_point` are required.
-
-`spawn_orientation` is handed straight to Panda3D's `Quat`, so its components
-are in (w, x, y, z) order. The default `[0, 0, 0, 1]` is therefore **not** the
-identity but a 180° turn about z.
-
-`target` is resolved as each ship spawns: the ship is aimed at whichever members
-of the target group are alive at that moment, so that group must already exist.
+| Field | Default | Meaning |
+|---|---|---|
+| `name` | required | Names the bots (`<name>_<i>`) |
+| `ship_model` | required | A pawn model, or `(model, count)` pairs for a mixed wave |
+| `size` | `None` | Number of ships; required for a single model, inferred for a mixed wave |
+| `spawn_point` | `None` | Leader's world position; may instead be given at spawn time |
+| `bot_type` | `"fighter"` | `"fighter"` or `"capital_ship"` |
+| `team` | `2` | |
+| `spawn_orientation` | `(0, 0, 0, 1)` | Quaternion `(w, x, y, z)`, passed straight to Panda3D — the default is a 180° turn about z, **not** the identity |
+| `formation` | `None` | `"arrowhead"`, `"diamond"`, `"around_diamond"`; `None` spawns in a centred line |
+| `formation_scale_m` | `30` | Slot spacing |
+| `waypoints` | `()` | Route given to every ship |
+| `loop` | `True` | Whether the route loops |
+| `record` | `False` | Step-by-step-record every bot of the wave |
 
 Turrets and tractor beams are not waves: they are spawned from their host
 capital ship's config (see [docs/subsystems.md](subsystems.md)).
 
-### Formation spawning
+### Spawning
 
-When a wave declares a `formation`, ships spawn **in formation**: the leader at
-`spawn_point`, each wingman at its slot offset from there. Ships beyond the
-formation's capacity (e.g. `size: 12` in an 8-slot diamond) fall back to a
-centred line. A wave with no `formation` spawns entirely in a centred line.
-
-### Spawning is spread across frames
-
-A wave spawns **one ship per frame**, so a large wave never freezes the
-simulation on one long loading frame. There is nothing to configure — it is how
-every wave spawns.
-
-### Spawning once
-
-A wave id is an *identity group*: by default it spawns **at most once**, even if
-several triggers point at it. A second attempt is skipped with a warning. This
-is a safety net — see [One wave, one trigger](#one-wave-one-trigger). Set
-`allow_respawn: true` for the rare case where re-spawning the same composition
-into the same group is intended.
-
-## Conditions (`when`)
-
-### Leaf conditions
-
-| Condition | Argument | True when |
-|---|---|---|
-| `after_seconds` | seconds | the game clock passes that time |
-| `all_destroyed` | group name | the group has spawned **and** all members are dead |
-| `any_alive` | group name | at least one member of the group is alive |
-| `reached_waypoint` | `{who, index}` | any live member of `who` has reached waypoint `index` (0-based; its navigator's next-waypoint index is > `index`) |
-| `near` | `{who, point, radius}` | `who` is within `radius` of `point` (`who` is `player` or a group; for a group, any live member) |
-| `fired` | trigger name | the named trigger has already fired |
-| `any_destroyed` | group name | **not implemented yet**: accepted by the loader but always false |
-
-```yaml
-when: { after_seconds: 50 }
-when: { all_destroyed: first_wave }
-when: { reached_waypoint: { who: transports, index: 5 } }
-when: { near: { who: player, point: [0, 2000, 500], radius: 350 } }
-when: { fired: blockade_past }
+```python
+wave = m.wave(SPEC)                       # a handle, not spawned yet
+wave.spawn(spawn_point=None, target=None, join=None)
+wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
 ```
 
-`fired` is how you chain a trigger off another by name (most often wrapped in
-`delay`, below). Every condition — including the inner `after` of a `delay` — is a
-single-key mapping like these; there is no bare-string form.
+- **One ship per frame**: a large wave never stalls the simulation on one
+  long frame. The first ship appears on the next update.
+- `spawn_point=` overrides the spec's, e.g. when it depends on the player's
+  position at that moment.
+- `target=` makes the ships attack a wave, the player, or any single ship
+  (see [`who`](#who)). It is resolved as each ship spawns, against whatever
+  is alive then.
+- `join=` attaches the ships to an existing, live formation (e.g.
+  `escort.formation`) instead of creating the spec's own. Each ship takes
+  the formation's next free slot as it spawns, so a wave can join another
+  that is still spawning.
+- Calling `spawn()` again on the same handle spawns the same composition
+  again into the same wave.
 
-`all_destroyed` is deliberately **false before the group has ever spawned**, so a
-chained event cannot fire against a wave that does not exist yet.
+### `WaveHandle`
 
-> `reached_waypoint` reads the navigator's waypoint index, which resets to 0 at
-> the end of each lap of a looping patrol and after the last waypoint of a
-> non-looping path — so it is unambiguous only on the first pass. `index` is
-> 0-based: `index: 0` means "reached the first waypoint", and it is only true
-> from the moment that waypoint is actually reached (not from mission start).
+State is read live, so a handle stays valid for the whole mission, before
+and after the wave exists:
 
-### Combinators
+| Member | Meaning |
+|---|---|
+| `alive()` | at least one member is alive |
+| `all_destroyed()` | spawned, and every member is dead (false before spawning) |
+| `any_destroyed()` | spawned, and at least one member has died (stays true after a total wipe) |
+| `pawns()` | the live members, in spawn order (the formation leader first) |
+| `formation` | the wave's `Formation`, once spawned (or `None`) |
+| `set_targets(who)` | every live member attacks every live pawn of `who` |
+| `set_team(team)` | reassigns every live member, cascading a capital ship's cached team to its sub-systems, shield and mounted turrets/tractor beams |
+| `set_waypoints(points, loop=True)` | gives every live member a new route |
 
-Combinators nest, so you can build up arbitrarily complex conditions:
+`alive`, `all_destroyed` and `any_destroyed` are plain methods. Call one to
+get a bool; pass it **uncalled** to use it as a condition:
+`m.on(wave.all_destroyed, ...)`.
 
-| Combinator | Argument | True when |
-|---|---|---|
-| `all_of` | list of conditions | every sub-condition is true |
-| `any_of` | list of conditions | any sub-condition is true |
-| `delay` | `{after, seconds}` | `seconds` have elapsed since `after` first became true |
+## Sequencing
 
-`delay` is what expresses "X, then wait, then…". It **latches**: once `after`
-becomes true the timer is armed and keeps running even if `after` flickers back
-to false.
-
-```yaml
-# 3 seconds after the first wave is wiped out
-when:
-  delay:
-    after: { all_destroyed: first_wave }
-    seconds: 3
-
-# 3 seconds after the `blockade_past` trigger fired
-when:
-  delay:
-    after: { fired: blockade_past }
-    seconds: 3
-
-# convoy reached waypoint 5 AND the second wave is gone
-when:
-  all_of:
-    - { reached_waypoint: { who: transports, index: 5 } }
-    - { all_destroyed: second_wave }
+```python
+yield from m.wait(10)                                  # 10 game-seconds
+yield from m.wait_until(wave.all_destroyed)            # until a condition holds
+ok = yield from m.wait_until(cond, timeout=30)         # True if met, False on timeout
 ```
 
-## Actions (`then`)
+## Reactive rules
 
-| Action | Argument | Effect |
-|---|---|---|
-| `spawn` | wave id | spawn the wave defined under `waves:` |
-| `hud_text` | string, or `{text, display_time_s}` | show a HUD banner |
-| `speech` | string, or `{text, speaker, display_time_s}` | play a voice line and show it as a subtitle |
-| `player_waypoints` | list of points, or `{points, arrival_radius_m, marker_radius_m}` | guide the player with targetable waypoint spheres |
-| `end_level` | outcome string, or `{outcome, text}` | end the level with a `victory`/`defeat`/`death` screen |
-| `all` | list of actions | run several actions in order |
-
-```yaml
-then: { spawn: first_wave }
-then: { hud_text: "Reinforcements detected!" }
-then: { end_level: victory }                 # outcome only
-then: { end_level: { outcome: defeat, text: "The convoy was lost." } }
-then:
-  speech:
-    speaker: "Gold Leader"
-    text: "Gold squadron reporting in."
-    display_time_s: 5
-then:
-  all:
-    - { hud_text: "Reinforcements detected!" }
-    - { spawn: third_wave }
+```python
+rule = m.on(condition, action, once=True)
+rule.cancel()   # stop checking it
+rule.fired      # whether its action has run
 ```
 
-`speech` shows a subtitle near the bottom of the screen (prefixed with `speaker`
-when given). The audio playback itself is currently stubbed — only the subtitle
-is rendered.
+With `once=False`, the action runs every frame the condition holds.
 
-`player_waypoints` shows the player's route one waypoint at a time as a
-semi-transparent sphere; flying within `arrival_radius_m` (default 350) of the
-current waypoint reveals the next. The marker is a neutral actor (bots ignore
-it) and is shown and targetable only while the player's **"Waypoints"** target
-filter is active — selecting that filter lets the player lock onto it.
+## Conditions
 
-```yaml
-then:
-  player_waypoints:
-    points:
-      - [0, 2000, 500]
-      - [3000, 4000, 600]
+### `who`
+
+Every condition or method taking a `who` accepts:
+
+- a `WaveHandle` (any of its live members);
+- the player or a bot (`game.player`, its pawn);
+- a single pawn (e.g. `leader = wave.pawns()[0]`).
+
+### Available conditions
+
+| Condition | True when |
+|---|---|
+| `m.after(seconds)` | `seconds` have passed **from now** |
+| `m.delay(cond, seconds)` | `seconds` after `cond` first became true — it **latches**, so a flicker back to false doesn't reset it |
+| `m.sustained(cond, seconds)` | `cond` has held for an **unbroken** `seconds` — it resets whenever `cond` goes false |
+| `near(who, point, radius)` | any live pawn of `who` is within `radius` of a fixed point |
+| `near_actor(a, b, radius)` | the nearest pair of live pawns between `a` and `b` is within `radius` (two moving targets) |
+| `reached_waypoint(who, index)` | any live bot of `who` has reached its waypoint `index` (0-based) |
+| `wave.alive` / `wave.all_destroyed` / `wave.any_destroyed` | see [`WaveHandle`](#wavehandle) |
+| `all_of(*conds)` / `any_of(*conds)` / `not_(cond)` | combinations |
+| any `lambda: ...` | whatever it returns |
+
+`m.delay` expresses "X, then wait, then…"; `m.sustained` expresses "for 10
+*consecutive* seconds":
+
+```python
+# defeat 3s after the convoy is wiped out
+m.on(m.delay(transports.all_destroyed, 3), lambda: m.defeat("..."))
+
+# defeat if the player stays more than 300m from every escort ship for 20s
+close = near_actor(game.player, escort, 300)
+m.on(m.sustained(not_(close), 20), lambda: m.defeat("..."))
 ```
 
-`end_level` summons the terminal level-end screen. `outcome` is `victory`,
-`defeat`, or `death` (which picks the title and tint); `text` is the
-level-specific explanation shown beneath it. The same screen is used when the
-player's ship is destroyed (`death`).
+> `reached_waypoint` reads the navigator's waypoint index, which resets to 0
+> at the end of each lap of a looping route and after the last waypoint of a
+> non-looping one — so it is unambiguous only on the first pass.
 
-## Groups
+## Actions
 
-A **group** is a named set of actors. Two kinds:
+| Method | Effect |
+|---|---|
+| `m.hud(text, display_time_s=5.0)` | HUD banner message |
+| `m.speech(text, speaker=None, display_time_s=6.0)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
+| `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
+| `m.clear_player_waypoints()` | removes it |
+| `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`) |
 
-- **Identity groups** — a specific cohort. Every wave is one (its id is the
-  group name); in the shipped levels even the convoy and its escort are plain
-  YAML waves. A group built directly in Python can still be registered by
-  name, though no current level does so:
-
-  ```python
-  game.scenario.register(name="transports", bots=transport_bots)
-  ```
-
-- **Query groups** — derived live from a predicate (e.g. "all team-2 ships").
-  Registered in Python with `register_query` (again, no current level uses
-  one); no membership is stored.
-
-Names are the only thing that crosses between YAML and Python: the YAML refers to
-`transports`, the engine resolves that to whichever transports are currently
-alive. Dead members drop out of every query automatically.
+HUD text and speech are skipped headless.
 
 ## Patterns and pitfalls
 
-### One wave, one trigger
+### Sequential vs. reactive
 
-The one-shot guard lives on the **trigger**, not the wave. Two triggers that both
-`spawn` the same wave would each fire once → the wave spawns twice. (The
-`allow_respawn: false` default catches this and skips the second spawn, but the
-clean fix is to not write it that way.)
+Put a step in the body when it is strictly ordered relative to the rest
+("after the first wave arrives, wait for it to die, then bring in the
+second"). Use `m.on` when it must hold wherever the body currently is.
 
-If a wave should arrive via either of two conditions, use **one** trigger with
-`any_of`:
+### Build stateful conditions once
 
-```yaml
-# third wave arrives at 200s OR 3s after the first wave is wiped — once
-- name: third_wave
-  when:
-    any_of:
-      - { after_seconds: 200 }
-      - delay:
-          after: { all_destroyed: first_wave }
-          seconds: 3
-  then:
-    all:
-      - { hud_text: "Reinforcements detected!" }
-      - { spawn: third_wave }
+`m.after`, `m.delay` and `m.sustained` keep a timer, so each must be built
+once, when the rule is declared. Pass them to `m.on`, `m.wait_until`,
+`all_of` or `any_of` directly, or name them first:
+
+```python
+wiped = m.delay(first_wave.all_destroyed, 3)
+m.on(lambda: timeout() or wiped(), spawn_reinforcements)   # fine
+m.on(lambda: m.delay(first_wave.all_destroyed, 3)(), ...)  # never fires: a fresh timer every frame
 ```
 
-### Chaining events
+### Refer to a wave before it spawns
 
-Because a condition can reference a group, events chain naturally: an action
-spawns `first_wave`; another trigger watches `all_destroyed: first_wave` to
-launch reinforcements; a third watches the convoy's progress for a mission
-objective. Keep each rule independent and let the conditions order them.
+A rule registered up front may need a wave that spawns later: create its
+handle with `m.wave(SPEC)` first, then call `spawn()` on it when the time
+comes. Its state methods are simply false until then.
 
-## Extending the vocabulary
+### Only one ending
 
-New conditions and actions are small Python factories:
+The body and a rule can each end the level, e.g. a rule-driven defeat while
+the body later reaches a victory. When both are possible, cancel the rule
+once it no longer applies (`rule.cancel()`), or make the body check the
+same condition.
 
-- a **condition** is any callable `condition(game) -> bool` — see
-  [`conditions.py`](../../src/space_flight/game/scenario/conditions.py);
-- an **action** is any callable `action(game) -> None` — see
-  [`actions.py`](../../src/space_flight/game/scenario/actions.py).
+### Extending
 
-After writing the factory, wire its YAML keyword into the matching `_build_*`
-function in [`loader.py`](../../src/space_flight/game/scenario/loader.py). Resist
-adding a keyword before you have a couple of real uses for it.
+A new condition is just a function returning a zero-argument callable (see
+[`conditions.py`](../../src/space_flight/game/scenario/conditions.py)); a
+new action is just a function or a lambda. Nothing needs registering.
