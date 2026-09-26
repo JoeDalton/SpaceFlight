@@ -20,7 +20,8 @@ class TrackingMountNavigator(GenericNavigator):
     Turns the tactician's intent into a direction for the pilot to point at, using
     lead pursuit so the barrel/antenna anticipates the prey. It is purely an aimer:
     it does not fire or grab. Instead it *publishes* its result onto the pawn
-    (:attr:`Pawn.aim_direction` and :attr:`Pawn.target_distance_m`), so the pawn's
+    (:attr:`TrackingMount.aim_direction` and
+    :attr:`TrackingMount.target_distance_m`), so the pawn's
     own per-frame action -- firing for a turret, grabbing for a tractor beam --
     can key off the same lead solution.
     """

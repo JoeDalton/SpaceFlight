@@ -39,10 +39,6 @@ python ./scripts/launcher.py
 
     `invoke test`
 
-* To run all the tests in dedicated virtualenv, with all supported python versions:
-
-    `invoke testall`
-
 * To check the code coverage:
 
     `invoke coverage`
@@ -51,8 +47,12 @@ python ./scripts/launcher.py
 
     `invoke quality`
 
+* To build the documentation (Sphinx, written to `docs/build/latest`):
+
+    `invoke doc`
+
 * To deploy :
-  * `invoke deploy` deploys a version to your pypiserver - should preferrably be done by the CI
+  * `invoke deploy` publishes a build to the `airthium` Poetry repository - should preferrably be done by the CI
 
 * To clean the build:
  
@@ -62,11 +62,9 @@ python ./scripts/launcher.py
 
     `poetry add/remove dependency`
 
-  * If this is a test dependency, do `poetry add/remove dependency --test`
-  * If this is a development dependency, do `poetry add/remove dependency --dev`
+  * If this is a test dependency, do `poetry add/remove --group test dependency`
+  * If this is a development dependency, do `poetry add/remove --group dev dependency`
+  * If this is a documentation dependency, do `poetry add/remove --group docs dependency`
 
-* To update from the template:
-  * `cruft update`
-
-  # User
-  To be announced :)
+# User
+To be announced :)

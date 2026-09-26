@@ -4,11 +4,11 @@
 asteroid fields, ocean, and volumetric clouds — as a set of independent,
 game-agnostic dressing objects assembled by a per-level `Scene` subclass.
 This page is the guided tour; the per-class API is generated from the
-docstrings in the [code reference](docs/).
+docstrings in the [code reference](apidocs/index.rst).
 
-All of it lives in [`src/space_flight/scenes/`](../src/space_flight/scenes/),
+All of it lives in [`src/space_flight/scenes/`](../../src/space_flight/scenes/),
 with the cloud system under
-[`scenes/cloud/`](../src/space_flight/scenes/cloud/).
+[`scenes/cloud/`](../../src/space_flight/scenes/cloud/).
 
 ## Mental model
 
@@ -18,9 +18,12 @@ with the cloud system under
   builder (see [docs/game.md](game.md)) calls `build_upfront()` then
   `build_decomposed()` on it.
 - Every scene splits its work into the same two-phase shape the level
-  builders expose: **`build_upfront()`** does the GPU-heavy, one-time-prep
-  objects (ocean, cloud field) synchronously on the black screen before the
-  hyperspace animation; **`build_decomposed()`** is a generator that yields
+  builders expose: **`build_upfront()`** builds the heavy objects
+  synchronously on the black screen before the hyperspace animation — the
+  ocean and cloud field for `SceneOcean` (whose one-time GPU prep it also
+  forces, see below), the asteroid fields for `SceneAsteroids` and
+  `SceneLavaPlanet` (built, but without a forced `prepare_scene`);
+  **`build_decomposed()`** is a generator that yields
   between the remaining, cheaper pieces (skybox, lighting, planet, dust,
   static set-dressing models) so the animation keeps rendering while they
   build. This mirrors — and is driven by — `FlightState`'s own two-phase
@@ -35,30 +38,33 @@ with the cloud system under
 
 ## `scenes.py` — the `Scene` catalogue
 
-[`scenes.py`](../src/space_flight/scenes/scenes.py) has one `Scene` subclass
+[`scenes.py`](../../src/space_flight/scenes/scenes.py) has one `Scene` subclass
 per named environment, selected by `scene_factory`:
 
 | Name | Class | Composition |
 |------|-------|-------------|
 | `asteroids` | `SceneAsteroids` | purple skybox, three asteroid fields (static + two rotating), dust, a drydock model |
 | `lava_planet` | `SceneLavaPlanet` | lava-toned lighting, asteroid fields, a 2D lava planet, an Imperial Star Destroyer |
-| `ocean_planet` | `SceneOcean` | dusk skybox, `Ocean`, volumetric `Clouds`, a 2D terran planet, a Star Destroyer |
+| `ocean_planet` | `SceneOcean` | dusk skybox, `Ocean` (with geometric swell on), volumetric `Clouds`, a 2D terran planet, dust (its Star Destroyer block is commented out) |
 | `debug` | `SceneDebug` | a bare skybox + lighting, nothing else |
 
 Each subclass's `build_upfront`/`build_decomposed` pair is a thin assembly
 list rather than logic: it constructs the pieces documented below in a fixed
 order and yields a label after each `build_decomposed` step (used for
-progress/debugging), then `clean()` tears every owned piece down in reverse.
+progress/debugging), then `clean()` tears the owned pieces down roughly in
+reverse (not all of them yet: `SceneOcean.clean` leaves its ocean, skybox
+and planet alone, and `SceneLavaPlanet.clean` skips its planet).
 `SceneOcean` is the most heavily commented example of *why* particular
 objects (the ocean, the cloud field) belong in `build_upfront` — their
 one-time shader compile/vertex upload is explicitly force-prepared
-(`prepare_scene(gsg)`) while the screen is still black, which the module
-docstring notes must run only once the player already exists, since the
-ocean's reflection camera copies the player camera's lens.
+(`prepare_scene(gsg)`) while the screen is still black, which
+`SceneOcean.build_upfront`'s docstring notes must run only once the player
+already exists, since the ocean's reflection camera copies the player
+camera's lens.
 
 ## Static environment pieces
 
-- **[`skybox.py`](../src/space_flight/scenes/skybox.py)**'s `Skybox` loads a
+- **[`skybox.py`](../../src/space_flight/scenes/skybox.py)**'s `Skybox` loads a
   named `.bam` skybox model at a huge scale, disables shading/lighting/depth
   write on it (it's a background painted at infinity), and re-centres itself
   on the player's position every frame so it never appears to move — the
@@ -66,17 +72,18 @@ ocean's reflection camera copies the player camera's lens.
   out of the ocean reflection camera's clip plane (`setClipPlaneOff(1)`),
   with a comment explaining the visible horizon-band artifact that would
   otherwise appear in the reflection at altitude.
-- **[`lighting.py`](../src/space_flight/scenes/lighting.py)**'s `Lighting` is
+- **[`lighting.py`](../../src/space_flight/scenes/lighting.py)**'s `Lighting` is
   a plain directional + ambient light pair attached to `game.root_node`,
   parameterised by colour and direction — no per-frame behaviour, just
   setup and `clean()`.
-- **[`planet_2d.py`](../src/space_flight/scenes/planet_2d.py)**'s `Planet2D`
-  is a single camera-facing textured card (not a sphere) placed far away and
-  scaled up — a cheap billboard for a background celestial body. Like the
+- **[`planet_2d.py`](../../src/space_flight/scenes/planet_2d.py)**'s `Planet2D`
+  is a single textured card (not a sphere) with a fixed orientation, placed
+  far away and scaled up — a cheap stand-in for a background celestial body
+  (it doesn't turn to face the camera). Like the
   skybox, it re-centres on the player each frame (`move_planet_task`) using a
   position stored *relative to* the player, so it appears fixed in the
   distance regardless of how far the player has actually travelled.
-- **[`asteroid_field.py`](../src/space_flight/scenes/asteroid_field.py)**'s
+- **[`asteroid_field.py`](../../src/space_flight/scenes/asteroid_field.py)**'s
   `AsteroidField` scatters `n_asteroids` model instances randomly inside a
   cube, each with a random scale and terrain collision sphere. When
   `is_moving=True` it also gives each asteroid a fixed random spin rate and
@@ -90,7 +97,7 @@ ocean's reflection camera copies the player camera's lens.
 
 ## `ocean.py` — clipmap-free reflective ocean
 
-[`ocean.py`](../src/space_flight/scenes/ocean.py)'s `Ocean` is the most
+[`ocean.py`](../../src/space_flight/scenes/ocean.py)'s `Ocean` is the most
 elaborate single-file piece of environment code in the game (see its own
 module docstring for the full picture):
 
@@ -101,10 +108,11 @@ module docstring for the full picture):
   shader from world position. `compute_wave_dirs` precomputes the
   per-iteration wave direction table on the CPU once (rather than
   recomputing trig per pixel per iteration in the shader) and uploads it as
-  a uniform array. An optional `geometric_swell` prototype mode instead
-  builds a dense, vertically displaced grid (`make_swell_grid_mesh`) for a
-  large-scale swell, tapering to flat at its edges so it joins the outer
-  flat quad seamlessly.
+  a uniform array. An optional `geometric_swell` prototype mode (which
+  `SceneOcean` enables) instead builds a dense, vertically displaced grid
+  (`make_swell_grid_mesh`) for a large-scale swell, tapering to flat at its
+  edges so it joins its flat border seamlessly — in this mode the border is
+  a ring of huge flat cells in the same mesh, not a separate outer quad.
 - **Planar reflections.** `make_reflection_buffer` builds an offscreen
   texture buffer and a mirrored reflection camera (`mirror_camera` flips the
   main camera's Z position/pitch/roll about the water plane each frame,
@@ -115,7 +123,8 @@ module docstring for the full picture):
   rather than the window. `uReflUVScale` corrects for GPU texture padding to
   a power of two, refreshed once the buffer's real texture size is known
   post-realization since it differs between the default pipeline (which
-  pads) and simplepbr (which doesn't).
+  pads) and simplepbr (which doesn't; simplepbr is currently disabled — its
+  init is commented out in `global_architecture/simulator.py`).
 - Registers a flat terrain collision plane at Z=0 via
   `attach_collision_plane` (see [docs/game.md](game.md)) so ships can crash
   into the water.
@@ -124,10 +133,10 @@ module docstring for the full picture):
 
 ## `cloud/` — volumetric billboard clouds
 
-[`scenes/cloud/`](../src/space_flight/scenes/cloud/) splits cleanly along the
+[`scenes/cloud/`](../../src/space_flight/scenes/cloud/) splits cleanly along the
 CPU-data/GPU-field line its own package docstring calls out:
 
-- **[`cloud.py`](../src/space_flight/scenes/cloud/cloud.py)** owns a single
+- **[`cloud.py`](../../src/space_flight/scenes/cloud/cloud.py)** owns a single
   cloud *shape*, entirely on the CPU, with no GPU involvement:
   - **`CloudType`** (`CUMULUS`/`STRATUS`/`CIRRUS`/`CUMULONIMBUS`) selects a
     `DEFAULTS` preset of shape/optical parameters.
@@ -151,7 +160,7 @@ CPU-data/GPU-field line its own package docstring calls out:
     cache (`use_cache=True`, keyed by a content hash of every input —
     `_template_cache_key`) skips regeneration entirely on repeat launches,
     since the generation is fully deterministic in its inputs.
-- **[`field.py`](../src/space_flight/scenes/cloud/field.py)** turns templates
+- **[`field.py`](../../src/space_flight/scenes/cloud/field.py)** turns templates
   into a drawable, animated field — the GPU/runtime half:
   - **`CloudLayer`** is a per-type placement spec (count, altitude range,
     how many distinct templates to build and cycle through); a `CloudField`
@@ -183,9 +192,9 @@ CPU-data/GPU-field line its own package docstring calls out:
 ## Where things live
 
 `Scene` and its subclasses live in
-[`scenes.py`](../src/space_flight/scenes/scenes.py); static pieces are one
+[`scenes.py`](../../src/space_flight/scenes/scenes.py); static pieces are one
 file each (`skybox.py`, `lighting.py`, `planet_2d.py`,
 `asteroid_field.py`); the ocean is `ocean.py`; the cloud system lives under
-[`scenes/cloud/`](../src/space_flight/scenes/cloud/) split into
+[`scenes/cloud/`](../../src/space_flight/scenes/cloud/) split into
 `cloud.py` (CPU shape data) and `field.py` (GPU field + game wrapper). The
-auto-generated [code reference](docs/) has the full per-class API.
+auto-generated [code reference](apidocs/index.rst) has the full per-class API.

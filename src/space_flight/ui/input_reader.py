@@ -210,11 +210,11 @@ class InputReader:
 
     Hybrid detection strategy
     -------------------------
-    * **Polling** (primary) — _read_all_buttons() returns the current
-      hardware state each frame.  Comparison with _previous gives
+    * **Polling** (primary) — read_all_buttons() returns the current
+      hardware state each frame.  Comparison with previous gives
       pressed / held / released without duplicates.
     * **Events** (safety net) — accept() callbacks for press and release
-      write into _ev_pressed / _ev_released.  After the comparison
+      write into ev_pressed / ev_released.  After the comparison
       pass these sets are OR-merged into buttons / releases to catch
       inputs that were pressed *and* released between two frames.
     * event-repeat is intentionally **not** registered; repeated-held
@@ -258,12 +258,12 @@ class InputReader:
 
         Steps performed each call:
 
-        1. :meth:`_read_all_buttons` returns the raw current button state.
+        1. :meth:`read_all_buttons` returns the raw current button state.
         2. Comparison with the previous frame produces buttons (newly
            pressed), repeats (held), and releases (newly released).
         3. The event-safety-net sets are OR-merged to catch inputs that were
            both pressed and released between two polls.
-        4. :meth:`_read_axes` populates state.axes.
+        4. :meth:`read_axes` populates state.axes.
 
         :return: The updated :class:`InputState` for this frame.
         """
@@ -451,7 +451,7 @@ class GamepadReader(InputReader):
         Detects a connected gamepad and registers hot-plug and button events.
 
         If a gamepad is already connected it is attached immediately via
-        :meth:`_connect`.  If none is found, an on-screen warning label is
+        :meth:`connect`.  If none is found, an on-screen warning label is
         shown.  Hot-plug events are accepted so the reader adapts at runtime.
 
         Safety-net accept() callbacks are registered for every bound
@@ -543,8 +543,9 @@ class GamepadReader(InputReader):
         Applies a symmetric dead zone to a raw axis value.
 
         Values within ±*dead_zone* of centre are zeroed; values outside are
-        linearly rescaled so that the output starts at zero at the dead-zone
-        boundary.
+        shifted towards zero by *dead_zone* so that the output starts at zero
+        at the dead-zone boundary (not renormalised: full deflection gives
+        1 - dead_zone).
 
         :param value: Raw axis value in the range [-1, 1].
         :param dead_zone: Half-width of the dead-zone band.

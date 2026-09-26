@@ -48,7 +48,7 @@ class InputContext(ABC):
         Interprets *state* and drives game objects. Called once per frame
         while this context is on top of the stack.
 
-        :param state: The :class:`~space_flight.ui.input_system.InputState`
+        :param state: The :class:`~space_flight.ui.input_reader.InputState`
             produced by the active reader this frame.
         """
 
@@ -64,8 +64,9 @@ class InputContextStack:
     LIFO stack of :class:`InputContext` objects.
 
     Only the top context receives input.  Pushing a new context deactivates
-    the previous top; popping restores it.  The stack is owned by the active
-    game state (e.g. :class:`~space_flight.game.flight_state.FlightState`).
+    the previous top; popping restores it.  The stack is owned by the app
+    (``SpaceFlightSimulator.input_context_stack``); states push and pop
+    their own contexts on it.
     """
 
     def __init__(self) -> None:
@@ -99,7 +100,7 @@ class InputContextStack:
         Passes *state* to the top context.  No-op if the stack is empty.
 
         :param state: Current frame's
-            :class:`~space_flight.ui.input_system.InputState`.
+            :class:`~space_flight.ui.input_reader.InputState`.
         """
         if self.stack:
             self.stack[-1].consume(state)
@@ -174,7 +175,7 @@ class FlightInputContext(InputContext):
     def consume(self, state) -> None:
         """
         :param state: Current
-            :class:`~space_flight.ui.input_system.InputState`.
+            :class:`~space_flight.ui.input_reader.InputState`.
         """
         self.handle_actions(state)
         throttle, yaw, pitch, roll = self.flight_axes(state)

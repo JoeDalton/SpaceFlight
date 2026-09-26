@@ -155,7 +155,8 @@ class _FireSmokeBuffer(ParticleBuffer):
                        uploaded as the uFadein uniform.
     :param bin_order:  Transparent bin sort order.
     :param additive:   Whether to use additive blending.
-    :param task_name:  Unique Panda3D task name.
+    :param task_name:  Descriptive name for this buffer's update (updates run
+                       via ``game.method_lists``, not a Panda3D task).
     """
 
     def __init__(

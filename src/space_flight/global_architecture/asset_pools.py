@@ -32,10 +32,10 @@ class TexturePool:
 
 def build_texture_pool(app, directory: Path, pattern: str) -> list:
     """
-    Builds a sound list from a glob pattern and loads a pool
+    Builds a texture pool from a glob pattern, loading every matching file
 
-    :param pattern: The glob pattern to find the sound files
-    :return: a sound list
+    :param pattern: The glob pattern to find the texture files
+    :return: a texture list
     """
     texture_files = list(directory.glob(pattern))
     texture_pool = []
@@ -79,7 +79,8 @@ class SoundPool:
 
     def get_sound(self, randomize_pitch: bool = False) -> object:
         """
-        Returns a random sound object from the pool, ready to be played
+        Returns the first sound object in the pool that is not in use, ready to
+        be played
 
         :param randomize_pitch: Whether the returned sound must have a randomized pitch
         :return: A sound object, ready to be played

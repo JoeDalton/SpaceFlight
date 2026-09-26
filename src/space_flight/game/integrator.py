@@ -15,9 +15,6 @@ class Integrator:
 
         :param game: The game object, used to retrieve the current time step
         :param max_state_size: Upper bound on the total number of state variables
-        :param debug: When True, step() asserts that the registered variable count
-            matches the previous frame.  This assertion fires on actor spawn/death;
-            use only in fixed-actor-count scenarios such as unit tests.
         """
         self.game = game
         self.x = np.zeros(max_state_size)
@@ -86,9 +83,10 @@ class Integrator:
         For the first step, a 1st order forward Euler (=AB1) is used.
 
         Integration is computed in-place on the live slice [:next_idx] only.
-        x and x_dot are zeroed in-place after the step; x_dot_previous
-        is left untouched because every actor overwrites it during re-registration
-        before the next step reads it.
+        x, x_dot and x_dot_previous are all zeroed in-place after the step;
+        x_dot_previous is not carried over from x_dot because every actor
+        re-registers it before the next step reads it (the number of state
+        variables can change from one step to the next).
 
         For any new state variable at runtime, set x_dot_previous equal to x_dot
         to get an AB1 initialisation of that variable.

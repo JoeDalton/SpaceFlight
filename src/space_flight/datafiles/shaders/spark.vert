@@ -19,7 +19,7 @@ in float gravity;       // downward acceleration (world units / s²)
 in vec4  spark_color;   // premixed RGBA tint for this spark
 
 uniform mat4  p3d_ModelViewProjectionMatrix;
-uniform float uTime;      // buffer clock (seconds since buffer creation)
+uniform float uTime;      // game time (game.game_time.get_current_time())
 uniform vec3  uCamRight;  // world-space camera right axis (billboard)
 uniform vec3  uCamUp;     // world-space camera up    axis (billboard)
 

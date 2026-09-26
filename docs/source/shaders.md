@@ -1,40 +1,46 @@
 # Shaders
 
-`datafiles/shaders/` holds every GLSL source the game loads directly (as
-opposed to shaders baked into imported models). Each file pairs with the
+`datafiles/shaders/` holds the GLSL sources the game loads from disk (as
+opposed to shaders baked into imported models) — the one exception is the
+volumetric cloud field, which compiles its shaders from inline strings in
+[`scenes/cloud/field.py`](../../src/space_flight/scenes/cloud/field.py)
+(see [docs/scenes.md](scenes.md)). Each file pairs with the
 Python code that compiles and drives it via uniforms — this page is the
 guided tour of what each shader does and where its Python counterpart lives,
 since the shaders themselves have no docstring-based reference.
 
 All of it lives in
-[`src/space_flight/datafiles/shaders/`](../src/space_flight/datafiles/shaders/).
+[`src/space_flight/datafiles/shaders/`](../../src/space_flight/datafiles/shaders/).
 
 ## Mental model
 
-- Every shader is `#version 140` GLSL, loaded via `Shader.load`/`Shader.make`
-  from Python and driven entirely by uniforms set each frame — there is no
-  runtime shader-side state beyond what's passed in.
-- Several fragment shaders share the same small noise/tonemap building
-  blocks (`hash`/`smoothNoise`/`fbmNoise`), copy-pasted rather than shared
-  via `#include`, since Panda3D's shader loader has no include mechanism
-  here — comments in the ocean/shield shaders explicitly note where a field
-  is "identical to" its counterpart in the other file.
-- Shaders that render into an offscreen buffer and composite it back
-  (render-scale/AA, the ocean reflection, hyperspace) all handle the same
-  power-of-two texture-padding correction: sample only the `texScale`
-  fraction of the texture, since Panda3D may pad an offscreen render target
-  up to the next power of two.
+- Every shader in this directory is `#version 140` GLSL, loaded via
+  `Shader.load` from Python and driven entirely by uniforms set each frame —
+  there is no runtime shader-side state beyond what's passed in. (The cloud
+  field's inline shaders are `#version 330`, compiled with `Shader.make`.)
+- `ocean.vert`, `ocean.frag` and `shield.frag` each carry their own
+  copy-pasted copy of a small value-noise kit (`hash`/`smoothNoise` plus
+  `fbmNoise`, or a variant `fbm` in the shield). `ocean.vert`'s copy is
+  explicitly marked "identical to ocean.frag", because the geometric swell
+  and the shading normal must match; the shield's copy only claims "the same
+  lineage" as the ocean's.
+- Shaders that sample an offscreen render target correct for power-of-two
+  texture padding, since Panda3D may pad such a target up to the next power
+  of two: the render-scale/AA composite samples only the `texScale`
+  fraction of the scene texture, and the ocean scales its reflection lookup
+  by `uReflUVScale`. (The hyperspace shaders don't need this — they draw
+  plain render2d cards from `gl_FragCoord`/`iResolution`.)
 
 ## Hyperspace loading-screen shaders
 
 Driven by
-[`game/hyperspace_loading_state.py`](../src/space_flight/game/hyperspace_loading_state.py)
+[`game/hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)
 (see [docs/game.md](game.md)) — three fullscreen fragment shaders for the
 three phases of the jump animation, sharing one passthrough vertex shader:
 
-- **[`hyperspace.vert`](../src/space_flight/datafiles/shaders/hyperspace.vert)**
+- **[`hyperspace.vert`](../../src/space_flight/datafiles/shaders/hyperspace.vert)**
   is a bare position-only passthrough shared by all three fragment shaders.
-- **[`hyperspace_into.frag`](../src/space_flight/datafiles/shaders/hyperspace_into.frag)**
+- **[`hyperspace_into.frag`](../../src/space_flight/datafiles/shaders/hyperspace_into.frag)**
   ("entering hyperspace") draws star streak trails converging into a central
   lens flare that grows and whites out the screen, adapted from a public
   ShaderToy source (credited in the header comment). Trails are procedural
@@ -45,7 +51,7 @@ three phases of the jump animation, sharing one passthrough vertex shader:
   **clamped**, not wrapped, once the flare fills the screen, so the white
   frame holds steady for the cross-fade into the tunnel rather than
   restarting the trail animation.
-- **[`hyperspace_inside.frag`](../src/space_flight/datafiles/shaders/hyperspace_inside.frag)**
+- **[`hyperspace_inside.frag`](../../src/space_flight/datafiles/shaders/hyperspace_inside.frag)**
   is the seamlessly looping warp-tunnel effect held while the level builds
   in the background, adapted from another ShaderToy source. Its core is a
   3D simplex-noise fractal Brownian motion (`loopFbm`) sampled around a
@@ -53,7 +59,7 @@ three phases of the jump animation, sharing one passthrough vertex shader:
   the comment explains this specifically avoids the visible seam a naive
   tiling would produce, since every fBm octave then traverses the circle an
   integer number of times over one loop period (`T_LOOP`).
-- **[`hyperspace_outof.frag`](../src/space_flight/datafiles/shaders/hyperspace_outof.frag)**
+- **[`hyperspace_outof.frag`](../../src/space_flight/datafiles/shaders/hyperspace_outof.frag)**
   ("dropping out of hyperspace") is the reverse of `hyperspace_into.frag` —
   streak trails collapsing from full brightness into the revealed level,
   fading from an initial whiteout.
@@ -61,42 +67,46 @@ three phases of the jump animation, sharing one passthrough vertex shader:
 ## Render-scale / anti-aliasing pipeline shaders
 
 Driven by
-[`GraphicsManager.begin_scene_render`](../src/space_flight/global_architecture/graphics_manager.py)
+[`GraphicsManager.begin_scene_render`](../../src/space_flight/global_architecture/graphics_manager.py)
 (see [docs/global_architecture.md](global_architecture.md)) to composite the
 (possibly downscaled) offscreen 3D render back onto the window:
 
-- **[`composite.vert`](../src/space_flight/datafiles/shaders/composite.vert)**
+- **[`composite.vert`](../../src/space_flight/datafiles/shaders/composite.vert)**
   is the shared fullscreen-quad passthrough vertex shader for both
   post-composite shaders below.
-- **[`blit.frag`](../src/space_flight/datafiles/shaders/blit.frag)** is the
+- **[`blit.frag`](../../src/space_flight/datafiles/shaders/blit.frag)** is the
   plain path when FXAA is off: sample the scene texture (scaled by
   `texScale` to stay inside its non-padded region) and let the GPU's own
   texture filtering handle any upscaling.
-- **[`fxaa.frag`](../src/space_flight/datafiles/shaders/fxaa.frag)** is a
+- **[`fxaa.frag`](../../src/space_flight/datafiles/shaders/fxaa.frag)** is a
   simplified port of Timothy Lottes' FXAA3 algorithm, run as the
   alternative post-process pass when FXAA is enabled: it estimates a local
-  edge direction from the luma of the four diagonal neighbours, samples
-  twice along that direction, and blends between a 2-tap and 4-tap result
-  depending on whether the 2-tap sample falls outside the local luma range
-  (`lumaMin`/`lumaMax`) — a lightweight edge-aware blur.
+  edge direction from the luma of the four diagonal neighbours, takes two
+  taps along that direction (`rgbA`), then two more further out to form a
+  4-tap blend (`rgbB`). It outputs `rgbB` unless that blend's luma falls
+  outside the local luma range (`lumaMin`/`lumaMax`), in which case it falls
+  back to `rgbA` — a lightweight edge-aware blur.
 
 ## Ocean shaders
 
 Driven by
-[`scenes/ocean.py`](../src/space_flight/scenes/ocean.py) (see
+[`scenes/ocean.py`](../../src/space_flight/scenes/ocean.py) (see
 [docs/scenes.md](scenes.md)):
 
-- **[`ocean.vert`](../src/space_flight/datafiles/shaders/ocean.vert)** is
+- **[`ocean.vert`](../../src/space_flight/datafiles/shaders/ocean.vert)** is
   mostly a passthrough, but implements the optional `uGeometricSwell`
-  prototype mode: it displaces the vertex vertically by sampling the same
+  prototype mode (which `SceneOcean` currently enables): it displaces the
+  vertex vertically by sampling the same
   `swellField` height function the fragment shader also samples (the
   comment is explicit that the two copies must stay identical, since the
   geometry and the shading normal must derive from one source of truth),
   tapered to zero near the dense grid's edge so the displaced centre joins
   the flat outer border seamlessly. The reflection lookup coordinate is
-  computed from the *undisplaced* flat-plane position, so surface
-  displacement never skews which reflection texel gets sampled.
-- **[`ocean.frag`](../src/space_flight/datafiles/shaders/ocean.frag)** is
+  computed from the *undisplaced* flat-plane position, which avoids the
+  per-triangle projective-divide skew — but sampling at that flat footprint
+  still slides against the displaced geometry (see the
+  [ocean swell artifact report](../../src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md)).
+- **[`ocean.frag`](../../src/space_flight/datafiles/shaders/ocean.frag)** is
   the most elaborate fragment shader in the game:
   - **Iterative wave field.** `getwaves`/`waveGradient` accumulate multiple
     Gerstner-like wave octaves (`wavedx`) along precomputed per-iteration
@@ -109,8 +119,11 @@ Driven by
     view-ray's elevation) and `distFade` (from camera distance) both fade
     wave detail toward a flat mirror — angle-based specifically so the look
     stays consistent regardless of camera altitude, not just raw distance.
-    Iteration counts (`normalIter`, `warpIter`) shrink with both factors so
-    distant/grazing water costs less per pixel.
+    Iteration counts shrink so distant/grazing water costs less per pixel:
+    `normalIter` decays exponentially with distance alone (`uWaveFadeK2`),
+    while `warpIter` and the warp strength follow the combined
+    angle×distance `lodFactor`. Below a `detailAngle` of 0.01 the small
+    waves are skipped entirely.
   - **Swell + frequency modulation.** A separate large-scale `swellField`
     (two drifting value-noise layers multiplied together, so the pattern
     interferes and changes shape rather than rigidly scrolling) tilts the
@@ -126,28 +139,30 @@ Driven by
     sample the power-of-two padding beyond it.
   - **ACES tonemapping** (`aces_tonemap`) is applied as the final step to
     the fresnel-blended reflection/scatter colour.
-  - Nine numbered `uDebugMode` branches (normal, reflection UV, fresnel,
-    world-position grid, clamp indicator, raw reflection, pre-tonemap
-    clipping, FM phase field) let each intermediate quantity be visualised
-    directly for debugging.
+  - Eight numbered `uDebugMode` branches let each intermediate quantity be
+    visualised directly for debugging (0 is normal rendering): 1 surface
+    normal, 2 reflection UV, 3 fresnel, 4 world-position grid, 5 reflection
+    UV clamp indicator, 6 raw reflection, 7 pre-tonemap clipping, 8 FM phase
+    field.
 
 ## Shield shaders
 
 Driven by
-[`actors/capital_ship/shield_model.py`](../src/space_flight/actors/capital_ship/shield_model.py)
+[`actors/capital_ship/shield_model.py`](../../src/space_flight/actors/capital_ship/shield_model.py)
 (see [docs/subsystems.md](subsystems.md) and [docs/actors.md](actors.md)):
 
-- **[`shield.vert`](../src/space_flight/datafiles/shaders/shield.vert)** is
+- **[`shield.vert`](../../src/space_flight/datafiles/shaders/shield.vert)** is
   a passthrough that additionally forwards both *object-space* and
   *world-space* position/normal — object-space because the surface pattern
   and the death-retraction sink points are anchored to the hull mesh (so
   they stay fixed as the ship rotates), world-space because the fresnel rim
   glow needs the true view direction.
-- **[`shield.frag`](../src/space_flight/datafiles/shaders/shield.frag)**
+- **[`shield.frag`](../../src/space_flight/datafiles/shaders/shield.frag)**
   layers a "living" bubble look with an optional death/appearance animation
   on top:
   - **Living look.** A triplanar value-noise field (`surfacePattern`,
-    blended across the three world-normal-weighted planar projections so
+    blended across three planar projections weighted by the object-space
+    normal `vObjNormal`, so
     there are no seams or poles regardless of mesh topology) drives a slow
     morphing interior pattern (`smoothField`, itself domain-warped by a
     second noise layer for organic drift), combined with a fresnel rim
@@ -173,12 +188,12 @@ Driven by
 ## Explosion particle shaders
 
 Driven by the GPU particle system in
-[`fx/fire_smoke_fx.py`](../src/space_flight/fx/fire_smoke_fx.py) /
-[`fx/__init__.py`](../src/space_flight/fx/__init__.py) (see [docs/fx.md](fx.md)).
+[`fx/fire_smoke_fx.py`](../../src/space_flight/fx/fire_smoke_fx.py) /
+[`fx/__init__.py`](../../src/space_flight/fx/__init__.py) (see [docs/fx.md](fx.md)).
 One shader pair, shared by both the fire and smoke buffers (they differ only
 by the `uFadein` uniform):
 
-- **[`explosion.vert`](../src/space_flight/datafiles/shaders/explosion.vert)**
+- **[`explosion.vert`](../../src/space_flight/datafiles/shaders/explosion.vert)**
   reconstructs each billboard particle's current state on the GPU from its
   spawn-time parameters — read straight from dedicated vertex columns
   (`velocity`, `size`, `spin`, `spawn_time`, `lifetime`, `tile_rect`), with no
@@ -188,7 +203,7 @@ by the `uFadein` uniform):
   outputs a combined fade-out/fade-in/alive alpha. No vertex data is touched
   after spawn, so hundreds of live particles cost only the three per-frame
   uniforms (`uTime`, `uCamRight`, `uCamUp`).
-- **[`explosion.frag`](../src/space_flight/datafiles/shaders/explosion.frag)**
+- **[`explosion.frag`](../../src/space_flight/datafiles/shaders/explosion.frag)**
   samples the sprite atlas for this particle's tile and multiplies by the
   vertex-computed alpha (early-discarding fully transparent fragments). The
   tile's UV rect arrives per-particle as the `vTileRect` varying, so — unlike
@@ -198,18 +213,18 @@ by the `uFadein` uniform):
 ## Spark particle shaders
 
 Driven by the GPU particle system in
-[`fx/spark_fx.py`](../src/space_flight/fx/spark_fx.py) (see [docs/fx.md](fx.md))
+[`fx/spark_fx.py`](../../src/space_flight/fx/spark_fx.py) (see [docs/fx.md](fx.md))
 for laser hit sparks. One shader pair, shared by every burst regardless of
-preset (metal / ice / magic):
+preset (metal / ice / rock / magic):
 
-- **[`spark.vert`](../src/space_flight/datafiles/shaders/spark.vert)**
+- **[`spark.vert`](../../src/space_flight/datafiles/shaders/spark.vert)**
   reconstructs each spark from its spawn-time vertex columns (`velocity`,
   `size`, `spawn_time`, `lifetime`, `gravity`, `spark_color`). Unlike the
   explosion, it follows a **ballistic** path — linear velocity plus a
   per-particle downward `gravity` — and shrinks the billboard as it ages.
   Colour and gravity are per-particle (not uniforms) so bursts of different
   hit types stay independent in one buffer.
-- **[`spark.frag`](../src/space_flight/datafiles/shaders/spark.frag)** renders
+- **[`spark.frag`](../../src/space_flight/datafiles/shaders/spark.frag)** renders
   each quad as a round glowing spark: an SDF circle discards the corners, a
   soft glow plus a hard core build the shape (floored by the `spark.png` red
   channel so it still reads if the texture is flat), and the per-spark
@@ -218,24 +233,27 @@ preset (metal / ice / magic):
 ## Laser bolt shaders
 
 Driven by `LaserShot` in
-[`actors/laser_cannon.py`](../src/space_flight/actors/laser_cannon.py) (see
+[`weapons/laser_cannon.py`](../../src/space_flight/weapons/laser_cannon.py) (see
 [docs/actors.md](actors.md)). Each bolt is a single camera-facing quad that the
 fragment shader turns into a glowing 3D capsule — an *analytic capsule
 impostor*. There is no mesh and no surface, so it reads as a solid glowing tube
 from any angle, including straight down its own axis (as when the player fires
 forward), where it shows as a bright disc rather than a flat sliver.
 
-- **[`laser.vert`](../src/space_flight/datafiles/shaders/laser.vert)** billboards
+- **[`laser.vert`](../../src/space_flight/datafiles/shaders/laser.vert)** billboards
   the card to face the camera. It works in the projectile node's **model space**
-  (the `Munition` base translates the node every frame and orients its local +Z
-  along the bolt's travel, which is also where the swept collision segment
-  lives), so the core is the fixed model-space segment `[uA, uB]` along local Z.
+  (`LaserShot._build_visual` orients the node's local +Z along the bolt's
+  travel once, at spawn — which is also where the swept collision segment
+  lives — and the `Munition` base in
+  [`weapons/__init__.py`](../../src/space_flight/weapons/__init__.py) only
+  translates it each frame), so the core is the fixed model-space segment
+  `[uA, uB]` along local Z.
   The camera position comes from column 3 of `p3d_ViewMatrixInverse` — the eye
   of *whatever* camera is drawing the current pass — so bolts are correct in the
   main view, the rear-view mirror and the ocean reflection alike, with no
   per-frame CPU work and no shared uniforms. (Column 3 is the world position,
   unambiguous in any convention; the basis columns are deliberately avoided.)
-- **[`laser.frag`](../src/space_flight/datafiles/shaders/laser.frag)** casts a
+- **[`laser.frag`](../../src/space_flight/datafiles/shaders/laser.frag)** casts a
   ray from the eye through each pixel and measures its distance to the core
   segment (a signed-distance field): distance → a white-hot core plus a soft
   coloured (`uColor`) halo. Correct at every angle — a long streak side-on, a
@@ -243,14 +261,32 @@ forward), where it shows as a bright disc rather than a flat sliver.
   `gl_FragDepth` from the point nearest the core so opaque geometry occludes
   bolts correctly while they never occlude each other or translucent geometry.
 
+## Cockpit damage overlay shaders
+
+Driven by
+[`fx/cockpit_fx.py`](../../src/space_flight/fx/cockpit_fx.py) (see
+[docs/fx.md](fx.md)), which draws them on a fullscreen render2d card over the
+player's view:
+
+- **[`cockpit_overlay.vert`](../../src/space_flight/datafiles/shaders/cockpit_overlay.vert)**
+  is a plain passthrough for the fullscreen card, forwarding its UV.
+- **[`cockpit_overlay.frag`](../../src/space_flight/datafiles/shaders/cockpit_overlay.frag)**
+  adds two contributions, both set from the CPU each frame: a red damage
+  vignette rising from the screen edges (`uVignetteColor`,
+  `uVignetteStrength`), and a directional hit flash (`uFlashColor`,
+  `uFlashDir`, `uFlashStrength`) that blooms on the side the shot came from
+  plus a faint full-screen wash. The output is alpha-blended, so it tints
+  the scene rather than darkening it.
+
 ## Where things live
 
 Every shader in this page lives directly under
-[`src/space_flight/datafiles/shaders/`](../src/space_flight/datafiles/shaders/):
+[`src/space_flight/datafiles/shaders/`](../../src/space_flight/datafiles/shaders/):
 the hyperspace overlay's three phase shaders plus shared vertex passthrough,
-the render-scale/AA composite pair, the ocean's vertex/fragment pair, the
-shield's vertex/fragment pair, the laser bolt's vertex/fragment pair, and the
-explosion and spark particle vertex/fragment pairs. Each is loaded and driven by
-the Python module named in
-its section above — there is no separate shader-only reference, since GLSL
-isn't covered by the docstring-generated [code reference](docs/).
+the render-scale/AA composite shaders (`composite.vert` plus `blit.frag` /
+`fxaa.frag`), the ocean's vertex/fragment pair, the shield's vertex/fragment
+pair, the laser bolt's vertex/fragment pair, the explosion and spark particle
+vertex/fragment pairs, and the cockpit overlay's vertex/fragment pair. Each
+is loaded and driven by the Python module named in its section above — there
+is no separate shader-only reference, since GLSL isn't covered by the
+docstring-generated [code reference](apidocs/index.rst).

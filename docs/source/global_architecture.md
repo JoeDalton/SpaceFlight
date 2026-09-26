@@ -5,10 +5,10 @@ stack-based state machine, and the app-lifetime services (assets, graphics
 settings) that outlive any single game session — as opposed to
 [`game/`](game.md), which is scoped to one `FlightState` session. This page
 is the guided tour; the per-class API is generated from the docstrings in the
-[code reference](docs/).
+[code reference](apidocs/index.rst).
 
 All of it lives in
-[`src/space_flight/global_architecture/`](../src/space_flight/global_architecture/).
+[`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/).
 
 ## Mental model
 
@@ -27,7 +27,7 @@ All of it lives in
 
 ## `simulator.py` — the app root and its state machine
 
-[`simulator.py`](../src/space_flight/global_architecture/simulator.py) has
+[`simulator.py`](../../src/space_flight/global_architecture/simulator.py) has
 two classes:
 
 - **`StateManager`** is a stack-based state machine: `push()` instantiates
@@ -48,36 +48,37 @@ two classes:
   application: its `__init__` builds every app-lifetime subsystem in order
   — `GraphicsSettings` → `GraphicsManager` → `StateManager` →
   `InputContextStack`/input reader (see
-  [`ui/input_context.py`](../src/space_flight/ui/)) → `AssetManager` →
-  `MenuModels` → `SFX` (see [docs/fx.md](fx.md)) — then pushes `SplashState`
-  to begin the app. `input_task`, registered at a high sort priority (`-100`,
+  [`ui/input_context.py`](../../src/space_flight/ui/input_context.py)) →
+  `AssetManager` → `MenuModels` → `SFX` (see [docs/fx.md](fx.md)) — then
+  pushes `SplashState` to begin the app. `input_task`, registered at a high sort priority (`-100`,
   before other tasks), polls the input reader and dispatches through the
   context stack every frame regardless of which state is active.
 
-A module-level `loadPrcFileData` call disables Panda3D's on-disk shader
-cache; the comment above it explains why — enabling it also routes glTF
-loading through `panda3d-gltf`, whose tangent calculation crashes on a
-non-triangle primitive in one of the ship cockpit models, and the cache was
-never the actual loading bottleneck.
+Two module-level `loadPrcFileData` calls configure Panda3D before the app
+starts: one silences ffmpeg's notices (`notify-level-ffmpeg error`), the
+other explicitly disables Panda3D's on-disk model cache (`model-cache-dir`),
+which also disables its compiled-shader cache. The cache was turned off
+because it was implicated in glTF models failing to load on some systems.
 
 ## `base_state.py` — the state contract
 
-[`base_state.py`](../src/space_flight/global_architecture/base_state.py)'s
+[`base_state.py`](../../src/space_flight/global_architecture/base_state.py)'s
 `BaseState` is the interface every pushable state implements: `enter()`
 (build UI, start tasks) and `exit()` (tear them down) are abstract;
 `pause()`/`resume()` default to no-ops for states that don't need to react to
 being covered/uncovered. `PAUSES_BELOW` (default `True`) controls whether
 pushing this state freezes the state beneath it — flipped to `False` only for
-overlays that must let the state below keep ticking (the hyperspace loading
-screen builds the level underneath itself; see
-[docs/game.md](game.md)). `force_render()` forces two synchronous frame
+overlays that must let the state below keep ticking: the hyperspace loading
+screen, which builds the level underneath itself (see
+[docs/game.md](game.md)), and the radial target-filter menu (see
+[docs/menus.md](menus.md)). `force_render()` forces two synchronous frame
 renders, called at the end of a state's `exit()` so the outgoing scene
 doesn't visibly hang on screen while the next state's heavy assets start
 loading.
 
 ## `asset_manager.py` and `asset_pools.py` — caching by path
 
-[`asset_manager.py`](../src/space_flight/global_architecture/asset_manager.py)'s
+[`asset_manager.py`](../../src/space_flight/global_architecture/asset_manager.py)'s
 `AssetManager` is a single app-wide `path -> loaded asset` cache:
 `get_asset()` returns the already-loaded asset for a path or loads-and-caches
 it on first request, so every caller (levels, actors, UI) that references the
@@ -92,13 +93,13 @@ during the splash screen, updating a progress bar as they go.
 resolves the (cached) model asset and creates a Panda3D *instance* of it
 under the caller's node, rather than a full copy.
 
-[`asset_pools.py`](../src/space_flight/global_architecture/asset_pools.py)
+[`asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py)
 implements the two non-model asset kinds `AssetManager` delegates to:
 - **`TexturePool`** loads either a single texture file or every file
   matching a glob pattern in a directory, and `get_texture()` returns a
   random one from the pool — used for texture *variety* (e.g. picking among
   several dust sprite colours) rather than pure caching.
-- **`SoundPool`** pre-loads a fixed-size pool of sound instances (200 by
+- **`SoundPool`** pre-loads a fixed-size pool of sound instances (1000 by
   default, `SOUND_POOL_LENGTH`) so multiple copies of the same sound can play
   overlapping without one cutting the other off. `get_sound()` hands back an
   instance not currently `in_use` (optionally randomising its pitch for
@@ -115,18 +116,20 @@ These two modules split responsibility the same way `AssetManager` and
 `asset_pools.py` do: settings own *what the sanitised configuration says*,
 the manager owns *making the engine reflect it*.
 
-[`graphics_settings.py`](../src/space_flight/global_architecture/graphics_settings.py)'s
+[`graphics_settings.py`](../../src/space_flight/global_architecture/graphics_settings.py)'s
 `GraphicsSettings` loads `configuration/graphics.yaml` layered over a
-read-only `configuration/default_graphics.yaml` (`_deep_merge`, the same
-pattern used for [input bindings](../src/space_flight/menus/) — see that
-module's docs), then `sanitise()`s the merged result so every field is
+read-only `configuration/default_graphics.yaml` (`_deep_merge`) — unlike the
+[input bindings](ui.md), which are not layered: `load_bindings` reads
+`configuration/configuration.yaml` alone, and `default_configuration.yaml` is
+only read by the input settings menu's reset-to-defaults. It then
+`sanitise()`s the merged result so every field is
 clamped to something the renderer can safely act on (valid display mode,
 minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample counts,
 etc.) — a malformed or hand-edited config file degrades to defaults rather
 than crashing the renderer. `save()` re-sanitises and persists to the user
 file; `reset_to_default()` reloads just the defaults without touching it.
 
-[`graphics_manager.py`](../src/space_flight/global_architecture/graphics_manager.py)'s
+[`graphics_manager.py`](../../src/space_flight/global_architecture/graphics_manager.py)'s
 `GraphicsManager` applies that sanitised config to the live engine, split
 into two independent concerns (detailed in the module's own docstring):
 
@@ -156,8 +159,8 @@ into two independent concerns (detailed in the module's own docstring):
 ## Where things live
 
 Everything in this page lives directly under
-[`src/space_flight/global_architecture/`](../src/space_flight/global_architecture/):
+[`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/):
 the app root and state stack in `simulator.py`, the state contract in
 `base_state.py`, asset caching in `asset_manager.py`/`asset_pools.py`, and
 display/render settings in `graphics_manager.py`/`graphics_settings.py`. The
-auto-generated [code reference](docs/) has the full per-class API.
+auto-generated [code reference](apidocs/index.rst) has the full per-class API.

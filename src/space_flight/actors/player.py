@@ -423,12 +423,12 @@ class Player:
             self.pawn.target_id
         )
 
-    def update_target_mask(self, player_actor_index: int) -> np.ndarray:
+    def update_target_mask(self, player_actor_index: int) -> None:
         """
-        Updates the target mask depending on the player's wishes
+        Updates ``self.target_mask`` (one entry per actor in
+        ``interactions.live_actors``) depending on the player's filter choice
 
         :param player_actor_index: Index of the player in the interactions class
-        :return: the target mask
         """
         if (self.target_filter == "All") or (self.target_filter == ""):
             # Everything except waypoint markers (those are Waypoints-mode only).
