@@ -85,8 +85,13 @@ class HUD:
         self.chatter.setShadow(0.05, 0.05)
         self.chatter.setShadowColor(0, 0, 0, 1)
         self.chatter_textNodePath = aspect2d.attachNewNode(self.chatter)
-        self.chatter_textNodePath.setScale(0.1)
+        self.chatter_textNodePath.setScale(0.075)
         self.chatter_textNodePath.setPos(0.0, 0, -0.8)
+
+        # Wrap long lines before they run off the edges of the screen.
+        text_wrap_width = 3.5 * EDGE_HORIZONTAL / self.events_textNodePath.getScale()[0]
+        self.events.setWordwrap(text_wrap_width)
+        self.chatter.setWordwrap(text_wrap_width)
 
         self.game.method_lists[self.id] = [self.hud_update_task]
 
