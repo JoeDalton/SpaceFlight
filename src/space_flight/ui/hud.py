@@ -81,6 +81,7 @@ class HUD:
         self.chatter_text_endtime = 0.0
         self.chatter = TextNode("Chatter")
         self.chatter.setSmallCaps(True)
+        self.chatter.setTextColor(252 / 255, 212 / 255, 10 / 255, 1)
         self.chatter.setShadow(0.05, 0.05)
         self.chatter.setShadowColor(0, 0, 0, 1)
         self.chatter_textNodePath = aspect2d.attachNewNode(self.chatter)
