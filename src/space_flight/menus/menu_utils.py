@@ -188,6 +188,7 @@ class CustomButton:
         scale: float,
         text_scale: float = 0.25,
         layout: str = "left",
+        width_scale: float = 1.0,
         extraArgs: list = [],
         parent=None,
     ):
@@ -200,29 +201,36 @@ class CustomButton:
             parent's coordinate space.
         :param command: Callable invoked when the button is clicked.
         :param text: Label string rendered on the button face.
-        :param scale: Uniform scale applied to the whole button node.
+        :param scale: Uniform scale applied to the whole button node
+            (text included), so glyphs always keep their normal aspect
+            ratio regardless of *width_scale*.
         :param text_scale: Scale of the text relative to the button geometry.
             Defaults to 0.25.
         :param layout: Controls text alignment and horizontal anchor.
             "left" aligns text to the left edge, "center" centres it,
             and "right" aligns it to the right edge. Raises
             NotImplementedError for any other value.
+        :param width_scale: Extra horizontal stretch applied only to the
+            button's face image and clickable frame (not to *scale*, so
+            the text is never distorted). 1.0 keeps the button's normal
+            square-ish proportions; e.g. 2.0 doubles its width only.
         :param extraArgs: Additional positional arguments forwarded to
             *command* when the button is clicked.
         :param parent: Panda3D node to attach the button to. Defaults to the
             global aspect2d when None.
         """
         self.app = app
+        self.width_scale = width_scale
 
         if layout == "left":
             text_align = TextNode.ALeft
-            text_pos = (-0.9, -0.35 * text_scale)
+            text_pos = (-0.9 * width_scale, -0.35 * text_scale)
         elif layout == "center":
             text_align = TextNode.ACenter
             text_pos = (0, -0.35 * text_scale)
         elif layout == "right":
             text_align = TextNode.ARight
-            text_pos = (0.9, -0.35 * text_scale)
+            text_pos = (0.9 * width_scale, -0.35 * text_scale)
         else:
             raise NotImplementedError(f"Unkonwn layout: {layout}")
 
@@ -239,11 +247,12 @@ class CustomButton:
             text_pos=text_pos,
             # Common parameters
             image=app.menu_models.button_geom,
+            image_scale=(width_scale, 1, 1),
             text_fg=(1, 1, 1, 1),
             relief=1,
             pad=(0.01, 0.01),
             frameColor=(0, 0, 0, 0),
-            frameSize=(-1, 1, -0.25, 0.25),
+            frameSize=(-width_scale, width_scale, -0.25, 0.25),
             pressEffect=True,
         )
         self.button.setTransparency(True)
@@ -273,6 +282,7 @@ class CustomButton:
         currently active.
         """
         self.button["geom"] = self.app.menu_models.button_geom[1]
+        self.stretch_geoms()
 
     def reset(self):
         """
@@ -280,6 +290,16 @@ class CustomButton:
         ready, click, hover, and disabled states normally again.
         """
         self.button["geom"] = self.app.menu_models.button_geom
+        self.stretch_geoms()
+
+    def stretch_geoms(self):
+        """
+        Apply width_scale to the per-state geom components, which are drawn
+        over the (already stretched) image and would otherwise stay narrow.
+        """
+        for name in self.button.components():
+            if name.startswith("geom"):
+                self.button.component(name).setScale(self.width_scale, 1, 1)
 
 
 class CustomEntry:
