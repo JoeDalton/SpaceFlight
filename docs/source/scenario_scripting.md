@@ -34,6 +34,16 @@ die, whenever that happens") are registered separately as **reactive rules**.
 
 ## A worked example
 
+> An all-features reference example exercising every feature described on
+> this page in one file — the Mission API
+> ([`all_features_example.py`](examples/all_features_example.py) /
+> [`.yaml`](examples/all_features_example.yaml)) and, separately, the legacy
+> DSL ([`all_features_example_trigger_dsl.yaml`](examples/all_features_example_trigger_dsl.yaml))
+> — is run end-to-end by
+> [`tests/test_all_features_example.py`](../../tests/test_all_features_example.py).
+> It is not a shipped level; copy its *patterns*, not its story, into a real
+> level.
+
 This mirrors the intro level's actual mission (trimmed):
 
 ```python
