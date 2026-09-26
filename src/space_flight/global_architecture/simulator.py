@@ -29,12 +29,8 @@ LOGGER = logging.getLogger()
 
 loadPrcFileData("", "notify-level-ffmpeg error")
 
-# NOTE: we do NOT enable Panda's on-disk cache (model-cache-dir). It is the only
-# switch for the compiled-shader binary cache, but it also routes glTF loading
-# through panda3d-gltf, whose calculate_tangents() crashes on models containing
-# a non-triangle primitive (e.g. the x-wing cockpit: "not enough values to
-# unpack (expected 3, got 2)"). Shader compilation was measured at ~4ms and was
-# never the loading bottleneck, so the cache is not worth breaking model loading.
+# Explicitly disable Panda's on-disk model cache (model-cache-dir)
+loadPrcFileData("", "model-cache-dir")
 
 
 class StateManager:

@@ -119,7 +119,7 @@ class ShipModel:
                     * gltf_model_tilt_quaternion(self.game)
                 )
                 self.model.setScale(0.5)
-        elif self.ship_type == "tie-fighter":  # NOK, model does not show
+        elif self.ship_type == "tie-fighter":
             if is_cockpit:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
                     path=DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf",
@@ -135,11 +135,11 @@ class ShipModel:
                     / "models/ships/tie-fighter/exterior/scene.gltf",
                     parent_node=self.model,
                 )
-                self.offset = np.array([0.0, 0.0, 0.0])
+                self.offset = np.array([3.7, 0.0, 6.5])
                 self.orientation = np.quaternion(
                     0.0, 0.0, 1.0, 0.0
                 ) * gltf_model_tilt_quaternion(self.game)
-                self.model.setScale(1000.0)
+                self.model.setScale(0.035)
         elif self.ship_type == "gr-75":
             if is_cockpit:
                 raise NotImplementedError(ship_type + f" {is_cockpit=}")

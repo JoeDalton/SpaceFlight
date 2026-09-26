@@ -21,4 +21,4 @@ antialiasing:
   fxaa: false             # post-process anti-aliasing (on/off)
 
 compatibility:
-  alternate_model_orientation: false
+  alternate_model_orientation: true
