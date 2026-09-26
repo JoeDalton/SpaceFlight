@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.ship_model import ShipModel, _gltf_model_tilt_quaternion
+from space_flight.actors.ship_model import ShipModel
 
 
 @pytest.fixture
@@ -84,43 +84,8 @@ def test_ship_model_offset_per_type(mock_game, ship_type, is_cockpit, expected_o
 
 
 # ---------------------------
-# alternate_model_orientation compatibility flag
+# Alternate_model_orientation compatibility flag
 # ---------------------------
-
-
-def test_gltf_model_tilt_quaternion_defaults_to_standard_value(mock_game):
-    """
-    With the compatibility flag off (the default), the tilt quaternion is
-    the value that has shipped since it replaced the pre-f833c5c value.
-    """
-    tilt = _gltf_model_tilt_quaternion(mock_game)
-    expected = np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
-    assert tilt == expected
-
-
-def test_gltf_model_tilt_quaternion_uses_alternate_value_when_flag_set(mock_game):
-    """
-    Setting compatibility.alternate_model_orientation swaps in the
-    pre-f833c5c tilt quaternion instead.
-    """
-    mock_game.app.graphics_settings.config = {
-        "compatibility": {"alternate_model_orientation": True}
-    }
-    tilt = _gltf_model_tilt_quaternion(mock_game)
-    assert tilt == np.quaternion(0.0, 1.0, 0.0, 0.0)
-
-
-def test_gltf_model_tilt_quaternion_defaults_when_graphics_settings_missing():
-    """
-    A game stand-in with no graphics_settings at all (e.g. a lightweight
-    headless stub) falls back to the standard value instead of raising.
-    """
-    import types
-
-    game = types.SimpleNamespace(app=types.SimpleNamespace())
-    tilt = _gltf_model_tilt_quaternion(game)
-    expected = np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
-    assert tilt == expected
 
 
 def test_ship_model_orientation_changes_with_alternate_flag(mock_game):

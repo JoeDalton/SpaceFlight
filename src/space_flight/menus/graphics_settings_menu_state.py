@@ -298,7 +298,8 @@ class GraphicsSettingsMenuState(BaseState):
         """Build the "Alternate Model Orientation" checkbox row.
 
         Manual workaround for ship models loading pre-rotated on some
-        systems (see space_flight.actors.ship_model._gltf_model_tilt_quaternion)
+        systems (see
+        space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion)
         -- no automatic detection exists, so the player has to flip this
         themselves if their ships look wrong.
         """

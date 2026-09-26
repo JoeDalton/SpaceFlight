@@ -2,12 +2,15 @@ import importlib.metadata
 import platform
 from pathlib import Path
 
+import numpy as np
+import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from direct.showbase.ShowBase import ShowBase
 
 from space_flight import DATAFILES_PATH, LOGGER
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
 
 # TODO use bam files for faster loading of 3D models
+
 
 COMMON_ASSETS_TO_LOAD = [
     # UI
@@ -215,3 +218,29 @@ class AssetManager:
             path=path,
         )
         model.instanceTo(parent_node)
+
+
+def gltf_model_tilt_quaternion(game) -> np.quaternion:
+    """
+    The second-stage rotation composed into every glTF ship model's
+    orientation (cockpit and exterior alike).
+
+    Some Linux systems (confirmed: an Arch install and a WSL Ubuntu install)
+    load models visibly mis-rotated relative to this value, for a root cause that could
+    not be reproduced locally. Rather than guess at platform detection
+    again, this is an explicit, user-set workaround.
+
+    :param game: The current game object
+    """
+    try:
+        use_alternate = bool(
+            game.app.graphics_settings.config.get("compatibility", {}).get(
+                "alternate_model_orientation", False
+            )
+        )
+    except AttributeError:
+        use_alternate = False
+
+    if use_alternate:
+        return np.quaternion(0.0, 1.0, 0.0, 0.0)
+    return np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
