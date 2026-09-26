@@ -41,8 +41,8 @@ WAYPOINT_1_ARRIVAL_RADIUS_M = 350
 FORMATION_AHEAD_M = 1000  # "1km ahead"
 FORMATION_LEFT_M = 400  # "and to the left"
 FOLLOW_RADIUS_M = 300  # "within 300m of any member of the formation"
-CATCH_UP_DEADLINE_S = 30
-SUSTAINED_SEPARATION_S = 20
+CATCH_UP_DEADLINE_S = 60
+SUSTAINED_SEPARATION_S = 30
 
 # Blue squadron's patrol circuit, a rough loop starting near WAYPOINT_1 and
 # closing back on itself.
@@ -77,6 +77,7 @@ RACE_WAYPOINTS = [
     [2500, 4000, 500],
 ]
 FINISH_RADIUS_M = 300
+RACE_TIMEOUT_S = 300  # defeat if the player hasn't finished by then
 
 
 def build_mission1_upfront(game: FlightState) -> None:
@@ -167,6 +168,12 @@ def mission1_mission(m: Mission) -> Iterator[None]:
 
     # Registered only now, so the initial catch-up isn't double-punished by
     # the same radius.
+    losing_contact = m.on(
+        m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S / 2),
+        lambda: m.speech(
+            "Come on Rookie, you're falling behind! Catch up!.", speaker="Blue Leader"
+        ),
+    )
     lost_contact = m.on(
         m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S),
         lambda: m.defeat(
@@ -178,6 +185,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # 4. The leader's circuit, then the handoff to a race.
     # ==================================================================
     yield from m.wait_until(reached_waypoint(leader, len(CIRCUIT_WAYPOINTS) - 1))
+    losing_contact.cancel()
     lost_contact.cancel()
 
     m.speech(
@@ -188,8 +196,10 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     blue.set_waypoints(RACE_WAYPOINTS, loop=False)
 
     # ==================================================================
-    # 5. Ranking: the player must not finish last, with a special line for
-    #    finishing first.
+    # 5. Ranking: ends the instant the player crosses the line, ranked by
+    #    whoever has already finished by then (no waiting for stragglers) --
+    #    a special line for finishing first -- or in defeat if the player
+    #    never finishes within the timeout.
     # ==================================================================
     finish_point = RACE_WAYPOINTS[-1]
     racers = [game.player, *blue.pawns()]
@@ -200,10 +210,11 @@ def mission1_mission(m: Mission) -> Iterator[None]:
             lambda racer=racer: finish_order.append(racer),
         )
 
-    yield from m.wait_until(lambda: len(finish_order) == len(racers))
-
-    if finish_order[-1] is game.player:
-        m.defeat("You crossed the line last. Mission failed.")
+    player_finished = yield from m.wait_until(
+        lambda: game.player in finish_order, timeout=RACE_TIMEOUT_S
+    )
+    if not player_finished:
+        m.defeat("You didn't reach the finish line in time. Mission failed.")
     elif finish_order[0] is game.player:
         m.victory("First across the line! Outstanding flying, rookie!")
     else:

@@ -216,7 +216,12 @@ def test_mission1_middle_place_is_a_plain_victory(game, spawned):
     assert "First" not in game.end_level_calls[-1][1]
 
 
-def test_mission1_last_place_is_defeat(game, spawned):
+def test_mission1_last_place_is_still_a_victory(game, spawned):
+    """
+    The race ends as soon as the player crosses the line, ranked by whoever
+    already finished by then -- there is no waiting for stragglers, so
+    finishing after every other racer is a plain victory, not a defeat.
+    """
     m = start(game, mission1.mission1_mission)
     blue = finish_circuit(game, m, spawned)
     finish = np.array(mission1.RACE_WAYPOINTS[-1], dtype=float)
@@ -225,7 +230,16 @@ def test_mission1_last_place_is_defeat(game, spawned):
     advance(game, m, 1)
     game.player.pawn.position = finish.copy()
     advance(game, m, 1)
+    assert game.end_level_calls[-1][0] == "victory"
+    assert "First" not in game.end_level_calls[-1][1]
+
+
+def test_mission1_race_timeout_is_defeat(game, spawned):
+    m = start(game, mission1.mission1_mission)
+    finish_circuit(game, m, spawned)
+    # The player never reaches the finish line.
+    advance(game, m, mission1.RACE_TIMEOUT_S + 1)
     assert game.end_level_calls[-1] == (
         "defeat",
-        "You crossed the line last. Mission failed.",
+        "You didn't reach the finish line in time. Mission failed.",
     )
