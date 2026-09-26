@@ -26,6 +26,10 @@ DEFAULT_GRAPHICS_FILE = CONFIGURATION_PATH / "default_graphics.yaml"
 
 _VALID_MODES = ("fullscreen", "windowed")
 _VALID_MSAA = (0, 2, 4, 8)
+# Cheapest first, so the menu slider's stops read left-to-right as increasing cost.
+# Mirrors CloudQuality in scenes.cloud.cloud; a test asserts the two agree, since
+# a name here that the enum does not know would silently fall back to "high".
+_VALID_CLOUD_QUALITY = ("low", "mid", "high", "ultra")
 _MIN_SCALE = 0.25
 _MAX_SCALE = 1.0
 _MIN_REFLECTION = 0.1
@@ -111,6 +115,7 @@ class GraphicsSettings:
         render = config.setdefault("render", {})
         aa = config.setdefault("antialiasing", {})
         compatibility = config.setdefault("compatibility", {})
+        clouds = config.setdefault("clouds", {})
 
         if display.get("mode") not in _VALID_MODES:
             display["mode"] = "fullscreen"
@@ -151,5 +156,12 @@ class GraphicsSettings:
         compatibility["alternate_model_orientation"] = bool(
             compatibility.get("alternate_model_orientation", False)
         )
+
+        quality = clouds.get("quality")
+        if isinstance(quality, str):
+            quality = quality.strip().lower()
+        if quality not in _VALID_CLOUD_QUALITY:
+            quality = "high"
+        clouds["quality"] = quality
 
         return config

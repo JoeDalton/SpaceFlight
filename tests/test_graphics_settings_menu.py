@@ -20,6 +20,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from space_flight.menus.graphics_settings_menu_state import (
+    _ROW_CLEARANCE,
+    _ROW_COUNT,
+    _ROW_STEP,
+    _ROW_TOP,
+    _WARNING_Y,
     GraphicsSettingsMenuState,
     _get_by_path,
     _pct,
@@ -37,6 +42,7 @@ def state():
         "render": {"scale": 1.0, "reflection_scale": 0.5, "mirror_scale": 1.0},
         "antialiasing": {"msaa": 0, "fxaa": False},
         "compatibility": {"alternate_model_orientation": False},
+        "clouds": {"quality": "high"},
     }
     return s
 
@@ -152,6 +158,90 @@ class TestOnMsaaSlider:
 
         slider.set_value.assert_not_called()
         slider.slider.setValue.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Row layout
+# ---------------------------------------------------------------------------
+
+
+class TestRowLayout:
+    def test_every_row_clears_the_warning_label(self):
+        """Rows are laid out top-down at a fixed step, and the warning text sits
+        below them. Seven rows at the original 0.2 step reached -0.6 against a
+        warning at -0.7; this fails if a row is added without re-spacing."""
+        lowest = _ROW_TOP - (_ROW_COUNT - 1) * _ROW_STEP
+        assert lowest - _WARNING_Y > _ROW_CLEARANCE, (
+            f"lowest row at {lowest:.3f} does not clear the warning at "
+            f"{_WARNING_Y}; reduce _ROW_STEP or move the warning"
+        )
+
+    def test_rows_start_on_screen(self):
+        """The top row must be below the title at 0.88."""
+        assert _ROW_TOP < 0.8
+
+
+# ---------------------------------------------------------------------------
+# on_cloud_quality_slider
+# ---------------------------------------------------------------------------
+
+
+class TestOnCloudQualitySlider:
+    PATH = ("clouds", "quality")
+
+    @pytest.mark.parametrize(
+        "slider_value,expected,expected_label",
+        [
+            (0.0, "low", "Low"),
+            (0.4, "low", "Low"),
+            (1.0, "mid", "Mid"),
+            (1.6, "high", "High"),
+            (3.0, "ultra", "Ultra"),
+        ],
+    )
+    def test_rounds_to_nearest_stop(
+        self, state, slider_value, expected, expected_label
+    ):
+        state.sliders = {self.PATH: _mock_slider(slider_value)}
+        state.slider_value_labels = {self.PATH: MagicMock()}
+
+        state.on_cloud_quality_slider()
+
+        assert state.working_config["clouds"]["quality"] == expected
+        state.slider_value_labels[self.PATH].__setitem__.assert_called_once_with(
+            "text", expected_label
+        )
+
+    @pytest.mark.parametrize("value,expected", [(99.0, "ultra"), (-5.0, "low")])
+    def test_out_of_range_value_is_clamped(self, state, value, expected):
+        state.sliders = {self.PATH: _mock_slider(value)}
+        state.slider_value_labels = {self.PATH: MagicMock()}
+        state.on_cloud_quality_slider()
+        assert state.working_config["clouds"]["quality"] == expected
+
+    def test_does_not_write_back_to_slider(self, state):
+        # Same freeze regression as the MSAA slider: PGSliderBar throws ADJUST
+        # asynchronously, so writing the value back from the handler re-enqueues
+        # it every dispatch and the event queue never drains.
+        slider = _mock_slider(2.0)
+        state.sliders = {self.PATH: slider}
+        state.slider_value_labels = {self.PATH: MagicMock()}
+
+        state.on_cloud_quality_slider()
+
+        slider.set_value.assert_not_called()
+        slider.slider.setValue.assert_not_called()
+
+    def test_stores_a_name_the_cloud_model_knows(self, state):
+        """The stop values must be CloudQuality names, or a saved setting would
+        pass the sanitiser and then silently fall back to HIGH."""
+        from space_flight.scenes.cloud import CloudQuality
+
+        for index in range(4):
+            state.sliders = {self.PATH: _mock_slider(float(index))}
+            state.slider_value_labels = {self.PATH: MagicMock()}
+            state.on_cloud_quality_slider()
+            CloudQuality(state.working_config["clouds"]["quality"])
 
 
 # ---------------------------------------------------------------------------

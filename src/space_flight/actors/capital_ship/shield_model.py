@@ -291,11 +291,11 @@ class ShieldModel:
         # through). It keeps depth-testing, so opaque geometry in front hides it.
         v.setTwoSided(True)
         v.setDepthWrite(False)
-        # Draw after the clouds (which sit in the "fixed" bin at sort 50, also
-        # depth-write off): the translucent shield then composites *over* the
-        # clouds, so a cloud behind it shows through dimmed instead of painting
-        # on top -- and, being mostly transparent, it barely tints a cloud in
-        # front. This is what keeps clouds from always covering the shield.
+        # Drawn after the clouds, which sit in their own bin between "opaque" and
+        # "transparent" (see scenes/cloud/field.py), so the translucent shield
+        # composites *over* a cloud behind it. Note the converse does NOT hold:
+        # the clouds write no depth, so a dense cloud in FRONT of the shield does
+        # not hide it.
         v.setBin("fixed", 60)
         v.reparentTo(parent)
 

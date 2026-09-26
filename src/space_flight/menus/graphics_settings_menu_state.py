@@ -31,6 +31,11 @@ _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
 _MSAA_VALUES = [0, 2, 4, 8]
 _MSAA_LABELS = ["Off", "2x", "4x", "8x"]
 
+# Cloud quality, likewise discrete. Ordered cheapest-first so dragging right costs
+# more, like every other slider here. The values must be names CloudQuality knows.
+_CLOUD_QUALITY_VALUES = ["low", "mid", "high", "ultra"]
+_CLOUD_QUALITY_LABELS = ["Low", "Mid", "High", "Ultra"]
+
 # Continuous quality sliders: (path, label, (min, max)).
 _SCALE_SLIDERS = [
     (("render", "scale"), "Render Scale", (0.5, 2.0)),
@@ -44,6 +49,17 @@ _SLIDER_X = 0.35
 _SLIDER_SCALE = 0.4
 _VALUE_LABEL_X = 0.95
 _CONTROL_X = -0.05  # left edge of button groups / checkbox
+
+# Rows run top-down from _ROW_TOP, one every _ROW_STEP. The step is what it is so
+# that _ROW_COUNT rows still clear _WARNING_Y: at the original 0.2 the eighth row
+# landed hard against the warning. A test asserts the gap, so adding a row fails
+# loudly rather than quietly overlapping the text below.
+_ROW_TOP = 0.6
+_ROW_STEP = 0.175
+_ROW_COUNT = 8
+_WARNING_Y = -0.7
+#: Clearance a row label needs below it before the warning text starts.
+_ROW_CLEARANCE = 0.06
 
 
 def _get_by_path(cfg: dict, path: tuple):
@@ -137,7 +153,7 @@ class GraphicsSettingsMenuState(BaseState):
         self.warning = DirectLabel(
             text="Render & quality changes apply on the next level load.",
             scale=0.045,
-            pos=(0, 0, -0.7),
+            pos=(0, 0, _WARNING_Y),
             frameColor=(0, 0, 0, 0),
             text_fg=(1.0, 0.85, 0.4, 1.0),
             text_align=TextNode.ACenter,
@@ -170,21 +186,24 @@ class GraphicsSettingsMenuState(BaseState):
         )
 
     def build_rows(self):
-        """Build every option row from the current working config, top to bottom."""
-        y = 0.6
-        self.build_mode_row(y)
-        y -= 0.2
-        self.build_slider_row(_SCALE_SLIDERS[0], y)  # Render Scale
-        y -= 0.2
-        self.build_msaa_row(y)
-        y -= 0.2
-        self.build_fxaa_row(y)
-        y -= 0.2
-        self.build_slider_row(_SCALE_SLIDERS[1], y)  # Reflection Quality
-        y -= 0.2
-        self.build_slider_row(_SCALE_SLIDERS[2], y)  # Mirror Quality
-        y -= 0.2
-        self.build_alternate_model_orientation_row(y)
+        """Build every option row from the current working config, top to bottom.
+
+        Adding a row here means bumping :data:`_ROW_COUNT`, which a test checks
+        still clears the warning label below.
+        """
+        builders = (
+            self.build_mode_row,
+            lambda y: self.build_slider_row(_SCALE_SLIDERS[0], y),  # Render Scale
+            self.build_msaa_row,
+            self.build_fxaa_row,
+            lambda y: self.build_slider_row(_SCALE_SLIDERS[1], y),  # Reflection
+            lambda y: self.build_slider_row(_SCALE_SLIDERS[2], y),  # Mirror
+            self.build_cloud_quality_row,
+            self.build_alternate_model_orientation_row,
+        )
+        assert len(builders) == _ROW_COUNT, "update _ROW_COUNT when adding a row"
+        for index, build in enumerate(builders):
+            build(_ROW_TOP - index * _ROW_STEP)
 
     def clear_rows(self):
         """Destroy all option-row widgets (labels, buttons, sliders, checkbox)."""
@@ -283,6 +302,31 @@ class GraphicsSettingsMenuState(BaseState):
         )
         self.slider_value_labels[path].setTransparency(True)
 
+    def build_cloud_quality_row(self, y: float):
+        """Build the cloud quality slider row (discrete Low/Mid/High/Ultra stops)."""
+        path = ("clouds", "quality")
+        self._row_label("Cloud Quality", y)
+        value = _get_by_path(self.working_config, path)
+        # sanitise() guarantees a known name, so this cannot raise.
+        idx = _CLOUD_QUALITY_VALUES.index(value)
+        self.sliders[path] = CustomSlider(
+            app=self.app,
+            pos=(_SLIDER_X, 0, y),
+            value=idx,
+            value_range=(0, len(_CLOUD_QUALITY_VALUES) - 1),
+            command=self.on_cloud_quality_slider,
+            scale=_SLIDER_SCALE,
+        )
+        self.slider_value_labels[path] = DirectLabel(
+            text=_CLOUD_QUALITY_LABELS[idx],
+            scale=0.05,
+            pos=(_VALUE_LABEL_X, 0, y - 0.015),
+            frameColor=(0, 0, 0, 0),
+            text_fg=(0.7, 0.85, 1.0, 1.0),
+            text_align=TextNode.ALeft,
+        )
+        self.slider_value_labels[path].setTransparency(True)
+
     def build_fxaa_row(self, y: float):
         """Build the FXAA checkbox row."""
         self._row_label("FXAA", y)
@@ -350,6 +394,20 @@ class GraphicsSettingsMenuState(BaseState):
         idx = max(0, min(len(_MSAA_VALUES) - 1, idx))
         self.working_config["antialiasing"]["msaa"] = _MSAA_VALUES[idx]
         self.slider_value_labels[path]["text"] = _MSAA_LABELS[idx]
+
+    def on_cloud_quality_slider(self):
+        """Map the cloud-quality slider to the nearest stop and store its name.
+
+        Same shape as :meth:`on_msaa_slider`, and for the same reason: the thumb is
+        deliberately NOT written back, because PGSliderBar throws ADJUST
+        asynchronously and re-setting the value from inside the handler re-enqueues
+        it every dispatch, which never drains the event queue.
+        """
+        path = ("clouds", "quality")
+        idx = int(round(self.sliders[path].get_value()))
+        idx = max(0, min(len(_CLOUD_QUALITY_VALUES) - 1, idx))
+        self.working_config["clouds"]["quality"] = _CLOUD_QUALITY_VALUES[idx]
+        self.slider_value_labels[path]["text"] = _CLOUD_QUALITY_LABELS[idx]
 
     def on_fxaa_toggle(self, status):
         """Store the FXAA checkbox state."""

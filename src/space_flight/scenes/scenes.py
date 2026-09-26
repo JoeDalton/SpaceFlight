@@ -1,5 +1,5 @@
 import numpy as np
-from panda3d.core import Vec3
+from panda3d.core import LVecBase3f, Vec3
 
 from space_flight import DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
@@ -42,6 +42,10 @@ class SceneOcean(Scene):
     SUN_DIRECTION = [-0.35, -1, 0.05]
     SUN_COLOR = np.array([1.0, 0.8, 0.2, 1])
     AMBIENT_COLOR = np.array([0.2, 0.2, 0.4, 0.2])
+    # What distant things fade to. ONE value, shared by the ocean, the cloud
+    # field and the scene fog: they all now curve over the planet and meet at the
+    # horizon, so if they faded to different colours they would not join.
+    HAZE_COLOR = AMBIENT_COLOR[:3]
 
     def build_upfront(self):
         """
@@ -53,16 +57,23 @@ class SceneOcean(Scene):
         Requires the player to already exist: the ocean's reflection camera
         copies the player camera's lens.
         """
-        # Ocean (geometry, reflection buffer, shader).
-        self.ocean = Ocean(game=self.game, geometric_swell=True)
+        # Ocean (geometry, reflection buffer, shader). Curved over the planet, so
+        # it has a real horizon that dips and bows with altitude.
+        self.ocean = Ocean(
+            game=self.game,
+            geometric_swell=True,
+            haze_color=LVecBase3f(*self.HAZE_COLOR),
+        )
 
-        # Volumetric clouds (cumulus + cirrus), lit to match the dusk sun.
+        # Volumetric clouds, lit to match the dusk sun. The lighting is live, so
+        # moving the sun here (or later, via clouds.field.set_sun) relights them
+        # with no rebuild.
         self.clouds = Clouds(
             game=self.game,
             sun_direction=Vec3(*self.SUN_DIRECTION),
             sun_color=self.SUN_COLOR[:3],
-            ambient_color=self.AMBIENT_COLOR[:3],
-            use_cache=True,
+            sky_color=self.AMBIENT_COLOR[:3],
+            haze_color=self.HAZE_COLOR,
         )
 
         # Force the one-time GPU preparation now (textures, vertex buffers and
