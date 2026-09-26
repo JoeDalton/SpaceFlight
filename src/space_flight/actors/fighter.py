@@ -43,6 +43,9 @@ class Fighter(Ship):
             team=team,
         )
 
+        # Actor category, so target filters can single fighters out.
+        self.category = "fighter"
+
         # Setup integrated shield
         self.max_shield = self.conf["shield"]
         self.shield = self.max_shield

@@ -6,16 +6,20 @@ etc.).  All tests therefore bypass __init__ via object.__new__() and set only
 the attributes consumed by each method under test.
 """
 
+import uuid
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.player import (
     HEAD_DAMPING_RATIO,
     HEAD_SPRING_COEFFICIENT_NPM,
     Player,
 )
+from space_flight.ai.interactions import Interactions
 
 # ---------------------------
 # Helpers
@@ -170,27 +174,26 @@ def test_update_target_mask_enemies_filter_uses_interact_matrix():
     assert player.target_mask[player_actor_index] == 0
 
 
-def test_update_target_mask_unknown_filter_does_not_change_mask():
+def test_update_target_mask_unknown_filter_clears_mask():
     """
-    An unrecognised filter leaves the existing target mask unchanged (except
-    zeroing the player's own slot, which always happens).
+    An unrecognised filter fails safe to an all-zero mask sized to the
+    current actor count, rather than reusing a stale mask that might have
+    been computed for a different (now outdated) actor count -- reusing a
+    wrong-sized mask could cause an out-of-bounds index in loop_target /
+    point_target.
     """
     n_actors = 4
     player_actor_index = 2
     initial_mask = np.array([1.0, 0.0, 1.0, 1.0])
     player = make_player_for_target_mask(
         n_actors=n_actors,
-        target_filter="Capital ships",  # not yet fully implemented
+        target_filter="Bogus filter",  # not a real filter
         initial_mask=initial_mask,
     )
 
     player.update_target_mask(player_actor_index=player_actor_index)
 
-    # Slots other than the player's own should be unchanged
-    for idx in range(n_actors):
-        if idx != player_actor_index:
-            assert player.target_mask[idx] == initial_mask[idx]
-    assert player.target_mask[player_actor_index] == 0
+    np.testing.assert_array_equal(player.target_mask, np.zeros(n_actors))
 
 
 @pytest.mark.parametrize(
@@ -209,6 +212,202 @@ def test_update_target_mask_all_filter_parametrized(n_actors, player_actor_index
             assert player.target_mask[idx] == 0
         else:
             assert player.target_mask[idx] == 1
+
+
+def test_update_target_mask_capital_ships_filter_selects_by_category():
+    """
+    The "Capital ships" filter masks in only category == "capital_ship" actors.
+    """
+    player = make_player_for_target_mask(n_actors=3, target_filter="Capital ships")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category=None),  # the player: no category
+        SimpleNamespace(category="fighter"),
+        SimpleNamespace(category="capital_ship"),
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 0.0, 1.0])
+
+
+def test_update_target_mask_subsystems_filter_includes_turrets():
+    """
+    The "Subsystems" filter masks in category == "sub_system" actors, which
+    includes turrets (turrets are subsystems, and also match "Turrets").
+    """
+    turret = MagicMock(spec=Turret)
+    turret.category = "sub_system"
+    player = make_player_for_target_mask(n_actors=3, target_filter="Subsystems")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category=None),  # the player: no category
+        SimpleNamespace(category="sub_system"),  # e.g. a shield generator
+        turret,
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 1.0, 1.0])
+
+
+def test_update_target_mask_turrets_filter_selects_turret_instances():
+    """
+    The "Turrets" filter masks in only Turret instances, even though a
+    turret's category is "sub_system" rather than "turret".
+    """
+    turret = MagicMock(spec=Turret)
+    turret.category = "sub_system"
+    player = make_player_for_target_mask(n_actors=3, target_filter="Turrets")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category=None),  # the player: no category
+        SimpleNamespace(category="sub_system"),  # e.g. a shield generator
+        turret,
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 0.0, 1.0])
+
+
+def test_update_target_mask_fighters_filter_selects_by_category():
+    """
+    The "Fighters" filter masks in only category == "fighter" actors.
+    """
+    player = make_player_for_target_mask(n_actors=3, target_filter="Fighters")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category="fighter"),  # the player itself: also a fighter
+        SimpleNamespace(category="fighter"),
+        SimpleNamespace(category="capital_ship"),
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 1.0, 0.0])
+
+
+# ---------------------------
+# loop_target
+# ---------------------------
+
+
+class MockTargetableActor:
+    """
+    Minimal actor stub satisfying both Interactions' attribute contract and
+    update_target_mask's optional `category` lookup.
+    """
+
+    def __init__(self, name, category=None):
+        self.id = uuid.uuid4()
+        self.name = name
+        self.team = 0
+        self.category = category
+        self.position = np.zeros(3)
+        self.speed = np.zeros(3)
+        self.forward = np.array([0.0, 1.0, 0.0])
+        self.is_dead = False
+        self.target = None
+        self.target_id = None
+        self.target_idx = None
+
+
+def make_player_for_loop_target(pawn, interactions, target_filter: str = "All"):
+    """
+    Build a Player stub wired to a real Interactions instance, so loop_target
+    exercises the actual (raw slot vs compressed position) index translation.
+
+    :param pawn: The player's own actor, already added to `interactions`
+    :param interactions: A real Interactions instance
+    :param target_filter: the filter string stored on the player
+    :return: the configured Player stub
+    """
+    player = object.__new__(Player)
+    player.target_filter = target_filter
+    player.pawn = pawn
+    player.game = SimpleNamespace(interactions=interactions)
+    return player
+
+
+def test_loop_target_advances_through_all_targets_despite_a_gap():
+    """
+    Regression test: a dead actor's slot leaves a gap between currently-alive
+    slots. Repeatedly looping "next target" must still visit every other
+    live actor exactly once before wrapping back to the first one -- it must
+    not get stuck jumping between the same one or two entries.
+    """
+    interactions = Interactions()
+    pawn = MockTargetableActor("player")
+    actor_a = MockTargetableActor("a")
+    actor_b = MockTargetableActor("b")  # will be removed, leaving a gap
+    actor_c = MockTargetableActor("c")
+    interactions.add_actor(pawn)  # slot 0
+    interactions.add_actor(actor_a)  # slot 1
+    interactions.add_actor(actor_b)  # slot 2
+    interactions.add_actor(actor_c)  # slot 3
+    interactions.remove_actor(actor_b)  # frees slot 2, leaving a gap
+
+    player = make_player_for_loop_target(pawn=pawn, interactions=interactions)
+
+    visited = []
+    for _ in range(3):
+        player.loop_target(increment=1)
+        visited.append(player.pawn.target.name)
+
+    # Both remaining targets are visited before the cycle repeats
+    assert visited == ["a", "c", "a"]
+
+
+def test_loop_target_reverse_also_advances_correctly_with_a_gap():
+    """
+    Same kind of gap scenario as above (with an extra live target so forward
+    and reverse traversal orders are distinguishable), but looping backwards
+    (Shift-Tab style).
+    """
+    interactions = Interactions()
+    pawn = MockTargetableActor("player")
+    actor_a = MockTargetableActor("a")
+    actor_b = MockTargetableActor("b")  # will be removed, leaving a gap
+    actor_c = MockTargetableActor("c")
+    actor_d = MockTargetableActor("d")
+    interactions.add_actor(pawn)  # slot 0
+    interactions.add_actor(actor_a)  # slot 1
+    interactions.add_actor(actor_b)  # slot 2
+    interactions.add_actor(actor_c)  # slot 3
+    interactions.add_actor(actor_d)  # slot 4
+    interactions.remove_actor(actor_b)  # frees slot 2, leaving a gap
+
+    player = make_player_for_loop_target(pawn=pawn, interactions=interactions)
+
+    visited = []
+    for _ in range(4):
+        player.loop_target(increment=-1)
+        visited.append(player.pawn.target.name)
+
+    # All three remaining targets are visited before the cycle repeats.
+    assert visited == ["c", "a", "d", "c"]
+    assert set(visited) == {"a", "c", "d"}
+
+
+def test_loop_target_keeps_current_target_selected_on_repeated_calls_with_one_target():
+    """
+    With only one available target beyond a gap, looping must keep landing on
+    it rather than losing track of the current target and failing to find it.
+    """
+    interactions = Interactions()
+    pawn = MockTargetableActor("player")
+    actor_dead = MockTargetableActor("dead")  # will be removed, leaving a gap
+    actor_only = MockTargetableActor("only")
+    interactions.add_actor(pawn)  # slot 0
+    interactions.add_actor(actor_dead)  # slot 1
+    interactions.add_actor(actor_only)  # slot 2
+    interactions.remove_actor(actor_dead)  # frees slot 1, leaving a gap
+
+    player = make_player_for_loop_target(pawn=pawn, interactions=interactions)
+
+    player.loop_target(increment=1)
+    assert player.pawn.target.name == "only"
+    # Calling again must still find "only" as the (unchanged) current target,
+    # not lose track of it because of a stale/mismatched index comparison.
+    player.loop_target(increment=1)
+    assert player.pawn.target.name == "only"
 
 
 # ---------------------------

@@ -4,6 +4,7 @@ from typing import Callable
 import numpy as np
 
 from space_flight import RECORD_GAME
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
@@ -349,10 +350,16 @@ class Player:
             self.pawn.target_idx = None
             return
 
-        # Find indices of available targets
+        # available_indices are positions in the compacted live_actors list,
+        # while self.pawn.target_idx is a stable interactions-grid slot index
+        # -- translate to slot indices before comparing the two.
         available_indices = np.where(self.target_mask)[0]
+        live_slot_indices = np.where(self.game.interactions.alive)[0]
+        available_slot_indices = live_slot_indices[available_indices]
         # Find current target in available targets
-        target_available_index = np.where(available_indices == self.pawn.target_idx)[0]
+        target_available_index = np.where(
+            available_slot_indices == self.pawn.target_idx
+        )[0]
         # Reset index if current target is not in the available targets
         # (Filter might have changed, for example)
         if len(target_available_index) == 0:
@@ -443,10 +450,39 @@ class Player:
             self.target_mask = self.game.interactions.interact[
                 player_actor_index, self.game.interactions.alive
             ]
-            # TODO: other filters
+        elif self.target_filter == "Capital ships":
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "capital_ship" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Subsystems":
+            # Includes turrets: a turret is a subsystem too, and it also
+            # matches the dedicated "Turrets" filter below.
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "sub_system" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Turrets":
+            self.target_mask = np.array(
+                [
+                    1.0 if isinstance(actor, Turret) else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Fighters":
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "fighter" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
         else:
-            # Don't change the target mask
-            pass
+            # Fail safe for unrecognised filters
+            self.target_mask = np.zeros(len(self.game.interactions.live_actors))
         self.target_mask[player_actor_index] = 0
 
     def open_radial_target_menu(self):
