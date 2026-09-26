@@ -350,10 +350,16 @@ class Player:
             self.pawn.target_idx = None
             return
 
-        # Find indices of available targets
+        # available_indices are positions in the compacted live_actors list,
+        # while self.pawn.target_idx is a stable interactions-grid slot index
+        # -- translate to slot indices before comparing the two.
         available_indices = np.where(self.target_mask)[0]
+        live_slot_indices = np.where(self.game.interactions.alive)[0]
+        available_slot_indices = live_slot_indices[available_indices]
         # Find current target in available targets
-        target_available_index = np.where(available_indices == self.pawn.target_idx)[0]
+        target_available_index = np.where(
+            available_slot_indices == self.pawn.target_idx
+        )[0]
         # Reset index if current target is not in the available targets
         # (Filter might have changed, for example)
         if len(target_available_index) == 0:
