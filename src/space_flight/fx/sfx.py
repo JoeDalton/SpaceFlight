@@ -242,6 +242,12 @@ class SFX:
             self.audio3d.attachSoundToObject(sound, dummy_node)
             sound.setVolume(multiplier)
             sound.play()
+            game.delayed_methods.do_method_later(
+                delay_s=SFX_MAX_SOUND_DURATION_S,
+                name="Release player crash terrain sound",
+                method=sound_pool.release_sound,
+                extra_args=[sound],
+            )
 
         # Play short crash sound
         sound_pool = self.player_crash_short_sound_pool
@@ -251,6 +257,12 @@ class SFX:
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="Release player crash short sound",
+            method=sound_pool.release_sound,
+            extra_args=[sound],
+        )
 
         # Play long crash sound
         sound_pool = self.player_crash_long_sound_pool
@@ -260,11 +272,9 @@ class SFX:
         self.audio3d.attachSoundToObject(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
-
-        # Schedule sound release
         game.delayed_methods.do_method_later(
             delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="Release player crash sound",
+            name="Release player crash long sound",
             method=sound_pool.release_sound,
             extra_args=[sound],
         )
