@@ -2,8 +2,9 @@
 Unified GPU-driven particle system for Panda3D.
 
 Currently powers the **explosion** effect (fire + smoke billboards,
-sprite-atlas animated). The base class is effect-agnostic, so further
-billboard effects can reuse it.
+sprite-atlas animated, in fire_smoke_fx.py) and the laser-hit **sparks**
+(spark_fx.py). The base class is effect-agnostic, so further billboard
+effects can reuse it.
 
 Each effect gets:
 
@@ -192,7 +193,7 @@ class ParticleBuffer:
     only per-frame work is pushing three lightweight uniforms
     (uTime, uCamRight, uCamUp) via :meth:`update`.
 
-    Slots are reused as particles expire. The CPU-side _slots list tracks
+    Slots are reused as particles expire. The CPU-side slots list tracks
     (spawn_time, total_duration) pairs so :meth:`alloc_slot` can find a
     free slot without reading back GPU memory.
 
@@ -215,8 +216,10 @@ class ParticleBuffer:
                       (src * alpha + dst * 1) for a bright glow effect.
                       If False, use standard alpha blending.
     :param bin_order: Sort order within the "transparent" render bin.
-    :param task_name: Unique name for the Panda3D per-frame update task.
-                      Must differ between simultaneous buffers.
+    :param task_name: Descriptive name for this buffer's update, stored as
+                      ``self.task_name``. The per-frame update itself is not
+                      a Panda3D task: :meth:`update` is registered in
+                      ``game.method_lists`` under this buffer's ``id``.
     """
 
     def __init__(
@@ -332,11 +335,11 @@ class ParticleBuffer:
 
         A slot is considered free when:
 
-        - It has never been used (_slots[i] is None), or
+        - It has never been used (slots[i] is None), or
         - Enough buffer-clock time has elapsed since its spawn that its
-          particle has fully expired (_time - spawn_time >= duration).
+          particle has fully expired (time - spawn_time >= duration).
 
-        :return: A free slot index in [0, _POOL_SIZE), or None
+        :return: A free slot index in [0, POOL_SIZE), or None
                   if the pool is completely full.
         """
         now = self.time

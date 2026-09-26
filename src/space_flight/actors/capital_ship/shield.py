@@ -61,7 +61,7 @@ class Shield(Destructible):
       reverse), coming back online.
 
     While either animation plays the shield is **not functional** (it blocks no
-    lasers and is skipped in laser_into_shield via :attr:`is_enabled`).
+    lasers and is skipped in munition_into_shield via :attr:`is_enabled`).
 
     :param game: The game/flight state
     :param ship: The ship this shield is mounted on and protects
@@ -369,7 +369,7 @@ class Shield(Destructible):
     def set_visible(self, visible: bool):
         """
         Show or hide the shield bubble. Hiding does not disable the collider; a
-        downed shield is instead ignored in laser_into_shield via
+        downed shield is instead ignored in munition_into_shield via
         :attr:`is_enabled`.
 
         :param visible: Whether the bubble should be rendered

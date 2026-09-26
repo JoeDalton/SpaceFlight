@@ -1,5 +1,16 @@
 # Ocean Geometric-Swell Artifacts — Investigation Report
 
+> **Historical report — does not describe the current code.** The §7 shader
+> toggles and varyings (`vSurfacePos`, `uReflRayToPlane`, `uShadeFromPlane`,
+> `uAANormal`, `uAALo`/`uAAHi`) and debug modes 8–9 are not in the code today:
+> `ocean.frag` debug mode 8 is now the FM phase field, and there is no mode 9.
+> The §2a reflection ray-cast fix is not applied either — `ocean.frag` still
+> samples the reflection at the flat footprint
+> (`uReflMVP * vec4(vWorldPos.xy, 0.0, 1.0)`). The demo script
+> (`scripts/ocean_demo.py`) and the `ocean_debug/` evidence referenced below
+> are not in the repo. Contrary to the recommendation in §7/§8, `SceneOcean`
+> currently runs with `geometric_swell=True` (see `scenes.py`).
+
 **Status: NOT SOLVED.** The artifacts are still present in the demo. The fixes
 implemented this session help when the camera is *above* the swell crests but
 **introduce a worse, hard-edged artifact at low altitude** (camera among/below

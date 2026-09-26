@@ -1,12 +1,18 @@
 """
-Ocean — clipmap LOD ocean with planar reflections for Panda3D.
+Ocean — camera-locked reflective ocean surface with planar reflections.
+
+The surface is either a single huge flat quad (default; all wave detail is
+computed per-pixel in ocean.frag) or, with ``geometric_swell=True``, a dense
+grid displaced by the swell in ocean.vert and ringed by flat border cells.
+Either mesh is re-centred under the camera every frame.  Reflections come
+from an offscreen buffer rendered by a camera mirrored across Z = 0.
 
 Usage:
-    from ocean import Ocean
-    self.ocean = Ocean(self)
+    from space_flight.scenes.ocean import Ocean
+    self.ocean = Ocean(game=game)
 
-    # In your update task:
-    self.ocean.update(camera_pos, t)
+``Ocean`` registers its own no-argument :meth:`Ocean.update` in
+``game.method_lists``, so no manual per-frame call is needed.
 """
 
 from __future__ import annotations
@@ -136,9 +142,10 @@ def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float) -> G
     # far border.  The two border steps are huge but stay flat (taper → 0).
     #
     # Built with NumPy + bulk buffer uploads rather than per-vertex/-triangle
-    # Python calls: at the default 256 subdivisions this is a 259x259 grid
-    # (~67k verts, ~133k tris), and the naive loop spent ~210ms here. The
-    # vectorised form is byte-identical and ~25x faster.
+    # Python calls: at the default 512 subdivisions this is a 515x515 grid
+    # (~265k verts, ~528k tris); even at 256 subdivisions (259x259) the naive
+    # loop spent ~210ms here. The vectorised form is byte-identical and ~25x
+    # faster.
     coords = np.empty(subdivs + 3, dtype=np.float32)
     coords[0] = -outer_half
     coords[1 : subdivs + 2] = (
@@ -397,9 +404,10 @@ class Ocean:
             "refl_buffer", buf_w, buf_h, refl_tex
         )
         self.refl_buffer.setSort(-100)
-        # DEBUG: reflection-buffer background = bright red, to see where the
-        # reflection camera renders nothing (no skybox/geometry) and the clear
-        # colour shows through.
+        # Clear the reflection buffer to the water colour, so wherever the
+        # reflection camera renders nothing (no skybox/geometry) the reflection
+        # blends into the water.  For debugging, swap in the bright-red clear
+        # below to see exactly where the clear colour shows through.
         self.refl_buffer.setClearColor(LVecBase4f(*water_color, 1))
         # self.refl_buffer.setClearColor((1.0, 0.0, 0.0, 1))
 

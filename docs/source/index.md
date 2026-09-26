@@ -1,17 +1,26 @@
-# Welcome to MkDocs
+# Welcome to the SpaceFlight documentation!
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+SpaceFlight is a home-made space combat flight simulator, heavily inspired by
+Star Wars Squadrons, written in Python on top of Panda3D.
 
-## Commands
+These pages are developer documentation: how the game is organised and how its
+main systems work. The per-class API is in the auto-generated
+[code reference](apidocs/index.rst).
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+```{toctree}
+:maxdepth: 2
+:caption: Contents
 
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+scenario_scripting
+actors
+ai
+fx
+game
+global_architecture
+menus
+scenes
+ui
+shaders
+subsystems
+apidocs/index
+```

@@ -284,7 +284,7 @@ class GenericTactician:
     def evaluate_fighting_shape(self) -> float:
         """
         The bot's fitness to keep fighting: half its health plus its shield. Reads
-        the uniform healthshield_level exposed by every pawn, so it works
+        the uniform health/shield_level exposed by every pawn, so it works
         the same for fighters and capital ships.
 
         TODO: add an "energy" mechanic ? Health of subsystems ?

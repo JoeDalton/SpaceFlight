@@ -5,7 +5,7 @@ objectives — are written declaratively in a YAML file next to the level, and r
 by a generic engine. You tune most things without touching Python.
 
 Each level points at its own file, e.g.
-[`intro_level.yaml`](../src/space_flight/game/levels/intro_level.yaml) for the
+[`intro_level.yaml`](../../src/space_flight/game/levels/intro_level.yaml) for the
 intro level.
 
 ## Mental model
@@ -17,8 +17,9 @@ The engine is built on three ideas:
   first wave wiped out?". Conditions compose.
 - **Action** — something that happens: spawn a wave, show a HUD message.
 
-Triggers fire **once** by default. Membership and liveness are tracked for you,
-so you never write "has this already happened" flags.
+Triggers fire **once** by default (set `once: false` to run the action every
+frame the condition holds). Membership and liveness are tracked for you, so you
+never write "has this already happened" flags.
 
 ## File structure
 
@@ -31,9 +32,11 @@ waves:        # reusable spawn definitions, keyed by the group id they spawn int
     # ...
 
 triggers:     # the mission rules
-  - name: first_wave            # optional, for logging
+  - name: first_wave            # optional; used in logs and by the fired condition
     when: { after_seconds: 50 } # a condition
     then: { spawn: first_wave } # an action
+    once: true                  # optional; set false to run the action every
+                                # frame the condition holds
 ```
 
 A `when` or `then` node is always a **single-key mapping**: the key chooses the
@@ -49,10 +52,10 @@ waves:
   first_wave:
     size: 5                       # number of ships
     ship_model: tie-bomber        # pawn model
-    bot_type: fighter             # fighter | capital_ship | turret (default: fighter)
+    bot_type: fighter             # fighter | capital_ship (default: fighter)
     team: 2                       # default: 2
     spawn_point: [300, 6000, 500] # world position of the formation leader
-    spawn_orientation: [0, 0, 0, 1]
+    spawn_orientation: [0, 0, 0, 1]  # quaternion (w, x, y, z); this is the default
     formation: { scale_m: 30, shape: arrowhead }  # arrowhead | diamond | around_diamond
     waypoints:                    # optional patrol path
       - [300, 0, 500]
@@ -60,10 +63,22 @@ waves:
     loop: true                    # loop the waypoints (default: true)
     target: transports            # group name to attack (optional)
     hud_text: "Enemy ships incoming!"  # shown when the wave begins (optional)
+    hud_time_s: 2.5               # how long hud_text shows
     allow_respawn: false          # see "Spawning once", below
+    record: false                 # record each bot via game.record
 ```
 
 Only `id` (the key), `size`, `ship_model`, and `spawn_point` are required.
+
+`spawn_orientation` is handed straight to Panda3D's `Quat`, so its components
+are in (w, x, y, z) order. The default `[0, 0, 0, 1]` is therefore **not** the
+identity but a 180° turn about z.
+
+`target` is resolved as each ship spawns: the ship is aimed at whichever members
+of the target group are alive at that moment, so that group must already exist.
+
+Turrets and tractor beams are not waves: they are spawned from their host
+capital ship's config (see [docs/subsystems.md](subsystems.md)).
 
 ### Formation spawning
 
@@ -95,9 +110,10 @@ into the same group is intended.
 | `after_seconds` | seconds | the game clock passes that time |
 | `all_destroyed` | group name | the group has spawned **and** all members are dead |
 | `any_alive` | group name | at least one member of the group is alive |
-| `reached_waypoint` | `{who, index}` | the (first live) member of `who` has reached waypoint `index` |
+| `reached_waypoint` | `{who, index}` | any live member of `who` has reached waypoint `index` (0-based; its navigator's next-waypoint index is > `index`) |
 | `near` | `{who, point, radius}` | `who` is within `radius` of `point` (`who` is `player` or a group; for a group, any live member) |
 | `fired` | trigger name | the named trigger has already fired |
+| `any_destroyed` | group name | **not implemented yet**: accepted by the loader but always false |
 
 ```yaml
 when: { after_seconds: 50 }
@@ -114,8 +130,11 @@ single-key mapping like these; there is no bare-string form.
 `all_destroyed` is deliberately **false before the group has ever spawned**, so a
 chained event cannot fire against a wave that does not exist yet.
 
-> `reached_waypoint` reads the navigator's waypoint index, which resets each lap
-> on a looping patrol — so it is unambiguous only on the first lap.
+> `reached_waypoint` reads the navigator's waypoint index, which resets to 0 at
+> the end of each lap of a looping patrol and after the last waypoint of a
+> non-looping path — so it is unambiguous only on the first pass. `index` is
+> 0-based: `index: 0` means "reached the first waypoint", and it is only true
+> from the moment that waypoint is actually reached (not from mission start).
 
 ### Combinators
 
@@ -206,15 +225,17 @@ player's ship is destroyed (`death`).
 A **group** is a named set of actors. Two kinds:
 
 - **Identity groups** — a specific cohort. Every wave is one (its id is the
-  group name). Standing groups built in the level (the convoy, its escort) are
-  registered by name in the level's Python build code:
+  group name); in the shipped levels even the convoy and its escort are plain
+  YAML waves. A group built directly in Python can still be registered by
+  name, though no current level does so:
 
   ```python
-  game.scenario.register(name="transports", bots=game.transport_bots)
+  game.scenario.register(name="transports", bots=transport_bots)
   ```
 
 - **Query groups** — derived live from a predicate (e.g. "all team-2 ships").
-  Registered in Python with `register_query`; no membership is stored.
+  Registered in Python with `register_query` (again, no current level uses
+  one); no membership is stored.
 
 Names are the only thing that crosses between YAML and Python: the YAML refers to
 `transports`, the engine resolves that to whichever transports are currently
@@ -259,10 +280,10 @@ objective. Keep each rule independent and let the conditions order them.
 New conditions and actions are small Python factories:
 
 - a **condition** is any callable `condition(game) -> bool` — see
-  [`conditions.py`](../src/space_flight/game/scenario/conditions.py);
+  [`conditions.py`](../../src/space_flight/game/scenario/conditions.py);
 - an **action** is any callable `action(game) -> None` — see
-  [`actions.py`](../src/space_flight/game/scenario/actions.py).
+  [`actions.py`](../../src/space_flight/game/scenario/actions.py).
 
 After writing the factory, wire its YAML keyword into the matching `_build_*`
-function in [`loader.py`](../src/space_flight/game/scenario/loader.py). Resist
+function in [`loader.py`](../../src/space_flight/game/scenario/loader.py). Resist
 adding a keyword before you have a couple of real uses for it.

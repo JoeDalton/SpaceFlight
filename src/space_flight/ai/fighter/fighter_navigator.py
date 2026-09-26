@@ -276,7 +276,7 @@ class FighterNavigator(GenericShipNavigator):
         ingress -> attack -> break -> reposition -> ingress that runs in fast,
         fires, peels off and comes around again, instead of spiralling like a chase.
 
-        For a surface-mounted prey (surface_normalsurface_hit_point in
+        For a surface-mounted prey (surface_normal/surface_hit_point in
         target_dict) the ingress becomes a low-altitude corridor (a run at a set
         altitude above the surface, then a dive), the break climbs along the normal,
         and a hard altitude floor forces recovery. Without surface info it is a

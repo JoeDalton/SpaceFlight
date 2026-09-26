@@ -1,4 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
+from panda3d.core import InputDevice
 
 from space_flight.ui.input_reader import (
     GamepadReader,
@@ -334,3 +337,57 @@ def test_button_index_empty_suffix_returns_none():
 
 def test_button_index_arbitrary_name_returns_none():
     assert JoystickReader.button_index("fire") is None
+
+
+# ---------------------------------------------------------------------------
+# GamepadReader — "no gamepad found" label lifecycle
+# ---------------------------------------------------------------------------
+
+
+def make_app_with_no_gamepad():
+    app = MagicMock()
+    app.bindings = {"input_type": "gamepad", "contexts": {}, "dead_zones": {}}
+    app.devices.getDevices.return_value = []
+    return app
+
+
+def make_gamepad_device():
+    device = MagicMock()
+    device.device_class = InputDevice.DeviceClass.gamepad
+    return device
+
+
+def test_gamepad_reader_shows_label_when_no_device_at_startup():
+    app = make_app_with_no_gamepad()
+    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
+        reader = GamepadReader(app)
+    mock_text.assert_called_once()
+    assert reader.lbl is mock_text.return_value
+
+
+def test_gamepad_reader_hides_label_once_a_gamepad_connects():
+    app = make_app_with_no_gamepad()
+    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
+        reader = GamepadReader(app)
+        reader.connect(make_gamepad_device())
+    mock_text.return_value.hide.assert_called_once()
+
+
+def test_gamepad_reader_shows_label_again_after_disconnect_with_no_fallback():
+    app = make_app_with_no_gamepad()
+    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
+        reader = GamepadReader(app)
+        device = make_gamepad_device()
+        reader.connect(device)
+        mock_text.return_value.reset_mock()
+        app.devices.getDevices.return_value = []
+        reader.disconnect(device)
+    mock_text.return_value.show.assert_called_once()
+
+
+def test_gamepad_reader_clean_destroys_label():
+    app = make_app_with_no_gamepad()
+    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
+        reader = GamepadReader(app)
+        reader.clean()
+    mock_text.return_value.destroy.assert_called_once()

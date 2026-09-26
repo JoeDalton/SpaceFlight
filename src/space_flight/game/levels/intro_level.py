@@ -66,8 +66,9 @@ def build_intro_level(game: FlightState) -> Iterator[str]:
     Initialize scenario
     """
     # Mission events (waves, objectives) are defined declaratively in the
-    # sibling YAML and driven by the generic scenario engine. The standing
-    # groups built above are registered by name so triggers can reference them.
+    # sibling YAML and driven by the generic scenario engine. Every group the
+    # triggers reference (the convoy and escort included) is a wave defined in
+    # that YAML, so nothing is registered here.
     game.scenario = load_scenario(Path(__file__).with_suffix(".yaml"))
     # game.scenario.register(name="transports", bots=game.transport_bots)
     # game.scenario.register(name="escort", bots=game.escort_bots)

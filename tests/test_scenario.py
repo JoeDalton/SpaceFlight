@@ -275,6 +275,25 @@ def test_reached_waypoint(game):
 
     assert cond(game) is False
     bot.navigator.next_waypoint_idx = 5
+    # next_waypoint_idx == index means waypoint `index` is the *next* one to
+    # reach, not the last one reached -- not true yet.
+    assert cond(game) is False
+    bot.navigator.next_waypoint_idx = 6
+    assert cond(game) is True
+
+
+def test_reached_waypoint_index_zero_is_not_true_before_any_waypoint(game):
+    """
+    Regression test: index=0 used to be trivially true from the first frame
+    (next_waypoint_idx starts at 0), before any waypoint was ever reached.
+    """
+    bot = MockBot("a", [0, 0, 0], team=2)
+    game.interactions.add(bot.pawn)
+    game.scenario.register("convoy", [bot])
+    cond = reached_waypoint("convoy", index=0)
+
+    assert cond(game) is False
+    bot.navigator.next_waypoint_idx = 1
     assert cond(game) is True
 
 

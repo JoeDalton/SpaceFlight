@@ -6,7 +6,6 @@ from panda3d.core import loadPrcFileData
 from space_flight.fx.sfx import SFX
 from space_flight.game.flight_state import FlightState
 from space_flight.game.hyperspace_loading_state import HyperspaceLoadingState
-from space_flight.game.loading_state import LoadingState
 from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.graphics_manager import GraphicsManager
@@ -54,7 +53,6 @@ class StateManager:
     RADIAL_MENU_STATE = RadialMenuState
     LEVEL_END_STATE = LevelEndState
     GAME_STATE = FlightState
-    LOADING_STATE = LoadingState
     HYPERSPACE_LOADING_STATE = HyperspaceLoadingState
 
     def __init__(self, app):

@@ -4,26 +4,26 @@ The `game` package is the session's runtime: the `FlightState` that owns
 every live subsystem, physics integration, collision resolution, time
 keeping, and the data-driven scenario/mission engine that scripts a level's
 events. This page is the guided tour; the per-class API is generated from the
-docstrings in the [code reference](docs/).
+docstrings in the [code reference](apidocs/index.rst).
 
 Most of the code lives in
-[`src/space_flight/game/`](../src/space_flight/game/), with level definitions
-under [`game/levels/`](../src/space_flight/game/levels/) and the scenario
-scripting engine under [`game/scenario/`](../src/space_flight/game/scenario/).
+[`src/space_flight/game/`](../../src/space_flight/game/), with level definitions
+under [`game/levels/`](../../src/space_flight/game/levels/) and the scenario
+scripting engine under [`game/scenario/`](../../src/space_flight/game/scenario/).
 
 ## `FlightState` — the session owner
 
-[`flight_state.py`](../src/space_flight/game/flight_state.py)'s `FlightState`
+[`flight_state.py`](../../src/space_flight/game/flight_state.py)'s `FlightState`
 is the app state active while actually flying (as opposed to menus or loading
 screens); `game` throughout the rest of the codebase almost always means
 "the current `FlightState` instance." It owns every session-scoped
 subsystem — the integrator, collision system, interactions, scenario,
-explosion pool, time keeping, the player, the scene, HUD — and drives the
-top-level per-frame update.
+explosion/fire-smoke and spark pools, time keeping, the player, the scene,
+HUD — and drives the top-level per-frame update.
 
 - **Two-phase, animated level entry.** `enter()` builds the level in two
   phases around a hyperspace-jump animation
-  ([`hyperspace_loading_state.py`](../src/space_flight/game/hyperspace_loading_state.py)):
+  ([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)):
   first `_build_upfront()` runs synchronously on a black screen for GPU-heavy
   one-time work (player, ocean/cloud reflections) so their first-render
   compile spike is invisible; then `_build_generator` (a generator from the
@@ -31,7 +31,12 @@ top-level per-frame update.
   its looping "inside" phase, via `_advance_build`. `_on_build_complete`
   wires up input/HUD/tasks once the build finishes (still hidden behind the
   animation); `_on_reveal` starts the simulation exactly as the overlay fades
-  out, so the world is already alive the moment it becomes visible.
+  out, so the world is already alive the moment it becomes visible. With
+  `WAIT_FOR_JUMP_KEY` (`True` by default) the overlay holds the tunnel after
+  the build until the player presses the jump-out key. Headless runs
+  (`FlightState(app, headless=True)`) skip the overlay and HUD entirely:
+  `_enter_headless` builds both phases synchronously and starts the
+  simulation straight away.
 - **`update_game_world_task`** is the fixed per-frame order of operations:
   delayed methods → kill destructibles whose health hit zero → resolve
   collisions → recompute actor interactions → integrate physics → run every
@@ -40,15 +45,15 @@ top-level per-frame update.
   frame. Both are no-ops while `is_paused`.
 - **`initialize_game_structure()`** constructs every session-scoped object
   once, in dependency order (see [Where things live](#where-things-live)
-  below for the object graph), and **`exit()`** tears them all down in
-  reverse — the two together are the definitive list of what a `FlightState`
-  owns.
+  below for the object graph), and **`exit()`** tears them down in roughly
+  reverse order (the `Scenario` is simply dropped rather than cleaned) — the
+  two together are the definitive list of what a `FlightState` owns.
 - `pause()`/`resume()` propagate to `IntervalManager` and `GameTimeManager` so
   intervals and the game clock freeze together, e.g. for the pause menu.
 
 ## Time keeping
 
-[`time_keeping.py`](../src/space_flight/game/time_keeping.py) has three small
+[`time_keeping.py`](../../src/space_flight/game/time_keeping.py) has three small
 managers, all pause-aware:
 
 - **`GameTimeManager`** is the single source of truth for "what time is it in
@@ -68,7 +73,7 @@ managers, all pause-aware:
 
 ## `Integrator` — shared physics stepping
 
-[`integrator.py`](../src/space_flight/game/integrator.py)'s `Integrator` is a
+[`integrator.py`](../../src/space_flight/game/integrator.py)'s `Integrator` is a
 single flat state buffer shared by every physics-driven actor (ships,
 capital ships), not one integrator per actor: each actor calls
 `set_state_variables` to claim a contiguous slice of a pre-allocated array
@@ -84,14 +89,14 @@ player's camera head bob) that doesn't need a slot in the shared buffer.
 
 ## `CollisionSystem` — layers, routing and physical response
 
-[`collisions.py`](../src/space_flight/game/collisions.py) is the largest
+[`collisions.py`](../../src/space_flight/game/collisions.py) is the largest
 module in this package: it defines Panda3D collision layers and owns all the
 `*-into-*` event handlers that turn a raw collision entry into game effects.
 
-- **`CollisionLayers`** defines bitmask layers (`LASER`, `SHIELD`,
-  `DESTRUCTIBLE`, `ENVIRONMENT`, plus the implicit `SENSOR` sharing bit 0
-  with `LASER`) and, for each named collider type
-  (`laser`/`sensor`/`destructible`/`terrain`/`subsystem`/`shield`), which
+- **`CollisionLayers`** defines bitmask layers (`MUNITION`, `SHIELD`,
+  `DESTRUCTIBLE`, `ENVIRONMENT`, plus `SENSOR` sharing bit 0 with
+  `MUNITION`) and, for each named collider type
+  (`laser`/`bomb`/`sensor`/`destructible`/`terrain`/`subsystem`/`shield`), which
   layers it collides *from* and *into*. `terrain`, `subsystem` and `shield`
   are into-only — like terrain, a subsystem or shield bubble never initiates
   a collision, it is only ever hit — so those three are not registered with
@@ -106,12 +111,12 @@ module in this package: it defines Panda3D collision layers and owns all the
   handler method to each event name Panda3D emits. `update_collisions()`
   (called once per frame from `FlightState`) just runs the traverser; all the
   actual game logic lives in the handler methods:
-  - **Laser hits** (`laser_into_destructible`, `laser_into_terrain`,
-    `laser_into_shield`) apply damage, delete the laser node, and trigger the
-    matching sound. A shield only blocks a laser crossing *inward* — one
-    fired from inside passes through, resolved by the sign of
-    `dot(laser.speed, surface_normal)` (see the module's own comment, and the
-    `trials/shield_normal_test.py` experiment referenced there).
+  - **Munition hits** (`munition_into_destructible`, `munition_into_terrain`,
+    `munition_into_shield`, shared by lasers and bombs) apply damage, delete
+    the munition node, and trigger the matching sound. A shield only blocks a
+    munition crossing *inward* — one fired from inside passes through,
+    resolved by the sign of the munition's velocity dotted with the shield's
+    surface normal (see the handler's own docstring).
   - **Ship/terrain/turret physical hits** (`ship_into_*` / `ship_again_*`
     pairs) resolve an inelastic-ish impulse collision (tuned by
     `SOLID_COLLISION_ELASTICITY`) rather than using Panda3D's built-in rigid
@@ -131,20 +136,20 @@ module in this package: it defines Panda3D collision layers and owns all the
 
 ## Levels
 
-[`game/levels/`](../src/space_flight/game/levels/) has one module per level,
+[`game/levels/`](../../src/space_flight/game/levels/) has one module per level,
 each exposing the same two-function shape `FlightState.enter()` expects
 (see above): `build_<name>_upfront(game)` for the black-screen phase, and
 `build_<name>_level(game) -> Iterator` for the animated incremental phase. A
 level's own logic is deliberately thin — spawn the player, pick a
-[scene](../src/space_flight/scenes/), then hand off to `game.scene.build_decomposed()`
+[scene](../../src/space_flight/scenes/), then hand off to `game.scene.build_decomposed()`
 and a sibling YAML scenario file loaded via `load_scenario` (see below) — all
 per-mission scripting lives in that YAML rather than in Python.
 
 | Level | File | Scene | Premise |
 |-------|------|-------|---------|
-| Dev | [`dev_level.py`](../src/space_flight/game/levels/dev_level.py) | `asteroids` | Sandbox for the latest feature under development |
-| Intro | [`intro_level.py`](../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
-| Race | [`race_level.py`](../src/space_flight/game/levels/race_level.py) | `lava_planet` | Friendly checkpoint race against three rivals |
+| Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `debug` | Sandbox for the latest feature under development |
+| Intro | [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
+| Race | [`race_level.py`](../../src/space_flight/game/levels/race_level.py) | `lava_planet` | Friendly checkpoint race against three rivals |
 
 `FlightState._build_upfront`/`_make_build_generator` dispatch on
 `app.configuration["selected_level"]` to pick which pair of functions to
@@ -152,7 +157,7 @@ call.
 
 ## Scenario — data-driven mission scripting
 
-[`game/scenario/`](../src/space_flight/game/scenario/) turns a level's YAML
+[`game/scenario/`](../../src/space_flight/game/scenario/) turns a level's YAML
 file into runtime `when → then` triggers, so mission design (spawn timings,
 objectives, dialogue) lives in data rather than in each level's Python.
 
@@ -164,7 +169,8 @@ objectives, dialogue) lives in data rather than in each level's Python.
   referencing it before it has spawned resolves to "no live members" rather
   than warning about an unknown group.
 - **`conditions.py`**: leaf conditions (`after_seconds`, `all_destroyed`,
-  `any_alive`, `fired`, `near`, `reached_waypoint`) are plain
+  `any_alive`, `fired`, `near`, `reached_waypoint`, plus `any_destroyed`,
+  a stub that is always false for now) are plain
   `condition(game) -> bool` closures. Conditions that need memory are small
   callable classes instead: `Delay` latches the moment its inner condition
   first becomes true (so it survives the inner condition flickering back to
@@ -194,33 +200,25 @@ objectives, dialogue) lives in data rather than in each level's Python.
 
 ## `Record`
 
-[`record.py`](../src/space_flight/game/record.py)'s `Record` is a minimal
+[`record.py`](../../src/space_flight/game/record.py)'s `Record` is a minimal
 offline-analysis logger, gated by the `RECORD_GAME` flag: `new_time` starts
 a new row keyed by the current game time, `record` appends a named value to
 the current row, and `save` dumps the accumulated rows to a timestamped
 Parquet file under `target/`. Used by `Player.record_state` (see
-[docs/actors.md](actors.md)) to capture flight-dynamics traces for tuning.
-
-## `LoadingState`
-
-[`loading_state.py`](../src/space_flight/game/loading_state.py)'s
-`LoadingState` is a simple, non-animated alternative to the hyperspace
-overlay: it shows a progress bar while Panda3D's threaded model loader loads
-a single model, then transitions straight to `FlightState` once done. It
-predates the two-phase hyperspace build described above and is a much
-thinner fallback for cases that don't need a scripted-in-two-phases level
-entry.
+[docs/actors.md](actors.md)) to capture flight-dynamics traces for tuning,
+and by `Bot.record_state` for bots spawned with `record: true` (their
+tactical decisions).
 
 ## Where things live
 
 `FlightState` (`flight_state.py`) is the root object; its
 `initialize_game_structure`/`exit` pair is the definitive list of everything
 a session owns: `GameTimeManager`/`IntervalManager`/`DelayedMethodManager`
-(`time_keeping.py`), `FireSmokePool` (see [docs/fx.md](fx.md)),
-`Destructibles` (see [docs/actors.md](actors.md)), `CollisionSystem`
+(`time_keeping.py`), `FireSmokePool` and `SparkPool` (see
+[docs/fx.md](fx.md)), `Destructibles` (see [docs/actors.md](actors.md)), `CollisionSystem`
 (`collisions.py`), `Interactions` (see [docs/ai.md](ai.md)), `Integrator`
 (`integrator.py`), and `Scenario` (`scenario/__init__.py`). Level definitions
-live under [`game/levels/`](../src/space_flight/game/levels/), one module (and
+live under [`game/levels/`](../../src/space_flight/game/levels/), one module (and
 a sibling YAML) per level; the scenario scripting engine lives under
-[`game/scenario/`](../src/space_flight/game/scenario/). The auto-generated
-[code reference](docs/) has the full per-class API.
+[`game/scenario/`](../../src/space_flight/game/scenario/). The auto-generated
+[code reference](apidocs/index.rst) has the full per-class API.

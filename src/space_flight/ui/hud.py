@@ -282,7 +282,7 @@ class TargetHUD:
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
-            self.game.player.target = None
+            self.game.player.pawn.target = None
             self.game.player.pawn.target_id = None
             self.game.player.pawn.target_idx = None
         else:

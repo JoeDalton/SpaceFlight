@@ -337,7 +337,7 @@ class Bot(Destructible):
         # Drop the pawn from targeting/interactions immediately, so nothing can
         # lock onto or keep shooting the wreck while it spins (it stays collidable
         # -- the collider lives until clean()).
-        try:  # TODO to remove when the player no longer has its own targets
+        try:
             self.game.player.remove_target(target_to_remove=self.pawn)
         except AttributeError:
             pass
@@ -372,7 +372,7 @@ class Bot(Destructible):
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaning bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
-        try:  # TODO to remove anyway when the player no longer has its own targets
+        try:
             self.game.player.remove_target(target_to_remove=self.pawn)
         except AttributeError:
             # In level cleanup, player may no longer exist at this point

@@ -58,7 +58,9 @@ def all_destroyed(group: str) -> Condition:
 
 def any_destroyed(group: str) -> Condition:
     """
-    True once group has spawned and one of its member is dead.
+    True once group has spawned and one of its members is dead.
+
+    Not implemented yet: the loader accepts it, but it always returns False.
 
     :param group: A group name (see :class:`Scenario`)
     :return: The condition callable
@@ -143,20 +145,24 @@ def _resolve_who(game: FlightState, who: str) -> list[Actor]:
 
 def reached_waypoint(group: str, index: int) -> Condition:
     """
-    True once any member of group has reached waypoint index.
+    True once any live member of group has reached waypoint index (0-based).
 
-    Reads the navigator's next_waypoint_idx directly. Looping patrols reset
-    this to 0 each lap, so it is unambiguous only on the first lap; use a
-    non-looping path or a monotonic counter if you need later laps.
+    Reads the navigator's next_waypoint_idx directly: it starts at 0 and is
+    incremented each time a waypoint is reached, so next_waypoint_idx becomes
+    index + 1 the moment waypoint index is reached, hence "> index" rather
+    than ">= index". The navigator resets it to 0 at the end of each lap of a
+    looping patrol and after the last waypoint of a non-looping path, so it is
+    unambiguous only on the first pass; use a monotonic counter if you need
+    more.
 
     :param group: A group name
-    :param index: The waypoint index to reach (0-based)
+    :param index: The (0-based) waypoint that must have been reached
     :return: The condition callable
     """
 
     def cond(game: FlightState) -> bool:
         for pawn in _resolve_who(game, group):
-            if pawn is not None and pawn.parent.navigator.next_waypoint_idx >= index:
+            if pawn is not None and pawn.parent.navigator.next_waypoint_idx > index:
                 return True
         return False
 

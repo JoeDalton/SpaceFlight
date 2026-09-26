@@ -344,7 +344,8 @@ class CollisionSystem:
     def munition_into_terrain(self, entry: CollisionEntry) -> None:
         """
         Handles the case where a munition hits a terrain object:
-        Removes the munition and throws magic sparks at the impact point.
+        Removes the munition and throws sparks at the impact point, picking the
+        spark preset from the terrain's material (defaulting to ROCK).
 
         :param entry: Panda3d's description of the collision
         """
@@ -407,8 +408,6 @@ class CollisionSystem:
         - anything else (dot >= 0): a munition exiting, a grazing contact, or the
           degenerate zero normal panda3d returns for a segment that started
           inside the solid -> it passes through.
-
-        See trials/shield_normal_test.py for the experiment behind this rule.
 
         :param entry: Panda3d's description of the collision
         """

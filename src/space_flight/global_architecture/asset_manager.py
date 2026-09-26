@@ -126,9 +126,13 @@ class AssetManager:
 
     def load_game_assets(self, app_state, assets_to_load: tuple = None):
         """
-        Launches the load_assets task. By default, load the common assets
+        Launches the load_assets task, which loads the common assets
+        (COMMON_ASSETS_TO_LOAD)
 
         :param app_state: The app's state
+        :param assets_to_load: Currently ignored: a passed list is never copied
+            into self.assets_to_load, so only the default None path (loading
+            the common assets) works as intended
         """
         if assets_to_load is None:
             self.assets_to_load = COMMON_ASSETS_TO_LOAD.copy()

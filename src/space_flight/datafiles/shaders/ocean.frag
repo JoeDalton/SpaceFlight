@@ -20,7 +20,9 @@ uniform float     iSwellDrift;
 // the exact tiling of the dominant (lowest-frequency) octave is broken up. 0
 // disables FM.
 uniform float     uFmDepth;
-uniform int       uDebugMode;  // 0 normal, 1 N, 2 reflUV, 3 fresnel, 4 worldgrid
+uniform int       uDebugMode;  // 0 normal, 1 N, 2 reflUV, 3 fresnel, 4 worldgrid,
+                               // 5 reflUV clamp, 6 raw reflection, 7 pre-tonemap
+                               // clipping, 8 FM phase field
 uniform int       uWaveOff;    // debug: 1 = skip small-wave normal, swell only
 uniform float     uExposure;   // pre-tonemap exposure
 uniform float     uWaveFadeNear;  // distance at which small-wave detail is still full

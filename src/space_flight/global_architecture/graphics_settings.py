@@ -1,11 +1,12 @@
 """
 Graphics settings persistence.
 
-Mirrors the input-settings pattern (see
-:mod:`space_flight.menus.input_settings_menu_state`): a user-editable
-configuration/graphics.yaml is layered over a read-only
+A user-editable configuration/graphics.yaml is layered over a read-only
 configuration/default_graphics.yaml so that any missing or invalid key
-always falls back to a sane default.
+always falls back to a sane default. (Input bindings, by contrast, are not
+layered: configuration.yaml is read alone, and default_configuration.yaml is
+only used by :mod:`space_flight.menus.input_settings_menu_state` to reset to
+defaults.)
 
 The parsed, sanitised settings are consumed by
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.

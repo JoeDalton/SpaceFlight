@@ -135,7 +135,8 @@ triggers:
         - { hud_text: "Enemy reinforcements detected!" }
         - { spawn: third_wave }
 
-  # Mission won once the convoy reaches waypoint 5 and wave 2 is gone.
+  # Mission won once the convoy reaches its final waypoint (index 8, the last
+  # of its 9-waypoint route) and wave 2 is gone.
   - name: blockade_past
     when:
       all_of:

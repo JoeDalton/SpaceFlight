@@ -130,8 +130,14 @@ class SceneOcean(Scene):
         Cleans the SceneOcean
         """
         # self.isd.removeNode()
+        self.ocean.clean()
+        self.ocean = None
         self.clouds.clean()
         self.clouds = None
+        self.skybox.clean()
+        self.skybox = None
+        self.planet.clean()
+        self.planet = None
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
         self.lighting.clean()
@@ -145,13 +151,9 @@ class SceneOcean(Scene):
 class SceneAsteroids(Scene):
     def build_upfront(self):
         """
-        Build the objects whose one-time GPU preparation (shader compile, vertex
-        munge, buffer upload) is heavy enough to spike a frame, and force that
-        prep now — on a black screen, BEFORE the hyperspace animation starts —
-        so the animation that follows stays smooth.
-
-        Requires the player to already exist: the ocean's reflection camera
-        copies the player camera's lens.
+        Build the asteroid fields (one dense static field plus two rotating
+        ones) synchronously on the black screen, BEFORE the hyperspace
+        animation starts. Their GPU preparation is not forced here.
         """
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
@@ -219,13 +221,9 @@ class SceneAsteroids(Scene):
 class SceneLavaPlanet(Scene):
     def build_upfront(self):
         """
-        Build the objects whose one-time GPU preparation (shader compile, vertex
-        munge, buffer upload) is heavy enough to spike a frame, and force that
-        prep now — on a black screen, BEFORE the hyperspace animation starts —
-        so the animation that follows stays smooth.
-
-        Requires the player to already exist: the ocean's reflection camera
-        copies the player camera's lens.
+        Build the asteroid fields (one static field plus two rotating ones)
+        synchronously on the black screen, BEFORE the hyperspace animation
+        starts. Their GPU preparation is not forced here.
         """
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
@@ -243,7 +241,10 @@ class SceneLavaPlanet(Scene):
         )
 
     def build_decomposed(self):
-        """Build the lava-planet scene incrementally (see SceneOcean.build)."""
+        """
+        Build the lava-planet scene incrementally (see
+        SceneOcean.build_decomposed): lighting, dust, planet and Star Destroyer.
+        """
         # Lights
         self.lighting = Lighting(
             game=self.game,
@@ -292,26 +293,24 @@ class SceneLavaPlanet(Scene):
         self.speed_dust_cloud = None
         self.lighting.clean()
         self.lighting = None
-        # self.skybox.clean()
-        # self.skybox=None
+        self.planet.clean()
+        self.planet = None
+        # No skybox: build_decomposed doesn't build one for this scene.
         self.game = None
 
 
 class SceneDebug(Scene):
     def build_upfront(self) -> None:
         """
-        Build the objects whose one-time GPU preparation (shader compile, vertex
-        munge, buffer upload) is heavy enough to spike a frame, and force that
-        prep now — on a black screen, BEFORE the hyperspace animation starts —
-        so the animation that follows stays smooth.
-
-        Requires the player to already exist: the ocean's reflection camera
-        copies the player camera's lens.
+        Nothing to build upfront: the debug scene has no heavy objects.
         """
         pass
 
     def build_decomposed(self):
-        """Build the debug scene incrementally (see SceneOcean.build)."""
+        """
+        Build the debug scene incrementally (see SceneOcean.build_decomposed):
+        a skybox and lighting.
+        """
         # Skybox
         self.skybox = Skybox(game=self.game, name="test")
         yield "skybox"

@@ -4,12 +4,12 @@ Every bot-controlled pawn — fighters, capital ships, turrets, tractor beams �
 is flown by the same three-stage pipeline: a **tactician** decides *what* to
 do, a **navigator** turns that into an explicit direction, and a **pilot**
 converts the direction into control inputs the pawn's `move()` understands.
-[`Bot.move_bot_task`](../src/space_flight/actors/bot.py) (and `Player`, for
+[`Bot.move_bot_task`](../../src/space_flight/actors/bot.py) (and `Player`, for
 an optionally AI-flown player ship) simply calls the three in sequence each
 frame. This page is the guided tour; the per-class API is generated from the
-docstrings in the [code reference](docs/).
+docstrings in the [code reference](apidocs/index.rst).
 
-Most of the code lives in [`src/space_flight/ai/`](../src/space_flight/ai/):
+Most of the code lives in [`src/space_flight/ai/`](../../src/space_flight/ai/):
 a `generic/` package with the shared base classes, and one package per pawn
 family (`fighter/`, `capital_ship/`, `tracking_mount/`) with the concrete
 subclasses. `auto_aim.py`, `collision_sensor.py`, `formation.py` and
@@ -17,7 +17,7 @@ subclasses. `auto_aim.py`, `collision_sensor.py`, `formation.py` and
 
 ## The tactician → navigator → pilot pipeline
 
-- **Tactician** ([`generic_tactician.py`](../src/space_flight/ai/generic/generic_tactician.py)):
+- **Tactician** ([`generic_tactician.py`](../../src/space_flight/ai/generic/generic_tactician.py)):
   a finite state machine over `Intent` (`ENGAGE`, `EVADE`, `DISENGAGE`,
   `REGROUP`, `PATROL`, `FORMATION`, `IDLE`). `think()` re-evaluates the
   intent at a capped frequency (`intent_update_delay`) and only switches
@@ -25,13 +25,13 @@ subclasses. `auto_aim.py`, `collision_sensor.py`, `formation.py` and
   hysteresis that stops a bot flip-flopping between behaviours every frame.
   `update_intent()` (subclass-specific) scores the tactical situation and
   returns `(intent, target_dict)`.
-- **Navigator** ([`generic_navigator.py`](../src/space_flight/ai/generic/generic_navigator.py)):
+- **Navigator** ([`generic_navigator.py`](../../src/space_flight/ai/generic/generic_navigator.py)):
   turns `(intent, target_dict)` into an explicit direction (plus, for ships,
   a desired speed). Provides shared aiming primitives: **Constant Angle
   Pursuit** (kill lateral velocity — good for closing from long range) and
   **lead/lag pursuit** (aim at the target's position at `now + lead_time_s`;
   negative lead time is a lag pursuit for close-in fights).
-- **Pilot** ([`generic_pilot.py`](../src/space_flight/ai/generic/generic_pilot.py)):
+- **Pilot** ([`generic_pilot.py`](../../src/space_flight/ai/generic/generic_pilot.py)):
   the actual control loop. `pilot()` is subclass-specific; concrete pilots
   wrap `simple_pid.PID` controllers (one per axis) that null out an angular
   error each frame.
@@ -43,25 +43,32 @@ method that consumes it defensively handles the "no target" case.
 
 ## `Personality` and per-role tuning
 
-[`ai/__init__.py`](../src/space_flight/ai/__init__.py) defines the shared
-`Intent` enum and a `Personality` class holding pre-baked parameter
+[`ai/__init__.py`](../../src/space_flight/ai/__init__.py) defines the shared
+`Intent` and `AttackMode` (`PURSUIT`, `STRAFE`, `ORBIT`, `BOMB`) enums and a
+`Personality` class holding pre-baked parameter
 dictionaries — `FIGHTER_DEFAULT`, `TURRET_DEFAULT`, `TRACTOR_BEAM_DEFAULT`,
 `CAPITAL_SHIP_DEFAULT` — one per pawn family. Each dictionary has a
 `tactician`/`navigator`/`pilot` (and, for tractor beams, `tractor_beam`)
-section holding every tunable constant for that trio: commitment times,
-engagement thresholds, PID gains, pursuit biases and cutoff distances. No
-tuning constant lives on the classes themselves — a personality dict is
-passed in at construction and *is* the bot's behavioural fingerprint, so
-retuning or adding a new archetype means adding a new `Personality` entry
-rather than touching code. `Bot.set_personality()` can swap all three
-components' personality live.
+section holding most of the tunable constants for that trio: commitment
+times, engagement thresholds, PID gains, pursuit biases and cutoff distances.
+A personality dict is passed in at construction and is largely the bot's
+behavioural fingerprint, so retuning or adding a new archetype mostly means
+adding a new `Personality` entry rather than touching code. A few tunables
+are still module-level constants rather than personality entries (e.g.
+`SCENE_ROLL_MULTIPLIER` in `fighter_pilot.py`,
+`COLLISION_REFERENCE_SPEED_MPS` in `generic_ship_navigator.py`,
+`REFERENCE_ERROR_VELOCITY_MPS` in `ai/__init__.py`, the `CollisionSensor`
+geometry and the `AutoAim` defaults). `Bot.set_personality()` swaps the dict
+on all three components: values read each frame (tactician thresholds,
+navigator parameters) take effect immediately, but the pilots' PID gains are
+baked in at construction, and a mount pawn keeps its own personality.
 
 ## Ship-flying trio: `Fighter` and `CapitalShip`
 
 Both free-flying ship types share
-[`generic_ship_navigator.py`](../src/space_flight/ai/generic/generic_ship_navigator.py)
+[`generic_ship_navigator.py`](../../src/space_flight/ai/generic/generic_ship_navigator.py)
 (`GenericShipNavigator`) and
-[`generic_ship_pilot.py`](../src/space_flight/ai/generic/generic_ship_pilot.py)
+[`generic_ship_pilot.py`](../../src/space_flight/ai/generic/generic_ship_pilot.py)
 (`GenericShipPilot`):
 
 - **`GenericShipNavigator`** blends an *intentional* direction
@@ -79,8 +86,8 @@ Both free-flying ship types share
 
 | Family | Tactician | Navigator | Pilot |
 |--------|-----------|-----------|-------|
-| Fighter | [`fighter_tactician.py`](../src/space_flight/ai/fighter/fighter_tactician.py) | [`fighter_navigator.py`](../src/space_flight/ai/fighter/fighter_navigator.py) | [`fighter_pilot.py`](../src/space_flight/ai/fighter/fighter_pilot.py) |
-| Capital ship | [`capital_ship_tactician.py`](../src/space_flight/ai/capital_ship/capital_ship_tactician.py) | [`capital_ship_navigator.py`](../src/space_flight/ai/capital_ship/capital_ship_navigator.py) | [`capital_ship_pilot.py`](../src/space_flight/ai/capital_ship/capital_ship_pilot.py) |
+| Fighter | [`fighter_tactician.py`](../../src/space_flight/ai/fighter/fighter_tactician.py) | [`fighter_navigator.py`](../../src/space_flight/ai/fighter/fighter_navigator.py) | [`fighter_pilot.py`](../../src/space_flight/ai/fighter/fighter_pilot.py) |
+| Capital ship | [`capital_ship_tactician.py`](../../src/space_flight/ai/capital_ship/capital_ship_tactician.py) | [`capital_ship_navigator.py`](../../src/space_flight/ai/capital_ship/capital_ship_navigator.py) | [`capital_ship_pilot.py`](../../src/space_flight/ai/capital_ship/capital_ship_pilot.py) |
 
 **`FighterTactician`** prioritises, in order: evade an overwhelming threat
 (`evaluate_threats` against `max_threat_score`), disengage if its own
@@ -116,10 +123,12 @@ allows), then the geometry decides the mode — `BOMB`, or for guns `STRAFE` vs.
   bomb's linear (no-gravity) velocity: it releases when the flight-time-led
   intercept falls inside a cone of that velocity, then breaks and comes around.
 
-**`CapitalShipTactician`** mirrors the fighter's priority list minus
-per-target engagement scoring (a capital ship engages a scripted/assigned
-prey rather than hunting, via `scripted_prey_dict`) and reads shield level
-through `Shield.get_shield_level()` for its fighting-shape estimate.
+**`CapitalShipTactician`** mirrors the fighter's priority list minus threat
+evasion (no `evaluate_threats`) and per-target engagement scoring: a capital
+ship engages a scripted/assigned prey rather than hunting, via
+`scripted_prey_dict`, tagging it `AttackMode.ORBIT`. Its fighting-shape
+estimate reads `pawn.shield_level`, which is the shared
+`Shield.get_shield_level()` (0 when the ship is unshielded).
 **`CapitalShipNavigator.engage_target`** flies an **orbit**: it holds a
 constant standoff off the nearest point of the target's oriented bounding box
 and drives tangentially, so the target stays abeam on the side-mounted
@@ -130,7 +139,7 @@ acrobatic fighter).
 
 ## Tracking-mount trio: turrets and tractor beams
 
-[`tracking_mount/`](../src/space_flight/ai/tracking_mount/) is the AI for
+[`tracking_mount/`](../../src/space_flight/ai/tracking_mount/) is the AI for
 anything that swivels in place rather than flies — shared by `Turret` and
 `TractorBeamProjector`, both mounted subsystems of a capital ship (see
 [Capital-ship subsystems](subsystems.md)):
@@ -152,16 +161,18 @@ anything that swivels in place rather than flies — shared by `Turret` and
 
 A tractor beam bot uses the identical trio (`Personality.TRACTOR_BEAM_DEFAULT`
 just adds a `tractor_beam` tuning section for grab timing) — see
-[`Bot.__init__`](../src/space_flight/actors/bot.py) for how `bot_type`
+[`Bot.__init__`](../../src/space_flight/actors/bot.py) for how `bot_type`
 selects one shared trio for both mount kinds.
 
 ## Supporting systems
 
 ### `AutoAim`
 
-[`auto_aim.py`](../src/space_flight/ai/auto_aim.py) is a fighter's per-shot
-targeting assist, distinct from the tactician/navigator/pilot pipeline (it's
-driven from `Fighter.move()` and `LaserCannon.fire()`, not `Bot`). It tracks
+[`auto_aim.py`](../../src/space_flight/ai/auto_aim.py) is a per-shot targeting
+assist used by fighters and by turrets boosted by a living targeting system
+(`Turret._apply_targeting_support`). It is distinct from the
+tactician/navigator/pilot pipeline: it's driven from `Fighter.move()` /
+`Turret._operate()` and `LaserCannon.fire()`, not `Bot`. It tracks
 whether the current target has stayed inside an acquisition cone for
 `target_lock_delay_s`; once acquired, `compute_shot_speed` aims each shot at
 the target's *predicted* impact-time position, clamped inside a maximum
@@ -172,13 +183,15 @@ retune a turret's auto-aim quality at runtime.
 
 ### `CollisionSensor` and `Formation`
 
-[`collision_sensor.py`](../src/space_flight/ai/collision_sensor.py) gives a
-ship three concentric forward collision-detection spheres; whatever collides
-with them each frame contributes a weighted repulsion vector (closer
-obstacles weigh more), consumed once per frame by
+[`collision_sensor.py`](../../src/space_flight/ai/collision_sensor.py) gives a
+ship three overlapping look-ahead collision spheres, centred at increasing
+distances ahead of the nose (by default ~5/50/125 m, radii ~30/50/100 m); the
+outer ones can be disabled via `active_range` (e.g. during a bomb run).
+Whatever collides with them each frame contributes a weighted repulsion
+vector (closer obstacles weigh more), consumed once per frame by
 `GenericShipNavigator.navigate_avoidance` and wiped after reading.
 
-[`formation.py`](../src/space_flight/ai/formation.py) is data, not AI logic:
+[`formation.py`](../../src/space_flight/ai/formation.py) is data, not AI logic:
 `Formation` holds a named layout (`arrowhead`, `diamond`, `around_diamond`)
 of scaled relative slot positions and the list of ship ids currently
 occupying them. Ships read their own slot via `pawn.formation` +
@@ -187,22 +200,28 @@ occupying them. Ships read their own slot via `pawn.formation` +
 
 ### `Interactions`
 
-[`interactions.py`](../src/space_flight/ai/interactions.py) is the central
+[`interactions.py`](../../src/space_flight/ai/interactions.py) is the central
 per-frame relationship cache every tactician/navigator/auto-aim query reads
 from instead of recomputing pairwise geometry themselves: for every pair of
-*opposing* live actors (different non-neutral teams) it precomputes distance,
-unit direction, relative velocity and forward alignment. Actors occupy
-stable pre-allocated slots (`add_actor`/`remove_actor`, `MAX_ACTORS = 64` by
-default) so slot indices never shift and no per-frame allocation is needed;
+*opposing* live actors (different non-neutral teams) within
+`INTERACT_MAX_DISTANCE_M` of each other (10 km, in `ai/__init__.py`) it flags
+the pair in `interact` and precomputes distance, unit direction, relative
+velocity and forward alignment. Actors occupy stable pre-allocated slots
+(`add_actor`/`remove_actor`, `MAX_ACTORS = 64` by default) so slot indices
+never shift and no per-frame allocation is needed;
 `update_interactions()` only iterates currently-live pairs, so cost scales
-with the number of live actors, not the pre-allocated capacity.
+with the number of live actors, not the pre-allocated capacity. Note that
+`live_actors` (and masks built over it, or rows sliced with `alive`) are
+compacted, so their positions are not the stable slot indices returned by
+`get_actor_index_from_id`; translate via `np.where(alive)[0]` before
+comparing the two.
 
 ## Where things live
 
 The tactician/navigator/pilot base classes live in
-[`ai/generic/`](../src/space_flight/ai/generic/); each pawn family's
+[`ai/generic/`](../../src/space_flight/ai/generic/); each pawn family's
 concrete subclasses live in their own subpackage
-(`ai/fighter/`, `ai/capital_ship/`, `ai/tracking_mount/`). `Personality` and
-`Intent` are defined once in [`ai/__init__.py`](../src/space_flight/ai/__init__.py)
+(`ai/fighter/`, `ai/capital_ship/`, `ai/tracking_mount/`). `Personality`,
+`Intent` and `AttackMode` are defined once in [`ai/__init__.py`](../../src/space_flight/ai/__init__.py)
 and shared by all of them. The auto-generated
-[code reference](docs/) has the full per-class API.
+[code reference](apidocs/index.rst) has the full per-class API.

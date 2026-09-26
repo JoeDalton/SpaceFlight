@@ -17,7 +17,7 @@ scipy = "^1.13.1"
 numpy-quaternion = "^2024.0.13"
 Panda3D = "^1.10.15"
 simple-pid = "^2.0.1"
-virtualenv = "^20.36.1"
+virtualenv = "^21.12.1"
 urllib3 = "^2.6.0"
 opensimplex = "^0.4.5.1"
 panda3d-gltf = "^1.3.0"
@@ -32,10 +32,6 @@ tox = "^4.11.4"
 flake8 = "^6.1.0"
 pep8-naming = "^0.13.3"
 flake8-eradicate = "^1.5.0"
-mkdocs-material = "^9.4.14"
-mkdocstrings-python = {extras = ["python"], version = "^1.7.5"}
-mkdocs-gen-files = "^0.5.0"
-mkdocs-section-index = "^0.3.8"
 twine = "^7.0.0"
 pre-commit = "^3.5.0"
 openpyxl = "^3.1.5"
@@ -109,11 +105,10 @@ extend-ignore = "E203,E701"
 [tool.tox]
 legacy_tox_ini = """
     [tox]
-    envlist = 
-        py310
-        py311
+    envlist =
         py312
         py313
+        py314
 
     [testenv]
     allowlist_externals = poetry

@@ -5,7 +5,18 @@ from pathlib import Path
 
 from invoke import task
 
-@task()
+@task
+def check_dynamic_versioning(c):
+    result = c.run("poetry self show plugins", hide=True, warn=True)
+    if "poetry-dynamic-versioning" not in result.stdout:
+        print(
+            "poetry-dynamic-versioning plugin not found, installing it "
+            "(required for poetry install/build to pick up the git-derived version)..."
+        )
+        c.run("poetry self add poetry-dynamic-versioning[plugin]")
+
+
+@task(pre=[check_dynamic_versioning])
 def develop(c):
     c.run("poetry install")
     c.run("poetry run pre-commit install")

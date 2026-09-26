@@ -28,7 +28,7 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_book_theme'
-html_static_path = ['_static']
+html_static_path = []
 
 # -- Options for MyST ---------------------------------------------------------
 
@@ -36,6 +36,9 @@ myst_enable_extensions = [
     'colon_fence',
     'fieldlist',
 ]
+# GitHub-style heading slugs, so in-page links like (#where-things-live)
+# resolve the same way in Sphinx as when browsing the repository.
+myst_heading_anchors = 3
 
 # -- Options for autodoc2 -----------------------------------------------------
 

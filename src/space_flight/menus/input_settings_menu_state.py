@@ -305,8 +305,8 @@ class InputSettingsMenuState(BaseState):
 
     - **Save** — flush dead-zone edits, write the YAML, rebuild the
       :class:`~space_flight.ui.input_reader.InputReader`, and return to the
-      main menu.
-    - **Cancel** — discard all edits and return to the main menu.
+      settings screen it was opened from.
+    - **Cancel** — discard all edits and return to the settings screen.
     - **Default** — reload the working copy from
       configuration/default_configuration.yaml without writing to disk.
 
@@ -479,7 +479,7 @@ class InputSettingsMenuState(BaseState):
 
         Called on :meth:`enter` and again each time the input type is changed so
         the binding list always reflects the active device's mappings.  Also
-        resets the :attr:`_dz_entries` and :attr:`_binding_labels` caches so
+        resets the :attr:`dz_entries` and :attr:`binding_labels` caches so
         stale widget references are never kept.
         """
         if self.v_scrollbar is not None:
@@ -600,8 +600,8 @@ class InputSettingsMenuState(BaseState):
         """
         Add a dead-zone label and editable entry to the scroll canvas.
 
-        The entry is stored in :attr:`_dz_entries` keyed by *row["path"]* so
-        that :meth:`_flush_dead_zones` can read back the edited value.
+        The entry is stored in :attr:`dz_entries` keyed by *row["path"]* so
+        that :meth:`flush_dead_zones` can read back the edited value.
 
         :param canvas: The scroll canvas node to parent the widgets to.
         :param row: Row descriptor dict with "label", "path", and
@@ -639,7 +639,7 @@ class InputSettingsMenuState(BaseState):
         Each row contains the action name, the current binding formatted as
         "Axis: …" or "Button: …", and a *Change* button that opens
         :class:`ChangeBindingDialog`.  The value label is stored in
-        :attr:`_binding_labels` keyed by *row["path"]* so it can be updated
+        :attr:`binding_labels` keyed by *row["path"]* so it can be updated
         in place when the user confirms a new binding.
 
         :param canvas: The scroll canvas node to parent the widgets to.
@@ -686,7 +686,7 @@ class InputSettingsMenuState(BaseState):
     def refresh_input_type_buttons(self):
         """
         Visually mark the active input-type button as pressed and reset the
-        others so the selector reflects _working_config["input_type"].
+        others so the selector reflects working_config["input_type"].
         """
         cur = self.working_config.get("input_type", "keyboard")
         for name, btn in self.input_type_buttons.items():
@@ -778,7 +778,7 @@ class InputSettingsMenuState(BaseState):
 
     def flush_dead_zones(self):
         """
-        Write current entry widget values back into :attr:`_working_config`.
+        Write current entry widget values back into :attr:`working_config`.
 
         Called before saving or switching the input type so that typed dead-zone
         edits are not silently discarded.  Values are converted to float when
@@ -828,12 +828,12 @@ class InputSettingsMenuState(BaseState):
         Callback fired by :class:`ChangeBindingDialog` when the user confirms a
         new binding.
 
-        Updates :attr:`_working_config` and refreshes the binding's display label
+        Updates :attr:`working_config` and refreshes the binding's display label
         in place.  Does nothing when *new_value* is None (the user cancelled).
 
         :param path: Config-tree path tuple of the binding that changed.
         :param new_type: "button" or "axis"; drives the display prefix in
-            :func:`_format_binding`.
+            :func:`format_binding`.
         :param new_value: Hardware name to store (e.g. "space" or
             "gamepad_lshoulder"), or None on cancel.
         """
@@ -889,11 +889,11 @@ class InputSettingsMenuState(BaseState):
         """
         Flush edits, write the configuration to disk, and rebuild the reader.
 
-        Writes :attr:`_working_config` to configuration/configuration.yaml
+        Writes :attr:`working_config` to configuration/configuration.yaml
         then reinitialises the running
         :class:`~space_flight.ui.input_reader.InputReader` so the new bindings
-        are active in the current session without a restart.  Finally navigates
-        back to the main menu.  Silently ignored if a dialog is open.
+        are active in the current session without a restart.  Finally pops back
+        to the settings screen.  Silently ignored if a dialog is open.
         """
         if self.active_dialog is not None:
             return

@@ -411,6 +411,43 @@ def test_loop_target_keeps_current_target_selected_on_repeated_calls_with_one_ta
 
 
 # ---------------------------
+# remove_target
+# ---------------------------
+
+
+def test_remove_target_clears_current_target():
+    """
+    remove_target() clears target/target_id/target_idx when the given actor
+    is the current target (e.g. a Bot whose pawn just died).
+    """
+    player = object.__new__(Player)
+    dead_actor = MagicMock()
+    player.pawn = MagicMock(target=dead_actor, target_id="some-id", target_idx=3)
+
+    player.remove_target(target_to_remove=dead_actor)
+
+    assert player.pawn.target is None
+    assert player.pawn.target_id is None
+    assert player.pawn.target_idx is None
+
+
+def test_remove_target_leaves_unrelated_target_untouched():
+    """
+    remove_target() is a no-op when the given actor isn't the current target.
+    """
+    player = object.__new__(Player)
+    current_target = MagicMock()
+    other_actor = MagicMock()
+    player.pawn = MagicMock(target=current_target, target_id="some-id", target_idx=3)
+
+    player.remove_target(target_to_remove=other_actor)
+
+    assert player.pawn.target is current_target
+    assert player.pawn.target_id == "some-id"
+    assert player.pawn.target_idx == 3
+
+
+# ---------------------------
 # compute_head_acceleration
 # ---------------------------
 

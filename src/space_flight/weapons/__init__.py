@@ -1,7 +1,7 @@
 """
 Generic weapon / munition base classes.
 
-Ship weapons (the :class:`~space_flight.wepaons.laser_cannon.LaserCannon`, the
+Ship weapons (the :class:`~space_flight.weapons.laser_cannon.LaserCannon`, the
 :class:`~space_flight.weapons.bomb_launcher.BombLauncher`) and their projectiles
 (LaserShot, Bomb) share the same skeleton:
 

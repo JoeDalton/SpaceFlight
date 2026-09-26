@@ -121,26 +121,22 @@ class RadialMenuState(BaseState):
         self,
         app,
         on_select: Callable,
-        slice_labels: list[str] | None = None,
+        slice_labels: list[str],
         min_magnitude: float = 0.3,
     ) -> None:
         """
         :param app: The simulator app.
         :param on_select: Called with the selected slice index (int) or
             None when the trigger is released without a valid direction.
-        :param slice_labels: Optional display labels; defaults to ["0",
-            "1", ...].
+        :param slice_labels: Display label for each slice. Also determines
+            the number of slices, so it must be non-empty.
         :param min_magnitude: Direction vector magnitude below which no slice
             is considered selected.
         """
         super().__init__(app)
+        self.slice_labels = slice_labels
         self.n_slices = len(slice_labels)
         self.on_select = on_select
-        self.slice_labels = (
-            slice_labels
-            if slice_labels is not None
-            else [str(i) for i in range(self.n_slices)]
-        )
         self.min_magnitude = min_magnitude
         self.visual: RadialMenuVisual | None = None
 

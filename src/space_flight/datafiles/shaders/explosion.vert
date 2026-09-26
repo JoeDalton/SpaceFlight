@@ -18,7 +18,7 @@ in float lifetime;     // particle lifetime (seconds)
 in vec4  tile_rect;    // atlas tile (u, v, uw, vh) in UV space
 
 uniform mat4  p3d_ModelViewProjectionMatrix;
-uniform float uTime;      // buffer clock (seconds since buffer creation)
+uniform float uTime;      // game time (game.game_time.get_current_time())
 uniform vec3  uCamRight;  // world-space camera right axis (billboard)
 uniform vec3  uCamUp;     // world-space camera up    axis (billboard)
 uniform float uFadein;    // fraction of lifetime over which alpha ramps 0 → 1

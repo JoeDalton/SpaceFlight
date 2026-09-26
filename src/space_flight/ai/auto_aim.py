@@ -69,7 +69,8 @@ class AutoAim:
             target can be acquired
         :param max_assist_angle_deg: Maximum angle a shot may be bent away from
             the barrel toward the predicted intercept (higher = tighter aim)
-        :param max_assist_distance_m: Range beyond which the assist is not applied
+        :param max_assist_distance_m: Range beyond which the assist is meant not to
+            apply (stored but currently unused: no range cut-off is applied)
         """
         self.target_lock_delay_s = target_lock_delay_s
         self.min_acquisition_alignment = np.cos(np.deg2rad(acquisition_cone_angle_deg))

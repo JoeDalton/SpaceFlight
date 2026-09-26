@@ -61,7 +61,8 @@ def build_race_level(game: FlightState) -> Iterator[str]:
     yield from game.scene.build_decomposed()
 
     # Mission events (waves, objectives) are defined declaratively in the
-    # sibling YAML and driven by the generic scenario engine. The standing
-    # groups built above are registered by name so triggers can reference them.
+    # sibling YAML and driven by the generic scenario engine. Every group the
+    # triggers reference is a wave defined in that YAML, so nothing is
+    # registered here.
     game.scenario = load_scenario(Path(__file__).with_suffix(".yaml"))
     yield "scenario"

@@ -26,7 +26,9 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger()
 
-# Quaternion convention used by the level scenario data (x, y, z, w).
+# Quaternion convention used by the level scenario data: (w, x, y, z), as
+# passed straight to Panda3D's Quat. This default is therefore not the identity
+# but a 180 degree turn about z.
 DEFAULT_SPAWN_ORIENTATION = np.array([0, 0, 0, 1])
 
 
@@ -45,10 +47,10 @@ def spawn_wave(cfg: dict) -> Action:
     stalls the simulation on a single long loading frame.
 
     Expected cfg keys: id, size, ship_model, spawn_point.
-    Optional: bot_type, team, spawn_orientation, formation,
-    record (step-by-step-record every bot of this wave via game.record)
-    ({scale_m, shape}), waypoints, loop, target, hud_text,
-    hud_time_s, allow_respawn.
+    Optional: bot_type, team, spawn_orientation (quaternion, w, x, y, z),
+    formation ({scale_m, shape}), waypoints, loop, target, hud_text,
+    hud_time_s (how long hud_text shows), allow_respawn, and record
+    (step-by-step-record every bot of this wave via game.record).
 
     A wave id is an identity group, so by default it spawns at most once even if
     several triggers point at it: a second attempt is skipped with a warning. Set
