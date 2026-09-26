@@ -12,7 +12,7 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
+from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE, FPS_COUNTER
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -46,24 +46,26 @@ class HUD:
         self.id = uuid.uuid4()
 
         # Debug info
-        self.debug = TextNode("Debug")
-        self.debug.setSmallCaps(True)
-        self.debug.setShadow(0.05, 0.05)
-        self.debug.setShadowColor(0, 0, 0, 1)
-        self.debug_textNodePath = aspect2d.attachNewNode(self.debug)
-        self.debug_textNodePath.setScale(0.07)
-        self.debug_textNodePath.reparentTo(self.game.app.a2dTopLeft)
-        self.debug_textNodePath.setPos(0.05, 0, -0.1)
+        if DEBUG_HUD:
+            self.debug = TextNode("Debug")
+            self.debug.setSmallCaps(True)
+            self.debug.setShadow(0.05, 0.05)
+            self.debug.setShadowColor(0, 0, 0, 1)
+            self.debug_textNodePath = aspect2d.attachNewNode(self.debug)
+            self.debug_textNodePath.setScale(0.07)
+            self.debug_textNodePath.reparentTo(self.game.app.a2dTopLeft)
+            self.debug_textNodePath.setPos(0.05, 0, -0.1)
 
         # Performance info
-        self.fps_counter = TextNode("FPS")
-        self.fps_counter.setSmallCaps(True)
-        self.fps_counter.setShadow(0.05, 0.05)
-        self.fps_counter.setShadowColor(0, 0, 0, 1)
-        self.fps_textNodePath = aspect2d.attachNewNode(self.fps_counter)
-        self.fps_textNodePath.setScale(0.07)
-        self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
-        self.fps_textNodePath.setPos(-0.4, 0, -0.1)
+        if FPS_COUNTER:
+            self.fps_counter = TextNode("FPS")
+            self.fps_counter.setSmallCaps(True)
+            self.fps_counter.setShadow(0.05, 0.05)
+            self.fps_counter.setShadowColor(0, 0, 0, 1)
+            self.fps_textNodePath = aspect2d.attachNewNode(self.fps_counter)
+            self.fps_textNodePath.setScale(0.07)
+            self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
+            self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
         # Event text
         self.event_text_endtime = 0.0
@@ -82,7 +84,7 @@ class HUD:
         self.chatter.setShadow(0.05, 0.05)
         self.chatter.setShadowColor(0, 0, 0, 1)
         self.chatter_textNodePath = aspect2d.attachNewNode(self.chatter)
-        self.chatter_textNodePath.setScale(0.05)
+        self.chatter_textNodePath.setScale(0.1)
         self.chatter_textNodePath.setPos(0.0, 0, -0.8)
 
         self.game.method_lists[self.id] = [self.hud_update_task]
@@ -129,70 +131,72 @@ class HUD:
         """
         A method to update debug info on screen
         """
-        frame_rate = self.game.game_time.get_average_frame_rate()
-        self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
+        if FPS_COUNTER:
+            frame_rate = self.game.game_time.get_average_frame_rate()
+            self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
 
-        # Count team members
-        n_team_1 = 0
-        n_team_2 = 0
-        for actor in self.game.interactions.live_actors:
-            if actor.team == 1:
-                n_team_1 += 1
-            elif actor.team == 2:
-                n_team_2 += 1
+        if DEBUG_HUD:
+            # Count team members
+            n_team_1 = 0
+            n_team_2 = 0
+            for actor in self.game.interactions.live_actors:
+                if actor.team == 1:
+                    n_team_1 += 1
+                elif actor.team == 2:
+                    n_team_2 += 1
 
-        player_text = (
-            ""
-            "Player Speed = "
-            f"{np.linalg.norm(self.game.player.pawn.state[7:10]):.1f}m/s\n"
-            f"Player health = {self.game.player.pawn.health:.1f}\n"
-            f"Player shield = {self.game.player.pawn.shield:.1f}\n"
-            f"Time = {self.game.game_time.get_current_time():.0f}\n"
-            f"Team 1 strength = {n_team_1}\n"
-            f"Team 2 strength = {n_team_2}\n"
-            "\n"
-            "Player has target lock = "
-            f"{self.game.player.pawn.auto_aim.is_target_acquired}\n"
-            "\n"
-        )
-        try:
-            bot_text = (
-                "Lead Bot angle to target = "
-                f"{self.game.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
-                "Lead Bot distance to target = "
-                f"{self.game.lead_bot.navigator.distance_to_waypoint_m:.1f}m\n"
-                "Lead Bot next waypoint = "
-                f"{self.game.lead_bot.navigator.next_waypoint_idx:.1f}\n"
-                "Lead Bot health = "
-                f"{self.game.lead_bot.pawn.health:.1f}\n"
-                # "Lead Bot shield = "
-                # f"{self.game.lead_bot.pawn.shield:.1f}\n"
-                "Lead Bot throttle = "
-                f"{self.game.lead_bot.pilot.throttle:.4f}\n"
-                "Lead Bot Speed = "
-                f"{np.linalg.norm(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
+            player_text = (
+                ""
+                "Player Speed = "
+                f"{np.linalg.norm(self.game.player.pawn.state[7:10]):.1f}m/s\n"
+                f"Player health = {self.game.player.pawn.health:.1f}\n"
+                f"Player shield = {self.game.player.pawn.shield:.1f}\n"
+                f"Time = {self.game.game_time.get_current_time():.0f}\n"
+                f"Team 1 strength = {n_team_1}\n"
+                f"Team 2 strength = {n_team_2}\n"
                 "\n"
-                # "Lead Bot has target lock = "
-                # f"{self.game.lead_bot.pawn.auto_aim.is_target_acquired}\n"
-                # "\n"
-            )
-        except AttributeError:
-            bot_text = ""
-        try:
-            turret_text = (
-                "Turret position = "
-                f"{np.array(self.game.turret.pawn.node.getPos())}\n"
-                "Turret angle to target = "
-                f"{self.game.turret.pilot.angle_to_target_deg:.1f}°\n"
-                "Turret health = "
-                f"{self.game.turret.pawn.health:.1f}\n"
+                "Player has target lock = "
+                f"{self.game.player.pawn.auto_aim.is_target_acquired}\n"
                 "\n"
             )
-        except AttributeError:
-            turret_text = ""
-        hud_text = player_text + bot_text + turret_text
+            try:
+                bot_text = (
+                    "Lead Bot angle to target = "
+                    f"{self.game.lead_bot.pilot.angle_to_target_deg:.1f}°\n"
+                    "Lead Bot distance to target = "
+                    f"{self.game.lead_bot.navigator.distance_to_waypoint_m:.1f}m\n"
+                    "Lead Bot next waypoint = "
+                    f"{self.game.lead_bot.navigator.next_waypoint_idx:.1f}\n"
+                    "Lead Bot health = "
+                    f"{self.game.lead_bot.pawn.health:.1f}\n"
+                    # "Lead Bot shield = "
+                    # f"{self.game.lead_bot.pawn.shield:.1f}\n"
+                    "Lead Bot throttle = "
+                    f"{self.game.lead_bot.pilot.throttle:.4f}\n"
+                    "Lead Bot Speed = "
+                    f"{np.linalg.norm(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
+                    "\n"
+                    # "Lead Bot has target lock = "
+                    # f"{self.game.lead_bot.pawn.auto_aim.is_target_acquired}\n"
+                    # "\n"
+                )
+            except AttributeError:
+                bot_text = ""
+            try:
+                turret_text = (
+                    "Turret position = "
+                    f"{np.array(self.game.turret.pawn.node.getPos())}\n"
+                    "Turret angle to target = "
+                    f"{self.game.turret.pilot.angle_to_target_deg:.1f}°\n"
+                    "Turret health = "
+                    f"{self.game.turret.pawn.health:.1f}\n"
+                    "\n"
+                )
+            except AttributeError:
+                turret_text = ""
+            hud_text = player_text + bot_text + turret_text
 
-        self.debug.setText(hud_text)
+            self.debug.setText(hud_text)
 
     def clean(self):
         """
@@ -203,11 +207,12 @@ class HUD:
                 self.game.method_lists.pop(self.id)
             except KeyError:
                 pass
-        self.debug_textNodePath.removeNode()
-        self.debug = None
-        self.fps_textNodePath.removeNode()
-        self.fps_counter = None
-        self.game = None
+        if DEBUG_HUD:
+            self.debug_textNodePath.removeNode()
+            self.debug = None
+        if FPS_COUNTER:
+            self.fps_textNodePath.removeNode()
+            self.fps_counter = None
         self.events_textNodePath.removeNode()
         self.events = None
         self.chatter_textNodePath.removeNode()
