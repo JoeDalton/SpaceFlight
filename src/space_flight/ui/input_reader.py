@@ -493,7 +493,7 @@ class GamepadReader(InputReader):
             print(f"Gamepad connected: {safe_device_name(device)}")
             self.gamepad = device
             self.app.attachInputDevice(device, prefix="gamepad")
-            if hasattr(self, "_lbl"):
+            if hasattr(self, "lbl"):
                 self.lbl.hide()
 
     def disconnect(self, device) -> None:
@@ -510,7 +510,7 @@ class GamepadReader(InputReader):
         devices = self.app.devices.getDevices(InputDevice.DeviceClass.gamepad)
         if devices:
             self.connect(devices[0])
-        elif hasattr(self, "_lbl"):
+        elif hasattr(self, "lbl"):
             self.lbl.show()
 
     # ------------------------------------------------------------------
@@ -601,7 +601,7 @@ class GamepadReader(InputReader):
             except AssertionError:
                 pass
             self.gamepad = None
-        if hasattr(self, "_lbl"):
+        if hasattr(self, "lbl"):
             self.lbl.destroy()
         for hw in self.button_names:
             evt = "gamepad-" + hw[len("gamepad_") :]
@@ -666,7 +666,7 @@ class JoystickReader(InputReader):
             print(f"Joystick connected: {device}")
             self.flightStick = device
             self.app.attachInputDevice(device, prefix="stick")
-            if hasattr(self, "_lbl"):
+            if hasattr(self, "lbl"):
                 self.lbl.hide()
 
     def disconnect(self, device) -> None:
@@ -683,7 +683,7 @@ class JoystickReader(InputReader):
         devices = self.app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
         if devices:
             self.connect(devices[0])
-        elif hasattr(self, "_lbl"):
+        elif hasattr(self, "lbl"):
             self.lbl.show()
 
     # ------------------------------------------------------------------
@@ -774,7 +774,7 @@ class JoystickReader(InputReader):
         if self.flightStick:
             self.app.detachInputDevice(self.flightStick)
             self.flightStick = None
-        if hasattr(self, "_lbl"):
+        if hasattr(self, "lbl"):
             self.lbl.destroy()
         self.app.ignore("connect-device")
         self.app.ignore("disconnect-device")
