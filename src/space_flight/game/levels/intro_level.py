@@ -47,6 +47,8 @@ TRANSPORTS = WaveSpec(
 )
 # The convoy is past the blockade once it reaches its last waypoint.
 CONVOY_LAST_WAYPOINT = len(TRANSPORTS.waypoints) - 1
+# Where the convoy turns east along the coast, about halfway.
+CONVOY_HALFWAY_WAYPOINT = 4
 
 ESCORT = WaveSpec(
     name="escort",
@@ -139,6 +141,10 @@ def intro_mission(m: Mission) -> Iterator[None]:
     # comes first, and only once.
     def spawn_third_wave() -> None:
         m.hud("Enemy reinforcements detected!")
+        m.speech(
+            "More bombers, eight of them, dropping out of the clouds!",
+            speaker="Red Two",
+        )
         third_wave.spawn(target=transports)
 
     m.on(any_of(m.after(200), m.delay(first_wave.all_destroyed, 3)), spawn_third_wave)
@@ -147,7 +153,15 @@ def intro_mission(m: Mission) -> Iterator[None]:
     blockade_past = all_of(
         reached_waypoint(transports, CONVOY_LAST_WAYPOINT), second_wave.all_destroyed
     )
-    m.on(blockade_past, lambda: m.hud("Convoy past the blockade — well done."))
+
+    def on_blockade_past() -> None:
+        m.hud("Convoy past the blockade — well done.")
+        m.speech(
+            "We're through! Thank you, Red squadron. We owe you one.",
+            speaker="Convoy Lead",
+        )
+
+    m.on(blockade_past, on_blockade_past)
     m.on(
         m.delay(blockade_past, 3),
         lambda: m.victory("The convoy reached the fleet. Mission accomplished."),
@@ -159,6 +173,13 @@ def intro_mission(m: Mission) -> Iterator[None]:
             "A transport has been destroyed! Focus fire on the bombers!",
             speaker="Red Leader",
             display_time_s=5,
+        ),
+    )
+    m.on(
+        m.delay(transports.any_destroyed, 3),
+        lambda: m.speech(
+            "We just lost a transport, crew and all. Don't let it happen again!",
+            speaker="Convoy Lead",
         ),
     )
     m.on(
@@ -174,18 +195,80 @@ def intro_mission(m: Mission) -> Iterator[None]:
         lambda: m.defeat("The convoy has been destroyed."),
     )
 
+    # --- combat chatter -------------------------------------------------------
+    m.on(
+        first_wave.any_destroyed,
+        lambda: m.speech("Scratch one bomber!", speaker="Red Two"),
+    )
+    m.on(
+        first_wave.all_destroyed,
+        lambda: m.speech(
+            "That's the last of the first wave. Nice shooting, Red squadron.",
+            speaker="Red Leader",
+        ),
+    )
+    m.on(
+        second_wave.all_destroyed,
+        lambda: m.speech(
+            "Interceptors are down! They're off our backs.", speaker="Red Three"
+        ),
+    )
+    m.on(
+        third_wave.all_destroyed,
+        lambda: m.speech(
+            "Bombers cleared! Convoy, you're free to run.", speaker="Red Leader"
+        ),
+    )
+    m.on(
+        escort.any_destroyed,
+        lambda: m.speech(
+            "We've lost one of ours! Close up the gaps, Red squadron.",
+            speaker="Red Leader",
+        ),
+    )
+    m.on(
+        reached_waypoint(transports, CONVOY_HALFWAY_WAYPOINT),
+        lambda: m.speech(
+            "Turning east along the coast. Halfway there, keep them off us!",
+            speaker="Convoy Lead",
+        ),
+    )
+
     # --- the timed waves ------------------------------------------------------
     yield from m.wait(0.1)
     transports.spawn()
 
     yield from m.wait(0.9)  # total: 1s
     escort.spawn()
-    m.speech("Red squadron standing by.", speaker="Red Leader", display_time_s=5)
+    m.speech(
+        "Red squadron standing by. Red Seven, that A-wing's the fastest\n"
+        "thing we've got: you're our interceptor. Stay near the convoy.",
+        speaker="Red Leader",
+    )
 
-    yield from m.wait(9)  # total: 10s
+    yield from m.wait(5)  # total: 6s
+    m.speech(
+        "Convoy Lead to escort: we're slow, fat and full of medical supplies.\n"
+        "We're counting on you.",
+        speaker="Convoy Lead",
+    )
+
+    yield from m.wait(4)  # total: 10s
     m.hud("First wave")
     first_wave.spawn(target=transports)
+    m.speech(
+        "Bombers, dead ahead and coming in low! They're after the transports.\n"
+        "Red Seven, break and engage!",
+        speaker="Red Leader",
+    )
 
     yield from m.wait(20)  # total: 30s
     m.hud("Second wave")
     second_wave.spawn(target=escort)
+    m.speech("Interceptors! They're coming for us this time!", speaker="Red Two")
+    yield from m.wait(3)
+    m.speech(
+        "Red Two, Three, with me on the fighters.\n"
+        "Seven, keep those bombers off the convoy!",
+        speaker="Red Leader",
+    )
