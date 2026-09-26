@@ -1,38 +1,94 @@
 """
 The intro level: escort a convoy of transports past an enemy blockade.
-
-Built in two phases — :func:`build_intro_upfront` (heavy work, on a black screen)
-and :func:`build_intro_level` (the rest, incrementally during the hyperspace
-animation) — with the scripted events defined in the sibling YAML scenario.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from space_flight.actors.player import Player
-from space_flight.game.scenario import Scenario
-from space_flight.game.scenario.conditions import (
-    AllOf,
-    AnyOf,
-    Delay,
-    after_seconds,
-    all_destroyed,
-    any_destroyed,
-    fired,
-    reached_waypoint,
-)
-from space_flight.game.scenario.loader import load_waves
-from space_flight.game.scenario.mission import Mission
+from space_flight.game.scenario import WaveSpec
+from space_flight.game.scenario.conditions import all_of, any_of, reached_waypoint
 from space_flight.scenes.scenes import scene_factory
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from space_flight.game.flight_state import FlightState
+    from space_flight.game.scenario import Mission
+
+# Orientations are quaternions (w, x, y, z).
+FACING_NORTH = [1, 0, 0, 0]
+FACING_SOUTH = [0, 0, 0, 1]
+
+TRANSPORTS = WaveSpec(
+    name="transports",
+    ship_model="cr-90",  # or gr-75
+    size=3,
+    bot_type="capital_ship",
+    team=1,
+    spawn_point=[0, -2000, 200],
+    spawn_orientation=FACING_NORTH,
+    formation="arrowhead",
+    formation_scale_m=150,
+    waypoints=[
+        [0, 0, 200],
+        [0, 3000, 200],
+        [500, 4000, 200],
+        [1000, 4500, 200],
+        [2000, 5000, 200],
+        [5000, 5000, 200],
+        [6000, 4500, 200],
+        [6500, 4000, 200],
+        [7000, 3000, 200],
+    ],
+)
+# The convoy is past the blockade once it reaches its last waypoint.
+CONVOY_LAST_WAYPOINT = len(TRANSPORTS.waypoints) - 1
+
+ESCORT = WaveSpec(
+    name="escort",
+    ship_model="x-wing",
+    size=6,
+    team=1,
+    spawn_point=[200, -2100, 300],
+    spawn_orientation=FACING_NORTH,
+    formation="arrowhead",
+    # Flies alongside the convoy: 200m to its right, 100m above.
+    waypoints=[[x + 200, y, z + 100] for x, y, z in TRANSPORTS.waypoints],
+)
+
+FIRST_WAVE = WaveSpec(
+    name="first_wave",
+    ship_model="tie-bomber",
+    size=5,
+    spawn_point=[300, 6000, 500],
+    spawn_orientation=FACING_SOUTH,
+    formation="arrowhead",
+    waypoints=[[300, 0, 500], [300, -6000, 500]],
+)
+
+SECOND_WAVE = WaveSpec(
+    name="second_wave",
+    ship_model="tie-interceptor",
+    size=5,
+    spawn_point=[300, 6300, 800],
+    spawn_orientation=FACING_SOUTH,
+    formation="diamond",
+    waypoints=[[300, 0, 500], [300, -6000, 500]],
+)
+
+THIRD_WAVE = WaveSpec(
+    name="third_wave",
+    ship_model="tie-bomber",
+    size=8,
+    spawn_point=[300, 0, 800],
+    spawn_orientation=FACING_SOUTH,
+    formation="diamond",
+    waypoints=[[300, 6000, 500], [300, 0, 500]],
+)
 
 
 def build_intro_upfront(game: FlightState) -> None:
@@ -64,114 +120,72 @@ def intro_mission(m: Mission) -> Iterator[None]:
     The intro level's mission body: escort a convoy of transports past an
     enemy blockade.
 
-    Reproduces the original three timed waves, then two chained events
-    (reinforcements after the first wave is wiped, and a win condition on
-    escort progress). The chained/conditional rules (third_wave, blockade_past,
-    victory, transport_destroyed, all_transports_destroyed, defeat) are
-    registered up front as reactive rules via :meth:`Mission.on` -- they must
-    hold throughout the mission regardless of where the sequential part below
-    currently is, since e.g. the first wave could be wiped out before or after
-    the second wave even arrives. The three timed waves are purely
-    time-sequenced, so they are simply waited out in order.
+    Three timed waves, plus reactive rules registered up front (they must
+    hold wherever the timed sequence currently is): reinforcements once the
+    first wave is wiped, and the win/lose conditions on the convoy.
 
     :param m: The level's :class:`Mission`
     """
-    # --- chained / reactive rules, live for the whole mission ---------------
+    # Handles first, so the rules below can refer to waves not spawned yet.
+    transports = m.wave(TRANSPORTS)
+    escort = m.wave(ESCORT)
+    first_wave = m.wave(FIRST_WAVE)
+    second_wave = m.wave(SECOND_WAVE)
+    third_wave = m.wave(THIRD_WAVE)
 
-    # The third wave arrives either at 200s OR 3s after the first wave is
-    # wiped, whichever comes first -- and only once, because a single trigger
-    # owns a single one-shot guard (two triggers pointing at one wave would
-    # double-spawn it).
-    def _spawn_third_wave(game) -> None:
+    # --- reactive rules, live for the whole mission --------------------------
+
+    # Reinforcements at 200s, or 3s after the first wave is wiped -- whichever
+    # comes first, and only once.
+    def spawn_third_wave() -> None:
         m.hud("Enemy reinforcements detected!")
-        m.spawn(m.waves["third_wave"])
+        third_wave.spawn(target=transports)
 
+    m.on(any_of(m.after(200), m.delay(first_wave.all_destroyed, 3)), spawn_third_wave)
+
+    # Won once the convoy reaches its last waypoint and wave 2 is gone.
+    blockade_past = all_of(
+        reached_waypoint(transports, CONVOY_LAST_WAYPOINT), second_wave.all_destroyed
+    )
+    m.on(blockade_past, lambda: m.hud("Convoy past the blockade — well done."))
     m.on(
-        AnyOf(after_seconds(200), Delay(all_destroyed("first_wave"), seconds=3)),
-        _spawn_third_wave,
-        name="third_wave",
+        m.delay(blockade_past, 3),
+        lambda: m.victory("The convoy reached the fleet. Mission accomplished."),
     )
 
-    # Mission won once the convoy reaches its final waypoint (index 8, the
-    # last of its 9-waypoint route) and wave 2 is gone.
     m.on(
-        AllOf(reached_waypoint("transports", 8), all_destroyed("second_wave")),
-        lambda game: m.hud("Convoy past the blockade — well done."),
-        name="blockade_past",
-    )
-    m.on(
-        Delay(fired("blockade_past"), seconds=3),
-        lambda game: m.victory("The convoy reached the fleet. Mission accomplished."),
-        name="victory",
-    )
-
-    # Warning when the first transport is destroyed.
-    m.on(
-        any_destroyed("transports"),
-        lambda game: m.speech(
+        transports.any_destroyed,
+        lambda: m.speech(
             "A transport has been destroyed! Focus fire on the bombers!",
             speaker="Red Leader",
             display_time_s=5,
         ),
-        name="transport_destroyed",
     )
-
-    # Mission lost if all transports are destroyed.
     m.on(
-        all_destroyed("transports"),
-        lambda game: m.speech(
+        transports.all_destroyed,
+        lambda: m.speech(
             "All transports have been destroyed. Let's retreat!",
             speaker="Red Leader",
             display_time_s=5,
         ),
-        name="all_transports_destroyed",
     )
     m.on(
-        Delay(fired("all_transports_destroyed"), seconds=3),
-        lambda game: m.defeat("The convoy has been destroyed."),
-        name="defeat",
+        m.delay(transports.all_destroyed, 3),
+        lambda: m.defeat("The convoy has been destroyed."),
     )
 
-    # --- the original timed waves, purely sequential -------------------------
+    # --- the timed waves ------------------------------------------------------
     yield from m.wait(0.1)
-    m.spawn(m.waves["transports"])
+    transports.spawn()
 
-    yield from m.wait(0.9)  # total: 1.0s
-    m.spawn(m.waves["escort"])
+    yield from m.wait(0.9)  # total: 1s
+    escort.spawn()
     m.speech("Red squadron standing by.", speaker="Red Leader", display_time_s=5)
 
     yield from m.wait(9)  # total: 10s
     m.hud("First wave")
-    m.spawn(m.waves["first_wave"])
+    first_wave.spawn(target=transports)
 
     yield from m.wait(20)  # total: 30s
     m.hud("Second wave")
-    m.spawn(m.waves["second_wave"])
-
-
-def build_intro_level(game: FlightState) -> Iterator[str]:
-    """
-    A generator that builds the rest of the level one step at a time, DURING the
-    hyperspace animation. Each yield hands control back to the render loop so
-    the animation keeps playing; the loading overlay advances it once per frame.
-
-    Assumes :func:`build_intro_upfront` has already created the player and the
-    scene and built the scene's heavy objects.
-
-    :param game: The game/flight state
-    :return: A generator yielding a label for each build step
-    """
-    # Rest of the scene (skybox, planet, lights, dust, ...)
-    yield from game.scene.build_decomposed()
-
-    """
-    Initialize scenario
-    """
-    # Wave data (sizes, ship models, spawn points, ...) lives in the sibling
-    # YAML; the mission's actual sequence of events is written in Python
-    # above, via the Mission API (see docs/source/scenario_scripting.md).
-    game.scenario = Scenario()
-    mission = Mission(game)
-    mission.waves = load_waves(Path(__file__).with_suffix(".yaml"))
-    game.scenario.schedule(intro_mission(mission))
-    yield "scenario"
+    second_wave.spawn(target=escort)

@@ -103,7 +103,8 @@ of its own; it's a small design system every screen builds on:
   `defeat`, or `death` — each with its own title text and colour tint
   (`_OUTCOMES`) plus an optional explanatory `text`. It's pushed by
   `FlightState.end_level` (skipped headless), which is called by
-  `Scenario`'s `end_level` action (see [docs/game.md](game.md)) or, on player
+  the level's `Mission` (`victory`/`defeat`/`end_level`, see
+  [docs/game.md](game.md)) or, on player
   death, once the death spin has finished. Being a normal state, it pauses
   the game beneath it. Its two buttons mirror the pause menu's
   return-to-main-menu and quit.

@@ -1,137 +1,29 @@
 """
-Tests for the Python Mission authoring API
-(:mod:`space_flight.game.scenario.mission`) and the small engine fixes it
-relies on (the fixed any_destroyed, formation-join spawning, mixed-composition
-waves, the team-cascade helper).
-
-Mirrors the fakes used in test_scenario.py: real Bot/Pawn construction needs a
-running Panda3D engine, so spawn_bot is monkeypatched with a lightweight stub
-and the "pawn" objects here are plain mocks carrying just the attributes the
-scenario engine and the Mission API touch.
+Tests for the mission scripting framework (:mod:`space_flight.game.scenario`):
+Mission (running, sequencing, rules, clock conditions, actions), WaveSpec,
+WaveHandle (spawning, state, mutations) and the spatial conditions.
 """
 
 import uuid
-from pathlib import Path
 
 import numpy as np
 import pytest
+from mission_fakes import FakeGame, advance, kill_all, patch_engine
 
-from space_flight.game.scenario import Scenario
-from space_flight.game.scenario.actions import _validate_wave_cfg, set_bot_team
-from space_flight.game.scenario.loader import load_waves
-from space_flight.game.scenario.mission import Mission, WaveHandle
+from space_flight.game.scenario import Mission, WaveSpec
+from space_flight.game.scenario.conditions import (
+    all_of,
+    any_of,
+    near,
+    near_actor,
+    not_,
+    pawns_of,
+    reached_waypoint,
+)
 
-LEVELS_DIR = Path(__file__).parent.parent / "src" / "space_flight" / "game" / "levels"
-
-# ---------------------------------------------------------------------------
-# Fakes (see test_scenario.py for the pattern this mirrors)
-# ---------------------------------------------------------------------------
-
-
-class FakeGameTime:
-    def __init__(self):
-        self.t = 0.0
-
-    def get_current_time(self):
-        return self.t
-
-
-class FakeInteractions:
-    def __init__(self):
-        self.actors = []
-        self.actors_id_dict = {}
-
-    def add(self, actor):
-        slot = len(self.actors)
-        self.actors.append(actor)
-        self.actors_id_dict[actor.id] = slot
-
-    def kill(self, actor):
-        slot = self.actors_id_dict.pop(actor.id)
-        self.actors[slot] = None
-
-    @property
-    def live_actors(self):
-        return [self.actors[s] for s in self.actors_id_dict.values()]
-
-
-class MockNavigator:
-    def __init__(self):
-        self.next_waypoint_idx = 0
-        self.waypoints = []
-        self.is_loop = False
-
-    def set_waypoints(self, waypoints, is_loop=False):
-        self.waypoints = waypoints
-        self.is_loop = is_loop
-
-
-class MockPawn:
-    def __init__(self, parent, position, team):
-        self.id = uuid.uuid4()
-        self.parent = parent
-        self.position = np.array(position, dtype=float)
-        self.team = team
-
-
-class MockBot:
-    """Bot stub carrying the attributes the scenario engine/Mission touch."""
-
-    def __init__(self, name, position, team):
-        self.name = name
-        self.team = team
-        self.pawn = MockPawn(self, position, team)
-        self.navigator = MockNavigator()
-
-        class _Tactician:
-            primary_target_ids = None
-
-        self.tactician = _Tactician()
-        self.tactician.primary_target_ids = []
-
-
-class MockHud:
-    def __init__(self):
-        self.messages = []
-        self.chatter = []
-
-    def set_event_text(self, text, display_time_s=2.5):
-        self.messages.append((text, display_time_s))
-
-    def set_chatter_text(self, text, display_time_s=4.0):
-        self.chatter.append((text, display_time_s))
-
-
-class FakeGame:
-    def __init__(self):
-        self.game_time = FakeGameTime()
-        self.interactions = FakeInteractions()
-        self.hud = MockHud()
-        self.scenario = Scenario()
-        self.headless = False
-        self.end_level_calls = []
-        self.player = MockBot("player", [0, 0, 0], team=1)
-
-    def end_level(self, outcome, text=""):
-        self.end_level_calls.append((outcome, text))
-
-
-@pytest.fixture
-def patch_spawn_bot(monkeypatch):
-    spawned = []
-
-    def fake_spawn_bot(game, **kwargs):
-        bot = MockBot(
-            name=kwargs.get("name"),
-            position=kwargs.get("ini_position"),
-            team=kwargs.get("team", 2),
-        )
-        game.interactions.add(bot.pawn)
-        spawned.append(bot)
-        return bot
-
-    monkeypatch.setattr("space_flight.game.scenario.spawn_bot", fake_spawn_bot)
-    return spawned
+WAVE = WaveSpec(
+    name="wave", ship_model="tie-bomber", size=3, spawn_point=[100, 200, 300]
+)
 
 
 @pytest.fixture
@@ -144,682 +36,482 @@ def mission(game):
     return Mission(game)
 
 
-def _run_jobs(game, n=1000):
-    """Step the scenario until its jobs list is empty, or n steps pass."""
+@pytest.fixture
+def spawned(monkeypatch):
+    return patch_engine(monkeypatch)
+
+
+def run_jobs(mission, n=1000):
+    """Step the mission until no job is left."""
     for _ in range(n):
-        if not game.scenario.jobs:
+        if not mission.jobs:
             return
-        game.scenario.update(game)
+        mission.update()
 
 
-WAVE_CFG = {
-    "id": "wave_a",
-    "size": 3,
-    "ship_model": "tie-bomber",
-    "spawn_point": [100, 200, 300],
-}
+def run_body(mission, body):
+    """Run a mission body to completion and return what it returned."""
+    result = {}
 
+    def wrapper(m):
+        result["value"] = yield from body(m)
 
-# ---------------------------------------------------------------------------
-# any_destroyed (engine fix)
-# ---------------------------------------------------------------------------
-
-
-def test_any_destroyed_false_before_spawn(game):
-    assert game.scenario.any_destroyed(game, "wave") is False
-
-
-def test_any_destroyed_true_after_one_loss_and_stays_true_when_all_lost(game):
-    a = MockBot("a", [0, 0, 0], team=2)
-    b = MockBot("b", [0, 0, 0], team=2)
-    game.interactions.add(a.pawn)
-    game.interactions.add(b.pawn)
-    game.scenario.register("wave", [a, b])
-
-    assert game.scenario.any_destroyed(game, "wave") is False
-    game.interactions.kill(a.pawn)
-    assert game.scenario.any_destroyed(game, "wave") is True
-    # all_destroyed is not true yet (b still alive) -- the two are independent
-    assert game.scenario.all_destroyed(game, "wave") is False
-
-    game.interactions.kill(b.pawn)
-    # any_destroyed stays true after a total wipe too
-    assert game.scenario.any_destroyed(game, "wave") is True
-    assert game.scenario.all_destroyed(game, "wave") is True
-
-
-def test_any_destroyed_condition_matches_scenario_method(game):
-    a = MockBot("a", [0, 0, 0], team=2)
-    game.interactions.add(a.pawn)
-    game.scenario.register("wave", [a])
-    from space_flight.game.scenario.conditions import any_destroyed
-
-    check = any_destroyed("wave")
-    assert check(game) is False
-    game.interactions.kill(a.pawn)
-    assert check(game) is True
+    mission.run(wrapper)
+    return result
 
 
 # ---------------------------------------------------------------------------
-# Wave cfg validation
+# Running and sequencing
 # ---------------------------------------------------------------------------
 
 
-def test_validate_wave_cfg_accepts_well_formed():
-    _validate_wave_cfg(WAVE_CFG)  # must not raise
+def test_run_steps_the_body_once_per_frame(mission):
+    steps = []
+
+    def body(m):
+        steps.append(1)
+        yield
+        steps.append(2)
+
+    mission.run(body)
+    mission.update()
+    assert steps == [1]
+    mission.update()
+    assert steps == [1, 2]
+    assert mission.jobs == []
 
 
-def test_validate_wave_cfg_rejects_missing_key():
-    with pytest.raises(ValueError, match="wave_a"):
-        _validate_wave_cfg({"id": "wave_a", "ship_model": "x"})
+def test_wait_pauses_for_game_time(game, mission):
+    done = []
+
+    def body(m):
+        yield from m.wait(10)
+        done.append(True)
+
+    mission.run(body)
+    advance(game, mission, 9)
+    assert not done
+    advance(game, mission, 2)
+    assert done
 
 
-def test_validate_wave_cfg_rejects_unknown_key():
-    with pytest.raises(ValueError, match="unknown key"):
-        _validate_wave_cfg({**WAVE_CFG, "not_a_real_key": 1})
+def test_wait_until_returns_true_when_the_condition_holds(game, mission):
+    flag = {"v": False}
+    result = run_body(mission, lambda m: m.wait_until(lambda: flag["v"], timeout=5))
+    advance(game, mission, 1)
+    assert "value" not in result
+    flag["v"] = True
+    mission.update()
+    assert result["value"] is True
 
 
-def test_validate_wave_cfg_mixed_composition_does_not_need_size():
-    cfg = {
-        "id": "mixed",
-        "ship_model": [{"ship_model": "x-wing", "count": 2}],
-        "spawn_point": [0, 0, 0],
-    }
-    _validate_wave_cfg(cfg)  # must not raise
+def test_wait_until_returns_false_on_timeout(game, mission):
+    result = run_body(mission, lambda m: m.wait_until(lambda: False, timeout=5))
+    advance(game, mission, 4)
+    assert "value" not in result
+    advance(game, mission, 2)
+    assert result["value"] is False
 
 
 # ---------------------------------------------------------------------------
-# Mission.spawn
+# Reactive rules
 # ---------------------------------------------------------------------------
 
 
-def test_mission_spawn_validates_and_returns_handle(mission, game, patch_spawn_bot):
-    handle = mission.spawn(WAVE_CFG)
-    assert isinstance(handle, WaveHandle)
-    assert handle.name == "wave_a"
-    _run_jobs(game)
-    assert len(patch_spawn_bot) == WAVE_CFG["size"]
+def test_on_fires_once_by_default(mission):
+    calls = []
+    trigger = mission.on(lambda: True, lambda: calls.append(1))
+    for _ in range(3):
+        mission.update()
+    assert calls == [1]
+    assert trigger.fired is True
 
 
-def test_mission_spawn_rejects_bad_cfg(mission):
-    with pytest.raises(ValueError):
-        mission.spawn({"id": "bad"})
+def test_on_repeats_every_frame_when_not_once(mission):
+    calls = []
+    mission.on(lambda: True, lambda: calls.append(1), once=False)
+    for _ in range(3):
+        mission.update()
+    assert calls == [1, 1, 1]
 
 
-def test_mission_spawn_with_target_wavehandle(mission, game, patch_spawn_bot):
-    transports = mission.spawn(
-        {"id": "transports", "size": 1, "ship_model": "cr-90", "spawn_point": [0, 0, 0]}
+def test_cancel_stops_a_rule(mission):
+    flag = {"v": False}
+    calls = []
+    trigger = mission.on(lambda: flag["v"], lambda: calls.append(1))
+    mission.update()
+    trigger.cancel()
+    flag["v"] = True
+    mission.update()
+    assert calls == []
+    assert mission.triggers == []
+
+
+# ---------------------------------------------------------------------------
+# Clock conditions
+# ---------------------------------------------------------------------------
+
+
+def test_after_is_relative_to_its_creation(game, mission):
+    game.game_time.t = 100
+    cond = mission.after(10)
+    game.game_time.t = 109
+    assert cond() is False
+    game.game_time.t = 110
+    assert cond() is True
+
+
+def test_delay_latches_once_armed(game, mission):
+    inner = {"v": False}
+    cond = mission.delay(lambda: inner["v"], 3)
+    assert cond() is False  # not armed
+    inner["v"] = True
+    game.game_time.t = 10
+    assert cond() is False  # armed at t=10
+    inner["v"] = False  # a flicker must not disarm
+    game.game_time.t = 13
+    assert cond() is True
+
+
+def test_sustained_needs_an_unbroken_run(game, mission):
+    inner = {"v": True}
+    cond = mission.sustained(lambda: inner["v"], 10)
+    assert cond() is False  # armed at t=0
+    game.game_time.t = 5
+    inner["v"] = False  # breaks the run: resets, unlike delay
+    assert cond() is False
+    inner["v"] = True
+    game.game_time.t = 10
+    assert cond() is False  # re-armed at t=10
+    game.game_time.t = 16
+    assert cond() is False
+    game.game_time.t = 20
+    assert cond() is True
+
+
+# ---------------------------------------------------------------------------
+# Actions
+# ---------------------------------------------------------------------------
+
+
+def test_hud_and_speech(game, mission):
+    mission.hud("First wave")
+    mission.speech("Standing by.", speaker="Red Leader")
+    mission.speech("Narration.")
+    assert game.hud.messages == [("First wave", 5.0)]
+    assert game.hud.chatter == [
+        ("Red Leader: Standing by.", 6.0),
+        ("Narration.", 6.0),
+    ]
+
+
+def test_hud_and_speech_are_skipped_headless(game, mission):
+    game.headless = True
+    mission.hud("x")
+    mission.speech("y")
+    assert game.hud.messages == [] and game.hud.chatter == []
+
+
+def test_end_level_victory_defeat(game, mission):
+    mission.victory("won")
+    mission.defeat("lost")
+    mission.end_level("death", "dead")
+    assert game.end_level_calls == [
+        ("victory", "won"),
+        ("defeat", "lost"),
+        ("death", "dead"),
+    ]
+
+
+def test_player_waypoints_replaces_the_previous_route(game, mission, spawned):
+    mission.player_waypoints([[0, 0, 0]], arrival_radius_m=200)
+    first = game.player_waypoints
+    assert first.kwargs == {"arrival_radius_m": 200}
+
+    mission.player_waypoints([[1, 1, 1]])
+    assert first.cleaned is True
+    assert game.player_waypoints.waypoints == [[1, 1, 1]]
+
+    second = game.player_waypoints
+    mission.clear_player_waypoints()
+    assert second.cleaned is True
+    assert game.player_waypoints is None
+
+
+# ---------------------------------------------------------------------------
+# WaveSpec
+# ---------------------------------------------------------------------------
+
+
+def test_wave_spec_requires_size_for_a_single_model():
+    with pytest.raises(ValueError, match="size"):
+        WaveSpec(name="w", ship_model="x-wing")
+
+
+def test_wave_spec_infers_size_for_a_mixed_wave():
+    spec = WaveSpec(name="w", ship_model=[("tie-bomber", 2), ("tie-interceptor", 1)])
+    assert spec.ship_models() == ["tie-bomber", "tie-bomber", "tie-interceptor"]
+    with pytest.raises(ValueError, match="inferred"):
+        WaveSpec(name="w", ship_model=[("x-wing", 1)], size=3)
+
+
+def test_wave_spec_rejects_unknown_fields():
+    with pytest.raises(TypeError):
+        WaveSpec(name="w", ship_model="x-wing", size=1, not_a_field=1)
+
+
+# ---------------------------------------------------------------------------
+# WaveHandle: spawning
+# ---------------------------------------------------------------------------
+
+
+def test_spawn_creates_one_ship_per_frame(mission, spawned):
+    mission.spawn(WAVE)
+    assert spawned == []  # deferred to the next update
+    mission.update()
+    assert [b.name for b in spawned] == ["wave_0"]
+    run_jobs(mission)
+    assert [b.name for b in spawned] == ["wave_0", "wave_1", "wave_2"]
+
+
+def test_spawn_point_can_be_given_at_spawn_time(mission, spawned):
+    spec = WaveSpec(name="w", ship_model="x-wing", size=1)
+    with pytest.raises(ValueError, match="spawn point"):
+        mission.spawn(spec)
+    mission.spawn(spec, spawn_point=[1, 2, 3])
+    run_jobs(mission)
+    assert np.allclose(spawned[0].pawn.position, [1, 2, 3])
+
+
+def test_spawn_uses_formation_slots(mission, spawned):
+    spec = WaveSpec(
+        name="w",
+        ship_model="x-wing",
+        size=3,
+        spawn_point=[100, 200, 300],
+        formation="arrowhead",
     )
-    _run_jobs(game)
-    mission.spawn({**WAVE_CFG, "id": "attackers"}, target=transports)
-    _run_jobs(game)
-    transport_pawn_id = game.scenario.resolve(game, "transports")[0].id
-    for bot in patch_spawn_bot[1:]:
-        assert transport_pawn_id in bot.tactician.primary_target_ids
+    wave = mission.spawn(spec)
+    run_jobs(mission)
+    # The leader spawns exactly on the spawn point; wingmen at their slots.
+    assert np.allclose(spawned[0].pawn.position, [100, 200, 300])
+    expected = np.array([100, 200, 300]) + wave.formation.relative_positions[1]
+    assert np.allclose(spawned[1].pawn.position, expected)
+    assert wave.formation.ship_ids == [b.pawn.id for b in spawned]
 
 
-def test_mission_spawn_mixed_ship_types(mission, game, patch_spawn_bot):
-    cfg = {
-        "id": "mixed_wave",
-        "ship_model": [
-            {"ship_model": "x-wing", "count": 2},
-            {"ship_model": "y-wing", "count": 1},
-        ],
-        "spawn_point": [0, 0, 0],
-    }
-    mission.spawn(cfg)
-    _run_jobs(game)
-    assert len(patch_spawn_bot) == 3
-    assert len(game.scenario.resolve(game, "mixed_wave")) == 3
+def test_spawn_without_formation_uses_a_centred_line(mission, spawned):
+    mission.spawn(WAVE)
+    run_jobs(mission)
+    xs = [b.pawn.position[0] for b in spawned]
+    assert xs == [50.0, 100.0, 150.0]
 
 
-def test_mission_spawn_join_formation_continues_slots(mission, game, patch_spawn_bot):
+def test_join_continues_the_formation_slots(mission, spawned):
     escort = mission.spawn(
-        {
-            "id": "escort",
-            "size": 2,
-            "ship_model": "x-wing",
-            "spawn_point": [0, 0, 0],
-            "formation": {"scale_m": 30, "shape": "arrowhead"},
-        }
+        WaveSpec(
+            name="escort",
+            ship_model="x-wing",
+            size=2,
+            spawn_point=[0, 0, 0],
+            formation="arrowhead",
+        )
     )
-    _run_jobs(game)
-    formation = escort.formation
-    assert formation is not None
-    assert len(formation.ship_ids) == 2
-
+    run_jobs(mission)
     reinforcements = mission.spawn(
-        {
-            "id": "reinforcements",
-            "size": 2,
-            "ship_model": "x-wing",
-            "spawn_point": [0, 0, 0],
-        },
-        join=formation,
+        WaveSpec(name="reinf", ship_model="x-wing", size=2, spawn_point=[0, 0, 0]),
+        join=escort.formation,
     )
-    _run_jobs(game)
-    assert len(formation.ship_ids) == 4
-    assert reinforcements.formation is formation
+    run_jobs(mission)
+    assert reinforcements.formation is escort.formation
+    assert len(escort.formation.ship_ids) == 4
+    # Reinforcements take slots 2 and 3, not the leader's slot 0.
+    assert np.allclose(spawned[2].pawn.position, escort.formation.relative_positions[2])
+
+
+def test_join_while_the_host_is_still_spawning_never_shares_a_slot(mission, spawned):
+    host = mission.spawn(
+        WaveSpec(
+            name="host",
+            ship_model="x-wing",
+            size=3,
+            spawn_point=[0, 0, 0],
+            formation="arrowhead",
+        )
+    )
+    mission.update()  # only the host's leader exists so far
+    mission.spawn(
+        WaveSpec(name="joiner", ship_model="x-wing", size=2, spawn_point=[0, 0, 0]),
+        join=host.formation,
+    )
+    run_jobs(mission)
+    positions = {tuple(b.pawn.position) for b in spawned}
+    assert len(positions) == 5
+    assert len(host.formation.ship_ids) == 5
+
+
+def test_mixed_wave_spawns_each_model(mission, spawned):
+    spec = WaveSpec(
+        name="mixed",
+        ship_model=[("tie-bomber", 2), ("tie-interceptor", 1)],
+        spawn_point=[0, 0, 0],
+    )
+    mission.spawn(spec)
+    run_jobs(mission)
+    assert [b.pawn_model for b in spawned] == [
+        "tie-bomber",
+        "tie-bomber",
+        "tie-interceptor",
+    ]
+
+
+def test_spawn_target_accepts_a_wave_or_a_ship(game, mission, spawned):
+    transports = mission.spawn(WAVE)
+    run_jobs(mission)
+    attackers = mission.spawn(
+        WaveSpec(name="att", ship_model="x", size=1, spawn_point=[0, 0, 0]),
+        target=transports,
+    )
+    hunters = mission.spawn(
+        WaveSpec(name="hunt", ship_model="x", size=1, spawn_point=[0, 0, 0]),
+        target=game.player,
+    )
+    run_jobs(mission)
+    transport_ids = [p.id for p in transports.pawns()]
+    assert attackers.pawns()[0].parent.tactician.primary_target_ids == transport_ids
+    assert hunters.pawns()[0].parent.tactician.primary_target_ids == [
+        game.player.pawn.id
+    ]
 
 
 # ---------------------------------------------------------------------------
-# WaveHandle
+# WaveHandle: state
 # ---------------------------------------------------------------------------
 
 
-def test_wave_handle_alive_and_all_destroyed(mission, game, patch_spawn_bot):
-    wave = mission.spawn(WAVE_CFG)
-    _run_jobs(game)
-    assert wave.alive is True
-    assert wave.all_destroyed is False
-    for bot in list(patch_spawn_bot):
-        game.interactions.kill(bot.pawn)
-    assert wave.alive is False
-    assert wave.all_destroyed is True
-    assert wave.any_destroyed is True
+def test_wave_state_before_during_and_after(game, mission, spawned):
+    wave = mission.wave(WAVE)
+    assert not wave.alive() and not wave.all_destroyed() and not wave.any_destroyed()
+
+    wave.spawn()
+    mission.update()  # one of three ships spawned
+    assert wave.alive() and not wave.all_destroyed() and not wave.any_destroyed()
+    run_jobs(mission)
+
+    game.interactions.kill(wave.pawns()[0])
+    assert wave.alive() and wave.any_destroyed() and not wave.all_destroyed()
+
+    kill_all(game, wave.pawns())
+    assert not wave.alive() and wave.any_destroyed() and wave.all_destroyed()
 
 
-def test_wave_handle_conditions_usable_with_wait_until(mission, game, patch_spawn_bot):
-    wave = mission.spawn(WAVE_CFG)
-    _run_jobs(game)
-    cond = wave.all_destroyed_cond()
-    assert cond(game) is False
-    for bot in list(patch_spawn_bot):
-        game.interactions.kill(bot.pawn)
-    assert cond(game) is True
+def test_wave_state_methods_are_conditions(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    calls = []
+    mission.on(wave.all_destroyed, lambda: calls.append(1))
+    mission.update()
+    assert calls == []
+    kill_all(game, wave.pawns())
+    mission.update()
+    assert calls == [1]
 
 
-def test_wave_handle_set_targets(mission, game, patch_spawn_bot):
-    attackers = mission.spawn(WAVE_CFG)
-    _run_jobs(game)
-    defenders = mission.spawn({**WAVE_CFG, "id": "defenders"})
-    _run_jobs(game)
+# ---------------------------------------------------------------------------
+# WaveHandle: mutations
+# ---------------------------------------------------------------------------
 
+
+def test_set_targets(mission, spawned):
+    attackers = mission.spawn(WAVE)
+    defenders = mission.spawn(
+        WaveSpec(name="def", ship_model="x", size=2, spawn_point=[0, 0, 0])
+    )
+    run_jobs(mission)
     attackers.set_targets(defenders)
-    defender_ids = {p.id for p in game.scenario.resolve(game, "defenders")}
-    for bot in patch_spawn_bot:
-        if bot.pawn.id not in defender_ids:
-            assert set(bot.tactician.primary_target_ids) == defender_ids
+    defender_ids = [p.id for p in defenders.pawns()]
+    for pawn in attackers.pawns():
+        assert pawn.parent.tactician.primary_target_ids == defender_ids
 
 
-def test_wave_handle_set_waypoints(mission, game, patch_spawn_bot):
-    wave = mission.spawn(WAVE_CFG)
-    _run_jobs(game)
+def test_set_waypoints(mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
     wave.set_waypoints([[0, 0, 0], [0, 100, 0]], loop=False)
-    for bot in patch_spawn_bot:
+    for bot in spawned:
         assert len(bot.navigator.waypoints) == 2
         assert bot.navigator.is_loop is False
 
 
-def test_wave_handle_set_team_lone_fighter(mission, game, patch_spawn_bot):
-    wave = mission.spawn(WAVE_CFG)
-    _run_jobs(game)
+def test_set_team(mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
     wave.set_team(9)
-    for bot in patch_spawn_bot:
-        assert bot.pawn.team == 9
-        assert bot.team == 9
+    assert all(b.team == 9 and b.pawn.team == 9 for b in spawned)
 
 
 # ---------------------------------------------------------------------------
-# set_bot_team cascade (capital ship with mounted turrets)
+# Conditions
 # ---------------------------------------------------------------------------
 
 
-class _FakeSubSystem:
-    def __init__(self, team):
-        self.team = team
+def test_pawns_of(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    assert pawns_of(wave) == wave.pawns()
+    assert pawns_of(game.player) == [game.player.pawn]
+    assert pawns_of(game.player.pawn) == [game.player.pawn]
+    game.player.pawn.is_dead = True
+    assert pawns_of(game.player) == []
+    game.player.pawn = None  # a cleaned-up bot
+    assert pawns_of(game.player) == []
 
 
-class _FakeShield:
-    def __init__(self, team):
-        self.team = team
+def test_near(game):
+    cond = near(game.player, [0, 0, 0], 100)
+    assert cond() is True
+    game.player.pawn.position = np.array([200.0, 0, 0])
+    assert cond() is False
 
 
-class _FakeCapitalPawn:
-    def __init__(self, team, sub_systems, shield, mounted_bots):
-        self.id = uuid.uuid4()
-        self.team = team
-        self.sub_systems = sub_systems
-        self.shield = shield
-        self.mounted_bots = mounted_bots
-
-
-def test_set_bot_team_cascades_to_capital_ship_dependents():
-    turret_bot = MockBot("turret", [0, 0, 0], team=2)
-    tractor_bot = MockBot("tractor", [0, 0, 0], team=2)
-    sub_systems = [_FakeSubSystem(team=2), _FakeSubSystem(team=2)]
-    shield = _FakeShield(team=2)
-
-    capital_bot = MockBot("frigate", [0, 0, 0], team=2)
-    capital_bot.pawn = _FakeCapitalPawn(
-        team=2,
-        sub_systems=sub_systems,
-        shield=shield,
-        mounted_bots=[turret_bot, tractor_bot],
+def test_near_actor_tracks_both_sides_live(game, mission, spawned):
+    wave = mission.spawn(
+        WaveSpec(name="w", ship_model="x", size=2, spawn_point=[1000, 0, 0])
     )
-
-    set_bot_team(capital_bot, 5)
-
-    assert capital_bot.team == 5
-    assert capital_bot.pawn.team == 5
-    assert all(sub.team == 5 for sub in sub_systems)
-    assert shield.team == 5
-    assert turret_bot.team == 5
-    assert turret_bot.pawn.team == 5
-    assert tractor_bot.team == 5
-    assert tractor_bot.pawn.team == 5
-
-
-# ---------------------------------------------------------------------------
-# Sequencing helpers
-# ---------------------------------------------------------------------------
-
-
-def test_wait_yields_until_seconds_elapsed(mission, game):
-    game.game_time.t = 0
-    gen = mission.wait(3)
-    next(gen)  # primes the deadline (now + 3 = 3) and yields once, at t=0
-    steps = 1
-    while True:
-        game.game_time.t += 1
-        try:
-            next(gen)
-            steps += 1
-        except StopIteration:
-            break
-    assert steps == 3  # yields at t=0, 1, 2; done once t=3 is reached
-
-
-def test_wait_until_accepts_condition_or_number(mission, game):
-    flag = {"v": False}
-    gen = mission.wait_until(lambda g: flag["v"])
-    assert next(gen) is None
-    flag["v"] = True
-    with pytest.raises(StopIteration):
-        next(gen)
-
-    gen2 = mission.wait_until(2)
-    game.game_time.t = 0
-    next(gen2)
-    game.game_time.t = 2
-    with pytest.raises(StopIteration):
-        next(gen2)
-
-
-def test_wait_any_and_wait_all(mission, game):
-    a, b = {"v": False}, {"v": False}
-    gen_any = mission.wait_any(lambda g: a["v"], lambda g: b["v"])
-    next(gen_any)
-    a["v"] = True
-    with pytest.raises(StopIteration):
-        next(gen_any)
-
-    c, d = {"v": False}, {"v": False}
-    gen_all = mission.wait_all(lambda g: c["v"], lambda g: d["v"])
-    next(gen_all)
-    c["v"] = True
-    next(gen_all)  # d still false
-    d["v"] = True
-    with pytest.raises(StopIteration):
-        next(gen_all)
-
-
-# ---------------------------------------------------------------------------
-# on() reactive rules
-# ---------------------------------------------------------------------------
-
-
-def test_on_registers_named_trigger(mission, game):
-    calls = []
-    mission.on(lambda g: True, lambda g: calls.append(1), name="my_rule")
-    assert "my_rule" in game.scenario.triggers_by_name
-    game.scenario.update(game)
-    assert calls == [1]
-    assert game.scenario.has_fired("my_rule") is True
-
-
-# ---------------------------------------------------------------------------
-# Thin action wrappers
-# ---------------------------------------------------------------------------
-
-
-def test_hud_speech_and_end_level_wrappers(mission, game):
-    mission.hud("hello")
-    assert game.hud.messages == [("hello", 2.5)]
-
-    mission.speech("hi", speaker="Red Leader")
-    assert game.hud.chatter == [("Red Leader: hi", 4.0)]
-
-    mission.victory("won")
-    assert game.end_level_calls == [("victory", "won")]
-
-    mission.defeat("lost")
-    assert game.end_level_calls[-1] == ("defeat", "lost")
-
-
-# ---------------------------------------------------------------------------
-# The 3 shipped levels' mission functions, run against fakes
-# ---------------------------------------------------------------------------
-
-
-def test_mission_waves_setter_predeclares_groups(mission):
-    """
-    Assigning Mission.waves pre-declares every wave id as an empty group on
-    the scenario, mirroring what load_scenario does for the legacy DSL.
-    """
-    mission.waves = {"first_wave": {"id": "first_wave"}, "second_wave": {"id": "s"}}
-    assert mission.scenario.groups == {"first_wave": [], "second_wave": []}
-
-
-def test_reactive_rule_on_unspawned_wave_does_not_warn_unknown_group(
-    mission, game, patch_spawn_bot, caplog
-):
-    """
-    Regression test: a reactive rule registered up front (see the intro
-    level's "blockade_past") polls reached_waypoint on a wave before it has
-    spawned. Without Mission.waves pre-declaring the group, Scenario.resolve
-    would log a spurious "unknown group 'transports'" warning on every frame
-    until the wave actually spawns.
-    """
-    from space_flight.game.scenario.conditions import reached_waypoint
-
-    mission.waves = load_waves(LEVELS_DIR / "intro_level.yaml")
-    mission.on(reached_waypoint("transports", 8), lambda game: None, name="check")
-
-    with caplog.at_level("WARNING"):
-        for _ in range(5):  # well before transports spawns at 0.1s
-            game.scenario.update(game)
-
-    assert "unknown group" not in caplog.text
-
-
-def test_dev_mission_spawns_frigate(game, patch_spawn_bot):
-    from space_flight.game.levels.dev_level import dev_mission
-
-    m = Mission(game)
-    m.waves = load_waves(LEVELS_DIR / "dev_level.yaml")
-    game.scenario.schedule(dev_mission(m))
-
-    for _ in range(400):
-        game.game_time.t += 1 / 60
-        game.scenario.update(game)
-
-    assert len(game.scenario.resolve(game, "enemy_frigate")) == 1
-
-
-def _run_mission1(game, patch_spawn_bot, monkeypatch, bindings=None):
-    """
-    Shared setup for the Mission 1: Rookies tests below: stubs out
-    PlayerWaypoints (needs a real app/loader), gives the fake game a minimal
-    app.bindings for the HUD keybinding call-outs, and schedules the mission.
-    Returns the Mission so the test can drive the fake world.
-    """
-    from space_flight.game.levels.mission1_level import mission1_mission
-
-    class _FakePlayerWaypoints:
-        def __init__(self, game, points, **kwargs):
-            self.points = points
-            self.cleaned = False
-
-        def clean(self):
-            self.cleaned = True
-
-    monkeypatch.setattr(
-        "space_flight.game.scenario.actions.PlayerWaypoints", _FakePlayerWaypoints
-    )
-
-    class _FakeApp:
-        pass
-
-    game.app = _FakeApp()
-    game.app.bindings = bindings or {
-        "input_type": "keyboard",
-        "contexts": {"flight": {"keyboard": {"radial_menu": "r", "loop_target": ","}}},
-    }
-    game.player.pawn.forward = np.array([0.0, 1.0, 0.0])
-    game.player.pawn.right = np.array([1.0, 0.0, 0.0])
-
-    m = Mission(game)
-    m.waves = load_waves(LEVELS_DIR / "mission1_level.yaml")
-    game.scenario.schedule(mission1_mission(m))
-    return m
-
-
-def _advance(game, seconds, dt=1 / 60):
-    steps = int(seconds / dt) + 1
-    for _ in range(steps):
-        game.game_time.t += dt
-        game.scenario.update(game)
-
-
-def test_mission1_waypoint_to_formation_handoff(game, patch_spawn_bot, monkeypatch):
-    from space_flight.game.levels.mission1_level import (
-        FORMATION_AHEAD_M,
-        FORMATION_LEFT_M,
-        WAYPOINT_1,
-    )
-
-    _run_mission1(game, patch_spawn_bot, monkeypatch)
-    _advance(game, 1)  # nothing spawns until the waypoint is reached
-
-    assert len(game.scenario.resolve(game, "escort")) == 0
-
-    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
-    _advance(game, 3)  # let the 4-ship wave finish spawning, one per frame
-
-    escort_pawns = game.scenario.resolve(game, "escort")
-    assert len(escort_pawns) == 4
-    # The leader (slot 0) spawns exactly at the computed point: 1km ahead
-    # (+forward) and FORMATION_LEFT_M to the left (-right) of the waypoint.
-    expected_leader_pos = (
-        np.array(WAYPOINT_1, dtype=float)
-        + np.array([0.0, 1.0, 0.0]) * FORMATION_AHEAD_M
-        - np.array([1.0, 0.0, 0.0]) * FORMATION_LEFT_M
-    )
-    assert np.allclose(escort_pawns[0].position, expected_leader_pos)
-    assert game.player_waypoints.cleaned is True  # the intro marker was removed
-
-
-def test_mission1_catch_up_deadline_defeat(game, patch_spawn_bot, monkeypatch):
-    from space_flight.game.levels.mission1_level import CATCH_UP_DEADLINE_S, WAYPOINT_1
-
-    _run_mission1(game, patch_spawn_bot, monkeypatch)
-    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
-    _advance(game, 3)  # formation spawns
-
-    # Player never closes the distance -> defeat after the deadline.
-    _advance(game, CATCH_UP_DEADLINE_S + 1)
-
-    assert game.end_level_calls
-    assert game.end_level_calls[-1][0] == "defeat"
-    assert "catch up" in game.end_level_calls[-1][1]
-
-
-def test_mission1_sustained_separation_defeat(game, patch_spawn_bot, monkeypatch):
-    from space_flight.game.levels.mission1_level import (
-        FOLLOW_RADIUS_M,
-        SUSTAINED_SEPARATION_S,
-        WAYPOINT_1,
-    )
-
-    _run_mission1(game, patch_spawn_bot, monkeypatch)
-    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
-    _advance(game, 3)  # formation spawns
-
-    leader = game.scenario.resolve(game, "escort_leader")[0]
-    game.player.pawn.position = leader.position.copy()  # catch up immediately
-    _advance(game, 1)
-    assert not any(o == "defeat" for o, _ in game.end_level_calls)
-
-    # Now drift away for longer than the sustained-separation window.
-    game.player.pawn.position = leader.position + np.array(
-        [FOLLOW_RADIUS_M * 3, 0.0, 0.0]
-    )
-    _advance(game, SUSTAINED_SEPARATION_S + 1)
-
-    assert game.end_level_calls
-    assert game.end_level_calls[-1][0] == "defeat"
-    assert "fell too far behind" in game.end_level_calls[-1][1]
-
-
-def test_mission1_follow_check_accepts_any_formation_member(
-    game, patch_spawn_bot, monkeypatch
-):
-    """
-    Staying close to ANY live formation member is enough -- not specifically
-    the leader. Ships patrol the circuit independently once spawned (each
-    runs the same absolute waypoints on its own navigator), so they can drift
-    apart; simulate that drift by moving a wingman well away from the leader.
-    """
-    from space_flight.game.levels.mission1_level import (
-        CATCH_UP_DEADLINE_S,
-        FOLLOW_RADIUS_M,
-        WAYPOINT_1,
-    )
-
-    _run_mission1(game, patch_spawn_bot, monkeypatch)
-    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
-    _advance(game, 3)  # formation spawns
-
-    escort_pawns = game.scenario.resolve(game, "escort")
-    leader, wingman = escort_pawns[0], escort_pawns[1]
-    wingman.position = leader.position + np.array([0.0, FOLLOW_RADIUS_M * 5, 0.0])
-
-    # Player sticks with the drifted wingman -- nowhere near the leader.
-    game.player.pawn.position = wingman.position.copy()
-    _advance(game, CATCH_UP_DEADLINE_S + 1)  # past the catch-up deadline too
-
-    assert not any(o == "defeat" for o, _ in game.end_level_calls)
-
-
-def test_mission1_race_first_place_is_special(game, patch_spawn_bot, monkeypatch):
-    from space_flight.game.levels.mission1_level import (
-        CIRCUIT_WAYPOINTS,
-        RACE_WAYPOINTS,
-        WAYPOINT_1,
-    )
-
-    _run_mission1(game, patch_spawn_bot, monkeypatch)
-    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
-    _advance(game, 3)  # formation spawns
-
-    leader = game.scenario.resolve(game, "escort_leader")[0]
-    game.player.pawn.position = leader.position.copy()
-    _advance(game, 1)
-
-    # Fast-forward the circuit: mark every escort ship past the last
-    # checkpoint, unblocking the mission body's wait_until(reached_waypoint).
-    for pawn in game.scenario.resolve(game, "escort"):
-        pawn.parent.navigator.next_waypoint_idx = len(CIRCUIT_WAYPOINTS)
-    _advance(game, 1)
-
-    assert not any(o == "defeat" for o, _ in game.end_level_calls)  # rule retired
-
-    # Player finishes first; the rest cross afterwards.
-    finish_point = np.array(RACE_WAYPOINTS[-1], dtype=float)
-    game.player.pawn.position = finish_point.copy()
-    _advance(game, 1)
-    for pawn in game.scenario.resolve(game, "escort"):
-        pawn.position = finish_point.copy()
-    _advance(game, 1)
-
-    assert game.end_level_calls[-1] == (
-        "victory",
-        "First across the line! Outstanding flying, rookie!",
-    )
-
-
-def test_mission1_race_last_place_is_defeat(game, patch_spawn_bot, monkeypatch):
-    from space_flight.game.levels.mission1_level import (
-        CIRCUIT_WAYPOINTS,
-        RACE_WAYPOINTS,
-        WAYPOINT_1,
-    )
-
-    _run_mission1(game, patch_spawn_bot, monkeypatch)
-    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
-    _advance(game, 3)
-
-    leader = game.scenario.resolve(game, "escort_leader")[0]
-    game.player.pawn.position = leader.position.copy()
-    _advance(game, 1)
-
-    for pawn in game.scenario.resolve(game, "escort"):
-        pawn.parent.navigator.next_waypoint_idx = len(CIRCUIT_WAYPOINTS)
-    _advance(game, 1)
-
-    finish_point = np.array(RACE_WAYPOINTS[-1], dtype=float)
-    # Everyone else finishes first; the player finishes last.
-    for pawn in game.scenario.resolve(game, "escort"):
-        pawn.position = finish_point.copy()
-    _advance(game, 1)
-    game.player.pawn.position = finish_point.copy()
-    _advance(game, 1)
-
-    assert game.end_level_calls[-1] == (
-        "defeat",
-        "You crossed the line last. Mission failed.",
-    )
-
-
-def test_intro_mission_full_sequence_to_victory(game, patch_spawn_bot):
-    from space_flight.game.levels.intro_level import intro_mission
-
-    m = Mission(game)
-    m.waves = load_waves(LEVELS_DIR / "intro_level.yaml")
-    game.scenario.schedule(intro_mission(m))
-
-    def advance(seconds, dt=1 / 60):
-        steps = int(seconds / dt) + 1
-        for _ in range(steps):
-            game.game_time.t += dt
-            game.scenario.update(game)
-
-    # Past the first three waves (transports at 0.1s, escort at 1s, first
-    # wave at 10s) -- generous margin for the one-ship-per-frame spawn jobs.
-    advance(12)
-    assert len(game.scenario.resolve(game, "transports")) == 3
-    assert len(game.scenario.resolve(game, "escort")) == 6
-    assert len(game.scenario.resolve(game, "first_wave")) == 5
-
-    # Wipe out the first wave -> third wave should arrive ~3s later (well
-    # before the 200s fallback). Keep advancing past t=30s so the (purely
-    # time-sequenced) second wave has also spawned by now.
-    for pawn in list(game.scenario.resolve(game, "first_wave")):
-        game.interactions.kill(pawn)
-    advance(20)  # t ~= 32s
-    assert len(game.scenario.resolve(game, "third_wave")) == 8
-    assert len(game.scenario.resolve(game, "second_wave")) == 5
-
-    # Wipe out the second wave and move transports past waypoint 8 -> the
-    # blockade_past objective fires, and victory follows 3s later.
-    for pawn in list(game.scenario.resolve(game, "second_wave")):
-        game.interactions.kill(pawn)
-    for pawn in game.scenario.resolve(game, "transports"):
-        pawn.parent.navigator.next_waypoint_idx = 9
-    advance(4)
-
-    assert game.scenario.has_fired("blockade_past") is True
-    assert any(o == "victory" for o, _ in game.end_level_calls)
-
-
-def test_intro_mission_defeat_path(game, patch_spawn_bot):
-    from space_flight.game.levels.intro_level import intro_mission
-
-    m = Mission(game)
-    m.waves = load_waves(LEVELS_DIR / "intro_level.yaml")
-    game.scenario.schedule(intro_mission(m))
-
-    def advance(seconds, dt=1 / 60):
-        steps = int(seconds / dt) + 1
-        for _ in range(steps):
-            game.game_time.t += dt
-            game.scenario.update(game)
-
-    advance(2)  # transports and escort spawned
-    for pawn in list(game.scenario.resolve(game, "transports")):
-        game.interactions.kill(pawn)
-    advance(4)
-
-    assert game.scenario.has_fired("all_transports_destroyed") is True
-    assert any(o == "defeat" for o, _ in game.end_level_calls)
+    run_jobs(mission)
+    cond = near_actor(game.player, wave, 100)
+    assert cond() is False
+    wave.pawns()[1].position = np.array([50.0, 0, 0])  # any member will do
+    assert cond() is True
+    game.player.pawn.position = np.array([500.0, 0, 0])
+    assert cond() is False
+
+
+def test_reached_waypoint(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    cond = reached_waypoint(wave, 0)
+    assert cond() is False  # next_waypoint_idx starts at 0: not reached yet
+    wave.pawns()[2].parent.navigator.next_waypoint_idx = 1
+    assert cond() is True
+    assert reached_waypoint(wave.pawns()[0], 0)() is False  # per-ship check
+
+
+def test_combinators():
+    def yes():
+        return True
+
+    def no():
+        return False
+
+    assert all_of(yes, yes)() and not all_of(yes, no)()
+    assert any_of(no, yes)() and not any_of(no, no)()
+    assert not_(no)() and not not_(yes)()
+
+
+def test_ids_are_unique_per_spawn(mission, spawned):
+    wave = mission.spawn(WAVE)
+    wave.spawn()  # spawning again adds the same composition to the wave
+    run_jobs(mission)
+    assert len(wave.ids) == 6 and len(set(wave.ids)) == 6
+    assert all(isinstance(i, uuid.UUID) for i in wave.ids)

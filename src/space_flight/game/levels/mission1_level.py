@@ -11,28 +11,24 @@ appended later -- keep the mission body easy to extend.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
 from space_flight.actors.player import Player
-from space_flight.game.scenario import Scenario
+from space_flight.game.scenario import WaveSpec
 from space_flight.game.scenario.conditions import (
-    Not,
-    Sustained,
-    after_seconds,
     near,
     near_actor,
+    not_,
     reached_waypoint,
 )
-from space_flight.game.scenario.loader import load_waves
-from space_flight.game.scenario.mission import Mission
 from space_flight.scenes.scenes import scene_factory
 from space_flight.ui.input_context import InputContext
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
+    from space_flight.game.scenario import Mission
 
 # --- tunable numbers -------------------------------------------------------
 # All illustrative placeholders, sized to fit comfortably inside the
@@ -44,12 +40,12 @@ WAYPOINT_1_ARRIVAL_RADIUS_M = 350
 
 FORMATION_AHEAD_M = 1000  # "1km ahead"
 FORMATION_LEFT_M = 400  # "and to the left"
-FOLLOW_RADIUS_M = 300  # "within 300m of the formation leader"
+FOLLOW_RADIUS_M = 300  # "within 300m of any member of the formation"
 CATCH_UP_DEADLINE_S = 30
 SUSTAINED_SEPARATION_S = 20
 
-# The escort's patrol circuit (baked into its own wave cfg below), a rough
-# loop starting near WAYPOINT_1 and closing back on itself (loop: true).
+# Blue squadron's patrol circuit, a rough loop starting near WAYPOINT_1 and
+# closing back on itself.
 CIRCUIT_WAYPOINTS = [
     [-800, 1200, 550],
     [800, 2500, 650],
@@ -57,6 +53,19 @@ CIRCUIT_WAYPOINTS = [
     [-500, 5500, 600],
     [-2000, 3000, 550],
 ]
+
+# The leader + 3 wingmen the player follows, then races. Their spawn point
+# depends on the player's position when WAYPOINT_1 is reached, so it is given
+# at spawn time.
+BLUE_SQUADRON = WaveSpec(
+    name="blue",
+    ship_model="x-wing",
+    size=4,
+    team=1,
+    formation="arrowhead",
+    waypoints=CIRCUIT_WAYPOINTS,
+    loop=True,
+)
 
 # The 5 new waypoints given to the player AND every former formation member
 # once the circuit is done, per issue's step 5. The last one is the finish.
@@ -106,22 +115,18 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         game.app.bindings, "flight", "loop_target", "the cycle-target key"
     )
 
-    m.player_waypoints(
-        {"points": [WAYPOINT_1], "arrival_radius_m": WAYPOINT_1_ARRIVAL_RADIUS_M}
-    )
-    yield from m.wait_until(after_seconds(3))
+    m.player_waypoints([WAYPOINT_1], arrival_radius_m=WAYPOINT_1_ARRIVAL_RADIUS_M)
+    yield from m.wait(3)
     m.hud(
         f"Hold [{radial_key}] to open the target menu,\n"
         f"point at Waypoints, then press [{loop_key}]\n"
         "to lock onto your next waypoint."
     )
 
-    # The waypoint marker auto-detects arrival internally (see
-    # PlayerWaypoints), but exposes no public "just reached" event -- poll
-    # the same radius with the ordinary near() condition instead of reaching
-    # into its private state.
-    yield from m.wait_until(near("player", WAYPOINT_1, WAYPOINT_1_ARRIVAL_RADIUS_M))
-    game.player_waypoints.clean()
+    # The waypoint marker detects arrival itself but exposes no event for
+    # it, so poll the same radius.
+    yield from m.wait_until(near(game.player, WAYPOINT_1, WAYPOINT_1_ARRIVAL_RADIUS_M))
+    m.clear_player_waypoints()
 
     # ==================================================================
     # 2. Spawn the formation 1km ahead and to the left, teach Fighters + loop.
@@ -132,120 +137,74 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         + player_pawn.forward * FORMATION_AHEAD_M
         - player_pawn.right * FORMATION_LEFT_M
     )
-    escort_cfg = dict(m.waves["escort"])
-    escort_cfg["spawn_point"] = spawn_point.tolist()
-    escort = m.spawn(escort_cfg)
+    blue = m.spawn(BLUE_SQUADRON, spawn_point=spawn_point)
 
     m.hud(
         f"Allied formation inbound! Hold [{radial_key}],\n"
         f"point at Fighters, then press [{loop_key}]\n"
         "to lock onto the formation leader."
     )
-    yield from m.wait_until(after_seconds(1))
+    yield from m.wait(1)
     m.speech("Follow me, rookie!", speaker="Blue Leader")
 
     # ==================================================================
     # 3. Follow the formation: a catch-up deadline, then a sustained-
     #    separation fail condition for the rest of the circuit. "Close
-    #    enough" means close to ANY live member of the formation, not
-    #    specifically the leader -- near_actor already reports true on the
-    #    nearest pair across both sides, so this is just comparing against
-    #    the whole escort group instead of a single ship.
+    #    enough" means close to ANY live member of the formation.
     # ==================================================================
-    yield from m.wait_until(escort.alive_cond())
-    leader_bot = m.scenario.resolve(game, escort.name)[0].parent
-    # Registered separately from the "escort" group: step 4 below needs to
-    # single out the LEADER specifically (its own circuit progress), whereas
-    # the follow-distance checks here deliberately use the whole formation.
-    m.scenario.register("Blue_leader", [leader_bot])
+    yield from m.wait_until(blue.alive)
+    # Spawned first, so the formation leader; its own progress (not the
+    # formation's) marks the end of the circuit in step 4.
+    leader = blue.pawns()[0]
 
     m.speech("On me, rookie. Try to keep up!", speaker="Blue Leader")
 
-    deadline = game.game_time.get_current_time() + CATCH_UP_DEADLINE_S
-    yield from m.wait_any(
-        near_actor("player", escort.name, FOLLOW_RADIUS_M),
-        after_seconds(deadline),
-    )
-    if not near_actor("player", escort.name, FOLLOW_RADIUS_M)(game):
+    close_to_blue = near_actor(game.player, blue, FOLLOW_RADIUS_M)
+    caught_up = yield from m.wait_until(close_to_blue, timeout=CATCH_UP_DEADLINE_S)
+    if not caught_up:
         m.defeat("You failed to catch up with the formation in time. Mission failed.")
         return
 
     # Registered only now, so the initial catch-up isn't double-punished by
     # the same radius.
     lost_contact = m.on(
-        Sustained(
-            Not(near_actor("player", escort.name, FOLLOW_RADIUS_M)),
-            SUSTAINED_SEPARATION_S,
-        ),
-        lambda game: m.defeat(
+        m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S),
+        lambda: m.defeat(
             "You fell too far behind the formation for too long. Mission failed."
         ),
-        name="lost_contact",
     )
 
     # ==================================================================
     # 4. The leader's circuit, then the handoff to a race.
     # ==================================================================
-    yield from m.wait_until(reached_waypoint("Blue_leader", len(CIRCUIT_WAYPOINTS) - 1))
-    if lost_contact in m.scenario.triggers:
-        m.scenario.triggers.remove(lost_contact)
+    yield from m.wait_until(reached_waypoint(leader, len(CIRCUIT_WAYPOINTS) - 1))
+    lost_contact.cancel()
 
     m.speech(
         "Not bad! Race you to the marker! Follow the new waypoints.",
         speaker="Blue Leader",
     )
     m.player_waypoints(RACE_WAYPOINTS)
-    escort.set_waypoints(RACE_WAYPOINTS, loop=False)
+    blue.set_waypoints(RACE_WAYPOINTS, loop=False)
 
     # ==================================================================
     # 5. Ranking: the player must not finish last, with a special line for
     #    finishing first.
     # ==================================================================
     finish_point = RACE_WAYPOINTS[-1]
-    escort_pawns = m.scenario.resolve(game, escort.name)
-    racer_names = ["player"]
-    for i, pawn in enumerate(escort_pawns):
-        name = f"racer_{i}"
-        m.scenario.register(name, [pawn.parent])
-        racer_names.append(name)
-    total_racers = len(racer_names)
-
-    finish_order: list[str] = []
-
-    def record_finish(name: str):
-        def action(game):
-            if name not in finish_order:
-                finish_order.append(name)
-
-        return action
-
-    for name in racer_names:
+    racers = [game.player, *blue.pawns()]
+    finish_order: list = []
+    for racer in racers:
         m.on(
-            near(name, finish_point, FINISH_RADIUS_M),
-            record_finish(name),
-            name=f"finish_{name}",
+            near(racer, finish_point, FINISH_RADIUS_M),
+            lambda racer=racer: finish_order.append(racer),
         )
 
-    yield from m.wait_until(lambda game: len(finish_order) == total_racers)
+    yield from m.wait_until(lambda: len(finish_order) == len(racers))
 
-    if finish_order[-1] == "player":
+    if finish_order[-1] is game.player:
         m.defeat("You crossed the line last. Mission failed.")
-    elif finish_order[0] == "player":
+    elif finish_order[0] is game.player:
         m.victory("First across the line! Outstanding flying, rookie!")
     else:
         m.victory("You made it across without embarrassing yourself. Mission complete.")
-
-
-def build_mission1_level(game: FlightState) -> Iterator[str]:
-    """
-    Build Mission 1: Rookies.
-
-    :param game: The game/flight state
-    """
-    yield from game.scene.build_decomposed()
-
-    game.scenario = Scenario()
-    mission = Mission(game)
-    mission.waves = load_waves(Path(__file__).with_suffix(".yaml"))
-    game.scenario.schedule(mission1_mission(mission))
-    yield "scenario"

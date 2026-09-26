@@ -2,13 +2,12 @@
 
 The `game` package is the session's runtime: the `FlightState` that owns
 every live subsystem, physics integration, collision resolution, time
-keeping, and the data-driven scenario/mission engine that scripts a level's
-events. This page is the guided tour; the per-class API is generated from the
+keeping, and the mission engine that runs a level's scripted events. This page is the guided tour; the per-class API is generated from the
 docstrings in the [code reference](apidocs/index.rst).
 
 Most of the code lives in
 [`src/space_flight/game/`](../../src/space_flight/game/), with level definitions
-under [`game/levels/`](../../src/space_flight/game/levels/) and the scenario
+under [`game/levels/`](../../src/space_flight/game/levels/) and the mission
 scripting engine under [`game/scenario/`](../../src/space_flight/game/scenario/).
 
 ## `FlightState` — the session owner
@@ -17,7 +16,7 @@ scripting engine under [`game/scenario/`](../../src/space_flight/game/scenario/)
 is the app state active while actually flying (as opposed to menus or loading
 screens); `game` throughout the rest of the codebase almost always means
 "the current `FlightState` instance." It owns every session-scoped
-subsystem — the integrator, collision system, interactions, scenario,
+subsystem — the integrator, collision system, interactions, mission,
 explosion/fire-smoke and spark pools, time keeping, the player, the scene,
 HUD — and drives the top-level per-frame update.
 
@@ -41,12 +40,12 @@ HUD — and drives the top-level per-frame update.
   delayed methods → kill destructibles whose health hit zero → resolve
   collisions → recompute actor interactions → integrate physics → run every
   actor's registered update methods (`game.method_lists`) → check player
-  death. **`update_scenario_task`** separately advances `game.scenario` each
+  death. **`update_mission_task`** separately advances `game.mission` each
   frame. Both are no-ops while `is_paused`.
 - **`initialize_game_structure()`** constructs every session-scoped object
   once, in dependency order (see [Where things live](#where-things-live)
   below for the object graph), and **`exit()`** tears them down in roughly
-  reverse order (the `Scenario` is simply dropped rather than cleaned) — the
+  reverse order (the `Mission` is simply dropped rather than cleaned) — the
   two together are the definitive list of what a `FlightState` owns.
 - `pause()`/`resume()` propagate to `IntervalManager` and `GameTimeManager` so
   intervals and the game clock freeze together, e.g. for the pause menu.
@@ -136,68 +135,56 @@ module in this package: it defines Panda3D collision layers and owns all the
 
 ## Levels
 
-[`game/levels/`](../../src/space_flight/game/levels/) has one module per level,
-each exposing the same two-function shape `FlightState.enter()` expects
-(see above): `build_<name>_upfront(game)` for the black-screen phase, and
-`build_<name>_level(game) -> Iterator` for the animated incremental phase. A
-level's own logic is deliberately thin — spawn the player, pick a
-[scene](../../src/space_flight/scenes/), then hand off to `game.scene.build_decomposed()`
-and a `Mission` (see [scenario_scripting.md](scenario_scripting.md)) that
-scripts the mission's events directly in Python, driven by wave *data* kept
-in a sibling YAML file.
+[`game/levels/`](../../src/space_flight/game/levels/) has one Python module
+per level, holding everything about it: its tunable constants, its waves
+(`WaveSpec` constants), a `build_<name>_upfront(game)` function for the
+black-screen phase (create the player, pick a
+[scene](../../src/space_flight/scenes/) and build its heavy objects), and a
+mission body — the level's scripted events, see
+[scenario_scripting.md](scenario_scripting.md).
 
 | Level | File | Scene | Premise |
 |-------|------|-------|---------|
-| Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `debug` | Sandbox for the latest feature under development |
-| Intro | [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
 | Mission 1: Rookies | [`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py) | `asteroids` | Tutorial: target-filter menu, follow a formation, then race it |
+| Mission 2: Escort | [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
+| Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `debug` | Sandbox for the latest feature under development |
 
 `game/levels/__init__.py`'s `LEVELS` registry maps
-`app.configuration["selected_level"]` to each level's pair of functions;
-`FlightState._build_upfront`/`_make_build_generator` just look it up there.
+`app.configuration["selected_level"]` to a `LevelEntry(upfront, mission,
+description)`. `FlightState._build_upfront` calls the level's upfront
+function; `_make_build_generator` builds the rest of the scene
+(`scene.build_decomposed()`) during the animation, then creates the level's
+`Mission` and starts its body.
 
-## Scenario — data-driven mission scripting
+## Mission scripting
 
-[`game/scenario/`](../../src/space_flight/game/scenario/) turns a level's YAML
-file into runtime `when → then` triggers, so mission design (spawn timings,
-objectives, dialogue) lives in data rather than in each level's Python.
+[`game/scenario/`](../../src/space_flight/game/scenario/) runs a level's
+mission body — a plain Python generator — see
+[scenario_scripting.md](scenario_scripting.md) for how to write one.
 
-- **`loader.py`**: `load_scenario(path)` reads the YAML's `waves` (reusable
-  spawn definitions) and `triggers` sections, recursively builds a
-  `Condition`/`Action` callable for each single-key `{kind: arg}` node via
-  `_build_condition`/`_build_action`, and returns a ready `Scenario`. Every
-  wave id is pre-registered as an empty group up front so a condition
-  referencing it before it has spawned resolves to "no live members" rather
-  than warning about an unknown group.
-- **`conditions.py`**: leaf conditions (`after_seconds`, `all_destroyed`,
-  `any_alive`, `fired`, `near`, `reached_waypoint`, plus `any_destroyed`,
-  a stub that is always false for now) are plain
-  `condition(game) -> bool` closures. Conditions that need memory are small
-  callable classes instead: `Delay` latches the moment its inner condition
-  first becomes true (so it survives the inner condition flickering back to
-  false) and reports true `seconds` later; `AllOf`/`AnyOf` combine
-  sub-conditions, letting YAML nest logic like
-  `delay: {after: {all_destroyed: first_wave}, seconds: 3}`.
-- **`actions.py`**: action factories build `action(game) -> None` closures.
-  `spawn_wave` is the most involved — it schedules a **job** (a generator,
-  see below) that spawns one ship per frame rather than blocking a whole
-  frame on a large wave, optionally arranging wingmen into a `Formation`
-  (see [docs/ai.md](ai.md)) around a leader. Other actions cover HUD text,
-  player waypoints, subtitled speech (audio itself is a logging stub for
-  now, `_play_speech_audio`), ending the level, and `all()` to sequence
-  several actions under one trigger.
-- **`__init__.py`** (`Scenario`, `Trigger`): `Trigger.maybe_fire` evaluates
-  its condition once per frame and runs its action the first time it's true
-  (or every frame, with `once=False`). `Scenario` is the per-level owner:
-  it fires every trigger and steps every running **job** each frame
-  (`update`/`_step_jobs` — jobs are the generator-based mechanism
-  `spawn_wave` uses to spread heavy work across frames, distinct from the
-  level-build generators in `FlightState`). It also tracks **identity
-  groups** (`spawn`/`register`, ids appended as bots are created — the only
-  sanctioned way to add a member, so the registry can never drift from
-  reality) and **query groups** (`register_query`, a predicate evaluated
-  live against all actors, e.g. "enemies"), unified behind `resolve()` so
-  conditions/actions don't need to know which kind a group name refers to.
+- **`mission.py`** (`Mission`, `Trigger`): the per-level owner, kept on
+  `game.mission`. Each frame, `update()` fires the due reactive rules
+  (`Trigger`s registered with `on()`), then steps every running **job** — a
+  generator advanced once per frame: the mission body itself, and each
+  wave's spawn (distinct from the level-build generators in `FlightState`).
+  It also provides the sequencing helpers (`wait`, `wait_until`), the
+  clock-based conditions (`after`, `delay`, `sustained`) and the actions
+  (HUD text, subtitled speech — audio is a logging stub for now — player
+  waypoints, ending the level).
+- **`wave.py`** (`WaveSpec`, `WaveHandle`): a `WaveSpec` is a frozen
+  dataclass describing a group of bots; a `WaveHandle` is its live side for
+  one run. Spawning schedules a job creating one ship per frame (so a large
+  wave never stalls a frame), optionally arranged into a `Formation` (see
+  [docs/ai.md](ai.md)) — each ship taking the formation's next free slot, so
+  a wave can `join` another's formation even mid-spawn. The handle records
+  its members' pawn ids, reads their state live (`pawns`, `alive`,
+  `all_destroyed`, `any_destroyed`) and mutates them (`set_targets`,
+  `set_team` — which cascades a capital ship's cached team to its
+  sub-systems, shield and mounted turrets — and `set_waypoints`).
+- **`conditions.py`**: zero-argument condition factories (`near`,
+  `near_actor`, `reached_waypoint`), the `all_of`/`any_of`/`not_`
+  combinators, and `pawns_of`, the single resolver turning a wave handle, a
+  Player/Bot or a pawn into live pawns.
 
 ## `Record`
 
@@ -207,8 +194,8 @@ a new row keyed by the current game time, `record` appends a named value to
 the current row, and `save` dumps the accumulated rows to a timestamped
 Parquet file under `target/`. Used by `Player.record_state` (see
 [docs/actors.md](actors.md)) to capture flight-dynamics traces for tuning,
-and by `Bot.record_state` for bots spawned with `record: true` (their
-tactical decisions).
+and by `Bot.record_state` for bots of a `WaveSpec(record=True)` wave
+(their tactical decisions).
 
 ## Where things live
 
@@ -218,8 +205,8 @@ a session owns: `GameTimeManager`/`IntervalManager`/`DelayedMethodManager`
 (`time_keeping.py`), `FireSmokePool` and `SparkPool` (see
 [docs/fx.md](fx.md)), `Destructibles` (see [docs/actors.md](actors.md)), `CollisionSystem`
 (`collisions.py`), `Interactions` (see [docs/ai.md](ai.md)), `Integrator`
-(`integrator.py`), and `Scenario` (`scenario/__init__.py`). Level definitions
-live under [`game/levels/`](../../src/space_flight/game/levels/), one module (and
-a sibling YAML) per level; the scenario scripting engine lives under
+(`integrator.py`), and `Mission` (`scenario/mission.py`). Level definitions
+live under [`game/levels/`](../../src/space_flight/game/levels/), one module per
+level; the mission scripting engine lives under
 [`game/scenario/`](../../src/space_flight/game/scenario/). The auto-generated
 [code reference](apidocs/index.rst) has the full per-class API.

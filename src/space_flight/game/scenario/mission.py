@@ -1,367 +1,239 @@
 """
-The Python authoring surface for scenario scripting.
+Mission scripting.
 
-Where :mod:`space_flight.game.scenario.loader` turns a YAML ``triggers:``
-section into :class:`~space_flight.game.scenario.Trigger` objects, a
-:class:`Mission` lets a level script its events directly in Python: a plain
-generator function that ``yield from``s the mission's own wait helpers for
-the sequential parts ("wait 10s, then spawn the first wave, then wait until
-it's wiped, then...") and calls :meth:`Mission.on` for reactive rules that
-must hold throughout regardless of where the main sequence currently is
-("if all transports die, defeat -- whenever that happens").
+A level scripts its events as a plain generator function, the mission body,
+run by a :class:`Mission` one step per frame::
 
-Wave *data* (size, ship model, spawn point, ...) still lives in YAML --
-:func:`space_flight.game.scenario.loader.load_waves` loads just that section,
-with no ``triggers:`` needed. A level's build function then does::
+    def intro_mission(m: Mission) -> Iterator[None]:
+        transports = m.spawn(TRANSPORTS)
+        m.on(m.delay(transports.all_destroyed, 3),
+             lambda: m.defeat("The convoy was lost."))
+        yield from m.wait(10)
+        m.spawn(FIRST_WAVE, target=transports)
 
-    def mission(m: Mission) -> Iterator[None]:
-        yield from m.wait(0.1)
-        transports = m.spawn(m.waves["transports"])
-        yield from m.wait_until(transports.all_destroyed_cond())
-        m.defeat("The convoy was lost.")
-
-    def build_x_level(game):
-        ...
-        game.scenario = Scenario()
-        m = Mission(game)
-        m.waves = load_waves(Path(__file__).with_suffix(".yaml"))
-        game.scenario.schedule(mission(m))
-        yield "scenario"
-
-This module reuses the existing engine wholesale (:class:`Scenario`,
-:class:`Trigger`, its job-stepping) rather than replacing it: a
-:class:`Mission`'s body is itself just a job, and :meth:`Mission.on` registers
-an ordinary trigger.
+The body ``yield from``s :meth:`Mission.wait` / :meth:`Mission.wait_until`
+for its sequential parts, and registers reactive rules with
+:meth:`Mission.on` for what must hold wherever the sequence currently is.
+Conditions are zero-argument callables (see
+:mod:`space_flight.game.scenario.conditions`); actions are zero-argument
+callables too, typically lambdas calling the mission's action methods.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Callable, Iterator, Optional, Sequence
 
-from space_flight.game.scenario import Action, Condition, Scenario, Trigger, actions
-from space_flight.game.scenario.actions import (
-    _assign_targets,
-    _spawn_wave_job,
-    _validate_wave_cfg,
-    set_bot_team,
-)
+from space_flight.game.scenario.conditions import Condition, _After, _Delay, _Sustained
+from space_flight.game.scenario.wave import WaveHandle, WaveSpec
+from space_flight.ui.player_waypoints import PlayerWaypoints
 
 if TYPE_CHECKING:
-    from space_flight.ai.formation import Formation
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
+#: An action: called once when a rule fires.
+Action = Callable[[], None]
+
+
+class Trigger:
+    """
+    A reactive rule: run action when condition becomes true.
+
+    :param condition: Checked once per frame
+    :param action: Run when the condition holds
+    :param once: Fire only the first time (otherwise every frame it holds)
+    """
+
+    def __init__(self, condition: Condition, action: Action, once: bool = True) -> None:
+        self.condition = condition
+        self.action = action
+        self.once = once
+        #: Whether the action has run at least once.
+        self.fired = False
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        """Stop checking this rule."""
+        self.cancelled = True
+
+    @property
+    def done(self) -> bool:
+        return self.cancelled or (self.once and self.fired)
+
+    def maybe_fire(self) -> None:
+        if not self.done and self.condition():
+            self.action()
+            self.fired = True
+
 
 class Mission:
     """
-    A level's Python mission: wraps a :class:`Scenario` with an ergonomic API
-    for a sequential mission body plus reactive rules.
+    Runs a level's mission: its body and jobs (generators stepped once per
+    frame) and its reactive rules.
 
-    One instance is normally created per level, in the level's build
-    function, and its mission body scheduled as a job on the scenario (see
-    module docstring). :attr:`waves` is mostly just a convenient place for a
-    level to stash the wave data it loaded so the mission body can refer to
-    ``m.waves["first_wave"]`` -- assigning it also pre-declares each wave id
-    as an (empty) group on the scenario, so a reactive rule that polls a
-    wave's group before it has spawned (see the setter) does not spuriously
-    warn about an "unknown group".
+    FlightState owns one per level (``game.mission``) and calls
+    :meth:`update` every unpaused frame.
 
-    :param game: The game/flight state; must already have ``game.scenario``
-        set to a live :class:`Scenario`
+    :param game: The game/flight state
     """
 
     def __init__(self, game: FlightState) -> None:
         self.game = game
-        self.scenario: Scenario = game.scenario
-        #: Optional convenience slot for a level's loaded wave data.
-        self._waves: dict[str, dict] = {}
+        self.triggers: list[Trigger] = []
+        self.jobs: list[Iterator] = []
 
-    @property
-    def waves(self) -> dict[str, dict]:
-        return self._waves
-
-    @waves.setter
-    def waves(self, waves: dict[str, dict]) -> None:
-        self._waves = waves
-        # Pre-declare every wave id as a (still empty) identity group, exactly
-        # as :func:`space_flight.game.scenario.loader.load_scenario` does for
-        # the legacy DSL, and for the same reason: a reactive rule registered
-        # up front (see module docstring) may poll a wave's group (e.g.
-        # reached_waypoint or near) before that wave has actually spawned --
-        # without this, Scenario.resolve would warn about an "unknown group"
-        # on every such frame, even though the wave's id is perfectly valid
-        # and simply hasn't spawned yet.
-        for wave_id in waves:
-            self.scenario.groups.setdefault(wave_id, [])
+    def now(self) -> float:
+        """The game clock, in seconds."""
+        return self.game.game_time.get_current_time()
 
     # ------------------------------------------------------------------
-    # Spawning
+    # Running
     # ------------------------------------------------------------------
 
-    def spawn(
-        self,
-        wave_cfg: dict,
-        *,
-        target: Optional[Union["WaveHandle", str]] = None,
-        join: Optional["Formation"] = None,
-    ) -> "WaveHandle":
-        """
-        Spawn a wave, one ship per frame, and return a handle to it.
+    def run(self, body: Callable[[Mission], Iterator[None]]) -> None:
+        """Start a mission body: a generator function taking this mission."""
+        self.schedule(body(self))
 
-        :param wave_cfg: The wave configuration (see
-            :func:`space_flight.game.scenario.actions.spawn_wave`); validated
-            up front so a typo'd or missing key raises immediately rather than
-            failing confusingly mid-spawn
-        :param target: A :class:`WaveHandle` or group name this wave's ships
-            should attack, overriding any ``target`` already in wave_cfg
-        :param join: An existing, live :class:`Formation` for this wave's
-            ships to attach to (continuing from its next free slot) instead of
-            creating a new formation, even if wave_cfg declares one
-        :return: A handle to the spawned (spawning) wave
-        """
-        cfg = dict(wave_cfg)
-        _validate_wave_cfg(cfg)
-        wave_id = cfg["id"]
-        if target is not None:
-            cfg["target"] = target.name if isinstance(target, WaveHandle) else target
+    def schedule(self, job: Iterator) -> None:
+        """Step a generator once per frame until it finishes."""
+        self.jobs.append(job)
 
-        if wave_id in self.scenario.scheduled and not cfg.get("allow_respawn", False):
-            LOGGER.warning(
-                "Mission.spawn: '%s' already spawned; skipping "
-                "(set allow_respawn: true to override)",
-                wave_id,
-            )
-            return WaveHandle(wave_id, self)
+    def update(self) -> None:
+        """Advance by one frame: fire due rules, then step every job."""
+        for trigger in list(self.triggers):
+            trigger.maybe_fire()
+        self.triggers = [t for t in self.triggers if not t.done]
 
-        self.scenario.scheduled.add(wave_id)
-        self.scenario.schedule(_spawn_wave_job(self.game, cfg, join=join))
-        return WaveHandle(wave_id, self)
+        # A job scheduled during this loop (e.g. a spawn started by the body)
+        # is appended to the list being iterated, so it takes its first step
+        # this same frame.
+        still_running = []
+        for job in self.jobs:
+            try:
+                next(job)
+                still_running.append(job)
+            except StopIteration:
+                pass
+        self.jobs = still_running
 
     # ------------------------------------------------------------------
-    # Sequencing helpers (yield from these in a mission body)
+    # Waves
+    # ------------------------------------------------------------------
+
+    def wave(self, spec: WaveSpec) -> WaveHandle:
+        """A handle to a not-yet-spawned wave (call its spawn() later)."""
+        return WaveHandle(self, spec)
+
+    def spawn(self, spec: WaveSpec, **kwargs) -> WaveHandle:
+        """Spawn a wave now; kwargs as :meth:`WaveHandle.spawn`."""
+        return self.wave(spec).spawn(**kwargs)
+
+    # ------------------------------------------------------------------
+    # Sequencing (yield from these in a mission body)
     # ------------------------------------------------------------------
 
     def wait(self, seconds: float) -> Iterator[None]:
-        """
-        Yield once per frame until seconds of game time have passed.
-
-        :param seconds: How long to wait, in game-clock seconds
-        """
-        deadline = self.game.game_time.get_current_time() + seconds
-        while self.game.game_time.get_current_time() < deadline:
+        """Pause the body for seconds of game time."""
+        deadline = self.now() + seconds
+        while self.now() < deadline:
             yield
 
-    def wait_until(self, condition: Union[Condition, float]) -> Iterator[None]:
+    def wait_until(
+        self, condition: Condition, timeout: Optional[float] = None
+    ) -> Iterator[None]:
         """
-        Yield once per frame until condition holds.
+        Pause the body until condition holds, or timeout seconds pass.
 
-        :param condition: A condition callable(game) -> bool, or a bare
-            number of seconds (equivalent to :meth:`wait`)
+        :return: (via ``yield from``) True if the condition was met, False on
+            timeout
         """
-        if isinstance(condition, (int, float)):
-            yield from self.wait(condition)
-            return
-        while not condition(self.game):
+        deadline = None if timeout is None else self.now() + timeout
+        while not condition():
+            if deadline is not None and self.now() >= deadline:
+                return False
             yield
+        return True
 
-    def wait_any(self, *conditions: Condition) -> Iterator[None]:
-        """
-        Yield once per frame until any of conditions holds.
+    # ------------------------------------------------------------------
+    # Conditions that need the clock
+    # ------------------------------------------------------------------
 
-        :param conditions: Condition callables(game) -> bool
-        """
-        while not any(cond(self.game) for cond in conditions):
-            yield
+    def after(self, seconds: float) -> Condition:
+        """True once seconds have passed from now."""
+        return _After(self.now, seconds)
 
-    def wait_all(self, *conditions: Condition) -> Iterator[None]:
-        """
-        Yield once per frame until every one of conditions holds.
+    def delay(self, condition: Condition, seconds: float) -> Condition:
+        """True seconds after condition first became true (latches)."""
+        return _Delay(self.now, condition, seconds)
 
-        :param conditions: Condition callables(game) -> bool
-        """
-        while not all(cond(self.game) for cond in conditions):
-            yield
+    def sustained(self, condition: Condition, seconds: float) -> Condition:
+        """True once condition has held for an unbroken run of seconds."""
+        return _Sustained(self.now, condition, seconds)
 
     # ------------------------------------------------------------------
     # Reactive rules
     # ------------------------------------------------------------------
 
-    def on(
-        self,
-        condition: Condition,
-        action: Action,
-        once: bool = True,
-        name: Optional[str] = None,
-    ) -> Trigger:
+    def on(self, condition: Condition, action: Action, once: bool = True) -> Trigger:
         """
-        Register a reactive rule alongside the sequential mission body.
+        Run action when condition becomes true, wherever the body currently is.
 
-        Use this for a rule that must hold no matter where the mission body's
-        sequence currently is (e.g. "defeat if all transports die, whenever
-        that happens"), as opposed to something the body itself waits on.
-
-        :param condition: Checked every frame
-        :param action: Run once condition holds
-        :param once: Whether the action fires only the first time
-        :param name: Optional label, for logging and the fired condition
-        :return: The created :class:`Trigger` (also appended to the scenario)
+        :return: The rule (call its cancel() to retire it)
         """
-        trigger = Trigger(condition=condition, action=action, once=once, name=name)
-        self.scenario.triggers.append(trigger)
-        if name is not None:
-            self.scenario.triggers_by_name[name] = trigger
+        trigger = Trigger(condition, action, once)
+        self.triggers.append(trigger)
         return trigger
 
     # ------------------------------------------------------------------
-    # Thin action wrappers
+    # Actions
     # ------------------------------------------------------------------
 
     def hud(self, text: str, display_time_s: float = 5.0) -> None:
-        """Show a one-off HUD banner message."""
-        actions.hud_text(text, display_time_s=display_time_s)(self.game)
+        """Show a message in the HUD event banner."""
+        # There is no HUD headless, and no one to read it.
+        if not self.game.headless:
+            self.game.hud.set_event_text(text=text, display_time_s=display_time_s)
 
     def speech(
-        self,
-        text: str,
-        speaker: Optional[str] = None,
-        display_time_s: float = 6.0,
+        self, text: str, speaker: Optional[str] = None, display_time_s: float = 6.0
     ) -> None:
-        """Play (stubbed) a line of speech, shown as a subtitle."""
-        cfg: dict[str, Any] = {"text": text, "display_time_s": display_time_s}
-        if speaker is not None:
-            cfg["speaker"] = speaker
-        actions.speech(cfg)(self.game)
+        """Play a line of speech (audio stubbed), shown as a subtitle."""
+        LOGGER.info("speech [%s]: %s", speaker or "narrator", text)
+        if not self.game.headless:
+            subtitle = f"{speaker}: {text}" if speaker else text
+            self.game.hud.set_chatter_text(text=subtitle, display_time_s=display_time_s)
 
-    def player_waypoints(self, cfg: Union[list, dict]) -> None:
-        """Give the player a targetable waypoint route."""
-        actions.player_waypoints(cfg)(self.game)
+    def player_waypoints(
+        self,
+        points: Sequence[Sequence[float]],
+        arrival_radius_m: Optional[float] = None,
+        marker_radius_m: Optional[float] = None,
+    ) -> None:
+        """Give the player a route of targetable waypoints, replacing any
+        previous one."""
+        self.clear_player_waypoints()
+        kwargs = {}
+        if arrival_radius_m is not None:
+            kwargs["arrival_radius_m"] = arrival_radius_m
+        if marker_radius_m is not None:
+            kwargs["marker_radius_m"] = marker_radius_m
+        self.game.player_waypoints = PlayerWaypoints(self.game, points, **kwargs)
+
+    def clear_player_waypoints(self) -> None:
+        """Remove the player's waypoint route, if any."""
+        route = getattr(self.game, "player_waypoints", None)
+        if route is not None:
+            route.clean()
+            self.game.player_waypoints = None
 
     def end_level(self, outcome: str, text: str = "") -> None:
-        """End the level immediately with the given outcome."""
-        actions.end_level({"outcome": outcome, "text": text})(self.game)
+        """End the level ("victory", "defeat" or "death")."""
+        self.game.end_level(outcome=outcome, text=text)
 
     def victory(self, text: str = "") -> None:
-        """Shorthand for :meth:`end_level` with outcome "victory"."""
         self.end_level("victory", text)
 
-    def defeat(self, text: str = "", delay: float = 0) -> None:
-        """
-        Shorthand for :meth:`end_level` with outcome "defeat".
-
-        :param delay: If non-zero, end the level that many seconds from now
-            (via the game's delayed-method manager) instead of immediately --
-            handy when calling this from a reactive :meth:`on` action, where
-            there is no generator to ``yield from`` a :meth:`wait` in.
-        """
-        if delay:
-            self.game.delayed_methods.do_method_later(
-                delay_s=delay,
-                name="mission_defeat",
-                method=lambda: self.end_level("defeat", text),
-            )
-        else:
-            self.end_level("defeat", text)
-
-
-class WaveHandle:
-    """
-    A handle to a wave spawned through :meth:`Mission.spawn`.
-
-    Thin wrapper around a group name plus the owning :class:`Mission`; every
-    property/method reads live state from the scenario, so a handle stays
-    valid across the wave's whole lifetime (spawning, alive, wiped out).
-
-    :param name: The wave's group/identity name
-    :param mission: The owning :class:`Mission`
-    """
-
-    def __init__(self, name: str, mission: Mission) -> None:
-        self.name = name
-        self.mission = mission
-
-    @property
-    def scenario(self) -> Scenario:
-        return self.mission.scenario
-
-    @property
-    def game(self) -> FlightState:
-        return self.mission.game
-
-    # ------------------------------------------------------------------
-    # State, read live
-    # ------------------------------------------------------------------
-
-    @property
-    def alive(self) -> bool:
-        """Whether at least one member of this wave is currently alive."""
-        return self.scenario.is_alive(self.game, self.name)
-
-    @property
-    def all_destroyed(self) -> bool:
-        """Whether this wave has spawned and now has no live members."""
-        return self.scenario.all_destroyed(self.game, self.name)
-
-    @property
-    def any_destroyed(self) -> bool:
-        """Whether this wave has spawned and lost at least one member."""
-        return self.scenario.any_destroyed(self.game, self.name)
-
-    @property
-    def formation(self) -> Optional["Formation"]:
-        """The wave's live :class:`Formation`, or None if it has none."""
-        return self.scenario.formation_by_group.get(self.name)
-
-    # ------------------------------------------------------------------
-    # As conditions, for wait_until / wait_any / wait_all / on
-    # ------------------------------------------------------------------
-
-    def all_destroyed_cond(self) -> Condition:
-        """A condition callable(game) -> bool mirroring :attr:`all_destroyed`."""
-        return lambda game: self.scenario.all_destroyed(game, self.name)
-
-    def any_destroyed_cond(self) -> Condition:
-        """A condition callable(game) -> bool mirroring :attr:`any_destroyed`."""
-        return lambda game: self.scenario.any_destroyed(game, self.name)
-
-    def alive_cond(self) -> Condition:
-        """A condition callable(game) -> bool mirroring :attr:`alive`."""
-        return lambda game: self.scenario.is_alive(game, self.name)
-
-    # ------------------------------------------------------------------
-    # Mutating every live member
-    # ------------------------------------------------------------------
-
-    def set_targets(self, other: Union["WaveHandle", str]) -> None:
-        """
-        Make every live member of this wave target every live member of other.
-
-        :param other: A :class:`WaveHandle` or a group name
-        """
-        target_name = other.name if isinstance(other, WaveHandle) else other
-        for pawn in self.scenario.resolve(self.game, self.name):
-            _assign_targets(self.game, pawn.parent, target_name)
-
-    def set_team(self, team: int) -> None:
-        """
-        Reassign every live member of this wave to team, cascading correctly
-        for capital ships (sub-systems, shield, mounted turrets/tractor beams).
-
-        :param team: The new team id
-        """
-        for pawn in self.scenario.resolve(self.game, self.name):
-            set_bot_team(pawn.parent, team)
-
-    def set_waypoints(self, points: list, loop: bool = True) -> None:
-        """
-        Give every live member of this wave a new patrol/route path.
-
-        :param points: The waypoints, in world space
-        :param loop: Whether to loop back to the first point
-        """
-        import numpy as np
-
-        waypoints = [np.array(p) for p in points]
-        for pawn in self.scenario.resolve(self.game, self.name):
-            pawn.parent.navigator.set_waypoints(waypoints=waypoints, is_loop=loop)
+    def defeat(self, text: str = "") -> None:
+        self.end_level("defeat", text)
