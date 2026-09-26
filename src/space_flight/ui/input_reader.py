@@ -365,7 +365,7 @@ class InputReader:
         names: set[str] = set()
         for ctx_data in self.app.bindings.get("contexts", {}).values():
             for hw_name in ctx_data.get(input_type, {}).values():
-                if hw_name not in axis_names:
+                if isinstance(hw_name, str) and hw_name not in axis_names:
                     names.add(hw_name)
         return frozenset(names)
 
@@ -578,10 +578,10 @@ class GamepadReader(InputReader):
             self.gamepad.findAxis(InputDevice.Axis.left_trigger).value, tdz
         )
         state.axes["left_x"] = self.dz(
-            -self.gamepad.findAxis(InputDevice.Axis.left_x).value, sdz
+            self.gamepad.findAxis(InputDevice.Axis.left_x).value, sdz
         )
         state.axes["left_y"] = self.dz(
-            -self.gamepad.findAxis(InputDevice.Axis.left_y).value, sdz
+            self.gamepad.findAxis(InputDevice.Axis.left_y).value, sdz
         )
         state.axes["right_x"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.right_x).value, sdz

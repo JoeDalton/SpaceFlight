@@ -22,7 +22,7 @@ from panda3d.core import InputDevice, TextNode, VBase4, Vec2
 
 from space_flight import CONFIGURATION_PATH
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton, CustomEntry
+from space_flight.menus.menu_utils import CustomButton, CustomCheckButton, CustomEntry
 from space_flight.ui.input_reader import (
     GAMEPAD_AXIS_NAMES,
     JOYSTICK_AXIS_NAMES,
@@ -320,6 +320,7 @@ class InputSettingsMenuState(BaseState):
         self.saved_config: dict = {}
         self.dz_entries: dict[tuple, CustomEntry] = {}
         self.binding_labels: dict[tuple, DirectLabel] = {}
+        self.checkbox_buttons: dict[tuple, CustomCheckButton] = {}
         self.input_type_buttons: dict[str, CustomButton] = {}
         self.static_widgets: list = []
         self.active_dialog: ChangeBindingDialog | None = None
@@ -490,6 +491,7 @@ class InputSettingsMenuState(BaseState):
             self.scroll_frame = None
         self.dz_entries.clear()
         self.binding_labels.clear()
+        self.checkbox_buttons.clear()
 
         rows = self.make_row_data()
         n = len(rows)
@@ -569,6 +571,8 @@ class InputSettingsMenuState(BaseState):
                 self.add_header(content, row["text"], y)
             elif kind == "deadzone":
                 self.add_deadzone_row(content, row, y)
+            elif kind == "checkbox":
+                self.add_checkbox_row(content, row, y)
             else:
                 self.add_binding_row(content, row, y)
 
@@ -631,6 +635,38 @@ class InputSettingsMenuState(BaseState):
             parent=canvas,
         )
         self.dz_entries[row["path"]] = entry
+
+    def add_checkbox_row(self, canvas, row: dict, y: float):
+        """
+        Add a boolean setting label and checkbox to the scroll canvas.
+
+        The checkbox is stored in :attr:`checkbox_buttons` keyed by
+        *row["path"]* and writes straight into :attr:`working_config`
+        on every toggle (see :meth:`on_checkbox_toggle`).
+
+        :param canvas: The scroll canvas node to parent the widgets to.
+        :param row: Row descriptor dict with "label", "path", and
+            "value" keys.
+        :param y: Vertical position on the canvas.
+        """
+        DirectLabel(
+            parent=canvas,
+            text=row["label"] + ":",
+            scale=0.05,
+            pos=(self.app.a2dLeft + 0.2, 0, y - 0.015),
+            frameColor=(0, 0, 0, 0),
+            text_fg=(0.898, 0.839, 0.730, 1.0),
+            text_align=TextNode.ALeft,
+        ).setTransparency(True)
+        checkbox = CustomCheckButton(
+            app=self.app,
+            pos=(self.app.a2dRight - 0.3, 0, y),
+            value=row["value"],
+            command=self.on_checkbox_toggle,
+            extraArgs=[row["path"]],
+            parent=canvas,
+        )
+        self.checkbox_buttons[row["path"]] = checkbox
 
     def add_binding_row(self, canvas, row: dict, y: float):
         """
@@ -710,6 +746,8 @@ class InputSettingsMenuState(BaseState):
           and "value" keys.
         - "binding" — remappable action with "label", "path", and
           "value" keys.
+        - "checkbox" — boolean toggle with "label", "path", and
+          "value" keys.
 
         Order: dead zones, then global bindings, then one section per context
         (flight, radial menu, …) filtered to the currently selected input type.
@@ -750,14 +788,24 @@ class InputSettingsMenuState(BaseState):
             label = _CONTEXT_LABELS.get(ctx_name, ctx_name.replace("_", " ").title())
             rows.append({"kind": "header", "text": f"{label} Bindings"})
             for action, val in bindings.items():
-                rows.append(
-                    {
-                        "kind": "binding",
-                        "label": action.replace("_", " ").capitalize(),
-                        "path": ("contexts", ctx_name, inp, action),
-                        "value": str(val) if val is not None else "",
-                    }
-                )
+                if isinstance(val, bool):
+                    rows.append(
+                        {
+                            "kind": "checkbox",
+                            "label": action.replace("_", " ").capitalize(),
+                            "path": ("contexts", ctx_name, inp, action),
+                            "value": val,
+                        }
+                    )
+                else:
+                    rows.append(
+                        {
+                            "kind": "binding",
+                            "label": action.replace("_", " ").capitalize(),
+                            "path": ("contexts", ctx_name, inp, action),
+                            "value": str(val) if val is not None else "",
+                        }
+                    )
 
         return rows
 
@@ -797,6 +845,24 @@ class InputSettingsMenuState(BaseState):
                 except ValueError:
                     pass
             d[path[-1]] = val
+
+    def on_checkbox_toggle(self, status, path: tuple):
+        """
+        Write a toggled checkbox value straight into :attr:`working_config`.
+
+        Unlike dead-zone edits, checkbox state is written immediately rather
+        than flushed on save, since :class:`~space_flight.menus.menu_utils.
+        CustomCheckButton`
+        already reports the new value on every toggle.
+
+        :param status: 1 (checked) or 0 (unchecked), as reported by
+            :class:`~space_flight.menus.menu_utils.CustomCheckButton`.
+        :param path: Config-tree path tuple identifying the boolean setting.
+        """
+        d = self.working_config
+        for key in path[:-1]:
+            d = d[key]
+        d[path[-1]] = bool(status)
 
     # ------------------------------------------------------------------
     # Dialog

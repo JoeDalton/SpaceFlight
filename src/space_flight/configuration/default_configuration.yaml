@@ -52,9 +52,13 @@ contexts:
     gamepad:
       # Flight axes
       throttle:            right_trigger
+      invert_throttle:     false
       yaw:                 right_x
+      invert_yaw:          true
       pitch:               left_y
+      invert_pitch:        true
       roll:                left_x
+      invert_roll:         false
       # Actions
       fire:                gamepad_lshoulder
       drop_bomb:           gamepad_face_x
@@ -70,9 +74,13 @@ contexts:
     joystick:
       # Flight axes
       throttle:            throttle
+      invert_throttle:     false
       yaw:                 yaw
+      invert_yaw:          false
       pitch:               pitch
+      invert_pitch:        false
       roll:                roll
+      invert_roll:         false
       # Head look (hat buttons)
       view_up:             stick_button_19
       view_down:           stick_button_18

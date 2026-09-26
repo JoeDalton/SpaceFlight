@@ -255,7 +255,10 @@ class FlightInputContext(InputContext):
         key = self.bindings.get(action)
         if not key:
             return 0.0
-        return state.axes.get(key, 0.0)
+        value = state.axes.get(key, 0.0)
+        if self.bindings.get(f"invert_{action}"):
+            value = -value
+        return value
 
     # ------------------------------------------------------------------
     # Actions
