@@ -230,6 +230,31 @@ class WaveHandle:
         for pawn in self.pawns():
             pawn.parent.navigator.set_waypoints(waypoints=waypoints, is_loop=loop)
 
+    def follow(self, leader: Any) -> None:
+        """
+        Every live member forms up on leader, which takes the lead slot of the
+        wave's formation (created from the spec if the wave has none); the
+        former leader and wingmen shift down one slot each.
+
+        Members drop their routes: a bot with waypoints patrols rather than
+        holds formation.
+
+        :param leader: See :func:`pawns_of` (typically ``game.player``); its
+            first live pawn leads
+        """
+        leader_pawns = pawns_of(leader)
+        if not leader_pawns:
+            return
+        if self.formation is None:
+            self.formation = Formation(
+                scale_m=self.spec.formation_scale_m,
+                shape=self.spec.formation or "arrowhead",
+            )
+        for pawn in self.pawns():
+            self.formation.add_ship(ship=pawn)
+            pawn.parent.navigator.clear_waypoints()
+        self.formation.add_ship(ship=leader_pawns[0], leader=True)
+
 
 def _add_targets(bot: Bot, who: Any) -> None:
     """Make every live pawn of who a primary target of bot."""

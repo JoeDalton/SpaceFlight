@@ -278,6 +278,16 @@ def test_mission2_is_registered():
     assert "Mission 3: Escort" in LEVELS
 
 
+def test_mission2_player_takes_point_when_ordered_to_scan(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 5)
+    assert any("take point" in text for text, _ in game.hud.chatter)
+    blue = live(game, spawned, "blue")
+    formation = blue[0].formation
+    assert formation.ship_ids == [game.player.pawn.id, *(p.id for p in blue)]
+    assert all(p.parent.navigator.waypoints == [] for p in blue)
+
+
 def test_mission2_convoy_is_neutral_and_smuggler_waits_for_clear_scans(game, spawned):
     m = start(game, mission2.mission2_mission)
     advance(game, m, mission2.INTRO_DELAY_S + 2 * mission2.CONVOY_INTERVAL_S + 1)

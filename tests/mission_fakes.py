@@ -45,6 +45,10 @@ class MockNavigator:
         self.waypoints = waypoints
         self.is_loop = is_loop
 
+    def clear_waypoints(self):
+        self.waypoints = []
+        self.next_waypoint_idx = 0
+
 
 class MockPawn:
     def __init__(self, parent, position, team):

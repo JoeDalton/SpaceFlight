@@ -158,6 +158,7 @@ and after the wave exists:
 | `set_targets(who)` | every live member attacks every live pawn of `who` |
 | `set_team(team)` | reassigns every live member, cascading a capital ship's cached team to its sub-systems, shield and mounted turrets/tractor beams |
 | `set_waypoints(points, loop=True)` | gives every live member a new route |
+| `follow(who)` | every live member forms up on `who` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, since a bot with waypoints patrols rather than holds formation |
 
 `alive`, `all_destroyed` and `any_destroyed` are plain methods. Call one to
 get a bool; pass it **uncalled** to use it as a condition:

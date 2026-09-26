@@ -309,15 +309,17 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     yield from m.wait(4)
     m.speech(
         "Their transponders say civilian freight. Weapons cold, nobody fires on them.\n"
-        "Three, you've got the scanner. Check each one.",
+        "Three, you've got the scanner, so take point. We'll follow your lead.",
         speaker="Blue Leader",
     )
+    blue.follow(game.player)
     yield from m.wait(4)
     m.hud(
+        "You have the lead: Blue flight now follows you.\n"
         f"Hold [{radial_key}], point at Capital ships, then press [{loop_key}]\n"
         "to lock a transport. Close to 1000m and keep it\n"
         "ahead of you for 15 seconds to scan it.",
-        display_time_s=8,
+        display_time_s=10,
     )
     yield from m.wait(CONVOY_INTERVAL_S - 8)
     convoy[1].spawn()

@@ -444,6 +444,33 @@ def test_set_waypoints(mission, spawned):
         assert bot.navigator.is_loop is False
 
 
+def test_follow_puts_the_leader_first_and_drops_routes(game, mission, spawned):
+    spec = WaveSpec(
+        name="flight",
+        ship_model="x-wing",
+        size=2,
+        spawn_point=[0, 0, 0],
+        formation="arrowhead",
+        waypoints=[[0, 100, 0]],
+    )
+    wave = mission.spawn(spec)
+    run_jobs(mission)
+    old_leader, wingman = wave.pawns()
+    wave.follow(game.player)
+    assert wave.formation.ship_ids == [game.player.pawn.id, old_leader.id, wingman.id]
+    assert game.player.pawn.formation is wave.formation
+    assert all(bot.navigator.waypoints == [] for bot in spawned)
+
+
+def test_follow_creates_a_formation_if_the_wave_has_none(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    wave.follow(game.player)
+    assert wave.formation is not None
+    assert wave.formation.ship_ids[0] == game.player.pawn.id
+    assert len(wave.formation.ship_ids) == WAVE.size + 1
+
+
 def test_set_team(mission, spawned):
     wave = mission.spawn(WAVE)
     run_jobs(mission)
