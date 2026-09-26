@@ -125,9 +125,19 @@ only read by the input settings menu's reset-to-defaults. It then
 `sanitise()`s the merged result so every field is
 clamped to something the renderer can safely act on (valid display mode,
 minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample counts,
-etc.) — a malformed or hand-edited config file degrades to defaults rather
-than crashing the renderer. `save()` re-sanitises and persists to the user
-file; `reset_to_default()` reloads just the defaults without touching it.
+a known cloud-quality name, etc.) — a malformed or hand-edited config file
+degrades to defaults rather than crashing the renderer. `save()` re-sanitises
+and persists to the user file; `reset_to_default()` reloads just the defaults
+without touching it.
+
+Not every setting is consumed by `GraphicsManager`. `clouds.quality` is read by
+`CloudField` itself when it builds, the same way the ocean reads
+`render.reflection_scale` — the setting belongs to the thing that can act on it,
+rather than being threaded through the manager. Its four names must match
+`CloudQuality` in
+[`scenes/cloud/cloud.py`](../../src/space_flight/scenes/cloud/cloud.py), since a
+name the sanitiser accepts but the enum does not know would validate and then
+silently fall back to `high`; a test asserts the two lists agree.
 
 [`graphics_manager.py`](../../src/space_flight/global_architecture/graphics_manager.py)'s
 `GraphicsManager` applies that sanitised config to the live engine, split

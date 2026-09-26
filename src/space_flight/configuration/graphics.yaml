@@ -22,3 +22,6 @@ antialiasing:
 
 compatibility:
   alternate_model_orientation: true
+
+clouds:
+  quality: high

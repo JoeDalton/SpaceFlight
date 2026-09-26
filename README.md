@@ -31,7 +31,7 @@ invoke develop
 ## Running the game 
 In the projects directory, with the environment activated
 ```
-python ./scripts/launcher.py
+space_flight
 ```
 
 ## Development 

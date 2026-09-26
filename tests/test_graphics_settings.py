@@ -19,12 +19,15 @@ from space_flight.global_architecture.graphics_settings import (
     _deep_merge,
 )
 
-# A fully-populated, valid config matching the YAML schema.
+# A fully-populated, valid config matching the YAML schema. Several tests assert
+# exact equality against it, so every section sanitise() populates must appear
+# here -- otherwise adding a section looks like a test failure.
 _VALID = {
     "display": {"mode": "windowed", "windowed_size": [1280, 720]},
     "render": {"scale": 0.75, "reflection_scale": 0.5, "mirror_scale": 1.0},
     "antialiasing": {"msaa": 4, "fxaa": True},
     "compatibility": {"alternate_model_orientation": False},
+    "clouds": {"quality": "mid"},
 }
 
 
@@ -156,6 +159,24 @@ class TestSanitise:
         )
         assert out["compatibility"]["alternate_model_orientation"] is expected
 
+    @pytest.mark.parametrize("quality", ["low", "mid", "high", "ultra"])
+    def test_valid_cloud_quality_preserved(self, quality):
+        out = GraphicsSettings.sanitise({"clouds": {"quality": quality}})
+        assert out["clouds"]["quality"] == quality
+
+    @pytest.mark.parametrize("raw", ["HIGH", "Ultra", "  low  ", "Mid"])
+    def test_cloud_quality_is_case_and_space_insensitive(self, raw):
+        """A hand-edited file should not silently downgrade over capitalisation."""
+        out = GraphicsSettings.sanitise({"clouds": {"quality": raw}})
+        assert out["clouds"]["quality"] == raw.strip().lower()
+
+    @pytest.mark.parametrize("raw", ["insane", "", None, 3, [], "medium"])
+    def test_invalid_cloud_quality_defaults_to_high(self, raw):
+        """HIGH is what the cloud presets ship, so an unreadable value must mean the
+        authored look rather than a silent downgrade."""
+        out = GraphicsSettings.sanitise({"clouds": {"quality": raw}})
+        assert out["clouds"]["quality"] == "high"
+
     def test_empty_config_produces_full_defaults(self):
         out = GraphicsSettings.sanitise({})
         assert out["display"]["mode"] == "fullscreen"
@@ -165,6 +186,7 @@ class TestSanitise:
         assert out["antialiasing"]["msaa"] == 0
         assert out["antialiasing"]["fxaa"] is False
         assert out["compatibility"]["alternate_model_orientation"] is False
+        assert out["clouds"]["quality"] == "high"
 
 
 # ---------------------------------------------------------------------------

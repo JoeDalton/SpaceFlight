@@ -28,6 +28,11 @@ uniform float     uExposure;   // pre-tonemap exposure
 uniform float     uWaveFadeNear;  // distance at which small-wave detail is still full
 uniform float     uWaveFadeFar;   // distance beyond which small waves are fully suppressed
 uniform float     uWaveFadeK2;    // exponential decay rate for iteration count: iter = iIterationsNormal * exp(-k2 * dist)
+// Aerial perspective: distant water loses contrast to the air in front of it and
+// tends to the horizon's own colour. Must agree with what the cloud field fades
+// to, or the sea and the sky above it disagree at the horizon.
+uniform vec3      uHazeColor;
+uniform float     uHazeDistance;  // metres over which the water reaches it fully
 
 // Per-iteration wave directions, precomputed on the CPU.  They depend only on
 // the iteration index and the wind (not on the pixel), so computing them here
@@ -303,5 +308,11 @@ void main() {
         fragColor = vec4(vec3(0.5 + 0.5 * sin(fmPhase)), 1.0); return;
     }
 
-    fragColor = vec4(aces_tonemap(C * uExposure), 1.0);
+    // Haze applied to the DISPLAYED colour, after the tonemap: the air sits
+    // between the eye and the water, so it is not something the water scatters.
+    // The cloud field does the same, which is what lets the two meet cleanly at
+    // the horizon despite using different tonemap operators.
+    vec3 display = aces_tonemap(C * uExposure);
+    fragColor = vec4(
+        mix(display, uHazeColor, clamp(dist / uHazeDistance, 0.0, 1.0)), 1.0);
 }

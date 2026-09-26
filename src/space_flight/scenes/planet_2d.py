@@ -27,6 +27,11 @@ class Planet2D:
         root.setTransparency(TransparencyAttrib.MAlpha)
         root.setShaderOff()
         root.setLightOff()
+        # A backdrop riding at a fixed offset, so its depth means nothing: draw it
+        # with the background and write no depth. The default "transparent" bin
+        # (sort 30) would draw it after, and over, the clouds (sort 25).
+        root.setBin("background", 2)
+        root.setDepthWrite(False)
 
         self.planet = root.attachNewNode(cm.generate())
         self.planet.setPos(position[0], position[1], position[2])

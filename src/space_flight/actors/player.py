@@ -19,6 +19,11 @@ _DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
 
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
+
+# Far clip, in metres: clears the outermost cloud shell (512 km) and keeps the
+# curved ocean horizon in view up to ~28 km of altitude. Depth precision is set
+# by the near plane, so this costs almost nothing.
+CAMERA_FAR_M = 600000.0
 COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_SPRING_COEFFICIENT_NPM = 17
 HEAD_DAMPING_RATIO = 0.8  # Slightly suboptimal damping
@@ -222,6 +227,9 @@ class Player:
         self.game.app.camera.reparentTo(self.head_pivot)
         # Allow near objects to be rendered
         # self.game.app.camLens.setNear(0.01)
+        # Set BEFORE the scene is built: the ocean's reflection camera copies this
+        # lens, and the levels create the player first for exactly that reason.
+        self.game.app.camLens.setFar(CAMERA_FAR_M)
 
     def move_camera(self):
         """

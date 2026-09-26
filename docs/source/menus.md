@@ -133,14 +133,26 @@ around their respective config owner (see
   `GraphicsSettingsMenuState` is the simpler of the two: display mode is a
   small button group, render/reflection/mirror scale are `CustomSlider`s
   mapped through `_get_by_path`/`_set_by_path` onto the nested config dict,
-  MSAA is a slider snapped to discrete stops (`_MSAA_VALUES`), and FXAA and
-  *Alternate Model Orientation* (a manual workaround for glTF models loading
-  pre-rotated on some systems) are checkboxes. On save it calls
-  `GraphicsSettings.save()` (persists + re-sanitises) and
-  `GraphicsManager.apply_window_settings()` for the parts that can change
-  live; a warning label makes clear that render-scale, AA and
-  reflection/mirror quality changes need the next level load to take effect (see
+  MSAA and cloud quality are sliders snapped to discrete stops
+  (`_MSAA_VALUES`, `_CLOUD_QUALITY_VALUES`, both ordered cheapest-first so
+  dragging right always costs more), and FXAA and *Alternate Model
+  Orientation* (a manual workaround for glTF models loading pre-rotated on
+  some systems) are checkboxes. On save it calls `GraphicsSettings.save()`
+  (persists + re-sanitises) and `GraphicsManager.apply_window_settings()` for
+  the parts that can change live; a warning label makes clear that
+  render-scale, AA, reflection/mirror quality and cloud changes need the next
+  level load to take effect (see
   [docs/global_architecture.md](global_architecture.md) for why).
+
+  Both discrete sliders deliberately do *not* write the snapped value back to
+  the thumb. `PGSliderBar` throws its ADJUST event asynchronously, so re-setting
+  the value from inside the handler re-enqueues ADJUST on every dispatch and the
+  event queue never drains — a hard freeze, and a fixed regression.
+
+  Rows are laid out from `_ROW_TOP` at `_ROW_STEP` intervals, with `_ROW_COUNT`
+  and the warning's `_WARNING_Y` as named constants because they constrain each
+  other: seven rows at the original 0.2 step reached the warning text. A test
+  asserts the clearance, so adding a row fails loudly rather than overlapping.
 - **[`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py)**
   is the largest and most involved menu screen in the game:
   - **`InputSettingsMenuState`** builds a scrollable, per-input-type

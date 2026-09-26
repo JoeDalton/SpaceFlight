@@ -19,6 +19,8 @@ from panda3d.core import TextNode
 
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.graphics_settings import (
+    _VALID_CLOUD_QUALITY,
+    _VALID_MSAA,
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
 )
@@ -27,16 +29,35 @@ from space_flight.menus.menu_utils import CustomButton, CustomCheckButton, Custo
 # Display mode is a small fixed button group.
 _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
 
-# MSAA is a slider over discrete stops.
-_MSAA_VALUES = [0, 2, 4, 8]
-_MSAA_LABELS = ["Off", "2x", "4x", "8x"]
+# Continuous quality sliders: path -> (label, (min, max)).
+_SCALE_SLIDERS = {
+    ("render", "scale"): ("Render Scale", (0.5, 2.0)),
+    ("render", "reflection_scale"): ("Reflection Quality", (0.25, 1.0)),
+    ("render", "mirror_scale"): ("Mirror Quality", (0.25, 1.0)),
+}
 
-# Continuous quality sliders: (path, label, (min, max)).
-_SCALE_SLIDERS = [
-    (("render", "scale"), "Render Scale", (0.5, 2.0)),
-    (("render", "reflection_scale"), "Reflection Quality", (0.25, 1.0)),
-    (("render", "mirror_scale"), "Mirror Quality", (0.25, 1.0)),
-]
+# Sliders over discrete stops: path -> (label, values, value labels). Cheapest
+# first, so dragging right costs more, like every other slider here.
+_DISCRETE_SLIDERS = {
+    ("antialiasing", "msaa"): ("MSAA", _VALID_MSAA, ("Off", "2x", "4x", "8x")),
+    ("clouds", "quality"): (
+        "Cloud Quality",
+        _VALID_CLOUD_QUALITY,
+        tuple(name.title() for name in _VALID_CLOUD_QUALITY),
+    ),
+}
+
+# Option rows, top to bottom: (builder method name, *builder args before y).
+_ROWS = (
+    ("build_mode_row",),
+    ("build_slider_row", ("render", "scale")),
+    ("build_discrete_row", ("antialiasing", "msaa")),
+    ("build_fxaa_row",),
+    ("build_slider_row", ("render", "reflection_scale")),
+    ("build_slider_row", ("render", "mirror_scale")),
+    ("build_discrete_row", ("clouds", "quality")),
+    ("build_alternate_model_orientation_row",),
+)
 
 # Layout
 _LABEL_X = -1.15
@@ -44,6 +65,15 @@ _SLIDER_X = 0.35
 _SLIDER_SCALE = 0.4
 _VALUE_LABEL_X = 0.95
 _CONTROL_X = -0.05  # left edge of button groups / checkbox
+
+# Rows run top-down from _ROW_TOP, one every _ROW_STEP; a test asserts the lowest
+# still clears _WARNING_Y, so adding a row fails loudly instead of overlapping it.
+_ROW_TOP = 0.6
+_ROW_STEP = 0.175
+_ROW_COUNT = len(_ROWS)
+_WARNING_Y = -0.7
+#: Clearance a row label needs below it before the warning text starts.
+_ROW_CLEARANCE = 0.06
 
 
 def _get_by_path(cfg: dict, path: tuple):
@@ -137,7 +167,7 @@ class GraphicsSettingsMenuState(BaseState):
         self.warning = DirectLabel(
             text="Render & quality changes apply on the next level load.",
             scale=0.045,
-            pos=(0, 0, -0.7),
+            pos=(0, 0, _WARNING_Y),
             frameColor=(0, 0, 0, 0),
             text_fg=(1.0, 0.85, 0.4, 1.0),
             text_align=TextNode.ACenter,
@@ -170,21 +200,9 @@ class GraphicsSettingsMenuState(BaseState):
         )
 
     def build_rows(self):
-        """Build every option row from the current working config, top to bottom."""
-        y = 0.6
-        self.build_mode_row(y)
-        y -= 0.2
-        self.build_slider_row(_SCALE_SLIDERS[0], y)  # Render Scale
-        y -= 0.2
-        self.build_msaa_row(y)
-        y -= 0.2
-        self.build_fxaa_row(y)
-        y -= 0.2
-        self.build_slider_row(_SCALE_SLIDERS[1], y)  # Reflection Quality
-        y -= 0.2
-        self.build_slider_row(_SCALE_SLIDERS[2], y)  # Mirror Quality
-        y -= 0.2
-        self.build_alternate_model_orientation_row(y)
+        """Build every option row in :data:`_ROWS` from the working config."""
+        for index, (builder, *args) in enumerate(_ROWS):
+            getattr(self, builder)(*args, _ROW_TOP - index * _ROW_STEP)
 
     def clear_rows(self):
         """Destroy all option-row widgets (labels, buttons, sliders, checkbox)."""
@@ -236,9 +254,22 @@ class GraphicsSettingsMenuState(BaseState):
             self.mode_buttons.append((value, btn))
         self.refresh_mode_buttons()
 
-    def build_slider_row(self, descriptor: tuple, y: float):
+    def _value_label(self, path: tuple, text: str, y: float):
+        """Create and register the value readout to the right of a slider."""
+        label = DirectLabel(
+            text=text,
+            scale=0.05,
+            pos=(_VALUE_LABEL_X, 0, y - 0.015),
+            frameColor=(0, 0, 0, 0),
+            text_fg=(0.7, 0.85, 1.0, 1.0),
+            text_align=TextNode.ALeft,
+        )
+        label.setTransparency(True)
+        self.slider_value_labels[path] = label
+
+    def build_slider_row(self, path: tuple, y: float):
         """Build a continuous quality slider row (label, slider, % value)."""
-        path, label, value_range = descriptor
+        label, value_range = _SCALE_SLIDERS[path]
         self._row_label(label, y)
         value = _get_by_path(self.working_config, path)
         self.sliders[path] = CustomSlider(
@@ -250,38 +281,24 @@ class GraphicsSettingsMenuState(BaseState):
             extraArgs=[path],
             scale=_SLIDER_SCALE,
         )
-        self.slider_value_labels[path] = DirectLabel(
-            text=_pct(value),
-            scale=0.05,
-            pos=(_VALUE_LABEL_X, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.7, 0.85, 1.0, 1.0),
-            text_align=TextNode.ALeft,
-        )
-        self.slider_value_labels[path].setTransparency(True)
+        self._value_label(path, _pct(value), y)
 
-    def build_msaa_row(self, y: float):
-        """Build the MSAA slider row (discrete Off/2x/4x/8x stops)."""
-        path = ("antialiasing", "msaa")
-        self._row_label("MSAA", y)
-        idx = _MSAA_VALUES.index(_get_by_path(self.working_config, path))
+    def build_discrete_row(self, path: tuple, y: float):
+        """Build a slider row over the discrete stops in :data:`_DISCRETE_SLIDERS`."""
+        label, values, labels = _DISCRETE_SLIDERS[path]
+        self._row_label(label, y)
+        # sanitise() guarantees a known value, so this cannot raise.
+        idx = values.index(_get_by_path(self.working_config, path))
         self.sliders[path] = CustomSlider(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
             value=idx,
-            value_range=(0, len(_MSAA_VALUES) - 1),
-            command=self.on_msaa_slider,
+            value_range=(0, len(values) - 1),
+            command=self.on_discrete_slider,
+            extraArgs=[path],
             scale=_SLIDER_SCALE,
         )
-        self.slider_value_labels[path] = DirectLabel(
-            text=_MSAA_LABELS[idx],
-            scale=0.05,
-            pos=(_VALUE_LABEL_X, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.7, 0.85, 1.0, 1.0),
-            text_align=TextNode.ALeft,
-        )
-        self.slider_value_labels[path].setTransparency(True)
+        self._value_label(path, labels[idx], y)
 
     def build_fxaa_row(self, y: float):
         """Build the FXAA checkbox row."""
@@ -336,8 +353,8 @@ class GraphicsSettingsMenuState(BaseState):
         _set_by_path(self.working_config, path, value)
         self.slider_value_labels[path]["text"] = _pct(value)
 
-    def on_msaa_slider(self):
-        """Map the MSAA slider to the nearest stop and store the level.
+    def on_discrete_slider(self, path: tuple):
+        """Map a discrete slider to the nearest stop and store that stop's value.
 
         The thumb is *not* written back here: PGSliderBar throws its ADJUST
         event asynchronously, so re-setting the value from inside this handler
@@ -345,11 +362,11 @@ class GraphicsSettingsMenuState(BaseState):
         (a hard freeze). The stored value/label are simply rounded to the
         nearest stop; the thumb stays where the user left it.
         """
-        path = ("antialiasing", "msaa")
+        _label, values, labels = _DISCRETE_SLIDERS[path]
         idx = int(round(self.sliders[path].get_value()))
-        idx = max(0, min(len(_MSAA_VALUES) - 1, idx))
-        self.working_config["antialiasing"]["msaa"] = _MSAA_VALUES[idx]
-        self.slider_value_labels[path]["text"] = _MSAA_LABELS[idx]
+        idx = max(0, min(len(values) - 1, idx))
+        _set_by_path(self.working_config, path, values[idx])
+        self.slider_value_labels[path]["text"] = labels[idx]
 
     def on_fxaa_toggle(self, status):
         """Store the FXAA checkbox state."""

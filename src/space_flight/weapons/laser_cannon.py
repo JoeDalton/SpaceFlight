@@ -243,7 +243,9 @@ class LaserShot(Munition):
         shot.set_attrib(CullFaceAttrib.make(CullFaceAttrib.MCullNone))
         shot.set_light_off()
         shot.set_depth_write(False)
-        shot.set_bin("fixed", 20)  # drawn after the sorted "transparent" bin
+        # After the sorted "transparent" bin, and so also after the clouds, which
+        # the additive blend then composites over harmlessly either way.
+        shot.set_bin("fixed", 20)
 
         # The vertex shader expands the unit card to half_size, so give the node
         # matching bounds or the frustum culler (which only sees the card's own

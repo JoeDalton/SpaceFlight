@@ -1,56 +1,31 @@
 """
-field.py — A field of in-scene billboard clouds: geometry, shaders, sorting,
-wind/recycling, plus the game-facing wrapper.
+field.py — A drawable field of billboard clouds: geometry, shaders, sorting,
+wind/recycling, plus the game-facing :class:`Clouds` wrapper.
 
-Clouds are ordinary 3D geometry parented under a node in render.  They
-depth-test against whatever is already in the depth buffer, so occlusion by
-ships / terrain / cockpit is handled by the hardware — no depth prepass, no
-composite, no power-of-two handling, no scene-depth plumbing, no near/far
-coupling.
+Clouds are ordinary geometry that depth-tests against the scene, so ships and
+terrain occlude them with no depth plumbing. Every particle of every layer lives in
+ONE Geom whose vertex data never changes after the build; the camera-facing quad is
+built in the vertex shader, cell centres move in a small per-cell texture (wind +
+toroidal recycling), and only the INDEX buffer is re-sorted, back to front for
+premultiplied-over blending, spread round-robin over ``resort_frames`` frames.
 
-Configuration lives in ONE place: :class:`CloudField`'s constructor (and the
-per-type :class:`CloudLayer` records it takes).  cloud.py builds the cloud
-*shapes* (data + CPU shading); this module turns them into a drawable, animated
-field.  :class:`Clouds` is a thin game adapter over :class:`CloudField`.
-
-Transparency model
-------------------
-Particles use premultiplied-alpha "over" blending (frag = vec4(rgb*a, a) with
-M_add, O_one, O_one_minus_incoming_alpha).  "over" is order-dependent, so the
-particles must be drawn back-to-front; the order is kept correct by sorting:
-
-  * Every particle of every cloud lives in ONE Geom (4 verts each); the static
-    vertex data (local pos, radius, colour, uv) is uploaded once and never again
-    — only the triangle INDEX buffer is reordered.
-  * The sort is per cloud (segmented): clouds are ordered by centroid distance,
-    particles within a cloud by distance.  Intra- and inter-cloud ordering are
-    both correct; cross-cloud interleaving is only approximate where two clouds
-    physically intersect.
-  * The sort + index gather is spread across resort_frames frames in a
-    round-robin (see :meth:`CloudField._restage`): one atomic index upload per
-    cycle — no per-frame spike, at the cost of a few frames' draw-order latency.
-
-Particle positions are stored RELATIVE to their cloud centroid; the centroids are
-moved each frame by wind and recycled toroidally around the camera within the
-domain box, so the heavy vertex data never changes — only a small per-cloud
-centroid texture is re-uploaded.  The billboard is built in the vertex shader, so
-the only per-frame CPU work is the incremental restage.
-
-Mixing types: pass several :class:`CloudLayer` entries (e.g. cumulus + cirrus);
-they share one Geom, so the single global sort orders every type together (layers
-superpose correctly from any angle) — unlike separate fields, which don't sort
-against each other.
+The clouds draw in their own "cloud" bin, between "opaque" and "transparent", with
+no depth write: every translucent effect composites over them, but an effect behind
+a dense cloud is not hidden by it. Design notes: docs/source/scenes.md.
 """
 
 from __future__ import annotations
 
+import functools
+import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from typing import Optional
 
 import numpy as np
 from panda3d.core import (
     ColorBlendAttrib,
+    CullBinManager,
     Geom,
     GeomEnums,
     GeomNode,
@@ -59,8 +34,9 @@ from panda3d.core import (
     GeomVertexData,
     GeomVertexFormat,
     InternalName,
-    NodePath,
+    LVecBase4f,
     OmniBoundingVolume,
+    PTA_LVecBase4f,
     SamplerState,
     Shader,
     Texture,
@@ -68,164 +44,193 @@ from panda3d.core import (
     Vec3,
 )
 
+from space_flight import DATAFILES_PATH, PLANET_RADIUS_M
 from space_flight.scenes.cloud.cloud import (
+    PRESETS,
+    CloudQuality,
     CloudType,
-    build_templates_iter,
+    at_quality,
+    atlas_mean_alpha,
     load_cloud_atlas,
+    sample_field_particles,
+    snap_to_noise_period,
+)
+from space_flight.scenes.cloud.noise import (
+    LAYER_VEC4S,
+    MAX_LAYERS,
+    NOISE_SIZE,
+    CloudOptics,
+    DensityField,
+    build_noise_texture,
+    column_peaks,
+    fbm_sigma,
+    pack_layer_params,
+    quantise,
+    value_noise_volume,
+    with_threshold,
 )
 
-# ── Per-type layer spec (the only structured, repeating config) ─────────────────
+LOGGER = logging.getLogger()
 
 
 @dataclass
 class CloudLayer:
-    """One type's worth of clouds in a field.
+    """One cloud type's worth of sky in a field.
 
-    cloud_type     CUMULUS / STRATUS / CIRRUS / CUMULONIMBUS (shape preset)
-    count          number of cloud placements of this type
-    altitude       (min, max) z the placements are scattered between
-    n_templates    distinct shapes built once and reused across the count
-    density_scale  alpha trim (alpha = particle density x this)
-    overrides      per-type shape/optical overrides for build_cloud_particles
+    No cloud count and no altitude range: the billboard count follows from the
+    field's coverage, and the altitude IS the field's slab.
+
+    cloud_type       which of :data:`cloud.PRESETS` to start from
+    field, optics, radius, volume_fraction, aspect
+                     override the preset's value (None keeps it)
+    domain           side of this layer's scatter/recycle box; None → the field's.
+                     Snapped down to whole noise periods where possible (seamless)
+    cell_size        side of one sort/recycle cell, metres
+    fade_in          (lo, hi) camera distances the layer fades in over, or None
+    fade_out         (lo, hi) it fades out over, or None for the horizon haze
     """
 
     cloud_type: CloudType
-    count: int
-    altitude: tuple = (1000.0, 1500.0)
-    n_templates: int = 8
-    density_scale: float = 0.7
-    overrides: Optional[dict] = None
+    field: Optional[DensityField] = None
+    optics: Optional[CloudOptics] = None
+    radius: Optional[tuple] = None
+    volume_fraction: Optional[float] = None
+    aspect: Optional[float] = None
+    domain: Optional[float] = None
+    cell_size: float = 1000.0
+    fade_in: Optional[tuple] = None
+    fade_out: Optional[tuple] = None
+
+
+_SPEC_OVERRIDES = ("field", "optics", "radius", "volume_fraction", "aspect")
+
+
+def lod_shells(
+    cloud_type: CloudType,
+    count: int = 6,
+    domain: float = 32000.0,
+    cell_size: float = 1000.0,
+    crossfade: tuple = (0.62, 0.85),
+    **overrides,
+):
+    """Nested camera-centred shells carrying one cloud type out to the horizon.
+
+    Optical depth through billboards goes as n·r³, so doubling each shell's radius
+    allows an eighth the density: with four times the area, each shell costs HALF
+    the previous and reach is nearly free (512 km ≈ 5% more than 128 km). Holding
+    volume_fraction fixed does exactly that. Six shells, because an elevated deck
+    stays visible to sqrt(2R·eye) + sqrt(2R·altitude), ~500 km from 9 km up.
+
+    cell_size and max_optical_depth double with the radius too (a doubled chord
+    doubles each fragment's depth).
+
+    :param crossfade: (start, end) fractions of a shell's half-width where it hands
+        over to the next; must complete inside the box to hide the recycle edge
+    :param overrides: applied to every shell (e.g. a shared ``field``)
+    :returns: a list of :class:`CloudLayer`, innermost first
+    """
+    preset = PRESETS[cloud_type]
+    base_radius = overrides.pop("radius", None) or preset.radius
+    base_optics = overrides.pop("optics", None) or preset.optics
+    # Shell k fades out over band k while shell k+1 fades in over it: weights sum to 1.
+    bands = [
+        (
+            crossfade[0] * domain * (2**k) * 0.5,
+            crossfade[1] * domain * (2**k) * 0.5,
+        )
+        for k in range(count)
+    ]
+    shells = []
+    for k in range(count):
+        scale = 2.0**k
+        shells.append(
+            CloudLayer(
+                cloud_type,
+                radius=(base_radius[0] * scale, base_radius[1] * scale),
+                optics=replace(
+                    base_optics,
+                    max_optical_depth=base_optics.max_optical_depth * scale,
+                ),
+                domain=domain * scale,
+                cell_size=cell_size * scale,
+                fade_in=bands[k - 1] if k > 0 else None,
+                fade_out=bands[k] if k < count - 1 else None,
+                **overrides,
+            )
+        )
+    return shells
 
 
 def _default_layers():
-    """:returns: a sensible default cumulus + cirrus layer list."""
-    return [
-        CloudLayer(
-            CloudType.CUMULUS, count=300, altitude=(1000.0, 1500.0), n_templates=12
-        ),
-        CloudLayer(
-            CloudType.CIRRUS, count=120, altitude=(8000.0, 8500.0), n_templates=6
-        ),
-    ]
+    """:returns: a cumulus deck in LOD shells — the type the field is tuned on."""
+    return lod_shells(CloudType.CUMULUS)
 
 
-# ── Shaders (travel with the geometry they describe) ────────────────────────────
-
-_VERT = """
-#version 330
-// Per-vertex: a quad corner in [-1,+1] (p3d_MultiTexCoord0), the particle position
-// LOCAL to its cloud centroid (p3d_Vertex), its colour (p3d_Color), radius, atlas
-// rect, and cloud id.  The cloud centroid is looked up from the cloudCentres
-// texture (moved each frame by wind + recycling on the CPU), so the per-particle
-// vertex data never changes.  The billboard is built here.
-uniform mat4 p3d_ViewProjectionMatrix;
-uniform vec3 camPos;
-uniform sampler2D cloudCentres;   // R32F, width 3*K: [x,y,z] per cloud, flat
-uniform float wrapRadius;         // half the recycle box (0 → wrap fade disabled)
-uniform float wrapFadeBand;       // metres over which a cloud fades at the box face
-
-in vec4 p3d_Vertex;            // particle position LOCAL to its cloud centroid
-in vec2 p3d_MultiTexCoord0;    // quad corner [-1,+1]
-in vec4 p3d_Color;             // pre-shaded RGBA (a = opacity)
-in float i_radius;
-in vec4  i_uv_st;              // (u0, v0, du, dv)
-in float i_cloudId;
-
-out vec2 uv;
-out vec4 vColor;
-out vec3 worldPos;
-out float vWrapFade;
-
-void main() {
-    int b = int(i_cloudId + 0.5) * 3;
-    vec3 centre = vec3(texelFetch(cloudCentres, ivec2(b,     0), 0).r,
-                       texelFetch(cloudCentres, ivec2(b + 1, 0), 0).r,
-                       texelFetch(cloudCentres, ivec2(b + 2, 0), 0).r);
-    vec3 pworld = centre + p3d_Vertex.xyz;   // particle centre in world space
-
-    vec3 fwd    = normalize(camPos - pworld);
-    // World-up reference, with a fallback when looking straight down the axis.
-    vec3 upRef  = abs(fwd.z) > 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
-    vec3 right  = normalize(cross(upRef, fwd));
-    vec3 up     = cross(fwd, right);
-
-    vec2 corner = p3d_MultiTexCoord0;
-    vec3 wp     = pworld + right * (corner.x * i_radius)
-                         + up    * (corner.y * i_radius);
-
-    gl_Position = p3d_ViewProjectionMatrix * vec4(wp, 1.0);
-    worldPos    = wp;
-    vColor      = p3d_Color;
-    uv          = i_uv_st.xy + (corner * 0.5 + 0.5) * i_uv_st.zw;
-
-    // Wrap-boundary fade: a cloud fades out as its centre nears the recycle box
-    // face (Chebyshev distance in XY from the camera), so teleporting it to the
-    // opposite face when it recycles is never visible.
-    float edge = max(abs(centre.x - camPos.x), abs(centre.y - camPos.y));
-    vWrapFade  = wrapRadius > 0.0
-               ? 1.0 - smoothstep(wrapRadius - wrapFadeBand, wrapRadius, edge)
-               : 1.0;
-}
-"""
-
-_FRAG = """
-#version 330
-uniform sampler2D p3d_Texture0;
-uniform vec3  lightDir;      // FROM scene TOWARD sun (== sun_dir)
-uniform vec3  viewPos;
-uniform vec3  sunGlowColor;
-uniform float hgForward;     // forward HG asymmetry (silver lining when back-lit)
-uniform float glowStrength;
-uniform float hgBackward;    // backward HG asymmetry (< 0 → peaks front-lit)
-uniform float backStrength;  // diffuse boost when front-lit (sun behind viewer)
-
-in  vec2 uv;
-in  vec4 vColor;
-in  vec3 worldPos;
-in  float vWrapFade;
-out vec4 fragColor;
-
-float hg(float c, float g) {
-    float g2 = g * g;
-    return (1.0 - g2) / (4.0 * 3.14159 * pow(1.0 + g2 - 2.0 * g * c, 1.5));
-}
-
-void main() {
-    vec4 tex = texture(p3d_Texture0, uv);
-    if (tex.a < 0.01) discard;
-
-    vec3  V    = normalize(viewPos - worldPos);
-    float cosT = dot(lightDir, -V);
-
-    // Forward scatter → the bright "silver lining" halo when looking toward the
-    // sun through a cloud edge.
-    float hgFwd = hg( 1.0, hgForward);
-    float hgBck = hg(-1.0, hgForward);
-    float phase = (hg(cosT, hgForward) - hgBck) / (hgFwd - hgBck);
-
-    vec3  diff = vColor.rgb * tex.rgb;
-    vec3  glow = glowStrength * phase * sunGlowColor;
-
-    // Back scatter → brightening of the near, sun-facing shell when the sun is
-    // behind the viewer.  A backward HG lobe (hgBackward < 0) peaks at cosT = -1;
-    // normalised to [0,1] (0 = back-lit, 1 = front-lit) and used to boost diffuse.
-    float bMin      = hg( 1.0, hgBackward);
-    float bMax      = hg(-1.0, hgBackward);
-    float backPhase = clamp((hg(cosT, hgBackward) - bMin) / (bMax - bMin), 0.0, 1.0);
-    diff *= (1.0 + backStrength * backPhase);
-
-    float a = tex.a * vColor.a * vWrapFade;
-    fragColor = vec4((diff + glow) * a, a);   // premultiplied "over"
-}
-"""
+# Panda's stock bins: background 10 < opaque 20 < transparent 30 < fixed 40.
+_CLOUD_BIN = "cloud"
+_CLOUD_BIN_SORT = 25
 
 
-# ── Static vertex format; only the index buffer is reordered per frame ──────────
+def _ensure_cloud_bins():
+    """Register the cloud cull bin once; Panda silently ignores unknown bin names."""
+    manager = CullBinManager.get_global_ptr()
+    if manager.find_bin(_CLOUD_BIN) == -1:
+        # BT_fixed: _restage sorts the geometry, so the bin must keep our order.
+        manager.add_bin(_CLOUD_BIN, CullBinManager.BT_fixed, _CLOUD_BIN_SORT)
+
+
+def _settings_quality(game) -> CloudQuality:
+    """The player's cloud quality, or HIGH when there is no setting to read (the
+    demo and the tests build from a stub game): never a crash or a downgrade."""
+    config = getattr(getattr(game, "app", None), "graphics_settings", None)
+    name = (getattr(config, "config", None) or {}).get("clouds", {}).get("quality")
+    try:
+        return CloudQuality(name)
+    except ValueError:
+        if name is not None:
+            LOGGER.warning(f"unknown cloud quality {name!r}; using high")
+        return CloudQuality.HIGH
+
+
+@functools.cache
+def _cloud_shader() -> Shader:
+    return Shader.load(
+        Shader.SL_GLSL,
+        vertex=DATAFILES_PATH / "shaders/cloud.vert",
+        fragment=DATAFILES_PATH / "shaders/cloud.frag",
+    )
+
+
+@functools.cache
+def _noise_volume(seed: int) -> np.ndarray:
+    """The noise octave quantised to the GPU's 8 bits, so CPU placement and GPU
+    drawing agree bit for bit."""
+    return quantise(value_noise_volume(seed=seed))
+
+
+@functools.cache
+def _calibration(seed: int, field: DensityField):
+    """(sorted column peaks, fbm sigma) for an unresolved field: ~300 ms to measure,
+    determined by field and seed alone, so shared across shells, scenes and tests."""
+    volume = _noise_volume(seed)
+    return column_peaks(volume, field), fbm_sigma(volume, field)
+
+
+#: Floats per vertex, and per cell in cellParams ([x, y, z, layerId]); the latter
+#: must match CELL_PARAMS_STRIDE in cloud.vert.
+_VERTEX_FLOATS = 11
+_CELL_PARAMS_STRIDE = 4
+#: Cells per ROW of cellParams (CELLS_PER_ROW in cloud.vert). One long row walks
+#: into GL_MAX_TEXTURE_DIMENSION at six shells, and every cell then reads zero.
+_CELLS_PER_ROW = 1024
 
 
 def _vertex_format() -> GeomVertexFormat:
-    """:returns: the interleaved per-vertex format — local position, quad corner,
-    pre-shaded RGBA, radius, atlas rect, and cloud id (15 floats / vertex)."""
+    """:returns: local position, quad corner, radius, sprite rect and cell id.
+
+    No colour column (colour is a function of world position) and no layer column
+    (it rides in the cellParams row the vertex shader already fetches).
+    """
     fmt = GeomVertexArrayFormat()
     fmt.add_column(
         InternalName.get_vertex(), 3, GeomEnums.NT_float32, GeomEnums.C_point
@@ -233,7 +238,6 @@ def _vertex_format() -> GeomVertexFormat:
     fmt.add_column(
         InternalName.get_texcoord(), 2, GeomEnums.NT_float32, GeomEnums.C_texcoord
     )
-    fmt.add_column(InternalName.get_color(), 4, GeomEnums.NT_float32, GeomEnums.C_color)
     fmt.add_column(
         InternalName.make("i_radius"), 1, GeomEnums.NT_float32, GeomEnums.C_other
     )
@@ -241,61 +245,29 @@ def _vertex_format() -> GeomVertexFormat:
         InternalName.make("i_uv_st"), 4, GeomEnums.NT_float32, GeomEnums.C_texcoord
     )
     fmt.add_column(
-        InternalName.make("i_cloudId"), 1, GeomEnums.NT_float32, GeomEnums.C_other
+        InternalName.make("i_cellId"), 1, GeomEnums.NT_float32, GeomEnums.C_other
     )
     combined = GeomVertexFormat()
     combined.add_array(fmt)
     return GeomVertexFormat.register_format(combined)
 
 
-# Quad corners (CCW): BL, BR, TR, TL — reused as the [-1,+1] offset and UV basis.
+# Quad corners (CCW): BL, BR, TR, TL — the [-1,+1] offset and UV basis.
 _CORNERS = np.array([(-1, -1), (1, -1), (1, 1), (-1, 1)], dtype=np.float32)
 # Two triangles per quad, as offsets into a particle's 4-vertex block.
 _QUAD_TRIS = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)
-# Particles per chunk when building/uploading the static vertex buffer, so its
-# ~200ms of NumPy work is spread across several frames instead of one.
-_VBUF_BLOCK = 20000
 
 
-def _assemble(templates, placements):
-    """Scatter templates into placements and pad to a uniform per-cloud size.
-
-    Every cloud is padded to the largest template's particle count with
-    zero-radius particles (which render nothing), so the per-frame draw-order sort
-    can be one vectorised segmented argsort over a (n_clouds, n_per) array.
-
-    :param templates: template dicts from :func:`cloud.build_templates`
-    :param placements: list of (template_index, offset_xyz)
-    :returns: (local, radii, colors, uv_rects, cloud_centres, n_per) — the
-        per-particle arrays shaped (n_clouds, n_per, …) (local is each
-        particle's offset from its cloud centroid), the (n_clouds, 3) centroids,
-        and the padded per-cloud particle count
-    """
-    n_clouds = len(placements)
-    n_per = max(len(templates[ti]["pos"]) for ti, _ in placements)
-
-    local = np.zeros((n_clouds, n_per, 3), np.float32)
-    radii = np.zeros((n_clouds, n_per), np.float32)  # 0 → degenerate (no frags)
-    colors = np.zeros((n_clouds, n_per, 4), np.float32)
-    uv_rects = np.zeros((n_clouds, n_per, 4), np.float32)
-    cloud_centres = np.zeros((n_clouds, 3), np.float32)
-    for cloud_idx, (template_idx, offset) in enumerate(placements):
-        template = templates[template_idx]
-        count = len(template["pos"])
-        local[cloud_idx, :count] = template["pos"]  # templates are origin-centred
-        radii[cloud_idx, :count] = template["radii"]
-        colors[cloud_idx, :count] = template["colors"]
-        uv_rects[cloud_idx, :count] = template["uv"]
-        cloud_centres[cloud_idx] = np.asarray(offset, dtype=np.float32)
-    return local, radii, colors, uv_rects, cloud_centres, n_per
+def _vec3(value) -> Vec3:
+    return Vec3(*np.asarray(value, dtype=float)[:3])
 
 
 class CloudField:
     """A drawable, wind-driven, depth-sorted field of mixed-type billboard clouds.
 
-    All field settings live here (the single configuration surface).  Construct
-    with a parent NodePath, a loader (for the atlas), and a list of
-    :class:`CloudLayer`; then call :meth:`update` once per frame.
+    Built in the constructor; call :meth:`update` once per frame. A layer's field
+    is its shape (rebuild to change); its optics, coverage and the sun can be
+    changed live with :meth:`set_optics`, :meth:`set_coverage`, :meth:`set_sun`.
     """
 
     def __init__(
@@ -304,221 +276,220 @@ class CloudField:
         game,
         layers=None,
         *,
-        domain=24000.0,
+        domain=32000.0,
         wind=(20.0, 0.0, 0.0),
         sun_direction=(0.2, 1.0, 0.1),
-        sun_color=(1.0, 0.8, 0.2),
-        ambient_color=(0.4, 0.10, 0.40),
-        hg_forward=0.85,
-        glow_strength=0.3,
-        hg_backward=-0.5,
-        back_strength=0.3,
+        sun_color=(1.0, 0.95, 0.85),
+        sky_color=(0.45, 0.6, 0.85),
+        haze_color=None,
+        sun_brightness=2.8,
+        sky_strength=0.35,
+        sky_occlusion=0.55,
+        exposure=1.15,
+        horizon_distance=400000.0,
+        planet_radius=PLANET_RADIUS_M,
+        near_fade_radii=2.5,
+        quality=None,
         resort_frames=8,
-        wrap_fade_band=None,
         seed=7,
-        defer_build=False,
-        use_cache=False,
     ):
-        """Build the field's geometry and shading from a list of layers.
-
-        :param parent: NodePath the cloud geometry is reparented under
-        :param game: the game object (used to load the sprite atlas via asset_manager)
-        :param layers: list of :class:`CloudLayer` (defaults to cumulus + cirrus)
-        :param domain: side of the camera-centred box clouds scatter/recycle within
-        :param wind: metres/second the clouds drift each frame
-        :param sun_direction: vector FROM the scene TOWARD the sun (lighting)
+        """
+        :param parent: NodePath the cloud geometry goes under
+        :param game: the game object (sprite atlas, graphics settings)
+        :param layers: list of :class:`CloudLayer` (default: a cumulus deck)
+        :param domain: recycle-box side for layers that don't set one; the default
+            is exactly one noise period at the cumulus feature size
+        :param wind: metres/second drift
+        :param sun_direction: vector FROM the scene TOWARD the sun
         :param sun_color: RGB of direct sunlight
-        :param ambient_color: RGB of the ambient/sky fill
-        :param hg_forward: forward Henyey-Greenstein asymmetry (silver lining)
-        :param glow_strength: strength of the forward-scatter glow
-        :param hg_backward: backward HG asymmetry (< 0 peaks when front-lit)
-        :param back_strength: diffuse boost when the sun is behind the viewer
-        :param resort_frames: frames to spread one full re-sort over (de-spike)
-        :param wrap_fade_band: metres of fade at the recycle box face
-            (defaults to 12% of domain)
-        :param seed: RNG seed for shapes and placement
-        :param defer_build: if True, do not build in the constructor; the caller
-            must drive :meth:`build` (a generator) instead, one step per frame.
-        :param use_cache: if True, load/save the generated cloud templates via
-            the on-disk template cache. Off by default so tests and tools never
-            touch the user-global cache; the game's loading path opts in.
+        :param sky_color: RGB of the ambient sky fill
+        :param haze_color: RGB distant cloud fades toward (default sky_color);
+            should match what the ocean fades to
+        :param sun_brightness: direct-term gain. NOT independent of ``exposure``:
+            the tonemap knee saturates above ~3 and flattens lit onto shadowed
+        :param sky_strength: ambient sky weight, lifting shadowed cloud off black
+        :param sky_occlusion: fraction of sky light reaching a deck's underside
+        :param exposure: cloud radiance scale before the soft-knee roll-off
+        :param horizon_distance: metres over which cloud tends fully to haze_color.
+            Must complete inside the outermost shell, and not much short of the
+            ~500 km an elevated deck stays visible, or it dips under the horizon
+        :param planet_radius: metres; the deck droops by d²/2R (0 = flat)
+        :param near_fade_radii: fade a billboard within this many of its radii of
+            the camera, so it never smears across the screen or clips (0 = off)
+        :param quality: a :class:`CloudQuality`; None reads the graphics settings
+            (HIGH if absent). Scales each layer's own request, so it composes with
+            lod_shells and explicit overrides
+        :param resort_frames: frames one full re-sort is spread over
+        :param seed: RNG seed for the noise volume and placement
         """
         self._parent = parent
         self._game = game
-        self._use_cache = use_cache
         self._layers = layers if layers is not None else _default_layers()
+        if len(self._layers) > MAX_LAYERS:
+            raise ValueError(
+                f"at most {MAX_LAYERS} cloud layers (the layerParams uniform "
+                f"array is sized for it); got {len(self._layers)}"
+            )
         self._domain = domain
-        self._wind_arg = wind
+        self._wind = np.asarray(wind, dtype=np.float32)
         self._sun_direction = sun_direction
         self._sun_color_arg = sun_color
-        self._ambient_color_arg = ambient_color
-        self._hg_forward = hg_forward
-        self._glow_strength = glow_strength
-        self._hg_backward = hg_backward
-        self._back_strength = back_strength
-        self._resort_frames_arg = resort_frames
-        self._wrap_fade_band_arg = wrap_fade_band
-        self._seed = seed
-
-        # Build immediately unless the caller wants to drive build() per frame.
-        if not defer_build:
-            for _ in self.build():
-                pass
-
-    def build(self):
-        """
-        Generator that builds the field, yielding between chunks of work so a
-        loader can spread the cost across frames rather than freezing on one
-        construction.
-
-        Template generation dominates the field's build cost (~18-40 ms each;
-        the whole default field is ~0.6 s); the static vertex buffer is then
-        built and uploaded in particle-blocks. Each yield ends a chunk.
-        """
-        # Local aliases so the assembly code below reads like a plain build.
-        parent = self._parent
-        game = self._game
-        layers = self._layers
-        domain = self._domain
-        wind = self._wind_arg
-        resort_frames = self._resort_frames_arg
-        wrap_fade_band = self._wrap_fade_band_arg
-        hg_forward = self._hg_forward
-        glow_strength = self._glow_strength
-        hg_backward = self._hg_backward
-        back_strength = self._back_strength
-        seed = self._seed
-
-        sun_color = np.asarray(self._sun_color_arg, dtype=float)[:3]
-        ambient_color = np.asarray(self._ambient_color_arg, dtype=float)[:3]
-        sun_dir = np.asarray(self._sun_direction, dtype=float)[:3]
-        sun_dir = sun_dir / np.linalg.norm(sun_dir)
-
-        atlas_tex, rects = load_cloud_atlas(game)
-
-        # ── Build per-layer shapes, scatter placements within the domain box ──
-        half = domain * 0.5
-        rng = np.random.default_rng(seed)
-        templates, placements = [], []
-        for layer in layers:
-            first_template = len(templates)
-            # One template per frame: this is the heavy, stutter-causing work.
-            for template in build_templates_iter(
-                layer.n_templates,
-                rects,
-                sun_color,
-                ambient_color,
-                sun_dir,
-                cloud_type=layer.cloud_type,
-                density_scale=layer.density_scale,
-                base_seed=seed,
-                overrides=layer.overrides,
-                use_cache=self._use_cache,
-            ):
-                templates.append(template)
-                yield f"cloud_template[{layer.cloud_type.value}]"
-            n_layer_templates = len(templates) - first_template
-            z_lo, z_hi = layer.altitude
-            # Cycle this layer's placements through its own templates, scattered
-            # over the domain box at the layer's altitude.
-            for i in range(layer.count):
-                placements.append(
-                    (
-                        first_template + i % n_layer_templates,
-                        (
-                            float(rng.uniform(-half, half)),
-                            float(rng.uniform(-half, half)),
-                            float(rng.uniform(z_lo, z_hi)),
-                        ),
-                    )
-                )
-
-        # ── Vertex/GPU assembly, split across frames so its ~170ms of NumPy
-        # buffer-building + uploads doesn't land in one frame. Each labelled
-        # yield ends a natural chunk. ──
-        local, radii, colors, uv_rects, cloud_centres, n_per = _assemble(
-            templates, placements
+        self._sky_color_arg = sky_color
+        self._haze_color_arg = haze_color
+        self._sun_brightness = sun_brightness
+        self._sky_strength = sky_strength
+        self._sky_occlusion = sky_occlusion
+        self._exposure = exposure
+        self._horizon_distance = horizon_distance
+        # The shader's 1/(2R), so a zero or infinite radius means flat.
+        self._curvature = (
+            0.0 if not planet_radius else 1.0 / (2.0 * float(planet_radius))
         )
-
-        self._local = np.ascontiguousarray(local.reshape(-1, 3), np.float32)
-        n_particles = len(self._local)
-        self._n = n_particles
-        self._cloud_centres = np.ascontiguousarray(cloud_centres, np.float32)  # (K,3)
-        self._n_per = int(n_per)
-        self._n_clouds = n_particles // self._n_per
-
-        # Incremental round-robin restage state.
+        self._near_fade_radii = near_fade_radii
+        self._quality = quality if quality is not None else _settings_quality(game)
         self._resort_frames = max(1, int(resort_frames))
-        self._stage = np.empty(n_particles * 6, dtype=np.uint32)  # staging index buffer
-        self._draw_order = None
-        self._cyc_cursor = 0
-        # Wind + toroidal recycling (centroids dynamic only when either is active).
-        self._wind = np.asarray(wind, dtype=np.float32)
-        self._wrap_radius = float(domain) * 0.5
-        self._wrap_band = (
-            0.12 * float(domain) if wrap_fade_band is None else float(wrap_fade_band)
+        self._seed = seed
+        self._build()
+
+    def _layer_spec(self, layer: CloudLayer):
+        overrides = {
+            name: getattr(layer, name)
+            for name in _SPEC_OVERRIDES
+            if getattr(layer, name) is not None
+        }
+        return at_quality(
+            replace(PRESETS[layer.cloud_type], **overrides), self._quality
         )
-        self._dynamic = bool(self._wind.any()) or self._wrap_radius > 0.0
-        yield "cloud_assemble"
 
-        # ── Static vertex data: 4 verts per particle, 15 floats each ─────────
-        # Built and uploaded in particle-blocks so the ~200ms of NumPy buffer
-        # construction + copy is spread across frames instead of one big spike.
-        vdata = GeomVertexData("cloud_field", _vertex_format(), GeomEnums.UH_static)
-        vdata.set_num_rows(4 * n_particles)
-        dst = memoryview(vdata.modify_array(0)).cast("B")
-        colors_flat = colors.reshape(-1, 4)
-        radii_flat = radii.reshape(-1)
-        uv_flat = uv_rects.reshape(-1, 4)
-        row_bytes = 15 * 4  # bytes per vertex (15 float32)
-        for b0 in range(0, n_particles, _VBUF_BLOCK):
-            b1 = min(b0 + _VBUF_BLOCK, n_particles)
-            m = b1 - b0
-            block = np.empty((4 * m, 15), dtype=np.float32)
-            block[:, 0:3] = np.repeat(self._local[b0:b1], 4, axis=0)
-            block[:, 3:5] = np.tile(_CORNERS, (m, 1))
-            block[:, 5:9] = np.repeat(colors_flat[b0:b1], 4, axis=0)
-            block[:, 9] = np.repeat(radii_flat[b0:b1], 4)
-            block[:, 10:14] = np.repeat(uv_flat[b0:b1], 4, axis=0)
-            # Per-vertex cloud id = particle index // n_per (fetches the centroid).
-            block[:, 14] = np.repeat(np.arange(b0, b1) // self._n_per, 4).astype(
-                np.float32
+    def _build(self):
+        _ensure_cloud_bins()
+        atlas_tex, rects = load_cloud_atlas(self._game)
+        sprite_coverage = atlas_mean_alpha()
+        # ONE volume for every layer; types decorrelate by a noise-space offset.
+        volume = _noise_volume(self._seed)
+        octave_mean = float(volume.mean())
+
+        self._layer_params = np.zeros((MAX_LAYERS, LAYER_VEC4S, 4), dtype=np.float32)
+        # _layer_specs is what each layer IS (set_* re-pack from it); _layer_report
+        # only what the build measured, so the two cannot drift apart.
+        self._layer_specs = []
+        self._layer_cal = []
+        self._layer_pack_args = []
+        self._layer_report = []
+        placements = []
+        for index, layer in enumerate(self._layers):
+            spec = self._layer_spec(layer)
+            # Shared calibration, so LOD shells of one type get the SAME threshold
+            # and agree about where cloud is across their crossfades.
+            cal = _calibration(self._seed, spec.field)
+            spec = replace(spec, field=with_threshold(spec.field, *cal))
+            width, seamless = snap_to_noise_period(
+                spec.field, float(layer.domain or self._domain)
             )
-            dst[b0 * 4 * row_bytes : b1 * 4 * row_bytes] = memoryview(block).cast("B")
-            yield "cloud_vertexbuf"
+            placed = sample_field_particles(
+                spec,
+                volume,
+                domain=width,
+                cell_size=layer.cell_size,
+                atlas_rects=rects,
+                seed=self._seed + 1000 * index,
+            )
+            # Derived, not tuned: divided by the placement's own phi and by the
+            # sprites' mean alpha, or every cloud comes out proportionally thin.
+            extinction = spec.field.density / max(placed["phi"] * sprite_coverage, 1e-6)
+            self._layer_specs.append(spec)
+            self._layer_cal.append(cal)
+            self._layer_pack_args.append(
+                dict(
+                    extinction=extinction,
+                    wrap_radius=0.5 * width,
+                    wrap_fade_band=0.0 if seamless else 0.12 * width,
+                    octave_mean=octave_mean,
+                    aspect=spec.aspect,
+                    fade_in=layer.fade_in,
+                    fade_out=layer.fade_out,
+                )
+            )
+            self._repack(index)
 
-        # ── Index buffer: reordered every frame (uint32 for >16k verts) ──────
+            n_cells = len(placed["cell_centres"])
+            placed["layer"] = np.full(n_cells, index, dtype=np.float32)
+            placed["wrap"] = np.full(n_cells, 0.5 * width, dtype=np.float32)
+            placed["pop"] = np.diff(placed["cell_start"])
+            placements.append(placed)
+            self._layer_report.append(
+                dict(
+                    type=layer.cloud_type,
+                    particles=len(placed["local"]),
+                    cells=n_cells,
+                    domain=width,
+                    seamless=seamless,
+                    phi=placed["phi"],
+                    extinction=extinction,
+                )
+            )
+
+        def cat(key):
+            return np.concatenate([placed[key] for placed in placements])
+
+        # One ragged particle array: cell c owns [cell_start[c], cell_start[c+1]).
+        self._local = np.ascontiguousarray(cat("local"), np.float32)
+        self._cell_centres = np.ascontiguousarray(cat("cell_centres"), np.float32)
+        self._cell_layer = cat("layer")
+        self._cell_wrap = cat("wrap")
+        self._cell_pop = cat("pop")
+        self._cell_start = np.concatenate([[0], np.cumsum(self._cell_pop)]).astype(
+            np.int64
+        )
+        n = self._n = len(self._local)
+        self._n_cells = len(self._cell_centres)
+        # Wind advection of the field, in METRES (each layer scales it by its own
+        # noise_scale in the shader), so billboards stay locked to their field.
+        self._noise_offset = np.zeros(3, dtype=np.float64)
+
+        # ── Static vertex data: 4 verts per particle ──────────────────────────
+        per_particle = np.empty((n, _VERTEX_FLOATS), dtype=np.float32)
+        per_particle[:, 0:3] = self._local
+        per_particle[:, 5] = cat("radii")
+        per_particle[:, 6:10] = cat("uv")
+        per_particle[:, 10] = np.repeat(
+            np.arange(self._n_cells, dtype=np.float32), self._cell_pop
+        )
+        verts = np.repeat(per_particle, 4, axis=0)
+        verts[:, 3:5] = np.tile(_CORNERS, (n, 1))
+        vdata = GeomVertexData("cloud_field", _vertex_format(), GeomEnums.UH_static)
+        vdata.set_num_rows(4 * n)
+        memoryview(vdata.modify_array(0)).cast("B")[: verts.nbytes] = memoryview(
+            verts
+        ).cast("B")
+
+        # ── Index buffer, re-sorted by _restage (uint32 for >16k verts) ────────
         self._tris = GeomTriangles(GeomEnums.UH_dynamic)
         self._tris.set_index_type(GeomEnums.NT_uint32)
-        self._tris.add_next_vertices(6 * n_particles)  # allocate; overwritten below
-        # Per-particle base triangle indices: particle p → its 4 verts at 4p..4p+3.
-        self._tri_base = (
-            np.arange(n_particles, dtype=np.uint32)[:, None] * 4
-        ) + _QUAD_TRIS
-        # Seed a valid (natural) order BEFORE add_primitive (it validates indices).
-        self._stage[:] = self._tri_base.reshape(-1)
-        memoryview(self._tris.modify_vertices()).cast("B")[
-            : self._stage.nbytes
-        ] = self._stage.tobytes()
-        yield "cloud_indexbuf"
+        self._tris.add_next_vertices(6 * n)
+        # A valid natural order BEFORE add_primitive, which validates indices.
+        self._stage = (np.arange(n, dtype=np.uint32)[:, None] * 4 + _QUAD_TRIS).ravel()
+        self._upload_indices()
+        # Round-robin state; a cursor at the end starts a cycle on the first update.
+        self._draw_order = None
+        self._buf_offset = None
+        self._cyc_cursor = self._n_cells
 
         geom = Geom(vdata)
         geom.add_primitive(self._tris)
         gnode = GeomNode("cloud_field")
         gnode.add_geom(geom)
+        # Billboards extend past their centres; skip culling rather than inflate.
+        gnode.set_bounds(OmniBoundingVolume())
+        gnode.set_final(True)
 
-        self.node = NodePath(gnode)
-        # Billboards extend past their centres; skip culling rather than inflate bounds.
-        self.node.node().set_bounds(OmniBoundingVolume())
-        self.node.node().set_final(True)
-        self.node.reparent_to(parent)
-
-        self.node.set_shader(Shader.make(Shader.SL_GLSL, _VERT, _FRAG))
+        self.node = self._parent.attach_new_node(gnode)
         self.node.set_texture(atlas_tex)
-        self.node.set_transparency(TransparencyAttrib.M_none)  # blend set explicitly
-        self.node.set_depth_write(False)  # translucent: don't occlude each other in Z
-        self.node.set_depth_test(True)  # but DO get occluded by opaque scene
-        self.node.set_bin("fixed", 50)  # drawn after opaque geometry
+        self.node.set_transparency(TransparencyAttrib.M_none)  # blend set below
+        self.node.set_shader(_cloud_shader())
+        self.node.set_depth_test(True)
+        self.node.set_depth_write(False)
+        self.node.set_bin(_CLOUD_BIN, 0)
         self.node.set_attrib(
             ColorBlendAttrib.make(
                 ColorBlendAttrib.M_add,
@@ -527,154 +498,245 @@ class CloudField:
             )
         )
 
-        # Per-cloud centroid texture (R32F, width 3*K: x,y,z per cloud, flat).
-        # Single-channel float → no BGRA channel-order ambiguity.
-        self._centre_tex = Texture("cloud_centres")
-        self._centre_tex.setup_2d_texture(
-            3 * self._n_clouds, 1, Texture.T_float, Texture.F_r32
+        # Per-cell [x, y, z, layerId] as R32F (no BGRA ambiguity), wrapped into
+        # rows; the layer ids are fixed, only the centres change per frame.
+        self._cell_rows = -(-self._n_cells // _CELLS_PER_ROW)
+        self._cell_params = np.zeros(
+            (self._cell_rows * _CELLS_PER_ROW, _CELL_PARAMS_STRIDE), dtype=np.float32
         )
-        self._centre_tex.set_magfilter(SamplerState.FT_nearest)
-        self._centre_tex.set_minfilter(SamplerState.FT_nearest)
-        self._upload_centres()
+        self._cell_params[: self._n_cells, 3] = self._cell_layer
+        self._cell_tex = Texture("cloud_cells")
+        self._cell_tex.setup_2d_texture(
+            _CELL_PARAMS_STRIDE * _CELLS_PER_ROW,
+            self._cell_rows,
+            Texture.T_float,
+            Texture.F_r32,
+        )
+        self._cell_tex.set_magfilter(SamplerState.FT_nearest)
+        self._cell_tex.set_minfilter(SamplerState.FT_nearest)
+        self._upload_cells()
 
-        self.node.set_shader_input("camPos", Vec3(0, 0, 0))
-        self.node.set_shader_input("viewPos", Vec3(0, 0, 0))
-        self.node.set_shader_input("lightDir", Vec3(*sun_dir))  # static sun
-        self.node.set_shader_input("sunGlowColor", Vec3(*sun_color))
-        self.node.set_shader_input("hgForward", float(hg_forward))
-        self.node.set_shader_input("glowStrength", float(glow_strength))
-        self.node.set_shader_input("hgBackward", float(hg_backward))
-        self.node.set_shader_input("backStrength", float(back_strength))
-        self.node.set_shader_input("cloudCentres", self._centre_tex)
-        self.node.set_shader_input("wrapRadius", float(self._wrap_radius))
-        self.node.set_shader_input("wrapFadeBand", float(self._wrap_band))
+        self._upload_layer_params()
+        self.node.set_shader_inputs(
+            camPos=Vec3(0, 0, 0),
+            cellParams=self._cell_tex,
+            sunBrightness=float(self._sun_brightness),
+            skyStrength=float(self._sky_strength),
+            skyOcclusion=float(self._sky_occlusion),
+            exposure=float(self._exposure),
+            horizonFade=1.0 / max(float(self._horizon_distance), 1.0),
+            earthCurvature=float(self._curvature),
+            cloudNoise=build_noise_texture(volume),
+            noiseSize=float(NOISE_SIZE),
+            noiseOffset=Vec3(0, 0, 0),
+            nearFadeRadii=float(self._near_fade_radii),
+        )
+        self.set_sun(
+            self._sun_direction,
+            self._sun_color_arg,
+            self._sky_color_arg,
+            self._haze_color_arg,
+        )
+
+    # ── Live edits ────────────────────────────────────────────────────────────
+
+    def _repack(self, index):
+        spec = self._layer_specs[index]
+        self._layer_params[index] = pack_layer_params(
+            spec.field, optics=spec.optics, **self._layer_pack_args[index]
+        )
+
+    def _upload_layer_params(self):
+        pta = PTA_LVecBase4f()
+        for row in self._layer_params.reshape(-1, 4):
+            pta.push_back(LVecBase4f(*(float(v) for v in row)))
+        self.node.set_shader_input("layerParams", pta)
+
+    def _edit_layers(self, layer, edit):
+        """Apply ``edit(index, spec) -> spec`` to one layer (or all), re-pack and
+        re-upload."""
+        indices = range(len(self._layer_specs)) if layer is None else [layer]
+        for index in indices:
+            self._layer_specs[index] = edit(index, self._layer_specs[index])
+            self._repack(index)
+        self._upload_layer_params()
+
+    def set_coverage(self, layer=None, coverage=None, edge_softness=None):
+        """Change how much of the sky one cloud type (or all) covers, live.
+
+        A new threshold is an index into the cached column peaks, but billboards
+        are NOT re-placed: lowering coverage is exact (the surplus discards),
+        raising it past the built value grows holes. A tuning knob; rebuild to
+        commit a higher coverage.
+
+        :param layer: layer index, or None for every layer
+        :param coverage: new zenith-projected cloud fraction, or None to keep
+        :param edge_softness: new window width in sigma, or None to keep
+        :returns: the resulting :class:`DensityField` per layer
+        """
+
+        def edit(index, spec):
+            field = spec.field
+            changed = replace(
+                field,
+                coverage=field.coverage if coverage is None else float(coverage),
+                edge_softness=(
+                    field.edge_softness
+                    if edge_softness is None
+                    else float(edge_softness)
+                ),
+            )
+            return replace(spec, field=with_threshold(changed, *self._layer_cal[index]))
+
+        self._edit_layers(layer, edit)
+        return [spec.field for spec in self._layer_specs]
+
+    def set_optics(self, layer=None, **changes):
+        """Change :class:`CloudOptics` fields of one layer (or all), live. Shape
+        lives in the DensityField and needs a rebuild.
+
+        :returns: the resulting :class:`CloudOptics` per layer
+        :raises AttributeError: for a name that is not a CloudOptics field
+        """
+        unknown = set(changes) - {f.name for f in fields(CloudOptics)}
+        if unknown:
+            raise AttributeError(
+                f"not CloudOptics parameters: {sorted(unknown)}. Shape parameters "
+                "live in DensityField and need a rebuild."
+            )
+        self._edit_layers(
+            layer,
+            lambda index, spec: replace(spec, optics=replace(spec.optics, **changes)),
+        )
+        return [spec.optics for spec in self._layer_specs]
+
+    def set_sun(self, direction, sun_color=None, sky_color=None, haze_color=None):
+        """Move the sun and/or restate its colours; nothing is baked, so this is a
+        few uniform writes.
+
+        :param direction: vector FROM the scene TOWARD the sun (need not be unit)
+        :param sun_color: RGB of direct sunlight, or None to keep
+        :param sky_color: RGB of the ambient sky, or None to keep; also sets the
+            haze colour unless *haze_color* is given
+        :param haze_color: RGB distant cloud tends toward, or None to keep
+        """
+        sun_dir = np.asarray(direction, dtype=float)[:3]
+        norm = np.linalg.norm(sun_dir)
+        if norm < 1e-9:
+            raise ValueError("sun direction must be a non-zero vector")
+        self._sun_direction = tuple(float(v) for v in sun_dir)
+        self.node.set_shader_input("sunDir", Vec3(*(sun_dir / norm)))
+        if sky_color is not None and haze_color is None:
+            haze_color = sky_color
+        for name, attr, value in (
+            ("sunColor", "_sun_color_arg", sun_color),
+            ("skyColor", "_sky_color_arg", sky_color),
+            ("hazeColor", "_haze_color_arg", haze_color),
+        ):
+            if value is not None:
+                setattr(self, attr, value)
+                self.node.set_shader_input(name, _vec3(value))
 
     # ── Per-frame ─────────────────────────────────────────────────────────────
 
     def update(self, cam_pos: Vec3, dt: float = 0.0):
-        """Advance the field one frame: re-face billboards, drift + recycle the
-        clouds, and continue the incremental draw-order re-sort.
+        """Advance one frame: drift + recycle the cells and continue the re-sort.
 
-        :param cam_pos: current camera world position
+        :param cam_pos: camera world position
         :param dt: seconds since the last frame (drives wind drift)
         """
-        # Cheap, every frame: billboards re-face the camera (built in the VS).
         self.node.set_shader_input("camPos", cam_pos)
-        self.node.set_shader_input("viewPos", cam_pos)
         cam_xyz = np.array([cam_pos.x, cam_pos.y, cam_pos.z], dtype=np.float32)
 
-        if self._dynamic:
-            if dt:
-                self._cloud_centres += self._wind * dt  # wind drift
-            if self._wrap_radius > 0.0:
-                # Toroidal recycle: wrap each centroid back into the camera-centred
-                # box on X/Y by subtracting the nearest whole box-width.
-                box_width = 2.0 * self._wrap_radius
-                rel = self._cloud_centres[:, :2] - cam_xyz[:2]
-                self._cloud_centres[:, :2] = (
-                    cam_xyz[:2] + rel - box_width * np.round(rel / box_width)
-                )
-            self._upload_centres()
-
+        if dt:
+            self._cell_centres += self._wind * dt
+            # The field drifts with the SAME wind, so a puff keeps its shape.
+            self._noise_offset -= self._wind * dt
+            self.node.set_shader_input("noiseOffset", Vec3(*self._noise_offset))
+        # Toroidal recycle into each layer's camera-centred box; seamless where the
+        # box is a whole number of noise periods.
+        box_width = 2.0 * self._cell_wrap[:, None]
+        rel = self._cell_centres[:, :2] - cam_xyz[:2]
+        self._cell_centres[:, :2] = (
+            cam_xyz[:2] + rel - box_width * np.round(rel / box_width)
+        )
+        self._upload_cells()
         self._restage(cam_xyz)
 
     def remove(self):
         """Detach the cloud geometry from the scene."""
         self.node.removeNode()
 
-    def _upload_centres(self):
-        """Push the current per-cloud centroids into the GPU centroid texture."""
-        self._centre_tex.set_ram_image(
-            np.ascontiguousarray(self._cloud_centres.reshape(-1), np.float32).tobytes()
-        )
+    def _upload_cells(self):
+        self._cell_params[: self._n_cells, 0:3] = self._cell_centres
+        self._cell_tex.set_ram_image(self._cell_params.tobytes())
+
+    def _upload_indices(self):
+        memoryview(self._tris.modify_vertices()).cast("B")[
+            : self._stage.nbytes
+        ] = self._stage.tobytes()
 
     def _restage(self, cam_xyz):
-        """Re-sort and re-upload one round-robin slice of the index buffer.
+        """Re-sort one round-robin slice of cells into the staged index buffer.
 
-        Each frame handles n_clouds / resort_frames clouds; a fresh cloud
-        draw-order is snapshotted at the start of each cycle, and the index buffer
-        is uploaded once per completed cycle.  This spreads both the sort and the
-        index gather, so there is no per-frame spike.
-
-        :param cam_xyz: current camera world position as a 3-float array
+        A cell draw order (far → near) is snapshotted per cycle, with each rank's
+        slot range from the cumulative ragged populations; within a slice the whole
+        gather and sort is one lexsort on (cell rank, distance). The buffer is
+        uploaded once per completed cycle, so the GPU only sees consistent orders.
         """
-        n_clouds, n_per = self._n_clouds, self._n_per
-        clouds_per_frame = -(-n_clouds // self._resort_frames)  # ceil division
-        if self._draw_order is None or self._cyc_cursor >= n_clouds:
-            # New cycle: snapshot the cloud draw order, far → near (cheap K-argsort).
-            centre_rel = self._cloud_centres - cam_xyz
+        n_cells = self._n_cells
+        cells_per_frame = -(-n_cells // self._resort_frames)
+        if self._cyc_cursor >= n_cells:
+            centre_rel = self._cell_centres - cam_xyz
             self._draw_order = np.argsort(
                 -np.einsum("ij,ij->i", centre_rel, centre_rel)
             )
+            self._buf_offset = np.concatenate(
+                [[0], np.cumsum(self._cell_pop[self._draw_order])]
+            ).astype(np.int64)
             self._cyc_cursor = 0
 
         start = self._cyc_cursor
-        end = min(start + clouds_per_frame, n_clouds)
-        cloud_ids = self._draw_order[start:end]  # clouds at these draw-ranks
-        # Re-sort just these clouds' particles; world centre = centroid + local.
-        world_pos = (
-            self._cloud_centres[cloud_ids][:, None, :]
-            + self._local.reshape(n_clouds, n_per, 3)[cloud_ids]
-        )
-        offset = world_pos - cam_xyz  # (m, n_per, 3)
-        dist_sq = np.einsum("ijk,ijk->ij", offset, offset)  # (m, n_per)
-        intra_order = np.argsort(-dist_sq, axis=1)  # far → near
-        particle_ids = cloud_ids[:, None] * n_per + intra_order  # global ids
-        # Write these clouds' tri-index blocks into their (contiguous) buffer slots.
-        self._stage[start * n_per * 6 : end * n_per * 6] = self._tri_base[
-            particle_ids
-        ].reshape(-1)
+        end = min(start + cells_per_frame, n_cells)
+        cells = self._draw_order[start:end]
+        counts = self._cell_pop[cells]
+        total = int(counts.sum())
+        if total:
+            # Ragged gather: (start, count) per cell → one flat particle-id array.
+            group_start = np.cumsum(counts) - counts
+            particle_ids = np.repeat(self._cell_start[cells] - group_start, counts)
+            particle_ids = particle_ids + np.arange(total)
+            group = np.repeat(np.arange(len(cells)), counts)
+
+            world = (
+                self._cell_centres[np.repeat(cells, counts)] + self._local[particle_ids]
+            )
+            offset = world - cam_xyz
+            dist_sq = np.einsum("ij,ij->i", offset, offset)
+            order = np.lexsort((-dist_sq, group))
+            lo, hi = self._buf_offset[start], self._buf_offset[end]
+            self._stage[lo * 6 : hi * 6] = (
+                particle_ids[order][:, None] * 4 + _QUAD_TRIS
+            ).ravel()
         self._cyc_cursor = end
 
-        if end >= n_clouds:  # cycle complete → ONE atomic upload
-            memoryview(self._tris.modify_vertices()).cast("B")[
-                : self._stage.nbytes
-            ] = self._stage.tobytes()
-
-
-# ── Game-facing wrapper ─────────────────────────────────────────────────────────
+        if end >= n_cells:
+            self._upload_indices()
 
 
 class Clouds:
-    """Drops a :class:`CloudField` into a level following the scene convention:
-    construct with the game, register a per-frame update in
-    game.method_lists, expose clean.  All CloudField settings (layers,
-    domain, wind, sun, lighting, …) pass straight through as keyword arguments.
-
-    Usage::
-
-        from space_flight.scenes.cloud.field import Clouds, CloudLayer
-        self.clouds = Clouds(game, sun_direction=Vec3(0.2, 1.0, 0.1))
+    """A :class:`CloudField` under ``game.root_node`` following the scene
+    convention: per-frame update via game.method_lists, and clean(). Keyword
+    arguments pass straight through to CloudField.
     """
 
-    def __init__(
-        self, game, layers=None, *, defer_build=False, use_cache=False, **field_kwargs
-    ):
+    def __init__(self, game, layers=None, **field_kwargs):
         self.game = game
         self.id = uuid.uuid4()
         self.field = CloudField(
-            parent=game.root_node,
-            game=game,
-            layers=layers,
-            defer_build=defer_build,
-            use_cache=use_cache,
-            **field_kwargs,
+            parent=game.root_node, game=game, layers=layers, **field_kwargs
         )
-        # When building synchronously the field is ready now; register the
-        # per-frame update. Deferred builds register it at the end of build().
-        if not defer_build:
-            game.method_lists[self.id] = [self.update]
-
-    def build(self):
-        """
-        Drive the deferred field build a chunk per frame, then register the
-        per-frame update once the field is ready. Use with defer_build=True::
-
-            self.clouds = Clouds(game, defer_build=True, ...)
-            yield from self.clouds.build()
-        """
-        yield from self.field.build()
-        self.game.method_lists[self.id] = [self.update]
+        game.method_lists[self.id] = [self.update]
 
     def update(self):
         """Per-frame: drive wind/recycle/sort against the current camera."""

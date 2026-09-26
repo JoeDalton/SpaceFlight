@@ -45,16 +45,17 @@ from panda3d.core import (
     Texture,
 )
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, PLANET_RADIUS_M
 from space_flight.game.collisions import attach_collision_plane
 from space_flight.utils import compute_next_power_of_2
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
-# Fraction of the camera far distance used as the ocean plane's half-size.
-# >1 so the plane's edges always lie beyond the far clip and are never visible.
-_PLANE_FAR_FACTOR = 3.0
+# The surface must reach past the horizon from the highest eye, so its own bulge
+# hides its edge: sqrt(2*R*altitude) is ~505 km at 20 km, plus a margin.
+_MAX_EYE_ALTITUDE_M = 20000.0
+_HORIZON_MARGIN = 1.1
 
 # Camera mask bit used to hide the ocean from the reflection camera
 _OCEAN_BIT = BitMask32.bit(1)
@@ -124,40 +125,63 @@ def make_plane_mesh(size: float) -> GeomNode:
     return node
 
 
-def make_swell_grid_mesh(grid_half: float, subdivs: int, outer_half: float) -> GeomNode:
+def border_coords(grid_half: float, outer_half: float, rings: int) -> np.ndarray:
     """
-    Mesh for the geometric-swell prototype: a dense uniform grid of half-size
-    grid_half (where the vertex shader displaces the surface by the swell),
-    surrounded by a single ring of huge border cells reaching outer_half so
-    the ocean still covers the view to the horizon.  The displacement is tapered
-    to zero before grid_half (in the shader), so the flat border joins
-    seamlessly — no projected-grid / clipmap machinery needed.
+    Radii of the border rings between the dense grid and the surface's edge.
+
+    Geometrically spaced, so the growth factor is derived rather than chosen: the
+    last ring lands exactly on outer_half whatever the ring count.  Geometric
+    rather than uniform because what has to be resolved is the planet's CURVE, and
+    the error in approximating it by flat cells is ``spacing^2 / (8R)`` — so a ring
+    schedule that grows with radius keeps the sag a roughly constant fraction of
+    the distance it is seen at, instead of spending vertices out where nothing can
+    be resolved anyway.
+
+    :param grid_half: Half-size of the dense inner grid, in world units.
+    :param outer_half: Half-size of the whole surface, in world units.
+    :param rings: Number of border rings.
+    :return: Ring radii, ascending, ending at outer_half.
+    """
+    growth = (outer_half / grid_half) ** (1.0 / rings)
+    return grid_half * growth ** np.arange(1, rings + 1, dtype=np.float64)
+
+
+def make_swell_grid_mesh(
+    grid_half: float,
+    subdivs: int,
+    outer_half: float,
+    curvature: float = 0.0,
+    border_rings: int = 28,
+) -> GeomNode:
+    """
+    Mesh for the geometric-swell mode: a dense uniform grid of half-size
+    grid_half (displaced by the swell in the vertex shader, tapered to zero
+    before its edge), ringed by geometrically-spaced border rings out to
+    outer_half.  Rings rather than one border quad so the surface can curve;
+    28 keeps the curve's sag under 1 arcmin.  Curvature is baked into z, which
+    is exact because the mesh is recentred on the camera every frame.
 
     :param grid_half: Half-size of the dense inner grid, in world units.
     :param subdivs: Number of subdivisions across the dense inner grid.
-    :param outer_half: Half-size of the flat outer border, in world units.
+    :param outer_half: Half-size of the outer border, in world units.
+    :param curvature: 1 / (2 * planet radius); 0 for a flat surface.
+    :param border_rings: Number of geometrically-spaced border rings.
     :return: A :class:`GeomNode` holding the grid mesh.
     """
-    # Per-axis coordinates: outer border, then the uniform inner span, then the
-    # far border.  The two border steps are huge but stay flat (taper → 0).
-    #
-    # Built with NumPy + bulk buffer uploads rather than per-vertex/-triangle
-    # Python calls: at the default 512 subdivisions this is a 515x515 grid
-    # (~265k verts, ~528k tris); even at 256 subdivisions (259x259) the naive
-    # loop spent ~210ms here. The vectorised form is byte-identical and ~25x
-    # faster.
-    coords = np.empty(subdivs + 3, dtype=np.float32)
-    coords[0] = -outer_half
-    coords[1 : subdivs + 2] = (
-        -grid_half + 2.0 * grid_half * np.arange(subdivs + 1) / subdivs
-    )
-    coords[subdivs + 2] = outer_half
+    # Per-axis coordinates: the border rings mirrored below the grid, the uniform
+    # inner span, then the border rings above it. Vectorised because the default
+    # grid is ~265k verts; a per-vertex Python loop was ~25x slower.
+    border = border_coords(grid_half, outer_half, border_rings)
+    inner = -grid_half + 2.0 * grid_half * np.arange(subdivs + 1) / subdivs
+    coords = np.concatenate([-border[::-1], inner, border]).astype(np.float32)
     m = coords.size
 
-    # Vertex positions (m*m, 3): vertex j*m + i sits at (coords[i], coords[j], 0).
+    # Vertex positions (m*m, 3): vertex j*m + i sits at (coords[i], coords[j]).
     verts = np.zeros((m * m, 3), dtype=np.float32)
     verts[:, 0] = np.tile(coords, m)
     verts[:, 1] = np.repeat(coords, m)
+    # Droop from the true radius, so the grid samples a paraboloid of revolution.
+    verts[:, 2] = -curvature * (verts[:, 0] ** 2 + verts[:, 1] ** 2)
 
     fmt = GeomVertexFormat.getV3()
     vdata = GeomVertexData("ocean_grid", fmt, Geom.UHStatic)
@@ -212,6 +236,8 @@ class Ocean:
         wave_fade_near: float = 300.0,
         wave_fade_far: float = 5000.0,
         wave_fade_k2: float = 0.001,
+        haze_color: LVecBase3f = LVecBase3f(0.2, 0.2, 0.4),
+        haze_distance: float = 150000.0,
         vert_shader: Path = DATAFILES_PATH / "shaders/ocean.vert",
         frag_shader: Path = DATAFILES_PATH / "shaders/ocean.frag",
     ) -> None:
@@ -243,6 +269,9 @@ class Ocean:
             displacement.
         :param wave_fade_near: Distance, in world units, below which small waves
             are at full detail.
+        :param haze_color: Colour distant water fades toward. Should match what
+            the cloud field fades to, or sea and sky disagree at the horizon.
+        :param haze_distance: Metres over which water reaches haze_color fully.
         :param wave_fade_far: Distance, in world units, beyond which small waves
             are fully suppressed.
         :param wave_fade_k2: Exponential decay rate for the iteration count
@@ -264,17 +293,21 @@ class Ocean:
         shader = Shader.load(Shader.SL_GLSL, vertex=vert_shader, fragment=frag_shader)
 
         # ── Camera-locked surface ─────────────────────────────────────────────
-        # Sized past the far clip so its edges are never visible; it follows the
-        # camera in XY each frame so the view is always covered to the horizon.
-        # Flat single quad by default; a dense displaced grid when geometric
-        # swell is enabled (prototype).
-        plane_size = self.game.app.camLens.getFar() * 2.0 * _PLANE_FAR_FACTOR
+        # Follows the camera in XY each frame so the view is always covered to the
+        # horizon. The collision plane and the reflection mirror stay flat at z=0;
+        # both are exact at the camera, where the droop is zero.
+        horizon = math.sqrt(2.0 * PLANET_RADIUS_M * _MAX_EYE_ALTITUDE_M)
+        outer_half = horizon * _HORIZON_MARGIN
         if geometric_swell:
             mesh = make_swell_grid_mesh(
-                swell_grid_half, swell_grid_subdivs, plane_size * 0.5
+                swell_grid_half,
+                swell_grid_subdivs,
+                outer_half,
+                curvature=1.0 / (2.0 * PLANET_RADIUS_M),
             )
         else:
-            mesh = make_plane_mesh(plane_size)
+            # Four vertices cannot curve, so this path stays flat.
+            mesh = make_plane_mesh(outer_half * 2.0)
         self.ocean_node = self.base_node.attachNewNode(mesh)
         self.ocean_node.setShader(shader)
         self.ocean_node.setShaderInput("iTime", 0.0)
@@ -307,6 +340,10 @@ class Ocean:
         self.ocean_node.setShaderInput("uWaveFadeNear", float(wave_fade_near))
         self.ocean_node.setShaderInput("uWaveFadeFar", float(wave_fade_far))
         self.ocean_node.setShaderInput("uWaveFadeK2", float(wave_fade_k2))
+        # Aerial perspective, to meet the cloud haze at the horizon. Shorter than
+        # the clouds' distance: the air path to sea level is denser.
+        self.ocean_node.setShaderInput("uHazeColor", haze_color)
+        self.ocean_node.setShaderInput("uHazeDistance", float(haze_distance))
         # Hide the ocean from the reflection camera
         self.ocean_node.hide(_OCEAN_BIT)
 

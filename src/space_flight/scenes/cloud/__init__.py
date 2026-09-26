@@ -1,29 +1,48 @@
 """
 In-scene billboard clouds.
 
-Two modules:
-    cloud.py  — a cloud's data: procedural generation, CPU self-shadow shading,
-                render-ready templates (build_templates), and the sprite atlas.
-    field.py  — a field of clouds: geometry, shaders, depth-sorting, wind +
-                recycling (CloudField), and the game wrapper (Clouds).
+    noise.py  — what a cloud type looks like: its density field (DensityField)
+                and the tileable 3D value-noise volume it is built from.
+    cloud.py  — where a type's billboards go (sample_field_particles), presets
+                (PRESETS, CloudSpec) and quality scaling (CloudQuality).
+    field.py  — the drawable field (CloudField: geometry, sorting, wind, live
+                set_sun / set_optics / set_coverage) and the game wrapper (Clouds).
 
-Public API:
-    Clouds          — game-facing wrapper (parent under game.root_node, per-frame
-                      update via game.method_lists, clean()).
-    CloudField      — the engine field: build from CloudLayers, draw, animate.
-    CloudLayer      — per-type spec (cloud_type, count, altitude, …).
-    CloudType       — CUMULUS / STRATUS / CIRRUS / CUMULONIMBUS shape presets.
-    load_cloud_atlas / build_templates — lower-level building blocks.
+A billboard is a sample of a volume, not a sprite, and a cloud type is one density
+field over a slab of sky whose features are the clouds. Design notes:
+docs/source/scenes.md; profiling and an open alternative: view_aligned_slicing.md.
 """
 
-from space_flight.scenes.cloud.cloud import CloudType, build_templates, load_cloud_atlas
+from space_flight.scenes.cloud.cloud import (
+    PRESETS,
+    QUALITY_SCALES,
+    CloudQuality,
+    CloudSpec,
+    CloudType,
+    at_quality,
+)
 from space_flight.scenes.cloud.field import CloudField, CloudLayer, Clouds
+from space_flight.scenes.cloud.noise import (
+    CloudOptics,
+    DensityField,
+    build_noise_texture,
+    measure_coverage,
+    resolve_field,
+)
 
 __all__ = [
     "Clouds",
     "CloudField",
     "CloudLayer",
     "CloudType",
-    "load_cloud_atlas",
-    "build_templates",
+    "CloudSpec",
+    "CloudOptics",
+    "CloudQuality",
+    "DensityField",
+    "PRESETS",
+    "QUALITY_SCALES",
+    "at_quality",
+    "build_noise_texture",
+    "measure_coverage",
+    "resolve_field",
 ]
