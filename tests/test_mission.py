@@ -14,6 +14,7 @@ from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
     any_of,
+    damaged,
     near,
     near_actor,
     not_,
@@ -515,3 +516,126 @@ def test_ids_are_unique_per_spawn(mission, spawned):
     run_jobs(mission)
     assert len(wave.ids) == 6 and len(set(wave.ids)) == 6
     assert all(isinstance(i, uuid.UUID) for i in wave.ids)
+
+
+# ---------------------------------------------------------------------------
+# Scanning
+# ---------------------------------------------------------------------------
+
+SUBJECT = WaveSpec(
+    name="subject", ship_model="gr-75", size=1, team=0, spawn_point=[0, 500, 0]
+)
+
+
+def _subject(game, mission):
+    """A spawned, scannable wave ahead of the player, and its scan pawn."""
+    wave = mission.spawn(SUBJECT)
+    advance(game, mission, 0.1)
+    return wave, wave.pawns()[0]
+
+
+def test_scan_fills_while_the_target_is_held(game, mission, spawned):
+    wave, pawn = _subject(game, mission)
+    scan = mission.scan(wave, duration_s=15)
+    game.player.pawn.target = pawn
+    advance(game, mission, 7.5)
+    assert pawn.scan.progress == pytest.approx(0.5, abs=0.01)
+    assert scan.started() and not scan.complete()
+    assert pawn.scan.status_text.startswith("SCANNING")
+    advance(game, mission, 8)
+    assert scan.complete()
+    assert pawn.scan.result == "clear"
+    assert pawn.scan.status_text == "CLEAR"
+
+
+def test_scan_reveals_contraband(game, mission, spawned):
+    wave, pawn = _subject(game, mission)
+    scan = mission.scan(wave, contraband=True)
+    game.player.pawn.target = pawn
+    advance(game, mission, 16)
+    assert scan.complete()
+    assert pawn.scan.result == "contraband"
+
+
+@pytest.mark.parametrize(
+    "breaking",
+    [
+        "untargeted",
+        "out_of_range",
+        "off_cone",
+    ],
+)
+def test_scan_does_not_fill_unless_held(game, mission, spawned, breaking):
+    wave, pawn = _subject(game, mission)
+    mission.scan(wave, range_m=1000, cone_deg=10)
+    game.player.pawn.target = pawn
+    if breaking == "untargeted":
+        game.player.pawn.target = None
+    elif breaking == "out_of_range":
+        pawn.position = np.array([0.0, 1500.0, 0.0])
+    else:
+        pawn.position = np.array([200.0, 500.0, 0.0])  # ~22 deg off the nose
+    advance(game, mission, 5)
+    assert pawn.scan.progress == 0.0
+
+
+def test_scan_decays_at_half_rate_when_broken(game, mission, spawned):
+    wave, pawn = _subject(game, mission)
+    scan = mission.scan(wave, duration_s=10, decay_ratio=0.5)
+    game.player.pawn.target = pawn
+    advance(game, mission, 6)
+    held = pawn.scan.progress
+    game.player.pawn.target = None
+    advance(game, mission, 4)
+    assert pawn.scan.progress == pytest.approx(held - 0.2, abs=0.01)
+    assert not scan.complete()
+
+
+def test_scan_freezes_once_complete(game, mission, spawned):
+    wave, pawn = _subject(game, mission)
+    mission.scan(wave, duration_s=1)
+    game.player.pawn.target = pawn
+    advance(game, mission, 2)
+    game.player.pawn.target = None
+    advance(game, mission, 5)
+    assert pawn.scan.progress == 1.0
+    assert pawn.scan.complete
+
+
+def test_scan_picks_up_a_wave_spawned_later(game, mission, spawned):
+    wave = mission.wave(SUBJECT)
+    scan = mission.scan(wave, duration_s=1)
+    advance(game, mission, 1)
+    assert not scan.complete()
+    wave.spawn()
+    advance(game, mission, 0.1)
+    game.player.pawn.target = wave.pawns()[0]
+    advance(game, mission, 1.5)
+    assert scan.complete()
+
+
+def test_scan_progress_at_least(game, mission, spawned):
+    wave, pawn = _subject(game, mission)
+    scan = mission.scan(wave, duration_s=10)
+    half = scan.progress_at_least(0.5)
+    game.player.pawn.target = pawn
+    advance(game, mission, 4)
+    assert not half()
+    advance(game, mission, 2)
+    assert half()
+
+
+def test_spawn_orientation_can_be_given_at_spawn_time(mission, spawned):
+    mission.spawn(WAVE, orientation=(0.5, 0.5, 0.5, 0.5))
+    for _ in range(WAVE.size):
+        mission.update()
+    assert all(list(bot.ini_orientation) == [0.5, 0.5, 0.5, 0.5] for bot in spawned)
+
+
+def test_damaged(game, mission, spawned):
+    wave, pawn = _subject(game, mission)
+    cond = damaged(wave)
+    assert not cond()
+    pawn.shield_level = 0.0
+    pawn.health -= 1
+    assert cond()

@@ -22,9 +22,10 @@ callables too, typically lambdas calling the mission's action methods.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable, Iterator, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Sequence
 
 from space_flight.game.scenario.conditions import Condition, _After, _Delay, _Sustained
+from space_flight.game.scenario.scan import ScanHandle
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
@@ -129,6 +130,21 @@ class Mission:
     def spawn(self, spec: WaveSpec, **kwargs) -> WaveHandle:
         """Spawn a wave now; kwargs as :meth:`WaveHandle.spawn`."""
         return self.wave(spec).spawn(**kwargs)
+
+    # ------------------------------------------------------------------
+    # Scanning
+    # ------------------------------------------------------------------
+
+    def scan(self, who: Any, contraband: bool = False, **kwargs) -> ScanHandle:
+        """
+        Make every pawn of who scannable by the player, starting now.
+
+        :param who: See :func:`~space_flight.game.scenario.conditions.pawns_of`
+        :param contraband: What the scans reveal
+        :param kwargs: Tuning, as :class:`ScanHandle`
+        :return: The scans' handle, whose state methods are conditions
+        """
+        return ScanHandle(self, who, contraband=contraband, **kwargs)
 
     # ------------------------------------------------------------------
     # Sequencing (yield from these in a mission body)

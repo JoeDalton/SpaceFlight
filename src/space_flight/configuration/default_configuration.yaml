@@ -52,9 +52,9 @@ contexts:
     gamepad:
       # Flight axes
       throttle:            right_trigger
-      yaw:                 left_x
+      yaw:                 right_x
       pitch:               left_y
-      roll:                right_x
+      roll:                left_x
       # Actions
       fire:                gamepad_lshoulder
       drop_bomb:           gamepad_face_x

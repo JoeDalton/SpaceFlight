@@ -23,6 +23,17 @@ EDGE_VERTICAL = 0.88
 # this non-zero magnitude keeps the projection finite and stable.
 MIN_PROJECTION_DEPTH = 1e-3
 
+# Target box half-extents, shared by the box and the scan bar filling it.
+TARGET_BOX_HALF_WIDTH = 0.038
+TARGET_BOX_HALF_HEIGHT = 0.03
+
+# Transparent fill of the scan bar: while scanning, then by scan result.
+SCAN_BAR_COLORS = {
+    None: (1.0, 0.85, 0.0, 0.35),
+    "clear": (0.0, 1.0, 0.0, 0.35),
+    "contraband": (1.0, 0.0, 0.0, 0.35),
+}
+
 
 class HUD:
     """
@@ -219,7 +230,12 @@ class TargetHUD:
 
         # Define target indicator
         cm = CardMaker("targetBox")
-        cm.setFrame(-0.038, 0.038, -0.03, 0.03)
+        cm.setFrame(
+            -TARGET_BOX_HALF_WIDTH,
+            TARGET_BOX_HALF_WIDTH,
+            -TARGET_BOX_HALF_HEIGHT,
+            TARGET_BOX_HALF_HEIGHT,
+        )
 
         self.square = NodePath(cm.generate())
         self.square.setTexture(
@@ -229,6 +245,21 @@ class TargetHUD:
         )
         self.square.setTransparency(TransparencyAttrib.MAlpha)
         self.square.reparentTo(self.aspect)
+
+        # Define scan progress bar: fills the target box from its left edge,
+        # scaled horizontally by the target's scan progress (see
+        # space_flight.game.scenario.scan)
+        scan_cm = CardMaker("scanBar")
+        scan_cm.setFrame(
+            0,
+            2 * TARGET_BOX_HALF_WIDTH,
+            -TARGET_BOX_HALF_HEIGHT,
+            TARGET_BOX_HALF_HEIGHT,
+        )
+        self.scan_bar = NodePath(scan_cm.generate())
+        self.scan_bar.setTransparency(TransparencyAttrib.MAlpha)
+        self.scan_bar.reparentTo(self.aspect)
+        self.scan_bar.setPos(-TARGET_BOX_HALF_WIDTH, 0, 0)
 
         # Define distance label
         self.distance_label = DirectLabel(
@@ -255,6 +286,10 @@ class TargetHUD:
         self.square.setDepthWrite(False)
         self.square.setBin("fixed", 10)
 
+        self.scan_bar.setDepthTest(False)
+        self.scan_bar.setDepthWrite(False)
+        self.scan_bar.setBin("fixed", 9)
+
         self.distance_label.setDepthTest(False)
         self.distance_label.setDepthWrite(False)
         self.distance_label.setBin("fixed", 10)
@@ -267,6 +302,7 @@ class TargetHUD:
         self.distance_label.hide()
         self.name_label.hide()
         self.square.hide()
+        self.scan_bar.hide()
 
     def target_hud_update_task(self):
         target = self.game.player.pawn.target
@@ -275,6 +311,7 @@ class TargetHUD:
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
+            self.scan_bar.hide()
             self.game.player.pawn.target_id = None
             self.game.player.pawn.target_idx = None
         elif target.is_dead:
@@ -282,6 +319,7 @@ class TargetHUD:
             self.distance_label.hide()
             self.name_label.hide()
             self.square.hide()
+            self.scan_bar.hide()
             self.game.player.pawn.target = None
             self.game.player.pawn.target_id = None
             self.game.player.pawn.target_idx = None
@@ -291,7 +329,16 @@ class TargetHUD:
             display_name = getattr(target.parent, "name", None) or getattr(
                 target, "name", ""
             )
-            self.name_label["text"] = display_name
+            scan = getattr(target, "scan", None)
+            status = scan.status_text if scan is not None else ""
+            if status:
+                self.name_label["text"] = f"{display_name} - {status}"
+                self.scan_bar.setScale(max(scan.progress, 1e-3), 1, 1)
+                self.scan_bar.setColor(*SCAN_BAR_COLORS[scan.result])
+                self.scan_bar.show()
+            else:
+                self.name_label["text"] = display_name
+                self.scan_bar.hide()
             self.distance_label.show()
             self.name_label.show()
             self.square.show()
@@ -393,6 +440,7 @@ class TargetHUD:
         self.name_label.destroy()
         self.distance_label.destroy()
         self.square.removeNode()
+        self.scan_bar.removeNode()
         self.aspect.removeNode()
         self.root.removeNode()
         self.game = None
