@@ -481,8 +481,8 @@ class Player:
                 ]
             )
         else:
-            # Don't change the target mask
-            pass
+            # Fail safe for unrecognised filters
+            self.target_mask = np.zeros(len(self.game.interactions.live_actors))
         self.target_mask[player_actor_index] = 0
 
     def open_radial_target_menu(self):

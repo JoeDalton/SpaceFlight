@@ -174,10 +174,13 @@ def test_update_target_mask_enemies_filter_uses_interact_matrix():
     assert player.target_mask[player_actor_index] == 0
 
 
-def test_update_target_mask_unknown_filter_does_not_change_mask():
+def test_update_target_mask_unknown_filter_clears_mask():
     """
-    An unrecognised filter leaves the existing target mask unchanged (except
-    zeroing the player's own slot, which always happens).
+    An unrecognised filter fails safe to an all-zero mask sized to the
+    current actor count, rather than reusing a stale mask that might have
+    been computed for a different (now outdated) actor count -- reusing a
+    wrong-sized mask could cause an out-of-bounds index in loop_target /
+    point_target.
     """
     n_actors = 4
     player_actor_index = 2
@@ -190,11 +193,7 @@ def test_update_target_mask_unknown_filter_does_not_change_mask():
 
     player.update_target_mask(player_actor_index=player_actor_index)
 
-    # Slots other than the player's own should be unchanged
-    for idx in range(n_actors):
-        if idx != player_actor_index:
-            assert player.target_mask[idx] == initial_mask[idx]
-    assert player.target_mask[player_actor_index] == 0
+    np.testing.assert_array_equal(player.target_mask, np.zeros(n_actors))
 
 
 @pytest.mark.parametrize(
