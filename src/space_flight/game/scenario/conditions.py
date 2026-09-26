@@ -145,23 +145,24 @@ def _resolve_who(game: FlightState, who: str) -> list[Actor]:
 
 def reached_waypoint(group: str, index: int) -> Condition:
     """
-    True while any live member of group has passed index waypoints.
+    True once any live member of group has reached waypoint index (0-based).
 
     Reads the navigator's next_waypoint_idx directly: it starts at 0 and is
-    incremented each time a waypoint is reached, so ">= index" means "has
-    passed index waypoints". The navigator resets it to 0 at the end of each
-    lap of a looping patrol and after the last waypoint of a non-looping path,
-    so it is unambiguous only on the first pass; use a monotonic counter if
-    you need more.
+    incremented each time a waypoint is reached, so next_waypoint_idx becomes
+    index + 1 the moment waypoint index is reached, hence "> index" rather
+    than ">= index". The navigator resets it to 0 at the end of each lap of a
+    looping patrol and after the last waypoint of a non-looping path, so it is
+    unambiguous only on the first pass; use a monotonic counter if you need
+    more.
 
     :param group: A group name
-    :param index: The number of waypoints that must have been passed
+    :param index: The (0-based) waypoint that must have been reached
     :return: The condition callable
     """
 
     def cond(game: FlightState) -> bool:
         for pawn in _resolve_who(game, group):
-            if pawn is not None and pawn.parent.navigator.next_waypoint_idx >= index:
+            if pawn is not None and pawn.parent.navigator.next_waypoint_idx > index:
                 return True
         return False
 
