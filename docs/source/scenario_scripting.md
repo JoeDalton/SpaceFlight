@@ -82,7 +82,7 @@ The level is then registered in
 [`game/levels/__init__.py`](../../src/space_flight/game/levels/__init__.py):
 
 ```python
-"Mission 2: Escort": LevelEntry(
+"Mission 3: Escort": LevelEntry(
     upfront=build_intro_upfront,
     mission=intro_mission,
     description="...",
@@ -122,7 +122,7 @@ capital ship's config (see [docs/subsystems.md](subsystems.md)).
 
 ```python
 wave = m.wave(SPEC)                       # a handle, not spawned yet
-wave.spawn(spawn_point=None, target=None, join=None)
+wave.spawn(spawn_point=None, target=None, join=None, orientation=None)
 wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
 ```
 
@@ -130,6 +130,9 @@ wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
   long frame. The first ship appears on the next update.
 - `spawn_point=` overrides the spec's, e.g. when it depends on the player's
   position at that moment.
+- `orientation=` overrides the spec's `spawn_orientation` (a `(w, x, y, z)`
+  quaternion), e.g. `game.player.pawn.orientation` to spawn ships flying the
+  same way as the player.
 - `target=` makes the ships attack a wave, the player, or any single ship
   (see [`who`](#who)). It is resolved as each ship spawns, against whatever
   is alive then.
@@ -198,6 +201,8 @@ Every condition or method taking a `who` accepts:
 | `near(who, point, radius)` | any live pawn of `who` is within `radius` of a fixed point |
 | `near_actor(a, b, radius)` | the nearest pair of live pawns between `a` and `b` is within `radius` (two moving targets) |
 | `reached_waypoint(who, index)` | any live bot of `who` has reached its waypoint `index` (0-based) |
+| `damaged(who)` | any live pawn of `who` has lost health or shield since the condition first saw it (stateful: build it once) |
+| `scan.complete` / `scan.started` / `scan.progress_at_least(x)` | see [Scanning](#scanning) |
 | `wave.alive` / `wave.all_destroyed` / `wave.any_destroyed` | see [`WaveHandle`](#wavehandle) |
 | `all_of(*conds)` / `any_of(*conds)` / `not_(cond)` | combinations |
 | any `lambda: ...` | whatever it returns |
@@ -217,6 +222,28 @@ m.on(m.sustained(not_(close), 20), lambda: m.defeat("..."))
 > `reached_waypoint` reads the navigator's waypoint index, which resets to 0
 > at the end of each lap of a looping route and after the last waypoint of a
 > non-looping one — so it is unambiguous only on the first pass.
+
+## Scanning
+
+```python
+scan = m.scan(who, contraband=False, duration_s=15, range_m=1000,
+              cone_deg=10, decay_ratio=0.5)
+yield from m.wait_until(scan.complete)
+```
+
+`m.scan` makes every pawn of `who` scannable by the player from now on (a
+wave that has not spawned yet is picked up as its ships appear). A pawn's
+scan progresses while it is the player's target, within `range_m` and
+within `cone_deg` of the player's nose, completing after `duration_s` of
+it; otherwise it drains at `decay_ratio` times the fill rate. Once
+complete it is frozen with its result, `"clear"` or `"contraband"`.
+
+The state lives on the pawn itself, as `pawn.scan` (a `ScanState`:
+`progress` from 0 to 1, `result`, `complete`, `status_text`), which is all
+the targeting HUD reads to draw its progress bar (see
+[docs/ui.md](ui.md)). The returned `ScanHandle`'s `complete()` (every live
+pawn of `who` scanned), `started()` (some progress) and
+`progress_at_least(x)` are conditions.
 
 ## Actions
 

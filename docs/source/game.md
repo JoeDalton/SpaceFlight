@@ -146,7 +146,8 @@ mission body — the level's scripted events, see
 | Level | File | Scene | Premise |
 |-------|------|-------|---------|
 | Mission 1: Rookies | [`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py) | `asteroids` | Tutorial: target-filter menu, follow a formation, then race it |
-| Mission 2: Escort | [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
+| Mission 2: Smugglers | [`mission2_level.py`](../../src/space_flight/game/levels/mission2_level.py) | `asteroids` | Patrol with a formation, scan passing transports, stop the gun-runner |
+| Mission 3: Escort | [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
 | Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `debug` | Sandbox for the latest feature under development |
 
 `game/levels/__init__.py`'s `LEVELS` registry maps

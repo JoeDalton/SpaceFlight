@@ -113,6 +113,30 @@ def reached_waypoint(who: Any, index: int) -> Condition:
     return cond
 
 
+def damaged(who: Any) -> Condition:
+    """
+    True once any live pawn of who has lost health or shield since the
+    condition first saw it.
+
+    Keeps a baseline per pawn, so it is stateful: build it once, when the
+    rule is declared.
+
+    :param who: See :func:`pawns_of`
+    :return: The condition
+    """
+    baselines: dict = {}
+
+    def cond() -> bool:
+        for pawn in pawns_of(who):
+            integrity = pawn.health + pawn.shield_level
+            baseline = baselines.setdefault(pawn.id, integrity)
+            if integrity < baseline:
+                return True
+        return False
+
+    return cond
+
+
 # ---------------------------------------------------------------------------
 # Combinators
 # ---------------------------------------------------------------------------

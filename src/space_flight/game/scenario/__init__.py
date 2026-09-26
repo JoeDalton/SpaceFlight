@@ -5,6 +5,7 @@ conditions (see :mod:`space_flight.game.scenario.conditions`).
 """
 
 from space_flight.game.scenario.mission import Mission, Trigger
+from space_flight.game.scenario.scan import ScanHandle, ScanState
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 
-__all__ = ["Mission", "Trigger", "WaveHandle", "WaveSpec"]
+__all__ = ["Mission", "ScanHandle", "ScanState", "Trigger", "WaveHandle", "WaveSpec"]

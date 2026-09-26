@@ -55,13 +55,18 @@ class MockPawn:
         self.is_dead = False
         self.forward = np.array([0.0, 1.0, 0.0])
         self.right = np.array([1.0, 0.0, 0.0])
+        self.orientation = np.array([1.0, 0.0, 0.0, 0.0])
+        self.target = None
+        self.health = 100.0
+        self.shield_level = 0.0
 
 
 class MockBot:
-    def __init__(self, name, position, team, pawn_model=None):
+    def __init__(self, name, position, team, pawn_model=None, orientation=None):
         self.name = name
         self.team = team
         self.pawn_model = pawn_model
+        self.ini_orientation = orientation
         self.pawn = MockPawn(self, position, team)
         self.navigator = MockNavigator()
         self.tactician = SimpleNamespace(primary_target_ids=[])
@@ -137,6 +142,7 @@ def patch_engine(monkeypatch):
             position=kwargs["ini_position"],
             team=kwargs["team"],
             pawn_model=kwargs["pawn_model"],
+            orientation=kwargs.get("ini_orientation"),
         )
         game.interactions.add(bot.pawn)
         spawned.append(bot)

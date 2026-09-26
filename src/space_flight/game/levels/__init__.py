@@ -25,6 +25,10 @@ from space_flight.game.levels.mission1_level import (
     build_mission1_upfront,
     mission1_mission,
 )
+from space_flight.game.levels.mission2_level import (
+    build_mission2_upfront,
+    mission2_mission,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -58,7 +62,14 @@ LEVELS: dict[str, LevelEntry] = {
         "menu, follow a formation through the asteroid field, then race it "
         "to the marker.",
     ),
-    "Mission 2: Escort": LevelEntry(
+    "Mission 2: Smugglers": LevelEntry(
+        upfront=build_mission2_upfront,
+        mission=mission2_mission,
+        description="Patrol the asteroid field with Blue flight: scan the "
+        "passing transports without firing on them, and stop the one "
+        "running guns.",
+    ),
+    "Mission 3: Escort": LevelEntry(
         upfront=build_intro_upfront,
         mission=intro_mission,
         description="The first `game ready` level.",

@@ -11,6 +11,7 @@ from mission_fakes import FakeGame, advance, kill_all, live, patch_engine
 
 from space_flight.game.levels import LEVELS
 from space_flight.game.levels import mission1_level as mission1
+from space_flight.game.levels import mission2_level as mission2
 from space_flight.game.levels.dev_level import dev_mission
 from space_flight.game.levels.intro_level import intro_mission
 from space_flight.game.scenario import Mission
@@ -243,3 +244,156 @@ def test_mission1_race_timeout_is_defeat(game, spawned):
         "defeat",
         "You didn't reach the finish line in time. Mission failed.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Mission 2: Smugglers
+# ---------------------------------------------------------------------------
+
+AHEAD_OF_PLAYER = np.array([0.0, 500.0, 0.0])
+
+
+def scan_now(game, m, pawn):
+    """Hold pawn ahead of the player, targeted, until its scan completes."""
+    pawn.position = game.player.pawn.position + AHEAD_OF_PLAYER
+    game.player.pawn.target = pawn
+    advance(game, m, 16)
+    game.player.pawn.target = None
+
+
+def reach_the_reveal(game, m, spawned):
+    """Play mission 2 up to the smuggler's reveal; return its pawn."""
+    advance(game, m, mission2.INTRO_DELAY_S + 2 * mission2.CONVOY_INTERVAL_S + 1)
+    for spec in mission2.CONVOY:
+        scan_now(game, m, live(game, spawned, spec.name)[0])
+    advance(game, m, 15)
+    dorn = live(game, spawned, "Dorn")[0]
+    scan_now(game, m, dorn)
+    advance(game, m, 0.5)
+    return dorn
+
+
+def test_mission2_is_registered():
+    assert LEVELS["Mission 2: Smugglers"].mission is mission2.mission2_mission
+    assert "Mission 3: Escort" in LEVELS
+
+
+def test_mission2_convoy_is_neutral_and_smuggler_waits_for_clear_scans(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 2 * mission2.CONVOY_INTERVAL_S + 1)
+    transports = [live(game, spawned, spec.name)[0] for spec in mission2.CONVOY]
+    assert all(t.team == 0 for t in transports)
+    assert len(live(game, spawned, "blue")) == 2
+
+    for pawn in transports[:2]:
+        scan_now(game, m, pawn)
+    advance(game, m, 30)
+    assert not live(game, spawned, "Dorn")
+
+    scan_now(game, m, transports[2])
+    assert all(t.scan.result == "clear" for t in transports)
+    advance(game, m, 15)
+    assert len(live(game, spawned, "Dorn")) == 1
+
+
+def test_mission2_reveal_turns_the_smuggler_and_spawns_ties_behind(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    game.player.pawn.orientation = np.array([0.0, 0.0, 0.0, 1.0])
+    dorn = reach_the_reveal(game, m, spawned)
+
+    assert dorn.scan.result == "contraband"
+    assert dorn.team == 2
+    ties = live(game, spawned, "tie")
+    assert len(ties) == 4
+    expected = game.player.pawn.position - game.player.pawn.forward * 1000
+    assert np.allclose(ties[0].position, expected)
+    tie_bots = [b for b in spawned if b.name.startswith("tie_")]
+    assert all(list(b.ini_orientation) == [0.0, 0.0, 0.0, 1.0] for b in tie_bots)
+    blue_ids = {p.id for p in live(game, spawned, "blue")}
+    assert all(blue_ids <= set(b.tactician.primary_target_ids) for b in tie_bots)
+    assert game.end_level_calls == []
+
+
+def test_mission2_victory_without_losses(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    dorn = reach_the_reveal(game, m, spawned)
+    kill_all(game, [dorn, *live(game, spawned, "tie")])
+    advance(game, m, mission2.VICTORY_DELAY_S + 1)
+    assert len(game.end_level_calls) == 1
+    outcome, text = game.end_level_calls[0]
+    assert outcome == "victory" and "no losses" in text
+
+
+def test_mission2_victory_with_one_ally_lost(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    dorn = reach_the_reveal(game, m, spawned)
+    kill_all(game, live(game, spawned, "blue")[:1])
+    kill_all(game, [dorn, *live(game, spawned, "tie")])
+    advance(game, m, mission2.VICTORY_DELAY_S + 1)
+    assert len(game.end_level_calls) == 1
+    outcome, text = game.end_level_calls[0]
+    assert outcome == "victory" and "lost a pilot" in text
+
+
+def test_mission2_defeat_when_blue_flight_is_wiped(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    reach_the_reveal(game, m, spawned)
+    kill_all(game, live(game, spawned, "blue"))
+    advance(game, m, 1)
+    assert game.end_level_calls == [("defeat", "Blue flight has been wiped out.")]
+
+
+def test_mission2_defeat_when_a_civilian_is_destroyed(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    kill_all(game, live(game, spawned, "Aurek"))
+    advance(game, m, 1)
+    assert [c[0] for c in game.end_level_calls] == ["defeat"]
+    assert "civilian" in game.end_level_calls[0][1]
+
+
+def test_mission2_warns_when_a_civilian_is_hit(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    live(game, spawned, "Aurek")[0].health -= 10
+    advance(game, m, 0.1)
+    assert any("cease fire" in text for text, _ in game.hud.chatter)
+    assert game.end_level_calls == []
+
+
+def test_mission2_defeat_when_an_unscanned_transport_exits(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    live(game, spawned, "Aurek")[0].position = np.array(mission2.EXIT_GATE, float)
+    advance(game, m, mission2.DEFEAT_DELAY_S + 1)
+    assert game.end_level_calls == [
+        ("defeat", "An unscanned transport slipped through the patrol.")
+    ]
+
+
+def test_mission2_scanned_transport_may_exit(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    aurek = live(game, spawned, "Aurek")[0]
+    scan_now(game, m, aurek)
+    aurek.position = np.array(mission2.EXIT_GATE, float)
+    advance(game, m, mission2.DEFEAT_DELAY_S + 1)
+    assert game.end_level_calls == []
+
+
+def test_mission2_defeat_when_the_smuggler_jumps_out(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    dorn = reach_the_reveal(game, m, spawned)
+    dorn.position = dorn.position + dorn.forward * mission2.ESCAPE_DISTANCE_M
+    advance(game, m, mission2.DEFEAT_DELAY_S + 1)
+    assert game.end_level_calls == [
+        ("defeat", "The gun-runner escaped with its cargo.")
+    ]
+
+
+def test_mission2_killing_the_revealed_smuggler_is_not_a_civilian_loss(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    dorn = reach_the_reveal(game, m, spawned)
+    kill_all(game, [dorn])
+    advance(game, m, 1)
+    assert game.end_level_calls == []

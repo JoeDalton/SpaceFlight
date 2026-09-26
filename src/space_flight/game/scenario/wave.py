@@ -133,6 +133,7 @@ class WaveHandle:
         spawn_point: Optional[Sequence[float]] = None,
         target: Any = None,
         join: Optional[Formation] = None,
+        orientation: Optional[Sequence[float]] = None,
     ) -> WaveHandle:
         """
         Spawn the wave's ships, one per frame.
@@ -144,23 +145,35 @@ class WaveHandle:
             as each ship spawns
         :param join: A live formation to attach to, continuing from its next
             free slot, instead of creating the spec's own formation
+        :param orientation: Overrides the spec's spawn orientation (e.g. to
+            face the way the player is flying)
         :return: self
         """
         point = spawn_point if spawn_point is not None else self.spec.spawn_point
         if point is None:
             raise ValueError(f"wave '{self.name}': no spawn point")
+        if orientation is None:
+            orientation = self.spec.spawn_orientation
         self.mission.schedule(
-            self._spawn_job(np.array(point, dtype=float), target, join)
+            self._spawn_job(
+                np.array(point, dtype=float),
+                np.array(orientation, dtype=float),
+                target,
+                join,
+            )
         )
         return self
 
     def _spawn_job(
-        self, spawn_point: np.ndarray, target: Any, join: Optional[Formation]
+        self,
+        spawn_point: np.ndarray,
+        orientation: np.ndarray,
+        target: Any,
+        join: Optional[Formation],
     ) -> Iterator[None]:
         spec = self.spec
         models = spec.ship_models()
         size = len(models)
-        orientation = np.array(spec.spawn_orientation)
         waypoints = [np.array(w) for w in spec.waypoints]
 
         formation = join
