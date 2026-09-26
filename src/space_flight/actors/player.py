@@ -4,6 +4,7 @@ from typing import Callable
 import numpy as np
 
 from space_flight import RECORD_GAME
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.fighter import Fighter
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
@@ -443,7 +444,36 @@ class Player:
             self.target_mask = self.game.interactions.interact[
                 player_actor_index, self.game.interactions.alive
             ]
-            # TODO: other filters
+        elif self.target_filter == "Capital ships":
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "capital_ship" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Subsystems":
+            # Includes turrets: a turret is a subsystem too, and it also
+            # matches the dedicated "Turrets" filter below.
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "sub_system" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Turrets":
+            self.target_mask = np.array(
+                [
+                    1.0 if isinstance(actor, Turret) else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
+        elif self.target_filter == "Fighters":
+            self.target_mask = np.array(
+                [
+                    1.0 if getattr(actor, "category", None) == "fighter" else 0.0
+                    for actor in self.game.interactions.live_actors
+                ]
+            )
         else:
             # Don't change the target mask
             pass

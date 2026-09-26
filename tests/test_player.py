@@ -6,11 +6,13 @@ etc.).  All tests therefore bypass __init__ via object.__new__() and set only
 the attributes consumed by each method under test.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
+from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.player import (
     HEAD_DAMPING_RATIO,
     HEAD_SPRING_COEFFICIENT_NPM,
@@ -180,7 +182,7 @@ def test_update_target_mask_unknown_filter_does_not_change_mask():
     initial_mask = np.array([1.0, 0.0, 1.0, 1.0])
     player = make_player_for_target_mask(
         n_actors=n_actors,
-        target_filter="Capital ships",  # not yet fully implemented
+        target_filter="Bogus filter",  # not a real filter
         initial_mask=initial_mask,
     )
 
@@ -209,6 +211,76 @@ def test_update_target_mask_all_filter_parametrized(n_actors, player_actor_index
             assert player.target_mask[idx] == 0
         else:
             assert player.target_mask[idx] == 1
+
+
+def test_update_target_mask_capital_ships_filter_selects_by_category():
+    """
+    The "Capital ships" filter masks in only category == "capital_ship" actors.
+    """
+    player = make_player_for_target_mask(n_actors=3, target_filter="Capital ships")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category=None),  # the player: no category
+        SimpleNamespace(category="fighter"),
+        SimpleNamespace(category="capital_ship"),
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 0.0, 1.0])
+
+
+def test_update_target_mask_subsystems_filter_includes_turrets():
+    """
+    The "Subsystems" filter masks in category == "sub_system" actors, which
+    includes turrets (turrets are subsystems, and also match "Turrets").
+    """
+    turret = MagicMock(spec=Turret)
+    turret.category = "sub_system"
+    player = make_player_for_target_mask(n_actors=3, target_filter="Subsystems")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category=None),  # the player: no category
+        SimpleNamespace(category="sub_system"),  # e.g. a shield generator
+        turret,
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 1.0, 1.0])
+
+
+def test_update_target_mask_turrets_filter_selects_turret_instances():
+    """
+    The "Turrets" filter masks in only Turret instances, even though a
+    turret's category is "sub_system" rather than "turret".
+    """
+    turret = MagicMock(spec=Turret)
+    turret.category = "sub_system"
+    player = make_player_for_target_mask(n_actors=3, target_filter="Turrets")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category=None),  # the player: no category
+        SimpleNamespace(category="sub_system"),  # e.g. a shield generator
+        turret,
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 0.0, 1.0])
+
+
+def test_update_target_mask_fighters_filter_selects_by_category():
+    """
+    The "Fighters" filter masks in only category == "fighter" actors.
+    """
+    player = make_player_for_target_mask(n_actors=3, target_filter="Fighters")
+    player.game.interactions.live_actors = [
+        SimpleNamespace(category="fighter"),  # the player itself: also a fighter
+        SimpleNamespace(category="fighter"),
+        SimpleNamespace(category="capital_ship"),
+    ]
+
+    player.update_target_mask(player_actor_index=0)
+
+    np.testing.assert_array_equal(player.target_mask, [0.0, 1.0, 0.0])
 
 
 # ---------------------------

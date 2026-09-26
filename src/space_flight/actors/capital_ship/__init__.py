@@ -43,6 +43,9 @@ class CapitalShip(Ship):
             team=team,
         )
 
+        # Actor category, so target filters can single capital ships out.
+        self.category = "capital_ship"
+
         # Setup subsystems (shield generators, targeting systems, ...) declared
         # in the ship config. A ship may declare no sub_systems at all.
         sub_systems_conf = self.conf.get("sub_systems", {})
