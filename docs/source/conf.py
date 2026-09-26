@@ -21,8 +21,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-# Summary.md is the MkDocs literate-nav file; the Sphinx toctree is in index.md.
-exclude_patterns = ['Summary.md']
+exclude_patterns = []
 
 
 # -- Options for HTML output -------------------------------------------------

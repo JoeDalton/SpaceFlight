@@ -110,7 +110,7 @@ into the same group is intended.
 | `after_seconds` | seconds | the game clock passes that time |
 | `all_destroyed` | group name | the group has spawned **and** all members are dead |
 | `any_alive` | group name | at least one member of the group is alive |
-| `reached_waypoint` | `{who, index}` | any live member of `who` has passed `index` waypoints (its navigator's next-waypoint index is ≥ `index`) |
+| `reached_waypoint` | `{who, index}` | any live member of `who` has reached waypoint `index` (0-based; its navigator's next-waypoint index is > `index`) |
 | `near` | `{who, point, radius}` | `who` is within `radius` of `point` (`who` is `player` or a group; for a group, any live member) |
 | `fired` | trigger name | the named trigger has already fired |
 | `any_destroyed` | group name | **not implemented yet**: accepted by the loader but always false |
@@ -132,7 +132,9 @@ chained event cannot fire against a wave that does not exist yet.
 
 > `reached_waypoint` reads the navigator's waypoint index, which resets to 0 at
 > the end of each lap of a looping patrol and after the last waypoint of a
-> non-looping path — so it is unambiguous only on the first pass.
+> non-looping path — so it is unambiguous only on the first pass. `index` is
+> 0-based: `index: 0` means "reached the first waypoint", and it is only true
+> from the moment that waypoint is actually reached (not from mission start).
 
 ### Combinators
 

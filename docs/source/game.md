@@ -209,16 +209,6 @@ Parquet file under `target/`. Used by `Player.record_state` (see
 and by `Bot.record_state` for bots spawned with `record: true` (their
 tactical decisions).
 
-## `LoadingState`
-
-[`loading_state.py`](../../src/space_flight/game/loading_state.py)'s
-`LoadingState` is a legacy stub from before the two-phase hyperspace build
-described above, not a working fallback. It was meant to show a progress bar
-while Panda3D's threaded model loader loads a single model, then switch to
-`FlightState`. It is still registered as `StateManager.LOADING_STATE` but is
-never pushed, and it is broken as written: it calls a
-`StateManager.change_state` method that does not exist.
-
 ## Where things live
 
 `FlightState` (`flight_state.py`) is the root object; its

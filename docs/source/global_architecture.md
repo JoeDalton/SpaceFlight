@@ -39,8 +39,8 @@ two classes:
   `clear()` collapses the stack down to just the current top, exiting
   everything below it (used when returning to the main menu from deep in a
   level). Every concrete state class the app can enter is declared as a
-  class attribute here (`GAME_STATE`, `LOADING_STATE`,
-  `HYPERSPACE_LOADING_STATE`, the various menu states, ...), so any module
+  class attribute here (`GAME_STATE`, `HYPERSPACE_LOADING_STATE`, the
+  various menu states, ...), so any module
   can reference `StateManager.GAME_STATE` without importing that state
   module directly — avoiding import cycles between states that push each
   other.

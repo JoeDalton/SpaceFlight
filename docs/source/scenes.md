@@ -52,9 +52,7 @@ Each subclass's `build_upfront`/`build_decomposed` pair is a thin assembly
 list rather than logic: it constructs the pieces documented below in a fixed
 order and yields a label after each `build_decomposed` step (used for
 progress/debugging), then `clean()` tears the owned pieces down roughly in
-reverse (not all of them yet: `SceneOcean.clean` leaves its ocean, skybox
-and planet alone, and `SceneLavaPlanet.clean` skips its planet).
-`SceneOcean` is the most heavily commented example of *why* particular
+reverse. `SceneOcean` is the most heavily commented example of *why* particular
 objects (the ocean, the cloud field) belong in `build_upfront` — their
 one-time shader compile/vertex upload is explicitly force-prepared
 (`prepare_scene(gsg)`) while the screen is still black, which

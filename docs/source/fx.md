@@ -236,9 +236,8 @@ creation cost across several frames instead of stalling on construction.
   panning/attenuation/Doppler automatically. Scheduled sounds are released
   back to their pool after the same fixed duration via
   `game.delayed_methods.do_method_later`, so pools don't leak playing-sound
-  references — with one gap: `player_crash` plays up to three sounds
-  (terrain hit, short crash, long crash) but only schedules the release of
-  the long-crash one.
+  references — `player_crash` schedules a release for each of the up to
+  three sounds it plays (terrain hit, short crash, long crash).
 - **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` are stubs that
   only log for now — the tractor beam mechanic works without a dedicated
   audio cue yet (see [subsystems.md](subsystems.md)).
