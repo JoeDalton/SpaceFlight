@@ -157,7 +157,11 @@ class SceneAsteroids(Scene):
         """
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
-            game=self.game, n_asteroids=2000, field_size=15000, is_moving=False
+            game=self.game,
+            n_asteroids=2000,
+            field_size=15000,
+            is_moving=False,
+            seed=0,
         )
         self.big_rotating_asteroid_field = AsteroidField(
             game=self.game,
@@ -165,9 +169,14 @@ class SceneAsteroids(Scene):
             scale_factor=10,
             field_size=15000,
             is_moving=True,
+            seed=1,
         )
         self.rotating_asteroid_field = AsteroidField(
-            game=self.game, n_asteroids=500, field_size=15000, is_moving=True
+            game=self.game,
+            n_asteroids=500,
+            field_size=15000,
+            is_moving=True,
+            seed=2,
         )
 
     def build_decomposed(self):
@@ -227,7 +236,11 @@ class SceneLavaPlanet(Scene):
         """
         # Asteroid field
         self.static_asteroid_field = AsteroidField(
-            game=self.game, n_asteroids=500, field_size=15000, is_moving=False
+            game=self.game,
+            n_asteroids=500,
+            field_size=15000,
+            is_moving=False,
+            seed=0,
         )
         self.big_rotating_asteroid_field = AsteroidField(
             game=self.game,
@@ -235,9 +248,14 @@ class SceneLavaPlanet(Scene):
             scale_factor=10,
             field_size=15000,
             is_moving=True,
+            seed=1,
         )
         self.rotating_asteroid_field = AsteroidField(
-            game=self.game, n_asteroids=100, field_size=15000, is_moving=True
+            game=self.game,
+            n_asteroids=100,
+            field_size=15000,
+            is_moving=True,
+            seed=2,
         )
 
     def build_decomposed(self):
