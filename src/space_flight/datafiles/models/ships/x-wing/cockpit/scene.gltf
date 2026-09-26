@@ -341,21 +341,6 @@
         },
         "roughnessFactor": 0.6
       }
-    },
-    {
-      "alphaMode": "BLEND",
-      "doubleSided": true,
-      "name": "window",
-      "pbrMetallicRoughness": {
-        "baseColorFactor": [
-          1.0,
-          1.0,
-          1.0,
-          0.2547627393418205
-        ],
-        "metallicFactor": 0.0,
-        "roughnessFactor": 0.6
-      }
     }
   ],
   "meshes": [
@@ -403,21 +388,6 @@
           "mode": 4
         }
       ]
-    },
-    {
-      "name": "Object_4",
-      "primitives": [
-        {
-          "attributes": {
-            "NORMAL": 16,
-            "POSITION": 15,
-            "TEXCOORD_0": 17
-          },
-          "indices": 18,
-          "material": 1,
-          "mode": 4
-        }
-      ]
     }
   ],
   "nodes": [
@@ -449,8 +419,7 @@
       "children": [
         2,
         3,
-        4,
-        5
+        4
       ],
       "name": "xwing_cockpit.obj.cleaner.materialmerger.gles"
     },
@@ -465,10 +434,6 @@
     {
       "mesh": 2,
       "name": "Object_5"
-    },
-    {
-      "mesh": 3,
-      "name": "Object_6"
     }
   ],
   "samplers": [
