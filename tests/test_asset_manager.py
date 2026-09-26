@@ -102,7 +102,7 @@ def mock_game():
     return game
 
 
-def testgltf_model_tilt_quaternion_defaults_to_standard_value(mock_game):
+def test_gltf_model_tilt_quaternion_defaults_to_standard_value(mock_game):
     """
     With the compatibility flag off (the default), the tilt quaternion is
     the value that has shipped since it replaced the pre-f833c5c value.
@@ -112,7 +112,7 @@ def testgltf_model_tilt_quaternion_defaults_to_standard_value(mock_game):
     assert tilt == expected
 
 
-def testgltf_model_tilt_quaternion_uses_alternate_value_when_flag_set(mock_game):
+def test_gltf_model_tilt_quaternion_uses_alternate_value_when_flag_set(mock_game):
     """
     Setting compatibility.alternate_model_orientation swaps in the
     pre-f833c5c tilt quaternion instead.
@@ -124,7 +124,7 @@ def testgltf_model_tilt_quaternion_uses_alternate_value_when_flag_set(mock_game)
     assert tilt == np.quaternion(0.0, 1.0, 0.0, 0.0)
 
 
-def testgltf_model_tilt_quaternion_defaults_when_graphics_settings_missing():
+def test_gltf_model_tilt_quaternion_defaults_when_graphics_settings_missing():
     """
     A game stand-in with no graphics_settings at all (e.g. a lightweight
     headless stub) falls back to the standard value instead of raising.

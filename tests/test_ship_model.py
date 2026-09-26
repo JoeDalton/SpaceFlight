@@ -68,7 +68,7 @@ def make_ship_model(mock_game, ship_type: str, is_cockpit: bool) -> ShipModel:
         ("x-wing", True, np.array([0.0, 0.9, -0.2])),
         ("x-wing", False, np.array([0.0, 0.0, 0.0])),
         ("tie-fighter", True, np.array([0.0, 0.9, -0.2])),
-        ("tie-fighter", False, np.array([0.0, 0.0, 0.0])),
+        ("tie-fighter", False, np.array([3.7, 0.0, 6.5])),
         ("gr-75", False, np.array([0.0, 0.0, 0.0])),
         ("cr-90", False, np.array([0.0, 0.0, 0.0])),
     ],
