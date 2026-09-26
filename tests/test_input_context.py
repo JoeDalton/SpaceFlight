@@ -67,6 +67,7 @@ def make_flight_ctx(device_bindings=None, global_bindings=None, input_type="keyb
     game = make_game(input_type, device_bindings, global_bindings)
     player = MagicMock()
     player.view_offset = [0.0, 0.0]
+    player.is_dying = False
     ctx = FlightInputContext(game=game, player=player)
     return ctx, game, player
 
@@ -414,6 +415,31 @@ def test_flight_ctx_handle_actions_drops_bomb_on_drop_bomb_binding():
     ctx.handle_actions(make_state(buttons={"x": True}))
     player.pawn.drop_bomb.assert_called_once()
     player.pawn.laser_cannon.fire.assert_not_called()
+
+
+def test_flight_ctx_handle_actions_ignores_weapons_and_targeting_while_dying():
+    """
+    While the player is dying its pawn has left the interactions, so firing
+    (auto-aim) or targeting would look it up and crash: only pause still works.
+    """
+    ctx, game, player = make_flight_ctx(
+        device_bindings={
+            "fire": "space",
+            "drop_bomb": "x",
+            "loop_target": ",",
+            "point_target": "t",
+            "pause": "p",
+        }
+    )
+    player.is_dying = True
+    ctx.handle_actions(
+        make_state(buttons={"space": True, "x": True, ",": True, "t": True, "p": True})
+    )
+    player.pawn.laser_cannon.fire.assert_not_called()
+    player.pawn.drop_bomb.assert_not_called()
+    player.loop_target.assert_not_called()
+    player.point_target.assert_not_called()
+    game.set_pause.assert_called_once()
 
 
 def test_flight_ctx_handle_actions_no_bomb_when_idle():
