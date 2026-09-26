@@ -23,7 +23,11 @@ from space_flight.game.time_keeping import (
 )
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.ui.hud import HUD, TargetHUD
-from space_flight.ui.input_context import FlightInputContext, HyperspaceInputContext
+from space_flight.ui.input_context import (
+    FlightInputContext,
+    HyperspaceInputContext,
+    InputContext,
+)
 
 if TYPE_CHECKING:
     from direct.task import Task
@@ -121,14 +125,9 @@ class FlightState(BaseState):
 
         :return: the prompt string shown by the loading overlay
         """
-        input_type = self.app.bindings.get("input_type", "keyboard")
-        key = (
-            self.app.bindings.get("contexts", {})
-            .get("hyperspace", {})
-            .get(input_type, {})
-            .get("drop_hyperspace", "")
+        label = InputContext.key_label(
+            self.app.bindings, "hyperspace", "drop_hyperspace", fallback="the jump key"
         )
-        label = key.upper() if key else "the jump key"
         return f"Press [{label}] to drop out of hyperspace"
 
     def _build_upfront(self) -> None:

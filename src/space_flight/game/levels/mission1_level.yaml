@@ -1,6 +1,6 @@
 # Wave data for Mission 1: Rookies.
 #
-# One wave, `escort`: the leader + 3 wingmen the player follows, then races.
+# One wave, `blue`: the leader + 3 wingmen the player follows, then races.
 # `spawn_point` is a placeholder -- the mission overrides it at spawn time,
 # since the real spawn point depends on the player's live position/heading
 # ("1km ahead and to the left") when the intro waypoint is reached. The
@@ -11,7 +11,7 @@
 # must match the last entry here).
 
 waves:
-  escort:
+  blue:
     size: 4
     ship_model: x-wing
     bot_type: fighter

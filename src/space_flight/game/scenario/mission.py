@@ -218,7 +218,7 @@ class Mission:
     # Thin action wrappers
     # ------------------------------------------------------------------
 
-    def hud(self, text: str, display_time_s: float = 2.5) -> None:
+    def hud(self, text: str, display_time_s: float = 5.0) -> None:
         """Show a one-off HUD banner message."""
         actions.hud_text(text, display_time_s=display_time_s)(self.game)
 
@@ -226,7 +226,7 @@ class Mission:
         self,
         text: str,
         speaker: Optional[str] = None,
-        display_time_s: float = 4.0,
+        display_time_s: float = 6.0,
     ) -> None:
         """Play (stubbed) a line of speech, shown as a subtitle."""
         cfg: dict[str, Any] = {"text": text, "display_time_s": display_time_s}

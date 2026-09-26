@@ -662,6 +662,36 @@ def test_mission1_sustained_separation_defeat(game, patch_spawn_bot, monkeypatch
     assert "fell too far behind" in game.end_level_calls[-1][1]
 
 
+def test_mission1_follow_check_accepts_any_formation_member(
+    game, patch_spawn_bot, monkeypatch
+):
+    """
+    Staying close to ANY live formation member is enough -- not specifically
+    the leader. Ships patrol the circuit independently once spawned (each
+    runs the same absolute waypoints on its own navigator), so they can drift
+    apart; simulate that drift by moving a wingman well away from the leader.
+    """
+    from space_flight.game.levels.mission1_level import (
+        CATCH_UP_DEADLINE_S,
+        FOLLOW_RADIUS_M,
+        WAYPOINT_1,
+    )
+
+    _run_mission1(game, patch_spawn_bot, monkeypatch)
+    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
+    _advance(game, 3)  # formation spawns
+
+    escort_pawns = game.scenario.resolve(game, "escort")
+    leader, wingman = escort_pawns[0], escort_pawns[1]
+    wingman.position = leader.position + np.array([0.0, FOLLOW_RADIUS_M * 5, 0.0])
+
+    # Player sticks with the drifted wingman -- nowhere near the leader.
+    game.player.pawn.position = wingman.position.copy()
+    _advance(game, CATCH_UP_DEADLINE_S + 1)  # past the catch-up deadline too
+
+    assert not any(o == "defeat" for o, _ in game.end_level_calls)
+
+
 def test_mission1_race_first_place_is_special(game, patch_spawn_bot, monkeypatch):
     from space_flight.game.levels.mission1_level import (
         CIRCUIT_WAYPOINTS,

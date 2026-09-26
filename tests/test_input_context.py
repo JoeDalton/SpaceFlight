@@ -118,6 +118,37 @@ def stack():
 
 
 # ---------------------------------------------------------------------------
+# InputContext.key_label
+# ---------------------------------------------------------------------------
+
+
+def test_key_label_returns_uppercased_bound_key():
+    bindings = {
+        "input_type": "keyboard",
+        "contexts": {"flight": {"keyboard": {"radial_menu": "r"}}},
+    }
+    assert InputContext.key_label(bindings, "flight", "radial_menu") == "R"
+
+
+def test_key_label_uses_the_active_input_type():
+    bindings = {
+        "input_type": "gamepad",
+        "contexts": {
+            "flight": {
+                "keyboard": {"radial_menu": "r"},
+                "gamepad": {"radial_menu": "dpad_down"},
+            }
+        },
+    }
+    assert InputContext.key_label(bindings, "flight", "radial_menu") == "DPAD_DOWN"
+
+
+def test_key_label_falls_back_when_unbound():
+    assert InputContext.key_label({}, "flight", "radial_menu", "fallback") == "fallback"
+    assert InputContext.key_label({}, "flight", "radial_menu") == ""
+
+
+# ---------------------------------------------------------------------------
 # InputContextStack
 # ---------------------------------------------------------------------------
 

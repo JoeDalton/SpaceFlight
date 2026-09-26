@@ -2,10 +2,11 @@
 Mission 1: Rookies -- a tutorial mission that replaces the old Race level.
 
 Teaches the radial target-filter menu (select "Waypoints", then "Fighters",
-cycling targets within a filter with "loop"), then a follow-the-leader escort
-sequence with two distinct fail conditions, ending in an impromptu race
-against the very ships the player was just escorting. More steps are
-expected to be appended later -- keep the mission body easy to extend.
+cycling targets within a filter with "loop"), then an escort-formation
+sequence (stay close to any member of the formation, not just its leader)
+with two distinct fail conditions, ending in an impromptu race against the
+very ships the player was just escorting. More steps are expected to be
+appended later -- keep the mission body easy to extend.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from space_flight.game.scenario.conditions import (
 from space_flight.game.scenario.loader import load_waves
 from space_flight.game.scenario.mission import Mission
 from space_flight.scenes.scenes import scene_factory
+from space_flight.ui.input_context import InputContext
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -42,9 +44,9 @@ WAYPOINT_1_ARRIVAL_RADIUS_M = 350
 
 FORMATION_AHEAD_M = 1000  # "1km ahead"
 FORMATION_LEFT_M = 400  # "and to the left"
-FOLLOW_RADIUS_M = 200  # "within 200m of the formation leader"
+FOLLOW_RADIUS_M = 300  # "within 300m of the formation leader"
 CATCH_UP_DEADLINE_S = 30
-SUSTAINED_SEPARATION_S = 10
+SUSTAINED_SEPARATION_S = 20
 
 # The escort's patrol circuit (baked into its own wave cfg below), a rough
 # loop starting near WAYPOINT_1 and closing back on itself (loop: true).
@@ -86,30 +88,6 @@ def build_mission1_upfront(game: FlightState) -> None:
     game.scene.build_upfront()
 
 
-def _key_label(game: FlightState, context: str, action: str, fallback: str) -> str:
-    """
-    Human-readable keybinding label for a bound action, e.g. "R" for the
-    keyboard's radial_menu binding.
-
-    Mirrors flight_state.py's _jump_prompt, so a HUD prompt stays correct
-    even if the player rebinds the key, instead of hardcoding a key name.
-
-    :param game: The game/flight state
-    :param context: The bindings context the action lives under (e.g. "flight")
-    :param action: The action name within that context (e.g. "radial_menu")
-    :param fallback: Shown instead if the action has no binding
-    :return: The uppercased key label, or fallback
-    """
-    input_type = game.app.bindings.get("input_type", "keyboard")
-    key = (
-        game.app.bindings.get("contexts", {})
-        .get(context, {})
-        .get(input_type, {})
-        .get(action, "")
-    )
-    return key.upper() if key else fallback
-
-
 def mission1_mission(m: Mission) -> Iterator[None]:
     """
     Mission 1: Rookies' mission body.
@@ -121,15 +99,21 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     # 1. A single waypoint, teaching the Waypoints filter + loop.
     # ==================================================================
-    radial_key = _key_label(game, "flight", "radial_menu", "the target-menu key")
-    loop_key = _key_label(game, "flight", "loop_target", "the cycle-target key")
+    radial_key = InputContext.key_label(
+        game.app.bindings, "flight", "radial_menu", "the target-menu key"
+    )
+    loop_key = InputContext.key_label(
+        game.app.bindings, "flight", "loop_target", "the cycle-target key"
+    )
 
     m.player_waypoints(
         {"points": [WAYPOINT_1], "arrival_radius_m": WAYPOINT_1_ARRIVAL_RADIUS_M}
     )
+    yield from m.wait_until(after_seconds(3))
     m.hud(
-        f"Hold [{radial_key}] to open the target menu, point at Waypoints, "
-        f"then press [{loop_key}] to lock onto it."
+        f"Hold [{radial_key}] to open the target menu,\n"
+        f"point at Waypoints, then press [{loop_key}]\n"
+        "to lock onto your next waypoint."
     )
 
     # The waypoint marker auto-detects arrival internally (see
@@ -153,34 +137,44 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     escort = m.spawn(escort_cfg)
 
     m.hud(
-        f"Formation inbound! Hold [{radial_key}], point at Fighters, then "
-        f"press [{loop_key}] to lock onto the formation leader."
+        f"Allied formation inbound! Hold [{radial_key}],\n"
+        f"point at Fighters, then press [{loop_key}]\n"
+        "to lock onto the formation leader."
     )
+    yield from m.wait_until(after_seconds(1))
+    m.speech("Follow me, rookie!", speaker="Blue Leader")
 
     # ==================================================================
-    # 3. Follow the leader: a catch-up deadline, then a sustained-separation
-    #    fail condition for the rest of the circuit.
+    # 3. Follow the formation: a catch-up deadline, then a sustained-
+    #    separation fail condition for the rest of the circuit. "Close
+    #    enough" means close to ANY live member of the formation, not
+    #    specifically the leader -- near_actor already reports true on the
+    #    nearest pair across both sides, so this is just comparing against
+    #    the whole escort group instead of a single ship.
     # ==================================================================
     yield from m.wait_until(escort.alive_cond())
     leader_bot = m.scenario.resolve(game, escort.name)[0].parent
-    m.scenario.register("escort_leader", [leader_bot])
+    # Registered separately from the "escort" group: step 4 below needs to
+    # single out the LEADER specifically (its own circuit progress), whereas
+    # the follow-distance checks here deliberately use the whole formation.
+    m.scenario.register("Blue_leader", [leader_bot])
 
     m.speech("On me, rookie. Try to keep up!", speaker="Blue Leader")
 
     deadline = game.game_time.get_current_time() + CATCH_UP_DEADLINE_S
     yield from m.wait_any(
-        near_actor("player", "escort_leader", FOLLOW_RADIUS_M),
+        near_actor("player", escort.name, FOLLOW_RADIUS_M),
         after_seconds(deadline),
     )
-    if not near_actor("player", "escort_leader", FOLLOW_RADIUS_M)(game):
+    if not near_actor("player", escort.name, FOLLOW_RADIUS_M)(game):
         m.defeat("You failed to catch up with the formation in time. Mission failed.")
         return
 
     # Registered only now, so the initial catch-up isn't double-punished by
-    # the same 200m radius.
+    # the same radius.
     lost_contact = m.on(
         Sustained(
-            Not(near_actor("player", "escort_leader", FOLLOW_RADIUS_M)),
+            Not(near_actor("player", escort.name, FOLLOW_RADIUS_M)),
             SUSTAINED_SEPARATION_S,
         ),
         lambda game: m.defeat(
@@ -192,14 +186,12 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     # 4. The leader's circuit, then the handoff to a race.
     # ==================================================================
-    yield from m.wait_until(
-        reached_waypoint("escort_leader", len(CIRCUIT_WAYPOINTS) - 1)
-    )
+    yield from m.wait_until(reached_waypoint("Blue_leader", len(CIRCUIT_WAYPOINTS) - 1))
     if lost_contact in m.scenario.triggers:
         m.scenario.triggers.remove(lost_contact)
 
     m.speech(
-        "Not bad! Race you to the marker -- follow the new waypoints!",
+        "Not bad! Race you to the marker! Follow the new waypoints.",
         speaker="Blue Leader",
     )
     m.player_waypoints(RACE_WAYPOINTS)

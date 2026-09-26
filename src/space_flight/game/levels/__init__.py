@@ -49,22 +49,21 @@ class LevelEntry:
 #: Every shipped level, keyed by its name as stored in
 #: ``app.configuration["selected_level"]``.
 LEVELS: dict[str, LevelEntry] = {
-    "Dev": LevelEntry(
-        upfront=build_dev_upfront,
-        build=build_dev_level,
-        description="A development level that usually demonstrates the "
-        "latest implemented features",
-    ),
-    "Intro": LevelEntry(
-        upfront=build_intro_upfront,
-        build=build_intro_level,
-        description="The first `game ready` level.",
-    ),
     "Mission 1: Rookies": LevelEntry(
         upfront=build_mission1_upfront,
         build=build_mission1_level,
         description="A tutorial mission: learn the target-filter radial "
         "menu, follow a formation through the asteroid field, then race it "
         "to the marker.",
+    ),
+    "Mission 2: Escort": LevelEntry(
+        upfront=build_intro_upfront,
+        build=build_intro_level,
+        description="The first `game ready` level.",
+    ),
+    "Dev": LevelEntry(
+        upfront=build_dev_upfront,
+        build=build_dev_level,
+        description="A development level, not player-intended",
     ),
 }
