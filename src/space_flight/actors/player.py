@@ -423,6 +423,20 @@ class Player:
             self.pawn.target_id
         )
 
+    def remove_target(self, target_to_remove) -> None:
+        """
+        Clears the current target if it is target_to_remove.
+
+        Called by Bot.begin_death/clean so a dying or cleaned-up actor is
+        dropped as the player's target instead of being left dangling.
+
+        :param target_to_remove: The actor to clear if it is the current target
+        """
+        if self.pawn.target is target_to_remove:
+            self.pawn.target = None
+            self.pawn.target_id = None
+            self.pawn.target_idx = None
+
     def update_target_mask(self, player_actor_index: int) -> None:
         """
         Updates ``self.target_mask`` (one entry per actor in

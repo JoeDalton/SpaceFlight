@@ -134,6 +134,37 @@ def test_set_personality_propagates_same_object_to_all_three():
 
 
 # ---------------------------
+# begin_death
+# ---------------------------
+
+
+def test_begin_death_removes_pawn_as_players_target():
+    """
+    begin_death() asks the player to drop this bot's pawn as its current
+    target, so a dying wreck can't stay locked on.
+
+    Regression test: this call used to raise AttributeError (silently
+    swallowed) because Player had no remove_target method.
+    """
+    bot = make_bot_without_init()
+
+    bot.begin_death()
+
+    bot.game.player.remove_target.assert_called_once_with(target_to_remove=bot.pawn)
+
+
+def test_begin_death_tolerates_missing_player():
+    """
+    begin_death() must not raise if game.player is None (or otherwise has no
+    remove_target), e.g. during level cleanup.
+    """
+    bot = make_bot_without_init()
+    bot.game.player = None
+
+    bot.begin_death()  # must not raise
+
+
+# ---------------------------
 # play_death
 # ---------------------------
 
@@ -264,6 +295,29 @@ def test_move_bot_task_calls_pawn_move_for_capital_ship():
 # ---------------------------
 # clean
 # ---------------------------
+
+
+def test_clean_removes_pawn_as_players_target():
+    """
+    clean() asks the player to drop this bot's pawn as its current target.
+    """
+    bot = make_bot_without_init()
+    pawn = bot.pawn
+    player = bot.game.player
+
+    bot.clean()
+
+    player.remove_target.assert_called_once_with(target_to_remove=pawn)
+
+
+def test_clean_tolerates_missing_player():
+    """
+    clean() must not raise if game.player is None, e.g. during level cleanup.
+    """
+    bot = make_bot_without_init()
+    bot.game.player = None
+
+    bot.clean()  # must not raise
 
 
 def test_clean_calls_pilot_clean():
