@@ -31,7 +31,6 @@ from space_flight.scenes.cloud.noise import (
     OCTAVE_OFFSETS,
     CloudOptics,
     DensityField,
-    base_density,
     build_noise_texture,
     column_peaks,
     density,
@@ -47,7 +46,6 @@ from space_flight.scenes.cloud.noise import (
     resolve_field,
     sample_volume,
     shadow_calibration,
-    slab_height,
     threshold_from_peaks,
     threshold_lift,
     value_noise_volume,
@@ -108,7 +106,7 @@ def test_quantise_matches_an_eight_bit_upload(volume):
     quantised = quantise(volume)
     assert np.abs(quantised - volume).max() <= 0.5 / 255.0 + 1e-7
     uploaded = (
-        np.frombuffer(build_noise_texture().get_ram_image().get_data(), np.uint8)
+        np.frombuffer(build_noise_texture(volume).get_ram_image().get_data(), np.uint8)
         / 255.0
     )
     np.testing.assert_allclose(uploaded.reshape(volume.shape), quantised, atol=1e-7)
@@ -367,27 +365,25 @@ def test_the_shadow_march_agrees_with_the_field_it_approximates(volume):
 # ── The vertical shaping: two different mechanisms ─────────────────────────────
 
 
-def test_slab_height_normalises_to_the_slab():
-    """Every vertical parameter is "per slab", so a type keeps its shape whatever
-    its vertical extent."""
-    spec = DensityField(slab=(1000.0, 600.0))
-    np.testing.assert_allclose(
-        slab_height(spec, np.array([1000.0, 1300.0, 1600.0, 700.0])),
-        [0.0, 0.5, 1.0, -0.5],
-    )
-
-
-def test_base_density_ramps_up_from_the_base():
+def test_base_density_ramps_up_from_the_base(volume):
     """The flat bottom, and it works by scaling DENSITY: condensation begins at
-    one altitude across the whole deck, so a multiplier is the right model."""
-    spec = DensityField(base_ramp=6.0)
-    h = np.linspace(0.0, 1.0, 21)
-    ramp = base_density(spec, h)
-    assert ramp[0] == pytest.approx(0.0)
+    one altitude across the whole deck, so a multiplier is the right model. With
+    the threshold far below the fbm and no erosion, density IS that multiplier."""
+    spec = DensityField(
+        slab=(1000.0, 600.0), base_ramp=6.0, top_erosion=0.0, threshold=(-10.0, -9.0)
+    )
+    h = np.linspace(0.025, 0.975, 20)
+    points = np.zeros((len(h), 3))
+    points[:, 2] = 1000.0 + h * 600.0
+    ramp = density(volume, spec, points)
+    np.testing.assert_allclose(ramp, 1.0 - np.exp2(-6.0 * h))
     assert (np.diff(ramp) > 0).all()  # monotonic
     assert ramp[-1] > 0.98  # fully filled in well before the ceiling
     # Most of the fill happens low in the slab, which is what makes it read flat.
-    assert base_density(spec, 0.25) > 0.6
+    assert ramp[np.searchsorted(h, 0.25)] > 0.6
+    # Outside the slab there is no cloud at all.
+    outside = np.array([[0.0, 0.0, 999.0], [0.0, 0.0, 1601.0]])
+    assert (density(volume, spec, outside) == 0.0).all()
 
 
 def test_threshold_lift_rises_to_clear_the_fbm_at_the_ceiling():
@@ -806,7 +802,7 @@ def test_shader_phase_constant_matches_the_python_one():
 
 
 def test_texture_is_repeat_wrapped_single_channel_and_unmipmapped():
-    texture = build_noise_texture()
+    texture = build_noise_texture(value_noise_volume())
     assert texture.get_texture_type() == Texture.TT_3d_texture
     assert (texture.get_x_size(), texture.get_y_size(), texture.get_z_size()) == (
         NOISE_SIZE,
@@ -823,8 +819,8 @@ def test_texture_is_repeat_wrapped_single_channel_and_unmipmapped():
 
 
 def test_texture_carries_the_volume_contents():
-    texture = build_noise_texture(seed=11)
     expected = value_noise_volume(seed=11)
+    texture = build_noise_texture(expected)
     got = np.frombuffer(texture.get_ram_image().get_data(), dtype=np.uint8)
     assert got.shape == (NOISE_SIZE**3,)
     # The RAM image is page-major, matching numpy's [z, y, x] ordering.

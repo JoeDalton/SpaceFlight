@@ -8,7 +8,7 @@ needs a real window and is verified manually / via integration.
 Covers:
 - :func:`_get_by_path` / :func:`_set_by_path` / :func:`_pct` helpers
 - :meth:`GraphicsSettingsMenuState.on_scale_slider`
-- :meth:`GraphicsSettingsMenuState.on_msaa_slider` (incl. freeze regression)
+- :meth:`GraphicsSettingsMenuState.on_discrete_slider` (incl. freeze regression)
 - :meth:`GraphicsSettingsMenuState.on_fxaa_toggle`
 - :meth:`GraphicsSettingsMenuState.select_mode`
 - :meth:`GraphicsSettingsMenuState.save` / :meth:`cancel`
@@ -110,7 +110,7 @@ class TestOnScaleSlider:
 
 
 # ---------------------------------------------------------------------------
-# on_msaa_slider
+# MSAA slider (on_discrete_slider)
 # ---------------------------------------------------------------------------
 
 
@@ -133,7 +133,7 @@ class TestOnMsaaSlider:
         state.sliders = {self.PATH: _mock_slider(slider_value)}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
-        state.on_msaa_slider()
+        state.on_discrete_slider(self.PATH)
 
         assert state.working_config["antialiasing"]["msaa"] == expected_msaa
         state.slider_value_labels[self.PATH].__setitem__.assert_called_once_with(
@@ -143,7 +143,7 @@ class TestOnMsaaSlider:
     def test_out_of_range_value_is_clamped(self, state):
         state.sliders = {self.PATH: _mock_slider(99.0)}
         state.slider_value_labels = {self.PATH: MagicMock()}
-        state.on_msaa_slider()
+        state.on_discrete_slider(self.PATH)
         assert state.working_config["antialiasing"]["msaa"] == 8
 
     def test_does_not_write_back_to_slider(self, state):
@@ -154,7 +154,7 @@ class TestOnMsaaSlider:
         state.sliders = {self.PATH: slider}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
-        state.on_msaa_slider()
+        state.on_discrete_slider(self.PATH)
 
         slider.set_value.assert_not_called()
         slider.slider.setValue.assert_not_called()
@@ -182,7 +182,7 @@ class TestRowLayout:
 
 
 # ---------------------------------------------------------------------------
-# on_cloud_quality_slider
+# Cloud quality slider (on_discrete_slider)
 # ---------------------------------------------------------------------------
 
 
@@ -205,7 +205,7 @@ class TestOnCloudQualitySlider:
         state.sliders = {self.PATH: _mock_slider(slider_value)}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
-        state.on_cloud_quality_slider()
+        state.on_discrete_slider(self.PATH)
 
         assert state.working_config["clouds"]["quality"] == expected
         state.slider_value_labels[self.PATH].__setitem__.assert_called_once_with(
@@ -216,7 +216,7 @@ class TestOnCloudQualitySlider:
     def test_out_of_range_value_is_clamped(self, state, value, expected):
         state.sliders = {self.PATH: _mock_slider(value)}
         state.slider_value_labels = {self.PATH: MagicMock()}
-        state.on_cloud_quality_slider()
+        state.on_discrete_slider(self.PATH)
         assert state.working_config["clouds"]["quality"] == expected
 
     def test_does_not_write_back_to_slider(self, state):
@@ -227,7 +227,7 @@ class TestOnCloudQualitySlider:
         state.sliders = {self.PATH: slider}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
-        state.on_cloud_quality_slider()
+        state.on_discrete_slider(self.PATH)
 
         slider.set_value.assert_not_called()
         slider.slider.setValue.assert_not_called()
@@ -240,7 +240,7 @@ class TestOnCloudQualitySlider:
         for index in range(4):
             state.sliders = {self.PATH: _mock_slider(float(index))}
             state.slider_value_labels = {self.PATH: MagicMock()}
-            state.on_cloud_quality_slider()
+            state.on_discrete_slider(self.PATH)
             CloudQuality(state.working_config["clouds"]["quality"])
 
 

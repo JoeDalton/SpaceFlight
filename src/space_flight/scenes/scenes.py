@@ -42,9 +42,9 @@ class SceneOcean(Scene):
     SUN_DIRECTION = [-0.35, -1, 0.05]
     SUN_COLOR = np.array([1.0, 0.8, 0.2, 1])
     AMBIENT_COLOR = np.array([0.2, 0.2, 0.4, 0.2])
-    # What distant things fade to. ONE value, shared by the ocean, the cloud
-    # field and the scene fog: they all now curve over the planet and meet at the
-    # horizon, so if they faded to different colours they would not join.
+    # What distant things fade to. ONE value, shared by the ocean and the cloud
+    # field: both curve over the planet and meet at the horizon, so if they faded
+    # to different colours they would not join.
     HAZE_COLOR = AMBIENT_COLOR[:3]
 
     def build_upfront(self):

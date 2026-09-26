@@ -20,19 +20,9 @@ _DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
 
-# Far clip, in metres. Panda's default is 100 km, which is too near for two things
-# that now reach past it:
-#
-#   * the cloud field's outermost LOD shells extend to 512 km, and anything past
-#     the far clip is built and then thrown away;
-#   * the ocean's horizon sits at sqrt(2*R*altitude), so a 100 km clip gives a
-#     correct horizon only up to 785 m of altitude — above that the surface is
-#     clipped before it curves away and the horizon cannot dip.
-#
-# Raising it is nearly free for depth precision, which goes as z^2/(near * 2^bits)
-# and is dominated by the NEAR plane: the resolution at any given distance is
-# unchanged by this. 600 km clears the outermost cloud shell and puts the ocean
-# horizon in view up to ~28 km of altitude.
+# Far clip, in metres: clears the outermost cloud shell (512 km) and keeps the
+# curved ocean horizon in view up to ~28 km of altitude. Depth precision is set
+# by the near plane, so this costs almost nothing.
 CAMERA_FAR_M = 600000.0
 COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_SPRING_COEFFICIENT_NPM = 17

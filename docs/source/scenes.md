@@ -80,7 +80,10 @@ camera's lens.
   (it doesn't turn to face the camera). Like the
   skybox, it re-centres on the player each frame (`move_planet_task`) using a
   position stored *relative to* the player, so it appears fixed in the
-  distance regardless of how far the player has actually travelled.
+  distance regardless of how far the player has actually travelled. Its
+  nominal distance is arbitrary, so it draws in the "background" bin with no
+  depth write: merely being transparent put it in the "transparent" bin (sort
+  30), after the clouds (25), and it painted over the cloud field.
 - **[`asteroid_field.py`](../../src/space_flight/scenes/asteroid_field.py)**'s
   `AsteroidField` scatters `n_asteroids` model instances randomly inside a
   cube, each with a random scale and terrain collision sphere. When
@@ -100,17 +103,43 @@ elaborate single-file piece of environment code in the game (see its own
 module docstring for the full picture):
 
 - **Camera-locked, per-pixel waves.** The ocean surface has no vertex
-  displacement in the default mode — a single huge flat quad, sized past the
-  camera's far clip (`_PLANE_FAR_FACTOR`) and re-centred under the camera
-  every frame, with all wave detail computed per-pixel in the fragment
-  shader from world position. `compute_wave_dirs` precomputes the
+  displacement in the default mode — a single huge flat quad, re-centred under
+  the camera every frame, with all wave detail computed per-pixel in the
+  fragment shader from world position. `compute_wave_dirs` precomputes the
   per-iteration wave direction table on the CPU once (rather than
   recomputing trig per pixel per iteration in the shader) and uploads it as
   a uniform array. An optional `geometric_swell` prototype mode (which
   `SceneOcean` enables) instead builds a dense, vertically displaced grid
   (`make_swell_grid_mesh`) for a large-scale swell, tapering to flat at its
   edges so it joins its flat border seamlessly — in this mode the border is
-  a ring of huge flat cells in the same mesh, not a separate outer quad.
+  a set of geometrically spaced rings in the same mesh, not a separate outer
+  quad.
+- **Curved over the planet** (swell mode). Every vertex droops by
+  `d² / 2R`, baked into the mesh: that is exact because the mesh is re-centred
+  on the camera, the same origin the cloud shader droops from, and it costs
+  nothing per frame. The horizon then dips `sqrt(2h/R)` below eye level (1.0° at
+  1 km, 3.05° at 9 km) instead of sitting dead level. The border has to be rings
+  rather than one quad, because a quad can only interpolate linearly and would
+  droop into a cone; the ring spacing is geometric because the flat-cell error
+  is `spacing² / 8R`, and 28 rings keep it under 1 arcmin everywhere (0.2 at
+  1 km, 0.8 at 9 km) for about 22% more triangles — 15 rings would give 2.9.
+  The surface is sized to reach past the horizon, `sqrt(2R·altitude)` (about
+  505 km for 20 km of eye altitude), so the planet's own bulge hides its edge;
+  sizing it off the 600 km far plane would ask for 1800 km. Two things stay flat
+  on purpose: the collision plane (the ship is always within metres of the
+  camera, where the droop is micrometres) and the planar reflection, which
+  mirrors about z=0 and drifts by the droop with distance — 7.8 m at 10 km,
+  where the normal is already flattened to a mirror.
+- **Aerial perspective.** Distant water fades to the same `HAZE_COLOR` as the
+  cloud field (applied after the tonemap, as the clouds do), so sea and sky meet
+  at the horizon. Its haze distance is much shorter than the clouds': the air
+  path to sea level is far denser than the path to cloud at altitude.
+- **The far plane** is raised to 600 km (`CAMERA_FAR_M` in `player.py`, set
+  before the scene is built because the reflection camera copies the lens).
+  Panda's default 100 km clips the outermost cloud shell and gives a correct
+  ocean horizon only up to 785 m of altitude; 600 km clears the 512 km shell and
+  keeps the horizon in view to about 28 km. It is nearly free for depth
+  precision, which goes as `z² / (near · 2^bits)` and is set by the near plane.
 - **Planar reflections.** `make_reflection_buffer` builds an offscreen
   texture buffer and a mirrored reflection camera (`mirror_camera` flips the
   main camera's Z position/pitch/roll about the water plane each frame,
@@ -212,7 +241,7 @@ each other, and it is why their silhouettes are exactly as crisp as the field is
     cloud count and no altitude range, because the billboard count follows from
     the field's coverage and the altitude *is* the field's slab.
   - **Per-type fields on the GPU** ride in a `layerParams` uniform array indexed
-    by a flat layer id (six `vec4`s each). A uniform array rather than a texture:
+    by a flat layer id (twelve `vec4`s each). A uniform array rather than a texture:
     a fragment needs two dozen of its type's parameters, which as `texelFetch`es
     would be two dozen texture reads per pixel and as varyings would burn most of
     the interpolator budget.
@@ -254,6 +283,33 @@ each other, and it is why their silhouettes are exactly as crisp as the field is
       both sun-tinted (so dusk shadows came out orange instead of blue-grey) and
       phase-multiplied (so looking toward the sun made shadowed cloud brighter
       than side-lit sunlit cloud, flattening a dusk deck to one uniform orange).
+
+    And a few more in `cloud.frag`, each also a fixed bug:
+    - The field is sampled **on the quad plane**, not offset back to mid-chord.
+      The offset displaced the lookup by up to a particle radius — most of a noise
+      feature — and varied with radius and across the sprite, so overlapping
+      billboards disagreed about where the cloud was and cut holes in each other.
+    - The **powder** term takes the *local* density over a fixed reference length.
+      Fed the sunward depth, it inverts (the lit surface gets the heaviest
+      darkening); fed the quad's own chord, it depends on billboard size (small
+      near quads went dark, large far ones white).
+    - The **sun march** uses only the two lowest octaves, affinely calibrated
+      (`noise.shadow_calibration`) onto the full field. Plain renormalisation left
+      the mean and spread too high: the march saw 1.65x the cloud and greyed the
+      tops in full sun.
+    - The **LOD crossfade** weights *optical depth*, after the per-billboard cap.
+      On depth the shells' transmittances multiply out exactly; on alpha two
+      half-weight billboards at depth 1.5 composite to 0.544 instead of 0.65, a
+      ~16% light ring that sweeps with the camera. Weighting before the cap would
+      let each shell reach it and sum to twice it.
+    - **Aerial perspective** tends to the haze *colour*, never to transparent:
+      fading alpha made a deck seen from above take on the ground behind it.
+  - **An open idea** for cirrus: the atlas sprites are painted cumulus puffs, and
+    stretching magnifies their detail along the long axis — backwards for a wisp,
+    which wants fine detail along and softness across. A cheap fix would modulate
+    the sprite's thickness by a 1-D tap of the existing noise volume along the
+    stretched axis, where aspect > 1 (the aspect would need passing to the
+    fragment stage). Not done: the field's own anisotropy may be enough.
   - **Quality** (`CloudQuality`, `at_quality`) scales a type's cost across
     LOW/MID/HIGH/ULTRA, read from `clouds.quality` in the graphics settings.
     HIGH is the identity — what the presets ship — so a caller with no settings
@@ -298,13 +354,26 @@ each other, and it is why their silhouettes are exactly as crisp as the field is
   - **`Clouds`** is the thin game-facing wrapper matching every other scene
     piece's contract (construct with `game`, register `update` in
     `game.method_lists`, `clean()`), delegating everything else to
-    `CloudField`. Its `build()` generator mirrors `CloudField.build()` for
-    `defer_build=True` use from a level's `build_decomposed`.
+    `CloudField`, which builds synchronously in its constructor.
 
 Two things the headless tests cannot check, and which therefore need
 [`scripts/demo_clouds.py`](../../scripts/demo_clouds.py) or an offscreen GL context:
 the pixels, and whether the GLSL compiles at all — `Shader.load` succeeds with no
 graphics context.
+
+The demo builds its deck with **coverage headroom** above the authored value,
+because `set_coverage` is only exact downward. Measured on six shells at
+1280x720 from a 0.29 deck: no headroom is 100k billboards and 9.6 ms, 0.15 is
+170k and 15.3 ms, 0.25 is 221k and 17.6 ms; 0.15 buys a 0.29 → 0.44 sweep, which
+crosses from isolated puffs toward the percolated, sheet-with-holes regime. Its
+`forward_gain` sweep stops at 15: above about 10 the view into the sun clips in
+the tonemap, and past about 20 (at 0.4 anisotropy) the phase solve needs a
+negative isotropic weight. The ground is a curved polar mesh for the same reason
+as the ocean — a flat plane clips the drooped deck beyond about 113 km — with
+256 segments (0.26 arcmin of flat spot, against 1.0 at 128) out to 550 km, good
+for eye heights to about 24 km. Its cirrus layer (`WITH_CIRRUS`) is toggled by
+zeroing the layer's optical-depth cap, since every layer shares one Geom: a look
+toggle, not a cost saving.
 
 ## Where things live
 

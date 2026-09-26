@@ -45,22 +45,16 @@ from panda3d.core import (
     Texture,
 )
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, PLANET_RADIUS_M
 from space_flight.game.collisions import attach_collision_plane
 from space_flight.utils import compute_next_power_of_2
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
-# Margin on the surface's half-size beyond the horizon it has to cover, so the
-# edge stays hidden behind the planet's own bulge rather than by the far clip.
-#
-# It used to be sized as a multiple of the camera's far distance, on the reasoning
-# that the edges then lie beyond the clip and are never seen. A curved surface
-# hides its own edge instead — past the horizon the bulge occludes everything —
-# so the requirement becomes "reach past the horizon", which no longer scales with
-# the far plane at all. That matters now the far plane is 600 km: the old rule
-# would have asked for an 1800 km surface.
+# The surface must reach past the horizon from the highest eye, so its own bulge
+# hides its edge: sqrt(2*R*altitude) is ~505 km at 20 km, plus a margin.
+_MAX_EYE_ALTITUDE_M = 20000.0
 _HORIZON_MARGIN = 1.1
 
 # Camera mask bit used to hide the ocean from the reflection camera
@@ -160,29 +154,12 @@ def make_swell_grid_mesh(
     border_rings: int = 28,
 ) -> GeomNode:
     """
-    Mesh for the geometric-swell prototype: a dense uniform grid of half-size
-    grid_half (where the vertex shader displaces the surface by the swell),
-    surrounded by geometrically-spaced border rings reaching outer_half so the
-    ocean still covers the view to the horizon.  The displacement is tapered
-    to zero before grid_half (in the shader), so the flat border joins
-    seamlessly — no projected-grid / clipmap machinery needed.
-
-    The border is RINGS rather than the single huge quad it used to be, and that
-    is what lets the surface curve: one quad spanning 4 km to 300 km can only
-    interpolate linearly across that span, so drooping its corners would give a
-    cone rather than a planet.  The ring count is set by the SAG — the error in
-    approximating the curve by flat cells, ``spacing^2 / (8R)`` — measured as an
-    angle at the distance it is seen from.  28 rings keeps that under 1 arcmin
-    everywhere (0.2 at the horizon for 1 km of altitude, 0.8 at 9 km), which is
-    about visual acuity, for roughly 22% more triangles than the single-quad
-    border.  Fewer rings degrade quickly: 15 gives 2.9 arcmin, because geometric
-    growth makes the last step enormous.
-
-    Curvature is baked into the vertex positions rather than applied in the
-    shader.  That works because the surface is recentred on the camera every
-    frame (see :meth:`Ocean.update`), so a drop measured from the mesh's own
-    centre IS measured from the camera; and it costs nothing per frame.  It also
-    composes with the swell, which the vertex shader adds to z afterwards.
+    Mesh for the geometric-swell mode: a dense uniform grid of half-size
+    grid_half (displaced by the swell in the vertex shader, tapered to zero
+    before its edge), ringed by geometrically-spaced border rings out to
+    outer_half.  Rings rather than one border quad so the surface can curve;
+    28 keeps the curve's sag under 1 arcmin.  Curvature is baked into z, which
+    is exact because the mesh is recentred on the camera every frame.
 
     :param grid_half: Half-size of the dense inner grid, in world units.
     :param subdivs: Number of subdivisions across the dense inner grid.
@@ -192,13 +169,8 @@ def make_swell_grid_mesh(
     :return: A :class:`GeomNode` holding the grid mesh.
     """
     # Per-axis coordinates: the border rings mirrored below the grid, the uniform
-    # inner span, then the border rings above it.
-    #
-    # Built with NumPy + bulk buffer uploads rather than per-vertex/-triangle
-    # Python calls: at the default 512 subdivisions this is a 515x515 grid
-    # (~265k verts, ~528k tris); even at 256 subdivisions (259x259) the naive
-    # loop spent ~210ms here. The vectorised form is byte-identical and ~25x
-    # faster.
+    # inner span, then the border rings above it. Vectorised because the default
+    # grid is ~265k verts; a per-vertex Python loop was ~25x slower.
     border = border_coords(grid_half, outer_half, border_rings)
     inner = -grid_half + 2.0 * grid_half * np.arange(subdivs + 1) / subdivs
     coords = np.concatenate([-border[::-1], inner, border]).astype(np.float32)
@@ -208,9 +180,7 @@ def make_swell_grid_mesh(
     verts = np.zeros((m * m, 3), dtype=np.float32)
     verts[:, 0] = np.tile(coords, m)
     verts[:, 1] = np.repeat(coords, m)
-    # Droop with the planet, measured from the surface's centre — which is the
-    # camera. Per-vertex from the TRUE radius, so the tensor-product grid samples
-    # a paraboloid of revolution rather than a per-axis approximation of one.
+    # Droop from the true radius, so the grid samples a paraboloid of revolution.
     verts[:, 2] = -curvature * (verts[:, 0] ** 2 + verts[:, 1] ** 2)
 
     fmt = GeomVertexFormat.getV3()
@@ -266,8 +236,6 @@ class Ocean:
         wave_fade_near: float = 300.0,
         wave_fade_far: float = 5000.0,
         wave_fade_k2: float = 0.001,
-        planet_radius: float = 6371000.0,
-        max_eye_altitude: float = 20000.0,
         haze_color: LVecBase3f = LVecBase3f(0.2, 0.2, 0.4),
         haze_distance: float = 150000.0,
         vert_shader: Path = DATAFILES_PATH / "shaders/ocean.vert",
@@ -301,21 +269,6 @@ class Ocean:
             displacement.
         :param wave_fade_near: Distance, in world units, below which small waves
             are at full detail.
-        :param planet_radius: Metres; the surface droops by
-            ``distance^2 / (2 * radius)`` so it curves away and gives a real
-            horizon — dipping ``sqrt(2h/R)`` below eye level, which is 1.0 degree
-            at 1 km of altitude and 3.05 at 9 km. A flat plane's horizon sits at
-            exactly eye level at every altitude, dead straight. Pass 0 for flat.
-
-            Two things stay flat on purpose. The collision plane is still at z=0,
-            which is consistent where it matters because the droop is measured
-            from the camera and the ship is always within metres of it (a drop of
-            micrometres). And the planar reflection still mirrors about z=0, so it
-            is exact at the camera and drifts by the droop with distance — 7.8 m at
-            10 km, where the shader has already flattened the normal to a mirror.
-        :param max_eye_altitude: Metres; how high the camera can go before the
-            surface's edge comes into view. Sets the surface's size, since it must
-            reach past ``sqrt(2*R*altitude)`` for its own bulge to hide the edge.
         :param haze_color: Colour distant water fades toward. Should match what
             the cloud field fades to, or sea and sky disagree at the horizon.
         :param haze_distance: Metres over which water reaches haze_color fully.
@@ -340,27 +293,20 @@ class Ocean:
         shader = Shader.load(Shader.SL_GLSL, vertex=vert_shader, fragment=frag_shader)
 
         # ── Camera-locked surface ─────────────────────────────────────────────
-        # Sized past the far clip so its edges are never visible; it follows the
-        # camera in XY each frame so the view is always covered to the horizon.
-        # Flat single quad by default; a dense displaced grid when geometric
-        # swell is enabled (prototype).
-        # Sized from the HORIZON rather than the far clip: the surface has to reach
-        # past sqrt(2*R*altitude) so its own bulge hides the edge. 20 km of eye
-        # altitude wants ~505 km, where the old far-clip rule would now ask 1800.
-        curvature = 0.0 if not planet_radius else 1.0 / (2.0 * float(planet_radius))
-        horizon = (
-            math.sqrt(2.0 * float(planet_radius) * max_eye_altitude)
-            if planet_radius
-            else self.game.app.camLens.getFar() * 3.0
-        )
+        # Follows the camera in XY each frame so the view is always covered to the
+        # horizon. The collision plane and the reflection mirror stay flat at z=0;
+        # both are exact at the camera, where the droop is zero.
+        horizon = math.sqrt(2.0 * PLANET_RADIUS_M * _MAX_EYE_ALTITUDE_M)
         outer_half = horizon * _HORIZON_MARGIN
         if geometric_swell:
             mesh = make_swell_grid_mesh(
-                swell_grid_half, swell_grid_subdivs, outer_half, curvature=curvature
+                swell_grid_half,
+                swell_grid_subdivs,
+                outer_half,
+                curvature=1.0 / (2.0 * PLANET_RADIUS_M),
             )
         else:
-            # The flat single quad cannot curve — four vertices can only interpolate
-            # linearly — so this path stays flat whatever the planet radius.
+            # Four vertices cannot curve, so this path stays flat.
             mesh = make_plane_mesh(outer_half * 2.0)
         self.ocean_node = self.base_node.attachNewNode(mesh)
         self.ocean_node.setShader(shader)
@@ -394,12 +340,8 @@ class Ocean:
         self.ocean_node.setShaderInput("uWaveFadeNear", float(wave_fade_near))
         self.ocean_node.setShaderInput("uWaveFadeFar", float(wave_fade_far))
         self.ocean_node.setShaderInput("uWaveFadeK2", float(wave_fade_k2))
-        # Aerial perspective. The cloud field fades to its own haze colour, so
-        # without this the water stays full-contrast right up to a horizon where
-        # the sky above it has already gone to haze. Deliberately a much SHORTER
-        # distance than the clouds use: the air path to a sea-level surface is far
-        # denser than the path to cloud at altitude, so the sea really does haze
-        # out sooner.
+        # Aerial perspective, to meet the cloud haze at the horizon. Shorter than
+        # the clouds' distance: the air path to sea level is denser.
         self.ocean_node.setShaderInput("uHazeColor", haze_color)
         self.ocean_node.setShaderInput("uHazeDistance", float(haze_distance))
         # Hide the ocean from the reflection camera

@@ -27,16 +27,9 @@ class Planet2D:
         root.setTransparency(TransparencyAttrib.MAlpha)
         root.setShaderOff()
         root.setLightOff()
-        # A BACKDROP, not an object in the scene: it rides at a fixed offset from
-        # the player (see move_planet_task), so its nominal distance is arbitrary
-        # and its depth means nothing. Draw it with the background — after the
-        # skybox, before everything else — and write no depth, so every real object
-        # composites over it.
-        #
-        # Being merely transparent is not enough. TransparencyAttrib.MAlpha puts
-        # geometry in the "transparent" bin, which sorts at 30, i.e. AFTER the
-        # clouds' own bin at 25 — so the planet painted straight over the cloud
-        # field however far behind it the planet was meant to be.
+        # A backdrop riding at a fixed offset, so its depth means nothing: draw it
+        # with the background and write no depth. The default "transparent" bin
+        # (sort 30) would draw it after, and over, the clouds (sort 25).
         root.setBin("background", 2)
         root.setDepthWrite(False)
 

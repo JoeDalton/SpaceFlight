@@ -24,6 +24,8 @@ FORWARD_BODY = np.array([0.0, 1.0, 0.0])
 RIGHT_BODY = np.array([1.0, 0.0, 0.0])
 UP_BODY = np.array([0.0, 0.0, 1.0])
 EPSILON_TOLERANCE = 1.0e-5
+# Shared by the curved ocean and the cloud deck, which must droop identically.
+PLANET_RADIUS_M = 6371000.0
 
 LOGGER = logging.getLogger()
 LOGGER.handlers = []

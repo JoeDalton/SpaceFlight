@@ -12,10 +12,10 @@ import numpy as np
 import pytest
 from panda3d.core import GeomVertexReader
 
+from space_flight import PLANET_RADIUS_M
 from space_flight.scenes.ocean import border_coords, make_swell_grid_mesh
 
-PLANET_RADIUS = 6371000.0
-CURVATURE = 1.0 / (2.0 * PLANET_RADIUS)
+CURVATURE = 1.0 / (2.0 * PLANET_RADIUS_M)
 
 
 def _read_positions(node):
@@ -62,13 +62,13 @@ def test_border_ring_sag_stays_below_visual_acuity():
     grid_half, outer_half = 4000.0, 555000.0
     border = border_coords(grid_half, outer_half, 28)
     spacing = np.diff(np.concatenate([[grid_half], border]))
-    sag = spacing**2 / (8.0 * PLANET_RADIUS)
+    sag = spacing**2 / (8.0 * PLANET_RADIUS_M)
     worst = np.degrees(sag / border).max() * 60.0
     assert worst < 1.0, f"worst sag {worst:.2f} arcmin"
     # And too few rings really is worse, so the number is doing something.
     coarse = border_coords(grid_half, outer_half, 15)
     coarse_spacing = np.diff(np.concatenate([[grid_half], coarse]))
-    coarse_sag = coarse_spacing**2 / (8.0 * PLANET_RADIUS)
+    coarse_sag = coarse_spacing**2 / (8.0 * PLANET_RADIUS_M)
     assert np.degrees(coarse_sag / coarse).max() * 60.0 > 2.0
 
 
@@ -117,7 +117,7 @@ def test_the_droop_puts_the_horizon_where_geometry_says():
     level at every altitude; a curved one dips by sqrt(2h/R) — 1.0 degree at 1 km
     of altitude, 3.05 at 9 km — and that dip is what the drop has to produce."""
     for altitude, expected_dip in ((1000.0, 1.01), (9000.0, 3.05)):
-        horizon = math.sqrt(2.0 * PLANET_RADIUS * altitude)
+        horizon = math.sqrt(2.0 * PLANET_RADIUS_M * altitude)
         drop = CURVATURE * horizon**2
         # Angle below eye level of the surface point at the horizon distance.
         dip = math.degrees(math.atan((altitude + drop) / horizon))

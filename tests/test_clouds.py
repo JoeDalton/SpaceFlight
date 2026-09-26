@@ -1194,35 +1194,6 @@ def test_vertex_format_carries_no_colour_and_no_layer_column(game):
     assert array.get_stride() == 11 * 4
 
 
-# ── Deferred / chunked field build (field.py) ────────────────────────────────────
-
-
-def test_cloudfield_defer_build_matches_immediate(game):
-    """A deferred build, driven step by step, equals the immediate build."""
-    immediate = _make_field(game, CUMULUS, seed=3)
-
-    deferred = CloudField(
-        parent=NodePath("deferred_parent"),
-        game=game,
-        layers=CUMULUS,
-        domain=TEST_DOMAIN,
-        seed=3,
-        defer_build=True,
-        # Pinned for the same reason _make_field pins it: this bypasses the helper,
-        # so without it the deferred field would read the developer's own quality
-        # setting while `immediate` used HIGH, and the two would never match.
-        quality=CloudQuality.HIGH,
-    )
-    assert not hasattr(deferred, "node")  # nothing built in the constructor
-
-    steps = list(deferred.build())  # drive the generator to completion
-    assert len(steps) > 3  # the cost really is spread, not one lump
-
-    assert not deferred.node.is_empty()
-    assert deferred._n == immediate._n
-    np.testing.assert_array_equal(deferred._cell_centres, immediate._cell_centres)
-
-
 # ── Sprite atlas (cloud.py) ─────────────────────────────────────────────────────
 
 
