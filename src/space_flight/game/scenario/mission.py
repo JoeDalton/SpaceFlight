@@ -61,9 +61,12 @@ class Mission:
 
     One instance is normally created per level, in the level's build
     function, and its mission body scheduled as a job on the scenario (see
-    module docstring). :attr:`waves` is not used by ``Mission`` itself; it is
-    just a convenient place for a level to stash the wave data it loaded so
-    the mission body can refer to ``m.waves["first_wave"]``.
+    module docstring). :attr:`waves` is mostly just a convenient place for a
+    level to stash the wave data it loaded so the mission body can refer to
+    ``m.waves["first_wave"]`` -- assigning it also pre-declares each wave id
+    as an (empty) group on the scenario, so a reactive rule that polls a
+    wave's group before it has spawned (see the setter) does not spuriously
+    warn about an "unknown group".
 
     :param game: The game/flight state; must already have ``game.scenario``
         set to a live :class:`Scenario`
@@ -73,7 +76,25 @@ class Mission:
         self.game = game
         self.scenario: Scenario = game.scenario
         #: Optional convenience slot for a level's loaded wave data.
-        self.waves: dict[str, dict] = {}
+        self._waves: dict[str, dict] = {}
+
+    @property
+    def waves(self) -> dict[str, dict]:
+        return self._waves
+
+    @waves.setter
+    def waves(self, waves: dict[str, dict]) -> None:
+        self._waves = waves
+        # Pre-declare every wave id as a (still empty) identity group, exactly
+        # as :func:`space_flight.game.scenario.loader.load_scenario` does for
+        # the legacy DSL, and for the same reason: a reactive rule registered
+        # up front (see module docstring) may poll a wave's group (e.g.
+        # reached_waypoint or near) before that wave has actually spawned --
+        # without this, Scenario.resolve would warn about an "unknown group"
+        # on every such frame, even though the wave's id is perfectly valid
+        # and simply hasn't spawned yet.
+        for wave_id in waves:
+            self.scenario.groups.setdefault(wave_id, [])
 
     # ------------------------------------------------------------------
     # Spawning

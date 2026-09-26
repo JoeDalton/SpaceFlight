@@ -502,6 +502,37 @@ def test_hud_speech_and_end_level_wrappers(mission, game):
 # ---------------------------------------------------------------------------
 
 
+def test_mission_waves_setter_predeclares_groups(mission):
+    """
+    Assigning Mission.waves pre-declares every wave id as an empty group on
+    the scenario, mirroring what load_scenario does for the legacy DSL.
+    """
+    mission.waves = {"first_wave": {"id": "first_wave"}, "second_wave": {"id": "s"}}
+    assert mission.scenario.groups == {"first_wave": [], "second_wave": []}
+
+
+def test_reactive_rule_on_unspawned_wave_does_not_warn_unknown_group(
+    mission, game, patch_spawn_bot, caplog
+):
+    """
+    Regression test: a reactive rule registered up front (see the intro
+    level's "blockade_past") polls reached_waypoint on a wave before it has
+    spawned. Without Mission.waves pre-declaring the group, Scenario.resolve
+    would log a spurious "unknown group 'transports'" warning on every frame
+    until the wave actually spawns.
+    """
+    from space_flight.game.scenario.conditions import reached_waypoint
+
+    mission.waves = load_waves(LEVELS_DIR / "intro_level.yaml")
+    mission.on(reached_waypoint("transports", 8), lambda game: None, name="check")
+
+    with caplog.at_level("WARNING"):
+        for _ in range(5):  # well before transports spawns at 0.1s
+            game.scenario.update(game)
+
+    assert "unknown group" not in caplog.text
+
+
 def test_dev_mission_spawns_frigate(game, patch_spawn_bot):
     from space_flight.game.levels.dev_level import dev_mission
 
