@@ -73,4 +73,18 @@ space_flight
   This tells git to ignore local modifications to this file (it will no longer show up in `git status`/`git diff`). It's a local, per-clone setting, so each contributor needs to run it once. To undo it: `git update-index --no-skip-worktree src/space_flight/_version.py`.
 
 # User
-To be announced :)
+
+## Windows user
+
+If you don't want to set up a full development environment, you can install and run the game from a local clone of this repository using the scripts in `MS_Windows_install/`.
+
+1. Clone (or download) this repository onto your machine.
+2. Open the `MS_Windows_install` folder and double-click `1.1_test_python_installation.bat` to check that a compatible Python (3.12, 3.13 or 3.14) is installed and on your `PATH`. If it isn't, install it from [python.org](https://www.python.org/downloads/) and make sure to check "Add Python to PATH" during installation.
+3. Double-click `2_install_space_flight.bat`. This creates a local virtual environment (`venv`) inside the folder and installs SpaceFlight and its dependencies from your local clone.
+4. Double-click `3.1_launch_space_flight.bat` to start the game.
+
+Other scripts in that folder:
+* `3.2_open_space_flight_environment.bat` opens a console with the game's virtual environment already activated, useful if you want to run commands manually.
+* `4_update_space_flight.bat` reinstalls SpaceFlight after you've pulled the latest changes (`git pull`) into your local clone, picking up any new or updated dependencies.
+
+Since installation happens from your local clone rather than a package index, you need the full repository on disk (not just the `MS_Windows_install` folder) for these scripts to work.
