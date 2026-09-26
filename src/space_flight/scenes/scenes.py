@@ -130,8 +130,14 @@ class SceneOcean(Scene):
         Cleans the SceneOcean
         """
         # self.isd.removeNode()
+        self.ocean.clean()
+        self.ocean = None
         self.clouds.clean()
         self.clouds = None
+        self.skybox.clean()
+        self.skybox = None
+        self.planet.clean()
+        self.planet = None
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
         self.lighting.clean()
@@ -287,8 +293,9 @@ class SceneLavaPlanet(Scene):
         self.speed_dust_cloud = None
         self.lighting.clean()
         self.lighting = None
-        # self.skybox.clean()
-        # self.skybox=None
+        self.planet.clean()
+        self.planet = None
+        # No skybox: build_decomposed doesn't build one for this scene.
         self.game = None
 
 
