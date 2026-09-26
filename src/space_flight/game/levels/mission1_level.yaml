@@ -1,0 +1,27 @@
+# Wave data for Mission 1: Rookies.
+#
+# One wave, `escort`: the leader + 3 wingmen the player follows, then races.
+# `spawn_point` is a placeholder -- the mission overrides it at spawn time,
+# since the real spawn point depends on the player's live position/heading
+# ("1km ahead and to the left") when the intro waypoint is reached. The
+# circuit itself (waypoints + loop: true) IS baked in here, so the leader
+# starts patrolling the instant it spawns, with no extra Python call needed
+# for that phase -- see mission1_level.py's CIRCUIT_WAYPOINTS for where these
+# numbers come from (kept in sync manually: reached_waypoint's index there
+# must match the last entry here).
+
+waves:
+  escort:
+    size: 4
+    ship_model: x-wing
+    bot_type: fighter
+    team: 1
+    spawn_point: [0, 0, 0] # overridden at spawn time, see mission1_level.py
+    formation: { scale_m: 30, shape: arrowhead }
+    waypoints:
+      - [-800, 1200, 550]
+      - [800, 2500, 650]
+      - [1500, 4500, 500]
+      - [-500, 5500, 600]
+      - [-2000, 3000, 550]
+    loop: true

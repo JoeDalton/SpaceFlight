@@ -547,35 +547,189 @@ def test_dev_mission_spawns_frigate(game, patch_spawn_bot):
     assert len(game.scenario.resolve(game, "enemy_frigate")) == 1
 
 
-def test_race_mission_checkpoint_and_finish(game, patch_spawn_bot, monkeypatch):
-    from space_flight.game.levels.race_level import race_mission
+def _run_mission1(game, patch_spawn_bot, monkeypatch, bindings=None):
+    """
+    Shared setup for the Mission 1: Rookies tests below: stubs out
+    PlayerWaypoints (needs a real app/loader), gives the fake game a minimal
+    app.bindings for the HUD keybinding call-outs, and schedules the mission.
+    Returns the Mission so the test can drive the fake world.
+    """
+    from space_flight.game.levels.mission1_level import mission1_mission
 
-    # PlayerWaypoints needs a real app/loader to build its marker model; stub
-    # it out (mirrors test_scenario.py's test_player_waypoints_action_creates_route).
+    class _FakePlayerWaypoints:
+        def __init__(self, game, points, **kwargs):
+            self.points = points
+            self.cleaned = False
+
+        def clean(self):
+            self.cleaned = True
+
     monkeypatch.setattr(
-        "space_flight.game.scenario.actions.PlayerWaypoints",
-        lambda game, points, **kwargs: None,
+        "space_flight.game.scenario.actions.PlayerWaypoints", _FakePlayerWaypoints
     )
 
+    class _FakeApp:
+        pass
+
+    game.app = _FakeApp()
+    game.app.bindings = bindings or {
+        "input_type": "keyboard",
+        "contexts": {"flight": {"keyboard": {"radial_menu": "r", "loop_target": ","}}},
+    }
+    game.player.pawn.forward = np.array([0.0, 1.0, 0.0])
+    game.player.pawn.right = np.array([1.0, 0.0, 0.0])
+
     m = Mission(game)
-    m.waves = load_waves(LEVELS_DIR / "race_level.yaml")
-    game.scenario.schedule(race_mission(m))
+    m.waves = load_waves(LEVELS_DIR / "mission1_level.yaml")
+    game.scenario.schedule(mission1_mission(m))
+    return m
 
-    # Advance until the rivals have spawned (after 1s + one ship per frame).
-    for _ in range(200):
-        game.game_time.t += 1 / 60
+
+def _advance(game, seconds, dt=1 / 60):
+    steps = int(seconds / dt) + 1
+    for _ in range(steps):
+        game.game_time.t += dt
         game.scenario.update(game)
-    assert len(game.scenario.resolve(game, "rivals")) == 3
 
-    # Player reaches the first checkpoint -> banter fires once.
-    game.player.pawn.position = np.array([0.0, 2000.0, 500.0])
-    game.scenario.update(game)
-    assert any("Hobbie" in text for text, _ in game.hud.chatter)
 
-    # Player crosses the finish line first -> victory.
-    game.player.pawn.position = np.array([-3000.0, 12000.0, 500.0])
-    game.scenario.update(game)
-    assert game.end_level_calls[0][0] == "victory"
+def test_mission1_waypoint_to_formation_handoff(game, patch_spawn_bot, monkeypatch):
+    from space_flight.game.levels.mission1_level import (
+        FORMATION_AHEAD_M,
+        FORMATION_LEFT_M,
+        WAYPOINT_1,
+    )
+
+    _run_mission1(game, patch_spawn_bot, monkeypatch)
+    _advance(game, 1)  # nothing spawns until the waypoint is reached
+
+    assert len(game.scenario.resolve(game, "escort")) == 0
+
+    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
+    _advance(game, 3)  # let the 4-ship wave finish spawning, one per frame
+
+    escort_pawns = game.scenario.resolve(game, "escort")
+    assert len(escort_pawns) == 4
+    # The leader (slot 0) spawns exactly at the computed point: 1km ahead
+    # (+forward) and FORMATION_LEFT_M to the left (-right) of the waypoint.
+    expected_leader_pos = (
+        np.array(WAYPOINT_1, dtype=float)
+        + np.array([0.0, 1.0, 0.0]) * FORMATION_AHEAD_M
+        - np.array([1.0, 0.0, 0.0]) * FORMATION_LEFT_M
+    )
+    assert np.allclose(escort_pawns[0].position, expected_leader_pos)
+    assert game.player_waypoints.cleaned is True  # the intro marker was removed
+
+
+def test_mission1_catch_up_deadline_defeat(game, patch_spawn_bot, monkeypatch):
+    from space_flight.game.levels.mission1_level import CATCH_UP_DEADLINE_S, WAYPOINT_1
+
+    _run_mission1(game, patch_spawn_bot, monkeypatch)
+    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
+    _advance(game, 3)  # formation spawns
+
+    # Player never closes the distance -> defeat after the deadline.
+    _advance(game, CATCH_UP_DEADLINE_S + 1)
+
+    assert game.end_level_calls
+    assert game.end_level_calls[-1][0] == "defeat"
+    assert "catch up" in game.end_level_calls[-1][1]
+
+
+def test_mission1_sustained_separation_defeat(game, patch_spawn_bot, monkeypatch):
+    from space_flight.game.levels.mission1_level import (
+        FOLLOW_RADIUS_M,
+        SUSTAINED_SEPARATION_S,
+        WAYPOINT_1,
+    )
+
+    _run_mission1(game, patch_spawn_bot, monkeypatch)
+    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
+    _advance(game, 3)  # formation spawns
+
+    leader = game.scenario.resolve(game, "escort_leader")[0]
+    game.player.pawn.position = leader.position.copy()  # catch up immediately
+    _advance(game, 1)
+    assert not any(o == "defeat" for o, _ in game.end_level_calls)
+
+    # Now drift away for longer than the sustained-separation window.
+    game.player.pawn.position = leader.position + np.array(
+        [FOLLOW_RADIUS_M * 3, 0.0, 0.0]
+    )
+    _advance(game, SUSTAINED_SEPARATION_S + 1)
+
+    assert game.end_level_calls
+    assert game.end_level_calls[-1][0] == "defeat"
+    assert "fell too far behind" in game.end_level_calls[-1][1]
+
+
+def test_mission1_race_first_place_is_special(game, patch_spawn_bot, monkeypatch):
+    from space_flight.game.levels.mission1_level import (
+        CIRCUIT_WAYPOINTS,
+        RACE_WAYPOINTS,
+        WAYPOINT_1,
+    )
+
+    _run_mission1(game, patch_spawn_bot, monkeypatch)
+    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
+    _advance(game, 3)  # formation spawns
+
+    leader = game.scenario.resolve(game, "escort_leader")[0]
+    game.player.pawn.position = leader.position.copy()
+    _advance(game, 1)
+
+    # Fast-forward the circuit: mark every escort ship past the last
+    # checkpoint, unblocking the mission body's wait_until(reached_waypoint).
+    for pawn in game.scenario.resolve(game, "escort"):
+        pawn.parent.navigator.next_waypoint_idx = len(CIRCUIT_WAYPOINTS)
+    _advance(game, 1)
+
+    assert not any(o == "defeat" for o, _ in game.end_level_calls)  # rule retired
+
+    # Player finishes first; the rest cross afterwards.
+    finish_point = np.array(RACE_WAYPOINTS[-1], dtype=float)
+    game.player.pawn.position = finish_point.copy()
+    _advance(game, 1)
+    for pawn in game.scenario.resolve(game, "escort"):
+        pawn.position = finish_point.copy()
+    _advance(game, 1)
+
+    assert game.end_level_calls[-1] == (
+        "victory",
+        "First across the line! Outstanding flying, rookie!",
+    )
+
+
+def test_mission1_race_last_place_is_defeat(game, patch_spawn_bot, monkeypatch):
+    from space_flight.game.levels.mission1_level import (
+        CIRCUIT_WAYPOINTS,
+        RACE_WAYPOINTS,
+        WAYPOINT_1,
+    )
+
+    _run_mission1(game, patch_spawn_bot, monkeypatch)
+    game.player.pawn.position = np.array(WAYPOINT_1, dtype=float)
+    _advance(game, 3)
+
+    leader = game.scenario.resolve(game, "escort_leader")[0]
+    game.player.pawn.position = leader.position.copy()
+    _advance(game, 1)
+
+    for pawn in game.scenario.resolve(game, "escort"):
+        pawn.parent.navigator.next_waypoint_idx = len(CIRCUIT_WAYPOINTS)
+    _advance(game, 1)
+
+    finish_point = np.array(RACE_WAYPOINTS[-1], dtype=float)
+    # Everyone else finishes first; the player finishes last.
+    for pawn in game.scenario.resolve(game, "escort"):
+        pawn.position = finish_point.copy()
+    _advance(game, 1)
+    game.player.pawn.position = finish_point.copy()
+    _advance(game, 1)
+
+    assert game.end_level_calls[-1] == (
+        "defeat",
+        "You crossed the line last. Mission failed.",
+    )
 
 
 def test_intro_mission_full_sequence_to_victory(game, patch_spawn_bot):

@@ -13,7 +13,7 @@ the intro level.
 > A legacy YAML `triggers:` DSL still exists in the engine (see
 > [Legacy: the YAML trigger DSL](#legacy-the-yaml-trigger-dsl), below) and
 > remains fully supported by `loader.py`, but the three shipped levels
-> (Dev, Intro, Race) are now all written with the Mission API, which is the
+> (Dev, Intro, Mission 1: Rookies) are now all written with the Mission API, which is the
 > primary way to author a mission going forward.
 
 ## Mental model
@@ -264,6 +264,7 @@ from a `when:` node:
 | `any_alive` | `any_alive(group)` | at least one member of the group is alive |
 | `reached_waypoint` | `reached_waypoint(group, index)` | any live member of `group` has reached waypoint `index` (0-based; its navigator's next-waypoint index is > `index`) |
 | `near` | `near(who, point, radius)` | `who` is within `radius` of `point` (`who` is `"player"` or a group; for a group, any live member) |
+| `near_actor` | `near_actor(who_a, who_b, radius)` | the nearest pair between `who_a`'s and `who_b`'s live members is within `radius` — the live-actor equivalent of `near`, for two *moving* groups (e.g. "is the player still close to the escort leader?") instead of a group and a fixed point |
 | `fired` | `fired(trigger_name)` | the named trigger (from `Mission.on(..., name=...)` or the legacy DSL) has already fired |
 
 ```python
@@ -271,6 +272,7 @@ after_seconds(50)
 all_destroyed("first_wave")
 reached_waypoint("transports", 5)
 near("player", [0, 2000, 500], radius=350)
+near_actor("player", "escort_leader", radius=200)
 fired("blockade_past")
 ```
 
@@ -286,14 +288,27 @@ a chained event cannot fire against a wave that does not exist yet.
 ### Combinators
 
 ```python
-Delay(inner, seconds)   # `seconds` after `inner` first becomes true
-AllOf(*conds)           # every sub-condition is true
-AnyOf(*conds)           # any sub-condition is true
+Delay(inner, seconds)      # `seconds` after `inner` first becomes true
+Sustained(inner, seconds)  # `inner` has held true for an UNBROKEN `seconds`
+Not(inner)                 # `inner` is false
+AllOf(*conds)              # every sub-condition is true
+AnyOf(*conds)              # any sub-condition is true
 ```
 
 `Delay` is what expresses "X, then wait, then…". It **latches**: once `inner`
 becomes true the timer is armed and keeps running even if `inner` flickers
 back to false.
+
+`Sustained` is `Delay`'s mirror image: it **resets** the moment `inner` goes
+false, instead of latching. Use it for "further than 200m for 10 *consecutive*
+seconds" rather than "3 seconds after first going out of range" (which is what
+`Delay` would give you):
+
+```python
+# defeat if the player drifts more than 200m from the escort leader for a
+# full, unbroken 10 seconds -- a momentary dip back inside 200m resets the timer
+Sustained(Not(near_actor("player", "escort_leader", 200)), seconds=10)
+```
 
 ```python
 # 3 seconds after the first wave is wiped out

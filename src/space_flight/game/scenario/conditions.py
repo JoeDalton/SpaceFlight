@@ -144,6 +144,34 @@ def _resolve_who(game: FlightState, who: str) -> list[Actor]:
     return game.scenario.resolve(game, who)
 
 
+def near_actor(who_a: str, who_b: str, radius: float) -> Condition:
+    """
+    True when the nearest pair between who_a's and who_b's live members is
+    within radius.
+
+    The live-actor equivalent of near(): where near() measures distance to a
+    fixed world position, this measures distance between two moving groups
+    (e.g. "is the player still close to the escort leader?"), re-resolving
+    both sides every frame.
+
+    :param who_a: "player" or a group name
+    :param who_b: "player" or a group name
+    :param radius: Distance in metres considered "near"
+    :return: The condition callable
+    """
+    radius_sq = radius * radius
+
+    def cond(game: FlightState) -> bool:
+        for a in _resolve_who(game, who_a):
+            for b in _resolve_who(game, who_b):
+                delta = a.position - b.position
+                if float(delta @ delta) <= radius_sq:
+                    return True
+        return False
+
+    return cond
+
+
 def reached_waypoint(group: str, index: int) -> Condition:
     """
     True once any live member of group has reached waypoint index (0-based).
@@ -199,6 +227,50 @@ class Delay:
                 return False
             self._armed_at = now
         return now - self._armed_at >= self.seconds
+
+
+class Sustained:
+    """
+    True once inner has held continuously true for seconds straight.
+
+    The mirror image of Delay: Delay latches permanently the moment inner
+    first becomes true and never un-arms, whereas Sustained resets to
+    unarmed the instant inner goes false, so it only reports true after an
+    unbroken run of seconds (e.g. "further than 200m for 10 *consecutive*
+    seconds", as opposed to Delay's "3 seconds after X first became true").
+    Each trigger must own its own Sustained instance, exactly as for Delay.
+
+    :param inner: The condition that must hold continuously
+    :param seconds: How long inner must hold, unbroken, before this reports true
+    """
+
+    def __init__(self, inner: Condition, seconds: float) -> None:
+        self.inner = inner
+        self.seconds = seconds
+        self._since: Optional[float] = None
+
+    def __call__(self, game: FlightState) -> bool:
+        if not self.inner(game):
+            self._since = None
+            return False
+        now = game.game_time.get_current_time()
+        if self._since is None:
+            self._since = now
+        return now - self._since >= self.seconds
+
+
+class Not:
+    """
+    True when inner is false.
+
+    :param inner: The condition to negate
+    """
+
+    def __init__(self, inner: Condition) -> None:
+        self.inner = inner
+
+    def __call__(self, game: FlightState) -> bool:
+        return not self.inner(game)
 
 
 class AllOf:

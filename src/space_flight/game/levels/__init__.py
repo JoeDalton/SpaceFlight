@@ -20,7 +20,10 @@ from typing import TYPE_CHECKING, Callable
 
 from space_flight.game.levels.dev_level import build_dev_level, build_dev_upfront
 from space_flight.game.levels.intro_level import build_intro_level, build_intro_upfront
-from space_flight.game.levels.race_level import build_race_level, build_race_upfront
+from space_flight.game.levels.mission1_level import (
+    build_mission1_level,
+    build_mission1_upfront,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -57,10 +60,11 @@ LEVELS: dict[str, LevelEntry] = {
         build=build_intro_level,
         description="The first `game ready` level.",
     ),
-    "Race": LevelEntry(
-        upfront=build_race_upfront,
-        build=build_race_level,
-        description="A friendly tutorial race: pass the checkpoints and "
-        "beat three rival pilots to the finish line.",
+    "Mission 1: Rookies": LevelEntry(
+        upfront=build_mission1_upfront,
+        build=build_mission1_level,
+        description="A tutorial mission: learn the target-filter radial "
+        "menu, follow a formation through the asteroid field, then race it "
+        "to the marker.",
     ),
 }

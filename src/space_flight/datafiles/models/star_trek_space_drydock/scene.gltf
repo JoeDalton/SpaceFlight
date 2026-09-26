@@ -5570,8 +5570,7 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 14,
-            "TEXCOORD_0": 15
+            "POSITION": 14
           },
           "indices": 16,
           "material": 11,

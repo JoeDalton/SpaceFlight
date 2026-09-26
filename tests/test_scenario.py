@@ -23,10 +23,13 @@ from space_flight.game.scenario.conditions import (
     AllOf,
     AnyOf,
     Delay,
+    Not,
+    Sustained,
     after_seconds,
     any_destroyed,
     fired,
     near,
+    near_actor,
     reached_waypoint,
 )
 from space_flight.game.scenario.loader import load_scenario
@@ -401,6 +404,53 @@ def test_fired_chains_with_delay(game):
     assert cond(game) is False  # armed, not elapsed
     game.game_time.t = 3
     assert cond(game) is True
+
+
+def test_near_actor_condition(game):
+    """near_actor is true only when the nearest pair of the two groups'
+    live members is within radius -- unlike near(), both sides are live
+    positions, not a fixed point."""
+    game.player = MockBot("player", [0, 0, 0], team=1)
+    leader = MockBot("leader", [50, 0, 0], team=1)
+    game.interactions.add(leader.pawn)
+    game.scenario.register("escort_leader", [leader])
+    cond = near_actor("player", "escort_leader", radius=100)
+
+    assert cond(game) is True
+    leader.pawn.position = np.array([500.0, 0.0, 0.0])
+    assert cond(game) is False
+    game.player.pawn.position = np.array([450.0, 0.0, 0.0])
+    assert cond(game) is True  # both sides re-resolved live
+
+
+def test_sustained_resets_on_interruption_and_fires_after_unbroken_run(game):
+    """Sustained requires an UNBROKEN run of `seconds`, unlike Delay, which
+    latches permanently the first time inner becomes true."""
+    inner = {"v": False}
+    cond = Sustained(lambda g: inner["v"], seconds=10)
+
+    game.game_time.t = 0
+    inner["v"] = True
+    assert cond(game) is False  # just armed
+    game.game_time.t = 5
+    assert cond(game) is False  # 5s in, not yet 10
+
+    inner["v"] = False  # breaks the run -- must reset, unlike Delay
+    game.game_time.t = 6
+    assert cond(game) is False
+
+    inner["v"] = True  # re-arms the moment it becomes true again (t=10)
+    game.game_time.t = 10
+    assert cond(game) is False  # just re-armed
+    game.game_time.t = 16
+    assert cond(game) is False  # only 6s since re-arming
+    game.game_time.t = 20
+    assert cond(game) is True  # 10s unbroken since re-arming at t=10
+
+
+def test_not_negates(game):
+    assert Not(lambda g: True)(game) is False
+    assert Not(lambda g: False)(game) is True
 
 
 def test_all_of_and_any_of(game):

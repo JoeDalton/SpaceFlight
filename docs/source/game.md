@@ -142,18 +142,19 @@ each exposing the same two-function shape `FlightState.enter()` expects
 `build_<name>_level(game) -> Iterator` for the animated incremental phase. A
 level's own logic is deliberately thin — spawn the player, pick a
 [scene](../../src/space_flight/scenes/), then hand off to `game.scene.build_decomposed()`
-and a sibling YAML scenario file loaded via `load_scenario` (see below) — all
-per-mission scripting lives in that YAML rather than in Python.
+and a `Mission` (see [scenario_scripting.md](scenario_scripting.md)) that
+scripts the mission's events directly in Python, driven by wave *data* kept
+in a sibling YAML file.
 
 | Level | File | Scene | Premise |
 |-------|------|-------|---------|
 | Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `debug` | Sandbox for the latest feature under development |
 | Intro | [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
-| Race | [`race_level.py`](../../src/space_flight/game/levels/race_level.py) | `lava_planet` | Friendly checkpoint race against three rivals |
+| Mission 1: Rookies | [`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py) | `asteroids` | Tutorial: target-filter menu, follow a formation, then race it |
 
-`FlightState._build_upfront`/`_make_build_generator` dispatch on
-`app.configuration["selected_level"]` to pick which pair of functions to
-call.
+`game/levels/__init__.py`'s `LEVELS` registry maps
+`app.configuration["selected_level"]` to each level's pair of functions;
+`FlightState._build_upfront`/`_make_build_generator` just look it up there.
 
 ## Scenario — data-driven mission scripting
 
