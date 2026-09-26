@@ -58,17 +58,18 @@ def all_destroyed(group: str) -> Condition:
 
 def any_destroyed(group: str) -> Condition:
     """
-    True once group has spawned and one of its members is dead.
+    True once group has spawned and at least one of its members is dead.
 
-    Not implemented yet: the loader accepts it, but it always returns False.
+    Stays true once every member has died too (all_destroyed is a subset of
+    any_destroyed, not its opposite): this reports "the group has taken at
+    least one loss", which remains the case after a total wipe.
 
     :param group: A group name (see :class:`Scenario`)
     :return: The condition callable
     """
 
-    # TODO
     def cond(game: FlightState) -> bool:
-        return False
+        return game.scenario.any_destroyed(game, group)
 
     return cond
 

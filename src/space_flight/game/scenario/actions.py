@@ -31,8 +31,57 @@ LOGGER = logging.getLogger()
 # but a 180 degree turn about z.
 DEFAULT_SPAWN_ORIENTATION = np.array([0, 0, 0, 1])
 
+# The keys a wave cfg dict may carry. `size` and `ship_model` are only
+# required in their plain (homogeneous) form -- a mixed-composition wave (see
+# _ship_model_sequence) gives ship_model as a list of {ship_model, count} and
+# may omit size (it is then inferred as the sum of the counts).
+REQUIRED_WAVE_KEYS = {"id", "spawn_point"}
+OPTIONAL_WAVE_KEYS = {
+    "size",
+    "ship_model",
+    "bot_type",
+    "team",
+    "spawn_orientation",
+    "formation",
+    "waypoints",
+    "loop",
+    "target",
+    "hud_text",
+    "hud_time_s",
+    "allow_respawn",
+    "record",
+}
+ALL_WAVE_KEYS = REQUIRED_WAVE_KEYS | OPTIONAL_WAVE_KEYS
 
-def spawn_wave(cfg: dict) -> Action:
+
+def _validate_wave_cfg(cfg: dict) -> None:
+    """
+    Raise a clear ValueError for a malformed wave cfg dict.
+
+    Checked by :meth:`space_flight.game.scenario.mission.Mission.spawn`
+    (kept simple by design: this is not a schema framework, just a flat
+    required/unknown key check).
+
+    :param cfg: The wave configuration to validate
+    :raise ValueError: naming the wave id and the missing/unknown key(s)
+    """
+    wave_id = cfg.get("id", "<unnamed>")
+    missing = {key for key in REQUIRED_WAVE_KEYS if key not in cfg}
+    ship_model = cfg.get("ship_model")
+    if ship_model is None:
+        missing.add("ship_model")
+    elif not isinstance(ship_model, list) and "size" not in cfg:
+        missing.add("size")
+    if missing:
+        raise ValueError(
+            f"wave '{wave_id}': missing required key(s): {sorted(missing)}"
+        )
+    unknown = set(cfg) - ALL_WAVE_KEYS
+    if unknown:
+        raise ValueError(f"wave '{wave_id}': unknown key(s): {sorted(unknown)}")
+
+
+def spawn_wave(cfg: dict, join: Optional[Formation] = None) -> Action:
     """
     Build a wave of bots from a config dict, one ship per frame.
 
@@ -76,12 +125,36 @@ def spawn_wave(cfg: dict) -> Action:
         # ships actually exist — otherwise it would fire the instant the wave is
         # scheduled but before any ship has spawned.
         game.scenario.scheduled.add(wave_id)
-        game.scenario.schedule(_spawn_wave_job(game, cfg))
+        game.scenario.schedule(_spawn_wave_job(game, cfg, join=join))
 
     return action
 
 
-def _spawn_wave_job(game: FlightState, cfg: dict) -> Iterator[None]:
+def _ship_model_sequence(cfg: dict) -> Optional[list[str]]:
+    """
+    Expand a mixed-composition ship_model into a flat per-slot list.
+
+    A wave cfg's ship_model is either a single model name (the common case;
+    this returns None, so the caller keeps its plain size-driven loop) or a
+    list of {ship_model, count} entries for a mixed-composition wave, in
+    which case each model appears count times, in order.
+
+    :param cfg: The wave configuration
+    :return: One model name per ship, in spawn order; or None for a
+        single-model wave
+    """
+    ship_model = cfg["ship_model"]
+    if not isinstance(ship_model, list):
+        return None
+    sequence: list[str] = []
+    for entry in ship_model:
+        sequence.extend([entry["ship_model"]] * entry["count"])
+    return sequence
+
+
+def _spawn_wave_job(
+    game: FlightState, cfg: dict, join: Optional[Formation] = None
+) -> Iterator[None]:
     """
     Generator that spawns one ship of a wave per frame.
 
@@ -90,26 +163,37 @@ def _spawn_wave_job(game: FlightState, cfg: dict) -> Iterator[None]:
 
     :param game: The game/flight state
     :param cfg: The wave configuration (see :func:`spawn_wave`)
+    :param join: An existing, live formation for this wave's ships to attach
+        to (continuing from its next free slot) instead of creating a new one,
+        even if cfg declares a formation of its own -- the Mission API's way
+        of having several waves share one formation (e.g. reinforcements
+        joining an escort already in flight)
     :return: A generator yielding once per spawned ship
     """
     wave_id = cfg["id"]
-    size = cfg["size"]
+    ship_models = _ship_model_sequence(cfg)
+    size = cfg.get("size", len(ship_models) if ship_models is not None else 0)
     spawn_point = np.array(cfg["spawn_point"], dtype=float)
     orientation = np.array(cfg.get("spawn_orientation", DEFAULT_SPAWN_ORIENTATION))
     waypoints = [np.array(w) for w in cfg.get("waypoints", [])]
     formation_cfg = cfg.get("formation")
 
-    # A wave only forms up if it declares a formation; otherwise it spawns in a
-    # simple centred line (also used for ships past the formation's capacity).
-    formation: Optional[Formation] = None
-    offsets: Optional[list[np.ndarray]] = None
-    if formation_cfg is not None:
+    # A wave only forms up if it declares a formation (or is told to join one
+    # already in flight); otherwise it spawns in a simple centred line (also
+    # used for ships past the formation's capacity).
+    formation: Optional[Formation] = join
+    start_index = 0
+    if formation is not None:
+        start_index = len(formation.ship_ids)
+    elif formation_cfg is not None:
         formation = Formation(
             scale_m=formation_cfg.get("scale_m"),
             shape=formation_cfg.get("shape"),
         )
-        offsets = formation.relative_positions
         game.scenario.formations.append(formation)
+    offsets = formation.relative_positions if formation is not None else None
+    if formation is not None:
+        game.scenario.formation_by_group[wave_id] = formation
 
     if cfg.get("hud_text") and not game.headless:
         game.hud.set_event_text(
@@ -117,13 +201,14 @@ def _spawn_wave_job(game: FlightState, cfg: dict) -> Iterator[None]:
         )
 
     for i in range(size):
+        slot = start_index + i
         bot = game.scenario.spawn(
             game,
             groups=[wave_id],
             name=f"{wave_id}_{i}",
             bot_type=cfg.get("bot_type", "fighter"),
-            pawn_model=cfg["ship_model"],
-            ini_position=spawn_point + _wave_offset(offsets, i, size),
+            pawn_model=ship_models[i] if ship_models is not None else cfg["ship_model"],
+            ini_position=spawn_point + _wave_offset(offsets, slot, size),
             ini_orientation=orientation,
             team=cfg.get("team", 2),
             debug_decisions=False,
@@ -293,3 +378,29 @@ def _assign_targets(game: FlightState, bot: Bot, group: str) -> None:
     """
     for pawn in game.scenario.resolve(game, group):
         bot.tactician.primary_target_ids.append(pawn.id)
+
+
+def set_bot_team(bot: Bot, team: int) -> None:
+    """
+    Reassign a bot's team, cascading to everything that caches it.
+
+    A lone fighter's team is read live every frame (by interactions and the
+    generic tactician), so setting bot.pawn.team alone would already work.
+    A capital ship, however, has dependents that cache team at construction
+    time and never re-read it: each sub_system (including shield
+    generators), the shared shield, and each mounted bot (turret / tractor
+    beam projector -- itself a separate Bot with its own pawn.team). This
+    walks all of them so a capital ship's team change is actually complete.
+
+    :param bot: The bot to reassign (fighter, capital ship, turret, ...)
+    :param team: The new team id
+    """
+    bot.team = team
+    bot.pawn.team = team
+    for sub_system in getattr(bot.pawn, "sub_systems", []):
+        sub_system.team = team
+    shield = getattr(bot.pawn, "shield", None)
+    if shield is not None:
+        shield.team = team
+    for mounted_bot in getattr(bot.pawn, "mounted_bots", []):
+        set_bot_team(mounted_bot, team)

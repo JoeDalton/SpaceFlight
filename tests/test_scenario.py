@@ -24,6 +24,7 @@ from space_flight.game.scenario.conditions import (
     AnyOf,
     Delay,
     after_seconds,
+    any_destroyed,
     fired,
     near,
     reached_waypoint,
@@ -252,6 +253,46 @@ def test_all_destroyed_false_while_wave_mid_spawn(game, patch_spawn_bot):
 
     game.scenario.update(game)  # first ship spawns
     assert game.scenario.all_destroyed(game, "wave_a") is False
+
+
+def test_any_destroyed_false_before_spawn(game):
+    """A group that never spawned has not had any member destroyed."""
+    assert game.scenario.any_destroyed(game, "wave") is False
+
+
+def test_any_destroyed_lifecycle(game):
+    """
+    True as soon as one member of a spawned group has died, and stays true
+    even once every member has died -- all_destroyed is a subset of
+    any_destroyed, not its opposite (regression test for the fix: this used
+    to be a stub that always returned False).
+    """
+    a = MockBot("a", [0, 0, 0], team=2)
+    b = MockBot("b", [0, 0, 0], team=2)
+    game.interactions.add(a.pawn)
+    game.interactions.add(b.pawn)
+    game.scenario.register("wave", [a, b])
+
+    assert game.scenario.any_destroyed(game, "wave") is False
+    game.interactions.kill(a.pawn)
+    assert game.scenario.any_destroyed(game, "wave") is True
+    assert game.scenario.all_destroyed(game, "wave") is False  # b still alive
+
+    game.interactions.kill(b.pawn)
+    assert game.scenario.any_destroyed(game, "wave") is True
+    assert game.scenario.all_destroyed(game, "wave") is True
+
+
+def test_any_destroyed_condition(game):
+    """The any_destroyed condition factory mirrors Scenario.any_destroyed."""
+    a = MockBot("a", [0, 0, 0], team=2)
+    game.interactions.add(a.pawn)
+    game.scenario.register("wave", [a])
+    cond = any_destroyed("wave")
+
+    assert cond(game) is False
+    game.interactions.kill(a.pawn)
+    assert cond(game) is True
 
 
 # ---------------------------------------------------------------------------

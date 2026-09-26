@@ -36,6 +36,29 @@ if TYPE_CHECKING:
     from space_flight.game.scenario import Action, Condition
 
 
+def load_waves(path: Union[str, Path]) -> dict[str, dict]:
+    """
+    Load just a level's wave data (the ``waves:`` section) from its YAML file.
+
+    Used by levels authored with the Python :class:`Mission` API (see
+    :mod:`space_flight.game.scenario.mission`): wave data (sizes, ship models,
+    spawn points, ...) stays in YAML, while the mission's sequence of events
+    is written directly in Python instead of a ``triggers:`` section. Each
+    wave dict is handed to :meth:`Mission.spawn` mostly as-is; this loader
+    only injects the wave's own id (its key) so callers do not have to repeat
+    it, mirroring what :func:`load_scenario` does for the legacy ``spawn``
+    action.
+
+    :param path: Path to the scenario YAML (a ``triggers:`` section, if
+        present, is simply ignored)
+    :return: The waves section, keyed by wave id, each dict carrying its own
+        "id" key
+    """
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    waves = data.get("waves", {})
+    return {wave_id: {"id": wave_id, **cfg} for wave_id, cfg in waves.items()}
+
+
 def load_scenario(path: Union[str, Path]) -> Scenario:
     """
     Load and build a :class:`Scenario` from a YAML file.

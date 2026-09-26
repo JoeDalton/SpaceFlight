@@ -13,9 +13,7 @@ from space_flight.fx.fire_smoke_fx import FireSmokePool
 from space_flight.fx.spark_fx import SparkPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
-from space_flight.game.levels.dev_level import build_dev_level, build_dev_upfront
-from space_flight.game.levels.intro_level import build_intro_level, build_intro_upfront
-from space_flight.game.levels.race_level import build_race_level, build_race_upfront
+from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
 from space_flight.game.scenario import Scenario
 from space_flight.game.time_keeping import (
@@ -139,14 +137,10 @@ class FlightState(BaseState):
         where the heavy objects are created and GPU-prepared before the animation.
         """
         selected_level = self.app.configuration["selected_level"]
-        if selected_level == "Dev":
-            return build_dev_upfront(game=self)
-        elif selected_level == "Intro":
-            return build_intro_upfront(game=self)
-        elif selected_level == "Race":
-            return build_race_upfront(game=self)
-        else:
+        entry = LEVELS.get(selected_level)
+        if entry is None:
             raise NotImplementedError(f"Level `{selected_level}` does not exist.")
+        return entry.upfront(game=self)
 
     def _make_build_generator(self) -> Iterator[str]:
         """
@@ -156,14 +150,10 @@ class FlightState(BaseState):
         :return: A generator yielding a short label once per build step.
         """
         selected_level = self.app.configuration["selected_level"]
-        if selected_level == "Dev":
-            return build_dev_level(game=self)
-        elif selected_level == "Intro":
-            return build_intro_level(game=self)
-        elif selected_level == "Race":
-            return build_race_level(game=self)
-        else:
+        entry = LEVELS.get(selected_level)
+        if entry is None:
             raise NotImplementedError(f"Level `{selected_level}` does not exist.")
+        return entry.build(game=self)
 
     def _advance_build(self) -> bool:
         """

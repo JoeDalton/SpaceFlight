@@ -114,6 +114,10 @@ class Scenario:
         # Formations are kept alive here so they are not garbage collected once
         # the spawning job that built them returns.
         self.formations: list[Formation] = []
+        # Same formations, indexed by the wave/group id that (last) spawned
+        # into them, so a WaveHandle can look its own formation up by name --
+        # including a formation shared by several waves via `join=`.
+        self.formation_by_group: dict[str, Formation] = {}
         # Active jobs: generators advanced one step per frame, letting an action
         # spread heavy work (e.g. spawning a wave) across frames.
         self.jobs: list[Iterator] = []
@@ -292,3 +296,26 @@ class Scenario:
         if name in self.queries:
             return not self.resolve(game, name)
         return name in self.spawned and not self.resolve(game, name)
+
+    def any_destroyed(self, game: FlightState, name: str) -> bool:
+        """
+        Whether an identity group has spawned and lost at least one member.
+
+        True as soon as one member has died, and stays true even once every
+        member has died (it does not "un-fire" once all_destroyed also
+        becomes true -- the two are not mutually exclusive: all_destroyed is
+        a strict subset of any_destroyed). False for a query group (there is
+        no stable "how many spawned" to compare against) and for a group that
+        has not spawned yet.
+
+        :param game: The game/flight state
+        :param name: The group name
+        :return: True once a spawned identity group has lost >= 1 member
+        """
+        if name in self.queries:
+            return False
+        if name not in self.spawned:
+            return False
+        total = len(self.groups.get(name, []))
+        alive = len(self.resolve(game, name))
+        return total > 0 and alive < total

@@ -1,11 +1,10 @@
-# Scenario for the intro level.
+# Wave data for the intro level.
 #
-# `waves` are reusable spawn definitions, keyed by the group id they spawn into.
-# `triggers` are the mission rules: when <condition> then <action>.
-#
-# This reproduces the original three timed waves, then adds two chained events
-# (reinforcements after a wipe, and an objective on escort progress) to show how
-# conditions compose. Tune freely without touching Python.
+# `waves` are reusable spawn definitions, keyed by the group id they spawn
+# into. The mission's actual sequence of events (waves' timing, chained
+# reinforcements, win/lose conditions) is written in Python, in the sibling
+# intro_level.py, using the Mission API (see
+# docs/source/scenario_scripting.md). Only wave data lives here now.
 
 waves:
 
@@ -86,98 +85,3 @@ waves:
       - [300, 6000, 500]
       - [300, 0, 500]
     target: transports
-
-triggers:
-  # --- escort -------------------------------------------
-  - name: transports
-    when: { after_seconds: 0.1 }
-    then:
-      spawn: transports
-
-  - name: escort
-    when: { after_seconds: 1.0 }
-    then:
-      all:
-        - { spawn: escort }
-        - speech:
-            speaker: "Red Leader"
-            text: "Red squadron standing by."
-            display_time_s: 5
-
-  # --- Timed waves -------------------------------------------
-  - name: first_wave
-    when: { after_seconds: 10 }
-    then:
-      all:
-        - { hud_text: "First wave" }
-        - { spawn: first_wave }
-
-  - name: second_wave
-    when: { after_seconds: 30 }
-    then:
-      all:
-        - { hud_text: "Second wave" }
-        - { spawn: second_wave }
-
-  # --- chained events (new capability) ------------------------------------
-  # The third wave arrives either at 200s OR 3s after the first wave is wiped,
-  # whichever comes first — and only once, because a single trigger owns a
-  # single one-shot guard. (Two triggers pointing at one wave would double-spawn.)
-  - name: third_wave
-    when:
-      any_of:
-        - { after_seconds: 200 }
-        - delay:
-            after: { all_destroyed: first_wave }
-            seconds: 3
-    then:
-      all:
-        - { hud_text: "Enemy reinforcements detected!" }
-        - { spawn: third_wave }
-
-  # Mission won once the convoy reaches its final waypoint (index 8, the last
-  # of its 9-waypoint route) and wave 2 is gone.
-  - name: blockade_past
-    when:
-      all_of:
-        - { reached_waypoint: { who: transports, index: 8 } }
-        - { all_destroyed: second_wave }
-    then:
-      all:
-        - { hud_text: "Convoy past the blockade — well done." }
-
-  - name: victory
-    when:
-      delay:
-        after: { fired: blockade_past }
-        seconds: 3
-    then:
-      end_level: { outcome: victory, text: "The convoy reached the fleet. Mission accomplished." }
-
-  # Warning when first transport destroyed
-  - name: transport_destroyed
-    when:
-      { any_destroyed: transports }
-    then:
-      speech:
-        speaker: "Red Leader"
-        text: "A transport has been destroyed! Focus fire on the bombers!"
-        display_time_s: 5
-
-  # Mission lost if all transports are destroyed
-  - name: all_transports_destroyed
-    when:
-      { all_destroyed: transports }
-    then:
-      speech:
-        speaker: "Red Leader"
-        text: "All transports have been destroyed. Let's retreat!"
-        display_time_s: 5
-
-  - name: defeat
-    when:
-      delay:
-        after: { fired: all_transports_destroyed }
-        seconds: 3
-    then:
-      end_level: { outcome: defeat, text: "The convoy has been destroyed." }
