@@ -66,5 +66,11 @@ python ./scripts/launcher.py
   * If this is a development dependency, do `poetry add/remove --group dev dependency`
   * If this is a documentation dependency, do `poetry add/remove --group docs dependency`
 
+* `src/space_flight/_version.py` is auto-generated and should never be committed with local changes. Right after cloning, run:
+
+    `git update-index --skip-worktree src/space_flight/_version.py`
+
+  This tells git to ignore local modifications to this file (it will no longer show up in `git status`/`git diff`). It's a local, per-clone setting, so each contributor needs to run it once. To undo it: `git update-index --no-skip-worktree src/space_flight/_version.py`.
+
 # User
 To be announced :)

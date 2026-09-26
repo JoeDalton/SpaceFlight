@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 import uuid
 from typing import TYPE_CHECKING
 
@@ -40,6 +39,7 @@ class AsteroidField:
         field_size: float = 200,
         scale_factor: float = 1.0,
         is_moving: bool = True,
+        seed: int | None = None,
     ) -> None:
         """
         Populate the field with randomly placed, sized, and oriented asteroids.
@@ -50,11 +50,14 @@ class AsteroidField:
             asteroids are scattered in, in world units.
         :param scale_factor: Multiplier applied to each asteroid's random scale.
         :param is_moving: Whether the asteroids slowly rotate over time.
+        :param seed: Seed for the random sampler. Use the same seed to get the
+            same field every time; leave unset for a different field each run.
         """
         self.game = game
         self.id = uuid.uuid4()
         self.n_asteroids = n_asteroids
         self.asteroids = []
+        self.rng = np.random.default_rng(seed)
 
         # Get 3D models from asset manager
         asteroid_model_paths = [
@@ -73,7 +76,7 @@ class AsteroidField:
 
         # Initialize instances of asteroids
         for ast_idx in range(self.n_asteroids):
-            asteroid_model_path = random.choice(asteroid_model_paths)
+            asteroid_model_path = self.rng.choice(asteroid_model_paths)
             instance = self.game.root_node.attachNewNode("asteroid_instance")
             self.game.app.asset_manager.instantiate_3d_model_to_node(
                 path=asteroid_model_path,
@@ -81,17 +84,17 @@ class AsteroidField:
             )
 
             # Set initial position
-            ini_pos = np.random.rand(3) * field_size - 0.5 * field_size
+            ini_pos = self.rng.random(3) * field_size - 0.5 * field_size
 
             instance.set_pos(*ini_pos)
             # instance.show_bounds()
 
             # Set scale
-            scale = (np.random.rand() * 100 + 1) * scale_factor
+            scale = (self.rng.random() * 100 + 1) * scale_factor
             instance.setScale(scale)
 
             # Set initial orientation
-            temp = np.random.rand(4)
+            temp = self.rng.random(4)
             quat_array = temp / np.linalg.norm(temp) + 0.2
             instance.setQuat(Quat(*quat_array))
             if self.is_moving:
@@ -99,7 +102,7 @@ class AsteroidField:
 
             # Set rotational rate
             if self.is_moving:
-                omega = 5000 * np.deg2rad(np.random.rand(3) - 0.5) / (scale**1.5)
+                omega = 5000 * np.deg2rad(self.rng.random(3) - 0.5) / (scale**1.5)
                 self.omegas[3 * ast_idx : 3 * (ast_idx + 1)] = omega.copy()
 
             # Initialize collisions

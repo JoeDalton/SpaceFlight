@@ -319,6 +319,27 @@ class Bot(Destructible):
         self.navigator.personality = personality
         self.pilot.personality = personality
 
+    def set_team(self, team: int) -> None:
+        """
+        Reassign this bot's team, cascading to everything that caches it.
+
+        A fighter's team is read live every frame, but a capital ship's
+        dependents cache it at construction: each sub_system (including
+        shield generators), the shield, and each mounted bot (turret /
+        tractor beam, itself a Bot with its own pawn.team).
+
+        :param team: The new team id
+        """
+        self.team = team
+        self.pawn.team = team
+        for sub_system in getattr(self.pawn, "sub_systems", []):
+            sub_system.team = team
+        shield = getattr(self.pawn, "shield", None)
+        if shield is not None:
+            shield.team = team
+        for mounted_bot in getattr(self.pawn, "mounted_bots", []):
+            mounted_bot.set_team(team)
+
     def begin_death(self):
         """
         Enter the bot's dying phase: silence the AI, make the wreck untargetable,
