@@ -201,6 +201,22 @@ def test_follow_waypoints_no_loop_clears_waypoints_when_done():
     assert nav.waypoints == []
 
 
+def test_follow_waypoints_after_clearing_a_loop_returns_no_direction():
+    """
+    A cleared looping route (the tactician may still be committed to
+    patrolling for a moment) must not be indexed: NO_DIRECTION instead.
+    """
+    nav = make_ship_navigator(pawn_position=np.zeros(3))
+    nav.set_waypoints([np.array([0.0, 1000.0, 0.0])], is_loop=True)
+
+    nav.clear_waypoints()
+    result_vector, _ = nav.follow_waypoints()
+
+    assert nav.waypoints == []
+    assert nav.has_waypoint_loop is False
+    np.testing.assert_array_equal(result_vector, NO_DIRECTION[0])
+
+
 # ---------------------------------------------------------------------------
 # compute_follow_speed
 # ---------------------------------------------------------------------------

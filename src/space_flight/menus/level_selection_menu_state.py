@@ -161,12 +161,18 @@ class LevelSelectionMenuState(BaseState):
         item.setTransparency(True)
 
         buttonScale = 0.2
+        buttonWidthScale = 2.0
         btn = CustomButton(
             app=self.app,
-            pos=(self.app.a2dLeft + (0.898 * buttonScale + 0.3), 0, 0),
+            pos=(
+                self.app.a2dLeft + (0.898 * buttonScale * buttonWidthScale + 0.3),
+                0,
+                0,
+            ),
             command=self.set_level,
             text=level_name,
             scale=buttonScale,
+            width_scale=buttonWidthScale,
             extraArgs=[index],
             parent=item,
         )

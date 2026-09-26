@@ -182,12 +182,25 @@ class GenericShipNavigator(GenericNavigator):
         self.next_waypoint_idx = 0
         self.has_waypoint_loop = is_loop
 
+    def clear_waypoints(self):
+        """
+        Drops the current trajectory, as when a non-looping one is completed
+        """
+        self.waypoints = []
+        self.next_waypoint_idx = 0
+        self.has_waypoint_loop = False
+
     def follow_waypoints(self) -> Tuple[np.ndarray, float]:
         """
         Goes to the next available waypoint
 
         :return: The direction to point to and the desired speed
         """
+        # No trajectory: the route was cleared (clear_waypoints) while the
+        # tactician is still committed to patrolling
+        if not self.waypoints:
+            return NO_DIRECTION
+
         # Handle the case where waypoints have already been visited
         if self.next_waypoint_idx == len(self.waypoints):
             if self.has_waypoint_loop:

@@ -133,6 +133,7 @@ class WaveHandle:
         spawn_point: Optional[Sequence[float]] = None,
         target: Any = None,
         join: Optional[Formation] = None,
+        orientation: Optional[Sequence[float]] = None,
     ) -> WaveHandle:
         """
         Spawn the wave's ships, one per frame.
@@ -144,23 +145,35 @@ class WaveHandle:
             as each ship spawns
         :param join: A live formation to attach to, continuing from its next
             free slot, instead of creating the spec's own formation
+        :param orientation: Overrides the spec's spawn orientation (e.g. to
+            face the way the player is flying)
         :return: self
         """
         point = spawn_point if spawn_point is not None else self.spec.spawn_point
         if point is None:
             raise ValueError(f"wave '{self.name}': no spawn point")
+        if orientation is None:
+            orientation = self.spec.spawn_orientation
         self.mission.schedule(
-            self._spawn_job(np.array(point, dtype=float), target, join)
+            self._spawn_job(
+                np.array(point, dtype=float),
+                np.array(orientation, dtype=float),
+                target,
+                join,
+            )
         )
         return self
 
     def _spawn_job(
-        self, spawn_point: np.ndarray, target: Any, join: Optional[Formation]
+        self,
+        spawn_point: np.ndarray,
+        orientation: np.ndarray,
+        target: Any,
+        join: Optional[Formation],
     ) -> Iterator[None]:
         spec = self.spec
         models = spec.ship_models()
         size = len(models)
-        orientation = np.array(spec.spawn_orientation)
         waypoints = [np.array(w) for w in spec.waypoints]
 
         formation = join
@@ -216,6 +229,31 @@ class WaveHandle:
         waypoints = [np.array(p) for p in points]
         for pawn in self.pawns():
             pawn.parent.navigator.set_waypoints(waypoints=waypoints, is_loop=loop)
+
+    def follow(self, leader: Any) -> None:
+        """
+        Every live member forms up on leader, which takes the lead slot of the
+        wave's formation (created from the spec if the wave has none); the
+        former leader and wingmen shift down one slot each.
+
+        Members drop their routes: a bot with waypoints patrols rather than
+        holds formation.
+
+        :param leader: See :func:`pawns_of` (typically ``game.player``); its
+            first live pawn leads
+        """
+        leader_pawns = pawns_of(leader)
+        if not leader_pawns:
+            return
+        if self.formation is None:
+            self.formation = Formation(
+                scale_m=self.spec.formation_scale_m,
+                shape=self.spec.formation or "arrowhead",
+            )
+        for pawn in self.pawns():
+            self.formation.add_ship(ship=pawn)
+            pawn.parent.navigator.clear_waypoints()
+        self.formation.add_ship(ship=leader_pawns[0], leader=True)
 
 
 def _add_targets(bot: Bot, who: Any) -> None:

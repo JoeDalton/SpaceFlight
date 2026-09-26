@@ -152,6 +152,13 @@ classes, both driven from a per-frame `game.method_lists` task:
   the target crosses the camera's XZ plane. Falls back to the target's own
   name when it has no named parent (used for subsystems, which aren't
   bot-controlled).
+  When the target carries a scan (`pawn.scan`, a `ScanState` from
+  [`game/scenario/scan.py`](../../src/space_flight/game/scenario/scan.py)), a
+  transparent bar fills the target box from its left edge in proportion to
+  the scan's progress: yellow while scanning, then green (clear) or red
+  (contraband) once complete. The scan's status ("SCANNING 42%", "CLEAR",
+  "CONTRABAND") is appended to the name label. The HUD reads only that
+  attribute, so any pawn a mission makes scannable gets the bar.
 
 ## `rear_view_mirror.py`
 

@@ -255,13 +255,26 @@ class FlightInputContext(InputContext):
         key = self.bindings.get(action)
         if not key:
             return 0.0
-        return state.axes.get(key, 0.0)
+        value = state.axes.get(key, 0.0)
+        if self.bindings.get(f"invert_{action}"):
+            value = -value
+        return value
 
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
 
     def handle_actions(self, state) -> None:
+        # Pause
+        if self.pressed(state, "pause"):
+            self.game.set_pause()
+
+        # While dying, the controls are dead (see Player.move_player). Weapons
+        # and targeting would also look up the player's pawn, which
+        # Player.begin_death has removed from the interactions.
+        if self.player.is_dying:
+            return
+
         # Fire weapons
         if self.active(state, "fire"):
             self.player.pawn.laser_cannon.fire()
@@ -277,10 +290,6 @@ class FlightInputContext(InputContext):
             self.is_boost = True
         if self.released(state, "boost_off"):
             self.is_boost = False
-
-        # Pause
-        if self.pressed(state, "pause"):
-            self.game.set_pause()
 
         # Target selection
         if self.pressed(state, "loop_target"):
