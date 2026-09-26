@@ -186,7 +186,7 @@ class SceneAsteroids(Scene):
         yield "skybox"
 
         # Lights
-        self.lighting = Lighting(game=self.game)
+        self.lighting = Lighting(game=self.game, ambient_color=[0.2, 0.4, 0.6, 1])
         yield "lighting"
 
         # Speed dust effect
@@ -196,22 +196,22 @@ class SceneAsteroids(Scene):
         yield "dust"
 
         # Drydock
-        self.drydock = self.game.root_node.attachNewNode("drydock_instance")
-        drydock_path = DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
-        self.game.app.asset_manager.instantiate_3d_model_to_node(
-            path=drydock_path,
-            parent_node=self.drydock,
-        )
-        self.drydock.reparent_to(self.game.root_node)
-        self.drydock.set_pos(0, 8000, 50)
-        self.drydock.set_scale(100, 100, 100)
-        yield "drydock"
+        # self.drydock = self.game.root_node.attachNewNode("drydock_instance")
+        # drydock_path = DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
+        # self.game.app.asset_manager.instantiate_3d_model_to_node(
+        # path=drydock_path,
+        # parent_node=self.drydock,
+        # )
+        # self.drydock.reparent_to(self.game.root_node)
+        # self.drydock.set_pos(0, 8000, 50)
+        # self.drydock.set_scale(100, 100, 100)
+        # yield "drydock"
 
     def clean(self):
         """
         Cleans the SceneAsteroids
         """
-        self.drydock.removeNode()
+        # self.drydock.removeNode()
         self.rotating_asteroid_field.clean()
         self.rotating_asteroid_field = None
         self.big_rotating_asteroid_field.clean()
