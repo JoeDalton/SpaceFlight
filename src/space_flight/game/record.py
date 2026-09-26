@@ -24,5 +24,6 @@ class Record:
         self.data[-1][variable_name] = variable
 
     def save(self):
+        self.filepath.parent.mkdir(parents=True, exist_ok=True)
         data_df = pd.DataFrame(self.data)
         data_df.to_parquet(self.filepath)

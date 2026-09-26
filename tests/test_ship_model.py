@@ -23,6 +23,11 @@ def mock_game():
     that NodePath-like attribute access does not collide between tests.
     """
     game = MagicMock()
+    # A real dict (not a MagicMock) so ShipModel's
+    # graphics_settings.config.get(...) lookups behave like the real,
+    # un-configured default (alternate_model_orientation off) instead of
+    # a truthy MagicMock chain.
+    game.app.graphics_settings.config = {}
     return game
 
 
@@ -63,7 +68,7 @@ def make_ship_model(mock_game, ship_type: str, is_cockpit: bool) -> ShipModel:
         ("x-wing", True, np.array([0.0, 0.9, -0.2])),
         ("x-wing", False, np.array([0.0, 0.0, 0.0])),
         ("tie-fighter", True, np.array([0.0, 0.9, -0.2])),
-        ("tie-fighter", False, np.array([0.0, 0.0, 0.0])),
+        ("tie-fighter", False, np.array([3.7, 0.0, 6.5])),
         ("gr-75", False, np.array([0.0, 0.0, 0.0])),
         ("cr-90", False, np.array([0.0, 0.0, 0.0])),
     ],
@@ -76,6 +81,26 @@ def test_ship_model_offset_per_type(mock_game, ship_type, is_cockpit, expected_o
     model = make_ship_model(mock_game, ship_type, is_cockpit)
 
     np.testing.assert_array_almost_equal(model.offset, expected_offset)
+
+
+# ---------------------------
+# Alternate_model_orientation compatibility flag
+# ---------------------------
+
+
+def test_ship_model_orientation_changes_with_alternate_flag(mock_game):
+    """
+    Flipping the compatibility flag actually changes the orientation a
+    real ShipModel ends up with, end to end.
+    """
+    default_model = make_ship_model(mock_game, "a-wing", is_cockpit=True)
+
+    mock_game.app.graphics_settings.config = {
+        "compatibility": {"alternate_model_orientation": True}
+    }
+    alternate_model = make_ship_model(mock_game, "a-wing", is_cockpit=True)
+
+    assert default_model.orientation != alternate_model.orientation
 
 
 # ---------------------------

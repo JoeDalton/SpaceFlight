@@ -14,7 +14,7 @@ reference_surface_m2: 10
 health: 1700.0
 shield: 0.0
 shield_regen_rate: 0.0
-hit_box_radius_m: 6.0
+hit_box_radius_m: 6.7
 
 laser_base_range_m: 1500
 laser_color: green

@@ -84,6 +84,7 @@ class GraphicsSettingsMenuState(BaseState):
         self.sliders: dict[tuple, CustomSlider] = {}
         self.slider_value_labels: dict[tuple, DirectLabel] = {}
         self.fxaa_checkbox: CustomCheckButton | None = None
+        self.alternate_model_orientation_checkbox: CustomCheckButton | None = None
         self.static_widgets: list = []
 
     # ------------------------------------------------------------------
@@ -182,6 +183,8 @@ class GraphicsSettingsMenuState(BaseState):
         self.build_slider_row(_SCALE_SLIDERS[1], y)  # Reflection Quality
         y -= 0.2
         self.build_slider_row(_SCALE_SLIDERS[2], y)  # Mirror Quality
+        y -= 0.2
+        self.build_alternate_model_orientation_row(y)
 
     def clear_rows(self):
         """Destroy all option-row widgets (labels, buttons, sliders, checkbox)."""
@@ -197,6 +200,9 @@ class GraphicsSettingsMenuState(BaseState):
         if self.fxaa_checkbox is not None:
             self.fxaa_checkbox.destroy()
             self.fxaa_checkbox = None
+        if self.alternate_model_orientation_checkbox is not None:
+            self.alternate_model_orientation_checkbox.destroy()
+            self.alternate_model_orientation_checkbox = None
         for w in self.static_widgets:
             w.destroy()
         self.static_widgets.clear()
@@ -288,6 +294,24 @@ class GraphicsSettingsMenuState(BaseState):
             scale=0.07,
         )
 
+    def build_alternate_model_orientation_row(self, y: float):
+        """Build the "Alternate Model Orientation" checkbox row.
+
+        Manual workaround for ship models loading pre-rotated on some
+        systems (see
+        space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion)
+        -- no automatic detection exists, so the player has to flip this
+        themselves if their ships look wrong.
+        """
+        self._row_label("Alternate Model Orientation", y)
+        self.alternate_model_orientation_checkbox = CustomCheckButton(
+            app=self.app,
+            pos=(_CONTROL_X + 0.06, 0, y),
+            value=self.working_config["compatibility"]["alternate_model_orientation"],
+            command=self.on_alternate_model_orientation_toggle,
+            scale=0.07,
+        )
+
     def refresh_mode_buttons(self):
         """Press the button matching the current display mode, reset the rest."""
         current = self.working_config["display"]["mode"]
@@ -330,6 +354,12 @@ class GraphicsSettingsMenuState(BaseState):
     def on_fxaa_toggle(self, status):
         """Store the FXAA checkbox state."""
         self.working_config["antialiasing"]["fxaa"] = bool(status)
+
+    def on_alternate_model_orientation_toggle(self, status):
+        """Store the alternate-model-orientation checkbox state."""
+        self.working_config["compatibility"]["alternate_model_orientation"] = bool(
+            status
+        )
 
     # ------------------------------------------------------------------
     # Action buttons

@@ -1,4 +1,4 @@
-input_type: gamepad  # keyboard | gamepad | joystick
+input_type: keyboard  # keyboard | gamepad | joystick
 
 # Bindings active on ALL input types (keyboard shortcuts that always work)
 global:

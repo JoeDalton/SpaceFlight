@@ -109,6 +109,7 @@ class GraphicsSettings:
         display = config.setdefault("display", {})
         render = config.setdefault("render", {})
         aa = config.setdefault("antialiasing", {})
+        compatibility = config.setdefault("compatibility", {})
 
         if display.get("mode") not in _VALID_MODES:
             display["mode"] = "fullscreen"
@@ -145,5 +146,9 @@ class GraphicsSettings:
         if aa.get("msaa") not in _VALID_MSAA:
             aa["msaa"] = 0
         aa["fxaa"] = bool(aa.get("fxaa", False))
+
+        compatibility["alternate_model_orientation"] = bool(
+            compatibility.get("alternate_model_orientation", False)
+        )
 
         return config
