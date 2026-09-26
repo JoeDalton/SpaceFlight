@@ -36,6 +36,7 @@ def state():
         "display": {"mode": "fullscreen", "windowed_size": [1280, 720]},
         "render": {"scale": 1.0, "reflection_scale": 0.5, "mirror_scale": 1.0},
         "antialiasing": {"msaa": 0, "fxaa": False},
+        "compatibility": {"alternate_model_orientation": False},
     }
     return s
 
@@ -165,6 +166,23 @@ class TestOnFxaaToggle:
     def test_stores_bool(self, state, status, expected):
         state.on_fxaa_toggle(status)
         assert state.working_config["antialiasing"]["fxaa"] is expected
+
+
+# ---------------------------------------------------------------------------
+# on_alternate_model_orientation_toggle
+# ---------------------------------------------------------------------------
+
+
+class TestOnAlternateModelOrientationToggle:
+    @pytest.mark.parametrize(
+        "status,expected", [(1, True), (0, False), (True, True), (False, False)]
+    )
+    def test_stores_bool(self, state, status, expected):
+        state.on_alternate_model_orientation_toggle(status)
+        assert (
+            state.working_config["compatibility"]["alternate_model_orientation"]
+            is expected
+        )
 
 
 # ---------------------------------------------------------------------------

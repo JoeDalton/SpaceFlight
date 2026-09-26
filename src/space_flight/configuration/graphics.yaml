@@ -19,3 +19,6 @@ render:
 antialiasing:
   msaa: 0                 # hardware multisampling: 0 | 2 | 4 | 8
   fxaa: true             # post-process anti-aliasing (on/off)
+
+compatibility:
+  alternate_model_orientation: false

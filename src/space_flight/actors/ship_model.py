@@ -1,7 +1,34 @@
 import numpy as np
+import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH
+
+
+def _gltf_model_tilt_quaternion(game) -> np.quaternion:
+    """
+    The second-stage rotation composed into every glTF ship model's
+    orientation (cockpit and exterior alike).
+
+    Some Linux systems (confirmed: an Arch install and a WSL Ubuntu install)
+    load models visibly mis-rotated relative to this value, for a root cause that could
+    not be reproduced locally. Rather than guess at platform detection
+    again, this is an explicit, user-set workaround.
+
+    :param game: The current game object
+    """
+    try:
+        use_alternate = bool(
+            game.app.graphics_settings.config.get("compatibility", {}).get(
+                "alternate_model_orientation", False
+            )
+        )
+    except AttributeError:
+        use_alternate = False
+
+    if use_alternate:
+        return np.quaternion(0.0, 1.0, 0.0, 0.0)
+    return np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
 
 
 class ShipModel:
@@ -20,9 +47,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.8, -0.2])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
                 self.model.setScale(0.8)
             else:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
@@ -30,9 +57,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.0, 0.0])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
                 self.model.setScale(0.01)
         elif self.ship_type == "tie-interceptor":  # OK
             if is_cockpit:
@@ -41,9 +68,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.9, -0.2])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
             else:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
                     path=DATAFILES_PATH
@@ -51,9 +78,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.0, 0.0])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
                 self.model.setScale(4.1)
         elif self.ship_type == "tie-bomber":  # OK
             if is_cockpit:
@@ -62,18 +89,18 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0, 0.9, -0.2])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
             else:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
                     path=DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf",
                     parent_node=self.model,
                 )
                 self.offset = np.array([1.5, 0.0, 0.0])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
                 self.model.setScale(1.0)
         elif self.ship_type == "y-wing":  # OK
             if is_cockpit:
@@ -82,18 +109,18 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0, 0.7, -0.5])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
             else:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
                     path=DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf",
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.0, 0.0])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
                 self.model.setScale(0.115)
         elif self.ship_type == "x-wing":  # NOK cockpit
             if is_cockpit:
@@ -102,9 +129,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0, 0.9, -0.2])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
             else:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
                     path=DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf",
@@ -114,7 +141,7 @@ class ShipModel:
                 self.orientation = (
                     np.quaternion(0.0, 0.0, 0.0, 1.0)
                     * np.quaternion(0.0, 0.0, 1.0, 0.0)
-                    * np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
+                    * _gltf_model_tilt_quaternion(self.game)
                 )
                 self.model.setScale(0.5)
         elif self.ship_type == "tie-fighter":  # NOK, model does not show
@@ -124,9 +151,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.9, -0.2])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
             else:
                 self.game.app.asset_manager.instantiate_3d_model_to_node(
                     path=DATAFILES_PATH
@@ -134,9 +161,9 @@ class ShipModel:
                     parent_node=self.model,
                 )
                 self.offset = np.array([0.0, 0.0, 0.0])
-                self.orientation = np.quaternion(0.0, 0.0, 1.0, 0.0) * np.quaternion(
-                    np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0
-                )
+                self.orientation = np.quaternion(
+                    0.0, 0.0, 1.0, 0.0
+                ) * _gltf_model_tilt_quaternion(self.game)
                 self.model.setScale(1000.0)
         elif self.ship_type == "gr-75":
             if is_cockpit:

@@ -24,6 +24,7 @@ _VALID = {
     "display": {"mode": "windowed", "windowed_size": [1280, 720]},
     "render": {"scale": 0.75, "reflection_scale": 0.5, "mirror_scale": 1.0},
     "antialiasing": {"msaa": 4, "fxaa": True},
+    "compatibility": {"alternate_model_orientation": False},
 }
 
 
@@ -145,6 +146,16 @@ class TestSanitise:
         out = GraphicsSettings.sanitise({"antialiasing": {"fxaa": raw}})
         assert out["antialiasing"]["fxaa"] is expected
 
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [(True, True), (False, False), (1, True), (0, False), ("y", True)],
+    )
+    def test_alternate_model_orientation_coerced_to_bool(self, raw, expected):
+        out = GraphicsSettings.sanitise(
+            {"compatibility": {"alternate_model_orientation": raw}}
+        )
+        assert out["compatibility"]["alternate_model_orientation"] is expected
+
     def test_empty_config_produces_full_defaults(self):
         out = GraphicsSettings.sanitise({})
         assert out["display"]["mode"] == "fullscreen"
@@ -153,6 +164,7 @@ class TestSanitise:
         assert out["render"]["mirror_scale"] == 1.0
         assert out["antialiasing"]["msaa"] == 0
         assert out["antialiasing"]["fxaa"] is False
+        assert out["compatibility"]["alternate_model_orientation"] is False
 
 
 # ---------------------------------------------------------------------------
