@@ -22,5 +22,6 @@ scenes
 ui
 shaders
 subsystems
+performance
 apidocs/index
 ```
