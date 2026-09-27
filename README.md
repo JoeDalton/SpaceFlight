@@ -88,3 +88,5 @@ Other scripts in that folder:
 * `4_update_space_flight.bat` reinstalls SpaceFlight after you've pulled the latest changes (`git pull`) into your local clone, picking up any new or updated dependencies.
 
 Since installation happens from your local clone rather than a package index, you need the full repository on disk (not just the `MS_Windows_install` folder) for these scripts to work.
+
+Note: `pip install` normally invokes `git` to determine the package's version (via `poetry-dynamic-versioning`). The `MS_Windows_install` scripts bypass this, so a system `git` installation is not required to run them — you'll still need git separately to clone/pull the repository itself.
