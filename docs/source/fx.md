@@ -252,25 +252,40 @@ creation cost across several frames instead of stalling on construction.
   since it must run regardless of which actors are alive. The manager also
   registers its own `Audio3DManager-updateTask` (sort 51, after `igLoop`), so
   the update currently runs twice per frame.
-- **Doppler is effectively off.** Every velocity reaching OpenAL is zero:
-  - "Auto" velocities are `getPosDelta(render) / dt`, and a node's delta is
-    only non-zero when it was moved with `setFluidPos`. Every node in the game
-    moves with plain `setPos` (ships from physics, the camera rig, laser
-    intervals), which resets the previous position, so the delta is always
-    zero.
-  - `Ship` and `CapitalShip` pass their *node* to `setSoundVelocityAuto`,
-    which expects the *sound*, so engine sounds never get an auto velocity
-    anyway.
-  - One-shot sounds (cannons, impacts) never get a velocity at all.
+- **Doppler from physics.** `SFX` uses `PhysicsAudio3DManager`, an
+  `Audio3DManager` whose velocities come from physics instead of node
+  position deltas. Panda3D's stock "auto" velocities are
+  `getPosDelta(render) / dt`, which is only non-zero for nodes moved with
+  `setFluidPos`; every node in the game moves with plain `setPos`, so they
+  were always zero. Instead, `attach_sound(sound, node, velocity_source=…)`
+  gives each sound a *velocity source*, any object with a world-frame `speed`,
+  read at every update:
+  - engine sounds: their `Ship` / `CapitalShip`;
+  - cannon shots: the firing actor, `LaserCannon.parent` (a fighter, or a
+    turret, whose `speed` is its host ship's);
+  - hits on and crashes of the player: the player's pawn, like the listener,
+    so they carry no shift;
+  - the listener (camera): the player's pawn, set by
+    `Player.initialize_camera` via `set_listener_velocity_source` and cleared
+    in `Player.clean`.
 
-  The factors set in `SFX.__init__` would not survive real velocities either.
-  In Panda3D's OpenAL backend the speed of sound is `343.3 × distance_factor`
-  units/s, i.e. 34 m/s with `setDistanceFactor(0.1)` (the game's unit is the
-  metre), and `setDopplerFactor(10)` scales every velocity ×10 on top. A
-  1 kHz source approaching at 2 m/s comes out at about 2.4 kHz, and at 10 m/s
-  or faster OpenAL goes silent. Making Doppler work means feeding velocities
-  from physics (`pawn.speed`) and going back to a distance factor of 1 with a
-  modest Doppler factor.
+  Sources are weak references, so a destroyed ship's sound falls back to zero
+  velocity rather than keeping the ship alive. Velocities stay world-frame
+  while positions are render-relative: `render` only translates with the
+  player (see [docs/game.md](game.md#the-floating-render-origin)), and OpenAL's
+  Doppler needs velocities relative to the medium.
+
+  `DISTANCE_FACTOR` is 1: in Panda3D's OpenAL backend the speed of sound is
+  `343.3 × distance_factor` units/s, and the game's unit is the metre. The
+  distance factor only sets that speed; it does not change attenuation.
+  `DOPPLER_FACTOR` is 0.5, which halves the physical shift at low speed.
+  OpenAL scales the velocities rather than the shift, so at fighter speeds it
+  cuts more than half when approaching and a bit less when receding: a 1 kHz
+  source at 170 m/s comes out at 1329 Hz approaching (1981 Hz at factor 1)
+  and 801 Hz receding (669 Hz). A head-on pass with both ships at 170 m/s
+  shifts pitch by up to about 1.7×. OpenAL goes silent when a source's
+  velocity towards the listener, times the Doppler factor, nears the speed of
+  sound (686 m/s at 0.5), which nothing in the game reaches.
 
 ## Where things live
 
