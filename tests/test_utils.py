@@ -11,6 +11,7 @@ from space_flight.utils import (
     magnitude,
     normalize,
     rotate_single_vector,
+    rotation_matrix_coefficients,
     safe_angle_rad,
     sample_direction_in_cone,
     sample_unit_sphere,
@@ -106,6 +107,34 @@ def test_rotate_single_vector_matches_quaternion_rotate_vectors_random(seed):
     result = rotate_single_vector(quat, vector)
     expected = quaternion.rotate_vectors(quat, vector)
     np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# rotation_matrix_coefficients
+# ---------------------------
+
+
+@pytest.mark.parametrize("seed", range(10))
+@pytest.mark.parametrize("norm", [1.0, 0.98, 1.03])  # unit, and drifted off unit
+def test_rotation_matrix_matches_rotate_single_vector(seed, norm):
+    """
+    R @ v equals rotate_single_vector(q, v), including for a quaternion that is
+    not exactly unit (the integrated orientation is not renormalized), and Rᵀ
+    rotates by the conjugate quaternion.
+    """
+    rng = np.random.default_rng(seed)
+    q_array = rng.normal(size=4)
+    q_array *= norm / np.linalg.norm(q_array)
+    quat = np.quaternion(*q_array)
+    matrix = np.array(rotation_matrix_coefficients(*q_array)).reshape(3, 3)
+    vector = rng.uniform(-10, 10, size=3)
+
+    np.testing.assert_allclose(
+        matrix @ vector, rotate_single_vector(quat, vector), atol=1e-12
+    )
+    np.testing.assert_allclose(
+        matrix.T @ vector, rotate_single_vector(quat.conjugate(), vector), atol=1e-12
+    )
 
 
 # ---------------------------

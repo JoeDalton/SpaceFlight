@@ -76,7 +76,8 @@ class FighterPilot(GenericShipPilot):
             # unit vectors so it is mathematically in range, but float error can
             # nudge it just past ±1, which would make arccos return NaN and poison
             # the whole state.
-            right_dot_ref = np.clip(np.dot(self.pawn.right, level_reference), -1.0, 1.0)
+            right_dot_ref = np.dot(self.pawn.right, level_reference)
+            right_dot_ref = min(max(right_dot_ref, -1.0), 1.0)
             is_up = np.dot(self.pawn.up, level_reference) >= 0
             if is_up:
                 level_roll_error = HALF_PI - np.arccos(right_dot_ref)
