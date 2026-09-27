@@ -57,6 +57,42 @@
 ```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.__init__
 ```
 
+````{py:attribute} _obstacles_time_s
+:canonical: space_flight.ai.collision_sensor.CollisionSensor._obstacles_time_s
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor._obstacles_time_s
+```
+
+````
+
+````{py:attribute} active
+:canonical: space_flight.ai.collision_sensor.CollisionSensor.active
+:value: >
+   True
+
+```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.active
+```
+
+````
+
+````{py:method} set_active(active: bool) -> None
+:canonical: space_flight.ai.collision_sensor.CollisionSensor.set_active
+
+```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.set_active
+```
+
+````
+
+````{py:method} record_obstacle(obstacle: dict) -> None
+:canonical: space_flight.ai.collision_sensor.CollisionSensor.record_obstacle
+
+```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.record_obstacle
+```
+
+````
+
 ````{py:method} compute_repulsion() -> tuple[numpy.ndarray, float]
 :canonical: space_flight.ai.collision_sensor.CollisionSensor.compute_repulsion
 

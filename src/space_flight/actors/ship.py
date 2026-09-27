@@ -1,8 +1,8 @@
 import logging
+import math
 from typing import Any
 
 import numpy as np
-import quaternion
 import yaml
 from panda3d.core import NodePath, Quat
 
@@ -10,7 +10,6 @@ from space_flight import (
     DATAFILES_PATH,
     DEBUG_DELETION,
     FLIGHT_MODEL,
-    FORWARD_BODY,
     RECORD_GAME,
     RIGHT_BODY,
     UP_BODY,
@@ -22,7 +21,7 @@ from space_flight.utils import (
     cross3,
     low_pass_filter_first_order,
     magnitude,
-    rotate_single_vector,
+    rotation_matrix_coefficients,
 )
 
 LOGGER = logging.getLogger()
@@ -373,18 +372,26 @@ class Ship(Pawn):
         self.state_dot_previous = self.state_dot.copy()
 
         # Compute derivative of position
-        self.state_dot[0:3] = self.speed.copy()
-        # Compute derivative of orientation
-        quat = np.quaternion(*self.orientation)
-        quat_pqr = np.quaternion(0, *self.pqr)
-        # Formula for pqr in body axes
-        quat_dot = 0.5 * quat * quat_pqr
-        self.state_dot[3:7] = quaternion.as_float_array(quat_dot)
+        self.state_dot[0:3] = self.speed
+        # Compute derivative of orientation: q_dot = 0.5 * q * (0, pqr), the
+        # rates being in body axes (Hamilton product written out in floats)
+        w, x, y, z = self.orientation
+        p, q, r = self.pqr
+        self.state_dot[3:7] = (
+            -0.5 * (x * p + y * q + z * r),
+            0.5 * (w * p + y * r - z * q),
+            0.5 * (w * q + z * p - x * r),
+            0.5 * (w * r + x * q - y * p),
+        )
 
-        # Find and store ship directions
-        self.forward = rotate_single_vector(quat, FORWARD_BODY)
-        self.right = rotate_single_vector(quat, RIGHT_BODY)
-        self.up = rotate_single_vector(quat, UP_BODY)
+        # Body-to-world rotation, built once for every vector rotated below:
+        # its columns are the ship's right, forward and up directions
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = rotation_matrix_coefficients(
+            w, x, y, z
+        )
+        self.right = np.array((r00, r10, r20))
+        self.forward = np.array((r01, r11, r21))
+        self.up = np.array((r02, r12, r22))
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
@@ -392,7 +399,7 @@ class Ship(Pawn):
 
         if FLIGHT_MODEL == "airplane":
             speed_norm = magnitude(self.speed)
-            if np.isnan(speed_norm) or (speed_norm <= 1e-4):
+            if math.isnan(speed_norm) or (speed_norm <= 1e-4):
                 # No lift or drag without speed
                 self.drag_n = np.zeros(3)
                 self.lift_n = np.zeros(3)
@@ -404,16 +411,20 @@ class Ship(Pawn):
                 # and proportional to angle of attack
                 # + And perpendicular to ship up and airflow
                 # and proportional to side-slip angle
-                airflow_speed_body = -rotate_single_vector(quat.conjugate(), self.speed)
-                airflow_direction_body = airflow_speed_body / speed_norm
-                angle_of_attack_deg = -np.rad2deg(
-                    np.arctan2(-airflow_speed_body[2], -airflow_speed_body[1])
+                # Airflow in body axes: -speed rotated world to body (transpose)
+                sx, sy, sz = self.speed
+                airflow_x = -(r00 * sx + r10 * sy + r20 * sz)
+                airflow_y = -(r01 * sx + r11 * sy + r21 * sz)
+                airflow_z = -(r02 * sx + r12 * sy + r22 * sz)
+                airflow_direction_body = (
+                    np.array((airflow_x, airflow_y, airflow_z)) / speed_norm
                 )
+                angle_of_attack_deg = -math.degrees(math.atan2(-airflow_z, -airflow_y))
                 # Clamp before arcsin: the ratio is mathematically in [-1, 1]
                 # (a velocity component over the speed norm) but float error can
                 # push it just past ±1, making arcsin return NaN.
-                side_slip_angle_deg = np.rad2deg(
-                    np.arcsin(np.clip(airflow_speed_body[0] / speed_norm, -1.0, 1.0))
+                side_slip_angle_deg = math.degrees(
+                    math.asin(min(max(airflow_x / speed_norm, -1.0), 1.0))
                 )
                 # TODO RIGHT_BODY/UP_BODY are axis-aligned unit vectors, so
                 # these two cross3 calls are just component permutations of
@@ -434,7 +445,14 @@ class Ship(Pawn):
                     )
                 )
                 # Turn lift in world coordinates
-                self.lift_n = rotate_single_vector(quat, self.lift_body_n)
+                lx, ly, lz = self.lift_body_n
+                self.lift_n = np.array(
+                    (
+                        r00 * lx + r01 * ly + r02 * lz,
+                        r10 * lx + r11 * ly + r12 * lz,
+                        r20 * lx + r21 * ly + r22 * lz,
+                    )
+                )
 
                 # Clip the lift to the max thrust to avoid simulation divergence
                 lift_norm_n = magnitude(self.lift_n)

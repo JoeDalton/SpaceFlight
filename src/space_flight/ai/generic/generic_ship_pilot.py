@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from simple_pid import PID
 
@@ -128,8 +130,8 @@ class GenericShipPilot(GenericPilot):
         ) = self.compute_angular_error(
             target_direction=target_direction, up_reference=up_reference
         )
-        self.angle_to_target_deg = np.rad2deg(
-            np.arccos(np.clip(cos_angle_to_target, -1.0, 1.0))
+        self.angle_to_target_deg = math.degrees(
+            math.acos(min(max(cos_angle_to_target, -1.0), 1.0))
         )
 
         # Find velocity error

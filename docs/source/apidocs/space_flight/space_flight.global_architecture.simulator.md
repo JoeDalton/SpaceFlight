@@ -161,16 +161,6 @@
 
 ````
 
-````{py:attribute} LOADING_STATE
-:canonical: space_flight.global_architecture.simulator.StateManager.LOADING_STATE
-:value: >
-   None
-
-```{autodoc2-docstring} space_flight.global_architecture.simulator.StateManager.LOADING_STATE
-```
-
-````
-
 ````{py:attribute} HYPERSPACE_LOADING_STATE
 :canonical: space_flight.global_architecture.simulator.StateManager.HYPERSPACE_LOADING_STATE
 :value: >

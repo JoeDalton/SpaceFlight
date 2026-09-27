@@ -37,6 +37,11 @@ Bases: {py:obj}`space_flight.ai.generic.generic_pilot.GenericPilot`
 ```{autodoc2-docstring} space_flight.ai.tracking_mount.tracking_mount_pilot.TrackingMountPilot.__init__
 ```
 
+````{py:method} sample_externally()
+:canonical: space_flight.ai.tracking_mount.tracking_mount_pilot.TrackingMountPilot.sample_externally
+
+````
+
 ````{py:method} set_on(current_normalized_yaw_rate_command: float = 0.0, current_normalized_pitch_rate_command: float = 0.0)
 :canonical: space_flight.ai.tracking_mount.tracking_mount_pilot.TrackingMountPilot.set_on
 

@@ -21,6 +21,18 @@
     ```
 ````
 
+### Functions
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`gltf_model_tilt_quaternion <space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion
+    :summary:
+    ```
+````
+
 ### Data
 
 ````{list-table}
@@ -98,3 +110,10 @@
 ````
 
 `````
+
+````{py:function} gltf_model_tilt_quaternion(game) -> numpy.quaternion
+:canonical: space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion
+
+```{autodoc2-docstring} space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion
+```
+````

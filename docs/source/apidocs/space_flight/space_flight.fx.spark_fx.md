@@ -304,7 +304,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 ```{autodoc2-docstring} space_flight.fx.spark_fx.SparkPool.__init__
 ```
 
-````{py:method} spawn(position: panda3d.core.Point3, normal: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, preset: space_flight.fx.spark_fx.SparkPreset) -> None
+````{py:method} spawn(position: panda3d.core.Point3, normal: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, preset: space_flight.fx.spark_fx.SparkPreset, size_scale: float = 1.0, speed_scale: float = 1.0) -> None
 :canonical: space_flight.fx.spark_fx.SparkPool.spawn
 
 ```{autodoc2-docstring} space_flight.fx.spark_fx.SparkPool.spawn

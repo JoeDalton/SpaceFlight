@@ -1,9 +1,10 @@
 import logging
 
 import numpy as np
+from panda3d.core import BitMask32
 
 from space_flight import DEBUG_DELETION
-from space_flight.game.collisions import attach_collision_sphere
+from space_flight.game.collisions import CollisionLayers, attach_collision_sphere
 from space_flight.utils import magnitude
 
 LOGGER = logging.getLogger()
@@ -19,6 +20,8 @@ class CollisionSensor:
     # Game time of the frame whose contacts `obstacles` holds, when recorded
     # through record_obstacle
     _obstacles_time_s = None
+    # Whether the spheres take part in collision traversal (see set_active)
+    active = True
 
     def __init__(
         self,
@@ -76,6 +79,21 @@ class CollisionSensor:
         )
         self.sphere_3.setPythonTag("owner", self)
         self.sphere_3.setPythonTag("sensor_range", 3)
+
+    def set_active(self, active: bool) -> None:
+        """
+        Include the spheres in collision traversal, or leave them out: an
+        inactive sensor costs nothing to traverse and records no contacts (its
+        from-mask is empty). Its bot only reads contacts on its think frames.
+
+        :param active: Whether the next traversals should detect obstacles
+        """
+        if active == self.active:
+            return
+        mask = CollisionLayers.SENSOR_FROM if active else BitMask32.allOff()
+        for sphere in (self.sphere_1, self.sphere_2, self.sphere_3):
+            sphere.node().setFromCollideMask(mask)
+        self.active = active
 
     def record_obstacle(self, obstacle: dict) -> None:
         """

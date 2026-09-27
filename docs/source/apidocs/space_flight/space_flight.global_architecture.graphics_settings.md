@@ -59,6 +59,10 @@
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_MSAA
     :summary:
     ```
+* - {py:obj}`_VALID_CLOUD_QUALITY <space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY
+    :summary:
+    ```
 * - {py:obj}`_MIN_SCALE <space_flight.global_architecture.graphics_settings._MIN_SCALE>`
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MIN_SCALE
     :summary:
@@ -133,6 +137,16 @@
    (0, 2, 4, 8)
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_MSAA
+```
+
+````
+
+````{py:data} _VALID_CLOUD_QUALITY
+:canonical: space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY
+:value: >
+   ('low', 'mid', 'high', 'ultra')
+
+```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY
 ```
 
 ````

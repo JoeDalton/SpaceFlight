@@ -30,6 +30,35 @@ def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
     )
 
 
+def rotation_matrix_coefficients(
+    w: float, x: float, y: float, z: float
+) -> tuple[float, float, float, float, float, float, float, float, float]:
+    """
+    The 9 coefficients, row by row, of the matrix R such that R @ v equals
+    rotate_single_vector(np.quaternion(w, x, y, z), v), as plain floats.
+
+    It is the same linear map written as a matrix, so it holds for any
+    quaternion, not only unit ones (an integrated orientation drifts slightly
+    off unit norm). Build it once to rotate several vectors: R's columns are
+    the body axes in world coordinates, and its transpose rotates by the
+    conjugate quaternion (world to body).
+    """
+    xx, yy, zz = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
+    return (
+        1.0 - 2.0 * (yy + zz),
+        2.0 * (xy - wz),
+        2.0 * (xz + wy),
+        2.0 * (xy + wz),
+        1.0 - 2.0 * (xx + zz),
+        2.0 * (yz - wx),
+        2.0 * (xz - wy),
+        2.0 * (yz + wx),
+        1.0 - 2.0 * (xx + yy),
+    )
+
+
 def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """
     Cross product of two plain 3-vectors, worked out component-by-component

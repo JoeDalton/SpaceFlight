@@ -579,3 +579,81 @@ def test_hit_on_bare_hull_sparks_metal() -> None:
     system.munition_into_destructible(entry)
 
     assert spawned_spark_preset(system) is spark_fx.METAL
+
+
+# ---------------------------
+# Sensor contacts: read from a queue, only while the sensor is active
+# ---------------------------
+
+
+def _scene_with_sensor_and_obstacle():
+    """
+    A real traverser over a bare scene: a sensor sphere registered the way the
+    game does it, overlapping a ship sphere. No ShowBase needed.
+    """
+    from panda3d.core import (
+        CollisionHandlerEvent,
+        CollisionHandlerQueue,
+        CollisionTraverser,
+        NodePath,
+    )
+
+    from space_flight.ai.collision_sensor import CollisionSensor
+    from space_flight.game.collisions import attach_collision_sphere
+
+    root = NodePath("render")
+    system = make_collision_system_without_init()
+    system.traverser = CollisionTraverser()
+    system.sensor_queue = CollisionHandlerQueue()
+    system.handler = CollisionHandlerEvent()
+    system.game.app.render = root
+    game = SimpleNamespace(collision_system=system)
+
+    sensor = object.__new__(CollisionSensor)
+    spheres = [
+        attach_collision_sphere(
+            game=game,
+            name="sensor",
+            radius=50.0,
+            collider_type="sensor",
+            parent_node=root,
+            parent_object=sensor,
+        )
+        for _ in range(3)
+    ]
+    sensor.sphere_1, sensor.sphere_2, sensor.sphere_3 = spheres
+    attach_collision_sphere(
+        game=game,
+        name="ship",
+        radius=10.0,
+        collider_type="destructible",
+        parent_node=root,
+        parent_object=MagicMock(),
+        relative_position=[30.0, 0.0, 0.0],
+    )
+    system.sensor_into_obstacle = MagicMock()
+    return system, sensor
+
+
+def test_sensor_contacts_are_handled_right_after_the_traverse():
+    """Each sensor contact goes to sensor_into_obstacle, without the messenger."""
+    system, _ = _scene_with_sensor_and_obstacle()
+
+    system.update_collisions()
+
+    assert system.sensor_into_obstacle.call_count == 3  # one per sphere
+    entry = system.sensor_into_obstacle.call_args.args[0]
+    assert entry.from_node_path.name == "sensor"
+    assert entry.into_node_path.name == "ship"
+
+
+def test_inactive_sensor_is_left_out_of_the_traverse():
+    system, sensor = _scene_with_sensor_and_obstacle()
+
+    sensor.set_active(False)
+    system.update_collisions()
+    system.sensor_into_obstacle.assert_not_called()
+
+    sensor.set_active(True)
+    system.update_collisions()
+    assert system.sensor_into_obstacle.call_count == 3
