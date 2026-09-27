@@ -128,7 +128,13 @@ def low_pass_filter_first_order(
 ) -> Union[float, np.ndarray]:
     """
     First order low pass filter with a possibility for distinct fall and rise
-    characteristic times
+    characteristic times.
+
+    The array branch is worked out component-by-component in plain floats
+    instead of np.where/elementwise array arithmetic, which dispatch through
+    numpy's generic, broadcast-capable machinery -- same reasoning, and same
+    pattern, as cross3/magnitude/normalize: pure overhead for the small,
+    fixed-size vectors this is actually called with (turn rates, thrust).
     """
     if dt == 0.0:
         return value
@@ -138,13 +144,18 @@ def low_pass_filter_first_order(
         tau = rise_time if value > previous else fall_time
         if tau <= 0.0:
             return value
-    elif isinstance(value, np.ndarray) and isinstance(previous, np.ndarray):
-        tau = np.where((value > previous), rise_time, fall_time)
-        if (tau <= 0).any():
-            return value
+        alpha = dt / (tau + dt)
+        return previous + (value - previous) * alpha
 
-    alpha = dt / (tau + dt)
-    return previous + (value - previous) * alpha
+    n = len(value)
+    taus = [rise_time if value[i] > previous[i] else fall_time for i in range(n)]
+    if any(tau <= 0.0 for tau in taus):
+        return value
+    result = np.empty(n)
+    for i in range(n):
+        alpha = dt / (taus[i] + dt)
+        result[i] = previous[i] + (value[i] - previous[i]) * alpha
+    return result
 
 
 def smooth_step_down(
