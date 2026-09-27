@@ -36,6 +36,24 @@ class SFX:
         self.audio3d.setListenerVelocityAuto()
         self.app.taskMgr.add(self.update_task, "AudioUpdate")
 
+    def attach_sound(self, sound, node) -> None:
+        """
+        Attach a 3D sound to a node and place it there right away.
+
+        Audio3DManager only moves attached sounds on its next update, so a
+        sound played in between would start from its previous position, or
+        from the render origin if it was never placed. The render origin is
+        kept on the player (see FlightState.recenter_render_origin), i.e. on
+        the listener: every such shot would open with a loud blip.
+
+        :param sound: The 3D sound to attach
+        :param node: The node the sound follows
+        """
+        self.audio3d.attachSoundToObject(sound, node)
+        pos = node.getPos(self.audio3d.root)
+        vel = self.audio3d.getSoundVelocity(sound)
+        sound.set3dAttributes(pos[0], pos[1], pos[2], vel[0], vel[1], vel[2])
+
     def build_sound_pool(self, directory: Path, pattern: str, is_3d: bool) -> List[str]:
         """
         Builds a sound pool from a glob pattern
@@ -199,7 +217,7 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
 
         # Attach sound to the dummy node
-        self.audio3d.attachSoundToObject(sound, dummy_node)
+        self.attach_sound(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
 
@@ -240,7 +258,7 @@ class SFX:
             sound_pool = self.terrain_hit_sound_pool
             sound = sound_pool.get_sound(randomize_pitch=True)
             # Attach sound to the cdumy node
-            self.audio3d.attachSoundToObject(sound, dummy_node)
+            self.attach_sound(sound, dummy_node)
             sound.setVolume(multiplier)
             sound.play()
             game.delayed_methods.do_method_later(
@@ -255,7 +273,7 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
 
         # Attach sound to the dumy node
-        self.audio3d.attachSoundToObject(sound, dummy_node)
+        self.attach_sound(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
         game.delayed_methods.do_method_later(
@@ -270,7 +288,7 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
 
         # Attach sound to the dumy node
-        self.audio3d.attachSoundToObject(sound, dummy_node)
+        self.attach_sound(sound, dummy_node)
         sound.setVolume(multiplier)
         sound.play()
         game.delayed_methods.do_method_later(
@@ -292,7 +310,7 @@ class SFX:
         if game.headless:
             return
         sound = sound_pool.get_sound(randomize_pitch=True)
-        self.audio3d.attachSoundToObject(sound, node)
+        self.attach_sound(sound, node)
         sound.play()
         # Schedule sound release
         game.delayed_methods.do_method_later(

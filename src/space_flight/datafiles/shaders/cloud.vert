@@ -3,7 +3,9 @@
 // position LOCAL to its cell, whose centre (wind + recycling) comes from the
 // cellParams texture, so the vertex data never changes. The quad carries no colour
 // and no silhouette: it only tells cloud.frag where in the volume it is.
-uniform mat4 p3d_ViewProjectionMatrix;
+// The field node has no transform of its own, so its model space is the
+// cells' world frame (the parent), wherever that sits under render.
+uniform mat4 p3d_ModelViewProjectionMatrix;
 uniform vec3 camPos;
 // R32F, rows of CELLS_PER_ROW cells, each [x, y, z, layerId].
 uniform sampler2D cellParams;
@@ -81,7 +83,7 @@ void main() {
     vec3 wp     = pworld + right * (corner.x * i_radius * stretch)
                          + up    * (corner.y * i_radius / stretch);
 
-    gl_Position = p3d_ViewProjectionMatrix * vec4(wp, 1.0);
+    gl_Position = p3d_ModelViewProjectionMatrix * vec4(wp, 1.0);
     worldPos    = wp;
     vUv         = i_uv_st.xy + (corner * 0.5 + 0.5) * i_uv_st.zw;
     vRadius     = i_radius;

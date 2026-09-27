@@ -361,7 +361,6 @@ class Shield(Destructible):
         health_frac = self.health / self.max_health if self.max_health > 0.0 else 0.0
         self.model.render(
             now=now,
-            camera_pos=self.game.app.camera.getPos(self.game.root_node),
             health_frac=health_frac,
             death=self._u,
         )

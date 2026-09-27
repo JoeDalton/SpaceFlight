@@ -3,7 +3,10 @@
 in vec4 p3d_Vertex;
 
 uniform mat4 p3d_ModelViewProjectionMatrix;
-uniform mat4 p3d_ModelMatrix;
+// Plane -> ocean base node (the sea's world frame), set from Python. Not
+// p3d_ModelMatrix: that is relative to render, which the game root is offset
+// under to keep the camera near the render origin.
+uniform mat4 uModelMatrix;
 uniform mat4 uReflMVP;
 
 // Geometric-swell displacement (prototype, gated by uGeometricSwell). The swell
@@ -53,7 +56,7 @@ float swellField(vec2 w) {
 }
 
 void main() {
-    vec4 wp = p3d_ModelMatrix * p3d_Vertex;
+    vec4 wp = uModelMatrix * p3d_Vertex;
 
     // Vertical swell displacement, world-anchored (sampled at world XY so the
     // pattern does not slide as the camera-locked plane follows the camera).
