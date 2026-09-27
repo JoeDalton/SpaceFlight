@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from direct.showbase.ShowBase import ShowBase
+from panda3d.core import Filename
 
 from space_flight import DATAFILES_PATH, LOGGER
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
@@ -27,6 +28,8 @@ COMMON_ASSETS_TO_LOAD = [
     # Skyboxes
     ("model", DATAFILES_PATH / "models/skyboxes/purple.bam", ""),
     ("model", DATAFILES_PATH / "models/skyboxes/dusk.bam", ""),
+    ("cube_map", DATAFILES_PATH / "models/skyboxes/purple_#.png", ""),
+    ("cube_map", DATAFILES_PATH / "models/skyboxes/dusk_#.png", ""),
     # Ships
     ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
@@ -203,6 +206,12 @@ class AssetManager:
 
         elif asset_type == "texture":
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
+        elif asset_type == "cube_map":
+            # Absolute path required: Panda3D resolves a "#" pattern only
+            # against the working directory, never the model path.
+            self.assets[path] = self.app.loader.loadCubeMap(
+                Filename.fromOsSpecific(str(path))
+            )
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
 

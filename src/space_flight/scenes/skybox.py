@@ -12,6 +12,12 @@ class Skybox:
 
         self.node = self.game.root_node.attachNewNode("skybox_node")
         self.model = self.game.app.loader.loadModel(skybox_path)
+        self.model.setTexture(
+            self.game.app.asset_manager.get_asset(
+                asset_type="cube_map",
+                path=DATAFILES_PATH / f"models/skyboxes/{name}_#.png",
+            )
+        )
         self.model.setShaderOff()
         self.model.setLightOff()
 
