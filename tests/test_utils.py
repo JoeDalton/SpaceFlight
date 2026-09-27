@@ -6,6 +6,7 @@ from space_flight.utils import (
     build_axis_billboard_quat,
     build_orthogonal_basis,
     compute_next_power_of_2,
+    cross3,
     low_pass_filter_first_order,
     rotate_single_vector,
     safe_angle_rad,
@@ -102,6 +103,50 @@ def test_rotate_single_vector_matches_quaternion_rotate_vectors_random(seed):
 
     result = rotate_single_vector(quat, vector)
     expected = quaternion.rotate_vectors(quat, vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# cross3
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "a, b",
+    [
+        # Axis-aligned basis vectors
+        (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+        (np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])),
+        (np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])),
+        # Parallel vectors (cross product is zero)
+        (np.array([2.0, 4.0, 6.0]), np.array([1.0, 2.0, 3.0])),
+        # Anti-parallel vectors
+        (np.array([1.0, 0.0, 0.0]), np.array([-3.0, 0.0, 0.0])),
+        # Arbitrary vectors
+        (np.array([1.0, 2.0, 3.0]), np.array([-2.0, 0.5, 4.0])),
+        (np.array([-5.0, 7.5, -0.25]), np.array([3.0, -1.0, 2.0])),
+        # Zero vector
+        (np.array([0.0, 0.0, 0.0]), np.array([1.0, 2.0, 3.0])),
+        # A vector crossed with itself
+        (np.array([1.5, -2.5, 3.5]), np.array([1.5, -2.5, 3.5])),
+    ],
+)
+def test_cross3_matches_np_cross(a, b):
+    """cross3 must agree with np.cross (the "old", generic-numpy way it
+    replaced) for a variety of vector pairs."""
+    result = cross3(a, b)
+    expected = np.cross(a, b)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_cross3_matches_np_cross_random(seed):
+    rng = np.random.default_rng(seed)
+    a = rng.uniform(-10, 10, size=3)
+    b = rng.uniform(-10, 10, size=3)
+
+    result = cross3(a, b)
+    expected = np.cross(a, b)
     np.testing.assert_allclose(result, expected, atol=1e-9)
 
 

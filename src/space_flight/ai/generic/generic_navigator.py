@@ -5,6 +5,7 @@ import numpy as np
 from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
+from space_flight.utils import cross3
 from space_flight.utils.state_machine import StateMachine
 
 LOGGER = logging.getLogger()
@@ -139,7 +140,7 @@ class GenericNavigator:
         """
         if amplitude <= 0.0:
             return base_direction
-        lateral = np.cross(base_direction, up_reference)
+        lateral = cross3(base_direction, up_reference)
         lateral_norm = np.linalg.norm(lateral)
         if lateral_norm < 1e-4:
             return base_direction

@@ -18,7 +18,7 @@ from space_flight import (
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
 from space_flight.fx.damage_fx import DamageFX
-from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
+from space_flight.utils import cross3, low_pass_filter_first_order, rotate_single_vector
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -414,11 +414,11 @@ class Ship(Pawn):
                     self.lift_factor
                     * speed_norm** 2
                     * angle_of_attack_deg
-                    * np.cross(airflow_direction_body, RIGHT_BODY)
+                    * cross3(airflow_direction_body, RIGHT_BODY)
                     + self.lateral_lift_factor
                     * speed_norm** 2
                     * side_slip_angle_deg
-                    * np.cross(
+                    * cross3(
                         UP_BODY,
                         airflow_direction_body,
                     )

@@ -9,6 +9,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.utils import cross3
 
 LOGGER = logging.getLogger()
 
@@ -142,7 +143,7 @@ class CapitalShipNavigator(GenericShipNavigator):
 
         # Tangent to the orbit (90° rotation of the outward normal about world up),
         # sense chosen so the target sits on the turret flank.
-        tangential = orbit["direction"] * np.cross(world_up, outward_normal)
+        tangential = orbit["direction"] * cross3(world_up, outward_normal)
 
         desired_direction = (
             tangential - orbit["radial_gain"] * radial_error_m * outward_normal

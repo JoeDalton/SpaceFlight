@@ -30,6 +30,23 @@ def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
     )
 
 
+def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """
+    Cross product of two plain 3-vectors, worked out component-by-component
+    in plain floats instead of np.cross (which, like quaternion.rotate_vectors,
+    dispatches through generic broadcasting-capable numpy machinery meant for
+    batches of vectors -- pure overhead for a lone pair of 3-vectors, and
+    substantially slower).
+    """
+    return np.array(
+        (
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        )
+    )
+
+
 def safe_angle_rad(angle_rad: float) -> float:
     """
     Transfers an angle in the [-pi, pi[ quadrant
@@ -148,9 +165,9 @@ def build_orthogonal_basis(
         if abs(np.dot(np.array([1, 0, 0]), normal)) < 0.9
         else np.array([0, 1, 0])
     )
-    tangent = np.cross(normal, helper)
+    tangent = cross3(normal, helper)
     tangent /= np.linalg.norm(tangent)
-    bitangent = np.cross(normal, tangent)
+    bitangent = cross3(normal, tangent)
     bitangent /= np.linalg.norm(bitangent)
     return normal, tangent, bitangent
 
@@ -229,8 +246,8 @@ def build_axis_billboard_quat(
         up_hint_axis = np.array([1, 0, 0])
 
     # Build orthogonal basis
-    right_axis = np.cross(forward_axis, up_hint_axis)
-    up_axis = np.cross(right_axis, forward_axis)
+    right_axis = cross3(forward_axis, up_hint_axis)
+    up_axis = cross3(right_axis, forward_axis)
 
     quat = quaternion.from_rotation_matrix(
         np.array(
