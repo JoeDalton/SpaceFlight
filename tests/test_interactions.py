@@ -680,7 +680,8 @@ def test_update_interactions_matches_reference(seed):
     """
     Over several frames of random movement, the vectorized update must:
     - produce exactly the same interact flags as the original loop;
-    - produce bit-identical geometry for interacting pairs;
+    - produce the same geometry for interacting pairs, to rounding (numpy may
+      vectorize the arithmetic differently on another CPU);
     - also fill correct geometry for non-interacting live pairs, which the
       original loop left stale;
     - leave dead slots' rows and columns zeroed.
@@ -731,8 +732,11 @@ def test_update_interactions_matches_reference(seed):
         np.testing.assert_array_equal(vectorized.interact, reference.interact)
         mask = reference.interact
         for name in ("distances", "directions", "rel_velocities", "alignments"):
-            np.testing.assert_array_equal(
-                getattr(vectorized, name)[mask], getattr(reference, name)[mask]
+            np.testing.assert_allclose(
+                getattr(vectorized, name)[mask],
+                getattr(reference, name)[mask],
+                rtol=1e-14,
+                atol=1e-15,
             )
 
         live = np.flatnonzero(vectorized.alive)
