@@ -215,8 +215,14 @@ class LaserShot(Munition):
         # local Z below. The roll about that axis is irrelevant (the capsule is
         # axially symmetric and the shader re-faces the card every frame), so the
         # preset up_hint from the spawn-time camera is only there to pin one.
-        camera_position = self.game.app.camera.get_pos(self.game.root_node)
-        to_camera_vector = camera_position - start_position
+        # Headless runs have no camera (no window ever opened); the billboard
+        # orientation is then irrelevant since nothing gets rendered, so any
+        # non-degenerate up_hint works.
+        camera = self.game.app.camera
+        if camera is not None:
+            to_camera_vector = camera.get_pos(self.game.root_node) - start_position
+        else:
+            to_camera_vector = Vec3(0, 0, 1)
         orientation_quat = build_axis_billboard_quat(
             forward=self.speed, up_hint=to_camera_vector
         ) * np.quaternion(SQT2_S, SQT2_S, 0, 0)
