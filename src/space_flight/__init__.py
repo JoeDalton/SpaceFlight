@@ -19,7 +19,7 @@ DEBUG_DELETION = False
 DEBUG_COLLISION = False
 DEBUG_HUD = False
 FPS_COUNTER = False
-RECORD_GAME = True
+RECORD_GAME = False
 FLIGHT_MODEL = "airplane"  # "airplane", "space"
 
 FORWARD_BODY = np.array([0.0, 1.0, 0.0])

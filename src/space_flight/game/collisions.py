@@ -926,7 +926,7 @@ class CollisionSystem:
         normal = entry.getSurfaceNormal(self.game.root_node)
         hit_point = entry.getSurfacePoint(self.game.root_node)
         sensor_range = entry.from_node_path.python_tags.get("sensor_range", 1)
-        sensor.obstacles.append(
+        sensor.record_obstacle(
             {"normal": normal, "hit_point": hit_point, "range": sensor_range}
         )
 

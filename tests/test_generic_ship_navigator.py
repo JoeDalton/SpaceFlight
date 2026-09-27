@@ -49,6 +49,8 @@ def make_ship_navigator(
     nav.distance_to_waypoint_m = 0.0
     nav.has_waypoint_loop = False
     nav.time_in_spiral_s = 0.0
+    nav._last_navigate_s = None
+    nav.think_dt_s = 0.0
     nav.collision_sensor = MagicMock()
     nav.collision_sensor.compute_repulsion.return_value = (np.zeros(3), 0.0)
     return nav

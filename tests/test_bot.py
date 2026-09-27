@@ -6,12 +6,14 @@ test that exercises post-construction logic uses object.__new__() with
 manually-set MagicMock attributes.  This keeps the suite fully headless.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
 from space_flight.actors.bot import Bot
+from space_flight.ai.think_scheduler import ThinkScheduler
 from space_flight.utils.state_machine import DyingPhase
 
 
@@ -32,10 +34,15 @@ def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     bot.navigator = MagicMock()
     bot.tactician = MagicMock()
     bot.game = MagicMock()
+    bot.game.game_time.get_current_time.return_value = 0.0
     bot.tasks = []
     # A live bot is not mid-death: move_bot_task checks is_dying (a property over
     # the composed DyingPhase) to switch from AI control to the death tumble.
     bot._dying = DyingPhase(clock=lambda: 0.0)
+    # Scheduled like a freshly spawned bot: it thinks on its first frame
+    bot._think_slot = ThinkScheduler().register(period_s=0.1)
+    bot._next_think_s = -math.inf
+    bot._commands = None
     return bot
 
 
@@ -460,3 +467,70 @@ def test_clean_sets_pawn_to_none():
     bot.clean()
 
     assert bot.pawn is None
+
+
+# ---------------------------
+# move_bot_task – think scheduling
+# ---------------------------
+
+
+def _run_frames(bot, n_frames):
+    """Step move_bot_task over n_frames of a 60 Hz game clock."""
+    clock = {"now_s": 0.0}
+    bot.game.game_time.get_current_time.side_effect = lambda: clock["now_s"]
+    for _ in range(n_frames):
+        bot.move_bot_task()
+        clock["now_s"] += 1.0 / 60.0
+
+
+def test_fighter_thinks_once_per_pilot_period_and_moves_every_frame():
+    """
+    With a 0.1 s pilot period, the fighter navigates and pilots every 6th
+    frame, keeps flying the last commands in between, and lets the navigator
+    take its weapon decisions on the other frames.
+    """
+    bot = make_bot_without_init(bot_type="fighter")
+    bot.tactician.think.return_value = ("engage", {})
+    bot.navigator.navigate.return_value = (np.array([1.0, 0.0, 0.0]), 100.0)
+    bot.pilot.pilot.return_value = (0.8, 0.1, -0.1, 0.0)
+
+    _run_frames(bot, 12)
+
+    assert bot.tactician.think.call_count == 12
+    assert bot.navigator.navigate.call_count == 2
+    assert bot.pilot.pilot.call_count == 2
+    assert bot.navigator.update_triggers.call_count == 10
+    assert bot.pawn.move.call_count == 12
+    bot.pawn.move.assert_called_with(
+        throttle=0.8, yaw_rate=0.1, pitch_rate=-0.1, roll_rate=0.0
+    )
+
+
+def test_turret_navigates_every_frame_but_pilots_once_per_period():
+    """
+    A mount's navigator publishes the firing solution checked every frame, so
+    it keeps running every frame; only the pilot follows the schedule.
+    """
+    bot = make_bot_without_init(bot_type="turret")
+    bot.tactician.think.return_value = ("track", {})
+    bot.navigator.navigate.return_value = np.array([0.0, 1.0, 0.0])
+    bot.pilot.pilot.return_value = (0.3, -0.2)
+
+    _run_frames(bot, 12)
+
+    assert bot.navigator.navigate.call_count == 12
+    assert bot.pilot.pilot.call_count == 2
+    assert bot.pawn.move.call_count == 12
+
+
+@pytest.mark.parametrize("end_of_life", ["begin_death", "clean"])
+def test_dying_or_cleaned_bot_gives_its_think_slot_back(end_of_life):
+    bot = make_bot_without_init()
+    scheduler = bot._think_slot.scheduler
+    assert scheduler.load.sum() == 1
+
+    getattr(bot, end_of_life)()
+    # Releasing again (e.g. cleanup after death) must not free it twice
+    bot._release_think_slot()
+
+    assert scheduler.load.sum() == 0

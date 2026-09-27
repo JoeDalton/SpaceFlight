@@ -19,6 +19,20 @@ class GenericPilot:
         self.pawn: Pawn = pawn
         self.personality: dict = personality
 
+    @property
+    def sample_period_s(self) -> float:
+        """How often the pilot's PIDs compute new commands."""
+        return self.personality["pilot"]["sample_time_s"]
+
+    def sample_externally(self):
+        """
+        Make the PIDs compute on every call, for a caller (a bot's think
+        scheduler) that already calls pilot() once per sample_period_s. Left to
+        the PIDs' own sample time, clock jitter (dt = 0.0999... < 0.1) could make
+        them skip a scheduled call and hold their output a whole extra period.
+        """
+        raise NotImplementedError
+
     def set_on(
         self,
         **kwargs,

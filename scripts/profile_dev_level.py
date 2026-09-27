@@ -3,9 +3,10 @@ Profile the CPU cost of the "Dev" level's steady-state simulation loop under
 a ~20-ship load, headlessly (no window, no audio device).
 
 Steps the level through an unprofiled warm-up (until the mission's waves have
-finished spawning), then profiles a further window of steps with cProfile so
-the recorded stats reflect per-frame cost at full ship count rather than the
-one-time spawn ramp-up.
+finished spawning), then times each frame of a window of steps without
+cProfile (median / p99 / max frame time, to spot periodic spikes), then
+profiles a further window of steps with cProfile so the recorded stats reflect
+per-frame cost at full ship count rather than the one-time spawn ramp-up.
 
 Usage:
     poetry run python scripts/profile_dev_level.py
@@ -17,7 +18,10 @@ View the result with: poetry run snakeviz <output>
 import argparse
 import cProfile
 import pstats
+import time
 from pathlib import Path
+
+import numpy as np
 
 from space_flight.headless.harness import DEFAULT_TIME_STEP, HeadlessHarness
 
@@ -43,6 +47,13 @@ def main() -> None:
         "and wave spawn ramp-up before profiling begins.",
     )
     parser.add_argument(
+        "--timing-steps",
+        type=int,
+        default=900,
+        help="Steps timed one by one without the profiler, after the warm-up, "
+        "to report median / p99 / max frame time.",
+    )
+    parser.add_argument(
         "--output",
         default="profiles/dev_level.prof",
         help="Path to write the cProfile stats file to.",
@@ -63,6 +74,12 @@ def main() -> None:
         for _ in range(args.warmup_steps):
             harness.app.taskMgr.step()
 
+        frame_times_ms = np.empty(args.timing_steps)
+        for k in range(args.timing_steps):
+            start = time.perf_counter()
+            harness.app.taskMgr.step()
+            frame_times_ms[k] = (time.perf_counter() - start) * 1000.0
+
         profiler = cProfile.Profile()
         profiler.enable()
         for _ in range(args.steps):
@@ -71,7 +88,17 @@ def main() -> None:
 
         profiler.dump_stats(str(output_path))
 
-        print(f"Warm-up steps: {args.warmup_steps}, profiled steps: {args.steps}")
+        print(
+            f"Warm-up steps: {args.warmup_steps}, timed steps: {args.timing_steps}, "
+            f"profiled steps: {args.steps}"
+        )
+        if args.timing_steps:
+            print(
+                "Frame time (ms, no profiler): "
+                f"median {np.median(frame_times_ms):.2f}, "
+                f"p99 {np.percentile(frame_times_ms, 99):.2f}, "
+                f"max {frame_times_ms.max():.2f}"
+            )
         print(
             f"Live actors at end of profiled window: "
             f"{len(flight_state.interactions.actors_id_dict)}"

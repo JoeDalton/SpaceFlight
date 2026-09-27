@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructibles
 from space_flight.ai.interactions import Interactions
+from space_flight.ai.think_scheduler import ThinkScheduler
 from space_flight.fx.fire_smoke_fx import FireSmokePool
 from space_flight.fx.spark_fx import SparkPool
 from space_flight.game.collisions import CollisionSystem
@@ -281,6 +282,8 @@ class FlightState(BaseState):
 
         # Initialize interaction compute between ships
         self.interactions = Interactions()
+        # Spreads the bots' thinking evenly over frames
+        self.think_scheduler = ThinkScheduler()
 
         # Initialize integrator.
         # The update must come before the physics computations :
@@ -445,6 +448,7 @@ class FlightState(BaseState):
         self.integrator = None
         self.interactions.clean()
         self.interactions = None
+        self.think_scheduler = None
         self.collision_system.clean()
         self.collision_system = None
         self.destructibles.clean()

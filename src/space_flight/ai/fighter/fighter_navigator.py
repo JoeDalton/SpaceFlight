@@ -33,6 +33,10 @@ class FighterNavigator(GenericShipNavigator):
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
         self.time_in_spiral_s = 0.0
+        # Weapon decision the last navigate() left for update_triggers to keep
+        # taking every frame until the next one: (weapon, target_id, min cos
+        # angle), weapon being "guns" or "bomb"; None when nothing is armed
+        self._armed_trigger = None
 
     def navigate_intent(
         self, intent: int, target_dict: dict
@@ -42,6 +46,8 @@ class FighterNavigator(GenericShipNavigator):
 
         :return: The direction to point to and the desired speed
         """
+        # Only an attack pattern re-arms a weapon, below
+        self._armed_trigger = None
         if intent == Intent.IDLE:
             self.engage_phase = ""
             return NO_DIRECTION
@@ -186,20 +192,11 @@ class FighterNavigator(GenericShipNavigator):
             lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
 
-        # Decide whether to shoot
-        firing_alignment = np.dot(lead_direction, self.pawn.forward)
-        in_range = (
-            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
-        )
-        aligned = (
-            firing_alignment
-            > self.personality["navigator"]["fire"]["minimum_cos_angle"]
-        )
-        fired = in_range and aligned
-        if fired:
-            self.pawn.laser_cannon.fire()
-        self._record_firing(
-            distance_m=distance_m, firing_alignment=firing_alignment, fired=fired
+        # Decide whether to shoot, now and on every frame until the next think
+        self._arm_trigger(
+            target_dict,
+            weapon="guns",
+            min_cos_angle=self.personality["navigator"]["fire"]["minimum_cos_angle"],
         )
 
         # Check if we risk passing ahead of the target
@@ -308,11 +305,12 @@ class FighterNavigator(GenericShipNavigator):
             lead_time_s=lead_time_s,
         )
 
-        # Fire whenever aligned and in range, in any phase.
-        self._strafe_try_fire(
-            target_position=target_position,
-            target_speed=target_speed,
-            distance_m=distance_m,
+        # Fire whenever aligned and in range, in any phase. Range from the shared
+        # fire config, but a wider (strafe-specific) cone: a fast pass rarely holds
+        # the nose within the 5deg pursuit cone, and auto-aim bends the shot the
+        # rest of the way.
+        self._arm_trigger(
+            target_dict, weapon="guns", min_cos_angle=strafe["fire_min_cos_angle"]
         )
 
         # Hard altitude floor: force a recovery break if we drop too low.
@@ -384,35 +382,80 @@ class FighterNavigator(GenericShipNavigator):
         self.behaviour_sm.request("strafe_reposition")
         return self._strafe_reposition(direction=direction, strafe=strafe)
 
-    def _strafe_try_fire(
-        self,
-        target_position: np.ndarray,
-        target_speed: np.ndarray,
-        distance_m: float,
-    ):
+    # %% ==== WEAPON TRIGGERS ====
+
+    def update_triggers(self, intent: int, target_dict: dict) -> None:
         """
-        Fire the guns if the (near-pure-pursuit) firing solution is aligned with
-        the nose and the target is in range.
+        Keep taking the weapon decision armed by the last navigate() on the
+        frames where navigate() does not run (the bot only thinks a few times a
+        second), on fresh geometry: a gun reloads faster than the bot thinks,
+        and a bomb released late misses.
+
+        :param intent: The tactician's current intent
+        :param target_dict: The tactician's current target info
         """
+        if self._armed_trigger is None or intent != Intent.ENGAGE:
+            return
+        if target_dict.get("target_id") != self._armed_trigger[1]:
+            return  # new target: wait for the next navigate()
+        if not self._resolve_engagement(target_dict):
+            return
+        self._pull_trigger(target_dict)
+
+    def _arm_trigger(
+        self, target_dict: dict, weapon: str, min_cos_angle: float = None
+    ) -> bool:
+        """
+        Take a weapon decision now, and arm it for update_triggers to keep
+        taking every frame until the next navigate().
+
+        :param target_dict: The target info enriched with the engagement geometry
+        :param weapon: "guns" or "bomb"
+        :param min_cos_angle: For guns, the firing cone around the lead solution
+        :return: Whether the weapon fired now
+        """
+        self._armed_trigger = (weapon, target_dict.get("target_id"), min_cos_angle)
+        return self._pull_trigger(target_dict)
+
+    def _pull_trigger(self, target_dict: dict) -> bool:
+        """
+        Fire the armed weapon if its solution is met.
+
+        Guns: the lead solution is in range and within the armed cone of the
+        nose. Bomb: a bomb dropped now would hit, then the run breaks off.
+
+        :param target_dict: The target info enriched with the engagement geometry
+        :return: Whether the weapon fired
+        """
+        weapon, _, min_cos_angle = self._armed_trigger
+        target_position = target_dict["target_current_position"]
+        target_speed = target_dict["target_current_speed"]
+        if weapon == "bomb":
+            if not self.compute_release_condition(
+                target_position, target_speed, self.personality["navigator"]["bomb"]
+            ):
+                return False
+            self.pawn.drop_bomb()
+            self.behaviour_sm.request("bomb_break")
+            self._armed_trigger = None
+            return True
+
+        distance_m = target_dict["distance_m"]
         lead_direction = self.compute_lead_pursuit(
             target_current_position=target_position,
             target_current_speed=target_speed,
             lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
         firing_alignment = np.dot(lead_direction, self.pawn.forward)
-        fire = self.personality["navigator"]["fire"]
-        strafe = self.personality["navigator"]["strafe"]
-        # Range from the shared fire config, but a wider (strafe-specific) cone: a
-        # fast pass rarely holds the nose within the 5deg pursuit cone, and auto-aim
-        # bends the shot the rest of the way.
-        fired = (distance_m < fire["maximum_distance_m"]) and (
-            firing_alignment > strafe["fire_min_cos_angle"]
-        )
+        fired = (
+            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
+        ) and (firing_alignment > min_cos_angle)
         if fired:
             self.pawn.laser_cannon.fire()
         self._record_firing(
             distance_m=distance_m, firing_alignment=firing_alignment, fired=fired
         )
+        return fired
 
     def _below_altitude_floor(
         self,
@@ -495,7 +538,7 @@ class FighterNavigator(GenericShipNavigator):
         """
         Hold the run-in line straight onto the target's lead point (a dive, for
         surface preys), nose steady for the guns. Firing is handled by
-        _strafe_try_fire.
+        _arm_trigger / update_triggers.
         """
         return lead_direction, self._strafe_speed(strafe, "attack_speed_factor")
 
@@ -657,10 +700,9 @@ class FighterNavigator(GenericShipNavigator):
             )
 
         if phase == "bomb_run":
-            # Release once the bomb's velocity sweeps the target, then break.
-            if self.compute_release_condition(target_position, target_speed, bomb):
-                self.pawn.drop_bomb()
-                self.behaviour_sm.request("bomb_break")
+            # Release once the bomb's velocity sweeps the target, then break
+            # (checked now and on every frame until the next think).
+            if self._arm_trigger(target_dict, weapon="bomb"):
                 return self._bomb_break(direction, bomb)
             # Overflew (or can't close) without a solution -> break and re-attack.
             if closing_speed_mps <= 0.0:
@@ -994,8 +1036,8 @@ class FighterNavigator(GenericShipNavigator):
             lateral_speed_scalar_mps
             > self.personality["navigator"]["extend"]["maximal_lateral_speed_mps"]
         ):
-            # Velocity condition met: accrue this frame's time in the spiral.
-            self.time_in_spiral_s += self.game.game_time.get_time_step()
+            # Velocity condition met: accrue the time since the last think.
+            self.time_in_spiral_s += self.think_dt_s
             # Result depends on time condition
             return (
                 self.time_in_spiral_s
