@@ -150,6 +150,10 @@ class LaserCannon(Weapon):
             game=self.game,
             sound_pool=self.sound_pool,
             node=self.cannon_nodes[self.current_next_cannon_idx],
+            velocity_source=self.parent,
+            is_player=(
+                self.game.player is not None and self.parent is self.game.player.pawn
+            ),
         )
 
         # Prepare next laser shot

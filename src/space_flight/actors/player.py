@@ -207,6 +207,8 @@ class Player:
         """
         Initialize the node structure to hold the camera
         """
+        # The camera is the audio listener: it moves with the ship (Doppler)
+        self.game.app.sfx.set_listener_velocity_source(self.pawn)
         # Get jolted by hits, ship acceleration, etc.
         self.head_jolt = self.pawn.node.attachNewNode("head_jolt")
         self.head_acceleration_mps2 = np.zeros(3)
@@ -581,6 +583,7 @@ class Player:
         Cleans the player object before it is deleted
         """
         if not self.game.headless:
+            self.game.app.sfx.set_listener_velocity_source(None)
             self.game.app.camera.reparentTo(self.game.app.render)
             self.head_pivot.removeNode()
             self.head_jolt.removeNode()

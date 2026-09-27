@@ -84,7 +84,7 @@ ENEMY_FIGHTER_SQUADRON = WaveSpec(
 ALLIED_PATROL = WaveSpec(
     name="allied_patrol",
     ship_model="y-wing",
-    size=1,
+    size=10,
     bot_type="fighter",
     team=1,
     spawn_point=[0, -2100, 500],
@@ -116,12 +116,12 @@ def build_dev_upfront(game: FlightState) -> None:
         # ship_type="tie-fighter",
         # ship_type="tie-bomber",
         ini_position=np.array([100, -1500, 505]),
-        is_neutral=False,
+        is_neutral=True,
         has_ai=False,
         record=True,
     )
     # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
-    game.scene = scene_factory(game=game, scene_name="debug")
+    game.scene = scene_factory(game=game, scene_name="lava_planet")
     game.scene.build_upfront()
 
 
@@ -140,3 +140,4 @@ def dev_mission(m: Mission) -> Iterator[None]:
     m.spawn(ENEMY_FRIGATE)
     m.spawn(ENEMY_FRIGATE_WING)
     m.spawn(ENEMY_FIGHTER_SQUADRON)
+    m.spawn(ALLIED_PATROL)

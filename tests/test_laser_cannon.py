@@ -132,6 +132,60 @@ def test_fire_wraps_cannon_index_around_after_last_cannon(laser_cannon):
     assert laser_cannon.current_next_cannon_idx == 0
 
 
+# ---------------------------
+# fire() -- player vs NPC cannon sound
+# ---------------------------
+
+
+def test_fire_marks_the_sound_as_the_players_when_the_parent_is_the_player(
+    laser_cannon,
+):
+    """
+    fire() tells SFX.cannon_fire this is the player's own gun when
+    game.player.pawn is the firing ship.
+    """
+    laser_cannon.game.player.pawn = laser_cannon.parent
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
+        laser_cannon.fire()
+
+    _, kwargs = laser_cannon.game.app.sfx.cannon_fire.call_args
+    assert kwargs["is_player"] is True
+
+
+def test_fire_marks_the_sound_as_an_npcs_when_the_parent_is_not_the_player(
+    laser_cannon,
+):
+    """
+    fire() tells SFX.cannon_fire this is not the player's gun when the firing
+    ship is anyone else's (e.g. a bot's fighter or a capital ship's turret).
+    """
+    assert laser_cannon.parent is not laser_cannon.game.player.pawn
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
+        laser_cannon.fire()
+
+    _, kwargs = laser_cannon.game.app.sfx.cannon_fire.call_args
+    assert kwargs["is_player"] is False
+
+
+def test_fire_marks_the_sound_as_an_npcs_when_there_is_no_player(laser_cannon):
+    """
+    fire() does not crash and reports is_player=False when game.player is
+    None (e.g. a headless run with no human-piloted ship).
+    """
+    laser_cannon.game.player = None
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot"):
+        laser_cannon.fire()
+
+    _, kwargs = laser_cannon.game.app.sfx.cannon_fire.call_args
+    assert kwargs["is_player"] is False
+
+
 def test_fire_uses_current_cannon_node_for_shot_origin(laser_cannon):
     """
     fire() calls get_pos on the cannon node at current_next_cannon_idx.

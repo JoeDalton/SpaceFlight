@@ -1,15 +1,95 @@
 """
-Unit tests for SFX 3D sound placement (space_flight.fx.sfx).
+Unit tests for SFX 3D sound placement and Doppler velocities
+(space_flight.fx.sfx).
 
-SFX.__init__ needs a live ShowBase (audio managers, camera), so these tests
-bypass it via object.__new__() and mock the Audio3DManager.
+SFX.__init__ needs a live ShowBase (audio managers, camera), so the SFX tests
+bypass it via object.__new__() and mock the Audio3DManager. The
+PhysicsAudio3DManager tests build a real one on a mock audio manager and
+window-less NodePaths.
 """
 
+import gc
 from unittest.mock import MagicMock
 
-from panda3d.core import LPoint3f, LVector3f
+import numpy as np
+import pytest
+from direct.task.TaskManagerGlobal import taskMgr
+from panda3d.core import LPoint3f, LVector3f, NodePath
 
-from space_flight.fx.sfx import SFX
+from space_flight.fx import sfx as sfx_mod
+from space_flight.fx.sfx import SFX, PhysicsAudio3DManager
+
+
+class _Body:
+    """Stands in for a ship: anything with a world-frame speed."""
+
+    def __init__(self, speed):
+        self.speed = np.array(speed, dtype=float)
+
+
+@pytest.fixture
+def manager():
+    root = NodePath("render")
+    listener = root.attachNewNode("camera")
+    audio3d = PhysicsAudio3DManager(MagicMock(), listener, root=root)
+    yield audio3d
+    taskMgr.remove("Audio3DManager-updateTask")
+
+
+def test_sound_velocity_follows_its_source_live(manager):
+    sound, body = MagicMock(), _Body([10.0, -150.0, 2.5])
+    manager.set_sound_velocity_source(sound, body)
+    assert tuple(manager.getSoundVelocity(sound)) == (10.0, -150.0, 2.5)
+    body.speed = np.array([0.0, 80.0, 0.0])
+    assert tuple(manager.getSoundVelocity(sound)) == (0.0, 80.0, 0.0)
+
+
+def test_sound_without_source_is_static(manager):
+    sound = MagicMock()
+    assert tuple(manager.getSoundVelocity(sound)) == (0.0, 0.0, 0.0)
+    manager.set_sound_velocity_source(sound, _Body([1.0, 2.0, 3.0]))
+    manager.set_sound_velocity_source(sound, None)
+    assert tuple(manager.getSoundVelocity(sound)) == (0.0, 0.0, 0.0)
+
+
+def test_detach_sound_drops_its_velocity_source(manager):
+    sound, body = MagicMock(), _Body([5.0, 0.0, 0.0])
+    manager.attachSoundToObject(sound, manager.root.attachNewNode("ship"))
+    manager.set_sound_velocity_source(sound, body)
+    manager.detachSound(sound)
+    assert tuple(manager.getSoundVelocity(sound)) == (0.0, 0.0, 0.0)
+
+
+def test_destroyed_source_falls_back_to_zero_and_is_not_kept_alive(manager):
+    sound = MagicMock()
+    manager.set_sound_velocity_source(sound, _Body([5.0, 0.0, 0.0]))
+    gc.collect()
+    assert tuple(manager.getSoundVelocity(sound)) == (0.0, 0.0, 0.0)
+
+
+def test_listener_velocity_follows_its_source(manager):
+    assert tuple(manager.getListenerVelocity()) == (0.0, 0.0, 0.0)
+    player = _Body([0.0, 120.0, 0.0])
+    manager.set_listener_velocity_source(player)
+    assert tuple(manager.getListenerVelocity()) == (0.0, 120.0, 0.0)
+    manager.set_listener_velocity_source(None)
+    assert tuple(manager.getListenerVelocity()) == (0.0, 0.0, 0.0)
+
+
+def test_update_feeds_physics_velocities_to_the_audio_backend(manager):
+    sound, ship = MagicMock(), _Body([0.0, -100.0, 0.0])
+    node = manager.root.attachNewNode("ship")
+    node.setPos(0.0, 300.0, 0.0)
+    manager.attachSoundToObject(sound, node)
+    manager.set_sound_velocity_source(sound, ship)
+    player = _Body([0.0, 50.0, 0.0])  # held: sources are weak references
+    manager.set_listener_velocity_source(player)
+
+    manager.update()
+
+    sound.set3dAttributes.assert_called_with(0.0, 300.0, 0.0, 0.0, -100.0, 0.0)
+    listener_args = manager.audio_manager.audio3dSetListenerAttributes.call_args[0]
+    assert tuple(listener_args[3:6]) == (0.0, 50.0, 0.0)
 
 
 def _make_sfx() -> SFX:
@@ -27,6 +107,7 @@ def test_attach_sound_places_the_sound_at_the_node_immediately():
     sfx.attach_sound(sound, node)
 
     sfx.audio3d.attachSoundToObject.assert_called_once_with(sound, node)
+    sfx.audio3d.set_sound_velocity_source.assert_called_once_with(sound, None)
     node.getPos.assert_called_once_with(sfx.audio3d.root)
     sound.set3dAttributes.assert_called_once_with(12.0, 270.0, -3.0, 0.0, 0.0, 0.0)
 
@@ -44,3 +125,90 @@ def test_cannon_fire_places_the_sound_before_playing_it():
 
     calls = [name for name, _, _ in sound.method_calls]
     assert calls.index("set3dAttributes") < calls.index("play")
+
+
+def test_attach_sound_places_the_sound_with_its_source_velocity():
+    sfx = _make_sfx()
+    sfx.audio3d.getSoundVelocity.return_value = LVector3f(0.0, -120.0, 0.0)
+    sound, node, ship = MagicMock(), MagicMock(), MagicMock()
+    node.getPos.return_value = LPoint3f(0.0, 250.0, 0.0)
+
+    sfx.attach_sound(sound, node, velocity_source=ship)
+
+    sfx.audio3d.set_sound_velocity_source.assert_called_once_with(sound, ship)
+    sound.set3dAttributes.assert_called_once_with(0.0, 250.0, 0.0, 0.0, -120.0, 0.0)
+
+
+def test_cannon_fire_gives_the_shot_the_firing_actors_velocity():
+    sfx = _make_sfx()
+    sound, node, shooter = MagicMock(), MagicMock(), MagicMock()
+    sound_pool = MagicMock()
+    sound_pool.get_sound.return_value = sound
+    node.getPos.return_value = LPoint3f(0.0, 0.0, 0.0)
+
+    sfx.cannon_fire(
+        game=MagicMock(headless=False),
+        sound_pool=sound_pool,
+        node=node,
+        velocity_source=shooter,
+    )
+
+    sfx.audio3d.set_sound_velocity_source.assert_called_once_with(sound, shooter)
+
+
+def test_distant_impact_hit_uses_the_player_volume_for_the_players_own_shot():
+    sfx = _make_sfx()
+    sfx.distant_target_hit_sound_pool = MagicMock()
+    sound = MagicMock()
+    sfx.distant_target_hit_sound_pool.get_sound.return_value = sound
+
+    sfx.distant_impact_hit(
+        game=MagicMock(headless=False),
+        player_ship_pos=np.zeros(3),
+        hit_pos=np.array([500.0, 0.0, 0.0]),  # SOUND_VOLUME_REFERENCE_DISTANCE_M
+        impact_type="target",
+        is_player=True,
+    )
+
+    # At the reference distance, (ref / distance) ** 2 == 1, so only the
+    # target/player multipliers remain.
+    sound.setVolume.assert_called_once_with(
+        sfx_mod.TARGET_HIT_SOUND_MULTIPLIER * sfx_mod.PLAYER_DISTANT_IMPACT_VOLUME
+    )
+
+
+def test_distant_impact_hit_uses_the_npc_volume_for_an_npcs_shot():
+    sfx = _make_sfx()
+    sfx.terrain_hit_sound_pool = MagicMock()
+    sound = MagicMock()
+    sfx.terrain_hit_sound_pool.get_sound.return_value = sound
+
+    sfx.distant_impact_hit(
+        game=MagicMock(headless=False),
+        player_ship_pos=np.zeros(3),
+        hit_pos=np.array([500.0, 0.0, 0.0]),
+        impact_type="terrain",
+        is_player=False,
+    )
+
+    sound.setVolume.assert_called_once_with(
+        sfx_mod.TERRAIN_HIT_SOUND_MULTIPLIER * sfx_mod.NPC_DISTANT_IMPACT_VOLUME
+    )
+
+
+def test_distant_impact_hit_defaults_to_the_npc_volume():
+    sfx = _make_sfx()
+    sfx.distant_target_hit_sound_pool = MagicMock()
+    sound = MagicMock()
+    sfx.distant_target_hit_sound_pool.get_sound.return_value = sound
+
+    sfx.distant_impact_hit(
+        game=MagicMock(headless=False),
+        player_ship_pos=np.zeros(3),
+        hit_pos=np.array([500.0, 0.0, 0.0]),
+        impact_type="target",
+    )
+
+    sound.setVolume.assert_called_once_with(
+        sfx_mod.TARGET_HIT_SOUND_MULTIPLIER * sfx_mod.NPC_DISTANT_IMPACT_VOLUME
+    )

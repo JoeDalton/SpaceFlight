@@ -201,7 +201,7 @@ space_flight.cli
 ````{py:data} FPS_COUNTER
 :canonical: space_flight.FPS_COUNTER
 :value: >
-   False
+   True
 
 ```{autodoc2-docstring} space_flight.FPS_COUNTER
 ```

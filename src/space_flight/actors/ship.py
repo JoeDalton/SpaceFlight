@@ -222,13 +222,9 @@ class Ship(Pawn):
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
             self.sound.setVolume(10.0)
-            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
+            # Follows the ship node, Doppler-shifted by the ship's velocity
+            self.game.app.sfx.attach_sound(self.sound, self.node, velocity_source=self)
 
-            # Automatic velocity tracking
-            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
-
-            # TODO Doppler does not seem to work great
-            # https://docs.panda3d.org/1.10/python/programming/audio/3d-audio
             # TODO Attach engine sound to a node located at the engine location
 
         # Play a bit later to avoid audio artifacts at startup
