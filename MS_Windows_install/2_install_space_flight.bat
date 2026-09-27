@@ -27,6 +27,7 @@ if errorlevel 1 (
 )
 
 echo Installing SpaceFlight and its dependencies ^(this will take a few minutes^)...
+set POETRY_DYNAMIC_VERSIONING_BYPASS=0.0.0
 pip install -e ..
 if errorlevel 1 (
     echo.
