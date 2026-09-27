@@ -4,6 +4,7 @@ Unit tests for the StateManager stack lifecycle.
 Uses lightweight mock state classes that record lifecycle calls without
 requiring any Panda3D initialisation.
 """
+
 from unittest.mock import MagicMock
 
 import pytest

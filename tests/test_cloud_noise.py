@@ -440,9 +440,9 @@ def test_the_cloud_top_follows_the_field(volume):
     # this is the dominant effect, which over several thousand columns it plainly
     # is — a threshold that does not vary with height would give zero.
     correlation = np.corrcoef(strength, height)[0, 1]
-    assert (
-        correlation > 0.45
-    ), f"top height barely follows the field ({correlation:.2f})"
+    assert correlation > 0.45, (
+        f"top height barely follows the field ({correlation:.2f})"
+    )
     # Nothing is pinned at the ceiling: the lift carries the threshold past the
     # fbm's maximum before the slab runs out, so the slab bounds itself.
     assert height.max() < 0.99

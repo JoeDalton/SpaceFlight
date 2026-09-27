@@ -304,9 +304,7 @@ def sample_field_particles(
     # E[r³] for r uniform on [a,b] is (b⁴-a⁴)/(4(b-a)); the mean CUBE, not the
     # cube of the mean.
     r_lo, r_hi = spec.radius
-    mean_r3 = (
-        (r_hi**4 - r_lo**4) / (4.0 * (r_hi - r_lo)) if r_hi > r_lo else r_lo**3
-    )
+    mean_r3 = (r_hi**4 - r_lo**4) / (4.0 * (r_hi - r_lo)) if r_hi > r_lo else r_lo**3
     sphere = (4.0 / 3.0) * np.pi * mean_r3
 
     kept, tried, accepted = [], 0, 0

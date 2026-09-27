@@ -672,9 +672,9 @@ class CloudField:
         self._cell_tex.set_ram_image(self._cell_params.tobytes())
 
     def _upload_indices(self):
-        memoryview(self._tris.modify_vertices()).cast("B")[
-            : self._stage.nbytes
-        ] = self._stage.tobytes()
+        memoryview(self._tris.modify_vertices()).cast("B")[: self._stage.nbytes] = (
+            self._stage.tobytes()
+        )
 
     def _restage(self, cam_xyz):
         """Re-sort one round-robin slice of cells into the staged index buffer.

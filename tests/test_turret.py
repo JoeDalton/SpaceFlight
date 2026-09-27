@@ -160,9 +160,12 @@ def test_turret_is_a_subsystem_of_its_ship():
     ship.node.reparentTo(game.root_node)
     bot = SimpleNamespace(name="turret_bot")
 
-    with patch(
-        "space_flight.actors.capital_ship.tracking_mount.TurretModel"
-    ) as mock_model_cls, patch("space_flight.actors.capital_ship.turret.LaserCannon"):
+    with (
+        patch(
+            "space_flight.actors.capital_ship.tracking_mount.TurretModel"
+        ) as mock_model_cls,
+        patch("space_flight.actors.capital_ship.turret.LaserCannon"),
+    ):
         mock_model_cls.return_value.set_yaw = MagicMock()
         mock_model_cls.return_value.set_pitch = MagicMock()
         mock_model_cls.return_value.cannon_node = NodePath("cannon")
