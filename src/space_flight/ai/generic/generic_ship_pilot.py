@@ -124,7 +124,9 @@ class GenericShipPilot(GenericPilot):
         ) = self.compute_angular_error(
             target_direction=target_direction, up_reference=up_reference
         )
-        self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
+        self.angle_to_target_deg = np.rad2deg(
+            np.arccos(np.clip(cos_angle_to_target, -1.0, 1.0))
+        )
 
         # Find velocity error
         velocity_error = (
