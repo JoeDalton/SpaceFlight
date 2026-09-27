@@ -15,8 +15,24 @@
 :class: autosummary longtable
 :align: left
 
+* - {py:obj}`PhysicsAudio3DManager <space_flight.fx.sfx.PhysicsAudio3DManager>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager
+    :summary:
+    ```
 * - {py:obj}`SFX <space_flight.fx.sfx.SFX>`
   - ```{autodoc2-docstring} space_flight.fx.sfx.SFX
+    :summary:
+    ```
+````
+
+### Functions
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`_velocity_of <space_flight.fx.sfx._velocity_of>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx._velocity_of
     :summary:
     ```
 ````
@@ -57,6 +73,14 @@
     ```
 * - {py:obj}`SOUND_POOL_LENGTH <space_flight.fx.sfx.SOUND_POOL_LENGTH>`
   - ```{autodoc2-docstring} space_flight.fx.sfx.SOUND_POOL_LENGTH
+    :summary:
+    ```
+* - {py:obj}`DISTANCE_FACTOR <space_flight.fx.sfx.DISTANCE_FACTOR>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.DISTANCE_FACTOR
+    :summary:
+    ```
+* - {py:obj}`DOPPLER_FACTOR <space_flight.fx.sfx.DOPPLER_FACTOR>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.DOPPLER_FACTOR
     :summary:
     ```
 ````
@@ -143,6 +167,80 @@
 
 ````
 
+````{py:data} DISTANCE_FACTOR
+:canonical: space_flight.fx.sfx.DISTANCE_FACTOR
+:value: >
+   1.0
+
+```{autodoc2-docstring} space_flight.fx.sfx.DISTANCE_FACTOR
+```
+
+````
+
+````{py:data} DOPPLER_FACTOR
+:canonical: space_flight.fx.sfx.DOPPLER_FACTOR
+:value: >
+   1.0
+
+```{autodoc2-docstring} space_flight.fx.sfx.DOPPLER_FACTOR
+```
+
+````
+
+````{py:function} _velocity_of(source_ref) -> panda3d.core.VBase3
+:canonical: space_flight.fx.sfx._velocity_of
+
+```{autodoc2-docstring} space_flight.fx.sfx._velocity_of
+```
+````
+
+`````{py:class} PhysicsAudio3DManager(*args, **kwargs)
+:canonical: space_flight.fx.sfx.PhysicsAudio3DManager
+
+Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
+
+```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.__init__
+```
+
+````{py:method} set_sound_velocity_source(sound, source) -> None
+:canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
+
+```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
+```
+
+````
+
+````{py:method} set_listener_velocity_source(source) -> None
+:canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
+
+```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
+```
+
+````
+
+````{py:method} getSoundVelocity(sound) -> panda3d.core.VBase3
+:canonical: space_flight.fx.sfx.PhysicsAudio3DManager.getSoundVelocity
+
+````
+
+````{py:method} getListenerVelocity() -> panda3d.core.VBase3
+:canonical: space_flight.fx.sfx.PhysicsAudio3DManager.getListenerVelocity
+
+````
+
+````{py:method} detachSound(sound)
+:canonical: space_flight.fx.sfx.PhysicsAudio3DManager.detachSound
+
+````
+
+`````
+
 `````{py:class} SFX(app)
 :canonical: space_flight.fx.sfx.SFX
 
@@ -155,10 +253,18 @@
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.__init__
 ```
 
-````{py:method} attach_sound(sound, node) -> None
+````{py:method} attach_sound(sound, node, velocity_source=None) -> None
 :canonical: space_flight.fx.sfx.SFX.attach_sound
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.attach_sound
+```
+
+````
+
+````{py:method} set_listener_velocity_source(source) -> None
+:canonical: space_flight.fx.sfx.SFX.set_listener_velocity_source
+
+```{autodoc2-docstring} space_flight.fx.sfx.SFX.set_listener_velocity_source
 ```
 
 ````
@@ -227,7 +333,7 @@
 
 ````
 
-````{py:method} cannon_fire(game, sound_pool, node)
+````{py:method} cannon_fire(game, sound_pool, node, velocity_source=None)
 :canonical: space_flight.fx.sfx.SFX.cannon_fire
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.cannon_fire

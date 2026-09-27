@@ -125,12 +125,8 @@ class CapitalShip(Ship):
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
             self.sound.setVolume(10.0)
-            self.game.app.sfx.audio3d.attachSoundToObject(self.sound, self.node)
-
-            # Automatic velocity tracking
-            self.game.app.sfx.audio3d.setSoundVelocityAuto(self.node)
-
-            # TODO Doppler does not seem to work great
+            # Follows the ship node, Doppler-shifted by the ship's velocity
+            self.game.app.sfx.attach_sound(self.sound, self.node, velocity_source=self)
             self.game.delayed_methods.do_method_later(
                 delay_s=0.5,
                 name="Play_engine_sound",

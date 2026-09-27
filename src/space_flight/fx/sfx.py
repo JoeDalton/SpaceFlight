@@ -1,10 +1,12 @@
 import logging
 import random
+import weakref
 from pathlib import Path
 from typing import List
 
 import numpy as np
 from direct.showbase import Audio3DManager
+from panda3d.core import VBase3
 
 from space_flight import DATAFILES_PATH
 from space_flight.utils import magnitude
@@ -23,20 +25,93 @@ PLAYER_HIT_SOUND_MULTIPLIER = 1.0
 
 SOUND_POOL_LENGTH = 20
 
+# Distances are in metres (OpenAL's speed of sound is 343.3 * this, in units/s)
+DISTANCE_FACTOR = 1.0
+# Half the physical Doppler shift (exactly half at low speed): the full
+# shift is too strong at fighter speeds
+DOPPLER_FACTOR = 0.5
+
+
+def _velocity_of(source_ref) -> VBase3:
+    """
+    :param source_ref: A weak reference to an object with a ``speed`` attribute
+        (world-frame velocity, m/s), or None
+    :return: Its current velocity, or zero if there is none or it is gone
+    """
+    source = source_ref() if source_ref is not None else None
+    speed = getattr(source, "speed", None)
+    if speed is None:
+        return VBase3(0, 0, 0)
+    return VBase3(*(float(v) for v in speed))
+
+
+class PhysicsAudio3DManager(Audio3DManager.Audio3DManager):
+    """
+    Audio3DManager whose Doppler velocities come from physics.
+
+    The stock "auto" velocities are node position deltas (getPosDelta), which
+    are zero for nodes moved with plain setPos, i.e. every node in the game.
+    Instead, each sound (and the listener) can be given a velocity source: any
+    object with a world-frame ``speed`` (a ship, a subsystem...), read at every
+    update. Velocities are world-frame even though positions are relative to
+    render, which only translates with the player: OpenAL's Doppler needs
+    velocities relative to the medium, and directions are unaffected.
+
+    Sources are held by weak reference, so a destroyed ship's sound falls back
+    to zero velocity instead of keeping the ship alive. The stock
+    setSoundVelocity / setSoundVelocityAuto / setListenerVelocity(Auto) are
+    superseded.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # Keyed by id(): the null audio backend's sounds all compare equal
+        self._sound_velocity_sources = {}
+        self._listener_velocity_source = None
+        super().__init__(*args, **kwargs)
+
+    def set_sound_velocity_source(self, sound, source) -> None:
+        """
+        :param sound: A 3D sound
+        :param source: Object whose ``speed`` is the sound's velocity, or None
+            for a static sound
+        """
+        if source is None:
+            self._sound_velocity_sources.pop(id(sound), None)
+        else:
+            self._sound_velocity_sources[id(sound)] = weakref.ref(source)
+
+    def set_listener_velocity_source(self, source) -> None:
+        """
+        :param source: Object whose ``speed`` is the listener's velocity, or
+            None for a static listener
+        """
+        self._listener_velocity_source = (
+            weakref.ref(source) if source is not None else None
+        )
+
+    def getSoundVelocity(self, sound) -> VBase3:
+        return _velocity_of(self._sound_velocity_sources.get(id(sound)))
+
+    def getListenerVelocity(self) -> VBase3:
+        return _velocity_of(self._listener_velocity_source)
+
+    def detachSound(self, sound):
+        self._sound_velocity_sources.pop(id(sound), None)
+        return super().detachSound(sound)
+
 
 class SFX:
     def __init__(self, app):
         self.app = app
-        self.audio3d = Audio3DManager.Audio3DManager(
+        self.audio3d = PhysicsAudio3DManager(
             self.app.sfxManagerList[0], self.app.camera
         )
-        self.audio3d.setDopplerFactor(10.0)
-        self.audio3d.setDistanceFactor(0.1)
+        self.audio3d.setDopplerFactor(DOPPLER_FACTOR)
+        self.audio3d.setDistanceFactor(DISTANCE_FACTOR)
         self.audio3d.attachListener(self.app.camera)
-        self.audio3d.setListenerVelocityAuto()
         self.app.taskMgr.add(self.update_task, "AudioUpdate")
 
-    def attach_sound(self, sound, node) -> None:
+    def attach_sound(self, sound, node, velocity_source=None) -> None:
         """
         Attach a 3D sound to a node and place it there right away.
 
@@ -48,11 +123,22 @@ class SFX:
 
         :param sound: The 3D sound to attach
         :param node: The node the sound follows
+        :param velocity_source: Object whose world-frame ``speed`` drives the
+            sound's Doppler shift (the ship carrying the node), or None for a
+            static sound
         """
         self.audio3d.attachSoundToObject(sound, node)
+        self.audio3d.set_sound_velocity_source(sound, velocity_source)
         pos = node.getPos(self.audio3d.root)
         vel = self.audio3d.getSoundVelocity(sound)
         sound.set3dAttributes(pos[0], pos[1], pos[2], vel[0], vel[1], vel[2])
+
+    def set_listener_velocity_source(self, source) -> None:
+        """
+        :param source: Object whose world-frame ``speed`` is the listener's
+            (camera's) velocity, i.e. the player's pawn, or None
+        """
+        self.audio3d.set_listener_velocity_source(source)
 
     def build_sound_pool(self, directory: Path, pattern: str, is_3d: bool) -> List[str]:
         """
@@ -217,7 +303,7 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
 
         # Attach sound to the dummy node
-        self.attach_sound(sound, dummy_node)
+        self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
         sound.setVolume(multiplier)
         sound.play()
 
@@ -258,7 +344,7 @@ class SFX:
             sound_pool = self.terrain_hit_sound_pool
             sound = sound_pool.get_sound(randomize_pitch=True)
             # Attach sound to the cdumy node
-            self.attach_sound(sound, dummy_node)
+            self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
             sound.setVolume(multiplier)
             sound.play()
             game.delayed_methods.do_method_later(
@@ -273,7 +359,7 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
 
         # Attach sound to the dumy node
-        self.attach_sound(sound, dummy_node)
+        self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
         sound.setVolume(multiplier)
         sound.play()
         game.delayed_methods.do_method_later(
@@ -288,7 +374,7 @@ class SFX:
         sound = sound_pool.get_sound(randomize_pitch=True)
 
         # Attach sound to the dumy node
-        self.attach_sound(sound, dummy_node)
+        self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
         sound.setVolume(multiplier)
         sound.play()
         game.delayed_methods.do_method_later(
@@ -298,19 +384,21 @@ class SFX:
             extra_args=[sound],
         )
 
-    def cannon_fire(self, game, sound_pool, node):
+    def cannon_fire(self, game, sound_pool, node, velocity_source=None):
         """
         Play the cannon firing sound at the cannon's location
 
         :param game: The game object
         :param sound_pool: The sound pool from which to draw the sound
         :param node: The node to attach the sound to
+        :param velocity_source: The firing actor (its ``speed`` drives the
+            Doppler shift), or None
         """
         # No one to hear it, headless.
         if game.headless:
             return
         sound = sound_pool.get_sound(randomize_pitch=True)
-        self.attach_sound(sound, node)
+        self.attach_sound(sound, node, velocity_source=velocity_source)
         sound.play()
         # Schedule sound release
         game.delayed_methods.do_method_later(
