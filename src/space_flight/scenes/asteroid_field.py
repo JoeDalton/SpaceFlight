@@ -62,8 +62,7 @@ class AsteroidField:
         # Get 3D models from asset manager
         asteroid_model_paths = [
             # DATAFILES_PATH / "models/asteroids/toutatis_asteroid/scene.gltf",
-            DATAFILES_PATH
-            / "models/asteroids/54509_asteroid/scene.gltf",
+            DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf",
         ]
 
         # Prepare integration

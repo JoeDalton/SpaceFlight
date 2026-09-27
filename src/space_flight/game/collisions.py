@@ -490,11 +490,11 @@ class CollisionSystem:
         # Handle pathologic cases
         if ship_from is None:
             if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+                LOGGER.info("ship_from being removed while it hits. Ignoring.")
             return
         if terrain_into is None:
             if DEBUG_COLLISION:
-                LOGGER.info("terrain_into being removed while it hits. " "Ignoring.")
+                LOGGER.info("terrain_into being removed while it hits. Ignoring.")
             return
 
         if DEBUG_COLLISION:
@@ -580,11 +580,11 @@ class CollisionSystem:
         # Handle pathologic cases
         if ship_from is None:
             if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+                LOGGER.info("ship_from being removed while it hits. Ignoring.")
             return
         if ship_into is None:
             if DEBUG_COLLISION:
-                LOGGER.info("ship_into being removed while it hits. " "Ignoring.")
+                LOGGER.info("ship_into being removed while it hits. Ignoring.")
             return
 
         # A ship never collides with its own subsystems (nor they with each
@@ -698,13 +698,11 @@ class CollisionSystem:
         # Handle pathologic cases
         if ship_from is None:
             if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. " "Ignoring.")
+                LOGGER.info("ship_from being removed while it hits. Ignoring.")
             return
         if massive_actor_into is None:
             if DEBUG_COLLISION:
-                LOGGER.info(
-                    "massive_actor_into being removed while it hits. " "Ignoring."
-                )
+                LOGGER.info("massive_actor_into being removed while it hits. Ignoring.")
             return
 
         if DEBUG_COLLISION:

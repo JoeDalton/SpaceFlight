@@ -992,9 +992,9 @@ def test_quality_preserves_the_sun_marchs_reach():
         reach = spec.optics.sun_steps * spec.optics.sun_step_length
         for quality in CloudQuality:
             optics = at_quality(spec, quality).optics
-            assert optics.sun_steps * optics.sun_step_length == pytest.approx(
-                reach
-            ), f"{cloud_type.value} at {quality.value} changed its march reach"
+            assert optics.sun_steps * optics.sun_step_length == pytest.approx(reach), (
+                f"{cloud_type.value} at {quality.value} changed its march reach"
+            )
 
 
 def test_quality_never_marches_zero_steps():

@@ -412,11 +412,11 @@ class Ship(Pawn):
                 )
                 self.lift_body_n = (
                     self.lift_factor
-                    * speed_norm**2
+                    * speed_norm** 2
                     * angle_of_attack_deg
                     * np.cross(airflow_direction_body, RIGHT_BODY)
                     + self.lateral_lift_factor
-                    * speed_norm**2
+                    * speed_norm** 2
                     * side_slip_angle_deg
                     * np.cross(
                         UP_BODY,

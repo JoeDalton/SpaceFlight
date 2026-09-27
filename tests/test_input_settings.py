@@ -8,6 +8,7 @@ Covers:
 - :meth:`InputSettingsMenuState.flush_dead_zones` — entry-widget flush
 - :meth:`InputSettingsMenuState.on_confirmed` — binding update callback
 """
+
 from unittest.mock import MagicMock
 
 import pytest
