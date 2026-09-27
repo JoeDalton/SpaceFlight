@@ -22,6 +22,10 @@ SFX_MAX_SOUND_DURATION_S = 5
 TERRAIN_HIT_SOUND_MULTIPLIER = 0.01
 TARGET_HIT_SOUND_MULTIPLIER = 1.0
 PLAYER_HIT_SOUND_MULTIPLIER = 1.0
+# Cannon fire is louder from the player's own guns (right in the cockpit) than
+# from anyone else's, at any distance.
+PLAYER_CANNON_FIRE_VOLUME = 1.0
+NPC_CANNON_FIRE_VOLUME = 3.0
 
 SOUND_POOL_LENGTH = 20
 
@@ -384,7 +388,9 @@ class SFX:
             extra_args=[sound],
         )
 
-    def cannon_fire(self, game, sound_pool, node, velocity_source=None):
+    def cannon_fire(
+        self, game, sound_pool, node, velocity_source=None, is_player=False
+    ):
         """
         Play the cannon firing sound at the cannon's location
 
@@ -393,12 +399,17 @@ class SFX:
         :param node: The node to attach the sound to
         :param velocity_source: The firing actor (its ``speed`` drives the
             Doppler shift), or None
+        :param is_player: Whether the player's own cannon fired the shot
+            (louder than an NPC's, see PLAYER_CANNON_FIRE_VOLUME)
         """
         # No one to hear it, headless.
         if game.headless:
             return
         sound = sound_pool.get_sound(randomize_pitch=True)
         self.attach_sound(sound, node, velocity_source=velocity_source)
+        sound.setVolume(
+            PLAYER_CANNON_FIRE_VOLUME if is_player else NPC_CANNON_FIRE_VOLUME
+        )
         sound.play()
         # Schedule sound release
         game.delayed_methods.do_method_later(

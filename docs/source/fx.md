@@ -233,7 +233,12 @@ creation cost across several frames instead of stalling on construction.
   `cannon_fire` each attach a sound to either an ad-hoc dummy node (placed at
   the relative hit point and auto-removed after `SFX_MAX_SOUND_DURATION_S`)
   or an existing node (a firing cannon), so Panda3D's 3D audio handles
-  panning and attenuation automatically. They attach through
+  panning and attenuation automatically. `cannon_fire` sets the shot's volume
+  from `PLAYER_CANNON_FIRE_VOLUME` or `NPC_CANNON_FIRE_VOLUME`, the shots
+  from the player's own guns against everyone else's — `is_player` is passed
+  in by `LaserCannon.fire()`, which compares its firing actor against
+  `game.player.pawn` (`None` outside a live game, e.g. headless, reads as not
+  the player). They attach through
   `attach_sound()`, which also places the sound at its node straight away:
   `Audio3DManager` only moves attached sounds on its next update, so a sound
   played in between would open from its previous position, or from the render

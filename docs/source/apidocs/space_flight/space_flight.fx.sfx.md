@@ -71,6 +71,14 @@
   - ```{autodoc2-docstring} space_flight.fx.sfx.PLAYER_HIT_SOUND_MULTIPLIER
     :summary:
     ```
+* - {py:obj}`PLAYER_CANNON_FIRE_VOLUME <space_flight.fx.sfx.PLAYER_CANNON_FIRE_VOLUME>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.PLAYER_CANNON_FIRE_VOLUME
+    :summary:
+    ```
+* - {py:obj}`NPC_CANNON_FIRE_VOLUME <space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME
+    :summary:
+    ```
 * - {py:obj}`SOUND_POOL_LENGTH <space_flight.fx.sfx.SOUND_POOL_LENGTH>`
   - ```{autodoc2-docstring} space_flight.fx.sfx.SOUND_POOL_LENGTH
     :summary:
@@ -157,6 +165,26 @@
 
 ````
 
+````{py:data} PLAYER_CANNON_FIRE_VOLUME
+:canonical: space_flight.fx.sfx.PLAYER_CANNON_FIRE_VOLUME
+:value: >
+   1.0
+
+```{autodoc2-docstring} space_flight.fx.sfx.PLAYER_CANNON_FIRE_VOLUME
+```
+
+````
+
+````{py:data} NPC_CANNON_FIRE_VOLUME
+:canonical: space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME
+:value: >
+   1.0
+
+```{autodoc2-docstring} space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME
+```
+
+````
+
 ````{py:data} SOUND_POOL_LENGTH
 :canonical: space_flight.fx.sfx.SOUND_POOL_LENGTH
 :value: >
@@ -180,7 +208,7 @@
 ````{py:data} DOPPLER_FACTOR
 :canonical: space_flight.fx.sfx.DOPPLER_FACTOR
 :value: >
-   1.0
+   0.5
 
 ```{autodoc2-docstring} space_flight.fx.sfx.DOPPLER_FACTOR
 ```
@@ -333,7 +361,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} cannon_fire(game, sound_pool, node, velocity_source=None)
+````{py:method} cannon_fire(game, sound_pool, node, velocity_source=None, is_player=False)
 :canonical: space_flight.fx.sfx.SFX.cannon_fire
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.cannon_fire
