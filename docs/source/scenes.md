@@ -34,7 +34,10 @@ with the cloud system under
 - Several pieces "follow the camera to infinity" by re-centring themselves on
   the player each frame (`Skybox`, `Planet2D`) rather than being fixed in
   world space, so a small/cheap piece of geometry can represent something
-  arbitrarily distant.
+  arbitrarily distant. This is separate from the floating render origin,
+  which shifts the whole world under `render` for float precision (see
+  [docs/game.md](game.md#the-floating-render-origin)); scene code keeps
+  working in world coordinates relative to `game.root_node`.
 
 ## `scenes.py` — the `Scene` catalogue
 

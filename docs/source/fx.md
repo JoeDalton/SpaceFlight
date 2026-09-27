@@ -233,7 +233,13 @@ creation cost across several frames instead of stalling on construction.
   `cannon_fire` each attach a sound to either an ad-hoc dummy node (placed at
   the relative hit point and auto-removed after `SFX_MAX_SOUND_DURATION_S`)
   or an existing node (a firing cannon), so Panda3D's 3D audio handles
-  panning/attenuation/Doppler automatically. Scheduled sounds are released
+  panning and attenuation automatically. They attach through
+  `attach_sound()`, which also places the sound at its node straight away:
+  `Audio3DManager` only moves attached sounds on its next update, so a sound
+  played in between would open from its previous position, or from the render
+  origin if never placed. The render origin is on the player, i.e. the
+  listener (see [docs/game.md](game.md#the-floating-render-origin)), so
+  that would start each shot with a loud blip. Scheduled sounds are released
   back to their pool after the same fixed duration via
   `game.delayed_methods.do_method_later`, so pools don't leak playing-sound
   references — `player_crash` schedules a release for each of the up to
@@ -241,9 +247,30 @@ creation cost across several frames instead of stalling on construction.
 - **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` are stubs that
   only log for now — the tractor beam mechanic works without a dedicated
   audio cue yet (see [subsystems.md](subsystems.md)).
-- `update_task` drives `Audio3DManager.update()` once per frame via Panda3D's
-  own task manager (not `game.method_lists` like everything else in this
-  package), since it must run regardless of which actors are alive.
+- `update_task` drives `Audio3DManager.update()` via Panda3D's own task
+  manager (not `game.method_lists` like everything else in this package),
+  since it must run regardless of which actors are alive. The manager also
+  registers its own `Audio3DManager-updateTask` (sort 51, after `igLoop`), so
+  the update currently runs twice per frame.
+- **Doppler is effectively off.** Every velocity reaching OpenAL is zero:
+  - "Auto" velocities are `getPosDelta(render) / dt`, and a node's delta is
+    only non-zero when it was moved with `setFluidPos`. Every node in the game
+    moves with plain `setPos` (ships from physics, the camera rig, laser
+    intervals), which resets the previous position, so the delta is always
+    zero.
+  - `Ship` and `CapitalShip` pass their *node* to `setSoundVelocityAuto`,
+    which expects the *sound*, so engine sounds never get an auto velocity
+    anyway.
+  - One-shot sounds (cannons, impacts) never get a velocity at all.
+
+  The factors set in `SFX.__init__` would not survive real velocities either.
+  In Panda3D's OpenAL backend the speed of sound is `343.3 × distance_factor`
+  units/s, i.e. 34 m/s with `setDistanceFactor(0.1)` (the game's unit is the
+  metre), and `setDopplerFactor(10)` scales every velocity ×10 on top. A
+  1 kHz source approaching at 2 m/s comes out at about 2.4 kHz, and at 10 m/s
+  or faster OpenAL goes silent. Making Doppler work means feeding velocities
+  from physics (`pawn.speed`) and going back to a distance factor of 1 with a
+  modest Doppler factor.
 
 ## Where things live
 
