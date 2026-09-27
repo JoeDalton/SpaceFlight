@@ -15,6 +15,7 @@
 
 space_flight.global_architecture
 space_flight.weapons
+space_flight.utils
 space_flight.ai
 space_flight.fx
 ```
@@ -25,8 +26,8 @@ space_flight.fx
 :titlesonly:
 :maxdepth: 1
 
-space_flight.utils
 space_flight._version
+space_flight.cli
 ```
 
 ## Package Contents
@@ -65,6 +66,14 @@ space_flight._version
   - ```{autodoc2-docstring} space_flight.DEBUG_COLLISION
     :summary:
     ```
+* - {py:obj}`DEBUG_HUD <space_flight.DEBUG_HUD>`
+  - ```{autodoc2-docstring} space_flight.DEBUG_HUD
+    :summary:
+    ```
+* - {py:obj}`FPS_COUNTER <space_flight.FPS_COUNTER>`
+  - ```{autodoc2-docstring} space_flight.FPS_COUNTER
+    :summary:
+    ```
 * - {py:obj}`RECORD_GAME <space_flight.RECORD_GAME>`
   - ```{autodoc2-docstring} space_flight.RECORD_GAME
     :summary:
@@ -87,6 +96,10 @@ space_flight._version
     ```
 * - {py:obj}`EPSILON_TOLERANCE <space_flight.EPSILON_TOLERANCE>`
   - ```{autodoc2-docstring} space_flight.EPSILON_TOLERANCE
+    :summary:
+    ```
+* - {py:obj}`PLANET_RADIUS_M <space_flight.PLANET_RADIUS_M>`
+  - ```{autodoc2-docstring} space_flight.PLANET_RADIUS_M
     :summary:
     ```
 * - {py:obj}`LOGGER <space_flight.LOGGER>`
@@ -175,10 +188,30 @@ space_flight._version
 
 ````
 
+````{py:data} DEBUG_HUD
+:canonical: space_flight.DEBUG_HUD
+:value: >
+   False
+
+```{autodoc2-docstring} space_flight.DEBUG_HUD
+```
+
+````
+
+````{py:data} FPS_COUNTER
+:canonical: space_flight.FPS_COUNTER
+:value: >
+   False
+
+```{autodoc2-docstring} space_flight.FPS_COUNTER
+```
+
+````
+
 ````{py:data} RECORD_GAME
 :canonical: space_flight.RECORD_GAME
 :value: >
-   True
+   False
 
 ```{autodoc2-docstring} space_flight.RECORD_GAME
 ```
@@ -231,6 +264,16 @@ space_flight._version
    1e-05
 
 ```{autodoc2-docstring} space_flight.EPSILON_TOLERANCE
+```
+
+````
+
+````{py:data} PLANET_RADIUS_M
+:canonical: space_flight.PLANET_RADIUS_M
+:value: >
+   6371000.0
+
+```{autodoc2-docstring} space_flight.PLANET_RADIUS_M
 ```
 
 ````

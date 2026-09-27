@@ -25,6 +25,7 @@ space_flight.ai.tracking_mount
 space_flight.ai.interactions
 space_flight.ai.collision_sensor
 space_flight.ai.formation
+space_flight.ai.think_scheduler
 space_flight.ai.auto_aim
 ```
 

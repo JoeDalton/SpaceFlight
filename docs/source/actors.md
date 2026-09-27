@@ -186,8 +186,11 @@ explodes immediately.
 ## `Bot` — the AI controller
 
 [`bot.py`](../../src/space_flight/actors/bot.py) is a `Destructible` that owns
-a pawn and drives it every frame via the tactician → navigator → pilot
-pipeline (see the [`ai`](../../src/space_flight/ai/) package). `bot_type`
+a pawn and drives it via the tactician → navigator → pilot pipeline (see the
+[`ai`](../../src/space_flight/ai/) package). The pawn moves every frame, but
+the navigator and pilot only run when the bot thinks, a few times a second on
+a frame balanced against the other bots (see
+[When a bot thinks](ai.md#when-a-bot-thinks)). `bot_type`
 selects both the pawn class and the matching AI trio:
 
 | `bot_type` | Pawn | AI trio |

@@ -34,7 +34,33 @@ subclasses. `auto_aim.py`, `collision_sensor.py`, `formation.py` and
 - **Pilot** ([`generic_pilot.py`](../../src/space_flight/ai/generic/generic_pilot.py)):
   the actual control loop. `pilot()` is subclass-specific; concrete pilots
   wrap `simple_pid.PID` controllers (one per axis) that null out an angular
-  error each frame.
+  error once per sample period (`sample_time_s` in the personality, 0.1 s
+  for fighters, 0.2 s for capital ships).
+
+### When a bot thinks
+
+The pilot's commands only change once per sample period, so a bot
+(`Bot.move_bot_task`) only *thinks* (runs its navigator and pilot) on those
+frames. Its ship flies the last commands in between; the tactician, cheap
+and already on its own timer, still runs every frame.
+[`think_scheduler.py`](../../src/space_flight/ai/think_scheduler.py) spreads
+the bots over frames: time is cut into one-frame slots, and each bot gets
+the least-busy slot of its period, so every frame carries about the same
+share of bots instead of all of them thinking on the same frame (a periodic
+hitch). The bot then drives its pilot's PIDs itself (`sample_externally`).
+
+Two things can't wait for the next think:
+- **Weapons.** A fighter's gun reloads faster than the bot thinks, and a
+  late bomb release misses. So `navigate()` arms its fire / release decision,
+  and on the frames in between, `FighterNavigator.update_triggers` takes it
+  again on fresh geometry from [`Interactions`](#interactions).
+- **Obstacle contacts.** The collision sensor only collects contacts for the
+  frame the bot thinks in (see [`CollisionSensor`](#collisionsensor-and-formation)).
+
+Turrets and tractor beams still navigate every frame: their navigator is
+cheap and publishes the firing solution the mount checks every frame. Only
+their pilot follows the schedule. The player's AI mode (`has_ai`) is not
+scheduled.
 
 `target_dict` is a small, informally-typed payload (`target_id`, `score`,
 sometimes `position`/`formation_index`) threaded from tactician through
@@ -80,7 +106,7 @@ Both free-flying ship types share
   `formation` (station-keeping relative to a wing leader, itself resolved via
   lead pursuit).
 - **`GenericShipPilot`** owns four PID loops (yaw, pitch, roll, throttle),
-  driven each frame by `compute_angular_error` (subclass-specific — a
+  driven at each think by `compute_angular_error` (subclass-specific — a
   fighter and a capital ship point their axes at a target differently) and a
   velocity error against the navigator's desired speed.
 
@@ -187,9 +213,13 @@ retune a turret's auto-aim quality at runtime.
 ship three overlapping look-ahead collision spheres, centred at increasing
 distances ahead of the nose (by default ~5/50/125 m, radii ~30/50/100 m); the
 outer ones can be disabled via `active_range` (e.g. during a bomb run).
-Whatever collides with them each frame contributes a weighted repulsion
-vector (closer obstacles weigh more), consumed once per frame by
-`GenericShipNavigator.navigate_avoidance` and wiped after reading.
+Each contact contributes a weighted repulsion vector (closer obstacles weigh
+more), consumed by `GenericShipNavigator.navigate_avoidance` when the bot
+thinks and wiped after reading. The collision system records contacts into
+the sensor (`record_obstacle`, current frame only) right after each
+traversal, and `set_active` takes the spheres out of the traversal on the
+frames their bot won't think. The whole flow, from traversal to avoidance, is
+described in [game.md](game.md#sensor-contacts-from-traversal-to-avoidance).
 
 [`formation.py`](../../src/space_flight/ai/formation.py) is data, not AI logic:
 `Formation` holds a named layout (`arrowhead`, `diamond`, `around_diamond`)
@@ -202,15 +232,17 @@ occupying them. Ships read their own slot via `pawn.formation` +
 
 [`interactions.py`](../../src/space_flight/ai/interactions.py) is the central
 per-frame relationship cache every tactician/navigator/auto-aim query reads
-from instead of recomputing pairwise geometry themselves: for every pair of
-*opposing* live actors (different non-neutral teams) within
-`INTERACT_MAX_DISTANCE_M` of each other (10 km, in `ai/__init__.py`) it flags
-the pair in `interact` and precomputes distance, unit direction, relative
-velocity and forward alignment. Actors occupy stable pre-allocated slots
-(`add_actor`/`remove_actor`, `MAX_ACTORS = 64` by default) so slot indices
-never shift and no per-frame allocation is needed;
-`update_interactions()` only iterates currently-live pairs, so cost scales
-with the number of live actors, not the pre-allocated capacity. Note that
+from instead of recomputing pairwise geometry themselves. For every pair of
+live actors it computes distance, unit direction, relative velocity and
+forward alignment, and flags in `interact` the pairs that can fight: opposing
+teams (different, non-neutral) within `INTERACT_MAX_DISTANCE_M` of each other
+(10 km, in `ai/__init__.py`). The diagonal (an actor with itself) is always
+zero. Actors occupy stable pre-allocated slots (`add_actor`/`remove_actor`,
+`MAX_ACTORS = 64` by default) so slot indices never shift and no per-frame
+allocation is needed. `update_interactions()` computes all live pairs at once
+with numpy and writes them into the matrices in place (callers keep views
+into them), so cost scales with the number of live actors, not the
+pre-allocated capacity. Note that
 `live_actors` (and masks built over it, or rows sliced with `alive`) are
 compacted, so their positions are not the stable slot indices returned by
 `get_actor_index_from_id`; translate via `np.where(alive)[0]` before

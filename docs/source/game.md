@@ -89,8 +89,8 @@ player's camera head bob) that doesn't need a slot in the shared buffer.
 ## `CollisionSystem` — layers, routing and physical response
 
 [`collisions.py`](../../src/space_flight/game/collisions.py) is the largest
-module in this package: it defines Panda3D collision layers and owns all the
-`*-into-*` event handlers that turn a raw collision entry into game effects.
+module in this package: it defines Panda3D collision layers and owns the
+handlers that turn a raw collision entry into game effects.
 
 - **`CollisionLayers`** defines bitmask layers (`MUNITION`, `SHIELD`,
   `DESTRUCTIBLE`, `ENVIRONMENT`, plus `SENSOR` sharing bit 0 with
@@ -105,11 +105,17 @@ module in this package: it defines Panda3D collision layers and owns all the
   vehicle" if they're identical, one is `mounted_on` the other, or both share
   the same `mounted_on` host (siblings). Every handler that could otherwise
   fire on a ship-vs-its-own-subsystem pair checks this first.
-- **`CollisionSystem`** owns the `CollisionTraverser` and a
-  `CollisionHandlerEvent` with `-into-`/`-again-` patterns, and subscribes a
-  handler method to each event name Panda3D emits. `update_collisions()`
-  (called once per frame from `FlightState`) just runs the traverser; all the
-  actual game logic lives in the handler methods:
+- **`CollisionSystem`** owns the `CollisionTraverser` and two handlers:
+  - a `CollisionHandlerEvent` with `-into-`/`-again-` patterns, used by every
+    collider except sensors, with a handler method subscribed to each event
+    name Panda3D emits;
+  - a `CollisionHandlerQueue` for collision sensors (`sensor_queue`), read
+    directly instead of going through events: see
+    [Sensor contacts](#sensor-contacts-from-traversal-to-avoidance) below.
+
+  `update_collisions()` (called once per frame from `FlightState`) runs the
+  traverser, then hands each queued sensor contact to `sensor_into_obstacle`.
+  All the actual game logic lives in the handler methods:
   - **Munition hits** (`munition_into_destructible`, `munition_into_terrain`,
     `munition_into_shield`, shared by lasers and bombs) apply damage, delete
     the munition node, and trigger the matching sound. A shield only blocks a
@@ -126,12 +132,56 @@ module in this package: it defines Panda3D collision layers and owns all the
     collision *damage* is dealt to the subsystem alone, never its parent.
   - **`sensor_into_obstacle`** just records the hit (normal + point) onto the
     sensor object for `CollisionSensor.compute_repulsion` (see
-    [docs/ai.md](ai.md)) to consume next frame.
+    [docs/ai.md](ai.md)) to consume later in the same frame.
 - **`attach_collision_sphere` / `_tube` / `_segment` / `_plane`** are the
   shared factory functions every actor uses to build a collider: they resolve
   the from/into masks for a collider type, attach the Panda3D collision
   solid, tag it with an `owner` python-tag (read back by every handler
-  above), and register it with the traverser unless its type is into-only.
+  above), and register it with the traverser unless its type is into-only
+  (with the sensor queue for sensors, the event handler otherwise).
+
+### Sensor contacts: from traversal to avoidance
+
+Sensor contacts don't go through Panda3D's event messenger: there are ~100
+of them per frame, and routing each one through events cost more than the
+avoidance itself. They are plain function calls instead, in this order.
+
+**Setup, once per sensor sphere.** `CollisionSensor.__init__` builds its
+three look-ahead spheres with `attach_collision_sphere(...,
+collider_type="sensor")`, which registers each of them with the traverser
+using `CollisionSystem.sensor_queue` rather than the event handler.
+
+**Each frame, inside `FlightState.update_game_world_task`:**
+
+1. **Traversal.** `update_collisions()` runs `traverser.traverse(render)`.
+   While traversing, Panda3D clears `sensor_queue` and fills it with one
+   `CollisionEntry` per contact of an *active* sensor sphere (other colliders
+   still throw their events, as described above).
+2. **Recording.** Right after the traverse, `update_collisions()` calls
+   `sensor_into_obstacle(entry)` for each queued entry. The handler finds the
+   sensor from the entry's `owner` tag, ignores contacts with the sensor's
+   own ship (`owners_share_vehicle`), and calls
+   `sensor.record_obstacle({normal, hit_point, range})`. The sensor keeps only
+   the current frame's contacts: the first contact of a new frame starts a
+   fresh list.
+3. **Consumption.** Later in the same frame, a bot that thinks runs its
+   navigator, whose `navigate_avoidance` calls
+   `collision_sensor.compute_repulsion()` on the contacts recorded in step 2.
+   Contacts left from an earlier frame are discarded: whatever they touched
+   is no longer in contact.
+4. **Next frame's sensor state.** At the end of its update, the bot calls
+   `sensor.set_active(...)` (`Bot._schedule_sensor`): the sensor is active only
+   if the bot thinks next frame. An inactive sensor's spheres have an empty
+   from-collide mask, so the next traversal skips them and they produce no
+   queue entries, which saves the traversal cost for bots that won't read
+   the contacts. If a frame comes later than expected and a bot is due to
+   think while its sensor sat out that frame's traversal, the bot turns the
+   sensor on and thinks one frame later, so it never thinks without fresh
+   contacts. The player's sensor is never switched off.
+
+Compared to events, this is also one frame fresher: events are delivered by
+Panda3D's event-loop task at the start of the *next* frame, whereas the
+queue is read as soon as the traverse ends.
 
 ## Levels
 

@@ -31,6 +31,10 @@
   - ```{autodoc2-docstring} space_flight.ai.interactions.MAX_ACTORS
     :summary:
     ```
+* - {py:obj}`_ZERO3 <space_flight.ai.interactions._ZERO3>`
+  - ```{autodoc2-docstring} space_flight.ai.interactions._ZERO3
+    :summary:
+    ```
 ````
 
 ### API
@@ -41,6 +45,16 @@
    64
 
 ```{autodoc2-docstring} space_flight.ai.interactions.MAX_ACTORS
+```
+
+````
+
+````{py:data} _ZERO3
+:canonical: space_flight.ai.interactions._ZERO3
+:value: >
+   'zeros(...)'
+
+```{autodoc2-docstring} space_flight.ai.interactions._ZERO3
 ```
 
 ````
@@ -103,6 +117,14 @@
 :canonical: space_flight.ai.interactions.Interactions.update_interactions
 
 ```{autodoc2-docstring} space_flight.ai.interactions.Interactions.update_interactions
+```
+
+````
+
+````{py:method} _live_pair_indices(live: numpy.ndarray) -> numpy.ndarray
+:canonical: space_flight.ai.interactions.Interactions._live_pair_indices
+
+```{autodoc2-docstring} space_flight.ai.interactions.Interactions._live_pair_indices
 ```
 
 ````

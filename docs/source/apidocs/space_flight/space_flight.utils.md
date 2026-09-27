@@ -16,7 +16,7 @@
 space_flight.utils.state_machine
 ```
 
-## Module Contents
+## Package Contents
 
 ### Functions
 
@@ -26,6 +26,22 @@ space_flight.utils.state_machine
 
 * - {py:obj}`rotate_single_vector <space_flight.utils.rotate_single_vector>`
   - ```{autodoc2-docstring} space_flight.utils.rotate_single_vector
+    :summary:
+    ```
+* - {py:obj}`rotation_matrix_coefficients <space_flight.utils.rotation_matrix_coefficients>`
+  - ```{autodoc2-docstring} space_flight.utils.rotation_matrix_coefficients
+    :summary:
+    ```
+* - {py:obj}`cross3 <space_flight.utils.cross3>`
+  - ```{autodoc2-docstring} space_flight.utils.cross3
+    :summary:
+    ```
+* - {py:obj}`normalize <space_flight.utils.normalize>`
+  - ```{autodoc2-docstring} space_flight.utils.normalize
+    :summary:
+    ```
+* - {py:obj}`magnitude <space_flight.utils.magnitude>`
+  - ```{autodoc2-docstring} space_flight.utils.magnitude
     :summary:
     ```
 * - {py:obj}`safe_angle_rad <space_flight.utils.safe_angle_rad>`
@@ -72,6 +88,34 @@ space_flight.utils.state_machine
 :canonical: space_flight.utils.rotate_single_vector
 
 ```{autodoc2-docstring} space_flight.utils.rotate_single_vector
+```
+````
+
+````{py:function} rotation_matrix_coefficients(w: float, x: float, y: float, z: float) -> tuple[float, float, float, float, float, float, float, float, float]
+:canonical: space_flight.utils.rotation_matrix_coefficients
+
+```{autodoc2-docstring} space_flight.utils.rotation_matrix_coefficients
+```
+````
+
+````{py:function} cross3(a: numpy.ndarray, b: numpy.ndarray) -> numpy.ndarray
+:canonical: space_flight.utils.cross3
+
+```{autodoc2-docstring} space_flight.utils.cross3
+```
+````
+
+````{py:function} normalize(vector: numpy.ndarray) -> numpy.ndarray
+:canonical: space_flight.utils.normalize
+
+```{autodoc2-docstring} space_flight.utils.normalize
+```
+````
+
+````{py:function} magnitude(vector: numpy.ndarray) -> float
+:canonical: space_flight.utils.magnitude
+
+```{autodoc2-docstring} space_flight.utils.magnitude
 ```
 ````
 
