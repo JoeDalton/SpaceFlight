@@ -7,10 +7,100 @@ import quaternion
 
 def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
     """
-    Rotates vector by the rotation defined by quat
+    Rotates vector by the rotation defined by quat.
+
+    Uses the scalar Rodrigues-style formula v' = v + 2*w*(q_v x v) + 2*(q_v x
+    (q_v x v)) worked out component-by-component in plain floats, instead of
+    quaternion.rotate_vectors (which builds a full rotation matrix via
+    generic, broadcasting-capable numpy ops meant for batches of vectors);
+    for a lone 3-vector that generality is pure overhead and this is
+    substantially faster (called once per ship per frame).
     """
-    # TODO quaternion multiplication for faster computation
-    return quaternion.rotate_vectors(quat, vector)
+    qx, qy, qz, qw = quat.x, quat.y, quat.z, quat.w
+    vx, vy, vz = vector[0], vector[1], vector[2]
+    tx = 2.0 * (qy * vz - qz * vy)
+    ty = 2.0 * (qz * vx - qx * vz)
+    tz = 2.0 * (qx * vy - qy * vx)
+    return np.array(
+        (
+            vx + qw * tx + (qy * tz - qz * ty),
+            vy + qw * ty + (qz * tx - qx * tz),
+            vz + qw * tz + (qx * ty - qy * tx),
+        )
+    )
+
+
+def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """
+    Cross product of two plain 3-vectors, worked out component-by-component
+    in plain floats instead of np.cross (which, like quaternion.rotate_vectors,
+    dispatches through generic broadcasting-capable numpy machinery meant for
+    batches of vectors -- pure overhead for a lone pair of 3-vectors, and
+    substantially slower).
+    """
+    return np.array(
+        (
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        )
+    )
+
+
+def normalize(vector: np.ndarray) -> np.ndarray:
+    """
+    Returns vector scaled to unit length: a 3D direction, or a quaternion's 4
+    raw components (as used when renormalizing one drifting slightly out of
+    unit norm after each integration step, e.g. in AsteroidField).
+
+    Builds the squared norm as a plain float sum and calls math.sqrt on it
+    directly, instead of going through np.linalg.norm's generic, broadcast-
+    capable dispatch -- same pattern, and same reasoning, as
+    rotate_single_vector/cross3: for a single fixed-size vector that
+    generality is pure overhead.
+
+    A 2nd-order Taylor expansion of sqrt around 1 was tried on top of this,
+    to shortcut the sqrt call for the common near-unit-length input (a
+    direction/quaternion that only drifted by a small numerical error, not a
+    fresh arbitrary vector). It measured *slower* than calling math.sqrt
+    directly (in CPython, math.sqrt is a single fast C call, and the extra
+    branch and multiplications to evaluate the series cost more than the
+    call they replace), and its ~1e-4 relative error broke exact-orthonormal
+    assumptions elsewhere in the codebase -- so it was dropped in favour of
+    a plain, exact math.sqrt.
+    """
+    if len(vector) == 3:
+        x, y, z = vector[0], vector[1], vector[2]
+        inv_norm = 1.0 / math.sqrt(x * x + y * y + z * z)
+        return np.array((x * inv_norm, y * inv_norm, z * inv_norm))
+    if len(vector) == 4:
+        x, y, z, w = vector[0], vector[1], vector[2], vector[3]
+        inv_norm = 1.0 / math.sqrt(x * x + y * y + z * z + w * w)
+        return np.array((x * inv_norm, y * inv_norm, z * inv_norm, w * inv_norm))
+    return vector / math.sqrt(float(np.dot(vector, vector)))
+
+
+def magnitude(vector: np.ndarray) -> float:
+    """
+    Returns the Euclidean norm (magnitude) of vector: a 2D screen-space
+    vector, a 3D direction/speed, or a quaternion's 4 raw components.
+
+    Same reasoning as normalize/cross3/rotate_single_vector: builds the
+    squared norm as a plain float sum and calls math.sqrt on it directly,
+    instead of going through np.linalg.norm's generic, broadcast-capable
+    dispatch -- for a single fixed-size vector that generality is pure
+    overhead.
+    """
+    if len(vector) == 3:
+        x, y, z = vector[0], vector[1], vector[2]
+        return math.sqrt(x * x + y * y + z * z)
+    if len(vector) == 2:
+        x, y = vector[0], vector[1]
+        return math.sqrt(x * x + y * y)
+    if len(vector) == 4:
+        x, y, z, w = vector[0], vector[1], vector[2], vector[3]
+        return math.sqrt(x * x + y * y + z * z + w * w)
+    return math.sqrt(float(np.dot(vector, vector)))
 
 
 def safe_angle_rad(angle_rad: float) -> float:
@@ -38,7 +128,13 @@ def low_pass_filter_first_order(
 ) -> Union[float, np.ndarray]:
     """
     First order low pass filter with a possibility for distinct fall and rise
-    characteristic times
+    characteristic times.
+
+    The array branch is worked out component-by-component in plain floats
+    instead of np.where/elementwise array arithmetic, which dispatch through
+    numpy's generic, broadcast-capable machinery -- same reasoning, and same
+    pattern, as cross3/magnitude/normalize: pure overhead for the small,
+    fixed-size vectors this is actually called with (turn rates, thrust).
     """
     if dt == 0.0:
         return value
@@ -48,13 +144,18 @@ def low_pass_filter_first_order(
         tau = rise_time if value > previous else fall_time
         if tau <= 0.0:
             return value
-    elif isinstance(value, np.ndarray) and isinstance(previous, np.ndarray):
-        tau = np.where((value > previous), rise_time, fall_time)
-        if (tau <= 0).any():
-            return value
+        alpha = dt / (tau + dt)
+        return previous + (value - previous) * alpha
 
-    alpha = dt / (tau + dt)
-    return previous + (value - previous) * alpha
+    n = len(value)
+    taus = [rise_time if value[i] > previous[i] else fall_time for i in range(n)]
+    if any(tau <= 0.0 for tau in taus):
+        return value
+    result = np.empty(n)
+    for i in range(n):
+        alpha = dt / (taus[i] + dt)
+        result[i] = previous[i] + (value[i] - previous[i]) * alpha
+    return result
 
 
 def smooth_step_down(
@@ -98,7 +199,7 @@ def sample_unit_sphere() -> np.ndarray:
     max_try = 50
     for _ in range(max_try):
         sample = np.random.uniform(low=-1, high=1, size=3)
-        if np.linalg.norm(sample) <= 1.0:
+        if magnitude(sample) <= 1.0:
             return sample
     # If no suitable sample is found, fall back to the origin (center of the sphere)
     return np.zeros(3)
@@ -119,7 +220,7 @@ def build_orthogonal_basis(
     """
     if normal is None:
         return None, None, None
-    normal_norm = np.linalg.norm(normal)
+    normal_norm = magnitude(normal)
     if normal_norm < 1e-6:
         normal = np.array([0, 0, 1])
         normal_norm = 1.0
@@ -131,10 +232,8 @@ def build_orthogonal_basis(
         if abs(np.dot(np.array([1, 0, 0]), normal)) < 0.9
         else np.array([0, 1, 0])
     )
-    tangent = np.cross(normal, helper)
-    tangent /= np.linalg.norm(tangent)
-    bitangent = np.cross(normal, tangent)
-    bitangent /= np.linalg.norm(bitangent)
+    tangent = normalize(cross3(normal, helper))
+    bitangent = normalize(cross3(normal, tangent))
     return normal, tangent, bitangent
 
 
@@ -169,7 +268,7 @@ def sample_direction_in_cone(
         + tangent * sine_theta * np.cos(phi_rad)
         + bitangent * sine_theta * np.sin(phi_rad)
     )
-    sample /= np.linalg.norm(sample)  # TODO Not necessary
+    sample = normalize(sample)  # TODO Not necessary
     return sample
 
 
@@ -190,7 +289,7 @@ def build_axis_billboard_quat(
     # Make copies to avoid modifying the original vectors
 
     # Normalize forward vector
-    forward_norm = np.linalg.norm(forward)
+    forward_norm = magnitude(forward)
     if forward_norm < 1e-4:
         forward_axis = np.array([0, 1, 0])
     else:
@@ -198,7 +297,7 @@ def build_axis_billboard_quat(
 
     # Normalize up_hint
     if up_hint is not None:
-        up_hint_norm = np.linalg.norm(up_hint)
+        up_hint_norm = magnitude(up_hint)
         if forward_norm < 1e-4:
             up_hint_axis = np.array([0, 0, 1])
         else:
@@ -212,8 +311,8 @@ def build_axis_billboard_quat(
         up_hint_axis = np.array([1, 0, 0])
 
     # Build orthogonal basis
-    right_axis = np.cross(forward_axis, up_hint_axis)
-    up_axis = np.cross(right_axis, forward_axis)
+    right_axis = cross3(forward_axis, up_hint_axis)
+    up_axis = cross3(right_axis, forward_axis)
 
     quat = quaternion.from_rotation_matrix(
         np.array(

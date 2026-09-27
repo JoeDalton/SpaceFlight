@@ -6,6 +6,7 @@ import yaml
 from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
 from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
+from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
 
 # Grab state machine states.
@@ -153,7 +154,7 @@ class TractorBeamProjector(TrackingMount):
             return
         if (
             elapsed_s >= params["min_grab_time_s"]
-            and np.linalg.norm(v_rel) >= params["release_speed_mps"]
+            and magnitude(v_rel) >= params["release_speed_mps"]
         ):
             self._release()
             return
@@ -169,7 +170,7 @@ class TractorBeamProjector(TrackingMount):
         :param to_prey_dir: Unit vector from the projector to the prey
         """
         # Drag opposes the relative velocity with magnitude k * ||v_rel||^2.
-        drag_force = -self.drag_coefficient * np.linalg.norm(v_rel) * v_rel
+        drag_force = -self.drag_coefficient * magnitude(v_rel) * v_rel
         # Attraction pulls the prey back toward the projector.
         attraction_force = -self.attraction_force_n * to_prey_dir
         prey.apply_external_force(drag_force + attraction_force)
@@ -233,7 +234,7 @@ class TractorBeamProjector(TrackingMount):
         :return: (distance_m, relative velocity vector, unit direction to prey)
         """
         to_prey = np.asarray(prey.position, dtype=float) - self.position
-        distance_m = np.linalg.norm(to_prey)
+        distance_m = magnitude(to_prey)
         if distance_m < EPSILON_TOLERANCE:
             to_prey_dir = np.zeros(3)
         else:

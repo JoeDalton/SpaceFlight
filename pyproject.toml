@@ -36,6 +36,7 @@ nptdms = "^1.10.0"
 plotly="^6.5.2"
 requests="^2.33.1"
 pygments="^2.20.0"
+snakeviz = "^2.2.2"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^9.0.3"

@@ -4,7 +4,7 @@ from simple_pid import PID
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import HALF_PI, Personality
 from space_flight.ai.generic.generic_pilot import GenericPilot
-from space_flight.utils import safe_angle_rad
+from space_flight.utils import magnitude, safe_angle_rad
 
 
 class TrackingMountPilot(GenericPilot):
@@ -80,7 +80,7 @@ class TrackingMountPilot(GenericPilot):
         """
 
         # Compute angular errors
-        target_direction_norm = np.linalg.norm(target_direction)
+        target_direction_norm = magnitude(target_direction)
         if target_direction_norm == 0.0:
             yaw_error_rad = 0.0
             pitch_error_rad = 0.0

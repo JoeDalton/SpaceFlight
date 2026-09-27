@@ -13,6 +13,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE, FPS_COUNTER
+from space_flight.utils import magnitude
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -154,7 +155,7 @@ class HUD:
             player_text = (
                 ""
                 "Player Speed = "
-                f"{np.linalg.norm(self.game.player.pawn.state[7:10]):.1f}m/s\n"
+                f"{magnitude(self.game.player.pawn.state[7:10]):.1f}m/s\n"
                 f"Player health = {self.game.player.pawn.health:.1f}\n"
                 f"Player shield = {self.game.player.pawn.shield:.1f}\n"
                 f"Time = {self.game.game_time.get_current_time():.0f}\n"
@@ -180,7 +181,7 @@ class HUD:
                     "Lead Bot throttle = "
                     f"{self.game.lead_bot.pilot.throttle:.4f}\n"
                     "Lead Bot Speed = "
-                    f"{np.linalg.norm(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
+                    f"{magnitude(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
                     "\n"
                     # "Lead Bot has target lock = "
                     # f"{self.game.lead_bot.pawn.auto_aim.is_target_acquired}\n"

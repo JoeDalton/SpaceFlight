@@ -18,7 +18,12 @@ from space_flight import (
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
 from space_flight.fx.damage_fx import DamageFX
-from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
+from space_flight.utils import (
+    cross3,
+    low_pass_filter_first_order,
+    magnitude,
+    rotate_single_vector,
+)
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -386,7 +391,7 @@ class Ship(Pawn):
         self.thrust_n = self.scalar_thrust_n * self.forward
 
         if FLIGHT_MODEL == "airplane":
-            speed_norm = np.linalg.norm(self.speed)
+            speed_norm = magnitude(self.speed)
             if np.isnan(speed_norm) or (speed_norm <= 1e-4):
                 # No lift or drag without speed
                 self.drag_n = np.zeros(3)
@@ -410,15 +415,20 @@ class Ship(Pawn):
                 side_slip_angle_deg = np.rad2deg(
                     np.arcsin(np.clip(airflow_speed_body[0] / speed_norm, -1.0, 1.0))
                 )
+                # TODO RIGHT_BODY/UP_BODY are axis-aligned unit vectors, so
+                # these two cross3 calls are just component permutations of
+                # airflow_direction_body (e.g. cross3(a, RIGHT_BODY) == (0,
+                # a[2], -a[1])) -- measured ~0.6% of total profiled game time,
+                # so likely not worth the fragility of hardcoding it.
                 self.lift_body_n = (
                     self.lift_factor
                     * speed_norm** 2
                     * angle_of_attack_deg
-                    * np.cross(airflow_direction_body, RIGHT_BODY)
+                    * cross3(airflow_direction_body, RIGHT_BODY)
                     + self.lateral_lift_factor
                     * speed_norm** 2
                     * side_slip_angle_deg
-                    * np.cross(
+                    * cross3(
                         UP_BODY,
                         airflow_direction_body,
                     )
@@ -427,7 +437,7 @@ class Ship(Pawn):
                 self.lift_n = rotate_single_vector(quat, self.lift_body_n)
 
                 # Clip the lift to the max thrust to avoid simulation divergence
-                lift_norm_n = np.linalg.norm(self.lift_n)
+                lift_norm_n = magnitude(self.lift_n)
                 if lift_norm_n > self.max_thrust_n:
                     self.lift_n /= lift_norm_n
                     self.lift_n *= self.max_thrust_n
@@ -514,7 +524,7 @@ class Ship(Pawn):
         underlying divergence can be investigated.
         """
         if np.all(np.isfinite(self.state)):
-            speed_norm = np.linalg.norm(self.speed)
+            speed_norm = magnitude(self.speed)
             if speed_norm > DIVERGENCE_SPEED_FACTOR * self.max_speed_mps:
                 LOGGER.warning(
                     "Ship %s speed %.3g m/s is diverging; snapping to terminal.",
@@ -597,7 +607,7 @@ class Ship(Pawn):
         """
         self.scalar_thrust_n = 0.0
         axis = np.random.normal(size=3)
-        norm = np.linalg.norm(axis)
+        norm = magnitude(axis)
         if norm > 1e-6:
             self._tumble_axis = axis / norm
 

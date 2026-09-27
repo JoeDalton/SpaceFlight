@@ -50,6 +50,35 @@ ENEMY_FRIGATE = WaveSpec(
     waypoints=PATROL_ROUTE,
 )
 
+# Two more capital ships alongside ENEMY_FRIGATE, for CPU load profiling
+# (~20 ships total with ENEMY_FIGHTER_SQUADRON below).
+ENEMY_FRIGATE_WING = WaveSpec(
+    name="frigate_wing",
+    ship_model="cr-90",
+    size=2,
+    bot_type="capital_ship",
+    team=2,
+    spawn_point=[300, -1500, 500],
+    spawn_orientation=[1, 0, 0, 0],
+    record=True,
+    waypoints=PATROL_ROUTE,
+)
+
+# A squadron of fighters, for CPU load profiling (~20 ships total with the two
+# frigate waves above: 1 + 2 + 17).
+ENEMY_FIGHTER_SQUADRON = WaveSpec(
+    name="enemy_fighter_squadron",
+    ship_model="tie-fighter",
+    size=17,
+    bot_type="fighter",
+    team=2,
+    spawn_point=[-300, -1500, 500],
+    spawn_orientation=[1, 0, 0, 0],
+    record=True,
+    formation="arrowhead",
+    waypoints=PATROL_ROUTE,
+)
+
 # Not spawned by default: available for trying things out in the sandbox
 # (e.g. m.spawn(ALLIED_PATROL, target=frigate) to have it bomb the frigate).
 ALLIED_PATROL = WaveSpec(
@@ -98,12 +127,16 @@ def build_dev_upfront(game: FlightState) -> None:
 
 def dev_mission(m: Mission) -> Iterator[None]:
     """
-    The dev sandbox's mission body: a lone enemy frigate arrives after a
-    couple of seconds. There is no win/lose condition here -- it is a sandbox
-    for trying out the latest implemented features, not a scripted mission.
+    The dev sandbox's mission body: an enemy frigate wing (3 capital ships)
+    and a fighter squadron arrive after a couple of seconds, ~20 ships total
+    for CPU load testing. There is no win/lose condition here -- it is a
+    sandbox for trying out the latest implemented features, not a scripted
+    mission.
 
     :param m: The level's :class:`Mission`
     """
     yield from m.wait(2)
-    m.hud("Enemy frigate inbound")
+    m.hud("Enemy forces inbound")
     m.spawn(ENEMY_FRIGATE)
+    m.spawn(ENEMY_FRIGATE_WING)
+    m.spawn(ENEMY_FIGHTER_SQUADRON)

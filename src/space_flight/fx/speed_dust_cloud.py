@@ -2,10 +2,10 @@ import random
 import uuid
 from typing import List
 
-import numpy as np
 from panda3d.core import CardMaker, NodePath, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
+from space_flight.utils import magnitude
 
 MIN_DUST_ALPHA = 0.2
 MAX_DUST_ALPHA = 0.8
@@ -117,7 +117,7 @@ class SpeedDustCloud:
         The dust's opacity increases with player speed to reinforce the feeling
         """
         dt = self.game.game_time.get_time_step()
-        speed = np.linalg.norm(self.game.player.pawn.speed)
+        speed = magnitude(self.game.player.pawn.speed)
         alpha = (
             MIN_DUST_ALPHA + speed * (MAX_DUST_ALPHA - MIN_DUST_ALPHA) / self.max_speed
         )

@@ -9,6 +9,7 @@ from panda3d.core import Quat
 
 from space_flight import DATAFILES_PATH
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.utils import normalize
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -158,9 +159,10 @@ class AsteroidField:
         # Update instances
         for ast_idx in range(self.n_asteroids):
             instance = self.asteroids[ast_idx]
-            # Normalize quaternion in state vector
-            new_quat = self.state[4 * ast_idx : 4 * (ast_idx + 1)]
-            new_quat /= np.linalg.norm(new_quat)
+            # Normalize quaternion in state vector (written back into
+            # self.state, read again below and by the next integration step)
+            new_quat = normalize(self.state[4 * ast_idx : 4 * (ast_idx + 1)])
+            self.state[4 * ast_idx : 4 * (ast_idx + 1)] = new_quat
             # Update instance orientation
             instance.setQuat(Quat(*new_quat))
 

@@ -69,6 +69,7 @@ from space_flight.scenes.cloud.noise import (
     value_noise_volume,
     with_threshold,
 )
+from space_flight.utils import magnitude
 
 LOGGER = logging.getLogger()
 
@@ -621,7 +622,7 @@ class CloudField:
         :param haze_color: RGB distant cloud tends toward, or None to keep
         """
         sun_dir = np.asarray(direction, dtype=float)[:3]
-        norm = np.linalg.norm(sun_dir)
+        norm = magnitude(sun_dir)
         if norm < 1e-9:
             raise ValueError("sun direction must be a non-zero vector")
         self._sun_direction = tuple(float(v) for v in sun_dir)

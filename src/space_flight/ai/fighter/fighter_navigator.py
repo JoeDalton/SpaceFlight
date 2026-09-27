@@ -10,7 +10,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
-from space_flight.utils import smooth_step_down, smooth_step_up
+from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
 from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
 LOGGER = logging.getLogger()
@@ -212,7 +212,7 @@ class FighterNavigator(GenericShipNavigator):
         # Check if we need to extend the trajectory to avoid a spiral of death
         longitudinal_speed_vector = longitudinal_speed_scalar_mps * direction
         lateral_speed_vector = relative_speed_vector - longitudinal_speed_vector
-        lateral_speed_scalar_mps = np.linalg.norm(lateral_speed_vector)
+        lateral_speed_scalar_mps = magnitude(lateral_speed_vector)
 
         if self.check_extend_conditions(
             longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
@@ -251,14 +251,14 @@ class FighterNavigator(GenericShipNavigator):
             * lag_direction
             * lag_weight
         )
-        aim_vector_norm = np.linalg.norm(aim_vector)
+        aim_vector_norm = magnitude(aim_vector)
         if aim_vector_norm < TARGET_DISTANCE_TOLERANCE_M:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm
 
         # Compute desired speed
-        target_speed_mps = np.linalg.norm(target_current_speed)
+        target_speed_mps = magnitude(target_current_speed)
         pursuit_speed_mps = self.compute_follow_speed(
             distance_m=distance_m,
             target_speed_mps=target_speed_mps,
@@ -457,7 +457,7 @@ class FighterNavigator(GenericShipNavigator):
                 lead_target_position + surface_normal * strafe["run_altitude_m"]
             )
             base_direction = corridor_point - self.pawn.position
-            base_norm = np.linalg.norm(base_direction)
+            base_norm = magnitude(base_direction)
             if base_norm > TARGET_DISTANCE_TOLERANCE_M:
                 base_direction = base_direction / base_norm
             else:
@@ -510,7 +510,7 @@ class FighterNavigator(GenericShipNavigator):
             break_direction = surface_normal - direction
         else:
             break_direction = -direction
-        break_norm = np.linalg.norm(break_direction)
+        break_norm = magnitude(break_direction)
         if break_norm > 1e-4:
             break_direction = break_direction / break_norm
         else:
@@ -632,7 +632,7 @@ class FighterNavigator(GenericShipNavigator):
             # target (at the bomber's current speed) AND still on the line, so the run
             # only commits from a clean overfly setup.
             lock_distance_m = max(
-                np.linalg.norm(self.pawn.speed) * bomb["lock_time_s"],
+                magnitude(self.pawn.speed) * bomb["lock_time_s"],
                 TARGET_DISTANCE_TOLERANCE_M,
             )
             if (
@@ -718,13 +718,13 @@ class FighterNavigator(GenericShipNavigator):
         :return: True if a drop is on target now
         """
         v_bomb = self.pawn.speed - BOMB_SPEED_MPS * self.pawn.up
-        v_bomb_norm = np.linalg.norm(v_bomb)
+        v_bomb_norm = magnitude(v_bomb)
         if v_bomb_norm < 1e-6:
             return False
         bomb_direction = v_bomb / v_bomb_norm
 
         to_target = target_position - self.pawn.position
-        distance_m = np.linalg.norm(to_target)
+        distance_m = magnitude(to_target)
         if distance_m > bomb["max_release_distance_m"]:
             return False
 
@@ -734,7 +734,7 @@ class FighterNavigator(GenericShipNavigator):
         to_intercept = (
             target_position + target_speed * flight_time_s
         ) - self.pawn.position
-        to_intercept_norm = np.linalg.norm(to_intercept)
+        to_intercept_norm = magnitude(to_intercept)
         if to_intercept_norm < TARGET_DISTANCE_TOLERANCE_M:
             return False
         aligned = (
@@ -746,7 +746,7 @@ class FighterNavigator(GenericShipNavigator):
     def _bomb_aim(self, point: np.ndarray) -> np.ndarray:
         """Unit direction from the bomber to a world point (nose target)."""
         to_point = point - self.pawn.position
-        to_point_norm = np.linalg.norm(to_point)
+        to_point_norm = magnitude(to_point)
         if to_point_norm > TARGET_DISTANCE_TOLERANCE_M:
             return to_point / to_point_norm
         return self.pawn.forward
@@ -765,13 +765,13 @@ class FighterNavigator(GenericShipNavigator):
         Flattened against the reference up so the entry point sits purely at the run
         altitude, not tilted by a climbing target.
         """
-        target_speed_norm = np.linalg.norm(target_speed)
+        target_speed_norm = magnitude(target_speed)
         if target_speed_norm >= bomb["min_track_speed_mps"]:
             track = target_speed / target_speed_norm
         else:
             track = direction
         track = track - np.dot(track, up_reference) * up_reference
-        track_norm = np.linalg.norm(track)
+        track_norm = magnitude(track)
         # track is a (near-)unit vector, so compare against a small epsilon, not the
         # metres-scale distance tolerance: only fall back to the nose when the track
         # is (near-)parallel to the reference up (nothing horizontal left).
@@ -796,7 +796,7 @@ class FighterNavigator(GenericShipNavigator):
             - np.dot(relative, track_direction) * track_direction
             - np.dot(relative, up_reference) * up_reference
         )
-        return float(np.linalg.norm(cross))
+        return float(magnitude(cross))
 
     def _bomb_line_carrot(
         self,

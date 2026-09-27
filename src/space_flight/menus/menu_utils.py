@@ -478,9 +478,18 @@ class CustomCheckButton:
             boxRelief=DGG.FLAT,
             boxBorder=0.04,
             boxImageColor=(0.12, 0.12, 0.18, 0.92),
-            indicator_text_fg=(0.65, 0.82, 1.0, 1.0),
         )
         self.checkbox.setTransparency(True)
+        # Set the indicator glyph/color after construction: DirectCheckButton
+        # uses an 'X' internally at creation time to size the box, then
+        # force-resets the display text to (' ', '*'); overriding either as a
+        # constructor kwarg collides with that sizing pass and shrinks the box.
+        self.checkbox["indicator_text"] = (" ", "X")
+        self.checkbox["indicator_text_fg"] = (0, 0, 0, 1)
+        # DirectCheckButton hardcodes text_pos=(0, -.2), tuned to visually
+        # center the default '*' glyph; re-center it for the 'X' glyph instead.
+        self.checkbox["indicator_text_pos"] = (0, 0)
+        self.checkbox["indicator_text_align"] = TextNode.ACenter
 
     def get_value(self) -> bool:
         """Return the current checked state."""

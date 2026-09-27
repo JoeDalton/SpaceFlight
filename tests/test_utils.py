@@ -1,11 +1,15 @@
 import numpy as np
 import pytest
+import quaternion
 
 from space_flight.utils import (
     build_axis_billboard_quat,
     build_orthogonal_basis,
     compute_next_power_of_2,
+    cross3,
     low_pass_filter_first_order,
+    magnitude,
+    normalize,
     rotate_single_vector,
     safe_angle_rad,
     sample_direction_in_cone,
@@ -38,6 +42,206 @@ def test_rotate_single_vector_90deg_z():
 
     expected = np.array([0.0, 1.0, 0.0])
     np.testing.assert_allclose(rotated, expected, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "quat, vector",
+    [
+        # Identity
+        (np.quaternion(1, 0, 0, 0), np.array([1.0, 2.0, 3.0])),
+        # 90 degrees around each axis
+        (
+            np.quaternion(np.cos(np.pi / 4), np.sin(np.pi / 4), 0, 0),
+            np.array([0.0, 1.0, 0.0]),
+        ),
+        (
+            np.quaternion(np.cos(np.pi / 4), 0, np.sin(np.pi / 4), 0),
+            np.array([1.0, 0.0, 0.0]),
+        ),
+        (
+            np.quaternion(np.cos(np.pi / 4), 0, 0, np.sin(np.pi / 4)),
+            np.array([1.0, 0.0, 0.0]),
+        ),
+        # 180 degrees around an arbitrary axis
+        (
+            np.quaternion(0, 1, 2, 3) / np.sqrt(14),
+            np.array([-1.5, 4.0, 2.0]),
+        ),
+        # A non-axis-aligned rotation
+        (
+            quaternion.from_euler_angles(0.3, 0.5, 0.7),
+            np.array([1.0, 2.0, 3.0]),
+        ),
+        # Vector not axis-aligned, quaternion not normalized to 1 exactly
+        (
+            quaternion.from_euler_angles(-1.2, 2.4, -0.6),
+            np.array([-5.0, 0.25, 7.5]),
+        ),
+        # Zero vector
+        (quaternion.from_euler_angles(0.1, 0.2, 0.3), np.array([0.0, 0.0, 0.0])),
+        # Vector already aligned with the rotation axis
+        (
+            np.quaternion(np.cos(0.4), np.sin(0.4), 0, 0),
+            np.array([5.0, 0.0, 0.0]),
+        ),
+    ],
+)
+def test_rotate_single_vector_matches_quaternion_rotate_vectors(quat, vector):
+    """
+    The fast, scalar implementation of rotate_single_vector must agree with
+    quaternion.rotate_vectors (the "old", generic-numpy way it replaced) for
+    a variety of quaternions and vectors.
+    """
+    result = rotate_single_vector(quat, vector)
+    expected = quaternion.rotate_vectors(quat, vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_rotate_single_vector_matches_quaternion_rotate_vectors_random(seed):
+    rng = np.random.default_rng(seed)
+    quat = quaternion.from_euler_angles(*rng.uniform(-np.pi, np.pi, size=3))
+    vector = rng.uniform(-10, 10, size=3)
+
+    result = rotate_single_vector(quat, vector)
+    expected = quaternion.rotate_vectors(quat, vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# cross3
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "a, b",
+    [
+        # Axis-aligned basis vectors
+        (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+        (np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])),
+        (np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])),
+        # Parallel vectors (cross product is zero)
+        (np.array([2.0, 4.0, 6.0]), np.array([1.0, 2.0, 3.0])),
+        # Anti-parallel vectors
+        (np.array([1.0, 0.0, 0.0]), np.array([-3.0, 0.0, 0.0])),
+        # Arbitrary vectors
+        (np.array([1.0, 2.0, 3.0]), np.array([-2.0, 0.5, 4.0])),
+        (np.array([-5.0, 7.5, -0.25]), np.array([3.0, -1.0, 2.0])),
+        # Zero vector
+        (np.array([0.0, 0.0, 0.0]), np.array([1.0, 2.0, 3.0])),
+        # A vector crossed with itself
+        (np.array([1.5, -2.5, 3.5]), np.array([1.5, -2.5, 3.5])),
+    ],
+)
+def test_cross3_matches_np_cross(a, b):
+    """cross3 must agree with np.cross (the "old", generic-numpy way it
+    replaced) for a variety of vector pairs."""
+    result = cross3(a, b)
+    expected = np.cross(a, b)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_cross3_matches_np_cross_random(seed):
+    rng = np.random.default_rng(seed)
+    a = rng.uniform(-10, 10, size=3)
+    b = rng.uniform(-10, 10, size=3)
+
+    result = cross3(a, b)
+    expected = np.cross(a, b)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# normalize
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "vector",
+    [
+        # Already unit length
+        np.array([1.0, 0.0, 0.0]),
+        # 3D, close to unit length (the common "renormalize after drift" case)
+        np.array([0.267, 0.534, -0.802]) * 1.001,
+        np.array([0.267, 0.534, -0.802]) * 0.999,
+        # 3D, far from unit length
+        np.array([0.001, 0.002, -0.0015]),
+        np.array([1234.5, -876.2, 45.6]),
+        np.array([-1.0, -2.0, -3.0]),
+        # 4D (quaternion raw components), close to unit length
+        np.array([0.9986, 0.03, -0.02, 0.01]),
+        # 4D, far from unit length
+        np.array([2.0, 0.5, -0.3, 0.1]),
+        # 5D, exercises the generic fallback path
+        np.array([1.0, 2.0, -3.0, 4.0, -5.0]),
+    ],
+)
+def test_normalize_matches_np_linalg_norm(vector):
+    """normalize must agree with v / np.linalg.norm(v) (the "old", generic-
+    numpy way it replaced) for a variety of vectors, near and far from unit
+    length, in 3D, 4D (quaternions) and beyond."""
+    result = normalize(vector)
+    expected = vector / np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+    np.testing.assert_allclose(np.linalg.norm(result), 1.0, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_normalize_matches_np_linalg_norm_random(seed):
+    rng = np.random.default_rng(seed)
+    vector = rng.uniform(-10, 10, size=3)
+
+    result = normalize(vector)
+    expected = vector / np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# magnitude
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "vector",
+    [
+        # Zero vector
+        np.array([0.0, 0.0, 0.0]),
+        # Unit length
+        np.array([1.0, 0.0, 0.0]),
+        # 2D (screen-space direction)
+        np.array([0.3, -0.7]),
+        np.array([0.0, 0.0]),
+        # 3D, near-zero
+        np.array([1e-8, -2e-8, 3e-8]),
+        # 3D, large
+        np.array([1234.5, -876.2, 45.6]),
+        # 3D, negative components
+        np.array([-1.0, -2.0, -3.0]),
+        # 4D (quaternion raw components)
+        np.array([0.9986, 0.03, -0.02, 0.01]),
+        np.array([2.0, 0.5, -0.3, 0.1]),
+        # 5D, exercises the generic fallback path
+        np.array([1.0, 2.0, -3.0, 4.0, -5.0]),
+    ],
+)
+def test_magnitude_matches_np_linalg_norm(vector):
+    """magnitude must agree with np.linalg.norm (the "old", generic-numpy
+    way it replaced) for a variety of vectors: 2D, 3D, 4D (quaternions),
+    beyond, zero, near-zero and large."""
+    result = magnitude(vector)
+    expected = np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_magnitude_matches_np_linalg_norm_random(seed):
+    rng = np.random.default_rng(seed)
+    vector = rng.uniform(-10, 10, size=3)
+
+    result = magnitude(vector)
+    expected = np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
 
 
 # ---------------------------

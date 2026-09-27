@@ -6,6 +6,7 @@ from space_flight import EPSILON_TOLERANCE
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent, Personality
 from space_flight.ai.generic.generic_navigator import GenericNavigator
+from space_flight.utils import magnitude
 
 LOGGER = logging.getLogger()
 
@@ -104,7 +105,7 @@ class TrackingMountNavigator(GenericNavigator):
             lead_time_s=self.personality["navigator"]["attack"]["lead_time_s"],
         )
 
-        aim_vector_norm = np.linalg.norm(aim_vector)
+        aim_vector_norm = magnitude(aim_vector)
         if aim_vector_norm < EPSILON_TOLERANCE:
             aim_vector = np.zeros(3)
         else:

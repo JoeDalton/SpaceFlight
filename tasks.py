@@ -86,6 +86,16 @@ def doc(c, path=r"./docs/build"):
     print(f"Doc written in {path}/$(poetry version -s)")
 
 @task
+def profile(c, steps=900, warmup_steps=200, output="profiles/dev_level.prof"):
+    c.run(
+        "poetry run python scripts/profile_dev_level.py "
+        f"--steps {steps} --warmup-steps {warmup_steps} --output {output}"
+    )
+    print(f"Profile written to {output}")
+    print(f"View it with: poetry run snakeviz {output}")
+
+
+@task
 def clean(c):
     shutil.rmtree("build", ignore_errors=True)
     shutil.rmtree("dist", ignore_errors=True)

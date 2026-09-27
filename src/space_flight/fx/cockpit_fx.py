@@ -15,6 +15,7 @@ from space_flight.fx.damage_fx import (
     DEFAULT_SMOKE_HEALTH_FRAC,
 )
 from space_flight.fx.spark_fx import SparkPreset
+from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -74,7 +75,7 @@ def screen_direction_from_incoming(
     :return: a length-2 unit vector, or [0, 0] for a head-on/degenerate hit
     """
     d = np.asarray(incoming_world_dir, dtype=float)
-    norm = np.linalg.norm(d)
+    norm = magnitude(d)
     if norm < 1e-9:
         return np.zeros(2)
     came_from = -d / norm  # toward the source
@@ -84,7 +85,7 @@ def screen_direction_from_incoming(
             float(np.dot(came_from, np.asarray(pawn_up, dtype=float))),
         ]
     )
-    mag = np.linalg.norm(screen)
+    mag = magnitude(screen)
     if mag < 1e-9:
         # Shot travelled straight down the view axis: no meaningful side.
         return np.zeros(2)
