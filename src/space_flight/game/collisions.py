@@ -9,6 +9,7 @@ from panda3d.core import (
     BitMask32,
     CollisionEntry,
     CollisionHandlerEvent,
+    CollisionHandlerQueue,
     CollisionNode,
     CollisionPlane,
     CollisionSegment,
@@ -208,6 +209,10 @@ class CollisionSystem:
         self.handler = CollisionHandlerEvent()
         self.handler.addInPattern("%fn-into-%in")
         self.handler.addAgainPattern("%fn-again-%in")
+        # Collision sensors report ~100 contacts per frame: read them straight
+        # from a queue after each traverse (see update_collisions), rather than
+        # routing each one through Panda3D's event messenger
+        self.sensor_queue = CollisionHandlerQueue()
 
         # Weapon hit = one time events
         self.game.app.accept("laser-into-ship", self.munition_into_destructible)
@@ -230,22 +235,16 @@ class CollisionSystem:
         self.game.app.accept("ship-again-turret", self.ship_again_massive_actor)
         self.game.app.accept("ship-into-subsystem", self.ship_into_subsystem)
         self.game.app.accept("ship-again-subsystem", self.ship_again_subsystem)
-        # Collision sensors = detected at each frame
-        self.game.app.accept("sensor-into-ship", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-again-ship", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-into-terrain", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-again-terrain", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-into-turret", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-again-turret", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-into-subsystem", self.sensor_into_obstacle)
-        self.game.app.accept("sensor-again-subsystem", self.sensor_into_obstacle)
 
     def update_collisions(self) -> None:
         """
-        Computes collisions via panda3d internal methods
-        it triggers the "%fn-into-%in" events
+        Computes collisions via panda3d internal methods: it triggers the
+        "%fn-into-%in" / "%fn-again-%in" events, and fills the sensor queue,
+        whose contacts are handled right away.
         """
         self.traverser.traverse(self.game.app.render)
+        for entry in self.sensor_queue.entries:
+            self.sensor_into_obstacle(entry)
 
     def munition_into_destructible(self, entry: CollisionEntry) -> None:
         """
@@ -952,13 +951,8 @@ class CollisionSystem:
         self.game.app.ignore("ship-into-ship")
         self.game.app.ignore("ship-into-subsystem")
         self.game.app.ignore("ship-again-subsystem")
-        self.game.app.ignore("sensor-into-terrain")
-        self.game.app.ignore("sensor-again-terrain")
-        self.game.app.ignore("sensor-into-ship")
-        self.game.app.ignore("sensor-again-ship")
-        self.game.app.ignore("sensor-into-subsystem")
-        self.game.app.ignore("sensor-again-subsystem")
         self.handler = None
+        self.sensor_queue = None
         self.game = None
 
 
@@ -1004,9 +998,12 @@ def attach_collision_sphere(
     node_path.setPythonTag("owner", parent_object)
     # Register in collosion handler
     if add_to_collision_handler:
-        game.collision_system.traverser.addCollider(
-            node_path, game.collision_system.handler
+        handler = (
+            game.collision_system.sensor_queue
+            if collider_type == "sensor"
+            else game.collision_system.handler
         )
+        game.collision_system.traverser.addCollider(node_path, handler)
 
     if DEBUG_COLLISION:
         node_path.show()

@@ -307,3 +307,19 @@ def test_contacts_from_an_earlier_frame_are_ignored():
     direction, weight = sensor.compute_repulsion()
     np.testing.assert_allclose(direction, np.zeros(3))
     assert weight == 0.0
+
+
+def test_set_active_only_touches_the_masks_on_a_change():
+    from unittest.mock import MagicMock
+
+    sensor = make_collision_sensor()
+    sensor.sphere_1, sensor.sphere_2, sensor.sphere_3 = (MagicMock() for _ in range(3))
+
+    sensor.set_active(True)  # already active: nothing to do
+    assert not sensor.sphere_1.node().setFromCollideMask.called
+
+    sensor.set_active(False)
+    sensor.set_active(False)
+    for sphere in (sensor.sphere_1, sensor.sphere_2, sensor.sphere_3):
+        sphere.node().setFromCollideMask.assert_called_once()
+    assert not sensor.active

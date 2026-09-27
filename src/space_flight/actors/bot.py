@@ -208,6 +208,7 @@ class Bot(Destructible):
                 )
             else:
                 self.navigator.update_triggers(intent=intent, target_dict=target_dict)
+            self._schedule_sensor()
             throttle, yaw_rate, pitch_rate, roll_rate = self._commands
             self.pawn.move(
                 throttle=throttle,
@@ -237,13 +238,32 @@ class Bot(Destructible):
         """
         Whether the bot thinks this frame; if so, schedule its next think.
 
+        A think needs this frame's obstacle contacts: if the collision sensor sat
+        out this frame's traversal (the frame came later than expected, see
+        _schedule_sensor), turn it on and think on the next frame instead.
+
         :return: True on the bot's think frames
         """
         now_s = self.game.game_time.get_current_time()
         if now_s < self._next_think_s:
             return False
+        sensor = getattr(self.navigator, "collision_sensor", None)
+        if sensor is not None and not sensor.active:
+            sensor.set_active(True)
+            return False
         self._next_think_s = self._think_slot.next_due_time_s(now_s)
         return True
+
+    def _schedule_sensor(self) -> None:
+        """
+        Keep the collision sensor in the collision traversal only for the frame
+        the bot next thinks in: it only reads contacts then. The traversal runs
+        before the bots update, so decide one frame ahead (assuming the next
+        frame lasts as long as this one).
+        """
+        game_time = self.game.game_time
+        next_frame_s = game_time.get_current_time() + game_time.get_time_step()
+        self.navigator.collision_sensor.set_active(next_frame_s >= self._next_think_s)
 
     def _release_think_slot(self) -> None:
         """Give the bot's think slot back to the scheduler (once)."""
@@ -394,6 +414,9 @@ class Bot(Destructible):
         super().begin_death()
         # The AI is silenced: the dying bot no longer thinks
         self._release_think_slot()
+        sensor = getattr(self.navigator, "collision_sensor", None)
+        if sensor is not None:
+            sensor.set_active(False)
 
         # Drop the pawn from targeting/interactions immediately, so nothing can
         # lock onto or keep shooting the wreck while it spins (it stays collidable

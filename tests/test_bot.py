@@ -35,6 +35,7 @@ def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     bot.tactician = MagicMock()
     bot.game = MagicMock()
     bot.game.game_time.get_current_time.return_value = 0.0
+    bot.game.game_time.get_time_step.return_value = 1.0 / 60.0
     bot.tasks = []
     # A live bot is not mid-death: move_bot_task checks is_dying (a property over
     # the composed DyingPhase) to switch from AI control to the death tumble.
@@ -534,3 +535,63 @@ def test_dying_or_cleaned_bot_gives_its_think_slot_back(end_of_life):
     bot._release_think_slot()
 
     assert scheduler.load.sum() == 0
+
+
+class _FakeSensor:
+    """Records the collision sensor's on/off state, like CollisionSensor.set_active."""
+
+    def __init__(self):
+        self.active = True
+
+    def set_active(self, active):
+        self.active = active
+
+
+def test_sensor_is_on_only_for_the_traversal_of_each_think_frame():
+    """
+    The traversal runs before the bots update: the sensor is switched on at the
+    end of the frame before each think, and off again after the think.
+    """
+    bot = make_bot_without_init(bot_type="fighter")
+    bot.tactician.think.return_value = ("engage", {})
+    bot.navigator.navigate.return_value = (np.array([1.0, 0.0, 0.0]), 100.0)
+    bot.pilot.pilot.return_value = (0.8, 0.1, -0.1, 0.0)
+    sensor = bot.navigator.collision_sensor = _FakeSensor()
+    clock = {"now_s": 0.0}
+    bot.game.game_time.get_current_time.side_effect = lambda: clock["now_s"]
+
+    traversed_with_sensor, think_frames = [], []
+    for frame in range(13):
+        traversed_with_sensor.append(sensor.active)  # state during this traversal
+        calls = bot.navigator.navigate.call_count
+        bot.move_bot_task()
+        if bot.navigator.navigate.call_count > calls:
+            think_frames.append(frame)
+        clock["now_s"] += 1.0 / 60.0
+
+    assert think_frames == [0, 6, 12]
+    assert [f for f, on in enumerate(traversed_with_sensor) if on] == think_frames
+
+
+def test_think_waits_a_frame_when_the_sensor_missed_the_traversal():
+    """
+    If a frame comes later than expected, the bot can be due to think while its
+    sensor sat out that frame's traversal: it turns the sensor on and thinks on
+    the next frame, so it never thinks without this frame's contacts.
+    """
+    bot = make_bot_without_init(bot_type="fighter")
+    bot.tactician.think.return_value = ("engage", {})
+    bot.navigator.navigate.return_value = (np.array([1.0, 0.0, 0.0]), 100.0)
+    bot.pilot.pilot.return_value = (0.8, 0.1, -0.1, 0.0)
+    bot._commands = (0.0, 0.0, 0.0, 0.0)  # it already thought before
+    bot._next_think_s = 0.0
+    sensor = bot.navigator.collision_sensor = _FakeSensor()
+    sensor.active = False
+
+    bot.move_bot_task()  # due, but no contacts this frame
+    bot.navigator.navigate.assert_not_called()
+    assert sensor.active
+
+    bot.game.game_time.get_current_time.return_value = 1.0 / 60.0
+    bot.move_bot_task()
+    bot.navigator.navigate.assert_called_once()
