@@ -582,6 +582,79 @@ def test_hit_on_bare_hull_sparks_metal() -> None:
 
 
 # ---------------------------
+# munition_into_destructible / munition_into_shield — player vs NPC impact sound
+# ---------------------------
+
+
+def test_npc_hit_on_a_target_is_not_marked_as_the_players() -> None:
+    """
+    A bot's shot landing on another (non-player) ship is reported to SFX as not
+    the player's own shot.
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    fighter = make_target_fighter(shield_level=0.0)
+    entry = make_destructible_entry(make_enemy_laser(), fighter)
+
+    system.munition_into_destructible(entry)
+
+    kwargs = system.game.app.sfx.distant_impact_hit.call_args.kwargs
+    assert kwargs["is_player"] is False
+
+
+def test_player_hit_on_a_target_is_marked_as_the_players() -> None:
+    """
+    The player's own shot landing on another ship is reported to SFX as the
+    player's shot.
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    laser = make_enemy_laser()
+    laser.origin_ship_id = "player-id"
+    fighter = make_target_fighter(shield_level=0.0)
+    entry = make_destructible_entry(laser, fighter)
+
+    system.munition_into_destructible(entry)
+
+    kwargs = system.game.app.sfx.distant_impact_hit.call_args.kwargs
+    assert kwargs["is_player"] is True
+
+
+def test_npc_hit_on_a_shield_is_not_marked_as_the_players() -> None:
+    """
+    A bot's shot absorbed by a shield is reported to SFX as not the player's
+    own shot.
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
+    laser.origin_ship_id = "shooter-id"
+    entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
+
+    system.munition_into_shield(entry)
+
+    kwargs = system.game.app.sfx.distant_impact_hit.call_args.kwargs
+    assert kwargs["is_player"] is False
+
+
+def test_player_hit_on_a_shield_is_marked_as_the_players() -> None:
+    """
+    The player's own shot absorbed by a shield is reported to SFX as the
+    player's shot.
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
+    laser.origin_ship_id = "player-id"
+    entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
+
+    system.munition_into_shield(entry)
+
+    kwargs = system.game.app.sfx.distant_impact_hit.call_args.kwargs
+    assert kwargs["is_player"] is True
+
+
+# ---------------------------
 # Sensor contacts: read from a queue, only while the sensor is active
 # ---------------------------
 

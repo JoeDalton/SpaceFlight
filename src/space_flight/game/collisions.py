@@ -322,6 +322,7 @@ class CollisionSystem:
                 player_ship_pos=self.game.player.pawn.position,
                 hit_pos=entry.into_node_path.parent.getPos(),
                 impact_type="target",
+                is_player=munition.origin_ship_id == self.game.player.pawn.id,
             )
             hit_point = entry.getSurfacePoint(self.game.root_node)
             hit_velocity = _hit_velocity(destructible)
@@ -366,6 +367,7 @@ class CollisionSystem:
             player_ship_pos=self.game.player.pawn.position,
             hit_pos=entry.into_node_path.parent.getPos(),
             impact_type="terrain",
+            is_player=munition.origin_ship_id == self.game.player.pawn.id,
         )
 
         # Sparks coloured by the terrain type (water → ice, rock → gray-brown).
@@ -474,6 +476,7 @@ class CollisionSystem:
             player_ship_pos=self.game.player.pawn.position,
             hit_pos=entry.into_node_path.parent.getPos(),
             impact_type="target",
+            is_player=munition.origin_ship_id == self.game.player.pawn.id,
         )
 
     def ship_into_terrain(self, entry: CollisionEntry) -> None:

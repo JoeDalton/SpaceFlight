@@ -79,6 +79,14 @@
   - ```{autodoc2-docstring} space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME
     :summary:
     ```
+* - {py:obj}`PLAYER_DISTANT_IMPACT_VOLUME <space_flight.fx.sfx.PLAYER_DISTANT_IMPACT_VOLUME>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.PLAYER_DISTANT_IMPACT_VOLUME
+    :summary:
+    ```
+* - {py:obj}`NPC_DISTANT_IMPACT_VOLUME <space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME>`
+  - ```{autodoc2-docstring} space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
+    :summary:
+    ```
 * - {py:obj}`SOUND_POOL_LENGTH <space_flight.fx.sfx.SOUND_POOL_LENGTH>`
   - ```{autodoc2-docstring} space_flight.fx.sfx.SOUND_POOL_LENGTH
     :summary:
@@ -178,9 +186,29 @@
 ````{py:data} NPC_CANNON_FIRE_VOLUME
 :canonical: space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME
 :value: >
-   1.0
+   3.0
 
 ```{autodoc2-docstring} space_flight.fx.sfx.NPC_CANNON_FIRE_VOLUME
+```
+
+````
+
+````{py:data} PLAYER_DISTANT_IMPACT_VOLUME
+:canonical: space_flight.fx.sfx.PLAYER_DISTANT_IMPACT_VOLUME
+:value: >
+   1.0
+
+```{autodoc2-docstring} space_flight.fx.sfx.PLAYER_DISTANT_IMPACT_VOLUME
+```
+
+````
+
+````{py:data} NPC_DISTANT_IMPACT_VOLUME
+:canonical: space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
+:value: >
+   1.0
+
+```{autodoc2-docstring} space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
 ```
 
 ````
@@ -321,7 +349,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} distant_impact_hit(game, player_ship_pos: numpy.ndarray, hit_pos: numpy.ndarray, impact_type: str)
+````{py:method} distant_impact_hit(game, player_ship_pos: numpy.ndarray, hit_pos: numpy.ndarray, impact_type: str, is_player: bool = False)
 :canonical: space_flight.fx.sfx.SFX.distant_impact_hit
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.distant_impact_hit

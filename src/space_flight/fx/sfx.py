@@ -20,12 +20,16 @@ SFX_MAX_SOUND_DURATION_S = 5
 
 # Balance
 TERRAIN_HIT_SOUND_MULTIPLIER = 0.01
-TARGET_HIT_SOUND_MULTIPLIER = 1.0
+TARGET_HIT_SOUND_MULTIPLIER = 0.5
 PLAYER_HIT_SOUND_MULTIPLIER = 1.0
 # Cannon fire is louder from the player's own guns (right in the cockpit) than
 # from anyone else's, at any distance.
 PLAYER_CANNON_FIRE_VOLUME = 1.0
 NPC_CANNON_FIRE_VOLUME = 3.0
+# Same idea for distant impacts (someone else's shot landing on a target or on
+# terrain): differentiate the player's own shots from an NPC's.
+PLAYER_DISTANT_IMPACT_VOLUME = 1.0
+NPC_DISTANT_IMPACT_VOLUME = 0.2
 
 SOUND_POOL_LENGTH = 20
 
@@ -204,7 +208,12 @@ class SFX:
         )
 
     def distant_impact_hit(
-        self, game, player_ship_pos: np.ndarray, hit_pos: np.ndarray, impact_type: str
+        self,
+        game,
+        player_ship_pos: np.ndarray,
+        hit_pos: np.ndarray,
+        impact_type: str,
+        is_player: bool = False,
     ):
         """
         Play an impact sound where the impact took place
@@ -215,6 +224,8 @@ class SFX:
         :param player_ship_pos: The location of the player
         :param hit_pos: The location of impact
         :param impact_type: The type of impact (target, terrain, etc.)
+        :param is_player: Whether the player's own shot caused this impact
+            (as opposed to an NPC's), see PLAYER_DISTANT_IMPACT_VOLUME
 
         """
         # No one to hear it, and no camera to hang a 3D sound off of, headless.
@@ -237,10 +248,13 @@ class SFX:
             multiplier = TERRAIN_HIT_SOUND_MULTIPLIER
         else:
             raise NotImplementedError(f"No sound for impact type {impact_type}")
+        shooter_multiplier = (
+            PLAYER_DISTANT_IMPACT_VOLUME if is_player else NPC_DISTANT_IMPACT_VOLUME
+        )
 
         # Add sound to laser hit
         sound = sound_pool.get_sound(randomize_pitch=False)
-        sound.setVolume(volume * multiplier)
+        sound.setVolume(volume * multiplier * shooter_multiplier)
         sound.play()
 
         # Schedule sound release

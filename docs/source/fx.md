@@ -229,6 +229,14 @@ creation cost across several frames instead of stalling on construction.
   distant impacts, not directly on the player) computes volume from an
   inverse-square falloff against a reference distance and drops the sound
   entirely beyond `MAX_SOUND_DISTANCE_M`, so far-off fights don't spam audio.
+  On top of that falloff and the `TARGET_HIT_SOUND_MULTIPLIER` /
+  `TERRAIN_HIT_SOUND_MULTIPLIER` per-surface knobs, `is_player` picks
+  `PLAYER_DISTANT_IMPACT_VOLUME` or `NPC_DISTANT_IMPACT_VOLUME` — the
+  player's own shot landing on a target or on terrain against anyone else's.
+  `CollisionSystem`'s three call sites (a target, terrain, or a shield) pass
+  `is_player=munition.origin_ship_id == game.player.pawn.id`, the same
+  by-id comparison the collision handlers already use elsewhere to single out
+  the player's ship.
 - **Positioned one-shots.** `laser_impact_hit_on_player`, `player_crash` and
   `cannon_fire` each attach a sound to either an ad-hoc dummy node (placed at
   the relative hit point and auto-removed after `SFX_MAX_SOUND_DURATION_S`)

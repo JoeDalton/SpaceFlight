@@ -16,6 +16,7 @@ import pytest
 from direct.task.TaskManagerGlobal import taskMgr
 from panda3d.core import LPoint3f, LVector3f, NodePath
 
+from space_flight.fx import sfx as sfx_mod
 from space_flight.fx.sfx import SFX, PhysicsAudio3DManager
 
 
@@ -153,3 +154,61 @@ def test_cannon_fire_gives_the_shot_the_firing_actors_velocity():
     )
 
     sfx.audio3d.set_sound_velocity_source.assert_called_once_with(sound, shooter)
+
+
+def test_distant_impact_hit_uses_the_player_volume_for_the_players_own_shot():
+    sfx = _make_sfx()
+    sfx.distant_target_hit_sound_pool = MagicMock()
+    sound = MagicMock()
+    sfx.distant_target_hit_sound_pool.get_sound.return_value = sound
+
+    sfx.distant_impact_hit(
+        game=MagicMock(headless=False),
+        player_ship_pos=np.zeros(3),
+        hit_pos=np.array([500.0, 0.0, 0.0]),  # SOUND_VOLUME_REFERENCE_DISTANCE_M
+        impact_type="target",
+        is_player=True,
+    )
+
+    # At the reference distance, (ref / distance) ** 2 == 1, so only the
+    # target/player multipliers remain.
+    sound.setVolume.assert_called_once_with(
+        sfx_mod.TARGET_HIT_SOUND_MULTIPLIER * sfx_mod.PLAYER_DISTANT_IMPACT_VOLUME
+    )
+
+
+def test_distant_impact_hit_uses_the_npc_volume_for_an_npcs_shot():
+    sfx = _make_sfx()
+    sfx.terrain_hit_sound_pool = MagicMock()
+    sound = MagicMock()
+    sfx.terrain_hit_sound_pool.get_sound.return_value = sound
+
+    sfx.distant_impact_hit(
+        game=MagicMock(headless=False),
+        player_ship_pos=np.zeros(3),
+        hit_pos=np.array([500.0, 0.0, 0.0]),
+        impact_type="terrain",
+        is_player=False,
+    )
+
+    sound.setVolume.assert_called_once_with(
+        sfx_mod.TERRAIN_HIT_SOUND_MULTIPLIER * sfx_mod.NPC_DISTANT_IMPACT_VOLUME
+    )
+
+
+def test_distant_impact_hit_defaults_to_the_npc_volume():
+    sfx = _make_sfx()
+    sfx.distant_target_hit_sound_pool = MagicMock()
+    sound = MagicMock()
+    sfx.distant_target_hit_sound_pool.get_sound.return_value = sound
+
+    sfx.distant_impact_hit(
+        game=MagicMock(headless=False),
+        player_ship_pos=np.zeros(3),
+        hit_pos=np.array([500.0, 0.0, 0.0]),
+        impact_type="target",
+    )
+
+    sound.setVolume.assert_called_once_with(
+        sfx_mod.TARGET_HIT_SOUND_MULTIPLIER * sfx_mod.NPC_DISTANT_IMPACT_VOLUME
+    )
