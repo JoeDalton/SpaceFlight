@@ -312,6 +312,7 @@ class Ocean:
         self.ocean_node.setShader(shader)
         self.ocean_node.setShaderInput("iTime", 0.0)
         self.ocean_node.setShaderInput("iCameraPos", LVecBase3f(0, 0, 20))
+        self.ocean_node.setShaderInput("uModelMatrix", LMatrix4f.identMat())
         self.ocean_node.setShaderInput("iWaterColor", water_color)
         self.ocean_node.setShaderInput("iReflectionTex", self.refl_tex)
         self.ocean_node.setShaderInput("iRippleStrength", ripple_strength)
@@ -394,6 +395,9 @@ class Ocean:
         # The wave pattern is anchored in world space (shader reads world
         # position), so sliding the plane introduces no motion artifacts.
         self.ocean_node.setPos(camera_pos.x, camera_pos.y, 0.0)
+        self.ocean_node.setShaderInput(
+            "uModelMatrix", self.ocean_node.getMat(self.base_node)
+        )
         self.ocean_node.setShaderInput("iTime", current_time)
         self.ocean_node.setShaderInput("iCameraPos", camera_pos)
         self.ocean_node.setShaderInput("uReflMVP", mvp)

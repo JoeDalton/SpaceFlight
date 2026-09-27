@@ -379,7 +379,6 @@ class ShieldModel:
         v.setShaderInput("uImpactCount", 0)
         # Per-frame scene inputs (seeded; refreshed in render())
         v.setShaderInput("iTime", 0.0)
-        v.setShaderInput("iCameraPos", Vec3(0, 0, 0))
         # Death / appearance
         v.setShaderInput("uDeath", 0.0)
         v.setShaderInput("uSinks", self._sink_pta)
@@ -439,14 +438,13 @@ class ShieldModel:
         if len(self._impacts) > _MAX_IMPACTS:
             self._impacts.pop(0)
 
-    def render(self, now: float, camera_pos, health_frac: float, death: float):
+    def render(self, now: float, health_frac: float, death: float):
         """
-        Refresh the per-frame shader uniforms: time, camera position (for the
-        fresnel rim), the health-driven tint, the death/appearance progress, and
-        the live impact flashes (dropping any that have expired).
+        Refresh the per-frame shader uniforms: time, the health-driven tint, the
+        death/appearance progress, and the live impact flashes (dropping any
+        that have expired). The fresnel rim reads the eye from the view matrix.
 
         :param now: Current time (seconds)
-        :param camera_pos: Camera position in world space
         :param health_frac: Shield strength fraction in [0, 1] (drives the tint)
         :param death: Death/appearance progress in [0, 1] (0 alive, 1 gone)
         """
@@ -454,7 +452,6 @@ class ShieldModel:
         if v is None:
             return
         v.setShaderInput("iTime", now)
-        v.setShaderInput("iCameraPos", camera_pos)
         v.setShaderInput("uHealth", max(0.0, min(1.0, health_frac)))
         v.setShaderInput("uDeath", death)
 

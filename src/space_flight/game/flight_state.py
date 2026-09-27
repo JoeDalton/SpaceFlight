@@ -211,6 +211,9 @@ class FlightState(BaseState):
             self.hud = HUD(game=self)
             self.target_hud = TargetHUD(game=self)
 
+        # Render the first frame around the player too
+        self.recenter_render_origin()
+
         # Game tasks. They stay idle until is_paused is cleared by resume().
         self.game_world_task = self.app.taskMgr.add(
             self.update_game_world_task, "update_game_world_task"
@@ -329,6 +332,8 @@ class FlightState(BaseState):
         for method_list in self.method_lists.values():
             for method in method_list:
                 method()
+        # After the actors: move() has written (and sanitised) the player's pose
+        self.recenter_render_origin()
         # Handle the death of the player: send it into an out-of-control tumble
         # first, and only show the level-end screen once the death spin finishes.
         if self.player.pawn.health <= 0:
@@ -337,6 +342,22 @@ class FlightState(BaseState):
             elif self.player.death_spin_finished():
                 self.end_level(outcome="death", text="Your ship was destroyed.")
         return task.cont
+
+    def recenter_render_origin(self) -> None:
+        """
+        Offset the game root under render so the player's ship sits at the
+        render origin. Panda3D composes net transforms in float32 from render:
+        far from the world origin, the camera and the cockpit (both under the
+        ship node) would each be rounded to a coarse grid and jitter against
+        each other. The ship node and this offset are rounded from the same
+        float64 position, so they cancel exactly and everything near the player
+        gets small, precise transforms.
+
+        World coordinates are unchanged: gameplay reads positions relative to
+        root_node (collisions, HUD, weapons), never relative to render.
+        """
+        x, y, z = self.player.pawn.position
+        self.root_node.setPos(-x, -y, -z)
 
     def end_level(self, outcome: str, text: str = "") -> None:
         """

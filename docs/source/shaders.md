@@ -1,8 +1,8 @@
 # Shaders
 
 `datafiles/shaders/` holds the GLSL sources the game loads from disk (as
-opposed to shaders baked into imported models) — the one exception is the
-volumetric cloud field, which compiles its shaders from inline strings in
+opposed to shaders baked into imported models), including the volumetric
+cloud field's `cloud.vert`/`cloud.frag`, loaded by
 [`scenes/cloud/field.py`](../../src/space_flight/scenes/cloud/field.py)
 (see [docs/scenes.md](scenes.md)). Each file pairs with the
 Python code that compiles and drives it via uniforms — this page is the
@@ -17,7 +17,7 @@ All of it lives in
 - Every shader in this directory is `#version 140` GLSL, loaded via
   `Shader.load` from Python and driven entirely by uniforms set each frame —
   there is no runtime shader-side state beyond what's passed in. (The cloud
-  field's inline shaders are `#version 330`, compiled with `Shader.make`.)
+  field's shaders are `#version 330`.)
 - `ocean.vert`, `ocean.frag` and `shield.frag` each carry their own
   copy-pasted copy of a small value-noise kit (`hash`/`smoothNoise` plus
   `fbmNoise`, or a variant `fbm` in the shield). `ocean.vert`'s copy is
@@ -30,6 +30,21 @@ All of it lives in
   fraction of the scene texture, and the ocean scales its reflection lookup
   by `uReflUVScale`. (The hyperspace shaders don't need this — they draw
   plain render2d cards from `gl_FragCoord`/`iResolution`.)
+- **Render space is not world space.** The game keeps the render origin on
+  the player (see [The floating render origin](game.md#the-floating-render-origin)),
+  so `p3d_ModelMatrix`, `p3d_ViewMatrix` and `p3d_ViewProjectionMatrix` are
+  relative to a frame that moves every frame. A shader must never combine them
+  with a position Python measured relative to `game.root_node`. The shaders
+  here stay consistent in one of three ways:
+  - **Their own world matrix.** `ocean.vert` takes `uModelMatrix`, the plane's
+    matrix relative to the ocean's base node, from Python, so its world
+    position, `iCameraPos` and `uReflMVP` all share that frame.
+  - **One frame on the GPU.** `shield.frag` takes the eye from
+    `p3d_ViewMatrixInverse`, in the same render space as its
+    `p3d_ModelMatrix` position. `laser.vert` works in model space.
+  - **World geometry under `root_node`.** `cloud.vert`, `spark.vert` and
+    `explosion.vert` place vertices in world coordinates and project them with
+    `p3d_ModelViewProjectionMatrix`, whose model part carries the offset.
 
 ## Hyperspace loading-screen shaders
 
@@ -106,6 +121,10 @@ Driven by
   per-triangle projective-divide skew — but sampling at that flat footprint
   still slides against the displaced geometry (see the
   [ocean swell artifact report](../../src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md)).
+  Its world position comes from `uModelMatrix` (the plane relative to the
+  ocean's base node, refreshed by `Ocean.update` right after the plane is
+  re-centred), not `p3d_ModelMatrix`, so the waves stay anchored to the world
+  rather than to the moving render origin.
 - **[`ocean.frag`](../../src/space_flight/datafiles/shaders/ocean.frag)** is
   the most elaborate fragment shader in the game:
   - **Iterative wave field.** `getwaves`/`waveGradient` accumulate multiple
@@ -153,10 +172,13 @@ Driven by
 
 - **[`shield.vert`](../../src/space_flight/datafiles/shaders/shield.vert)** is
   a passthrough that additionally forwards both *object-space* and
-  *world-space* position/normal — object-space because the surface pattern
+  *render-space* position/normal — object-space because the surface pattern
   and the death-retraction sink points are anchored to the hull mesh (so
-  they stay fixed as the ship rotates), world-space because the fresnel rim
-  glow needs the true view direction.
+  they stay fixed as the ship rotates), render-space because the fresnel rim
+  glow needs the true view direction. `shield.frag` takes the eye from
+  `p3d_ViewMatrixInverse` in the same space, so the rim is right in every
+  pass (main view, rear-view mirror, ocean reflection) without any
+  per-frame camera uniform.
 - **[`shield.frag`](../../src/space_flight/datafiles/shaders/shield.frag)**
   layers a "living" bubble look with an optional death/appearance animation
   on top:

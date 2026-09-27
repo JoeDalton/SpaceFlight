@@ -155,6 +155,14 @@
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.__init__
 ```
 
+````{py:method} attach_sound(sound, node) -> None
+:canonical: space_flight.fx.sfx.SFX.attach_sound
+
+```{autodoc2-docstring} space_flight.fx.sfx.SFX.attach_sound
+```
+
+````
+
 ````{py:method} build_sound_pool(directory: pathlib.Path, pattern: str, is_3d: bool) -> typing.List[str]
 :canonical: space_flight.fx.sfx.SFX.build_sound_pool
 

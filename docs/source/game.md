@@ -39,7 +39,9 @@ HUD — and drives the top-level per-frame update.
 - **`update_game_world_task`** is the fixed per-frame order of operations:
   delayed methods → kill destructibles whose health hit zero → resolve
   collisions → recompute actor interactions → integrate physics → run every
-  actor's registered update methods (`game.method_lists`) → check player
+  actor's registered update methods (`game.method_lists`) → re-centre the
+  render origin on the player (see
+  [The floating render origin](#the-floating-render-origin)) → check player
   death. **`update_mission_task`** separately advances `game.mission` each
   frame. Both are no-ops while `is_paused`.
 - **`initialize_game_structure()`** constructs every session-scoped object
@@ -49,6 +51,66 @@ HUD — and drives the top-level per-frame update.
   two together are the definitive list of what a `FlightState` owns.
 - `pause()`/`resume()` propagate to `IntervalManager` and `GameTimeManager` so
   intervals and the game clock freeze together, e.g. for the pause menu.
+
+## The floating render origin
+
+The scene graph has two frames that are easy to confuse:
+
+- **`game.root_node` is the world frame.** It is the single child of
+  `render` created by `initialize_game_structure()`, and every gameplay node
+  hangs under it: ships, munitions, asteroids, the ocean, clouds, skybox,
+  lights. A position relative to `root_node` is a world position, the same
+  thing physics stores in `pawn.position`.
+- **`render` is the frame Panda3D draws from.** The engine composes every
+  node's net transform from `render` down, and it does so in float32.
+
+`FlightState.recenter_render_origin()` moves `root_node` inside `render` so
+that the player's ship sits at the render origin. It runs every frame right
+after the actors' updates (after `Ship.move()` has written and sanitised the
+player's pose), and once in `_on_build_complete` so the first frame is
+already centred.
+
+**Why.** Physics runs in float64 numpy, but a float32 world position only has
+a coarse grid far from the origin: about 1 mm at 10 km, 4 mm at 50 km and
+8 mm at 100 km. The camera and the cockpit are siblings under the player's
+ship node, so without the offset each gets its own large net transform,
+rounded independently, and the cockpit shakes against the camera by several
+pixels (issue #29). The ship node and the offset are rounded from the same
+float64 position, so their translations cancel exactly. Everything near the
+player then has small, precise render transforms.
+
+**Why nothing visibly moves.** The whole world, camera included, shifts by the
+same amount. Rendering only depends on positions relative to the camera, and
+those are unchanged; only the numbers Panda3D works with get small.
+
+**Rules for code that touches the scene graph:**
+
+- Read and write world positions relative to `game.root_node`
+  (`getPos(root_node)`, `getSurfacePoint(root_node)`,
+  `getRelativePoint(root_node, …)`), never relative to `render`. Parent new
+  world-space nodes under `root_node`. Local moves (`setPos()` with no
+  reference node) are unaffected.
+- Treat render-space positions as valid for the current frame only: `render`
+  space moves with the player every frame.
+- In shaders, Panda3D's `p3d_ModelMatrix`, `p3d_ViewMatrix` and
+  `p3d_ViewProjectionMatrix` are relative to `render`, not to the world. Don't
+  mix them with positions Python measured relative to `root_node`. See the
+  shader [mental model](shaders.md#mental-model) for how each shader deals
+  with it.
+- 3D audio (`Audio3DManager`) works in `render` space. That is fine because
+  only positions relative to the listener matter, but a sound must be placed
+  before it plays: see `SFX.attach_sound` in [docs/fx.md](fx.md).
+
+**What stays at world scale.** Collision traversal still resolves in float32
+world coordinates, exactly as before the offset existed. Particle bursts
+(sparks, explosions, cockpit sparks) bake world positions into their vertex
+data, so they keep a few millimetres of GPU rounding far from the origin.
+World-anchored shader noise (the ocean swell) is sampled at world coordinates.
+None of these is visible in practice.
+
+The behaviour is pinned by the `recenter_render_origin` tests in
+[`tests/test_flight_state.py`](../../tests/test_flight_state.py), including one
+that shows the imprecision without the offset.
 
 ## Time keeping
 

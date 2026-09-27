@@ -643,7 +643,7 @@ class CloudField:
     def update(self, cam_pos: Vec3, dt: float = 0.0):
         """Advance one frame: drift + recycle the cells and continue the re-sort.
 
-        :param cam_pos: camera world position
+        :param cam_pos: camera position in the parent's frame (the cells' world)
         :param dt: seconds since the last frame (drives wind drift)
         """
         self.node.set_shader_input("camPos", cam_pos)
@@ -741,7 +741,7 @@ class Clouds:
 
     def update(self):
         """Per-frame: drive wind/recycle/sort against the current camera."""
-        cam_pos = self.game.app.camera.get_pos(self.game.app.render)
+        cam_pos = self.game.app.camera.get_pos(self.game.root_node)
         dt = self.game.game_time.get_time_step()
         self.field.update(cam_pos, dt)
 

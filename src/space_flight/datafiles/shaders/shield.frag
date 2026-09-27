@@ -16,7 +16,9 @@
 
 // --- Per-frame / scene uniforms --------------------------------------------
 uniform float iTime;
-uniform vec3  iCameraPos;      // camera position in world space (for fresnel)
+// View -> render space; column 3 is the eye, in the same space as vWorldPos
+// (p3d_ModelMatrix), however the game root is offset under render.
+uniform mat4  p3d_ViewMatrixInverse;
 
 // --- Look knobs (set from Python; see main.py for defaults) -----------------
 uniform vec3  uColorFull;      // tint at full health (light blue)
@@ -138,7 +140,7 @@ float nearestSink() {
 
 void main() {
     vec3 N = normalize(vWorldNormal);
-    vec3 V = normalize(iCameraPos - vWorldPos);
+    vec3 V = normalize(p3d_ViewMatrixInverse[3].xyz - vWorldPos);
     float NdotV = abs(dot(N, V));  // abs(): two-sided, back-faces point inward
 
     float fresnel = uFresnelGain * pow(1.0 - NdotV, uFresnelPower);
