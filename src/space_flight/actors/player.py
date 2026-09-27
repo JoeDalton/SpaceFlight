@@ -505,7 +505,12 @@ class Player:
         else:
             # Fail safe for unrecognised filters
             self.target_mask = np.zeros(len(self.game.interactions.live_actors))
-        self.target_mask[player_actor_index] = 0
+        # The mask is indexed by position in live_actors, not by grid slot:
+        # translate the player's slot so it can never target itself.
+        player_live_position = np.count_nonzero(
+            self.game.interactions.alive[:player_actor_index]
+        )
+        self.target_mask[player_live_position] = 0
 
     def open_radial_target_menu(self):
         """

@@ -606,6 +606,16 @@ def test_scan_does_not_fill_unless_held(game, mission, spawned, breaking):
     assert pawn.scan.progress == 0.0
 
 
+def test_scan_does_not_fill_once_the_player_is_removed(game, mission, spawned):
+    """A dead player is no longer in the interactions: the scan just stops."""
+    wave, pawn = _subject(game, mission)
+    mission.scan(wave)
+    game.player.pawn.target = pawn
+    game.interactions.kill(game.player.pawn)
+    advance(game, mission, 2)
+    assert pawn.scan.progress == 0.0
+
+
 def test_scan_decays_at_half_rate_when_broken(game, mission, spawned):
     wave, pawn = _subject(game, mission)
     scan = mission.scan(wave, duration_s=10, decay_ratio=0.5)

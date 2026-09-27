@@ -260,7 +260,7 @@ class TargetHUD:
 
         # Define scan progress bar: fills the target box from its left edge,
         # scaled horizontally by the target's scan progress (see
-        # space_flight.game.scenario.scan)
+        # space_flight.actors.scan)
         scan_cm = CardMaker("scanBar")
         scan_cm.setFrame(
             0,

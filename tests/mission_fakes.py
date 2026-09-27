@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
+
 
 class FakeGameTime:
     def __init__(self):
@@ -21,10 +23,41 @@ class FakeGameTime:
         return self.t
 
 
+class _LivePairs:
+    """
+    Read-only stand-in for an Interactions matrix: ``matrix[i, j]`` is
+    computed from the actors' current positions on each access, so tests can
+    move pawns without an update step.
+    """
+
+    def __init__(self, interactions, pair_value):
+        self.interactions = interactions
+        self.pair_value = pair_value
+
+    def __getitem__(self, pair):
+        source_idx, target_idx = pair
+        actors = self.interactions.actors
+        return self.pair_value(actors[source_idx], actors[target_idx])
+
+
+def _distance(source, target):
+    distance = float(np.linalg.norm(target.position - source.position))
+    return distance if distance > TARGET_DISTANCE_TOLERANCE_M else 0.0
+
+
+def _alignment(source, target):
+    distance = _distance(source, target)
+    if distance == 0.0:
+        return 0.0
+    return float(np.dot((target.position - source.position) / distance, source.forward))
+
+
 class FakeInteractions:
     def __init__(self):
         self.actors = []
         self.actors_id_dict = {}
+        self.distances = _LivePairs(self, _distance)
+        self.alignments = _LivePairs(self, _alignment)
 
     def add(self, actor):
         self.actors_id_dict[actor.id] = len(self.actors)
@@ -33,6 +66,12 @@ class FakeInteractions:
     def kill(self, actor):
         slot = self.actors_id_dict.pop(actor.id)
         self.actors[slot] = None
+
+    def get_actor_index_from_id(self, actor_id):
+        try:
+            return self.actors_id_dict[actor_id]
+        except KeyError:
+            raise ValueError(f"Actor {actor_id} is not in the actors' list")
 
 
 class MockNavigator:
@@ -118,6 +157,7 @@ class FakeGame:
         self.headless = False
         self.end_level_calls = []
         self.player = MockBot("player", [0, 0, 0], team=1)
+        self.interactions.add(self.player.pawn)
         self.player_waypoints = None
         self.app = SimpleNamespace(
             bindings={
