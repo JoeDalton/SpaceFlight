@@ -17,7 +17,7 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH
 from space_flight.game.collisions import attach_collision_segment
-from space_flight.utils import build_axis_billboard_quat
+from space_flight.utils import build_axis_billboard_quat, magnitude
 from space_flight.weapons import Munition, Weapon
 
 LASER_SPEED_MPS = 2000.0
@@ -280,7 +280,7 @@ class LaserShot(Munition):
         # between two frames
         dt = 1 / self.game.game_time.get_average_frame_rate()
         relative_start_position = np.zeros(3)
-        length = np.linalg.norm(self.speed) * dt * np.array([0.0, 0.0, 1.0])
+        length = magnitude(self.speed) * dt * np.array([0.0, 0.0, 1.0])
         relative_end_position = relative_start_position + length
         return attach_collision_segment(
             game=self.game,

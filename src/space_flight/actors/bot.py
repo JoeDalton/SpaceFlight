@@ -24,6 +24,7 @@ from space_flight.ai.tracking_mount.tracking_mount_pilot import TrackingMountPil
 from space_flight.ai.tracking_mount.tracking_mount_tactician import (
     TrackingMountTactician,
 )
+from space_flight.utils import magnitude
 
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
@@ -260,7 +261,7 @@ class Bot(Destructible):
             target_velocity_mps = np.asarray(
                 getattr(target_actor, "speed", nan3), dtype=float
             )
-            target_speed_mps = float(np.linalg.norm(target_velocity_mps))
+            target_speed_mps = float(magnitude(target_velocity_mps))
             target_mobility = float(getattr(target_actor, "mobility", float("nan")))
             target_position_m = np.asarray(
                 getattr(target_actor, "position", nan3), dtype=float
@@ -273,7 +274,7 @@ class Bot(Destructible):
         record.record(f"{name}_target_speed_mps", target_speed_mps)
         record.record(f"{name}_target_mobility", target_mobility)
         record.record(f"{name}_desired_speed_mps", float(desired_speed_mps))
-        record.record(f"{name}_speed_mps", float(np.linalg.norm(self.pawn.speed)))
+        record.record(f"{name}_speed_mps", float(magnitude(self.pawn.speed)))
 
         # Full kinematics (like the player's) so a bomb run's geometry -- overfly
         # position, belly aim, lead/cone alignment -- can be reconstructed offline.

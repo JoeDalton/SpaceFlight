@@ -4,7 +4,7 @@ from simple_pid import PID
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS
 from space_flight.ai.generic.generic_pilot import GenericPilot
-from space_flight.utils import safe_angle_rad
+from space_flight.utils import magnitude, safe_angle_rad
 
 
 class GenericShipPilot(GenericPilot):
@@ -130,7 +130,7 @@ class GenericShipPilot(GenericPilot):
 
         # Find velocity error
         velocity_error = (
-            np.linalg.norm(self.pawn.speed) - desired_speed_mps
+            magnitude(self.pawn.speed) - desired_speed_mps
         ) / REFERENCE_ERROR_VELOCITY_MPS
 
         # Update PID commands

@@ -9,7 +9,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
-from space_flight.utils import cross3
+from space_flight.utils import cross3, magnitude
 
 LOGGER = logging.getLogger()
 
@@ -127,11 +127,11 @@ class CapitalShipNavigator(GenericShipNavigator):
         # Outward normal from the hull, kept in the horizontal plane.
         outward = self.pawn.position - nearest_point
         outward_horizontal = outward - np.dot(outward, world_up) * world_up
-        outward_distance_m = np.linalg.norm(outward_horizontal)
+        outward_distance_m = magnitude(outward_horizontal)
         if outward_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             # Degenerate (directly over the hull): fall back to the target's beam.
             outward_horizontal = self._horizontal_axis(target.right, world_up)
-            outward_distance_m = np.linalg.norm(outward_horizontal)
+            outward_distance_m = magnitude(outward_horizontal)
             if outward_distance_m < TARGET_DISTANCE_TOLERANCE_M:
                 return NO_DIRECTION
         outward_normal = outward_horizontal / outward_distance_m
@@ -158,7 +158,7 @@ class CapitalShipNavigator(GenericShipNavigator):
             desired_direction + orbit["vertical_gain"] * altitude_error_m * world_up
         )
 
-        desired_norm = np.linalg.norm(desired_direction)
+        desired_norm = magnitude(desired_direction)
         if desired_norm < TARGET_DISTANCE_TOLERANCE_M:
             return NO_DIRECTION
         return desired_direction / desired_norm, orbit["orbit_speed_mps"]
@@ -196,8 +196,8 @@ class CapitalShipNavigator(GenericShipNavigator):
         # Horizontal footprint axes from the target's orientation.
         right_axis = self._horizontal_axis(target.right, world_up)
         forward_axis = self._horizontal_axis(target.forward, world_up)
-        right_norm = np.linalg.norm(right_axis)
-        forward_norm = np.linalg.norm(forward_axis)
+        right_norm = magnitude(right_axis)
+        forward_norm = magnitude(forward_axis)
         if right_norm < 1e-4 or forward_norm < 1e-4:
             # No usable footprint orientation: treat as a point at the center.
             return center.copy()

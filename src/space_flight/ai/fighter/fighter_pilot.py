@@ -3,6 +3,7 @@ import numpy as np
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import HALF_PI, ROLL_TOLERANCE, Personality
 from space_flight.ai.generic.generic_ship_pilot import GenericShipPilot
+from space_flight.utils import magnitude
 
 SCENE_ROLL_MULTIPLIER = 0.5
 
@@ -34,7 +35,7 @@ class FighterPilot(GenericShipPilot):
         """
 
         # Compute directions
-        target_direction_norm = np.linalg.norm(target_direction)
+        target_direction_norm = magnitude(target_direction)
         if target_direction_norm == 0.0:
             yaw_error = 0.0
             pitch_error = 0.0

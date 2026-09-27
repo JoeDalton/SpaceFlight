@@ -4,6 +4,7 @@ from uuid import UUID
 import numpy as np
 
 from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
+from space_flight.utils import magnitude
 
 """
 Teams are defined as :
@@ -148,7 +149,7 @@ class Interactions:
                     direction = np.float64(
                         target_actor.position - source_actor.position
                     )
-                    distance = np.linalg.norm(direction)
+                    distance = magnitude(direction)
                     if distance > TARGET_DISTANCE_TOLERANCE_M:
                         direction /= distance
                     else:

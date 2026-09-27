@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional
 import numpy as np
 
 from space_flight.game.scenario.conditions import Condition, pawns_of
+from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.game.scenario.mission import Mission
@@ -130,7 +131,7 @@ class ScanHandle:
         if getattr(player_pawn, "target", None) is not pawn:
             return False
         delta = pawn.position - player_pawn.position
-        distance = float(np.linalg.norm(delta))
+        distance = float(magnitude(delta))
         if distance > self.range_m:
             return False
         if distance == 0.0:

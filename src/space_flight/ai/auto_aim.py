@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.utils import rotate_single_vector
+from space_flight.utils import magnitude, rotate_single_vector
 from space_flight.utils.state_machine import StateMachine
 from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
 
@@ -138,7 +138,7 @@ class AutoAim:
 
                 # Find predicted target direction
                 predicted_direction = target_predicted_position - start_position
-                norm = np.linalg.norm(predicted_direction)
+                norm = magnitude(predicted_direction)
                 if norm < 1e-4:
                     # Better safe than sorry
                     desired_shot_dir = self.parent.forward
@@ -169,7 +169,7 @@ class AutoAim:
                         desired_shot_dir_body[2],
                     ]
                 )
-                norm = np.linalg.norm(clipped_dir_body)
+                norm = magnitude(clipped_dir_body)
                 if norm < 1e-4:
                     # Should not happen since the lateral component is significant,
                     # but better safe than sorry

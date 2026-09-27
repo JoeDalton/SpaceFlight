@@ -8,7 +8,7 @@ from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
 from space_flight.ai.collision_sensor import CollisionSensor
 from space_flight.ai.generic.generic_navigator import GenericNavigator
-from space_flight.utils import smooth_step_down
+from space_flight.utils import magnitude, smooth_step_down
 
 LOGGER = logging.getLogger()
 
@@ -88,8 +88,8 @@ class GenericShipNavigator(GenericNavigator):
         if RECORD_GAME and getattr(self.pawn.parent, "record", False):
             name = self.pawn.parent.name
             self.game.record.record(f"{name}_avoidance_weight", float(avoidance_weight))
-            intent_norm = np.linalg.norm(intent_direction)
-            blended_norm = np.linalg.norm(direction)
+            intent_norm = magnitude(intent_direction)
+            blended_norm = magnitude(direction)
             if intent_norm > EPSILON_TOLERANCE and blended_norm > EPSILON_TOLERANCE:
                 deflection = float(
                     np.dot(intent_direction / intent_norm, direction / blended_norm)
@@ -138,7 +138,7 @@ class GenericShipNavigator(GenericNavigator):
         :return: The direction to point to and the desired speed
         """
         target_relative_position = target_dict["position"] - self.pawn.position
-        target_distance = np.linalg.norm(target_relative_position)
+        target_distance = magnitude(target_relative_position)
 
         # Case where the target is at zero distance
         if target_distance < TARGET_DISTANCE_TOLERANCE_M:
@@ -159,7 +159,7 @@ class GenericShipNavigator(GenericNavigator):
         :return: The direction to point to and the desired speed
         """
         target_relative_position = target_dict["position"] - self.pawn.position
-        target_distance = np.linalg.norm(target_relative_position)
+        target_distance = magnitude(target_relative_position)
 
         # Case where the target is at zero distance
         if target_distance < TARGET_DISTANCE_TOLERANCE_M:
@@ -216,7 +216,7 @@ class GenericShipNavigator(GenericNavigator):
         # Find next waypoint
         next_waypoint = self.waypoints[self.next_waypoint_idx]
         waypoint_direction = next_waypoint - self.pawn.position
-        self.distance_to_waypoint_m = np.linalg.norm(waypoint_direction)
+        self.distance_to_waypoint_m = magnitude(waypoint_direction)
 
         # Handle the case where the next waypoint has been met already
         if (
@@ -294,7 +294,7 @@ class GenericShipNavigator(GenericNavigator):
 
         # Compute relative quantities
         direction = np.float64(target_position - self.pawn.position)
-        distance_m = np.linalg.norm(direction)
+        distance_m = magnitude(direction)
         if distance_m > TARGET_DISTANCE_TOLERANCE_M:
             direction /= distance_m
         else:
@@ -311,14 +311,14 @@ class GenericShipNavigator(GenericNavigator):
             lead_time_s=1.0,
         )
 
-        aim_vector_norm = np.linalg.norm(aim_vector)
+        aim_vector_norm = magnitude(aim_vector)
         if aim_vector_norm < EPSILON_TOLERANCE:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm
 
         # Compute desired speed
-        target_speed_mps = np.linalg.norm(target_speed)
+        target_speed_mps = magnitude(target_speed)
         pursuit_speed_mps = self.compute_follow_speed(
             distance_m=distance_m,
             target_speed_mps=target_speed_mps,

@@ -8,6 +8,7 @@ from space_flight.utils import (
     compute_next_power_of_2,
     cross3,
     low_pass_filter_first_order,
+    magnitude,
     normalize,
     rotate_single_vector,
     safe_angle_rad,
@@ -193,6 +194,53 @@ def test_normalize_matches_np_linalg_norm_random(seed):
 
     result = normalize(vector)
     expected = vector / np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# magnitude
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "vector",
+    [
+        # Zero vector
+        np.array([0.0, 0.0, 0.0]),
+        # Unit length
+        np.array([1.0, 0.0, 0.0]),
+        # 2D (screen-space direction)
+        np.array([0.3, -0.7]),
+        np.array([0.0, 0.0]),
+        # 3D, near-zero
+        np.array([1e-8, -2e-8, 3e-8]),
+        # 3D, large
+        np.array([1234.5, -876.2, 45.6]),
+        # 3D, negative components
+        np.array([-1.0, -2.0, -3.0]),
+        # 4D (quaternion raw components)
+        np.array([0.9986, 0.03, -0.02, 0.01]),
+        np.array([2.0, 0.5, -0.3, 0.1]),
+        # 5D, exercises the generic fallback path
+        np.array([1.0, 2.0, -3.0, 4.0, -5.0]),
+    ],
+)
+def test_magnitude_matches_np_linalg_norm(vector):
+    """magnitude must agree with np.linalg.norm (the "old", generic-numpy
+    way it replaced) for a variety of vectors: 2D, 3D, 4D (quaternions),
+    beyond, zero, near-zero and large."""
+    result = magnitude(vector)
+    expected = np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_magnitude_matches_np_linalg_norm_random(seed):
+    rng = np.random.default_rng(seed)
+    vector = rng.uniform(-10, 10, size=3)
+
+    result = magnitude(vector)
+    expected = np.linalg.norm(vector)
     np.testing.assert_allclose(result, expected, atol=1e-9)
 
 

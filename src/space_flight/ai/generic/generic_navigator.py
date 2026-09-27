@@ -5,7 +5,7 @@ import numpy as np
 from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
-from space_flight.utils import cross3
+from space_flight.utils import cross3, magnitude
 from space_flight.utils.state_machine import StateMachine
 
 LOGGER = logging.getLogger()
@@ -82,7 +82,7 @@ class GenericNavigator:
         # TODO Dynamic CAP strength, should vary with distance/closing_speed
         cap_strength_s = 1.0  # Or =1/omega_max_radps
         desired_vector = direction * distance_m - cap_strength_s * lateral_speed_vector
-        desired_vector_norm = np.linalg.norm(desired_vector)
+        desired_vector_norm = magnitude(desired_vector)
         # Norm can't be zero if distance != 0
         return desired_vector / desired_vector_norm
 
@@ -107,7 +107,7 @@ class GenericNavigator:
 
         # Compute direction to point to
         target_future_direction = target_future_position - self.pawn.position
-        target_future_distance_m = np.linalg.norm(target_future_direction)
+        target_future_distance_m = magnitude(target_future_direction)
         if target_future_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             target_future_direction = np.zeros(3)
         else:
@@ -141,7 +141,7 @@ class GenericNavigator:
         if amplitude <= 0.0:
             return base_direction
         lateral = cross3(base_direction, up_reference)
-        lateral_norm = np.linalg.norm(lateral)
+        lateral_norm = magnitude(lateral)
         if lateral_norm < 1e-4:
             return base_direction
         lateral /= lateral_norm
@@ -150,7 +150,7 @@ class GenericNavigator:
             2 * np.pi * frequency_hz * self.behaviour_duration_s + self.weave_phase_rad
         )
         weaved = base_direction + offset * lateral
-        weaved_norm = np.linalg.norm(weaved)
+        weaved_norm = magnitude(weaved)
         if weaved_norm < 1e-4:
             return base_direction
         return weaved / weaved_norm

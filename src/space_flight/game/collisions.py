@@ -23,6 +23,7 @@ from panda3d.core import (
 
 from space_flight import DEBUG_COLLISION
 from space_flight.fx import spark_fx
+from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.actors.capital_ship.shield import Shield
@@ -641,7 +642,7 @@ class CollisionSystem:
         # Get impact parameters
         # Normal and penetration depth from ship positions directly (assumed spherical)
         relative_position = ship_from.position - ship_into.position
-        distance_m = np.linalg.norm(relative_position)
+        distance_m = magnitude(relative_position)
         if distance_m < 1e-4:
             # Objects are so close that we are better off waiting for a more favorable
             # situation

@@ -80,6 +80,29 @@ def normalize(vector: np.ndarray) -> np.ndarray:
     return vector / math.sqrt(float(np.dot(vector, vector)))
 
 
+def magnitude(vector: np.ndarray) -> float:
+    """
+    Returns the Euclidean norm (magnitude) of vector: a 2D screen-space
+    vector, a 3D direction/speed, or a quaternion's 4 raw components.
+
+    Same reasoning as normalize/cross3/rotate_single_vector: builds the
+    squared norm as a plain float sum and calls math.sqrt on it directly,
+    instead of going through np.linalg.norm's generic, broadcast-capable
+    dispatch -- for a single fixed-size vector that generality is pure
+    overhead.
+    """
+    if len(vector) == 3:
+        x, y, z = vector[0], vector[1], vector[2]
+        return math.sqrt(x * x + y * y + z * z)
+    if len(vector) == 2:
+        x, y = vector[0], vector[1]
+        return math.sqrt(x * x + y * y)
+    if len(vector) == 4:
+        x, y, z, w = vector[0], vector[1], vector[2], vector[3]
+        return math.sqrt(x * x + y * y + z * z + w * w)
+    return math.sqrt(float(np.dot(vector, vector)))
+
+
 def safe_angle_rad(angle_rad: float) -> float:
     """
     Transfers an angle in the [-pi, pi[ quadrant
@@ -165,7 +188,7 @@ def sample_unit_sphere() -> np.ndarray:
     max_try = 50
     for _ in range(max_try):
         sample = np.random.uniform(low=-1, high=1, size=3)
-        if np.linalg.norm(sample) <= 1.0:
+        if magnitude(sample) <= 1.0:
             return sample
     # If no suitable sample is found, fall back to the origin (center of the sphere)
     return np.zeros(3)
@@ -186,7 +209,7 @@ def build_orthogonal_basis(
     """
     if normal is None:
         return None, None, None
-    normal_norm = np.linalg.norm(normal)
+    normal_norm = magnitude(normal)
     if normal_norm < 1e-6:
         normal = np.array([0, 0, 1])
         normal_norm = 1.0
@@ -255,7 +278,7 @@ def build_axis_billboard_quat(
     # Make copies to avoid modifying the original vectors
 
     # Normalize forward vector
-    forward_norm = np.linalg.norm(forward)
+    forward_norm = magnitude(forward)
     if forward_norm < 1e-4:
         forward_axis = np.array([0, 1, 0])
     else:
@@ -263,7 +286,7 @@ def build_axis_billboard_quat(
 
     # Normalize up_hint
     if up_hint is not None:
-        up_hint_norm = np.linalg.norm(up_hint)
+        up_hint_norm = magnitude(up_hint)
         if forward_norm < 1e-4:
             up_hint_axis = np.array([0, 0, 1])
         else:

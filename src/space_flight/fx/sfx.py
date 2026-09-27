@@ -7,6 +7,7 @@ import numpy as np
 from direct.showbase import Audio3DManager
 
 from space_flight import DATAFILES_PATH
+from space_flight.utils import magnitude
 
 LOGGER = logging.getLogger()
 
@@ -112,7 +113,7 @@ class SFX:
         if game.headless:
             return
         # Set the volume according to the distance fromm the impact to the player
-        impact_distance = np.linalg.norm(hit_pos - player_ship_pos)
+        impact_distance = magnitude(hit_pos - player_ship_pos)
 
         # Ignore distant events
         if impact_distance > MAX_SOUND_DISTANCE_M:
