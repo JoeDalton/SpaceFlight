@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import quaternion
 
 from space_flight.utils import (
     build_axis_billboard_quat,
@@ -38,6 +39,70 @@ def test_rotate_single_vector_90deg_z():
 
     expected = np.array([0.0, 1.0, 0.0])
     np.testing.assert_allclose(rotated, expected, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "quat, vector",
+    [
+        # Identity
+        (np.quaternion(1, 0, 0, 0), np.array([1.0, 2.0, 3.0])),
+        # 90 degrees around each axis
+        (
+            np.quaternion(np.cos(np.pi / 4), np.sin(np.pi / 4), 0, 0),
+            np.array([0.0, 1.0, 0.0]),
+        ),
+        (
+            np.quaternion(np.cos(np.pi / 4), 0, np.sin(np.pi / 4), 0),
+            np.array([1.0, 0.0, 0.0]),
+        ),
+        (
+            np.quaternion(np.cos(np.pi / 4), 0, 0, np.sin(np.pi / 4)),
+            np.array([1.0, 0.0, 0.0]),
+        ),
+        # 180 degrees around an arbitrary axis
+        (
+            np.quaternion(0, 1, 2, 3) / np.sqrt(14),
+            np.array([-1.5, 4.0, 2.0]),
+        ),
+        # A non-axis-aligned rotation
+        (
+            quaternion.from_euler_angles(0.3, 0.5, 0.7),
+            np.array([1.0, 2.0, 3.0]),
+        ),
+        # Vector not axis-aligned, quaternion not normalized to 1 exactly
+        (
+            quaternion.from_euler_angles(-1.2, 2.4, -0.6),
+            np.array([-5.0, 0.25, 7.5]),
+        ),
+        # Zero vector
+        (quaternion.from_euler_angles(0.1, 0.2, 0.3), np.array([0.0, 0.0, 0.0])),
+        # Vector already aligned with the rotation axis
+        (
+            np.quaternion(np.cos(0.4), np.sin(0.4), 0, 0),
+            np.array([5.0, 0.0, 0.0]),
+        ),
+    ],
+)
+def test_rotate_single_vector_matches_quaternion_rotate_vectors(quat, vector):
+    """
+    The fast, scalar implementation of rotate_single_vector must agree with
+    quaternion.rotate_vectors (the "old", generic-numpy way it replaced) for
+    a variety of quaternions and vectors.
+    """
+    result = rotate_single_vector(quat, vector)
+    expected = quaternion.rotate_vectors(quat, vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_rotate_single_vector_matches_quaternion_rotate_vectors_random(seed):
+    rng = np.random.default_rng(seed)
+    quat = quaternion.from_euler_angles(*rng.uniform(-np.pi, np.pi, size=3))
+    vector = rng.uniform(-10, 10, size=3)
+
+    result = rotate_single_vector(quat, vector)
+    expected = quaternion.rotate_vectors(quat, vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
 
 
 # ---------------------------

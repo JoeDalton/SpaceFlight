@@ -7,10 +7,27 @@ import quaternion
 
 def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
     """
-    Rotates vector by the rotation defined by quat
+    Rotates vector by the rotation defined by quat.
+
+    Uses the scalar Rodrigues-style formula v' = v + 2*w*(q_v x v) + 2*(q_v x
+    (q_v x v)) worked out component-by-component in plain floats, instead of
+    quaternion.rotate_vectors (which builds a full rotation matrix via
+    generic, broadcasting-capable numpy ops meant for batches of vectors);
+    for a lone 3-vector that generality is pure overhead and this is
+    substantially faster (called once per ship per frame).
     """
-    # TODO quaternion multiplication for faster computation
-    return quaternion.rotate_vectors(quat, vector)
+    qx, qy, qz, qw = quat.x, quat.y, quat.z, quat.w
+    vx, vy, vz = vector[0], vector[1], vector[2]
+    tx = 2.0 * (qy * vz - qz * vy)
+    ty = 2.0 * (qz * vx - qx * vz)
+    tz = 2.0 * (qx * vy - qy * vx)
+    return np.array(
+        (
+            vx + qw * tx + (qy * tz - qz * ty),
+            vy + qw * ty + (qz * tx - qx * tz),
+            vz + qw * tz + (qx * ty - qy * tx),
+        )
+    )
 
 
 def safe_angle_rad(angle_rad: float) -> float:
