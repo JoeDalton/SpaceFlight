@@ -3,8 +3,9 @@ import uuid
 import numpy as np
 import pytest
 
-from space_flight.ai import INTERACT_MAX_DISTANCE_M
+from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
 from space_flight.ai.interactions import MAX_ACTORS, Interactions
+from space_flight.utils import magnitude
 
 
 class MockActor:
@@ -601,3 +602,230 @@ def test_update_interactions_tolerates_missing_speed_and_forward(interactions):
     assert interactions.alignments[i_sub, i_ship] == pytest.approx(0.0)
     # Relative velocity falls back to zero for the speed-less subsystem
     np.testing.assert_allclose(interactions.rel_velocities[i_ship, i_sub], 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Vectorized update vs the original per-pair loop
+# ---------------------------------------------------------------------------
+
+
+def _reference_update_interactions(ix):
+    """
+    The original per-pair loop implementation of update_interactions, kept as
+    the reference the vectorized version is checked against. It only writes
+    geometry for interacting pairs.
+    """
+    live_indices = np.where(ix.alive)[0]
+    n_live = len(live_indices)
+    for i in range(1, n_live):
+        idx_source = live_indices[i]
+        source_actor = ix.actors[idx_source]
+        for j in range(0, i):
+            idx_target = live_indices[j]
+            target_actor = ix.actors[idx_target]
+            interact = not (
+                source_actor.team == 0
+                or target_actor.team == 0
+                or source_actor.team == target_actor.team
+            )
+            if interact:
+                direction = np.float64(target_actor.position - source_actor.position)
+                distance = magnitude(direction)
+                if distance > TARGET_DISTANCE_TOLERANCE_M:
+                    direction /= distance
+                else:
+                    direction = np.zeros(3)
+                    distance = 0.0
+                interact *= distance < INTERACT_MAX_DISTANCE_M
+            if interact:
+                target_velocity = getattr(target_actor, "speed", np.zeros(3))
+                source_velocity = getattr(source_actor, "speed", np.zeros(3))
+                rel_velocity = target_velocity - source_velocity
+                ix.directions[idx_source, idx_target, :] = direction
+                ix.distances[idx_source, idx_target] = distance
+                ix.rel_velocities[idx_source, idx_target, :] = rel_velocity
+                ix.directions[idx_target, idx_source, :] = -direction
+                ix.distances[idx_target, idx_source] = distance
+                ix.rel_velocities[idx_target, idx_source, :] = -rel_velocity
+            ix.interact[idx_source, idx_target] = interact
+            ix.interact[idx_target, idx_source] = interact
+    for i in range(n_live):
+        idx_source = live_indices[i]
+        source_forward = getattr(ix.actors[idx_source], "forward", np.zeros(3))
+        for j in range(n_live):
+            idx_target = live_indices[j]
+            if ix.interact[idx_source, idx_target] and (idx_source != idx_target):
+                ix.alignments[idx_source, idx_target] = np.dot(
+                    ix.directions[idx_source, idx_target, :], source_forward
+                )
+
+
+def _expected_pair_geometry(source, target):
+    """Direct per-pair computation of (distance, direction, rel_velocity, alignment)."""
+    offset = np.asarray(target.position, dtype=float) - source.position
+    distance = float(np.linalg.norm(offset))
+    if distance > TARGET_DISTANCE_TOLERANCE_M:
+        direction = offset / distance
+    else:
+        direction, distance = np.zeros(3), 0.0
+    rel_velocity = getattr(target, "speed", np.zeros(3)) - getattr(
+        source, "speed", np.zeros(3)
+    )
+    alignment = float(np.dot(direction, getattr(source, "forward", np.zeros(3))))
+    return distance, direction, rel_velocity, alignment
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_update_interactions_matches_reference(seed):
+    """
+    Over several frames of random movement, the vectorized update must:
+    - produce exactly the same interact flags as the original loop;
+    - produce bit-identical geometry for interacting pairs;
+    - also fill correct geometry for non-interacting live pairs, which the
+      original loop left stale;
+    - leave dead slots' rows and columns zeroed.
+    Covers slot holes and reuse, neutral and same-team actors, actors without
+    speed/forward, coincident and out-of-range pairs, and team changes.
+    """
+    rng = np.random.default_rng(seed)
+    vectorized, reference = Interactions(), Interactions()
+
+    def add(actor):
+        vectorized.add_actor(actor)
+        reference.add_actor(actor)
+
+    def remove(actor):
+        vectorized.remove_actor(actor)
+        reference.remove_actor(actor)
+
+    actors = []
+    for k, team in enumerate([1] * 4 + [2] * 10 + [3] * 5 + [0] * 3):
+        position = rng.uniform(-7000, 7000, 3)
+        if k % 5 == 3:
+            actor = BareActor(team=team, position=position)
+        else:
+            actor = MockActor(
+                team=team,
+                position=position,
+                speed=list(rng.uniform(-300, 300, 3)),
+                forward=list(rng.normal(size=3)),
+            )
+        actors.append(actor)
+        add(actor)
+    # A coincident pair of opposing actors (below the distance tolerance)
+    actors[5].position = actors[0].position + 0.1
+    # Slot hole, then slot reuse by a new actor
+    remove(actors.pop(2))
+    remove(actors.pop(7))
+    newcomer = MockActor(team=2, position=[1.0, 2.0, 3.0], speed=[5.0, 0.0, 0.0])
+    actors.append(newcomer)
+    add(newcomer)
+
+    for frame in range(5):
+        if frame == 2:
+            actors[3].team = 3  # switches sides
+            actors[4].team = 0  # turns neutral
+        vectorized.update_interactions()
+        _reference_update_interactions(reference)
+
+        np.testing.assert_array_equal(vectorized.interact, reference.interact)
+        mask = reference.interact
+        for name in ("distances", "directions", "rel_velocities", "alignments"):
+            np.testing.assert_array_equal(
+                getattr(vectorized, name)[mask], getattr(reference, name)[mask]
+            )
+
+        live = np.flatnonzero(vectorized.alive)
+        for i in live:
+            for j in live:
+                if mask[i, j]:
+                    continue
+                distance, direction, rel_velocity, alignment = _expected_pair_geometry(
+                    vectorized.actors[i], vectorized.actors[j]
+                )
+                np.testing.assert_allclose(
+                    vectorized.distances[i, j], distance, rtol=1e-12, atol=1e-9
+                )
+                np.testing.assert_allclose(
+                    vectorized.directions[i, j], direction, rtol=1e-12, atol=1e-12
+                )
+                np.testing.assert_allclose(
+                    vectorized.rel_velocities[i, j], rel_velocity, atol=1e-12
+                )
+                np.testing.assert_allclose(
+                    vectorized.alignments[i, j], alignment, atol=1e-12
+                )
+
+        dead = np.flatnonzero(~vectorized.alive)
+        for name in ("distances", "directions", "rel_velocities", "alignments"):
+            matrix = getattr(vectorized, name)
+            assert not matrix[dead].any() and not matrix[:, dead].any()
+        assert not vectorized.interact[dead].any()
+        assert not vectorized.interact[:, dead].any()
+
+        # Move everyone, with steps large enough for pairs to cross the
+        # INTERACT_MAX_DISTANCE_M boundary both ways
+        for actor in actors:
+            actor.position = actor.position + rng.uniform(-4000, 4000, 3)
+
+
+def test_geometry_filled_for_non_interacting_pairs(interactions):
+    """
+    Same-team and neutral pairs never interact, but their geometry must still
+    be computed (e.g. the player scores friendly capital ships or waypoint
+    markers by distance and alignment).
+    """
+    a = MockActor(team=1, position=[0, 0, 0], forward=[1, 0, 0])
+    friend = MockActor(team=1, position=[300, 0, 0])
+    marker = MockActor(team=0, position=[0, 400, 0])
+    for actor in (a, friend, marker):
+        interactions.add_actor(actor)
+    interactions.update_interactions()
+
+    sa, sf, sm = (interactions.actors_id_dict[x.id] for x in (a, friend, marker))
+    assert not interactions.interact[sa].any()
+    np.testing.assert_allclose(interactions.distances[sa, sf], 300.0)
+    np.testing.assert_allclose(interactions.directions[sa, sf], [1, 0, 0])
+    np.testing.assert_allclose(interactions.alignments[sa, sf], 1.0)
+    np.testing.assert_allclose(interactions.distances[sa, sm], 400.0)
+    np.testing.assert_allclose(interactions.alignments[sa, sm], 0.0, atol=1e-12)
+
+
+def test_update_writes_matrices_in_place(interactions):
+    """
+    Navigators keep views such as directions[i, j, :] across frames, so the
+    update must write into the existing arrays rather than replace them.
+    """
+    a = MockActor(team=1, position=[0, 0, 0])
+    b = MockActor(team=2, position=[100, 0, 0])
+    interactions.add_actor(a)
+    interactions.add_actor(b)
+    sa, sb = interactions.actors_id_dict[a.id], interactions.actors_id_dict[b.id]
+    interactions.update_interactions()
+    held_view = interactions.directions[sa, sb, :]
+
+    b.position = np.array([0.0, 100.0, 0.0])
+    interactions.update_interactions()
+
+    np.testing.assert_allclose(held_view, [0, 1, 0])
+
+
+def test_diagonal_is_zero_even_with_non_finite_kinematics(interactions):
+    """
+    An actor never interacts with itself: every matrix keeps a zero diagonal,
+    even for an actor whose speed or facing is NaN (NaN - NaN is NaN).
+    """
+    healthy = MockActor(team=1, position=[0, 0, 0], speed=[10, 0, 0])
+    broken = MockActor(team=2, position=[100, 0, 0])
+    broken.speed = np.array([np.nan, 0.0, 0.0])
+    broken.forward = np.array([np.nan, np.nan, np.nan])
+    interactions.add_actor(healthy)
+    interactions.add_actor(broken)
+    interactions.update_interactions()
+
+    for slot in (interactions.actors_id_dict[x.id] for x in (healthy, broken)):
+        assert not interactions.interact[slot, slot]
+        assert interactions.distances[slot, slot] == 0.0
+        assert interactions.alignments[slot, slot] == 0.0
+        assert not interactions.directions[slot, slot].any()
+        assert not interactions.rel_velocities[slot, slot].any()

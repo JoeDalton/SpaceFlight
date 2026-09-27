@@ -16,6 +16,10 @@ class CollisionSensor:
     3 consecutive collision spheres intersect with dangerous objects
     """
 
+    # Game time of the frame whose contacts `obstacles` holds, when recorded
+    # through record_obstacle
+    _obstacles_time_s = None
+
     def __init__(
         self,
         game,
@@ -29,6 +33,7 @@ class CollisionSensor:
         radius_3_m=100,
     ):
         self.obstacles = []
+        self._clock = game.game_time.get_current_time
         self.ship = ship
         self.collision_reference_distance_m = collision_reference_distance_m
         # The three look-ahead spheres, numbered from the innermost (1) to the
@@ -72,13 +77,37 @@ class CollisionSensor:
         self.sphere_3.setPythonTag("owner", self)
         self.sphere_3.setPythonTag("sensor_range", 3)
 
+    def record_obstacle(self, obstacle: dict) -> None:
+        """
+        Register a contact reported by the collision system this frame.
+
+        Contacts are reported every frame while a sphere overlaps an obstacle,
+        but the navigator may only consume them every few frames: keep the
+        current frame's contacts only, or each obstacle would be counted once
+        per frame since the last compute_repulsion.
+
+        :param obstacle: The contact ("normal", "hit_point", "range")
+        """
+        now_s = self._clock()
+        if now_s != self._obstacles_time_s:
+            self.obstacles = []
+            self._obstacles_time_s = now_s
+        self.obstacles.append(obstacle)
+
     def compute_repulsion(self) -> tuple[np.ndarray, float]:
         """
-        Computes the repulsion vector at every frame,
+        Computes the repulsion vector from this frame's contacts,
         then wipes the recorded obstacles
 
         :return: The repulsion vector and the repulsion weight
         """
+        # Contacts from an earlier frame are gone: nothing touched the sensor
+        # since.
+        if (
+            self._obstacles_time_s is not None
+            and self._obstacles_time_s != self._clock()
+        ):
+            self.obstacles = []
         repulsion_vector = np.zeros(3)
         total_weight = 0.0
         n_contributing = 0

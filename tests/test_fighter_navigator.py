@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.ai import Personality
+from space_flight.ai import Intent, Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.utils.state_machine import StateMachine
 from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
@@ -65,6 +65,9 @@ def make_fighter_navigator(
     nav.distance_to_waypoint_m = 0.0
     nav.has_waypoint_loop = False
     nav.time_in_spiral_s = 0.0
+    nav._last_navigate_s = None
+    nav.think_dt_s = 0.1  # matches get_time_step above
+    nav._armed_trigger = None
     nav.collision_sensor = MagicMock()
     nav.collision_sensor.compute_repulsion.return_value = (np.zeros(3), 0.0)
     nav.engage_phase = ""
@@ -900,3 +903,115 @@ def test_bomb_run_follows_track_line_and_publishes_up_reference():
     assert np.allclose(desired_direction, expected_dir, atol=1e-6)
     assert desired_direction[2] > 0.0  # aims up toward the run altitude
     assert nav.up_reference is not None  # belly aim published for the run
+
+
+# ---------------------------------------------------------------------------
+# Weapon triggers between thinks
+# ---------------------------------------------------------------------------
+
+
+def _held_on_target(nav):
+    """
+    A target dead ahead in gun range. The geometry is given directly, so
+    _resolve_engagement (which refreshes it from Interactions) is stubbed.
+    """
+    _augment_pawn_for_strafe(nav)
+    target_dict = _strafe_target_dict(300.0)
+    target_dict["target_id"] = "prey"
+    nav._resolve_engagement = lambda target_dict: True
+    return target_dict
+
+
+def test_guns_fire_on_every_frame_between_thinks():
+    """
+    navigate() only runs when the bot thinks (every 6th frame here), but a gun
+    reloads faster than that: the armed decision is taken on every frame, so the
+    rate of fire is unchanged (the cannon's own reload gate still applies).
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_on_target(nav)
+    min_cos = nav.personality["navigator"]["fire"]["minimum_cos_angle"]
+
+    for frame in range(12):
+        if frame % 6 == 0:
+            nav._arm_trigger(target_dict, weapon="guns", min_cos_angle=min_cos)
+        else:
+            nav.update_triggers(Intent.ENGAGE, target_dict)
+
+    assert nav.pawn.laser_cannon.fire.call_count == 12
+
+
+@pytest.mark.parametrize("change", ["new_target", "no_longer_engaging", "disarmed"])
+def test_guns_hold_fire_once_the_decision_no_longer_applies(change):
+    nav = make_fighter_navigator()
+    target_dict = _held_on_target(nav)
+    nav._arm_trigger(
+        target_dict,
+        weapon="guns",
+        min_cos_angle=nav.personality["navigator"]["fire"]["minimum_cos_angle"],
+    )
+    nav.pawn.laser_cannon.fire.reset_mock()
+
+    intent = Intent.ENGAGE
+    if change == "new_target":
+        target_dict = dict(target_dict, target_id="another_prey")
+    elif change == "no_longer_engaging":
+        intent = Intent.EVADE
+    else:  # the next think chose not to attack
+        nav.navigate_intent(intent=Intent.IDLE, target_dict={})
+    nav.update_triggers(intent, target_dict)
+
+    nav.pawn.laser_cannon.fire.assert_not_called()
+
+
+def test_bomb_released_between_thinks_once_the_solution_is_met():
+    """
+    A bomb run armed at a think without a solution yet releases on the frame the
+    solution is met, not up to a think period later, then breaks off, once.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    nav._resolve_engagement = lambda target_dict: True
+    _enter_behaviour(nav, "bomb_run")
+    target_dict = _bomb_engagement(
+        distance_m=400.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        target_position=np.array([0.0, 400.0, 0.0]),  # dead ahead: no solution
+        longitudinal=-100.0,
+    )
+    target_dict["target_id"] = "prey"
+
+    nav.bomb_target(target_dict)  # the think
+    assert nav.behaviour == "bomb_run"
+    nav.pawn.drop_bomb.assert_not_called()
+
+    # A few frames later (fresh geometry): the target now lies on the bomb path
+    direction = _bomb_velocity_dir(nav)
+    target_dict.update(
+        distance_m=100.0,
+        direction=direction,
+        target_current_position=direction * 100.0,
+    )
+    nav.update_triggers(Intent.ENGAGE, target_dict)
+    nav.update_triggers(Intent.ENGAGE, target_dict)
+
+    nav.pawn.drop_bomb.assert_called_once()
+    assert nav.behaviour == "bomb_break"
+
+
+def test_time_in_spiral_accrues_the_time_between_thinks():
+    """Checked every 0.1 s instead of every frame, a spiral lasts as long."""
+    extend = Personality.FIGHTER_DEFAULT["navigator"]["extend"]
+    in_spiral = dict(
+        longitudinal_speed_scalar_mps=0.0,
+        lateral_speed_scalar_mps=2.0 * extend["maximal_lateral_speed_mps"] + 1.0,
+    )
+    per_frame, per_think = make_fighter_navigator(), make_fighter_navigator()
+    per_frame.think_dt_s = 1.0 / 60.0
+    per_think.think_dt_s = 0.1
+    for _ in range(60):
+        per_frame.check_extend_conditions(**in_spiral)
+    for _ in range(10):
+        per_think.check_extend_conditions(**in_spiral)
+    assert per_think.time_in_spiral_s == pytest.approx(per_frame.time_in_spiral_s)
+    assert per_think.time_in_spiral_s == pytest.approx(1.0)

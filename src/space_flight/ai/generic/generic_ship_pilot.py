@@ -64,6 +64,10 @@ class GenericShipPilot(GenericPilot):
         self.throttle = 0.0
         self.angle_to_target_deg = 0.0
 
+    def sample_externally(self):
+        for pid in (self.pid_yaw, self.pid_pitch, self.pid_roll, self.pid_throttle):
+            pid.sample_time = None
+
     def set_on(
         self,
         current_normalized_yaw_rate_command: float = 0.0,

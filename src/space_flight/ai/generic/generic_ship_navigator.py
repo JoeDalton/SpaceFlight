@@ -38,6 +38,10 @@ class GenericShipNavigator(GenericNavigator):
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
         self.time_in_spiral_s = 0.0
+        # Game time of the last navigate() and the time elapsed since the one
+        # before: navigate() runs when the bot thinks, not necessarily every frame
+        self._last_navigate_s = None
+        self.think_dt_s = 0.0
         # Per-phase scaling of the collision-avoidance contribution, reset each
         # frame and lowered by phases that deliberately fly close (formation, the
         # strafe corridor). The surface altitude floor is a *separate* mechanism
@@ -54,6 +58,12 @@ class GenericShipNavigator(GenericNavigator):
         :param target_dict: A dictionary containing target info
         :return: The direction to point to and the desired speed
         """
+        now_s = self.game.game_time.get_current_time()
+        if self._last_navigate_s is None:
+            self.think_dt_s = self.game.game_time.get_time_step()
+        else:
+            self.think_dt_s = now_s - self._last_navigate_s
+        self._last_navigate_s = now_s
         # Reset the per-phase avoidance factor; the intent may lower it (formation,
         # strafe corridor) before we apply it below.
         self.avoidance_weight_factor = 1.0
@@ -101,6 +111,15 @@ class GenericShipNavigator(GenericNavigator):
             )
 
         return direction, speed
+
+    def update_triggers(self, intent: int, target_dict: dict) -> None:
+        """
+        Weapon decisions (firing, bomb release) on the frames where navigate()
+        does not run. None by default.
+
+        :param intent: The tactician's current intent
+        :param target_dict: The tactician's current target info
+        """
 
     def navigate_avoidance(self) -> tuple[np.ndarray, float, float]:
         """

@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional
 import numpy as np
 
 from space_flight.game.scenario.conditions import Condition, pawns_of
-from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.game.scenario.mission import Mission
@@ -130,15 +129,18 @@ class ScanHandle:
         player_pawn = self.mission.game.player.pawn
         if getattr(player_pawn, "target", None) is not pawn:
             return False
-        delta = pawn.position - player_pawn.position
-        distance = float(magnitude(delta))
+        interactions = self.mission.game.interactions
+        try:
+            player_idx = interactions.get_actor_index_from_id(player_pawn.id)
+            pawn_idx = interactions.get_actor_index_from_id(pawn.id)
+        except ValueError:
+            return False  # the player or the pawn has just been removed
+        distance = interactions.distances[player_idx, pawn_idx]
         if distance > self.range_m:
             return False
         if distance == 0.0:
             return True
-        # Computed directly: interactions.alignments is not filled for
-        # neutral actors, which are the usual scan subjects.
-        return float(player_pawn.forward @ delta) / distance >= self.cos_cone
+        return interactions.alignments[player_idx, pawn_idx] >= self.cos_cone
 
     def _scan_job(self) -> Iterator[None]:
         last_time = self.mission.now()

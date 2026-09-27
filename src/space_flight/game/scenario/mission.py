@@ -25,11 +25,11 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Sequence
 
 from space_flight.game.scenario.conditions import Condition, _After, _Delay, _Sustained
-from space_flight.game.scenario.scan import ScanHandle
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
 if TYPE_CHECKING:
+    from space_flight.actors.scan import ScanHandle
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
@@ -144,6 +144,9 @@ class Mission:
         :param kwargs: Tuning, as :class:`ScanHandle`
         :return: The scans' handle, whose state methods are conditions
         """
+        # Imported here: actors.scan itself imports this package (conditions)
+        from space_flight.actors.scan import ScanHandle
+
         return ScanHandle(self, who, contraband=contraband, **kwargs)
 
     # ------------------------------------------------------------------

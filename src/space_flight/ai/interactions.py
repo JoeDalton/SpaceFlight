@@ -4,7 +4,6 @@ from uuid import UUID
 import numpy as np
 
 from space_flight.ai import INTERACT_MAX_DISTANCE_M, TARGET_DISTANCE_TOLERANCE_M
-from space_flight.utils import magnitude
 
 """
 Teams are defined as :
@@ -14,6 +13,10 @@ Foes in any team > 1
 """
 
 MAX_ACTORS = 64
+
+# Default speed/facing for actors without one; never written to.
+_ZERO3 = np.zeros(3)
+_ZERO3.flags.writeable = False
 
 
 class Interactions:
@@ -39,6 +42,13 @@ class Interactions:
         self.distances: np.ndarray = np.zeros((max_actors, max_actors))
         self.alignments: np.ndarray = np.zeros((max_actors, max_actors))
         self.rel_velocities: np.ndarray = np.zeros((max_actors, max_actors, 3))
+        # Where each live pair's results go in the matrices: for every pair of
+        # live slots (i, j), the flat index i * max_actors + j into the
+        # matrices viewed as one long row. update_interactions computes a
+        # compact n_live x n_live block and scatters it through these indices
+        # in one write per matrix. Only changes when an actor is added or
+        # removed, so it is cached, and reset to None by add/remove_actor.
+        self._live_pair_idx = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -73,6 +83,7 @@ class Interactions:
         self.actors[slot] = actor
         self.alive[slot] = True
         self.actors_id_dict[actor.id] = slot
+        self._live_pair_idx = None
 
     def remove_actor(self, actor):
         """
@@ -84,6 +95,7 @@ class Interactions:
         slot = self.actors_id_dict.pop(actor.id)
         self.actors[slot] = None
         self.alive[slot] = False
+        self._live_pair_idx = None
 
         self.interact[slot, :] = False
         self.interact[:, slot] = False
@@ -118,81 +130,87 @@ class Interactions:
         """
         Computes the interaction between actors.
 
-        Iterates only live pairs, so the O(N²) cost is proportional to
-        the number of live actors, not the pre-allocated capacity.
+        Vectorized over every live pair at once. Distances, directions,
+        relative velocities and alignments are refreshed for all live pairs,
+        interacting or not; interact flags which pairs are hostile and in
+        range. Matrices are written in place (callers hold views into them).
 
-        TODO: Optimize this so every interaction is not computed at each step.
-        The time between update should be:
-            - proportional to distance between actors
-            - inversely proportional to their closing speed
-            - A bubble of a few seconds max
-        TODO: add an "engagement" array to update these very frequently ?
+        Per-pair update scheduling by closing time (issue #19) is not worth it
+        for this geometry: it costs about as much as recomputing everything.
         """
-        live_indices = np.where(self.alive)[0]
-        n_live = len(live_indices)
+        live = np.flatnonzero(self.alive)
+        if len(live) < 2:
+            return
 
-        # Upper-triangular pass: distances, directions, relative velocities
-        for i in range(1, n_live):
-            idx_source = live_indices[i]
-            source_actor = self.actors[idx_source]
-            for j in range(0, i):
-                idx_target = live_indices[j]
-                target_actor = self.actors[idx_target]
+        actors = [self.actors[k] for k in live]
+        positions = np.array([a.position for a in actors], dtype=float)
+        # Some actors (e.g. subsystems) have no speed or facing: treat them as
+        # static and unoriented so they still take part in interactions.
+        velocities = np.array(
+            [getattr(a, "speed", _ZERO3) for a in actors], dtype=float
+        )
+        forwards = np.array(
+            [getattr(a, "forward", _ZERO3) for a in actors], dtype=float
+        )
+        teams = np.array([a.team for a in actors])
 
-                interact = not (
-                    source_actor.team == 0  # Source is neutral
-                    or target_actor.team == 0  # Target is neutral
-                    or source_actor.team == target_actor.team  # Same team
-                )
+        # Explicit sums rather than einsum/linalg.norm: as fast, and
+        # bit-identical to the scalar per-pair formulas.
+        offsets = positions[None, :, :] - positions[:, None, :]  # [i, j] = P_j - P_i
+        distances = np.sqrt(
+            offsets[..., 0] * offsets[..., 0]
+            + offsets[..., 1] * offsets[..., 1]
+            + offsets[..., 2] * offsets[..., 2]
+        )
+        far = distances > TARGET_DISTANCE_TOLERANCE_M
+        directions = offsets / np.where(far, distances, 1.0)[..., None]
+        directions[~far] = 0.0
+        distances[~far] = 0.0
 
-                if interact:
-                    direction = np.float64(
-                        target_actor.position - source_actor.position
-                    )
-                    distance = magnitude(direction)
-                    if distance > TARGET_DISTANCE_TOLERANCE_M:
-                        direction /= distance
-                    else:
-                        direction = np.zeros(3)
-                        distance = 0.0
-                    distance_interact = distance < INTERACT_MAX_DISTANCE_M
-                    interact *= distance_interact
+        interact = (
+            (teams[:, None] != teams[None, :])
+            & (teams[:, None] != 0)
+            & (teams[None, :] != 0)
+            & (distances < INTERACT_MAX_DISTANCE_M)
+        )
+        alignments = (
+            directions[..., 0] * forwards[:, None, 0]
+            + directions[..., 1] * forwards[:, None, 1]
+            + directions[..., 2] * forwards[:, None, 2]
+        )
+        rel_velocities = velocities[None, :, :] - velocities[:, None, :]
 
-                if interact:
-                    try:
-                        target_velocity = target_actor.speed
-                    except AttributeError:
-                        target_velocity = np.zeros(3)
-                    try:
-                        source_velocity = source_actor.speed
-                    except AttributeError:
-                        source_velocity = np.zeros(3)
-                    rel_velocity = target_velocity - source_velocity
+        # An actor never interacts with itself: keep the diagonal at zero even
+        # when its own speed or facing is non-finite (NaN - NaN is NaN).
+        diagonal = np.arange(len(live))
+        interact[diagonal, diagonal] = False
+        distances[diagonal, diagonal] = 0.0
+        alignments[diagonal, diagonal] = 0.0
+        directions[diagonal, diagonal] = 0.0  # whole [i, i, :] vector (3 coords)
+        rel_velocities[diagonal, diagonal] = 0.0  # whole [i, i, :] vector (3 coords)
 
-                    self.directions[idx_source, idx_target, :] = direction
-                    self.distances[idx_source, idx_target] = distance
-                    self.rel_velocities[idx_source, idx_target, :] = rel_velocity
-                    self.directions[idx_target, idx_source, :] = -direction
-                    self.distances[idx_target, idx_source] = distance
-                    self.rel_velocities[idx_target, idx_source, :] = -rel_velocity
+        flat = self._live_pair_indices(live)
+        n_cells = self.max_actors * self.max_actors
+        self.interact.reshape(n_cells)[flat] = interact.ravel()
+        self.distances.reshape(n_cells)[flat] = distances.ravel()
+        self.alignments.reshape(n_cells)[flat] = alignments.ravel()
+        self.directions.reshape(n_cells, 3)[flat] = directions.reshape(-1, 3)
+        self.rel_velocities.reshape(n_cells, 3)[flat] = rel_velocities.reshape(-1, 3)
 
-                self.interact[idx_source, idx_target] = interact
-                self.interact[idx_target, idx_source] = interact
+    def _live_pair_indices(self, live: np.ndarray) -> np.ndarray:
+        """
+        Flat indices, into a (max_actors * max_actors) view of the matrices, of
+        every (live, live) pair in row-major order. Cached until an actor is
+        added or removed.
 
-        # Full pass for alignments (source -> target and target -> source)
-        for i in range(n_live):
-            idx_source = live_indices[i]
-            # Some actors (e.g. subsystems) have no facing: treat them as
-            # unoriented so they still take part in interactions.
-            source_forward = getattr(self.actors[idx_source], "forward", np.zeros(3))
-            for j in range(n_live):
-                idx_target = live_indices[j]
-                if self.interact[idx_source, idx_target] and (idx_source != idx_target):
-                    source_to_target_direction = self.directions[
-                        idx_source, idx_target, :
-                    ]
-                    alignment = np.dot(source_to_target_direction, source_forward)
-                    self.alignments[idx_source, idx_target] = alignment
+        :param live: Sorted slot indices of the live actors
+        :return: The flat pair indices
+        """
+        if self._live_pair_idx is None:
+            self._live_pair_idx = (
+                live[:, None] * self.max_actors + live[None, :]
+            ).ravel()
+        return self._live_pair_idx
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -212,3 +230,4 @@ class Interactions:
         self.distances = None
         self.alignments = None
         self.rel_velocities = None
+        self._live_pair_idx = None

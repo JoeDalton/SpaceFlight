@@ -249,3 +249,61 @@ def test_compute_repulsion_keeps_spheres_within_active_range():
         repulsion_vector / np.linalg.norm(repulsion_vector),
         inner["normal"],
     )
+
+
+# ---------------------------------------------------------------------------
+# record_obstacle: only the current frame's contacts count
+# ---------------------------------------------------------------------------
+
+
+class FakeClock:
+    def __init__(self):
+        self.now_s = 0.0
+
+    def __call__(self):
+        return self.now_s
+
+
+def make_clocked_sensor():
+    sensor = make_collision_sensor()
+    sensor._clock = FakeClock()
+    return sensor
+
+
+def test_record_obstacle_keeps_every_contact_of_the_same_frame():
+    sensor = make_clocked_sensor()
+    sensor.record_obstacle(make_obstacle(np.array([1.0, 0, 0]), np.array([50.0, 0, 0])))
+    sensor.record_obstacle(make_obstacle(np.array([0, 1.0, 0]), np.array([0, 50.0, 0])))
+    assert len(sensor.obstacles) == 2
+
+
+def test_repeated_contacts_over_frames_count_once():
+    """
+    A sphere overlapping the same obstacle reports it every frame. Consumed
+    only every few frames, it must weigh the same as when consumed each frame.
+    """
+    obstacle = make_obstacle(np.array([-1.0, 0, 0]), np.array([50.0, 0, 0]))
+    every_frame = make_clocked_sensor()
+    every_frame.record_obstacle(dict(obstacle))
+    expected = every_frame.compute_repulsion()
+
+    every_sixth_frame = make_clocked_sensor()
+    for frame in range(6):
+        every_sixth_frame._clock.now_s = frame / 60
+        every_sixth_frame.record_obstacle(dict(obstacle))
+    result = every_sixth_frame.compute_repulsion()
+
+    np.testing.assert_allclose(result[0], expected[0])
+    assert result[1] == pytest.approx(expected[1])
+
+
+def test_contacts_from_an_earlier_frame_are_ignored():
+    """An obstacle last seen a few frames ago no longer repels."""
+    sensor = make_clocked_sensor()
+    sensor.record_obstacle(
+        make_obstacle(np.array([-1.0, 0, 0]), np.array([50.0, 0, 0]))
+    )
+    sensor._clock.now_s = 3 / 60
+    direction, weight = sensor.compute_repulsion()
+    np.testing.assert_allclose(direction, np.zeros(3))
+    assert weight == 0.0

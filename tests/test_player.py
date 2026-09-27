@@ -46,6 +46,8 @@ def make_player_for_target_mask(
     )
     game = MagicMock()
     game.interactions.n_actors = n_actors
+    # No dead slots: grid slot indices equal positions in live_actors.
+    game.interactions.alive = np.ones(n_actors, dtype=bool)
     # Plain actors with no `category`, so "All" treats them all as targetable.
     game.interactions.live_actors = [object() for _ in range(n_actors)]
     player.game = game
@@ -408,6 +410,71 @@ def test_loop_target_keeps_current_target_selected_on_repeated_calls_with_one_ta
     # not lose track of it because of a stale/mismatched index comparison.
     player.loop_target(increment=1)
     assert player.pawn.target.name == "only"
+
+
+@pytest.mark.parametrize("select", ["loop_target", "point_target"])
+def test_player_never_targets_itself_after_a_slot_gap(select):
+    """
+    Regression test: the player's own entry in the target mask must be found
+    by its position in live_actors, not by its grid slot. With a dead slot
+    before the player's, the slot index used to hide the *next* actor and
+    leave the player itself targetable.
+    """
+    interactions = Interactions()
+    filler = MockTargetableActor("filler")  # removed, leaving slot 0 free
+    pawn = MockTargetableActor("player")
+    other = MockTargetableActor("other")
+    other.position = np.array([0.0, 500.0, 0.0])  # straight ahead
+    for actor in (filler, pawn, other):
+        interactions.add_actor(actor)
+    interactions.remove_actor(filler)
+    interactions.update_interactions()
+
+    player = make_player_for_loop_target(pawn=pawn, interactions=interactions)
+    getattr(player, select)()
+
+    assert player.pawn.target is other
+
+
+# ---------------------------
+# point_target
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "target_filter, category, team",
+    [
+        ("Waypoints", "waypoint", 0),  # neutral markers
+        ("Capital ships", "capital_ship", 1),  # friendly capital ships
+    ],
+)
+def test_point_target_scores_non_interacting_candidates(target_filter, category, team):
+    """
+    Regression test: candidates that never interact with the player (neutral
+    waypoints, friendly capital ships) must be scored on their real distance
+    and alignment, so the near one straight ahead wins over a far one behind.
+    Their geometry used to be left at zero, so every such candidate tied and
+    the first slot won.
+    """
+    interactions = Interactions()
+    pawn = MockTargetableActor("player")
+    pawn.team = 1
+    far_behind = MockTargetableActor("far_behind", category=category)
+    far_behind.team = team
+    far_behind.position = np.array([0.0, -5000.0, 0.0])
+    near_ahead = MockTargetableActor("near_ahead", category=category)
+    near_ahead.team = team
+    near_ahead.position = np.array([0.0, 500.0, 0.0])  # the pawn faces +y
+    for actor in (pawn, far_behind, near_ahead):
+        interactions.add_actor(actor)
+    interactions.update_interactions()
+
+    player = make_player_for_loop_target(
+        pawn=pawn, interactions=interactions, target_filter=target_filter
+    )
+    player.point_target()
+
+    assert player.pawn.target is near_ahead
 
 
 # ---------------------------

@@ -153,7 +153,7 @@ classes, both driven from a per-frame `game.method_lists` task:
   name when it has no named parent (used for subsystems, which aren't
   bot-controlled).
   When the target carries a scan (`pawn.scan`, a `ScanState` from
-  [`game/scenario/scan.py`](../../src/space_flight/game/scenario/scan.py)), a
+  [`actors/scan.py`](../../src/space_flight/actors/scan.py)), a
   transparent bar fills the target box from its left edge in proportion to
   the scan's progress: yellow while scanning, then green (clear) or red
   (contraband) once complete. The scan's status ("SCANNING 42%", "CLEAR",

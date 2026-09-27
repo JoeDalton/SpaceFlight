@@ -1,5 +1,6 @@
 import gc
 import logging
+import math
 import sys
 
 import numpy as np
@@ -151,6 +152,16 @@ class Bot(Destructible):
         self.team = team
         self.record = kwargs.get("record", False)
 
+        # Think (navigate + pilot) only when the pilot samples its commands, on
+        # a frame balanced against the other bots' (see ThinkScheduler). The
+        # first frame always thinks.
+        self.pilot.sample_externally()
+        self._think_slot = self.game.think_scheduler.register(
+            period_s=self.pilot.sample_period_s
+        )
+        self._next_think_s = -math.inf
+        self._commands = None
+
         self.add_task(method=self.move_bot_task)
 
         # Add the pawn to the interacting actors. A subsystem pawn (e.g. a
@@ -180,20 +191,24 @@ class Bot(Destructible):
         if self.bot_type == "fighter" or self.bot_type == "capital_ship":
             intent, target_dict = self.tactician.think()
 
-            target_direction, desired_speed_mps = self.navigator.navigate(
-                intent=intent, target_dict=target_dict
-            )
-            if RECORD_GAME and self.record:
-                self.record_state(
-                    intent=intent,
-                    target_dict=target_dict,
-                    desired_speed_mps=desired_speed_mps,
+            if self._think_is_due():
+                target_direction, desired_speed_mps = self.navigator.navigate(
+                    intent=intent, target_dict=target_dict
                 )
-            throttle, yaw_rate, pitch_rate, roll_rate = self.pilot.pilot(
-                target_direction=target_direction,
-                desired_speed_mps=desired_speed_mps,
-                up_reference=self.navigator.up_reference,
-            )
+                if RECORD_GAME and self.record:
+                    self.record_state(
+                        intent=intent,
+                        target_dict=target_dict,
+                        desired_speed_mps=desired_speed_mps,
+                    )
+                self._commands = self.pilot.pilot(
+                    target_direction=target_direction,
+                    desired_speed_mps=desired_speed_mps,
+                    up_reference=self.navigator.up_reference,
+                )
+            else:
+                self.navigator.update_triggers(intent=intent, target_dict=target_dict)
+            throttle, yaw_rate, pitch_rate, roll_rate = self._commands
             self.pawn.move(
                 throttle=throttle,
                 yaw_rate=yaw_rate,
@@ -203,16 +218,38 @@ class Bot(Destructible):
         elif self.bot_type in ("turret", "tractor_beam"):
             intent, target_dict = self.tactician.think()
 
+            # Navigates every frame: it is cheap, and publishes the firing
+            # solution the mount checks every frame. Only the pilot waits.
             target_direction = self.navigator.navigate(
                 intent=intent, target_dict=target_dict
             )
-            yaw_rate, pitch_rate = self.pilot.pilot(target_direction=target_direction)
+            if self._think_is_due():
+                self._commands = self.pilot.pilot(target_direction=target_direction)
+            yaw_rate, pitch_rate = self._commands
             self.pawn.move(
                 yaw_rate=yaw_rate,
                 pitch_rate=pitch_rate,
             )
         else:
             raise NotImplementedError(f"Unknown bot type {self.bot_type}")
+
+    def _think_is_due(self) -> bool:
+        """
+        Whether the bot thinks this frame; if so, schedule its next think.
+
+        :return: True on the bot's think frames
+        """
+        now_s = self.game.game_time.get_current_time()
+        if now_s < self._next_think_s:
+            return False
+        self._next_think_s = self._think_slot.next_due_time_s(now_s)
+        return True
+
+    def _release_think_slot(self) -> None:
+        """Give the bot's think slot back to the scheduler (once)."""
+        if self._think_slot is not None:
+            self._think_slot.scheduler.unregister(self._think_slot)
+            self._think_slot = None
 
     def record_state(self, intent, target_dict: dict, desired_speed_mps: float):
         """
@@ -355,6 +392,8 @@ class Bot(Destructible):
         if self.is_dying:
             return
         super().begin_death()
+        # The AI is silenced: the dying bot no longer thinks
+        self._release_think_slot()
 
         # Drop the pawn from targeting/interactions immediately, so nothing can
         # lock onto or keep shooting the wreck while it spins (it stays collidable
@@ -405,6 +444,7 @@ class Bot(Destructible):
             # Already removed (a subsystem pawn deregisters itself), or
             # game.interactions is gone during level cleanup
             pass
+        self._release_think_slot()
         self.pilot.clean()
         self.pilot = None
         self.navigator.clean()
