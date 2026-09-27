@@ -47,6 +47,39 @@ def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     )
 
 
+def normalize(vector: np.ndarray) -> np.ndarray:
+    """
+    Returns vector scaled to unit length: a 3D direction, or a quaternion's 4
+    raw components (as used when renormalizing one drifting slightly out of
+    unit norm after each integration step, e.g. in AsteroidField).
+
+    Builds the squared norm as a plain float sum and calls math.sqrt on it
+    directly, instead of going through np.linalg.norm's generic, broadcast-
+    capable dispatch -- same pattern, and same reasoning, as
+    rotate_single_vector/cross3: for a single fixed-size vector that
+    generality is pure overhead.
+
+    A 2nd-order Taylor expansion of sqrt around 1 was tried on top of this,
+    to shortcut the sqrt call for the common near-unit-length input (a
+    direction/quaternion that only drifted by a small numerical error, not a
+    fresh arbitrary vector). It measured *slower* than calling math.sqrt
+    directly (in CPython, math.sqrt is a single fast C call, and the extra
+    branch and multiplications to evaluate the series cost more than the
+    call they replace), and its ~1e-4 relative error broke exact-orthonormal
+    assumptions elsewhere in the codebase -- so it was dropped in favour of
+    a plain, exact math.sqrt.
+    """
+    if len(vector) == 3:
+        x, y, z = vector[0], vector[1], vector[2]
+        inv_norm = 1.0 / math.sqrt(x * x + y * y + z * z)
+        return np.array((x * inv_norm, y * inv_norm, z * inv_norm))
+    if len(vector) == 4:
+        x, y, z, w = vector[0], vector[1], vector[2], vector[3]
+        inv_norm = 1.0 / math.sqrt(x * x + y * y + z * z + w * w)
+        return np.array((x * inv_norm, y * inv_norm, z * inv_norm, w * inv_norm))
+    return vector / math.sqrt(float(np.dot(vector, vector)))
+
+
 def safe_angle_rad(angle_rad: float) -> float:
     """
     Transfers an angle in the [-pi, pi[ quadrant
@@ -165,10 +198,8 @@ def build_orthogonal_basis(
         if abs(np.dot(np.array([1, 0, 0]), normal)) < 0.9
         else np.array([0, 1, 0])
     )
-    tangent = cross3(normal, helper)
-    tangent /= np.linalg.norm(tangent)
-    bitangent = cross3(normal, tangent)
-    bitangent /= np.linalg.norm(bitangent)
+    tangent = normalize(cross3(normal, helper))
+    bitangent = normalize(cross3(normal, tangent))
     return normal, tangent, bitangent
 
 
@@ -203,7 +234,7 @@ def sample_direction_in_cone(
         + tangent * sine_theta * np.cos(phi_rad)
         + bitangent * sine_theta * np.sin(phi_rad)
     )
-    sample /= np.linalg.norm(sample)  # TODO Not necessary
+    sample = normalize(sample)  # TODO Not necessary
     return sample
 
 

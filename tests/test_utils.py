@@ -8,6 +8,7 @@ from space_flight.utils import (
     compute_next_power_of_2,
     cross3,
     low_pass_filter_first_order,
+    normalize,
     rotate_single_vector,
     safe_angle_rad,
     sample_direction_in_cone,
@@ -147,6 +148,51 @@ def test_cross3_matches_np_cross_random(seed):
 
     result = cross3(a, b)
     expected = np.cross(a, b)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+
+
+# ---------------------------
+# normalize
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "vector",
+    [
+        # Already unit length
+        np.array([1.0, 0.0, 0.0]),
+        # 3D, close to unit length (the common "renormalize after drift" case)
+        np.array([0.267, 0.534, -0.802]) * 1.001,
+        np.array([0.267, 0.534, -0.802]) * 0.999,
+        # 3D, far from unit length
+        np.array([0.001, 0.002, -0.0015]),
+        np.array([1234.5, -876.2, 45.6]),
+        np.array([-1.0, -2.0, -3.0]),
+        # 4D (quaternion raw components), close to unit length
+        np.array([0.9986, 0.03, -0.02, 0.01]),
+        # 4D, far from unit length
+        np.array([2.0, 0.5, -0.3, 0.1]),
+        # 5D, exercises the generic fallback path
+        np.array([1.0, 2.0, -3.0, 4.0, -5.0]),
+    ],
+)
+def test_normalize_matches_np_linalg_norm(vector):
+    """normalize must agree with v / np.linalg.norm(v) (the "old", generic-
+    numpy way it replaced) for a variety of vectors, near and far from unit
+    length, in 3D, 4D (quaternions) and beyond."""
+    result = normalize(vector)
+    expected = vector / np.linalg.norm(vector)
+    np.testing.assert_allclose(result, expected, atol=1e-9)
+    np.testing.assert_allclose(np.linalg.norm(result), 1.0, atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_normalize_matches_np_linalg_norm_random(seed):
+    rng = np.random.default_rng(seed)
+    vector = rng.uniform(-10, 10, size=3)
+
+    result = normalize(vector)
+    expected = vector / np.linalg.norm(vector)
     np.testing.assert_allclose(result, expected, atol=1e-9)
 
 
