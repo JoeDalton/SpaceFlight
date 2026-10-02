@@ -457,8 +457,8 @@ class Ship(Pawn):
                     self.lift_n *= self.max_thrust_n
                     lift_norm_n = self.max_thrust_n
 
-                # Drag is opposed to speed, composed of viscous+wave drag
-                # and lift-induced drag
+                # Drag is opposed to speed: viscous+wave drag plus lift-induced
+                # drag (quadratic in the post-clip lift magnitude)
                 self.drag_n = (
                     -speed_norm
                     * self.speed

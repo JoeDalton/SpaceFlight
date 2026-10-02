@@ -192,9 +192,9 @@ def _make_flying_ship(
     pqr=None,
     zero_forces=False,
 ):
-    """A ship with a random attitude, rates, speed and forces -- or, for tests
-    that need to check an exact formula, an explicit `speed`/`orientation`/`pqr`
-    and `zero_forces=True` to silence thrust and the random extra forces."""
+    """A ship with a random attitude, rates, speed and forces. Pass explicit
+    `speed`/`orientation`/`pqr` and `zero_forces=True` for a deterministic
+    ship whose drag_n can be checked against a hand-computed formula."""
     ship = object.__new__(_DerivativesShip)
     if orientation is None:
         orientation = rng.normal(size=4)
@@ -314,9 +314,8 @@ def test_compute_derivatives_matches_per_vector_rotations(seed, case):
 
 
 def _make_simple_flying_ship(speed, lift_inefficiency, **kwargs):
-    """A non-rotating, non-rotating-rate ship with a fixed speed vector and no
-    thrust/random forces, so the resulting drag_n can be checked against a
-    hand-computed formula."""
+    """A deterministic, non-rotating ship with a fixed speed vector (see
+    `_make_flying_ship`)."""
     return _make_flying_ship(
         rng=np.random.default_rng(0),
         speed=speed,
@@ -331,9 +330,7 @@ def _make_simple_flying_ship(speed, lift_inefficiency, **kwargs):
 
 def test_lift_induced_drag_matches_formula():
     """
-    drag_n is the viscous+wave drag_factor term plus a lift-induced term
-    lift_norm_n**2 * lift_inefficiency / speed_norm**2, as derived from
-    lift_inefficiency = 1/(pi * AR * e).
+    drag_n = drag_factor term + lift_norm_n**2 * lift_inefficiency / speed_norm**2.
     """
     speed = np.array([0.0, 200.0, 20.0])  # forward with some AoA
     ship = _make_simple_flying_ship(speed, lift_inefficiency=0.05)
@@ -352,10 +349,7 @@ def test_lift_induced_drag_matches_formula():
 
 
 def test_lift_induced_drag_is_zero_when_lift_inefficiency_is_zero():
-    """
-    With lift_inefficiency == 0.0 (the conf.get default for ships that don't
-    set it), drag_n reduces to the pure drag_factor term.
-    """
+    """lift_inefficiency == 0.0 (the conf.get default) drops the induced term."""
     speed = np.array([0.0, 200.0, 20.0])
     ship = _make_simple_flying_ship(speed, lift_inefficiency=0.0)
 
@@ -366,10 +360,7 @@ def test_lift_induced_drag_is_zero_when_lift_inefficiency_is_zero():
 
 
 def test_lift_induced_drag_adds_to_baseline_drag():
-    """
-    Turning on lift_inefficiency strictly increases drag magnitude relative to
-    the no-induced-drag baseline, for a flight condition that does produce lift.
-    """
+    """Nonzero lift_inefficiency strictly increases drag over the baseline."""
     speed = np.array([0.0, 200.0, 20.0])
     baseline = _make_simple_flying_ship(speed, lift_inefficiency=0.0)
     induced = _make_simple_flying_ship(speed, lift_inefficiency=0.05)
@@ -382,8 +373,8 @@ def test_lift_induced_drag_adds_to_baseline_drag():
 
 def test_lift_induced_drag_scales_with_lift_inefficiency():
     """
-    A ship with lower aspect-ratio/Oswald-efficiency wings (higher
-    lift_inefficiency) suffers more induced drag for the same flight condition.
+    Lower aspect-ratio/Oswald-efficiency wings (higher lift_inefficiency)
+    mean more induced drag.
     """
     speed = np.array([0.0, 200.0, 20.0])
     low = _make_simple_flying_ship(speed, lift_inefficiency=0.03)
@@ -396,10 +387,7 @@ def test_lift_induced_drag_scales_with_lift_inefficiency():
 
 
 def test_lift_induced_drag_absent_at_rest():
-    """
-    No lift nor drag (induced or otherwise) is produced while the ship isn't
-    moving, regardless of lift_inefficiency.
-    """
+    """No lift nor drag at zero speed, regardless of lift_inefficiency."""
     ship = _make_simple_flying_ship(np.zeros(3), lift_inefficiency=0.05)
 
     ship.compute_derivatives()
@@ -408,11 +396,8 @@ def test_lift_induced_drag_absent_at_rest():
 
 
 def test_lift_induced_drag_uses_clipped_lift_magnitude():
-    """
-    lift_n is clipped to max_thrust_n to avoid simulation divergence, and the
-    induced-drag term uses that same clipped magnitude -- not the larger
-    unclipped one -- so drag_n stays bounded along with the lift force.
-    """
+    """The induced-drag term uses the post-clip lift magnitude, so it stays
+    bounded along with lift_n once max_thrust_n clipping kicks in."""
     speed = np.array([0.0, 200.0, 20.0])
     unclipped = _make_simple_flying_ship(
         speed, lift_inefficiency=0.05, lift_factor=10.0, max_thrust_n=1.0e9

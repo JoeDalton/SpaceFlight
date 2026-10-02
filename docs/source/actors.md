@@ -48,11 +48,14 @@ linear speed) is integrated by the game's central integrator; rotation rates
 are treated as directly-commanded inputs (from player input or AI), passed
 through a low-pass filter to emulate physical actuator delay. Two flight
 models are supported (`FLIGHT_MODEL`): `"space"` (thrust only) and
-`"airplane"` (thrust, drag, lift from angle of attack/side-slip).
+`"airplane"` (thrust, lift from angle of attack/side-slip, and drag —
+viscous/wave plus lift-induced, the latter growing with the square of the
+(clipped) lift force).
 
 Key responsibilities:
 - **Per-ship-type configuration.** Mass, thrust, turn rates, drag/lift
-  coefficients and health all come from that ship type's
+  coefficients, `lift_inefficiency` (= 1/(π·AR·e), from wing aspect ratio and
+  Oswald efficiency) and health all come from that ship type's
   [`configuration.yaml`](../../src/space_flight/datafiles/models/ships/).
 - **External forces.** `impact_force_n` (from hits; each hit's force is
   removed in one step after `DAMAGE_FORCE_APPLICATION_DURATION_S`, 0.1 s)
