@@ -3,8 +3,11 @@ Graphics settings menu — lets the player view and change display/render option
 
 Mirrors :mod:`space_flight.menus.input_settings_menu_state`: a deep-copied
 working config is edited in memory while the menu is open and written back on
-*Save*. Display mode is a button group; the quality knobs are sliders; FXAA is
-a checkbox.
+*Save*, and both menus share their scrollable-list machinery (see
+:class:`~space_flight.menus.menu_utils.ScrollableList`). Display mode is a
+button group; the quality knobs are sliders; FXAA and the other toggles are
+checkboxes. Rows are grouped under one header per top-level section of
+configuration/default_graphics.yaml.
 
 On save the display mode is applied to the live window immediately; render
 scale, anti-aliasing and the reflection/mirror quality are picked up on the
@@ -24,7 +27,7 @@ from space_flight.global_architecture.graphics_settings import (
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
 )
-from space_flight.menus.menu_utils import CustomButton, CustomCheckButton, CustomSlider
+from space_flight.menus.menu_utils import CustomButton, CustomSlider, ScrollableList
 
 # Display mode is a small fixed button group.
 _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
@@ -47,34 +50,34 @@ _DISCRETE_SLIDERS = {
     ),
 }
 
-# Option rows, top to bottom: (builder method name, *builder args before y).
-_ROWS = (
-    ("build_mode_row",),
-    ("build_slider_row", ("render", "scale")),
-    ("build_discrete_row", ("antialiasing", "msaa")),
-    ("build_fxaa_row",),
-    ("build_slider_row", ("render", "reflection_scale")),
-    ("build_slider_row", ("render", "mirror_scale")),
-    ("build_discrete_row", ("clouds", "quality")),
-    ("build_alternate_model_orientation_row",),
-    ("build_fps_counter_row",),
-)
+# Checkbox toggles: path -> label.
+_CHECKBOXES = {
+    ("antialiasing", "fxaa"): "FXAA",
+    ("compatibility", "alternate_model_orientation"): "Alternate Model Orientation",
+    ("hud", "fps_counter"): "FPS Counter",
+}
+
+# Section headers are named after the top-level keys of default_graphics.yaml,
+# in the order they appear there; override only where title-casing the key
+# reads oddly.
+_SECTIONS = ("display", "render", "antialiasing", "compatibility", "clouds", "hud")
+_SECTION_LABELS = {"hud": "HUD"}
 
 # Layout
-_LABEL_X = -1.15
-_SLIDER_X = 0.35
-_SLIDER_SCALE = 0.4
-_VALUE_LABEL_X = 0.95
-_CONTROL_X = -0.05  # left edge of button groups / checkbox
+_SLIDER_X = 0.0
+_SLIDER_SCALE = 0.35
+_VALUE_LABEL_X = 0.65
+_MODE_BUTTON_X = -0.1
 
-# Rows run top-down from _ROW_TOP, one every _ROW_STEP; a test asserts the lowest
-# still clears _WARNING_Y, so adding a row fails loudly instead of overlapping it.
-_ROW_TOP = 0.6
-_ROW_STEP = 0.15
-_ROW_COUNT = len(_ROWS)
-_WARNING_Y = -0.7
-#: Clearance a row label needs below it before the warning text starts.
-_ROW_CLEARANCE = 0.06
+_ROW_HEIGHT = 0.15
+_FRAME_TOP = 0.78
+_FRAME_BOTTOM = -0.72
+_WARNING_Y = -0.8
+
+
+def _section_label(name: str) -> str:
+    """Return the display header for a top-level graphics.yaml section."""
+    return _SECTION_LABELS.get(name, name.replace("_", " ").title())
 
 
 def _get_by_path(cfg: dict, path: tuple):
@@ -114,10 +117,13 @@ class GraphicsSettingsMenuState(BaseState):
         # Quality sliders keyed by config path, plus their value labels.
         self.sliders: dict[tuple, CustomSlider] = {}
         self.slider_value_labels: dict[tuple, DirectLabel] = {}
-        self.fxaa_checkbox: CustomCheckButton | None = None
-        self.alternate_model_orientation_checkbox: CustomCheckButton | None = None
-        self.fps_counter_checkbox: CustomCheckButton | None = None
-        self.static_widgets: list = []
+        self.checkboxes: dict[tuple, object] = {}
+        self.scroll_list = ScrollableList(
+            app,
+            row_height=_ROW_HEIGHT,
+            frame_top=_FRAME_TOP,
+            frame_bottom=_FRAME_BOTTOM,
+        )
 
     # ------------------------------------------------------------------
     # State lifecycle
@@ -126,13 +132,18 @@ class GraphicsSettingsMenuState(BaseState):
     def enter(self):
         """Take a working copy of the current settings and build the UI."""
         self.working_config = copy.deepcopy(self.app.graphics_settings.config)
-        self.build_ui()
+        self.build_static_ui()
+        self.rebuild_scroll()
+        self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
+        self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
 
     def exit(self):
         """Destroy every UI element and force a frame render."""
+        self.app.ignore("wheel_up")
+        self.app.ignore("wheel_down")
+        self.scroll_list.destroy()
         self.title.destroy()
         self.bg.destroy()
-        self.clear_rows()
         self.warning.destroy()
         self.default_btn.destroy()
         self.cancel_btn.destroy()
@@ -143,9 +154,10 @@ class GraphicsSettingsMenuState(BaseState):
     # UI construction
     # ------------------------------------------------------------------
 
-    def build_ui(self):
-        """Build the background, title, every option row, the warning, and the
-        Save / Cancel / Default action buttons."""
+    def build_static_ui(self):
+        """Build the background, title, warning, and the Save / Cancel /
+        Default action buttons. Called once per :meth:`enter`; only the
+        scrollable content is rebuilt afterwards."""
         self.bg = DirectFrame(
             frameSize=(self.app.a2dLeft, self.app.a2dRight, -1.0, 1.0),
             frameColor=(0.04, 0.04, 0.1, 0.97),
@@ -163,8 +175,6 @@ class GraphicsSettingsMenuState(BaseState):
             text_align=TextNode.ACenter,
         )
         self.title.setTransparency(True)
-
-        self.build_rows()
 
         self.warning = DirectLabel(
             text="Render & quality changes apply on the next level load.",
@@ -201,67 +211,59 @@ class GraphicsSettingsMenuState(BaseState):
             layout="center",
         )
 
-    def build_rows(self):
-        """Build every option row in :data:`_ROWS` from the working config."""
-        for index, (builder, *args) in enumerate(_ROWS):
-            getattr(self, builder)(*args, _ROW_TOP - index * _ROW_STEP)
+    def rebuild_scroll(self):
+        """
+        Destroy the current scrollable frame and rebuild it from the working
+        configuration.
 
-    def clear_rows(self):
-        """Destroy all option-row widgets (labels, buttons, sliders, checkbox)."""
-        for _value, btn in self.mode_buttons:
-            btn.destroy()
+        Called on :meth:`enter` and again by :meth:`load_default`. Also resets
+        the :attr:`mode_buttons`, :attr:`sliders`, :attr:`slider_value_labels`
+        and :attr:`checkboxes` caches so stale widget references are never
+        kept.
+        """
         self.mode_buttons.clear()
-        for slider in self.sliders.values():
-            slider.destroy()
         self.sliders.clear()
-        for lbl in self.slider_value_labels.values():
-            lbl.destroy()
         self.slider_value_labels.clear()
-        if self.fxaa_checkbox is not None:
-            self.fxaa_checkbox.destroy()
-            self.fxaa_checkbox = None
-        if self.alternate_model_orientation_checkbox is not None:
-            self.alternate_model_orientation_checkbox.destroy()
-            self.alternate_model_orientation_checkbox = None
-        if self.fps_counter_checkbox is not None:
-            self.fps_counter_checkbox.destroy()
-            self.fps_counter_checkbox = None
-        for w in self.static_widgets:
-            w.destroy()
-        self.static_widgets.clear()
+        self.checkboxes.clear()
 
-    def _row_label(self, text: str, y: float):
-        """Create and register a left-aligned row label."""
-        label = DirectLabel(
-            text=text + ":",
-            scale=0.055,
-            pos=(_LABEL_X, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.898, 0.839, 0.730, 1.0),
-            text_align=TextNode.ALeft,
-        )
-        label.setTransparency(True)
-        self.static_widgets.append(label)
+        rows = self.make_row_data()
+        self.scroll_list.rebuild(len(rows))
 
-    def build_mode_row(self, y: float):
-        """Build the Display Mode button group."""
-        self._row_label("Display Mode", y)
+        for i, row in enumerate(rows):
+            y = self.scroll_list.row_y(i)
+            kind = row["kind"]
+            if kind == "header":
+                self.scroll_list.add_header(row["text"], y)
+            elif kind == "mode":
+                self.add_mode_row(y)
+            elif kind == "slider":
+                self.add_slider_row(row["path"], y)
+            elif kind == "discrete":
+                self.add_discrete_row(row["path"], y)
+            else:
+                self.add_checkbox_row(row["path"], row["label"], y)
+
+    def add_mode_row(self, y: float):
+        """Add the Display Mode button group to the scroll canvas."""
+        self.scroll_list.add_row_label("Display Mode", y)
         for j, (text, value) in enumerate(_MODE_OPTIONS):
             btn = CustomButton(
                 app=self.app,
-                pos=(_CONTROL_X + j * 0.46, 0, y),
+                pos=(_MODE_BUTTON_X + j * 0.46, 0, y),
                 command=self.select_mode,
                 text=text,
                 scale=0.19,
                 layout="center",
                 extraArgs=[value],
+                parent=self.scroll_list.content,
             )
             self.mode_buttons.append((value, btn))
         self.refresh_mode_buttons()
 
-    def _value_label(self, path: tuple, text: str, y: float):
+    def _add_value_label(self, path: tuple, text: str, y: float):
         """Create and register the value readout to the right of a slider."""
         label = DirectLabel(
+            parent=self.scroll_list.content,
             text=text,
             scale=0.05,
             pos=(_VALUE_LABEL_X, 0, y - 0.015),
@@ -272,10 +274,10 @@ class GraphicsSettingsMenuState(BaseState):
         label.setTransparency(True)
         self.slider_value_labels[path] = label
 
-    def build_slider_row(self, path: tuple, y: float):
-        """Build a continuous quality slider row (label, slider, % value)."""
+    def add_slider_row(self, path: tuple, y: float):
+        """Add a continuous quality slider row (label, slider, % value)."""
         label, value_range = _SCALE_SLIDERS[path]
-        self._row_label(label, y)
+        self.scroll_list.add_row_label(label, y)
         value = _get_by_path(self.working_config, path)
         self.sliders[path] = CustomSlider(
             app=self.app,
@@ -285,13 +287,14 @@ class GraphicsSettingsMenuState(BaseState):
             command=self.on_scale_slider,
             extraArgs=[path],
             scale=_SLIDER_SCALE,
+            parent=self.scroll_list.content,
         )
-        self._value_label(path, _pct(value), y)
+        self._add_value_label(path, _pct(value), y)
 
-    def build_discrete_row(self, path: tuple, y: float):
-        """Build a slider row over the discrete stops in :data:`_DISCRETE_SLIDERS`."""
+    def add_discrete_row(self, path: tuple, y: float):
+        """Add a slider row over the discrete stops in :data:`_DISCRETE_SLIDERS`."""
         label, values, labels = _DISCRETE_SLIDERS[path]
-        self._row_label(label, y)
+        self.scroll_list.add_row_label(label, y)
         # sanitise() guarantees a known value, so this cannot raise.
         idx = values.index(_get_by_path(self.working_config, path))
         self.sliders[path] = CustomSlider(
@@ -302,47 +305,18 @@ class GraphicsSettingsMenuState(BaseState):
             command=self.on_discrete_slider,
             extraArgs=[path],
             scale=_SLIDER_SCALE,
+            parent=self.scroll_list.content,
         )
-        self._value_label(path, labels[idx], y)
+        self._add_value_label(path, labels[idx], y)
 
-    def build_fxaa_row(self, y: float):
-        """Build the FXAA checkbox row."""
-        self._row_label("FXAA", y)
-        self.fxaa_checkbox = CustomCheckButton(
-            app=self.app,
-            pos=(_CONTROL_X + 0.06, 0, y),
-            value=self.working_config["antialiasing"]["fxaa"],
-            command=self.on_fxaa_toggle,
-            scale=0.07,
-        )
-
-    def build_alternate_model_orientation_row(self, y: float):
-        """Build the "Alternate Model Orientation" checkbox row.
-
-        Manual workaround for ship models loading pre-rotated on some
-        systems (see
-        space_flight.global_architecture.asset_manager.gltf_model_tilt_quaternion)
-        -- no automatic detection exists, so the player has to flip this
-        themselves if their ships look wrong.
-        """
-        self._row_label("Alternate Model Orientation", y)
-        self.alternate_model_orientation_checkbox = CustomCheckButton(
-            app=self.app,
-            pos=(_CONTROL_X + 0.06, 0, y),
-            value=self.working_config["compatibility"]["alternate_model_orientation"],
-            command=self.on_alternate_model_orientation_toggle,
-            scale=0.07,
-        )
-
-    def build_fps_counter_row(self, y: float):
-        """Build the "FPS Counter" checkbox row."""
-        self._row_label("FPS Counter", y)
-        self.fps_counter_checkbox = CustomCheckButton(
-            app=self.app,
-            pos=(_CONTROL_X + 0.06, 0, y),
-            value=self.working_config["hud"]["fps_counter"],
-            command=self.on_fps_counter_toggle,
-            scale=0.07,
+    def add_checkbox_row(self, path: tuple, label: str, y: float):
+        """Add a boolean setting label and checkbox to the scroll canvas."""
+        self.scroll_list.add_row_label(label, y)
+        self.checkboxes[path] = self.scroll_list.add_checkbox(
+            y,
+            _get_by_path(self.working_config, path),
+            self.on_checkbox_toggle,
+            extraArgs=[path],
         )
 
     def refresh_mode_buttons(self):
@@ -353,6 +327,47 @@ class GraphicsSettingsMenuState(BaseState):
                 btn.set_pressed()
             else:
                 btn.reset()
+
+    # ------------------------------------------------------------------
+    # Row data
+    # ------------------------------------------------------------------
+
+    def make_row_data(self) -> list[dict]:
+        """
+        Build the ordered list of row descriptors for the scrollable area.
+
+        Returns a flat list of dicts, each with a "kind" key that is one of:
+
+        - "header" — section separator with a "text" key.
+        - "mode" — the display-mode button group (no extra keys).
+        - "slider" — continuous quality slider with a "path" key (see
+          :data:`_SCALE_SLIDERS`).
+        - "discrete" — slider over fixed stops with a "path" key (see
+          :data:`_DISCRETE_SLIDERS`).
+        - "checkbox" — boolean toggle with "path" and "label" keys.
+
+        One header precedes each top-level section of
+        configuration/default_graphics.yaml, in file order.
+
+        :return: Ordered list of row descriptor dicts.
+        """
+        rows = []
+
+        for section in _SECTIONS:
+            rows.append({"kind": "header", "text": _section_label(section)})
+            if section == "display":
+                rows.append({"kind": "mode"})
+            for path in _SCALE_SLIDERS:
+                if path[0] == section:
+                    rows.append({"kind": "slider", "path": path})
+            for path in _DISCRETE_SLIDERS:
+                if path[0] == section:
+                    rows.append({"kind": "discrete", "path": path})
+            for path, label in _CHECKBOXES.items():
+                if path[0] == section:
+                    rows.append({"kind": "checkbox", "path": path, "label": label})
+
+        return rows
 
     # ------------------------------------------------------------------
     # Control callbacks
@@ -384,23 +399,17 @@ class GraphicsSettingsMenuState(BaseState):
         _set_by_path(self.working_config, path, values[idx])
         self.slider_value_labels[path]["text"] = labels[idx]
 
-    def on_fxaa_toggle(self, status):
-        """Store the FXAA checkbox state."""
-        self.working_config["antialiasing"]["fxaa"] = bool(status)
-
-    def on_alternate_model_orientation_toggle(self, status):
-        """Store the alternate-model-orientation checkbox state."""
-        self.working_config["compatibility"]["alternate_model_orientation"] = bool(
-            status
-        )
-
-    def on_fps_counter_toggle(self, status):
-        """Store the FPS-counter checkbox state."""
-        self.working_config["hud"]["fps_counter"] = bool(status)
+    def on_checkbox_toggle(self, status, path: tuple):
+        """Store a toggled checkbox value straight into :attr:`working_config`."""
+        _set_by_path(self.working_config, path, bool(status))
 
     # ------------------------------------------------------------------
-    # Action buttons
+    # Button callbacks
     # ------------------------------------------------------------------
+
+    def wheel_scroll(self, direction: int):
+        """Scroll the option list by one step in *direction* (-1 = up, +1 = down)."""
+        self.scroll_list.wheel_scroll(direction)
 
     def save(self):
         """Write the config, apply window mode live, and return to the caller."""
@@ -417,5 +426,4 @@ class GraphicsSettingsMenuState(BaseState):
         self.working_config = GraphicsSettings.sanitise(
             GraphicsSettings.load_file(DEFAULT_GRAPHICS_FILE)
         )
-        self.clear_rows()
-        self.build_rows()
+        self.rebuild_scroll()
