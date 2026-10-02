@@ -18,10 +18,10 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - [`menu_utils.py`](../../src/space_flight/menus/menu_utils.py) is the shared
   widget toolkit: every menu screen builds its interactive controls from
   `CustomButton`, `CustomEntry`, `CustomSlider`, `CustomCheckButton` and
-  `ProgressBar` (labels, frames and scroll containers remain plain
-  `DirectGui` widgets), so control styling (colours, geometry, hover states)
-  stays consistent app-wide and each screen's own code only expresses layout
-  and behaviour.
+  `ProgressBar`, and both settings screens' scrollable option lists from
+  `ScrollableList`, so control styling and scrolling behaviour stay
+  consistent app-wide and each screen's own code only expresses layout and
+  behaviour.
 - The two settings screens
   ([`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py),
   [`graphics_settings_menu_state.py`](../../src/space_flight/menus/graphics_settings_menu_state.py))
@@ -57,6 +57,14 @@ of its own; it's a small design system every screen builds on:
 - **`ProgressBar`** is a minimal white fill-bar plus a rotating "blurb" hint
   label above it (a random string swapped on a timer), used by
   `SplashState` while assets load.
+- **`ScrollableList`** wraps a `DirectScrolledFrame`/`DirectScrollBar` pair
+  behind a `rebuild(n_rows)`/`row_y(i)`/`destroy()` API: the frame is just a
+  border/clip, and the scrollbar instead moves a plain "content" node the
+  caller parents its own row widgets to, so the canvas never resizes. Also
+  provides `add_header`/`add_row_label`/`add_checkbox` for the row patterns
+  both settings screens share. Used by both
+  `InputSettingsMenuState`/`GraphicsSettingsMenuState` so their option lists
+  scroll identically.
 
 ## Startup and top-level navigation
 
@@ -130,41 +138,37 @@ around their respective config owner (see
 [docs/global_architecture.md](global_architecture.md) for `GraphicsSettings`):
 
 - **[`graphics_settings_menu_state.py`](../../src/space_flight/menus/graphics_settings_menu_state.py)**'s
-  `GraphicsSettingsMenuState` is the simpler of the two: display mode is a
-  small button group, render/reflection/mirror scale are `CustomSlider`s
-  mapped through `_get_by_path`/`_set_by_path` onto the nested config dict,
-  MSAA and cloud quality are sliders snapped to discrete stops
-  (`_MSAA_VALUES`, `_CLOUD_QUALITY_VALUES`, both ordered cheapest-first so
-  dragging right always costs more), and FXAA and *Alternate Model
-  Orientation* (a manual workaround for glTF models loading pre-rotated on
-  some systems) are checkboxes. On save it calls `GraphicsSettings.save()`
-  (persists + re-sanitises) and `GraphicsManager.apply_window_settings()` for
-  the parts that can change live; a warning label makes clear that
-  render-scale, AA, reflection/mirror quality and cloud changes need the next
-  level load to take effect (see
-  [docs/global_architecture.md](global_architecture.md) for why).
+  `GraphicsSettingsMenuState` builds a `ScrollableList` of rows from
+  `make_row_data()`, one header per top-level section of
+  `default_graphics.yaml` (Display, Render, Antialiasing, Compatibility,
+  Clouds, HUD): display mode is a button group, render/reflection/mirror
+  scale are `CustomSlider`s mapped through `_get_by_path`/`_set_by_path` onto
+  the nested config dict, MSAA and cloud quality are sliders snapped to
+  discrete stops (`_DISCRETE_SLIDERS`, ordered cheapest-first so dragging
+  right always costs more), and FXAA, *Alternate Model Orientation* (a manual
+  workaround for glTF models loading pre-rotated on some systems) and *FPS
+  Counter* are checkboxes (`on_checkbox_toggle`, shared across all three). On
+  save it calls `GraphicsSettings.save()` (persists + re-sanitises) and
+  `GraphicsManager.apply_window_settings()` for the parts that can change
+  live; a warning label makes clear that render-scale, AA, reflection/mirror
+  quality, cloud and HUD changes need the next level load to take effect
+  (see [docs/global_architecture.md](global_architecture.md) for why).
 
-  Both discrete sliders deliberately do *not* write the snapped value back to
+  The discrete sliders deliberately do *not* write the snapped value back to
   the thumb. `PGSliderBar` throws its ADJUST event asynchronously, so re-setting
   the value from inside the handler re-enqueues ADJUST on every dispatch and the
   event queue never drains — a hard freeze, and a fixed regression.
-
-  Rows are laid out from `_ROW_TOP` at `_ROW_STEP` intervals, with `_ROW_COUNT`
-  and the warning's `_WARNING_Y` as named constants because they constrain each
-  other: seven rows at the original 0.2 step reached the warning text. A test
-  asserts the clearance, so adding a row fails loudly rather than overlapping.
 - **[`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py)**
   is the largest and most involved menu screen in the game:
-  - **`InputSettingsMenuState`** builds a scrollable, per-input-type
-    (keyboard/gamepad/joystick) list of every dead zone and every action
-    binding read from `configuration.yaml`, laid out via manually positioned
-    rows (`make_row_data`/`rebuild_scroll`) rather than a native scrolled
-    list, driven by a custom `DirectScrollBar` wired to move a content node.
-    Selecting a different input type flushes any typed dead-zone edits, then
-    rebuilds the row list filtered to that type's bindings. Saving writes the
-    YAML, then rebuilds the live `InputReader` (`reader_factory`) and asks
-    the `InputContextStack` to refresh all bindings, so remapped controls
-    take effect immediately without restarting.
+  - **`InputSettingsMenuState`** builds a `ScrollableList` of every dead zone
+    and every action binding read from `configuration.yaml`
+    (`make_row_data`/`rebuild_scroll`), filtered to the selected input type
+    (keyboard/gamepad/joystick). Selecting a different input type flushes any
+    typed dead-zone edits, then rebuilds the row list filtered to that type's
+    bindings. Saving writes the YAML, then rebuilds the live `InputReader`
+    (`reader_factory`) and asks the `InputContextStack` to refresh all
+    bindings, so remapped controls take effect immediately without
+    restarting.
   - **`ChangeBindingDialog`** is the "press any key" capture dialog opened by
     each row's *Change* button. While open, it redirects Panda3D's button
     throwers to two generic listener events so *any* keyboard/gamepad/

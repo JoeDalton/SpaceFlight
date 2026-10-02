@@ -107,8 +107,10 @@ context, and `push`/`pop` handle (de)activation. Concrete contexts:
 - **`HyperspaceInputContext`** is the same blocking pattern applied to the
   hyperspace loading overlay's "press key to jump out" prompt (see
   [docs/game.md](game.md)): a one-shot trigger that fires its callback once
-  on the bound key and then ignores further input, relying on the overlay's
-  own reveal logic to pop it.
+  on the bound key (device-specific or global — `drop_hyperspace` is also
+  bound under `global`, so the keyboard key works even on gamepad/joystick,
+  like the pause key) and then ignores further input, relying on the
+  overlay's own reveal logic to pop it.
 - **`RadialMenuInputContext`** drives the radial target-filter menu
   (see [docs/menus.md](menus.md)): each frame it reads a 2D direction
   (analog axes, or discrete directional keys combined into a vector) via
@@ -129,7 +131,8 @@ classes, both driven from a per-frame `game.method_lists` task:
   shield, game time, team strengths, a target-lock flag, plus optional
   bot/turret debug lines
   guarded by `try`/`except AttributeError` so the HUD tolerates whichever
-  debug actors happen to exist in the current level), an FPS counter, and
+  debug actors happen to exist in the current level), an FPS counter
+  (toggleable in the graphics settings menu, `hud.fps_counter`), and
   two timed message lines — `set_event_text`/`set_chatter_text` set a string
   plus an expiry timestamp, and `clear_scenario_hud` blanks each one once
   its `game_time` deadline passes. `Scenario`'s `hud_text`/`speech` actions
