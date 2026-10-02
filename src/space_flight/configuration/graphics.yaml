@@ -23,5 +23,15 @@ antialiasing:
 compatibility:
   alternate_model_orientation: true
 
+hud:
+  # Show the live FPS readout in the top-right corner.
+  fps_counter: true
+
 clouds:
+  # How much the volumetric clouds are allowed to cost: low | mid | high | ultra.
+  # "high" is what the cloud presets are authored at. Each step scales the
+  # billboard budget (x0.25 / x0.5 / x1 / x2) and, much more gently, the sun
+  # march's step count. Halving the billboards leaves a cloud exactly as opaque
+  # -- extinction is derived from the placement -- so this trades how uniformly
+  # the volume is covered, not how the clouds read.
   quality: high

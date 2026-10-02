@@ -12,7 +12,7 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
-from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE, FPS_COUNTER
+from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
 from space_flight.utils import magnitude
 
 EDGE_HORIZONTAL = 0.94
@@ -45,6 +45,9 @@ class HUD:
     def __init__(self, game):
         self.game = game
         self.id = uuid.uuid4()
+        self.fps_counter_enabled = game.app.graphics_settings.config["hud"][
+            "fps_counter"
+        ]
 
         # Debug info
         if DEBUG_HUD:
@@ -58,7 +61,7 @@ class HUD:
             self.debug_textNodePath.setPos(0.05, 0, -0.1)
 
         # Performance info
-        if FPS_COUNTER:
+        if self.fps_counter_enabled:
             self.fps_counter = TextNode("FPS")
             self.fps_counter.setSmallCaps(True)
             self.fps_counter.setShadow(0.05, 0.05)
@@ -138,7 +141,7 @@ class HUD:
         """
         A method to update debug info on screen
         """
-        if FPS_COUNTER:
+        if self.fps_counter_enabled:
             frame_rate = self.game.game_time.get_average_frame_rate()
             self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
 
@@ -217,7 +220,7 @@ class HUD:
         if DEBUG_HUD:
             self.debug_textNodePath.removeNode()
             self.debug = None
-        if FPS_COUNTER:
+        if self.fps_counter_enabled:
             self.fps_textNodePath.removeNode()
             self.fps_counter = None
         self.events_textNodePath.removeNode()

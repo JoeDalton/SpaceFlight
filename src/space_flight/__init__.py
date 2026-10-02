@@ -18,7 +18,6 @@ CACHE_PATH = Path(__file__).parent.parent.parent / ".cache"
 DEBUG_DELETION = False
 DEBUG_COLLISION = False
 DEBUG_HUD = False
-FPS_COUNTER = True
 RECORD_GAME = False
 FLIGHT_MODEL = "airplane"  # "airplane", "space"
 

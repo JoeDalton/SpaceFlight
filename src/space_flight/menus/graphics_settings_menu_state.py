@@ -57,6 +57,7 @@ _ROWS = (
     ("build_slider_row", ("render", "mirror_scale")),
     ("build_discrete_row", ("clouds", "quality")),
     ("build_alternate_model_orientation_row",),
+    ("build_fps_counter_row",),
 )
 
 # Layout
@@ -69,7 +70,7 @@ _CONTROL_X = -0.05  # left edge of button groups / checkbox
 # Rows run top-down from _ROW_TOP, one every _ROW_STEP; a test asserts the lowest
 # still clears _WARNING_Y, so adding a row fails loudly instead of overlapping it.
 _ROW_TOP = 0.6
-_ROW_STEP = 0.175
+_ROW_STEP = 0.15
 _ROW_COUNT = len(_ROWS)
 _WARNING_Y = -0.7
 #: Clearance a row label needs below it before the warning text starts.
@@ -115,6 +116,7 @@ class GraphicsSettingsMenuState(BaseState):
         self.slider_value_labels: dict[tuple, DirectLabel] = {}
         self.fxaa_checkbox: CustomCheckButton | None = None
         self.alternate_model_orientation_checkbox: CustomCheckButton | None = None
+        self.fps_counter_checkbox: CustomCheckButton | None = None
         self.static_widgets: list = []
 
     # ------------------------------------------------------------------
@@ -221,6 +223,9 @@ class GraphicsSettingsMenuState(BaseState):
         if self.alternate_model_orientation_checkbox is not None:
             self.alternate_model_orientation_checkbox.destroy()
             self.alternate_model_orientation_checkbox = None
+        if self.fps_counter_checkbox is not None:
+            self.fps_counter_checkbox.destroy()
+            self.fps_counter_checkbox = None
         for w in self.static_widgets:
             w.destroy()
         self.static_widgets.clear()
@@ -329,6 +334,17 @@ class GraphicsSettingsMenuState(BaseState):
             scale=0.07,
         )
 
+    def build_fps_counter_row(self, y: float):
+        """Build the "FPS Counter" checkbox row."""
+        self._row_label("FPS Counter", y)
+        self.fps_counter_checkbox = CustomCheckButton(
+            app=self.app,
+            pos=(_CONTROL_X + 0.06, 0, y),
+            value=self.working_config["hud"]["fps_counter"],
+            command=self.on_fps_counter_toggle,
+            scale=0.07,
+        )
+
     def refresh_mode_buttons(self):
         """Press the button matching the current display mode, reset the rest."""
         current = self.working_config["display"]["mode"]
@@ -377,6 +393,10 @@ class GraphicsSettingsMenuState(BaseState):
         self.working_config["compatibility"]["alternate_model_orientation"] = bool(
             status
         )
+
+    def on_fps_counter_toggle(self, status):
+        """Store the FPS-counter checkbox state."""
+        self.working_config["hud"]["fps_counter"] = bool(status)
 
     # ------------------------------------------------------------------
     # Action buttons

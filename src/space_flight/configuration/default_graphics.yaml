@@ -23,6 +23,10 @@ antialiasing:
 compatibility:
   alternate_model_orientation: true
 
+hud:
+  # Show the live FPS readout in the top-right corner.
+  fps_counter: true
+
 clouds:
   # How much the volumetric clouds are allowed to cost: low | mid | high | ultra.
   # "high" is what the cloud presets are authored at. Each step scales the
