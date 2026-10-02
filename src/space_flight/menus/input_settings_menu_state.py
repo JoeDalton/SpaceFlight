@@ -10,19 +10,17 @@ is rebuilt so the new bindings take effect immediately without a restart.
 import copy
 
 import yaml
-from direct.gui.DirectGui import (
-    DGG,
-    DirectFrame,
-    DirectLabel,
-    DirectScrollBar,
-    DirectScrolledFrame,
-    OkCancelDialog,
-)
+from direct.gui.DirectGui import DGG, DirectFrame, DirectLabel, OkCancelDialog
 from panda3d.core import InputDevice, TextNode, VBase4, Vec2
 
 from space_flight import CONFIGURATION_PATH
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton, CustomCheckButton, CustomEntry
+from space_flight.menus.menu_utils import (
+    CustomButton,
+    CustomCheckButton,
+    CustomEntry,
+    ScrollableList,
+)
 from space_flight.ui.input_reader import (
     GAMEPAD_AXIS_NAMES,
     JOYSTICK_AXIS_NAMES,
@@ -324,8 +322,9 @@ class InputSettingsMenuState(BaseState):
         self.input_type_buttons: dict[str, CustomButton] = {}
         self.static_widgets: list = []
         self.active_dialog: ChangeBindingDialog | None = None
-        self.scroll_frame = None
-        self.v_scrollbar: DirectScrollBar | None = None
+        self.scroll_list = ScrollableList(
+            app, row_height=_ROW_HEIGHT, frame_top=0.65, frame_bottom=-0.82
+        )
 
     # ------------------------------------------------------------------
     # State lifecycle
@@ -371,12 +370,7 @@ class InputSettingsMenuState(BaseState):
         if self.active_dialog is not None:
             self.active_dialog.onClose(DGG.DIALOG_CANCEL)
             self.active_dialog = None
-        if self.v_scrollbar is not None:
-            self.v_scrollbar.destroy()
-            self.v_scrollbar = None
-        if self.scroll_frame is not None:
-            self.scroll_frame.destroy()
-            self.scroll_frame = None
+        self.scroll_list.destroy()
         self.title.destroy()
         self.bg.destroy()
         for w in self.static_widgets:
@@ -483,122 +477,24 @@ class InputSettingsMenuState(BaseState):
         resets the :attr:`dz_entries` and :attr:`binding_labels` caches so
         stale widget references are never kept.
         """
-        if self.v_scrollbar is not None:
-            self.v_scrollbar.destroy()
-            self.v_scrollbar = None
-        if self.scroll_frame is not None:
-            self.scroll_frame.destroy()
-            self.scroll_frame = None
         self.dz_entries.clear()
         self.binding_labels.clear()
         self.checkbox_buttons.clear()
 
         rows = self.make_row_data()
-        n = len(rows)
-        half_row = _ROW_HEIGHT / 2
-
-        frame_bottom = -0.82
-        frame_top = 0.65
-        frame_h = frame_top - frame_bottom
-        scrollable = max(0.0, n * _ROW_HEIGHT - frame_h)
-
-        # Canvas height equals frame height so PGScrollFrame does not move the canvas.
-        # A content_node child is scrolled directly by _v_scrollbar instead.
-        sb_cx = self.app.a2dRight - 0.12  # scrollbar centre x
-        self.scroll_frame = DirectScrolledFrame(
-            frameSize=(self.app.a2dLeft + 0.08, self.app.a2dRight - 0.08, 0.0, frame_h),
-            pos=(0, 0, frame_bottom),
-            frameColor=(0, 0, 0, 0.25),
-            canvasSize=(
-                self.app.a2dLeft + 0.12,
-                self.app.a2dRight - 0.12,
-                0.0,
-                frame_h,
-            ),
-            manageScrollBars=False,
-            verticalScroll_relief=None,
-            horizontalScroll_relief=None,
-        )
-        self.scroll_frame.verticalScroll.hide()
-        self.scroll_frame.horizontalScroll.hide()
-
-        # Content node that moves to scroll the list.
-        canvas = self.scroll_frame.getCanvas()
-        content = canvas.attachNewNode("content")
-        content.setZ(frame_h - half_row)  # scroll=0: first row at frame top
-
-        def scroll():
-            content.setZ(frame_h - half_row + self.v_scrollbar["value"])
-
-        self.v_scrollbar = DirectScrollBar(
-            range=(0, scrollable),
-            value=0,
-            scrollSize=0.25 * _ROW_HEIGHT,
-            pageSize=frame_h,
-            orientation=DGG.VERTICAL,
-            pos=(sb_cx, 0, frame_bottom),
-            frameSize=(-0.04, 0.04, 0.0, frame_h),
-            frameColor=(0.02, 0.02, 0.02, 1),
-            command=scroll,
-            # resizeThumb=0 keeps the thumb a fixed size, so its travel is
-            # identical across input modes (only the value->content mapping
-            # differs). With it off, PGSliderBar slides the thumb *node* across
-            # the whole trough; the thumb_geom is authored 1.1 units tall, which
-            # would overflow far past the inc/dec buttons, so scale it down to a
-            # compact grip that stays within the trough between the buttons.
-            resizeThumb=0,
-            thumb_relief=1,
-            thumb_geom=self.app.menu_models.thumb_geom,
-            thumb_geom_scale=(1, 1, 0.15),
-            thumb_pressEffect=True,
-            thumb_frameColor=(0, 0, 0, 0),
-            incButton_relief=1,
-            incButton_geom=self.app.menu_models.inc_geom,
-            incButton_frameSize=(-0.04, 0.04, -0.04, 0.04),
-            incButton_pressEffect=True,
-            incButton_frameColor=(0, 0, 0, 0),
-            decButton_relief=1,
-            decButton_geom=self.app.menu_models.dec_geom,
-            decButton_frameSize=(-0.04, 0.04, -0.04, 0.04),
-            decButton_pressEffect=True,
-            decButton_frameColor=(0, 0, 0, 0),
-        )
+        content = self.scroll_list.rebuild(len(rows))
 
         for i, row in enumerate(rows):
-            y = -(i * _ROW_HEIGHT)
+            y = self.scroll_list.row_y(i)
             kind = row["kind"]
             if kind == "header":
-                self.add_header(content, row["text"], y)
+                self.scroll_list.add_header(row["text"], y)
             elif kind == "deadzone":
                 self.add_deadzone_row(content, row, y)
             elif kind == "checkbox":
-                self.add_checkbox_row(content, row, y)
+                self.add_checkbox_row(row, y)
             else:
                 self.add_binding_row(content, row, y)
-
-    def add_header(self, canvas, text: str, y: float):
-        """
-        Add a blue section-header label to the scroll canvas.
-
-        :param canvas: The scroll canvas node to parent the label to.
-        :param text: Header text displayed in the label (e.g. "Flight
-            Bindings").
-        :param y: Vertical position on the canvas (more negative = further down).
-        """
-        left = self.app.a2dLeft + 0.14
-        scale = 0.055
-        width = (self.app.a2dRight - 0.14 - left) / scale
-        hdr = DirectLabel(
-            parent=canvas,
-            text=text,
-            scale=scale,
-            pos=(left, 0, y - 0.02),
-            frameSize=(-0.05, width, -0.35, 0.65),
-            frameColor=(0.1, 0.1, 0.3, 0.85),
-            text_fg=(0.65, 0.82, 1.0, 1.0),
-            text_align=TextNode.ALeft,
-        )
-        hdr.setTransparency(True)
 
     def add_deadzone_row(self, canvas, row: dict, y: float):
         """
@@ -612,15 +508,7 @@ class InputSettingsMenuState(BaseState):
             "value" keys.
         :param y: Vertical position on the canvas.
         """
-        DirectLabel(
-            parent=canvas,
-            text=row["label"] + ":",
-            scale=0.05,
-            pos=(self.app.a2dLeft + 0.2, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.898, 0.839, 0.730, 1.0),
-            text_align=TextNode.ALeft,
-        ).setTransparency(True)
+        self.scroll_list.add_row_label(row["label"], y)
         btn_scale = 0.18
         entry_scale = 0.05
         entry = CustomEntry(
@@ -636,7 +524,7 @@ class InputSettingsMenuState(BaseState):
         )
         self.dz_entries[row["path"]] = entry
 
-    def add_checkbox_row(self, canvas, row: dict, y: float):
+    def add_checkbox_row(self, row: dict, y: float):
         """
         Add a boolean setting label and checkbox to the scroll canvas.
 
@@ -644,29 +532,14 @@ class InputSettingsMenuState(BaseState):
         *row["path"]* and writes straight into :attr:`working_config`
         on every toggle (see :meth:`on_checkbox_toggle`).
 
-        :param canvas: The scroll canvas node to parent the widgets to.
         :param row: Row descriptor dict with "label", "path", and
             "value" keys.
         :param y: Vertical position on the canvas.
         """
-        DirectLabel(
-            parent=canvas,
-            text=row["label"] + ":",
-            scale=0.05,
-            pos=(self.app.a2dLeft + 0.2, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.898, 0.839, 0.730, 1.0),
-            text_align=TextNode.ALeft,
-        ).setTransparency(True)
-        checkbox = CustomCheckButton(
-            app=self.app,
-            pos=(self.app.a2dRight - 0.3, 0, y),
-            value=row["value"],
-            command=self.on_checkbox_toggle,
-            extraArgs=[row["path"]],
-            parent=canvas,
+        self.scroll_list.add_row_label(row["label"], y)
+        self.checkbox_buttons[row["path"]] = self.scroll_list.add_checkbox(
+            y, row["value"], self.on_checkbox_toggle, extraArgs=[row["path"]]
         )
-        self.checkbox_buttons[row["path"]] = checkbox
 
     def add_binding_row(self, canvas, row: dict, y: float):
         """
@@ -685,15 +558,7 @@ class InputSettingsMenuState(BaseState):
         """
         inp = self.working_config.get("input_type", "keyboard")
 
-        DirectLabel(
-            parent=canvas,
-            text=row["label"] + ":",
-            scale=0.05,
-            pos=(self.app.a2dLeft + 0.2, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.898, 0.839, 0.730, 1.0),
-            text_align=TextNode.ALeft,
-        ).setTransparency(True)
+        self.scroll_list.add_row_label(row["label"], y)
 
         val_lbl = DirectLabel(
             parent=canvas,
@@ -928,11 +793,9 @@ class InputSettingsMenuState(BaseState):
         :param direction: -1 to scroll toward the top, +1 toward the
             bottom.
         """
-        if self.active_dialog is not None or self.v_scrollbar is None:
+        if self.active_dialog is not None:
             return
-        vs = self.v_scrollbar
-        lo, hi = vs["range"]
-        vs["value"] = max(lo, min(hi, vs["value"] + direction * vs["scrollSize"]))
+        self.scroll_list.wheel_scroll(direction)
 
     def select_input_type(self, input_type: str):
         """

@@ -116,6 +116,7 @@ class GraphicsSettings:
         aa = config.setdefault("antialiasing", {})
         compatibility = config.setdefault("compatibility", {})
         clouds = config.setdefault("clouds", {})
+        hud = config.setdefault("hud", {})
 
         if display.get("mode") not in _VALID_MODES:
             display["mode"] = "fullscreen"
@@ -163,5 +164,7 @@ class GraphicsSettings:
         if quality not in _VALID_CLOUD_QUALITY:
             quality = "high"
         clouds["quality"] = quality
+
+        hud["fps_counter"] = bool(hud.get("fps_counter", True))
 
         return config

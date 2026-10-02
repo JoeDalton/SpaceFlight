@@ -7,9 +7,10 @@ needs a real window and is verified manually / via integration.
 
 Covers:
 - :func:`_get_by_path` / :func:`_set_by_path` / :func:`_pct` helpers
+- :meth:`GraphicsSettingsMenuState.make_row_data` — row descriptor builder
 - :meth:`GraphicsSettingsMenuState.on_scale_slider`
 - :meth:`GraphicsSettingsMenuState.on_discrete_slider` (incl. freeze regression)
-- :meth:`GraphicsSettingsMenuState.on_fxaa_toggle`
+- :meth:`GraphicsSettingsMenuState.on_checkbox_toggle`
 - :meth:`GraphicsSettingsMenuState.select_mode`
 - :meth:`GraphicsSettingsMenuState.save` / :meth:`cancel`
 - :class:`SettingsMenuState` navigation
@@ -20,14 +21,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from space_flight.menus.graphics_settings_menu_state import (
-    _ROW_CLEARANCE,
-    _ROW_COUNT,
-    _ROW_STEP,
-    _ROW_TOP,
-    _WARNING_Y,
     GraphicsSettingsMenuState,
     _get_by_path,
     _pct,
+    _section_label,
     _set_by_path,
 )
 from space_flight.menus.settings_menu_state import SettingsMenuState
@@ -43,6 +40,7 @@ def state():
         "antialiasing": {"msaa": 0, "fxaa": False},
         "compatibility": {"alternate_model_orientation": False},
         "clouds": {"quality": "high"},
+        "hud": {"fps_counter": True},
     }
     return s
 
@@ -161,24 +159,66 @@ class TestOnMsaaSlider:
 
 
 # ---------------------------------------------------------------------------
-# Row layout
+# make_row_data
 # ---------------------------------------------------------------------------
 
 
-class TestRowLayout:
-    def test_every_row_clears_the_warning_label(self):
-        """Rows are laid out top-down at a fixed step, and the warning text sits
-        below them. Seven rows at the original 0.2 step reached -0.6 against a
-        warning at -0.7; this fails if a row is added without re-spacing."""
-        lowest = _ROW_TOP - (_ROW_COUNT - 1) * _ROW_STEP
-        assert lowest - _WARNING_Y > _ROW_CLEARANCE, (
-            f"lowest row at {lowest:.3f} does not clear the warning at "
-            f"{_WARNING_Y}; reduce _ROW_STEP or move the warning"
-        )
+class TestMakeRowData:
+    def test_one_header_per_yaml_section(self, state):
+        headers = [r["text"] for r in state.make_row_data() if r["kind"] == "header"]
+        assert headers == [
+            _section_label(s)
+            for s in (
+                "display",
+                "render",
+                "antialiasing",
+                "compatibility",
+                "clouds",
+                "hud",
+            )
+        ]
 
-    def test_rows_start_on_screen(self):
-        """The top row must be below the title at 0.88."""
-        assert _ROW_TOP < 0.8
+    def test_headers_use_yaml_section_names(self):
+        """Section titles must read as the yaml's own section names, not an
+        invented label."""
+        assert _section_label("display") == "Display"
+        assert _section_label("clouds") == "Clouds"
+        assert _section_label("hud") == "HUD"
+
+    def test_mode_row_present_once(self, state):
+        modes = [r for r in state.make_row_data() if r["kind"] == "mode"]
+        assert len(modes) == 1
+
+    def test_every_slider_path_appears(self, state):
+        paths = [r["path"] for r in state.make_row_data() if r["kind"] == "slider"]
+        assert set(paths) == {
+            ("render", "scale"),
+            ("render", "reflection_scale"),
+            ("render", "mirror_scale"),
+        }
+
+    def test_every_discrete_path_appears(self, state):
+        paths = [r["path"] for r in state.make_row_data() if r["kind"] == "discrete"]
+        assert set(paths) == {("antialiasing", "msaa"), ("clouds", "quality")}
+
+    def test_every_checkbox_path_appears(self, state):
+        paths = [r["path"] for r in state.make_row_data() if r["kind"] == "checkbox"]
+        assert set(paths) == {
+            ("antialiasing", "fxaa"),
+            ("compatibility", "alternate_model_orientation"),
+            ("hud", "fps_counter"),
+        }
+
+    def test_header_precedes_its_section_rows(self, state):
+        rows = state.make_row_data()
+        kinds = [r["kind"] for r in rows]
+        texts = [r.get("text") for r in rows]
+        clouds_header_idx = texts.index(_section_label("clouds"))
+        cloud_row_idx = next(
+            i for i, r in enumerate(rows) if r.get("path") == ("clouds", "quality")
+        )
+        assert clouds_header_idx < cloud_row_idx
+        assert kinds[clouds_header_idx] == "header"
 
 
 # ---------------------------------------------------------------------------
@@ -245,34 +285,25 @@ class TestOnCloudQualitySlider:
 
 
 # ---------------------------------------------------------------------------
-# on_fxaa_toggle
+# on_checkbox_toggle
 # ---------------------------------------------------------------------------
 
 
-class TestOnFxaaToggle:
+class TestOnCheckboxToggle:
+    @pytest.mark.parametrize(
+        "path",
+        [
+            ("antialiasing", "fxaa"),
+            ("compatibility", "alternate_model_orientation"),
+            ("hud", "fps_counter"),
+        ],
+    )
     @pytest.mark.parametrize(
         "status,expected", [(1, True), (0, False), (True, True), (False, False)]
     )
-    def test_stores_bool(self, state, status, expected):
-        state.on_fxaa_toggle(status)
-        assert state.working_config["antialiasing"]["fxaa"] is expected
-
-
-# ---------------------------------------------------------------------------
-# on_alternate_model_orientation_toggle
-# ---------------------------------------------------------------------------
-
-
-class TestOnAlternateModelOrientationToggle:
-    @pytest.mark.parametrize(
-        "status,expected", [(1, True), (0, False), (True, True), (False, False)]
-    )
-    def test_stores_bool(self, state, status, expected):
-        state.on_alternate_model_orientation_toggle(status)
-        assert (
-            state.working_config["compatibility"]["alternate_model_orientation"]
-            is expected
-        )
+    def test_stores_bool(self, state, path, status, expected):
+        state.on_checkbox_toggle(status, path)
+        assert _get_by_path(state.working_config, path) is expected
 
 
 # ---------------------------------------------------------------------------

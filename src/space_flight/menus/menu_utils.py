@@ -8,6 +8,8 @@ from direct.gui.DirectGui import (
     DirectEntry,
     DirectFrame,
     DirectLabel,
+    DirectScrollBar,
+    DirectScrolledFrame,
     DirectSlider,
 )
 from direct.showbase.ShowBase import ShowBase
@@ -167,6 +169,187 @@ class MenuModels:
             dec_map.find("**/dec_hover"),
             dec_map.find("**/dec_disabled"),
         )
+
+
+class ScrollableList:
+    """
+    A vertically scrolling list of fixed-height rows inside a bordered frame.
+
+    Wraps a :class:`DirectScrolledFrame` (used purely as a border/clip, not
+    for its own scrolling) and a :class:`DirectScrollBar` that instead moves a
+    "content" node directly, so the canvas never resizes as rows are added.
+    :meth:`rebuild` (re)creates the frame for a given row count and returns
+    the content node; callers parent their own row widgets to it, positioned
+    via :meth:`row_y`.
+
+    Shared by the input and graphics settings menus so both option lists
+    scroll identically.
+    """
+
+    def __init__(
+        self,
+        app: ShowBase,
+        row_height: float,
+        frame_top: float,
+        frame_bottom: float,
+    ):
+        """
+        Store layout parameters; no widgets are created until :meth:`rebuild`.
+
+        :param app: The running ShowBase application; used for a2dLeft /
+            a2dRight and the shared scrollbar geometry in app.menu_models.
+        :param row_height: Vertical space allotted to each row.
+        :param frame_top: Z of the top edge of the scrollable frame.
+        :param frame_bottom: Z of the bottom edge of the scrollable frame.
+        """
+        self.app = app
+        self.row_height = row_height
+        self.frame_top = frame_top
+        self.frame_bottom = frame_bottom
+        self.scroll_frame = None
+        self.v_scrollbar: DirectScrollBar | None = None
+        self.content = None
+
+    def rebuild(self, n_rows: int):
+        """
+        Destroy any existing frame/scrollbar and build new ones sized for
+        *n_rows* rows.
+
+        :param n_rows: Number of rows that will be laid out via :meth:`row_y`.
+        :return: The content node rows should be parented to.
+        """
+        self.destroy()
+        half_row = self.row_height / 2
+        frame_h = self.frame_top - self.frame_bottom
+        scrollable = max(0.0, n_rows * self.row_height - frame_h)
+        left = self.app.a2dLeft
+        right = self.app.a2dRight
+
+        # Canvas height equals frame height so PGScrollFrame does not move the
+        # canvas; the content node is scrolled directly by v_scrollbar instead.
+        self.scroll_frame = DirectScrolledFrame(
+            frameSize=(left + 0.08, right - 0.08, 0.0, frame_h),
+            pos=(0, 0, self.frame_bottom),
+            frameColor=(0, 0, 0, 0.25),
+            canvasSize=(left + 0.12, right - 0.12, 0.0, frame_h),
+            manageScrollBars=False,
+            verticalScroll_relief=None,
+            horizontalScroll_relief=None,
+        )
+        self.scroll_frame.verticalScroll.hide()
+        self.scroll_frame.horizontalScroll.hide()
+
+        canvas = self.scroll_frame.getCanvas()
+        self.content = canvas.attachNewNode("content")
+        self.content.setZ(frame_h - half_row)  # scroll=0: first row at frame top
+
+        def scroll():
+            self.content.setZ(frame_h - half_row + self.v_scrollbar["value"])
+
+        self.v_scrollbar = DirectScrollBar(
+            range=(0, scrollable),
+            value=0,
+            scrollSize=0.25 * self.row_height,
+            pageSize=frame_h,
+            orientation=DGG.VERTICAL,
+            pos=(right - 0.12, 0, self.frame_bottom),
+            frameSize=(-0.04, 0.04, 0.0, frame_h),
+            frameColor=(0.02, 0.02, 0.02, 1),
+            command=scroll,
+            # resizeThumb=0 keeps the thumb a fixed size, so its travel is
+            # identical regardless of content length (only the value->content
+            # mapping differs). With it off, PGSliderBar slides the thumb
+            # *node* across the whole trough; the thumb_geom is authored 1.1
+            # units tall, which would overflow far past the inc/dec buttons,
+            # so scale it down to a compact grip that stays within the trough.
+            resizeThumb=0,
+            thumb_relief=1,
+            thumb_geom=self.app.menu_models.thumb_geom,
+            thumb_geom_scale=(1, 1, 0.15),
+            thumb_pressEffect=True,
+            thumb_frameColor=(0, 0, 0, 0),
+            incButton_relief=1,
+            incButton_geom=self.app.menu_models.inc_geom,
+            incButton_frameSize=(-0.04, 0.04, -0.04, 0.04),
+            incButton_pressEffect=True,
+            incButton_frameColor=(0, 0, 0, 0),
+            decButton_relief=1,
+            decButton_geom=self.app.menu_models.dec_geom,
+            decButton_frameSize=(-0.04, 0.04, -0.04, 0.04),
+            decButton_pressEffect=True,
+            decButton_frameColor=(0, 0, 0, 0),
+        )
+        return self.content
+
+    def row_y(self, index: int) -> float:
+        """Return the content-space Z offset for row *index* (0-based)."""
+        return -(index * self.row_height)
+
+    def add_header(self, text: str, y: float):
+        """Add a blue section-header label spanning the row's width at *y*."""
+        left = self.app.a2dLeft + 0.14
+        scale = 0.055
+        width = (self.app.a2dRight - 0.14 - left) / scale
+        hdr = DirectLabel(
+            parent=self.content,
+            text=text,
+            scale=scale,
+            pos=(left, 0, y - 0.02),
+            frameSize=(-0.05, width, -0.35, 0.65),
+            frameColor=(0.1, 0.1, 0.3, 0.85),
+            text_fg=(0.65, 0.82, 1.0, 1.0),
+            text_align=TextNode.ALeft,
+        )
+        hdr.setTransparency(True)
+        return hdr
+
+    def add_row_label(self, text: str, y: float):
+        """Add a left-aligned row label (rendered as "*text*:") at *y*."""
+        label = DirectLabel(
+            parent=self.content,
+            text=text + ":",
+            scale=0.05,
+            pos=(self.app.a2dLeft + 0.2, 0, y - 0.015),
+            frameColor=(0, 0, 0, 0),
+            text_fg=(0.898, 0.839, 0.730, 1.0),
+            text_align=TextNode.ALeft,
+        )
+        label.setTransparency(True)
+        return label
+
+    def add_checkbox(
+        self, y: float, value: bool, command: Callable, extraArgs: list = []
+    ):
+        """Add a boolean checkbox at the row's right edge, at *y*."""
+        return CustomCheckButton(
+            app=self.app,
+            pos=(self.app.a2dRight - 0.3, 0, y),
+            value=value,
+            command=command,
+            extraArgs=extraArgs,
+            parent=self.content,
+        )
+
+    def wheel_scroll(self, step: float):
+        """
+        Scroll by *step* scroll-bar units (negative toward the top, positive
+        toward the bottom). A no-op before the first :meth:`rebuild`.
+        """
+        if self.v_scrollbar is None:
+            return
+        vs = self.v_scrollbar
+        lo, hi = vs["range"]
+        vs["value"] = max(lo, min(hi, vs["value"] + step * vs["scrollSize"]))
+
+    def destroy(self):
+        """Destroy the scrollbar/frame if present; safe to call repeatedly."""
+        if self.v_scrollbar is not None:
+            self.v_scrollbar.destroy()
+            self.v_scrollbar = None
+        if self.scroll_frame is not None:
+            self.scroll_frame.destroy()
+            self.scroll_frame = None
+        self.content = None
 
 
 class CustomButton:
