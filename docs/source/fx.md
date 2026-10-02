@@ -1,311 +1,234 @@
 # FX
 
-Everything visually or aurally reactive but not part of core gameplay logic —
-explosions, engine dust, impact sounds — lives in
+Everything visually or aurally reactive but not core gameplay — explosions,
+sparks, damage trails, cockpit feedback, speed dust, sound — lives in
 [`src/space_flight/fx/`](../../src/space_flight/fx/). This page is the guided
-tour; the per-class API is generated from the docstrings in the
-[code reference](apidocs/index.rst).
+tour; the per-class API is in the [code reference](apidocs/index.rst).
 
 ## Mental model
 
-- Particle effects (explosions and hit sparks) are **GPU-driven**:
-  a particle is written once at spawn time into a pre-allocated vertex
-  buffer, and a GLSL vertex shader reconstructs its position/size/alpha every
-  frame from those spawn-time parameters. The CPU's only recurring work is
-  updating three small uniforms (time, camera right/up) — no per-particle
-  CPU cost after spawn, which is what makes hundreds of live particles cheap.
-- Non-particle FX (the speed dust cloud) are ordinary Panda3D nodes moved by
-  a per-frame Python task — simpler, and fine at their much lower particle
-  count.
-- Sound (`SFX`) is a thin wrapper around Panda3D's `Audio3DManager`: it owns
-  sound pools per impact type and attaches/detaches sounds to short-lived
-  dummy nodes so 3D positioning and Doppler come for free.
+- Particle effects (fire/smoke and hit sparks) are **GPU-driven**: a particle
+  is written once at spawn into a pre-allocated vertex buffer, and the vertex
+  shader reconstructs its position/size/alpha every frame from those spawn-time
+  values. The CPU only updates three uniforms per buffer per frame (`uTime`,
+  `uCamRight`, `uCamUp`), so hundreds of live particles are cheap.
+- The speed dust cloud is ordinary Panda3D nodes moved by a per-frame Python
+  task — fine at its much lower particle count.
+- Sound (`SFX`) wraps Panda3D's `Audio3DManager`: sound pools per impact type,
+  attached to nodes so 3D positioning and Doppler come for free.
 
 ## `fx/__init__.py` — the shared GPU particle system
 
-[`fx/__init__.py`](../../src/space_flight/fx/__init__.py) is a small framework,
-not just package glue: it defines the vertex format and base class every
-particle effect builds on, documented at length in its own module docstring
-(worth reading directly for the exact vertex-column layout).
+[`fx/__init__.py`](../../src/space_flight/fx/__init__.py) defines the vertex
+format and base class every particle effect builds on; its module docstring
+has the exact vertex-column layout and the render-state gotchas.
 
-- **`make_particle_format(columns)`** — builds one interleaved vertex format
-  **per effect**: the shared billboard columns (`vertex`, `corner`,
-  `spawn_time`) plus the effect's own per-particle columns. Explosion adds
-  `velocity`, `size`, `spin`, `lifetime`, `tile_rect`; spark adds `velocity`,
-  `size`, `lifetime`, `gravity`, `spark_color`. Each custom column is read in
-  GLSL directly by name — no bit-packing, and no repurposing of the semantic
-  `color`/`texcoord` columns.
-- **`ParticleBuffer`** — owns one `GeomNode` of `POOL_SIZE` (512) billboard
-  quads, plus the shader and render state (additive or alpha blending,
-  no depth-write, always-visible bounds so it skips frustum culling cheaply).
-  Slots are tracked CPU-side as `(spawn_time, duration)` pairs so
-  `alloc_slot()` can find or reclaim a free slot without reading back GPU
-  memory. It takes a ready-compiled `Shader` and a `columns` spec (sub-classes
-  supply both); `write_slot()` writes one quad's four identical vertices (only
-  the `corner` selector differs), taking each effect column as a keyword
-  argument (`velocity=…`, `size=…`, …) and reserving its slot for
-  `delay + duration`. `update()` runs once per frame per buffer, pushing
-  `uTime`, `uCamRight`, `uCamUp` — everything else (position, size, motion,
-  fade) is computed entirely on the GPU from those spawn-time values, so a
-  live particle never touches the CPU again after `write_slot`.
-- **`load_atlas()`** — loads a sprite-atlas PNG plus its companion JSON rect
-  descriptor into a `(Texture, rects)` pair, ready to be bound and indexed
-  by a shader.
+- **`make_particle_format(columns)`** builds one interleaved format **per
+  effect**: the shared billboard columns (`vertex`, `corner`, `spawn_time`)
+  plus the effect's own columns (explosion: `velocity`, `size`, `spin`,
+  `lifetime`, `tile_rect`; spark: `velocity`, `size`, `lifetime`, `gravity`,
+  `spark_color`). GLSL reads each custom column by name — no bit-packing, no
+  repurposed `color`/`texcoord` columns.
+- **`ParticleBuffer`** owns one `GeomNode` of `POOL_SIZE` (512) billboard
+  quads plus the shader and render state (additive or alpha blending, no
+  depth write, omni bounds so it skips frustum culling). Slots are tracked
+  CPU-side as `(write_time, delay + duration)` pairs, so `alloc_slot()` finds
+  a free one without GPU read-back. `write_slot()` writes a quad's four
+  identical vertices (only `corner` differs), taking each effect column as a
+  keyword argument; `update()` (registered in `game.method_lists`) pushes the
+  three uniforms.
+- **`load_atlas()`** loads a sprite-atlas PNG and its JSON rect descriptor
+  into a `(Texture, rects)` pair. The atlases are built by
+  `scripts/build_particle_atlas.py`.
 
 ## `fire_smoke_fx.py` — fire and smoke
 
 [`fire_smoke_fx.py`](../../src/space_flight/fx/fire_smoke_fx.py) is one shared
-fire/smoke billboard system on top of `ParticleBuffer`, fed by three effects:
-one-shot explosions, laser-hit puffs, and the continuous per-ship damage/death
-trail (`damage_fx.py`, below).
+fire/smoke billboard system on top of `ParticleBuffer`.
 
-- **`_explosion_shader()`** lazily loads the shared GLSL shader from
-  [`datafiles/shaders/explosion.{vert,frag}`](../../src/space_flight/datafiles/shaders/)
-  (see [shaders.md](shaders.md)) via `Shader.load`. The vertex shader reads
-  each per-particle value straight from its own vertex column, computes
-  particle age from `uTime - spawn_time`, grows the billboard over its life,
-  and applies a fade-in ramp whose length is the `uFadein` uniform. The
-  fragment shader samples the atlas tile whose UV rect arrived in the
-  `tile_rect` column — no uniform array or dynamic indexing needed.
-- **`_FireSmokeBuffer`** is a thin `ParticleBuffer` subclass: it applies the
-  shared shader, sets its layer's `uFadein`, and `spawn_particle()` resolves
-  the particle's `tile_index` to its atlas UV rect before calling
-  `write_slot` (fire and smoke differ only by `uFadein`).
-- **`FireSmokePool`** is the object the rest of the game talks to (see
-  `Bot.play_death`, `docs/actors.md`). It owns two `_FireSmokeBuffer`s — fire
-  and smoke, each with its own atlas but sharing the one explosion shader —
-  and exposes intention-revealing emitters that all share those buffers:
-  - **`burst()`** — one one-shot explosion (a ship/subsystem dying): fire
-    launches immediately, smoke slightly later (`SMOKE_DELAY`), so smoke
-    trails the fire. The delay needs no CPU timer: the smoke particle is
-    written with a future `spawn_time` (`write_slot(spawn_delay=...)`), so
-    the shader simply sees it as not yet born. Only bursts given a surface
-    `normal` fan out in cones around it (fire wide, smoke narrower); death
-    explosions pass no normal, so their particles carry only the inherited
-    velocity plus a random positional bias. Sizes/speeds/lifetimes are
-    randomised within tunable ranges and scaled by the caller's `scale`, so a
-    fighter's and a capital ship's deaths reuse the pool at different sizes.
-  - **`hit_burst()`** — the small secondary explosion on laser hits (see
-    `spark_fx.py`): `burst()` along the impact normal with the
-    `HIT_EXPLOSION_*` knobs (low count, reduced speed, smaller scale, same
-    cone angles — `HIT_EXPLOSION_JET_ANGLE_SCALE = 1.0`) so hits stay cheap
-    next to deaths.
+- **`_FireSmokeBuffer`** applies the shared
+  [`explosion.{vert,frag}`](shaders.md#explosion-particle-shaders) shader
+  (loaded once by `_explosion_shader()`), sets its layer's `uFadein`, and
+  `spawn_particle()` resolves a random atlas tile index to its UV rect for the
+  `tile_rect` column. Fire and smoke differ only by atlas and `uFadein`.
+- **`FireSmokePool`** (`game.fire_smoke_pool`) owns the fire and smoke buffers
+  and exposes three emitters that share them (and their pool budget):
+  - **`burst()`** — a one-shot explosion (ship/subsystem death, e.g.
+    `Bot.play_death`, see [actors.md](actors.md)). Smoke trails the fire by
+    `SMOKE_DELAY` with no CPU timer: it is written with a future `spawn_time`
+    (`write_slot(spawn_delay=...)`), so the shader treats it as not yet born.
+    Only bursts given a surface `normal` fan out in cones (fire wider than
+    smoke); death explosions pass none, so particles carry only the inherited
+    velocity plus a random positional bias. Sizes, speeds and bias are scaled
+    by the caller's `scale`, so fighters and capital ships share the pool.
+  - **`hit_burst()`** — the small secondary explosion on laser hits:
+    `burst()` along the impact normal with the `HIT_EXPLOSION_*` knobs (few
+    billboards, lower speed) so hits stay cheap.
   - **`trail_smoke()` / `trail_fire()`** — one puff of the continuous damage
-    trail. They use dedicated short-lived layers (`_TRAIL_SMOKE_LAYER`,
-    `_TRAIL_FIRE_LAYER`) so that, emitted every frame across many damaged ships
-    into this shared pool, only a handful are alive at once — long-lived trail
-    particles would saturate the pool and flood the screen with transparent
-    overdraw.
-  Fire/smoke emission for every intent is factored into one `_emit_layer`
-  helper driven by a `_Layer` config (which carries each layer's explicit
-  lifetime range).
+    trail (`damage_fx.py`). They use short-lived layers (`_TRAIL_SMOKE_LAYER`,
+    `_TRAIL_FIRE_LAYER`) so that, emitted every frame by many ships, only a
+    handful are alive at once; long-lived trail particles would saturate the
+    pool and flood the screen with transparent overdraw.
+
+  All three go through `_emit_layer`, driven by a `_Layer` config carrying
+  each layer's cone, ranges, lifetime and delay.
 
 ## `spark_fx.py` — laser hit sparks
 
-[`spark_fx.py`](../../src/space_flight/fx/spark_fx.py) is the second concrete
-particle effect: a short, bright burst of round glowing sparks thrown out of a
-laser impact (distinct from the death-triggered explosion).
+[`spark_fx.py`](../../src/space_flight/fx/spark_fx.py): a short, bright burst
+of round glowing sparks thrown out of a laser impact.
 
-- **`SparkPool`** is a `ParticleBuffer` subclass (one shared buffer for every
-  spark) loading `datafiles/shaders/spark.{vert,frag}` via `_spark_shader()`
-  and the single `spark.png` sprite via the asset manager, with additive
-  blending. `spawn(position, normal, base_velocity, preset)` emits a cone of
-  sparks around the surface normal, each on a ballistic (gravity-pulled)
-  trajectory and shrinking as it ages.
-- **`SparkPreset`** (`METAL`, `ICE`, `ROCK`, `MAGIC`) bundles the per-hit look:
-  two colours, count, speed, cone spread, gravity, lifetime and size. Crucially,
-  colour and gravity are written **per particle** (not as uniforms) so bursts
-  of different presets can be alive together in the one buffer without
-  repainting each other — each spark's tint is premixed CPU-side from its size
-  (a proxy for launch speed). Global tuning knobs at the top of the module
-  (`SPARK_SIZE_SCALE`, `SPARK_SPEED_SCALE`, `SPARK_JET_ANGLE_SCALE`) scale every
-  preset at once.
-- The pool is created in `FlightState` as `game.spark_fx_pool` (beside
-  `fire_smoke_pool`) and driven from the laser collision handlers in
-  [`collisions.py`](../../src/space_flight/game/collisions.py): on destructible
-  (bot) hits, `ICE` when the target fighter's shield is still up else `METAL`;
-  `ICE` on capital-ship shield-bubble hits (on top of the shield's own impact
-  flash); and a material-dependent preset on terrain hits — chosen from
-  the `_TERRAIN_SPARK_PRESET` map by the terrain object's declarative
-  `material` attribute (`Ocean.material == "water"` → `ICE`,
-  `AsteroidField.material == "rock"` → `ROCK`, `"metal"` → `METAL`).
-  Destructible and shield hit bursts inherit the hit object's velocity so
-  sparks ride a moving target; terrain bursts don't (the handler passes a
-  zero velocity, since terrain is static).
-- On a fraction of destructible hits (`HIT_EXPLOSION_CHANCE`, default 1/3,
-  defined in `collisions.py` itself), a small secondary explosion is also
-  spawned via `FireSmokePool.hit_burst()` — a contained, low-billboard-count
-  burst (shaped by the `HIT_EXPLOSION_*` knobs in `fire_smoke_fx.py`)
-  sharing the sparks' impact point, normal and velocity.
+- **`SparkPool`** (`game.spark_fx_pool`, created in `FlightState` beside
+  `fire_smoke_pool`) is a `ParticleBuffer` with the
+  [`spark.{vert,frag}`](shaders.md#spark-particle-shaders) shader, the
+  `spark.png` sprite and additive blending.
+  `spawn(position, normal, base_velocity, preset)` emits a cone of sparks
+  around the normal, each on a ballistic (gravity-pulled) path, shrinking as
+  it ages.
+- **`SparkPreset`** (`METAL`, `ICE`, `ROCK`, `MAGIC`) bundles two colours,
+  count, speed, cone spread, gravity, lifetime and size. Colour and gravity
+  are written **per particle** so bursts of different presets coexist in the
+  one buffer; each spark's colour is premixed CPU-side from its random size
+  (the largest get `color_inner`). `SPARK_SIZE_SCALE`, `SPARK_SPEED_SCALE`
+  and `SPARK_JET_ANGLE_SCALE` scale every preset at once.
+- Wiring, in the laser handlers of
+  [`collisions.py`](../../src/space_flight/game/collisions.py):
+  - bot hits: `ICE` if the target's shield was still up, else `METAL`;
+  - capital-ship shield-bubble hits: `ICE`, on top of the shield's own flash;
+  - terrain hits: `_TERRAIN_SPARK_PRESET[terrain.material]` (`"water"` →
+    `ICE`, `"rock"` → `ROCK`, `"metal"` → `METAL`; `ROCK` if absent).
+
+  Bot and shield bursts inherit the target's velocity; terrain bursts get
+  zero. On a fraction of bot hits (`HIT_EXPLOSION_CHANCE` in `collisions.py`,
+  1/3) `FireSmokePool.hit_burst()` is also spawned at the same point, normal
+  and velocity.
 
 ## `damage_fx.py` — damage & death smoke/fire trail
 
 [`damage_fx.py`](../../src/space_flight/fx/damage_fx.py)'s `DamageFX` is a
-per-actor smoke-and-fire trail that tracks how badly the actor is hurt. It owns
-no geometry of its own — it emits into the shared `FireSmokePool` via
-`trail_smoke()` / `trail_fire()`.
+per-actor smoke-and-fire trail emitted into the shared `FireSmokePool` via
+`trail_smoke()` / `trail_fire()`; it owns no geometry.
 
-- **Severity-driven.** Each frame `update()` derives a `severity` (0 intact, 1
-  smoking below ~2/3 health, 2 on fire below ~1/3, 3 dying) from the owner's
-  `health / max_health`, forced to the maximum while `is_dying`. Because it is
-  re-derived from health every frame (not stored), the trail a wounded ship
-  streams keeps burning — and intensifies — straight through its death spin with
-  no visible restart. A `_SEVERITY` table bundles each level's knobs (emit
-  interval, count, puff scale) per layer.
-- **Duck-typed owner.** Any object exposing `position`, `speed`, `health`,
-  `max_health` and (optionally) `is_dying` works, so both ships and subsystems
-  carry one; it is registered as a per-frame task and cleaned with its owner.
-- **Cheap at scale.** Continuity comes from a few large overlapping puffs rather
-  than a dense stream of tiny ones, and the pool's trail layers are short-lived,
-  so dozens of ships can trail at once without saturating the shared pool or
-  drowning the GPU in transparent overdraw (see `fire_smoke_fx.py`).
+- **Severity-driven.** Each frame `update()` derives a severity (0 intact,
+  1 smoking at ≤ 2/3 health, 2 on fire at ≤ 1/3, 3 while `is_dying`) from the
+  owner's `health / max_health`. Because it is re-derived every frame, a
+  wounded ship's trail keeps burning — and intensifies — through its death
+  spin with no restart. `_SEVERITY` holds each level's emit interval, count
+  and puff scale.
+- **Duck-typed owner.** Anything with `position`, `speed`, `health`,
+  `max_health` and optionally `is_dying` works; ships and subsystems each
+  carry one, registered as a per-frame task and cleaned with the owner.
+- **Cheap at scale.** Continuity comes from a few large overlapping puffs, and
+  the trail layers are short-lived, so dozens of ships can trail at once.
 
 ## `cockpit_fx.py` — first-person low-health feedback
 
 [`cockpit_fx.py`](../../src/space_flight/fx/cockpit_fx.py)'s `CockpitFX` is the
-player-only, display-only counterpart to `DamageFX`: since the exterior smoke/fire
-trail is emitted at the hull (i.e. at the camera) it is useless in first person, so
-this gives the pilot an in-cockpit read on their own ship. Built by `Player` **only
-when not headless** and cleaned with the player; everything keys off the same two
-health tiers as the exterior FX (`health_tier()` reuses `damage_fx`'s 2/3 and 1/3
-thresholds).
+player-only, display-only counterpart to `DamageFX`, whose trail is emitted at
+the hull, i.e. at the camera, and so is useless in first person. `Player`
+builds it **only when not headless**. Everything keys off two health tiers
+(`health_tier()`, reusing `damage_fx`'s 2/3 and 1/3 thresholds).
 
 - **Damage vignette + directional hit flash** share one fullscreen `render2d`
-  `CardMaker` quad with the `cockpit_overlay.{vert,frag}` shader (on the 2D layer, so
-  it composites regardless of the conditional `GraphicsManager` post pass). `update()`
-  drives the red vignette from the tier (pulsing when critical); `flash(color,
-  screen_dir)` triggers a transient bloom tinted the laser's colour, biased toward the
-  incoming direction — wired from the player branch of `munition_into_destructible`
-  ([collisions.py](../../src/space_flight/game/collisions.py)) via `Player.on_laser_hit`,
-  whose direction math (`screen_direction_from_incoming`) projects the shot's world
-  velocity onto the pawn's `right`/`up` basis.
-- **Electrical sparks** reuse the hit-spark pool and shader directly
-  (`game.spark_fx_pool`, `spark.{vert,frag}`) — no separate cockpit pool — with a small
-  cockpit `SparkPreset` and `spawn(..., size_scale=, speed_scale=)` so the close-up
-  sparks are scaled down against the pool's distance-tuned globals. Each burst fires a
-  random subset of the ship's **authored cockpit emitters** — 3D positions + normals in
-  the ship body frame, loaded from `cockpit/spark_emitters.yaml` via the
-  `cockpit_spark_emitters` config key (the three TIE variants share one file under
-  `models/ships/tie_common/cockpit/`) — transformed to world through the ship node so
-  sparks fly out of fixed cockpit points.
-- **Cockpit rattle + engine sputter** are one synchronized effect: `update()` runs a
-  random damage-*stutter* scheduler (discrete jolt events at random intervals, more
-  frequent/stronger by tier — not a continuous vibration), exposing a single `[0,1]`
-  envelope via `sputter_intensity()`. `Player.move_camera` reads it through
-  `rattle_offset()`, which fades a fast multi-frequency camera vibration in and out by
-  that envelope; `Ship.adjust_engine_pitch` reads the *same* value to cut the interior
-  engine play-rate at the same instant. Computing
-  it once here keeps the shake and the engine cut in lockstep. `Ship` only sputters when
-  its controller carries a `cockpit_fx` (the player), so bots and headless are unaffected.
+  quad with the [`cockpit_overlay`](shaders.md#cockpit-damage-overlay-shaders)
+  shader (on the 2D layer, so it composites whether or not the
+  `GraphicsManager` post pass is active). `update()` drives the vignette from
+  the tier (pulsing when critical). `flash(color, screen_dir)` is called by
+  `Player.on_laser_hit` from `munition_into_destructible`
+  ([collisions.py](../../src/space_flight/game/collisions.py)); its direction
+  comes from `screen_direction_from_incoming`, which projects the shot's world
+  velocity onto the pawn's `right`/`up` axes.
+- **Electrical sparks** reuse `game.spark_fx_pool` with a small cockpit
+  `SparkPreset` and `spawn(..., size_scale=, speed_scale=)` to shrink them
+  against the pool's distance-tuned globals. Each burst fires a random subset
+  of the ship's authored emitters (body-frame positions + normals from the
+  YAML file named by the `cockpit_spark_emitters` config key; the three TIE
+  variants share `models/ships/tie_common/cockpit/spark_emitters.yaml`),
+  transformed to world through the ship node.
+- **Cockpit rattle + engine sputter** are one effect: `update()` schedules
+  random discrete stutter events (more frequent and stronger when critical)
+  and exposes their `[0, 1]` envelope via `sputter_intensity()`.
+  `Player.move_camera` adds `rattle_offset()`, a fast multi-frequency
+  vibration scaled by that envelope, and `Ship.adjust_engine_pitch` reads the
+  same value to cut the engine play rate, so shake and engine cut stay in
+  lockstep. Only a controller with a `cockpit_fx` (the player) sputters.
 
 ## `speed_dust_cloud.py` — engine speed feel
 
 [`speed_dust_cloud.py`](../../src/space_flight/fx/speed_dust_cloud.py)'s
-`SpeedDustCloud` gives the player a sense of speed: a fixed pool of small
-billboarded dust card sprites scattered in a box around the player's ship,
-each `setBillboardPointEye()`'d to always face the camera. Unlike the GPU
-particle system, these are plain Panda3D nodes updated from Python each
-frame (`dust_update`): every particle drifts backward at the player's current
-speed and is recycled to a random position ahead once it passes behind the
-ship (`reset_particle`), and the whole cloud's opacity scales with speed
-(`MIN_DUST_ALPHA`→`MAX_DUST_ALPHA`) so it reads as more intense at higher
-velocity. `build()` can create the particle nodes incrementally in chunks
-(`defer_build=True`, used with `yield from`) to spread the one-time node
-creation cost across several frames instead of stalling on construction.
+`SpeedDustCloud` is a fixed pool of small `setBillboardPointEye()` dust cards
+parented to the player's ship, in a box ahead of it. `dust_update` moves each
+card backward at the player's speed and recycles it ahead
+(`reset_particle`) once it passes behind; the cloud's opacity scales with
+speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`). With `defer_build=True`,
+`build()` is a generator (`yield from`) that spreads node creation across
+frames.
 
 ## `sfx.py` — 3D sound effects
 
-[`sfx.py`](../../src/space_flight/fx/sfx.py)'s `SFX` wraps Panda3D's
-`Audio3DManager` for every non-music sound in the game:
+[`sfx.py`](../../src/space_flight/fx/sfx.py)'s `SFX` handles every non-music
+sound:
 
-- **Sound pools.** `get_sounds_from_asset_manager()` loads a named pool per
-  impact category (player crash short/long, laser-on-hull, laser-on-shield,
-  distant target hit, terrain hit) via the asset manager, which handles
-  randomised pitch and playback slot reuse (`get_sound`/`release_sound`).
-  The actual pooled loading is `build_sound_pool` in
-  [`global_architecture/asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py);
+- **Sound pools.** `get_sounds_from_asset_manager()` loads one pool per
+  category (player crash short/long, laser on player hull/shield, distant
+  target hit, terrain hit). The pools come from `build_sound_pool` in
+  [`global_architecture/asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py)
+  and handle random pitch and slot reuse (`get_sound`/`release_sound`);
   `SFX.build_sound_pool()` is an unused legacy helper.
-- **Distance-aware playback.** `distant_impact_hit()` (used for AI-vs-AI or
-  distant impacts, not directly on the player) computes volume from an
-  inverse-square falloff against a reference distance and drops the sound
-  entirely beyond `MAX_SOUND_DISTANCE_M`, so far-off fights don't spam audio.
-  On top of that falloff and the `TARGET_HIT_SOUND_MULTIPLIER` /
-  `TERRAIN_HIT_SOUND_MULTIPLIER` per-surface knobs, `is_player` picks
-  `PLAYER_DISTANT_IMPACT_VOLUME` or `NPC_DISTANT_IMPACT_VOLUME` — the
-  player's own shot landing on a target or on terrain against anyone else's.
-  `CollisionSystem`'s three call sites (a target, terrain, or a shield) pass
-  `is_player=munition.origin_ship_id == game.player.pawn.id`, the same
-  by-id comparison the collision handlers already use elsewhere to single out
-  the player's ship.
-- **Positioned one-shots.** `laser_impact_hit_on_player`, `player_crash` and
-  `cannon_fire` each attach a sound to either an ad-hoc dummy node (placed at
-  the relative hit point and auto-removed after `SFX_MAX_SOUND_DURATION_S`)
-  or an existing node (a firing cannon), so Panda3D's 3D audio handles
-  panning and attenuation automatically. `cannon_fire` sets the shot's volume
-  from `PLAYER_CANNON_FIRE_VOLUME` or `NPC_CANNON_FIRE_VOLUME`, the shots
-  from the player's own guns against everyone else's — `is_player` is passed
-  in by `LaserCannon.fire()`, which compares its firing actor against
-  `game.player.pawn` (`None` outside a live game, e.g. headless, reads as not
-  the player). They attach through
-  `attach_sound()`, which also places the sound at its node straight away:
-  `Audio3DManager` only moves attached sounds on its next update, so a sound
-  played in between would open from its previous position, or from the render
-  origin if never placed. The render origin is on the player, i.e. the
-  listener (see [docs/game.md](game.md#the-floating-render-origin)), so
-  that would start each shot with a loud blip. Scheduled sounds are released
-  back to their pool after the same fixed duration via
-  `game.delayed_methods.do_method_later`, so pools don't leak playing-sound
-  references — `player_crash` schedules a release for each of the up to
-  three sounds it plays (terrain hit, short crash, long crash).
-- **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` are stubs that
-  only log for now — the tractor beam mechanic works without a dedicated
-  audio cue yet (see [subsystems.md](subsystems.md)).
-- `update_task` drives `Audio3DManager.update()` via Panda3D's own task
-  manager (not `game.method_lists` like everything else in this package),
-  since it must run regardless of which actors are alive. The manager also
-  registers its own `Audio3DManager-updateTask` (sort 51, after `igLoop`), so
-  the update currently runs twice per frame.
-- **Doppler from physics.** `SFX` uses `PhysicsAudio3DManager`, an
-  `Audio3DManager` whose velocities come from physics instead of node
-  position deltas. Panda3D's stock "auto" velocities are
-  `getPosDelta(render) / dt`, which is only non-zero for nodes moved with
-  `setFluidPos`; every node in the game moves with plain `setPos`, so they
-  were always zero. Instead, `attach_sound(sound, node, velocity_source=…)`
-  gives each sound a *velocity source*, any object with a world-frame `speed`,
-  read at every update:
+- **Distant impacts.** `distant_impact_hit()` (hits not on the player) uses an
+  inverse-square falloff from `SOUND_VOLUME_REFERENCE_DISTANCE_M`, drops the
+  sound beyond `MAX_SOUND_DISTANCE_M`, and multiplies by the per-surface
+  `TARGET_HIT_SOUND_MULTIPLIER` / `TERRAIN_HIT_SOUND_MULTIPLIER` and by
+  `PLAYER_DISTANT_IMPACT_VOLUME` or `NPC_DISTANT_IMPACT_VOLUME`.
+  `CollisionSystem`'s three call sites (target, terrain, shield) pass
+  `is_player=munition.origin_ship_id == game.player.pawn.id`.
+- **Positioned one-shots.** `laser_impact_hit_on_player` and `player_crash`
+  attach their sounds to a dummy node at the relative hit point (removed after
+  `SFX_MAX_SOUND_DURATION_S`); `cannon_fire` attaches to the firing cannon's
+  node, with `PLAYER_CANNON_FIRE_VOLUME` or `NPC_CANNON_FIRE_VOLUME` chosen by
+  `is_player` from `LaserCannon.fire()`. Every sound is released to its pool
+  after `SFX_MAX_SOUND_DURATION_S` via `game.delayed_methods.do_method_later`
+  (`player_crash` releases each of its up to three sounds).
+- **Place before playing.** `attach_sound()` also sets the sound's position
+  immediately: `Audio3DManager` only moves attached sounds on its next update,
+  so a sound played in between would start at its previous position or at the
+  render origin — which is on the listener (see
+  [the floating render origin](game.md#the-floating-render-origin)), giving a
+  loud blip.
+- **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` only log (see
+  [subsystems.md](subsystems.md)).
+- **Update.** `update_task` calls `Audio3DManager.update()` from Panda3D's
+  task manager (not `game.method_lists`), since it must run whatever actors are
+  alive. The manager also registers its own `Audio3DManager-updateTask`
+  (sort 51, after `igLoop`), so the update currently runs twice per frame.
+- **Doppler from physics.** `PhysicsAudio3DManager` takes velocities from
+  physics: Panda3D's stock velocities are `getPosDelta(render) / dt`, which is
+  zero for nodes moved with plain `setPos` — every node in the game.
+  `attach_sound(sound, node, velocity_source=…)` gives each sound a weakly
+  referenced *velocity source* (any object with a world-frame `speed`), read
+  at every update:
   - engine sounds: their `Ship` / `CapitalShip`;
-  - cannon shots: the firing actor, `LaserCannon.parent` (a fighter, or a
-    turret, whose `speed` is its host ship's);
-  - hits on and crashes of the player: the player's pawn, like the listener,
-    so they carry no shift;
-  - the listener (camera): the player's pawn, set by
-    `Player.initialize_camera` via `set_listener_velocity_source` and cleared
-    in `Player.clean`.
+  - cannon shots: `LaserCannon.parent` (a fighter, or a turret, whose `speed`
+    is its host ship's);
+  - hits on and crashes of the player, and the listener (set by
+    `Player.initialize_camera`, cleared in `Player.clean`): the player's
+    pawn, so player-centred sounds carry no shift.
 
-  Sources are weak references, so a destroyed ship's sound falls back to zero
-  velocity rather than keeping the ship alive. Velocities stay world-frame
-  while positions are render-relative: `render` only translates with the
-  player (see [docs/game.md](game.md#the-floating-render-origin)), and OpenAL's
-  Doppler needs velocities relative to the medium.
+  A destroyed source reads as zero velocity. Velocities stay world-frame while
+  positions are render-relative: `render` only translates with the player,
+  and OpenAL's Doppler needs velocities relative to the medium.
 
-  `DISTANCE_FACTOR` is 1: in Panda3D's OpenAL backend the speed of sound is
-  `343.3 × distance_factor` units/s, and the game's unit is the metre. The
-  distance factor only sets that speed; it does not change attenuation.
-  `DOPPLER_FACTOR` is 0.5, which halves the physical shift at low speed.
-  OpenAL scales the velocities rather than the shift, so at fighter speeds it
-  cuts more than half when approaching and a bit less when receding: a 1 kHz
-  source at 170 m/s comes out at 1329 Hz approaching (1981 Hz at factor 1)
-  and 801 Hz receding (669 Hz). A head-on pass with both ships at 170 m/s
-  shifts pitch by up to about 1.7×. OpenAL goes silent when a source's
-  velocity towards the listener, times the Doppler factor, nears the speed of
-  sound (686 m/s at 0.5), which nothing in the game reaches.
+  `DISTANCE_FACTOR` is 1: Panda3D's OpenAL backend sets the speed of sound to
+  `343.3 × distance_factor` units/s and the game's unit is the metre (it does
+  not change attenuation). `DOPPLER_FACTOR` 0.5 halves the shift at low speed;
+  since OpenAL scales the velocities, not the shift, it cuts more than half
+  when approaching and less when receding. A 1 kHz source at 170 m/s gives
+  1329 Hz approaching (1981 Hz at factor 1) and 801 Hz receding (669 Hz).
+  OpenAL goes silent as a source's closing speed × Doppler factor nears the
+  speed of sound (686 m/s at 0.5), which nothing in the game reaches.
 
 ## Where things live
 
-All of it lives directly under
-[`src/space_flight/fx/`](../../src/space_flight/fx/): the shared particle
-framework in `__init__.py`, the fire/smoke pool in `fire_smoke_fx.py`, the
-damage/death trail in `damage_fx.py`, the cockpit low-health feedback in
-`cockpit_fx.py`, the sparks in `spark_fx.py`, the non-particle dust cloud in
-`speed_dust_cloud.py`, and sound in `sfx.py`. The auto-generated
-[code reference](apidocs/index.rst) has the full per-class API.
+One module per section above, all under
+[`src/space_flight/fx/`](../../src/space_flight/fx/); the shaders they drive
+are described in [shaders.md](shaders.md).

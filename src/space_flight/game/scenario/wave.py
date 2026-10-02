@@ -58,7 +58,7 @@ class WaveSpec:
     loop: bool = True
     record: bool = False
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         single = isinstance(self.ship_model, str)
         if single and self.size is None:
             raise ValueError(f"wave '{self.name}': size is required")
@@ -88,7 +88,7 @@ class WaveHandle:
     :param spec: What to spawn
     """
 
-    def __init__(self, mission: Mission, spec: WaveSpec) -> None:
+    def __init__(self, mission: Mission, spec: WaveSpec):
         self.mission = mission
         self.spec = spec
         #: Pawn ids of every ship spawned so far, in spawn order (the
@@ -212,25 +212,23 @@ class WaveHandle:
     # Mutating every live member
     # ------------------------------------------------------------------
 
-    def set_targets(self, who: Any) -> None:
+    def set_targets(self, who: Any):
         """Every live member attacks every live pawn of who."""
         for pawn in self.pawns():
             _add_targets(pawn.parent, who)
 
-    def set_team(self, team: int) -> None:
+    def set_team(self, team: int):
         """Reassign every live member's team, cascading for capital ships."""
         for pawn in self.pawns():
             pawn.parent.set_team(team)
 
-    def set_waypoints(
-        self, points: Sequence[Sequence[float]], loop: bool = True
-    ) -> None:
+    def set_waypoints(self, points: Sequence[Sequence[float]], loop: bool = True):
         """Give every live member a new route."""
         waypoints = [np.array(p) for p in points]
         for pawn in self.pawns():
             pawn.parent.navigator.set_waypoints(waypoints=waypoints, is_loop=loop)
 
-    def follow(self, leader: Any) -> None:
+    def follow(self, leader: Any):
         """
         Every live member forms up on leader, which takes the lead slot of the
         wave's formation (created from the spec if the wave has none); the
@@ -256,7 +254,7 @@ class WaveHandle:
         self.formation.add_ship(ship=leader_pawns[0], leader=True)
 
 
-def _add_targets(bot: Bot, who: Any) -> None:
+def _add_targets(bot: Bot, who: Any):
     """Make every live pawn of who a primary target of bot."""
     bot.tactician.primary_target_ids.extend(pawn.id for pawn in pawns_of(who))
 

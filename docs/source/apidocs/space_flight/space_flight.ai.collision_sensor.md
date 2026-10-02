@@ -77,7 +77,7 @@
 
 ````
 
-````{py:method} set_active(active: bool) -> None
+````{py:method} set_active(active: bool) 
 :canonical: space_flight.ai.collision_sensor.CollisionSensor.set_active
 
 ```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.set_active
@@ -85,7 +85,7 @@
 
 ````
 
-````{py:method} record_obstacle(obstacle: dict) -> None
+````{py:method} record_obstacle(obstacle: dict) 
 :canonical: space_flight.ai.collision_sensor.CollisionSensor.record_obstacle
 
 ```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.record_obstacle

@@ -1,4 +1,6 @@
-from typing import List
+from __future__ import annotations
+
+from typing import Any, List
 from uuid import UUID
 
 import numpy as np
@@ -67,7 +69,7 @@ class Interactions:
     # Actor management
     # ------------------------------------------------------------------
 
-    def add_actor(self, actor):
+    def add_actor(self, actor: Any):
         """
         Assigns actor to the next free slot without allocating new matrices.
 
@@ -85,7 +87,7 @@ class Interactions:
         self.actors_id_dict[actor.id] = slot
         self._live_pair_idx = None
 
-    def remove_actor(self, actor):
+    def remove_actor(self, actor: Any):
         """
         Frees actor's slot and zeroes its rows/columns so stale values
         never leak into other actors' queries.

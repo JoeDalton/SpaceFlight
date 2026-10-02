@@ -1,21 +1,26 @@
+from __future__ import annotations
+
 import uuid
-from typing import Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from direct.interval.Interval import Interval
 from direct.showbase.ShowBaseGlobal import ClockObject
 
 from space_flight import EPSILON_TOLERANCE
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 
 class GameTimeManager:
     """
-    A class to store the game's state and handle the time
+    The game clock: Panda3D's real clock minus the time spent paused.
     """
 
-    def __init__(self, game, pause_on_init: bool = True):
+    def __init__(self, game: FlightState, pause_on_init: bool = True):
         self.game = game
-        # The game is not created at hte first frame since there are
-        # splash and menu states => Account for that delay in the initial pause time
+        # The game starts after the splash and menu states: count that delay as
+        # pause time, so game time starts near zero
         self.time_in_pause_s = ClockObject.getGlobalClock().getFrameTime()
         self.real_time_at_last_pause_s = 0.0
         self.game_time_at_last_pause_s = 0.0
@@ -39,9 +44,9 @@ class GameTimeManager:
 
     def get_current_time(self) -> float:
         """
-        Gets the time of the current frame
+        Gets the game time of the current frame (frozen while paused)
 
-        :return: The time stamp of the current frame
+        :return: The time stamp of the current frame, in seconds
         """
         if self.game.is_paused:
             time_s = self.game_time_at_last_pause_s
@@ -52,9 +57,9 @@ class GameTimeManager:
 
     def get_time_step(self) -> float:
         """
-        Gets the time elapsed since the last frame
+        Gets the game time elapsed since the last frame
 
-        :return: The time step
+        :return: The time step, in seconds (0 while paused)
         """
         if self.game.is_paused:
             return 0.0
@@ -64,7 +69,7 @@ class GameTimeManager:
     def get_average_frame_rate(self) -> float:
         """
         Gets the average frame rate.
-        Always return a strictly positive value to avoid diveide by zero errors
+        Always return a strictly positive value to avoid divide by zero errors
 
         TODO: Take pauses/start menu into account ?
 
@@ -87,7 +92,7 @@ class IntervalManager:
     A class to handle the creation, destruction and pausing/resuming of time intervals
     """
 
-    def __init__(self, game, pause_on_init: bool = True):
+    def __init__(self, game: FlightState, pause_on_init: bool = True):
         self.active_intervals: list[Interval] = []
         self.game = game
         if pause_on_init:
@@ -113,7 +118,7 @@ class IntervalManager:
         """
         Remove an interval from the active list
 
-        :param interval: _description_
+        :param interval: The finished interval
         """
         if interval in self.active_intervals:
             self.active_intervals.remove(interval)
@@ -142,21 +147,25 @@ class IntervalManager:
 
 class DelayedMethodManager:
     """
-    A class to mimic the doMethodLater feature of panda3d while allowing pauses
+    Panda3D's doMethodLater on game time, so scheduled calls respect pauses
     """
 
-    def __init__(self, game):
+    def __init__(self, game: FlightState):
         self.game = game
-        self.methods_to_run_dict = {}
+        self.methods_to_run_dict: dict[str, dict[str, Any]] = {}
 
     def do_method_later(
-        self, delay_s: float, name: str, method: Callable, extra_args: list = None
+        self,
+        delay_s: float,
+        name: str,
+        method: Callable,
+        extra_args: list | None = None,
     ):
         """
         Schedule a method to run at some time in the future
 
         :param delay_s: The time to wait before running the method
-        :param name: The name of the method
+        :param name: A label for the call (made unique, so may be reused)
         :param method: The method itself
         :param extra_args: extra arguments for the method
         """

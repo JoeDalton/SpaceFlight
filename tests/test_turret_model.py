@@ -133,8 +133,8 @@ def test_turret_model_anchor_model_sets_position_from_offset(mock_game):
 
 def test_turret_model_anchor_model_sets_orientation(mock_game):
     """
-    anchor_model calls setQuat on the model node; because __init__ already
-    calls it once, two calls are expected after a second explicit call.
+    Each anchor_model call sets the model node's orientation once more (on top
+    of the call made by __init__).
     """
     turret_model = make_turret_model(mock_game, "test")
     calls_after_init = turret_model.model.setQuat.call_count

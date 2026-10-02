@@ -71,8 +71,8 @@ void main() {
     wp.z += h;
 
     vWorldPos  = wp.xyz;
-    // Reflection footprint stays on the flat z=0 plane (the fragment also forces
-    // z=0), so displacing the surface never skews the reflection lookup.
+    // Flat z=0 reflection footprint. Not read by ocean.frag, which recomputes
+    // it per fragment (see the reflection comment there).
     vReflCoord = uReflMVP * vec4(wp.xy, 0.0, 1.0);
 
     // The ocean's model matrix is a pure XY translation (the plane follows the

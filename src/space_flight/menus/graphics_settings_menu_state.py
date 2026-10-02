@@ -1,21 +1,20 @@
 """
 Graphics settings menu — lets the player view and change display/render options.
 
-Mirrors :mod:`space_flight.menus.input_settings_menu_state`: a deep-copied
-working config is edited in memory while the menu is open and written back on
-*Save*, and both menus share their scrollable-list machinery (see
-:class:`~space_flight.menus.menu_utils.ScrollableList`). Display mode is a
-button group; the quality knobs are sliders; FXAA and the other toggles are
-checkboxes. Rows are grouped under one header per top-level section of
-configuration/default_graphics.yaml.
+Like :mod:`space_flight.menus.input_settings_menu_state`, a deep-copied working
+config is edited in memory and written back only on *Save*. Rows are grouped
+under one header per top-level section of configuration/default_graphics.yaml.
 
-On save the display mode is applied to the live window immediately; render
-scale, anti-aliasing and the reflection/mirror quality are picked up on the
-next level load (hence the warning shown above the Save button). See
+On save the display mode is applied to the live window immediately; every
+other setting is read on the next level load (hence the warning shown above
+the Save button). See
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
 """
 
+from __future__ import annotations
+
 import copy
+from typing import TYPE_CHECKING, Any
 
 from direct.gui.DirectGui import DirectFrame, DirectLabel
 from panda3d.core import TextNode
@@ -28,6 +27,9 @@ from space_flight.global_architecture.graphics_settings import (
     GraphicsSettings,
 )
 from space_flight.menus.menu_utils import CustomButton, CustomSlider, ScrollableList
+
+if TYPE_CHECKING:
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 # Display mode is a small fixed button group.
 _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
@@ -80,7 +82,7 @@ def _section_label(name: str) -> str:
     return _SECTION_LABELS.get(name, name.replace("_", " ").title())
 
 
-def _get_by_path(cfg: dict, path: tuple):
+def _get_by_path(cfg: dict, path: tuple) -> Any:
     """Return the value at *path* (a tuple of keys) within nested dict *cfg*."""
     d = cfg
     for key in path:
@@ -88,7 +90,7 @@ def _get_by_path(cfg: dict, path: tuple):
     return d
 
 
-def _set_by_path(cfg: dict, path: tuple, value):
+def _set_by_path(cfg: dict, path: tuple, value: Any):
     """Set the value at *path* (a tuple of keys) within nested dict *cfg*."""
     d = cfg
     for key in path[:-1]:
@@ -109,7 +111,7 @@ class GraphicsSettingsMenuState(BaseState):
     mode live; Cancel discards; Default reloads factory settings (unsaved).
     """
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         super().__init__(app)
         self.working_config: dict = {}
         # Display-mode button group: list of (value, CustomButton).
@@ -399,7 +401,7 @@ class GraphicsSettingsMenuState(BaseState):
         _set_by_path(self.working_config, path, values[idx])
         self.slider_value_labels[path]["text"] = labels[idx]
 
-    def on_checkbox_toggle(self, status, path: tuple):
+    def on_checkbox_toggle(self, status: int, path: tuple):
         """Store a toggled checkbox value straight into :attr:`working_config`."""
         _set_by_path(self.working_config, path, bool(status))
 
@@ -407,8 +409,8 @@ class GraphicsSettingsMenuState(BaseState):
     # Button callbacks
     # ------------------------------------------------------------------
 
-    def wheel_scroll(self, direction: int):
-        """Scroll the option list by one step in *direction* (-1 = up, +1 = down)."""
+    def wheel_scroll(self, direction: float):
+        """Scroll the option list by *direction* scroll steps (negative = up)."""
         self.scroll_list.wheel_scroll(direction)
 
     def save(self):

@@ -1,12 +1,9 @@
 #version 140
-// Explosion particle vertex shader.
+// Explosion (fire/smoke) particle vertex shader.
 //
-// Reconstructs each billboard particle's current state on the GPU from its
-// spawn-time parameters (stored once, per vertex, at spawn). No vertex data
-// is touched after spawn; only the per-frame uniforms below change.
-//
-// Every per-particle value arrives in its own named vertex column (see
-// fx/__init__.py's vertex-layout table) — no bit-packing to unpack here.
+// Reconstructs each billboard's current state from its spawn-time vertex
+// columns (written once at spawn; see fx/__init__.py's vertex-layout table).
+// Only the per-frame uniforms change.
 
 in vec3  p3d_Vertex;   // world-space spawn position
 in vec2  corner;       // billboard corner selector, one of (±1, ±1)

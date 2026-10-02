@@ -1,13 +1,9 @@
 #version 140
 // Spark particle vertex shader (hit sparks).
 //
-// Reconstructs each spark's current state on the GPU from its spawn-time
-// parameters (stored once, per vertex, at spawn). No vertex data is touched
-// after spawn; only the per-frame uniforms below change.
-//
-// Unlike the explosion, colour and gravity are carried PER PARTICLE (not as
-// uniforms) so bursts of different hit types — metal / ice / magic — can be
-// alive simultaneously in one buffer without repainting each other.
+// Reconstructs each spark's current state from its spawn-time vertex columns;
+// only the per-frame uniforms change. Colour and gravity are PER PARTICLE (not
+// uniforms) so bursts of different presets can share one buffer.
 
 in vec3  p3d_Vertex;    // world-space spawn position
 in vec2  corner;        // billboard corner selector, one of (±1, ±1)

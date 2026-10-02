@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -7,6 +10,9 @@ from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent
 from space_flight.utils import smooth_step_down
 from space_flight.utils.state_machine import StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -18,7 +24,7 @@ class GenericTactician:
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict,
         debug: bool = False,
@@ -43,11 +49,11 @@ class GenericTactician:
         self.debug = debug
 
     @property
-    def intent(self):
+    def intent(self) -> Intent:
         """The current intent (the intent state machine's state)."""
         return self.intent_sm.state
 
-    def think(self):
+    def think(self) -> tuple[Intent, dict]:
         """
         Evaluates the intent of the bot at the correct frequency
         """
@@ -96,7 +102,7 @@ class GenericTactician:
 
         return self.intent_sm.state, self.target_dict
 
-    def update_intent(self):
+    def update_intent(self) -> tuple[Intent, dict]:
         """
         Evaluates the tactical situation around the bot and computes the bot's intent
         """
@@ -104,12 +110,11 @@ class GenericTactician:
 
     def evaluate_threats(self, my_actor_index: int) -> dict:
         """
-        Find the most threatening among all foes and return it with its threat score
-        Also find the center of all foes for disengagement
+        Find the most threatening foe: close (within prey_cutoff_distance) and
+        holding self in its cone of fire.
 
-        A threat is high if it :
-        - Is close (in range)
-        - Holds self in cone of fire
+        :param my_actor_index: The bot's slot in game.interactions
+        :return: {"score", "target_id"} (target_id None if no threat)
         """
 
         interact_mask = self.game.interactions.interact[my_actor_index, :]
@@ -149,14 +154,12 @@ class GenericTactician:
 
     def evaluate_preys(self, my_actor_index: int) -> dict:
         """
-        Find the most vulnerable among all foes and return it
-        with its vulnerability score
+        Find the best prey among all foes: close (within hunter_cutoff_distance),
+        mostly forward, boosted if in primary_target_ids.
+        TODO: low health, threatening a protected ally.
 
-        Ideal prey is:
-        - Not too far
-        - Mostly forward
-        - Low on health ? -- TODO
-        - Threatening a protected ally -- TODO using primary targets
+        :param my_actor_index: The bot's slot in game.interactions
+        :return: {"score", "target_id"} (target_id None if no prey)
         """
         interact_mask = self.game.interactions.interact[my_actor_index, :]
         distances = self.game.interactions.distances[my_actor_index, :]
@@ -177,7 +180,7 @@ class GenericTactician:
         # Health status contribution TODO
         health_scores = 1.0
 
-        # Primary target contribution: modifies the interact mask
+        # Primary target contribution
         primary_target_scores = np.ones(len(distances))
         for actor_idx, actor in enumerate(self.game.interactions.actors):
             if interact_mask[actor_idx]:
@@ -233,7 +236,11 @@ class GenericTactician:
 
     def evaluate_team_center(self, team: str) -> dict:
         """
-        Find the center of gravity of the "friends" or "foes" team
+        Find the center of gravity of the "friends" (excluding self) or "foes"
+        (other non-neutral teams) live actors
+
+        :param team: "friends" or "foes"
+        :return: {"position": center}, the origin if the team is empty
         """
         my_team = self.pawn.team
         n_actor_in_team = 0
@@ -283,9 +290,8 @@ class GenericTactician:
 
     def evaluate_fighting_shape(self) -> float:
         """
-        The bot's fitness to keep fighting: half its health plus its shield. Reads
-        the uniform health/shield_level exposed by every pawn, so it works
-        the same for fighters and capital ships.
+        The bot's fitness to keep fighting: half its health plus its shield
+        (the health/shield_level every pawn exposes).
 
         TODO: add an "energy" mechanic ? Health of subsystems ?
 

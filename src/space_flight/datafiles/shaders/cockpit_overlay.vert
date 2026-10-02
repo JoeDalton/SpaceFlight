@@ -1,8 +1,6 @@
 #version 140
-// Full-screen cockpit damage overlay — passthrough vertex shader.
-//
-// Drawn on a render2d CardMaker fullscreen quad, so p3d_Vertex already spans
-// the screen; we only forward the [0,1] UV (v up) to the fragment shader.
+// Full-screen cockpit damage overlay — passthrough vertex shader: the render2d
+// fullscreen quad already spans the screen; forward its [0,1] UV (v up).
 uniform mat4 p3d_ModelViewProjectionMatrix;
 in vec4 p3d_Vertex;
 in vec2 p3d_MultiTexCoord0;

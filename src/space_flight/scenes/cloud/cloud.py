@@ -18,9 +18,10 @@ import json
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import Filename, PNMImage
+from panda3d.core import Filename, PNMImage, Texture
 
 from space_flight.fx import load_atlas
 from space_flight.scenes.cloud.noise import (
@@ -33,6 +34,9 @@ from space_flight.scenes.cloud.noise import (
     density,
     field_offset,
 )
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class CloudType(Enum):
@@ -248,7 +252,7 @@ def volume_fraction(radii: np.ndarray, cloud_volume: float) -> float:
     return float((4.0 / 3.0 * np.pi) * (radii**3).sum() / cloud_volume)
 
 
-def snap_to_noise_period(spec: DensityField, requested: float):
+def snap_to_noise_period(spec: DensityField, requested: float) -> tuple[float, bool]:
     """The largest recycle-box width up to *requested* that recycles seamlessly.
 
     A box a whole number of noise periods wide teleports cells to bit-identical
@@ -376,7 +380,7 @@ ATLAS_PNG = _ASSET_DIR / "cloud_atlas.png"
 ATLAS_JSON = _ASSET_DIR / "cloud_atlas.json"
 
 
-def load_cloud_atlas(game):
+def load_cloud_atlas(game: FlightState) -> tuple[Texture, list]:
     """Load the cloud sprite atlas through the game's asset_manager.
 
     The sprites are a per-quad THICKNESS profile, not a silhouette: their alpha

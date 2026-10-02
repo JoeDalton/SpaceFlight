@@ -4,7 +4,9 @@ Central owner of all graphics/display options.
 Responsibilities:
 
 * **Window mode** — fullscreen vs windowed, and window size. Applied when the
-  real game window is (re)opened after the splash screen.
+  real game window opens after the splash screen (:meth:`open_game_window`),
+  and to the live window when the settings menu saves
+  (:meth:`apply_window_settings`).
 * **Render scale** — the 3D scene can be rendered into an offscreen buffer at a
   fraction of the window resolution and upscaled to the window, so old hardware
   can render fewer pixels while the window stays at native resolution. The 2D
@@ -12,16 +14,18 @@ Responsibilities:
   buffer, so they stay crisp at full window resolution.
 * **Anti-aliasing** — MSAA (hardware multisampling, applied to the offscreen
   render buffer) and/or FXAA (a post-process pass on the composited result).
-  Both are independently selectable.
 
 Render-scale and anti-aliasing live on a :class:`FilterManager` pipeline that is
 (re)built per level load via :meth:`begin_scene_render` / torn down via
 :meth:`end_scene_render`, so changing those settings takes effect on the next
-level load. Window mode is applied via :meth:`open_game_window`.
+level load.
 """
+
+from __future__ import annotations
 
 import logging
 from time import sleep
+from typing import TYPE_CHECKING
 
 from direct.filter.FilterManager import FilterManager
 from panda3d.core import (
@@ -33,6 +37,12 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
+
+if TYPE_CHECKING:
+    from direct.task.Task import Task
+    from panda3d.core import NodePath
+
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 LOGGER = logging.getLogger()
 
@@ -51,15 +61,15 @@ class GraphicsManager:
     Applies the graphics settings to the running engine.
     """
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         self.app = app
         # FilterManager pipeline state (None when the scene renders straight to
         # the window — i.e. scale == 1.0 and no AA).
-        self._filter_manager = None
-        self._scene_tex = None
-        self._scene_quad = None
-        self._render_size = None
-        self._uniform_task = None
+        self._filter_manager: FilterManager | None = None
+        self._scene_tex: Texture | None = None
+        self._scene_quad: NodePath | None = None
+        self._render_size: tuple[int, int] | None = None
+        self._uniform_task: Task | None = None
 
     @property
     def settings(self) -> dict:
@@ -75,9 +85,8 @@ class GraphicsManager:
         Close the current window and open the real game window honouring the
         saved display mode/size.
 
-        Called from :meth:`SplashState.exit` once loading is done. The brief
-        sleep gives a clean cut between the splash window and the game window
-        rather than a flicker.
+        Called from :meth:`SplashState.exit`. The brief sleep gives a clean
+        cut between the splash and game windows rather than a flicker.
         """
         old_win = self.app.win
         self.app.closeWindow(old_win)
@@ -88,11 +97,8 @@ class GraphicsManager:
     def apply_window_settings(self):
         """
         Apply the saved display mode/size to the live window without recreating
-        it (a runtime fullscreen/windowed toggle or resize).
-
-        Used by the graphics settings menu on save, so window changes take
-        effect immediately. Render scale and anti-aliasing are not touched here
-        — those are rebuilt on the next level load via :meth:`begin_scene_render`.
+        it. Used by the graphics settings menu on save; render scale and
+        anti-aliasing wait for the next :meth:`begin_scene_render`.
         """
         self.app.win.requestProperties(self._build_window_props())
 
@@ -122,8 +128,7 @@ class GraphicsManager:
 
         Equals the offscreen render-scale buffer size when the pipeline is
         active, otherwise the window size. Buffers that should scale with the
-        internal resolution (the ocean reflection) size themselves off this
-        rather than reading the window directly.
+        internal resolution (the ocean reflection) size themselves off this.
         """
         if self._render_size is not None:
             return self._render_size
@@ -213,15 +218,15 @@ class GraphicsManager:
             f"(scale {scale}), msaa={msaa}, fxaa={fxaa}"
         )
 
-    def _update_pipeline_uniforms(self, task):
+    def _update_pipeline_uniforms(self, task: Task) -> int:
         """
         Keep the composite shader's pad-correction in sync with the render
         target.
 
         The GSG may pad the offscreen render target up to a power of two; the
         usable region (tex.getTexScale()) is only known after the first
-        render and is fixed thereafter, but we refresh it every frame so the
-        composite stays correct across any re-preparation of the texture.
+        render. Refreshed every frame so the composite stays correct if the
+        texture is ever re-prepared.
         """
         if self._scene_quad is None or self._scene_tex is None:
             return task.done

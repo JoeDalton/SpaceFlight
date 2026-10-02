@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Tuple
+from typing import TYPE_CHECKING, Any, Tuple
 
 import numpy as np
 
@@ -11,20 +13,20 @@ from space_flight.ai.generic.generic_ship_navigator import (
 )
 from space_flight.utils import cross3, magnitude
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 
 
 class CapitalShipNavigator(GenericShipNavigator):
     """
-    A class to define the aim of a bot given an intent given by a tactician, and
-    passes its decision to a pilot that steers the ship.
-
-    Outputs a direction to point to and a reference distance
+    Capital ship navigator: engages by orbiting the target (see orbit_target)
     """
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
         debug: bool = False,
@@ -32,7 +34,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
 
     def navigate_intent(
-        self, intent: int, target_dict: dict
+        self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
@@ -66,11 +68,6 @@ class CapitalShipNavigator(GenericShipNavigator):
         Engages a target by orbiting it so it stays abeam on the side-mounted
         turret flank (the turrets track and fire on their own; this only maintains
         the hull geometry).
-
-        Rather than a fixed-radius circle, the ship holds a constant standoff from
-        the target's oriented bounding box and drives tangentially, so the orbit
-        shape follows the target: a circle for a compact target, a racetrack for a
-        long thin one (constant firing range off the flanks).
 
         :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
@@ -108,10 +105,12 @@ class CapitalShipNavigator(GenericShipNavigator):
         self.behaviour_sm.request("orbit")
         return self.orbit_target(target=target, target_position=target_position)
 
-    def orbit_target(self, target, target_position: np.ndarray) -> tuple:
+    def orbit_target(self, target: Any, target_position: np.ndarray) -> tuple:
         """
         Hold a constant standoff from the target's horizontal oriented bounding box
         and drive tangentially around it, staggered slightly off the target plane.
+        The orbit follows the target's shape: a circle for a compact target, a
+        racetrack for a long thin one (constant firing range off the flanks).
 
         :param target: The target actor (read for its bounding box and orientation)
         :param target_position: The target's world position this frame
@@ -174,7 +173,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         return axis - np.dot(axis, world_up) * world_up
 
     def _nearest_point_on_horizontal_obb(
-        self, target, center: np.ndarray, point: np.ndarray
+        self, target: Any, center: np.ndarray, point: np.ndarray
     ) -> np.ndarray:
         """
         Closest point to point on the target's horizontal oriented bounding box

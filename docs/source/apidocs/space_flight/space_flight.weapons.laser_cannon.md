@@ -233,7 +233,7 @@ Bases: {py:obj}`space_flight.weapons.Munition`
 
 ````
 
-````{py:method} _clean_extra() -> None
+````{py:method} _clean_extra() 
 :canonical: space_flight.weapons.laser_cannon.LaserShot._clean_extra
 
 ````

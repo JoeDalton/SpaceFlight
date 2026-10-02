@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING
 
 import numpy as np
 import quaternion
@@ -6,14 +9,17 @@ from panda3d.core import CardMaker, NodePath, Quat, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 
 class Planet2D:
     def __init__(
         self,
-        game,
+        game: FlightState,
         scale: float = 5000,
         position: np.ndarray = np.array([0.0, 10000.0, 2000.0]),
-        orientation: quaternion = np.quaternion(1, 0, 0, 0),
+        orientation: quaternion.quaternion = np.quaternion(1, 0, 0, 0),
         type: str = "terran",
     ):
         self.game = game

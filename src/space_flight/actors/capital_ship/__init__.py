@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import gc
 import logging
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -11,6 +13,9 @@ from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 from space_flight.game.collisions import attach_collision_sphere
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -23,7 +28,7 @@ class CapitalShip(Ship):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
@@ -46,14 +51,12 @@ class CapitalShip(Ship):
         # Actor category, so target filters can single capital ships out.
         self.category = "capital_ship"
 
-        # Setup subsystems (shield generators, targeting systems, ...) declared
-        # in the ship config. A ship may declare no sub_systems at all.
+        # Subsystems declared in the ship config (possibly none)
         sub_systems_conf = self.conf.get("sub_systems", {})
         self.sub_systems = []
 
-        # Shield generators: the hardware. All of a ship's generators project a
-        # single shared shield (built below); destroying them scales its perks
-        # down pro rata. self.shield_generators is also read by the fleet AI.
+        # Shield generators, projecting one shared shield (built below).
+        # self.shield_generators is also read by the fleet AI.
         self.shield_generators = []
         for gen_conf in sub_systems_conf.get("shield_generators", []):
             generator = ShieldGenerator(
@@ -69,8 +72,6 @@ class CapitalShip(Ship):
             self.sub_systems.append(generator)
             self.shield_generators.append(generator)
 
-        # The single shared shield projected by the whole generator group (if
-        # any). A ship with no generators gets no shield.
         self._setup_shield(sub_systems_conf)
 
         for ts_conf in sub_systems_conf.get("targeting_systems", []):
@@ -89,11 +90,8 @@ class CapitalShip(Ship):
                 )
             )
 
-        # Mounted, bot-controlled subsystems (turrets, tractor beams). Unlike the
-        # pure subsystems above, these have their own AI, so each is spawned as a
-        # Bot whose pawn is mounted on us. They are separate Destructibles that die
-        # with us on their own (via mounted_on.is_dead), so we only keep the bots
-        # referenced to spawn them; see clean().
+        # Mounted, bot-controlled subsystems (turrets, tractor beams): each has
+        # its own AI, so it is spawned as a Bot whose pawn is mounted on us.
         self.mounted_bots = self._spawn_mounted_bots(
             "turrets", bot_type="turret", model_key="turret_type"
         ) + self._spawn_mounted_bots(
@@ -141,8 +139,7 @@ class CapitalShip(Ship):
         config (turrets, tractor beams, ...).
 
         Each mount is a Bot (it has its own tracking AI) whose pawn is bolted onto
-        this ship. spawn_bot is imported here rather than at module level to
-        break the bot <-> capital_ship import cycle.
+        this ship.
 
         :param config_key: The sub_systems config section listing the mounts
         :param bot_type: The bot type to spawn for each entry
@@ -181,10 +178,9 @@ class CapitalShip(Ship):
         Build the single shared :class:`Shield` projected by this ship's shield
         generators, if it has any.
 
-        A ship with **no** shield generators gets **no** shield: the shield is an
-        effect of the generator hardware, so without generators there is nothing
-        to project it (a shield spec on such a ship is ignored, with a
-        warning). Sets :attr:`shield` to the shield or None.
+        A ship with **no** shield generators gets **no** shield (a shield spec on
+        such a ship is ignored, with a warning). Sets :attr:`shield` to the shield
+        or None.
 
         :param sub_systems_conf: The ship's sub_systems config section
         """
@@ -213,12 +209,12 @@ class CapitalShip(Ship):
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
         """
-        Moves the ship given throttle and turn rates
+        Moves the ship given throttle and turn rates (see :meth:`Ship.move`)
 
-        :param throttle: _description_
-        :param yaw_rate: _description_
-        :param pitch_rate: _description_
-        :param roll_rate: _description_
+        :param throttle: Throttle command in [0, 1]
+        :param yaw_rate: Yaw rate command in [-1, 1]
+        :param pitch_rate: Pitch rate command in [-1, 1]
+        :param roll_rate: Roll rate command in [-1, 1]
         """
         super().move(
             throttle=throttle,
@@ -241,11 +237,12 @@ class CapitalShip(Ship):
 
     def apply_damage(self, damage: float, damage_type: str):
         """
-        Apply damage to the ship
+        Apply damage straight to hull health (the shared shield absorbs hits
+        separately, through the collision handlers)
 
+        :param damage: The amount of damage to apply
         :param damage_type: the type of damage to apply (physical, energy)
         """
-        # Apply damage to health and shield
         if damage_type == "physical":
             self.health -= damage
         else:
@@ -253,7 +250,7 @@ class CapitalShip(Ship):
 
     def ship_handle_health(self):
         """
-        Monitors the ships health and shield
+        Clamps health to its maximum
         """
         self.health = min(self.health, self.max_health)
 
@@ -263,17 +260,11 @@ class CapitalShip(Ship):
         garbage collected
         """
         if not self.is_clean:
-            # Subsystems are Destructibles of their own. Once this ship is dead
-            # they detect it (parent.is_dead) and drop their health, so the
-            # central death handling explodes and cleans each one
-            # (see SubSystem.handle_health). We only drop our references here:
-            # explicitly cleaning them would leave dead husks lingering in
-            # alive_objects (get_health would still report their stale health).
-            # Mounted bots (turrets, tractor beams) likewise die with us on their
-            # own (mounted_on.is_dead), so we only drop their references too. The
-            # shared shield is a Destructible of its own that detects our death
-            # (mounted_on doomed) and plays out its collapse before being cleaned,
-            # so we only drop our reference to it as well.
+            # Subsystems, mounted bots and the shared shield are Destructibles of
+            # their own: they detect our death (mounted_on.is_dead / doomed) and
+            # are exploded and cleaned by the central death handling (the shield
+            # after its collapse). We only drop our references: cleaning them here
+            # would leave dead husks in alive_objects reporting stale health.
             self.sub_systems = []
             self.shield_generators = []
             self.shield = None

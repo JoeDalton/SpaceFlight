@@ -50,8 +50,7 @@ ENEMY_FRIGATE = WaveSpec(
     waypoints=PATROL_ROUTE,
 )
 
-# Two more capital ships alongside ENEMY_FRIGATE, for CPU load profiling
-# (~20 ships total with ENEMY_FIGHTER_SQUADRON below).
+# Two more capital ships alongside ENEMY_FRIGATE, for CPU load profiling.
 ENEMY_FRIGATE_WING = WaveSpec(
     name="frigate_wing",
     ship_model="cr-90",
@@ -64,8 +63,7 @@ ENEMY_FRIGATE_WING = WaveSpec(
     waypoints=PATROL_ROUTE,
 )
 
-# A squadron of fighters, for CPU load profiling (~20 ships total with the two
-# frigate waves above: 1 + 2 + 17).
+# A squadron of fighters, for CPU load profiling.
 ENEMY_FIGHTER_SQUADRON = WaveSpec(
     name="enemy_fighter_squadron",
     ship_model="tie-fighter",
@@ -79,8 +77,8 @@ ENEMY_FIGHTER_SQUADRON = WaveSpec(
     waypoints=PATROL_ROUTE,
 )
 
-# Not spawned by default: available for trying things out in the sandbox
-# (e.g. m.spawn(ALLIED_PATROL, target=frigate) to have it bomb the frigate).
+# An allied Y-wing patrol (e.g. m.spawn(ALLIED_PATROL, target=frigate) to have
+# it bomb the frigate).
 ALLIED_PATROL = WaveSpec(
     name="allied_patrol",
     ship_model="y-wing",
@@ -95,15 +93,10 @@ ALLIED_PATROL = WaveSpec(
 )
 
 
-def build_dev_upfront(game: FlightState) -> None:
+def build_dev_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
-
-    This is the player plus the scene's GPU-heavy objects (ocean, cloud field),
-    whose one-time first-render preparation would otherwise spike a frame in the
-    middle of the animation. The player is created here first because the scene's
-    ocean reflection camera copies the player camera's lens.
 
     :param game: The game/flight state
     """
@@ -127,11 +120,9 @@ def build_dev_upfront(game: FlightState) -> None:
 
 def dev_mission(m: Mission) -> Iterator[None]:
     """
-    The dev sandbox's mission body: an enemy frigate wing (3 capital ships)
-    and a fighter squadron arrive after a couple of seconds, ~20 ships total
-    for CPU load testing. There is no win/lose condition here -- it is a
-    sandbox for trying out the latest implemented features, not a scripted
-    mission.
+    The dev sandbox's mission body: after 2s, 3 enemy capital ships, 17
+    enemy fighters and 10 allied Y-wings (30 ships, for CPU load testing).
+    No win/lose condition.
 
     :param m: The level's :class:`Mission`
     """

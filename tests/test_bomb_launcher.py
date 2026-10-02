@@ -1,9 +1,9 @@
 """
 Unit tests for BombLauncher (space_flight.weapons.bomb_launcher).
 
-BombLauncher.__init__ needs no Panda3D nodes, so it is constructed directly.
-Bomb spawning inside launch() is monkeypatched out so the launch geometry can be
-validated without a live render context.
+The fixture bypasses __init__, and Bomb spawning inside launch() is
+monkeypatched out, so the launch geometry can be validated without a live
+render context.
 """
 
 import uuid
@@ -57,8 +57,8 @@ def test_launch_spawns_a_bomb(bomb_launcher):
 
 def test_launch_velocity_is_belly_down_plus_ship_speed(bomb_launcher):
     """
-    The bomb's velocity is the ship's velocity minus base_speed along +Z (i.e.
-    launched down the belly, carrying the ship's motion).
+    The bomb's velocity is the ship's velocity minus BOMB_SPEED_MPS along its up
+    axis (i.e. launched down the belly, carrying the ship's motion).
     """
     with patch("space_flight.weapons.bomb_launcher.Bomb") as mock_bomb:
         bomb_launcher.launch()

@@ -39,12 +39,12 @@ def quality(c):
 
 @task
 def check_env(c):
-    c.run("pip freeze |grep numpy ; pip freeze |grep scipy ; pip freeze |grep airthium")
+    c.run("pip freeze |grep numpy ; pip freeze |grep scipy ; pip freeze |grep space_flight")
 
 
 @task
 def deploy(c):
-    c.run("poetry publish --build --repository airthium")
+    c.run("poetry publish --build --repository space_flight")
 
 
 @task

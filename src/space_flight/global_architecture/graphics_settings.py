@@ -2,18 +2,13 @@
 Graphics settings persistence.
 
 A user-editable configuration/graphics.yaml is layered over a read-only
-configuration/default_graphics.yaml so that any missing or invalid key
-always falls back to a sane default. (Input bindings, by contrast, are not
-layered: configuration.yaml is read alone, and default_configuration.yaml is
-only used by :mod:`space_flight.menus.input_settings_menu_state` to reset to
-defaults.)
-
-The parsed, sanitised settings are consumed by
-:class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
+configuration/default_graphics.yaml, and the result sanitised, so that any
+missing or invalid key falls back to a sane default.
 """
 
 import copy
 import logging
+from pathlib import Path
 
 import yaml
 
@@ -28,7 +23,7 @@ _VALID_MODES = ("fullscreen", "windowed")
 _VALID_MSAA = (0, 2, 4, 8)
 # Cheapest first, so the menu slider's stops read left-to-right as increasing cost.
 # Mirrors CloudQuality in scenes.cloud.cloud; a test asserts the two agree, since
-# a name here that the enum does not know would silently fall back to "high".
+# a name here that the enum does not know would fall back to "high" at build time.
 _VALID_CLOUD_QUALITY = ("low", "mid", "high", "ultra")
 _MIN_SCALE = 0.25
 _MAX_SCALE = 1.0
@@ -65,7 +60,7 @@ class GraphicsSettings:
         self.config = self.load()
 
     @staticmethod
-    def load_file(path) -> dict:
+    def load_file(path: Path) -> dict:
         """Parse a YAML file and return its contents as a dict ({} if empty)."""
         with open(path, "r") as f:
             return yaml.safe_load(f) or {}

@@ -2,8 +2,9 @@
 All-features reference example for mission scripting.
 
 Not a shipped level: it is not in :data:`space_flight.game.levels.LEVELS` and
-nothing in the game imports it. It exercises every feature of
-:mod:`space_flight.game.scenario` once, as a companion to
+nothing in the game imports it. It exercises most features of
+:mod:`space_flight.game.scenario` once (all but scanning, ``damaged``,
+``follow``, ``orientation=`` and ``Mission.schedule``), as a companion to
 docs/source/scenario_scripting.md -- copy its patterns, not its story, which
 makes no narrative sense.
 
@@ -90,7 +91,7 @@ PATROL = WaveSpec(
 
 def all_features_mission(m: Mission) -> Iterator[None]:
     """
-    Every Mission / WaveHandle / condition feature, one at a time.
+    The Mission / WaveHandle / condition features, one at a time.
 
     :param m: The mission
     """

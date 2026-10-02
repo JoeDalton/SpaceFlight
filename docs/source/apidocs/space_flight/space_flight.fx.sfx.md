@@ -156,7 +156,7 @@
 ````{py:data} TARGET_HIT_SOUND_MULTIPLIER
 :canonical: space_flight.fx.sfx.TARGET_HIT_SOUND_MULTIPLIER
 :value: >
-   1.0
+   0.5
 
 ```{autodoc2-docstring} space_flight.fx.sfx.TARGET_HIT_SOUND_MULTIPLIER
 ```
@@ -206,7 +206,7 @@
 ````{py:data} NPC_DISTANT_IMPACT_VOLUME
 :canonical: space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
 :value: >
-   1.0
+   0.2
 
 ```{autodoc2-docstring} space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
 ```
@@ -264,7 +264,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.__init__
 ```
 
-````{py:method} set_sound_velocity_source(sound, source) -> None
+````{py:method} set_sound_velocity_source(sound, source) 
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
@@ -272,7 +272,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} set_listener_velocity_source(source) -> None
+````{py:method} set_listener_velocity_source(source) 
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
@@ -309,7 +309,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.__init__
 ```
 
-````{py:method} attach_sound(sound, node, velocity_source=None) -> None
+````{py:method} attach_sound(sound, node, velocity_source=None) 
 :canonical: space_flight.fx.sfx.SFX.attach_sound
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.attach_sound
@@ -317,7 +317,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} set_listener_velocity_source(source) -> None
+````{py:method} set_listener_velocity_source(source) 
 :canonical: space_flight.fx.sfx.SFX.set_listener_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.set_listener_velocity_source

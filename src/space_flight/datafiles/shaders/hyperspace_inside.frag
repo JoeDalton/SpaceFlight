@@ -78,8 +78,8 @@ float snoise(vec3 v)
 
 // Seamlessly tiling fBm. The angular coordinate runs along x; the depth/scroll
 // coordinate is wrapped onto a circle (period TAU) in the y-z plane, so the
-// pattern repeats with no discontinuity — replacing the old mod()-based tiling,
-// whose hard wrap produced a visible seam. Each octave traverses the circle an
+// pattern repeats with no discontinuity (a hard mod() wrap would leave a
+// visible seam). Each octave traverses the circle an
 // integer number of extra times (freq doubles), so every octave is periodic
 // too: the whole sum loops seamlessly as depth_phase advances by 1.
 float loopFbm(float angle, float depth_phase)

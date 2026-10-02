@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import gc
 import logging
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -11,6 +13,9 @@ from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.weapons.bomb_launcher import BombLauncher
 from space_flight.weapons.laser_cannon import LaserCannon
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -23,7 +28,7 @@ class Fighter(Ship):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
@@ -57,8 +62,7 @@ class Fighter(Ship):
         self.auto_aim = AutoAim(game=self.game, parent=self)
         self.laser_cannon = LaserCannon(game=self.game, parent=self)
 
-        # Limited bomb ordnance + its launcher. drop_bomb spends one unit and
-        # releases a bomb; supply gates how many can be dropped.
+        # Limited bomb ordnance + its launcher (see drop_bomb)
         self.bomb_supply = self.conf.get("bomb_supply", 0)
         self.bomb_launcher = BombLauncher(game=self.game, parent=self)
 
@@ -80,12 +84,12 @@ class Fighter(Ship):
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
         """
-        Moves the ship given throttle and turn rates
+        Moves the ship (see :meth:`Ship.move`), then updates auto-aim acquisition
 
-        :param throttle: _description_
-        :param yaw_rate: _description_
-        :param pitch_rate: _description_
-        :param roll_rate: _description_
+        :param throttle: Throttle command in [0, 1]
+        :param yaw_rate: Yaw rate command in [-1, 1]
+        :param pitch_rate: Pitch rate command in [-1, 1]
+        :param roll_rate: Roll rate command in [-1, 1]
         """
         super().move(
             throttle=throttle,
@@ -110,11 +114,9 @@ class Fighter(Ship):
         """
         Release one bomb from the limited supply.
 
-        The launcher is rate-limited (reload), so a drop can be refused while it is
-        reloading even with ordnance to spare; supply is only spent on an actual
-        release. Mirrors laser_cannon.fire() as the hook the bombing-run
-        navigator calls, and lets the tactician's ammo accounting work against a
-        real, depleting supply.
+        The launcher is rate-limited, so a drop can be refused while reloading
+        even with ordnance to spare; supply is only spent on an actual release.
+        The bombing-run navigator's counterpart of laser_cannon.fire().
 
         :return: True if a bomb was released, False if out of ordnance or reloading
         """
@@ -129,13 +131,13 @@ class Fighter(Ship):
 
     def apply_damage(self, damage: float, damage_type: str):
         """
-        Apply damage to the ship
+        Apply damage to the shield first, the overflow to health
 
+        :param damage: The amount of damage to apply
         :param damage_type: the type of damage to apply (physical, energy)
         """
-        # A ship playing out its death spin is inert: it takes no further damage
-        # (so extra hits/rams during the tumble cannot drive health further down or
-        # re-trigger death), though collision pushes still shove the wreck around.
+        # A wreck in its death spin takes no further damage (hits cannot
+        # re-trigger death), though collision pushes still shove it around.
         if self.is_dying:
             return
         # Apply damage to health and shield
@@ -151,7 +153,7 @@ class Fighter(Ship):
 
     def ship_handle_health(self):
         """
-        Monitors the ships health and shield
+        Regenerates the shield and clamps health to its maximum
         """
         dt = self.game.game_time.get_time_step()
         self.shield = min(

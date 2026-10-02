@@ -1,12 +1,6 @@
 """
-Unit tests for pure functions and data methods in the input settings menu.
-
-Covers:
-- :func:`_format_binding` — pure label-format helper
-- :meth:`InputSettingsMenuState.load_file` — static YAML loader
-- :meth:`InputSettingsMenuState.make_row_data` — row descriptor builder
-- :meth:`InputSettingsMenuState.flush_dead_zones` — entry-widget flush
-- :meth:`InputSettingsMenuState.on_confirmed` — binding update callback
+Unit tests for pure functions and data methods in the input settings menu
+(:func:`format_binding` and the non-UI methods of InputSettingsMenuState).
 """
 
 from unittest.mock import MagicMock

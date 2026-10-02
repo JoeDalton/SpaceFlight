@@ -1,17 +1,17 @@
 #version 140
 // Full-screen cockpit damage overlay — fragment shader.
 //
-// Two independent, additively-combined contributions, both driven entirely by
-// uniforms set on the CPU each frame (see fx/cockpit_fx.py):
+// Two contributions (colours added, alpha = max), driven by uniforms from
+// fx/cockpit_fx.py:
 //
-//  * A radial damage VIGNETTE: a coloured wash that grows from the screen edges
-//    inward as uVignetteStrength rises (health tiers), tinted uVignetteColor.
-//  * A directional hit FLASH: a transient coloured bloom (uFlashColor) biased
-//    toward uFlashDir — the screen-space direction the shot came from — plus a
-//    faint full-screen wash so a head-on hit still registers. uFlashStrength is
-//    set to 1 on a hit and decays to 0.
+//  * A radial damage VIGNETTE: a uVignetteColor wash growing inward from the
+//    screen edges as uVignetteStrength rises (health tiers).
+//  * A directional hit FLASH: a uFlashColor bloom biased toward uFlashDir (the
+//    screen direction the shot came from) plus a faint full-screen wash so a
+//    head-on hit still registers. uFlashStrength jumps to a peak on a hit
+//    (_FLASH_PEAK) and decays to 0.
 //
-// Output is alpha-blended (MAlpha), so it tints the scene rather than darkening.
+// Output is alpha-blended (MAlpha) over the scene.
 
 in vec2 vUV;
 out vec4 fragColor;
@@ -20,7 +20,7 @@ uniform vec3  uVignetteColor;    // damage tint (red)
 uniform float uVignetteStrength; // 0 = intact; pulsing when critical (CPU-side)
 uniform vec3  uFlashColor;       // hit tint = the laser's colour
 uniform vec2  uFlashDir;         // screen dir the shot came from (x right, y up)
-uniform float uFlashStrength;    // 0..1, decays after a hit
+uniform float uFlashStrength;    // 0..peak, decays after a hit
 
 void main() {
     vec2 p = vUV - vec2(0.5);       // centred, y up

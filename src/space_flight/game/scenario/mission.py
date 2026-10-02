@@ -29,6 +29,8 @@ from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from space_flight.actors.scan import ScanHandle
     from space_flight.game.flight_state import FlightState
 
@@ -47,7 +49,7 @@ class Trigger:
     :param once: Fire only the first time (otherwise every frame it holds)
     """
 
-    def __init__(self, condition: Condition, action: Action, once: bool = True) -> None:
+    def __init__(self, condition: Condition, action: Action, once: bool = True):
         self.condition = condition
         self.action = action
         self.once = once
@@ -55,7 +57,7 @@ class Trigger:
         self.fired = False
         self.cancelled = False
 
-    def cancel(self) -> None:
+    def cancel(self):
         """Stop checking this rule."""
         self.cancelled = True
 
@@ -63,7 +65,7 @@ class Trigger:
     def done(self) -> bool:
         return self.cancelled or (self.once and self.fired)
 
-    def maybe_fire(self) -> None:
+    def maybe_fire(self):
         if not self.done and self.condition():
             self.action()
             self.fired = True
@@ -80,7 +82,7 @@ class Mission:
     :param game: The game/flight state
     """
 
-    def __init__(self, game: FlightState) -> None:
+    def __init__(self, game: FlightState):
         self.game = game
         self.triggers: list[Trigger] = []
         self.jobs: list[Iterator] = []
@@ -93,15 +95,15 @@ class Mission:
     # Running
     # ------------------------------------------------------------------
 
-    def run(self, body: Callable[[Mission], Iterator[None]]) -> None:
+    def run(self, body: Callable[[Mission], Iterator[None]]):
         """Start a mission body: a generator function taking this mission."""
         self.schedule(body(self))
 
-    def schedule(self, job: Iterator) -> None:
+    def schedule(self, job: Iterator):
         """Step a generator once per frame until it finishes."""
         self.jobs.append(job)
 
-    def update(self) -> None:
+    def update(self):
         """Advance by one frame: fire due rules, then step every job."""
         for trigger in list(self.triggers):
             trigger.maybe_fire()
@@ -127,7 +129,7 @@ class Mission:
         """A handle to a not-yet-spawned wave (call its spawn() later)."""
         return WaveHandle(self, spec)
 
-    def spawn(self, spec: WaveSpec, **kwargs) -> WaveHandle:
+    def spawn(self, spec: WaveSpec, **kwargs: Any) -> WaveHandle:
         """Spawn a wave now; kwargs as :meth:`WaveHandle.spawn`."""
         return self.wave(spec).spawn(**kwargs)
 
@@ -135,7 +137,7 @@ class Mission:
     # Scanning
     # ------------------------------------------------------------------
 
-    def scan(self, who: Any, contraband: bool = False, **kwargs) -> ScanHandle:
+    def scan(self, who: Any, contraband: bool = False, **kwargs: Any) -> ScanHandle:
         """
         Make every pawn of who scannable by the player, starting now.
 
@@ -161,7 +163,7 @@ class Mission:
 
     def wait_until(
         self, condition: Condition, timeout: Optional[float] = None
-    ) -> Iterator[None]:
+    ) -> Generator[None, None, bool]:
         """
         Pause the body until condition holds, or timeout seconds pass.
 
@@ -209,7 +211,7 @@ class Mission:
     # Actions
     # ------------------------------------------------------------------
 
-    def hud(self, text: str, display_time_s: float = 5.0) -> None:
+    def hud(self, text: str, display_time_s: float = 5.0):
         """Show a message in the HUD event banner."""
         # There is no HUD headless, and no one to read it.
         if not self.game.headless:
@@ -217,7 +219,7 @@ class Mission:
 
     def speech(
         self, text: str, speaker: Optional[str] = None, display_time_s: float = 6.0
-    ) -> None:
+    ):
         """Play a line of speech (audio stubbed), shown as a subtitle."""
         LOGGER.info("speech [%s]: %s", speaker or "narrator", text)
         if not self.game.headless:
@@ -229,7 +231,7 @@ class Mission:
         points: Sequence[Sequence[float]],
         arrival_radius_m: Optional[float] = None,
         marker_radius_m: Optional[float] = None,
-    ) -> None:
+    ):
         """Give the player a route of targetable waypoints, replacing any
         previous one."""
         self.clear_player_waypoints()
@@ -240,19 +242,19 @@ class Mission:
             kwargs["marker_radius_m"] = marker_radius_m
         self.game.player_waypoints = PlayerWaypoints(self.game, points, **kwargs)
 
-    def clear_player_waypoints(self) -> None:
+    def clear_player_waypoints(self):
         """Remove the player's waypoint route, if any."""
         route = getattr(self.game, "player_waypoints", None)
         if route is not None:
             route.clean()
             self.game.player_waypoints = None
 
-    def end_level(self, outcome: str, text: str = "") -> None:
+    def end_level(self, outcome: str, text: str = ""):
         """End the level ("victory", "defeat" or "death")."""
         self.game.end_level(outcome=outcome, text=text)
 
-    def victory(self, text: str = "") -> None:
+    def victory(self, text: str = ""):
         self.end_level("victory", text)
 
-    def defeat(self, text: str = "") -> None:
+    def defeat(self, text: str = ""):
         self.end_level("defeat", text)

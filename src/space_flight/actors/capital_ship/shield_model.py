@@ -15,12 +15,16 @@ collision, lifecycle). It bundles two things:
 
 :class:`ShieldModel` deliberately depends only on a Panda3D loader and a
 parent NodePath -- not on the game -- so the presentation can be reasoned
-about (and reused) in isolation. All per-frame state it needs (time, camera
-position, health fraction, death progress) is passed in by the owning Shield.
+about (and reused) in isolation. All per-frame state it needs (time, health
+fraction, death progress) is passed in by the owning Shield.
 """
+
+from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import (
@@ -33,6 +37,7 @@ from panda3d.core import (
     GeomVertexWriter,
     LVecBase4f,
     NodePath,
+    Point3,
     PTA_LVecBase4f,
     Shader,
     TransparencyAttrib,
@@ -40,6 +45,9 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
+
+if TYPE_CHECKING:
+    from direct.showbase.Loader import Loader
 
 LOGGER = logging.getLogger()
 
@@ -94,7 +102,7 @@ _MAX_SURFACE_SAMPLES = 1500
 _SHIELD_SHADER = None
 
 
-def _shield_shader():
+def _shield_shader() -> Shader:
     """Load (once) and return the shared shield GLSL shader."""
     global _SHIELD_SHADER
     if _SHIELD_SHADER is None:
@@ -107,8 +115,8 @@ def _shield_shader():
 
 
 def make_capsule(
-    point_a,
-    point_b,
+    point_a: Sequence[float],
+    point_b: Sequence[float],
     radius: float,
     num_segments: int = 24,
     num_rings: int = 8,
@@ -192,8 +200,8 @@ class ShieldModel:
     3D model -- under parent, applies the shield shader, and exposes a
     small API the owning Shield drives each frame:
 
-    - :meth:`render` pushes the per-frame uniforms (time, camera, health tint,
-      death progress) and the live impact flashes.
+    - :meth:`render` pushes the per-frame uniforms (time, health tint, death
+      progress) and the live impact flashes.
     - :meth:`add_impact` records a laser hit so the surface flashes there.
     - :meth:`place_sinks` seeds the random points the fluid retracts into / grows
       out of (used at the start of a death or appearance animation).
@@ -215,7 +223,12 @@ class ShieldModel:
     """
 
     def __init__(
-        self, loader, parent, color=None, shape: dict = None, model: str = None
+        self,
+        loader: Loader,
+        parent: NodePath,
+        color: Sequence[float] | None = None,
+        shape: dict | None = None,
+        model: str | None = None,
     ):
         color = tuple(color) if color is not None else _SHIELD_COLOR
         shape = shape or {}
@@ -245,7 +258,7 @@ class ShieldModel:
     # ------------------------------------------------------------------
     # Geometry
     # ------------------------------------------------------------------
-    def _build(self, loader, parent, shape: dict, model: str):
+    def _build(self, loader: Loader, parent: NodePath, shape: dict, model: str | None):
         """Build the bubble geometry and record its resolved dimensions."""
         if model:
             self.shape_type = "model"
@@ -273,7 +286,7 @@ class ShieldModel:
         else:
             raise ValueError(f"Unknown shield shape type {shape_type!r}")
 
-    def _style(self, parent, strip_texture: bool):
+    def _style(self, parent: NodePath, strip_texture: bool):
         """
         Apply the common translucent render state and parent the bubble. The
         shader is applied separately (transparency must be set first, or Panda3D's
@@ -342,7 +355,7 @@ class ShieldModel:
     # ------------------------------------------------------------------
     # Shader
     # ------------------------------------------------------------------
-    def _apply_shader(self, color):
+    def _apply_shader(self, color: Sequence[float]):
         """
         Apply the shield shader and seed all its uniforms. Sizes the
         pattern/impact/death scales from the geometry's own radius so the look is
@@ -422,7 +435,7 @@ class ShieldModel:
         self.visual.setShaderInput("uSinkCount", count)
         self.visual.setShaderInput("uMaxReach", max_reach)
 
-    def add_impact(self, world_point, root, now: float):
+    def add_impact(self, world_point: Point3, root: NodePath, now: float):
         """
         Register a laser impact so the shader flashes the bubble where it was hit.
 

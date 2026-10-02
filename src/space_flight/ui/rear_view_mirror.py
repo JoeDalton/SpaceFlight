@@ -1,5 +1,12 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from direct.showbase.ShowBaseGlobal import aspect2d
 from panda3d.core import BitMask32, Camera, CardMaker, NodePath, Texture
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 MIRROR_ASPECT_RATIO = 2
 MIRROR_VERTICAL_RESOLUTION = 128
@@ -9,7 +16,7 @@ MIRROR_FOV = 30
 
 class RearViewMirror:
     # TODO: integrate in 3D cockpit
-    def __init__(self, game, player_node):
+    def __init__(self, game: FlightState, player_node: NodePath):
         self.game = game
 
         mirror_tex = Texture()

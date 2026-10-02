@@ -1,7 +1,7 @@
 """
 Entry point for the ``space_flight`` console script (see ``pyproject.toml``'s
-``[tool.poetry.scripts]``). Mirrors ``scripts/launcher.py``, which remains the
-way to run the game straight from a checkout (``python ./scripts/launcher.py``).
+``[tool.poetry.scripts]``). ``scripts/launcher.py`` calls it to run the game
+straight from a checkout.
 """
 
 from space_flight import RECORD_GAME

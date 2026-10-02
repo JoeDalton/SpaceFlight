@@ -136,8 +136,8 @@ vec2 domainWarp(vec2 pos, int iterations, float strength) {
 // Analytic wave-height gradient (∂H/∂x, ∂H/∂y) accumulated in a SINGLE pass.
 // Each wave term is wave = exp(sin(x) - 1) with x = freq * dot(p, pos) + t, so
 // its slope is d(wave)/dpos = wave * cos(x) * freq * p — known in closed form.
-// This replaces the old 3x getwaves finite-difference normal with one pass and
-// no height accumulation (the surface is a flat plane; only the slope matters).
+// One pass instead of a 3x getwaves finite-difference normal, and no height
+// accumulation (the surface is a flat plane; only the slope matters).
 // Approximation: the loop advects `position` to sharpen crests, and we keep
 // that advection so the field matches getwaves(), but we don't differentiate
 // through it — the standard, visually-faithful real-time simplification.
@@ -232,7 +232,7 @@ void main() {
     } else {
         // Exponential decay: aggressive early drop but waves survive to large distances.
         // Tune uWaveFadeK2 (Python: wave_fade_k2): larger = faster decay.
-        // At k2=0.001: 36→22 at 500u, →13 at 1000u, →5 at 2000u, →2 at 3000u.
+        // At k2=0.001: 36→21 at 500u, →13 at 1000u, →4 at 2000u, →2 at 3000u.
         int   normalIter = max(ITERATIONS_MIN, int(float(iIterationsNormal) * exp(-uWaveFadeK2 * dist)));
         int   warpIter   = int(mix(1.0, 4.0, lodFactor));
 

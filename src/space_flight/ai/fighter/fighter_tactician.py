@@ -1,7 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
 from space_flight.utils import smooth_step_up
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from space_flight.game.flight_state import FlightState
 
 # TODO Add an intent to go back to the fight area if too far
 
@@ -12,23 +21,22 @@ from space_flight.utils import smooth_step_up
 class FighterTactician(GenericTactician):
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.FIGHTER_DEFAULT,
         debug: bool = False,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
 
-    def update_intent(self) -> tuple[int, dict]:
+    def update_intent(self) -> tuple[Intent, dict]:
         """
-        Evaluates the tactical situation around the bot.
-
-        For each foe, score its value as a threat or as a prey.
-        Also score the bot's own fighting shape
+        Picks the intent by priority: evade an overwhelming threat, disengage if
+        in poor fighting shape, engage the best prey, patrol, hold formation,
+        else regroup.
 
         TODO: include role/squad strategy biases
 
-        Finally, evaluates the intent of the bot with priorites
+        :return: The intent and its target dict
         """
         # Find current actor index of self
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
@@ -73,10 +81,7 @@ class FighterTactician(GenericTactician):
         friends_center_dict["target_id"] = Intent.REGROUP
         return Intent.REGROUP, friends_center_dict
 
-    # evaluate_fighting_shape is inherited from GenericTactician (uniform
-    # health/shield_level).
-
-    def _select_attack_mode(self, target_id) -> AttackMode:
+    def _select_attack_mode(self, target_id: UUID) -> AttackMode:
         """
         Choose how to attack the prey. First the weapon (guns vs. a limited bomb,
         by suitability scoring), then the geometry: bomb -> BOMB; guns + a
@@ -103,7 +108,7 @@ class FighterTactician(GenericTactician):
             return AttackMode.PURSUIT
         return AttackMode.STRAFE if is_slow else AttackMode.PURSUIT
 
-    def _choose_weapon(self, target) -> str:
+    def _choose_weapon(self, target: Any) -> str:
         """
         Pick the weapon system for a target by suitability: a limited bomb only
         beats guns on a target that is stationary, tough AND valuable, with supply

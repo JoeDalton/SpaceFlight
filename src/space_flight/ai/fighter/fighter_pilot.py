@@ -1,9 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import HALF_PI, ROLL_TOLERANCE, Personality
 from space_flight.ai.generic.generic_ship_pilot import GenericShipPilot
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 SCENE_ROLL_MULTIPLIER = 0.5
 
@@ -14,15 +21,18 @@ class FighterPilot(GenericShipPilot):
     """
 
     def __init__(
-        self, game, pawn: Pawn, personality: dict = Personality.FIGHTER_DEFAULT
+        self,
+        game: FlightState,
+        pawn: Pawn,
+        personality: dict = Personality.FIGHTER_DEFAULT,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
     def compute_angular_error(
         self,
         target_direction: np.ndarray = np.zeros(3),
-        up_reference: np.ndarray = None,
-    ) -> tuple[float]:
+        up_reference: np.ndarray | None = None,
+    ) -> tuple[float, float, float, float]:
         """
         Computes the angular error of the ship. Adapted to fighter ships
 
@@ -72,10 +82,8 @@ class FighterPilot(GenericShipPilot):
                 roll_error = 0.0
                 level_weight = 1.0
 
-            # Clamp the dot to [-1, 1] before arccos: right and the reference are
-            # unit vectors so it is mathematically in range, but float error can
-            # nudge it just past ±1, which would make arccos return NaN and poison
-            # the whole state.
+            # Clamp before arccos: float error can push the dot of two unit
+            # vectors past ±1, and a NaN would poison the whole state.
             right_dot_ref = np.dot(self.pawn.right, level_reference)
             right_dot_ref = min(max(right_dot_ref, -1.0), 1.0)
             is_up = np.dot(self.pawn.up, level_reference) >= 0

@@ -1,195 +1,144 @@
 # Menus
 
 `menus` holds every non-gameplay screen — splash, main menu, level selection,
-pause, settings, and the level-end/radial overlays — built as
-[`BaseState`](global_architecture.md) subclasses pushed onto the app's
-`StateManager` (see [docs/global_architecture.md](global_architecture.md)).
-This page is the guided tour; the per-class API is generated from the
-docstrings in the [code reference](apidocs/index.rst).
+pause, settings, and the level-end/radial overlays — built as `BaseState`
+subclasses pushed onto the app's `StateManager` (see
+[docs/global_architecture.md](global_architecture.md)). This page is the guided
+tour; the per-class API is in the [code reference](apidocs/index.rst).
 
 All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 
 ## Mental model
 
 - Every screen is a `BaseState`: `enter()` builds its widgets, `exit()`
-  destroys them, and navigation is expressed entirely through
-  `state_manager.push`/`pop`/`replace`/`clear` calls — states don't reach
-  into each other directly.
+  destroys them, and navigation goes only through
+  `state_manager.push`/`pop`/`replace`/`clear` — states don't reach into each
+  other.
 - [`menu_utils.py`](../../src/space_flight/menus/menu_utils.py) is the shared
-  widget toolkit: every menu screen builds its interactive controls from
-  `CustomButton`, `CustomEntry`, `CustomSlider`, `CustomCheckButton` and
-  `ProgressBar`, and both settings screens' scrollable option lists from
-  `ScrollableList`, so control styling and scrolling behaviour stay
-  consistent app-wide and each screen's own code only expresses layout and
-  behaviour.
-- The two settings screens
-  ([`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py),
-  [`graphics_settings_menu_state.py`](../../src/space_flight/menus/graphics_settings_menu_state.py))
-  share one pattern end to end: load a YAML config, edit a deep-copied
-  **working copy** in memory, and only write it back to disk (plus apply it
-  live where possible) on *Save* — *Cancel* simply discards the working copy,
-  *Default* reloads factory values into it without touching disk.
+  widget toolkit, so styling and scrolling stay consistent and each screen's
+  code only expresses layout and behaviour.
+- The two settings screens share one pattern: edit an in-memory **working
+  copy** of a YAML config, and only write it to disk (and apply it live where
+  possible) on *Save*. *Cancel* discards the working copy; *Default* reloads
+  factory values into it without touching disk.
 
 ## `menu_utils.py` — shared widgets
 
-[`menu_utils.py`](../../src/space_flight/menus/menu_utils.py) has no state logic
-of its own; it's a small design system every screen builds on:
-
-- **`MenuModels`** loads the game's shared egg models once (button, thumb,
-  inc/dec scrollbar arrows) into the four-state `(ready, click, hover,
-  disabled)` geometry tuples `DirectButton`/`DirectScrollBar` expect, and
-  registers the game's dialog background as Panda3D's default dialog
-  geometry. Constructed once by `SpaceFlightSimulator` (see
-  [docs/global_architecture.md](global_architecture.md)) and referenced as
-  `app.menu_models` by `CustomButton` and `CustomSlider` (and the menus'
-  scrollbars).
-- **`CustomButton`** wraps `DirectButton` with the game's button geometry and
-  styling baked in, exposing `layout="left"/"center"/"right"` for text
-  alignment plus `set_pressed()`/`reset()` to lock a button into its "active"
-  visual state — used throughout for radio-button-style selectors (input
-  type, display mode) where one option is persistently highlighted rather
-  than only reacting to hover.
-- **`CustomEntry`**, **`CustomSlider`**, **`CustomCheckButton`** are the same
-  pattern applied to `DirectEntry`/`DirectSlider`/`DirectCheckButton` — game
-  palette and geometry pre-applied, with thin wrappers (`get`/`set` on the
-  entry, `get_value`/`set_value` on the slider, `get_value` on the checkbox,
-  plus `destroy` on all three).
-- **`ProgressBar`** is a minimal white fill-bar plus a rotating "blurb" hint
-  label above it (a random string swapped on a timer), used by
-  `SplashState` while assets load.
-- **`ScrollableList`** wraps a `DirectScrolledFrame`/`DirectScrollBar` pair
-  behind a `rebuild(n_rows)`/`row_y(i)`/`destroy()` API: the frame is just a
-  border/clip, and the scrollbar instead moves a plain "content" node the
-  caller parents its own row widgets to, so the canvas never resizes. Also
-  provides `add_header`/`add_row_label`/`add_checkbox` for the row patterns
-  both settings screens share. Used by both
-  `InputSettingsMenuState`/`GraphicsSettingsMenuState` so their option lists
-  scroll identically.
+- **`MenuModels`** loads the shared egg models (button, scrollbar thumb,
+  inc/dec arrows) once into the `(ready, click, hover, disabled)` geometry
+  tuples `DirectButton`/`DirectScrollBar` expect, and registers the game's
+  dialog background as Panda3D's default dialog geometry. Built by
+  `SpaceFlightSimulator` and read as `app.menu_models`.
+- **`CustomButton`** wraps `DirectButton` with the game's geometry and styling,
+  `layout="left"/"center"/"right"` text alignment, and
+  `set_pressed()`/`reset()` to lock a button in its "click" look — used for
+  radio-style selectors (input type, display mode, level list).
+- **`CustomEntry`**, **`CustomSlider`**, **`CustomCheckButton`** apply the same
+  treatment to `DirectEntry`/`DirectSlider`/`DirectCheckButton`, with thin
+  `get`/`set`, `get_value`/`set_value` and `get_value` accessors respectively.
+- **`ProgressBar`** is a white fill bar with a rotating random hint ("blurb")
+  above it, used by `SplashState` while assets load.
+- **`ScrollableList`** pairs a `DirectScrolledFrame` (used only as a
+  border/clip) with a `DirectScrollBar` that moves a plain "content" node the
+  caller parents its rows to, so the canvas never resizes. API:
+  `rebuild(n_rows)` → content node, `row_y(i)`, `wheel_scroll(step)`,
+  `destroy()`, plus `add_header`/`add_row_label`/`add_checkbox` row helpers.
+  Both settings screens use it.
 
 ## Startup and top-level navigation
 
-- **[`splash_state.py`](../../src/space_flight/menus/splash_state.py)**'s
-  `SplashState` is the very first state pushed by `SpaceFlightSimulator`
-  (see [docs/global_architecture.md](global_architecture.md)). It opens a
-  small undecorated splash window, shows the splash image with a
-  `ProgressBar`, and kicks off `asset_manager.load_game_assets` (see
-  [docs/global_architecture.md](global_architecture.md)); when loading
-  finishes it fades the splash out and replaces itself with `MainMenuState`.
-  Its `exit()` calls `graphics_manager.open_game_window()` to swap from the
-  small splash window to the real game window sized per the saved graphics
-  settings.
-- **[`main_menu_state.py`](../../src/space_flight/menus/main_menu_state.py)**'s
-  `MainMenuState` is just three buttons (Play, Settings, Quit) routing to
+- **[`splash_state.py`](../../src/space_flight/menus/splash_state.py)** —
+  `SplashState` is the first state pushed by `SpaceFlightSimulator`. It opens a
+  small undecorated window with the splash image and a `ProgressBar`, starts
+  `asset_manager.load_game_assets`, and once loading finishes fades out and
+  replaces itself with `MainMenuState`. Its `exit()` calls
+  `graphics_manager.open_game_window()` to swap to the real game window sized
+  per the saved graphics settings.
+- **[`main_menu_state.py`](../../src/space_flight/menus/main_menu_state.py)** —
+  `MainMenuState`: *Play*, *Settings*, *Quit Game*, routing to
   `LevelSelectionMenuState` / `SettingsMenuState` / `sys.exit()`.
-- **[`level_selection_menu_state.py`](../../src/space_flight/menus/level_selection_menu_state.py)**'s
-  `LevelSelectionMenuState` hardcodes the `LEVELS` list (name + description,
-  kept in sync with the level builders under
-  [`game/levels/`](../../src/space_flight/game/levels/) — see
-  [docs/game.md](game.md)) and renders it as a scrollable button list.
-  Selecting a level shows its description and a *Start Game* button;
-  starting sets `app.configuration["selected_level"]` (the key
-  `FlightState._build_upfront`/`_make_build_generator` dispatch on) and
-  replaces the current state with `GAME_STATE`.
-- **[`settings_menu_state.py`](../../src/space_flight/menus/settings_menu_state.py)**'s
-  `SettingsMenuState` is a small landing screen (reached from both the main
-  menu and the pause menu) routing to `INPUT_SETTINGS_STATE` or
-  `GRAPHICS_SETTINGS_STATE`.
+- **[`level_selection_menu_state.py`](../../src/space_flight/menus/level_selection_menu_state.py)** —
+  `LevelSelectionMenuState` builds its `LEVELS` list (name + description) from
+  the level registry `space_flight.game.levels.LEVELS` (see
+  [docs/game.md](game.md#levels)), so it can't drift from what `FlightState`
+  can build. Selecting a level shows its description and a *Start Game*
+  button, which sets `app.configuration["selected_level"]` and replaces the
+  current state with `GAME_STATE`.
+- **[`settings_menu_state.py`](../../src/space_flight/menus/settings_menu_state.py)** —
+  `SettingsMenuState` is a landing screen (reached from the main and pause
+  menus) routing to `INPUT_SETTINGS_STATE` or `GRAPHICS_SETTINGS_STATE`.
 
 ## In-session overlays
 
-- **[`pause_menu_state.py`](../../src/space_flight/menus/pause_menu_state.py)**'s
-  `PauseMenuState` is pushed over a running `FlightState`; because it
-  doesn't override `PAUSES_BELOW`, pushing it pauses the game underneath (see
-  [docs/game.md](game.md)'s `FlightState.pause`). It also pushes a
-  `PauseMenuInputContext` (see the input stack in [docs/ui.md](ui.md)) so gameplay input is captured while the menu is up. Buttons resume
-  the game, open settings, return to the main menu (`state_manager.clear()`
-  then `replace(MAIN_MENU_STATE)`, discarding every state below), or quit —
-  quitting saves the flight record first when `RECORD_GAME` is set (see
-  [docs/game.md](game.md)'s `Record`).
-- **[`level_end_state.py`](../../src/space_flight/menus/level_end_state.py)**'s
-  `LevelEndState` is the terminal screen for any outcome — `victory`,
-  `defeat`, or `death` — each with its own title text and colour tint
-  (`_OUTCOMES`) plus an optional explanatory `text`. It's pushed by
-  `FlightState.end_level` (skipped headless), which is called by
-  the level's `Mission` (`victory`/`defeat`/`end_level`, see
-  [docs/game.md](game.md)) or, on player
-  death, once the death spin has finished. Being a normal state, it pauses
-  the game beneath it. Its two buttons mirror the pause menu's
+- **[`pause_menu_state.py`](../../src/space_flight/menus/pause_menu_state.py)** —
+  `PauseMenuState` is pushed over a running `FlightState` and, keeping the
+  default `PAUSES_BELOW = True`, pauses it. It pushes a
+  `PauseMenuInputContext` (see [docs/ui.md](ui.md)) so gameplay input is
+  blocked while it is up. Buttons resume, open settings, return to the main
+  menu (`state_manager.clear()` then `replace(MAIN_MENU_STATE)`), or quit;
+  the last two save the flight record first when `RECORD_GAME` is set (see
+  [docs/game.md](game.md#record)).
+- **[`level_end_state.py`](../../src/space_flight/menus/level_end_state.py)** —
+  `LevelEndState` is the terminal screen for every outcome (`victory`,
+  `defeat`, `death`), each with its own title and tint (`_OUTCOMES`) plus an
+  optional explanatory `text`. It is pushed by `FlightState.end_level`
+  (skipped headless), called by the level's `Mission` (see
+  [docs/game.md](game.md#mission-scripting)) or once the player's death spin
+  ends. It pauses the game beneath it; its buttons mirror the pause menu's
   return-to-main-menu and quit.
-- **[`radial_menu_state.py`](../../src/space_flight/menus/radial_menu_state.py)**'s
-  `RadialMenuState` is the player's target-filter picker (a generic
-  label/index/callback wheel), opened by
-  holding a bound trigger. It declares `PAUSES_BELOW = False` so the game
-  keeps simulating while the wheel is open (matching the hyperspace overlay
-  pattern in [docs/game.md](game.md)) and is fully parameterised at push
-  time via kwargs (`on_select`, `slice_labels`) rather than a fixed set of
-  options, which is how `Player.open_radial_target_menu` (see
-  [docs/actors.md](actors.md)) reuses it for the target filter list. Two
-  pieces split cleanly: `RadialMenuVisual` only draws and highlights the
-  slice labels around a circle; the actual direction-to-slice mapping and
-  trigger handling live in `RadialMenuInputContext` (see
-  [`ui/input_context.py`](../../src/space_flight/ui/input_context.py)), keeping the visual
-  ignorant of input hardware.
+- **[`radial_menu_state.py`](../../src/space_flight/menus/radial_menu_state.py)** —
+  `RadialMenuState` is a generic label/callback wheel, opened by the
+  `radial_menu` binding. It sets `PAUSES_BELOW = False` so the game keeps
+  simulating, and takes its options as push kwargs (`on_select`,
+  `slice_labels`) — `Player.open_radial_target_menu` (see
+  [docs/actors.md](actors.md)) uses it for the target filter. Drawing lives in
+  `RadialMenuVisual`; direction-to-slice mapping and trigger handling live in
+  `RadialMenuInputContext` (see [docs/ui.md](ui.md)), so the visual knows
+  nothing about input hardware.
 
 ## Settings screens
 
-Both settings screens follow the working-copy pattern described above, built
-around their respective config owner (see
-[docs/global_architecture.md](global_architecture.md) for `GraphicsSettings`):
-
-- **[`graphics_settings_menu_state.py`](../../src/space_flight/menus/graphics_settings_menu_state.py)**'s
-  `GraphicsSettingsMenuState` builds a `ScrollableList` of rows from
-  `make_row_data()`, one header per top-level section of
-  `default_graphics.yaml` (Display, Render, Antialiasing, Compatibility,
-  Clouds, HUD): display mode is a button group, render/reflection/mirror
-  scale are `CustomSlider`s mapped through `_get_by_path`/`_set_by_path` onto
-  the nested config dict, MSAA and cloud quality are sliders snapped to
-  discrete stops (`_DISCRETE_SLIDERS`, ordered cheapest-first so dragging
-  right always costs more), and FXAA, *Alternate Model Orientation* (a manual
-  workaround for glTF models loading pre-rotated on some systems) and *FPS
-  Counter* are checkboxes (`on_checkbox_toggle`, shared across all three). On
-  save it calls `GraphicsSettings.save()` (persists + re-sanitises) and
-  `GraphicsManager.apply_window_settings()` for the parts that can change
-  live; a warning label makes clear that render-scale, AA, reflection/mirror
-  quality, cloud and HUD changes need the next level load to take effect
-  (see [docs/global_architecture.md](global_architecture.md) for why).
+- **[`graphics_settings_menu_state.py`](../../src/space_flight/menus/graphics_settings_menu_state.py)** —
+  `GraphicsSettingsMenuState` edits a deep copy of `GraphicsSettings.config`
+  (see [docs/global_architecture.md](global_architecture.md)). `make_row_data()`
+  emits one header per top-level section of `default_graphics.yaml` (Display,
+  Render, Antialiasing, Compatibility, Clouds, HUD): display mode is a button
+  group, render/reflection/mirror scale are continuous sliders, MSAA and cloud
+  quality are sliders snapped to discrete stops (`_DISCRETE_SLIDERS`, cheapest
+  first so dragging right always costs more), and FXAA, *Alternate Model
+  Orientation* (a manual workaround for glTF models loading mis-rotated on
+  some systems) and *FPS Counter* are checkboxes. *Save* calls
+  `GraphicsSettings.save()` (re-sanitises and persists) and
+  `GraphicsManager.apply_window_settings()`, so the display mode changes
+  live; everything else takes effect on the next level load, as an on-screen
+  warning says.
 
   The discrete sliders deliberately do *not* write the snapped value back to
-  the thumb. `PGSliderBar` throws its ADJUST event asynchronously, so re-setting
-  the value from inside the handler re-enqueues ADJUST on every dispatch and the
-  event queue never drains — a hard freeze, and a fixed regression.
-- **[`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py)**
-  is the largest and most involved menu screen in the game:
-  - **`InputSettingsMenuState`** builds a `ScrollableList` of every dead zone
-    and every action binding read from `configuration.yaml`
-    (`make_row_data`/`rebuild_scroll`), filtered to the selected input type
-    (keyboard/gamepad/joystick). Selecting a different input type flushes any
-    typed dead-zone edits, then rebuilds the row list filtered to that type's
-    bindings. Saving writes the YAML, then rebuilds the live `InputReader`
-    (`reader_factory`) and asks the `InputContextStack` to refresh all
-    bindings, so remapped controls take effect immediately without
-    restarting.
-  - **`ChangeBindingDialog`** is the "press any key" capture dialog opened by
-    each row's *Change* button. While open, it redirects Panda3D's button
-    throwers to two generic listener events so *any* keyboard/gamepad/
-    joystick button can be captured as a raw hardware name, and separately
-    polls every attached device's axes each frame against a baseline
-    snapshot (`watchControls`) so a deliberate axis movement can be
-    distinguished from resting-position drift and captured as an axis
-    binding instead. Restores the throwers to normal on close either way
-    (OK or Cancel). The implementation explicitly mirrors Panda3D's own
-    `mappingGUI.py` gamepad sample, credited in the class docstring.
-  - **`format_binding()`** is the small shared helper that turns a raw stored
-    hardware name back into a human-readable "Axis: Left X" / "Button:
-    Space" label for display.
+  the thumb: `PGSliderBar` throws its ADJUST event asynchronously, so setting
+  the value from inside the handler re-enqueues ADJUST forever and freezes the
+  game.
+- **[`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py)**:
+  - **`InputSettingsMenuState`** loads `configuration.yaml` and lists the dead
+    zones, the global bindings, and each context's bindings for the selected
+    input type (keyboard/gamepad/joystick), with checkboxes for boolean
+    options such as `invert_*` (`make_row_data`/`rebuild_scroll`). Switching
+    input type flushes typed dead-zone edits, then rebuilds the list. *Save*
+    writes the YAML, rebuilds the live `InputReader` (`reader_factory`) and
+    calls `InputContextStack.refresh_all_bindings`, so remapped controls work
+    without a restart.
+  - **`ChangeBindingDialog`** is the "press any key" dialog behind each row's
+    *Change* button, modelled on Panda3D's `mappingGUI.py` gamepad sample.
+    While open it redirects Panda3D's button throwers to two generic listener
+    events, so any keyboard/gamepad/joystick button is captured by raw
+    hardware name, and polls every device's axes each frame against a baseline
+    snapshot (`watchControls`), so a deliberate axis movement is captured as
+    an axis binding while resting drift is ignored. The throwers are restored
+    on close (OK or Cancel).
+  - **`format_binding()`** turns a stored hardware name into a display label
+    such as "Axis: Left X" or "Button: Space".
 
 ## Where things live
 
-Every module in this page lives directly under
-[`src/space_flight/menus/`](../../src/space_flight/menus/): shared widgets in
-`menu_utils.py`, top-level navigation in `splash_state.py`/
-`main_menu_state.py`/`level_selection_menu_state.py`/`settings_menu_state.py`,
-in-session overlays in `pause_menu_state.py`/`level_end_state.py`/
-`radial_menu_state.py`, and the two settings editors in
-`graphics_settings_menu_state.py`/`input_settings_menu_state.py`. The
-auto-generated [code reference](apidocs/index.rst) has the full per-class API.
+Every module above sits directly under
+[`src/space_flight/menus/`](../../src/space_flight/menus/); the
+[code reference](apidocs/index.rst) has the full per-class API.

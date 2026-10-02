@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 import quaternion
@@ -10,6 +13,11 @@ from space_flight.actors.capital_ship.turret_model import TurretModel
 from space_flight.ai import Personality
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
 
+if TYPE_CHECKING:
+    from space_flight.actors.bot import Bot
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 
 
@@ -20,17 +28,14 @@ class TrackingMount(SubSystem):
     This is the generic base shared by the laser :class:`~space_flight.actors.
     capital_ship.turret.Turret` and the :class:`~space_flight.actors.
     capital_ship.tractor_beam.TractorBeamProjector`: everything about *aiming*
-    lives here (mounting,
-    yaw/pitch state, the swivelling model, the remarkable directions), while what
-    the mount *does* once aimed is deferred to :meth:`_operate`, which subclasses
-    override (fire cannons, grab a prey...).
+    lives here (mounting, yaw/pitch state, the swivelling model, the remarkable
+    directions), while what the mount *does* once aimed is deferred to
+    :meth:`_operate`, which subclasses override (fire cannons, grab a prey...).
 
-    A tracking mount is a :class:`SubSystem` (destructible, targetable, dies with
-    its ship) driven by a Bot: the bot is its parent (controller), while
-    mounted_on is the ship it sits on. Its generic AI
-    (:mod:`space_flight.ai.tracking_mount`) selects a prey and steers the barrel;
-    the navigator publishes its lead solution onto :attr:`aim_direction` /
-    :attr:`target_distance_m` for :meth:`_operate` to act upon.
+    It is driven by a Bot (its parent), while mounted_on is the ship it sits on.
+    Its AI (:mod:`space_flight.ai.tracking_mount`) selects a prey and steers the
+    barrel; the navigator publishes its lead solution onto :attr:`aim_direction`
+    / :attr:`target_distance_m` for :meth:`_operate` to act upon.
 
     "Forward" is on an object's Y axis in panda3d. X is right, Z is up.
 
@@ -41,17 +46,18 @@ class TrackingMount(SubSystem):
     :param model_type: The swivelling model to load (see :class:`TurretModel`)
     :param base_position: Mounting position relative to the ship node
     :param base_orientation: Mounting orientation (quaternion) on the ship
-    :param ini_yaw_deg: Initial yaw angle
-    :param ini_pitch_deg: Initial pitch angle
+    :param ini_yaw_deg: Initial yaw angle, relative to the mounting base
+    :param ini_pitch_deg: Initial pitch angle, clipped to the config's
+        [min_pitch_deg, max_pitch_deg] from the first move
     :param personality: Behaviour parameters (shared with the mount's AI)
     :param name: Node and display name of the mount
     """
 
     def __init__(
         self,
-        game,
-        parent,
-        mounted_on,
+        game: FlightState,
+        parent: Bot,
+        mounted_on: Ship,
         conf: dict,
         model_type: str,
         base_position: np.ndarray = np.zeros(3),
@@ -83,13 +89,12 @@ class TrackingMount(SubSystem):
         self.max_pitch_rate_degps = conf["max_pitch_rate_degps"]
         self.max_yaw_rate_degps = conf["max_yaw_rate_degps"]
 
-        # Kinematic/targeting attributes read by the AI. Directions are filled in
-        # by move(); a mount has no linear velocity of its own.
+        # Kinematic/targeting attributes read by the AI. move() refreshes forward
+        # and the base_* axes (right/up stay zero); speed is the host's (see
+        # SubSystem.speed).
         self.right = np.zeros(3)
         self.forward = np.zeros(3)
         self.up = np.zeros(3)
-        # speed is a property: a mount rides its ship, so it reports the host's
-        # velocity (see below).
         # Orientation frame whose forward (+Y) axis is the barrel/antenna aim.
         self.orientation = np.array(base_orientation, dtype=float)
         self.base_forward = np.zeros(3)

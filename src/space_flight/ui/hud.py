@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING
 
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
@@ -14,6 +17,9 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 EDGE_HORIZONTAL = 0.94
 EDGE_VERTICAL = 0.88
@@ -42,7 +48,7 @@ class HUD:
     simulation parameters on screen.
     """
 
-    def __init__(self, game):
+    def __init__(self, game: FlightState):
         self.game = game
         self.id = uuid.uuid4()
         self.fps_counter_enabled = game.app.graphics_settings.config["hud"][
@@ -231,7 +237,7 @@ class HUD:
 
 
 class TargetHUD:
-    def __init__(self, game):
+    def __init__(self, game: FlightState):
         # TODO add lead indicator
         self.game = game
         self.id = uuid.uuid4()
@@ -371,10 +377,8 @@ class TargetHUD:
             # Convert to camera space
             cam_space_pos = cam.getRelativePoint(self.game.root_node, world_pos)
 
-            # Guard against the degenerate projection when the target lies in
-            # the camera's XZ plane (depth ~ 0): clamp the forward depth to a
-            # small non-zero magnitude, preserving its sign so the behind-camera
-            # handling below still triggers correctly.
+            # Clamp the depth (see MIN_PROJECTION_DEPTH), preserving its sign so
+            # the behind-camera handling below still triggers correctly.
             if abs(cam_space_pos.y) < MIN_PROJECTION_DEPTH:
                 cam_space_pos.y = (
                     MIN_PROJECTION_DEPTH

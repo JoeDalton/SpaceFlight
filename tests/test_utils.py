@@ -89,9 +89,8 @@ def test_rotate_single_vector_90deg_z():
 )
 def test_rotate_single_vector_matches_quaternion_rotate_vectors(quat, vector):
     """
-    The fast, scalar implementation of rotate_single_vector must agree with
-    quaternion.rotate_vectors (the "old", generic-numpy way it replaced) for
-    a variety of quaternions and vectors.
+    rotate_single_vector must agree with the generic quaternion.rotate_vectors
+    for a variety of quaternions and vectors.
     """
     result = rotate_single_vector(quat, vector)
     expected = quaternion.rotate_vectors(quat, vector)
@@ -163,8 +162,7 @@ def test_rotation_matrix_matches_rotate_single_vector(seed, norm):
     ],
 )
 def test_cross3_matches_np_cross(a, b):
-    """cross3 must agree with np.cross (the "old", generic-numpy way it
-    replaced) for a variety of vector pairs."""
+    """cross3 must agree with np.cross for a variety of vector pairs."""
     result = cross3(a, b)
     expected = np.cross(a, b)
     np.testing.assert_allclose(result, expected, atol=1e-9)
@@ -207,9 +205,8 @@ def test_cross3_matches_np_cross_random(seed):
     ],
 )
 def test_normalize_matches_np_linalg_norm(vector):
-    """normalize must agree with v / np.linalg.norm(v) (the "old", generic-
-    numpy way it replaced) for a variety of vectors, near and far from unit
-    length, in 3D, 4D (quaternions) and beyond."""
+    """normalize must agree with v / np.linalg.norm(v) for vectors near and far
+    from unit length, in 3D, 4D (quaternions) and beyond."""
     result = normalize(vector)
     expected = vector / np.linalg.norm(vector)
     np.testing.assert_allclose(result, expected, atol=1e-9)
@@ -255,9 +252,8 @@ def test_normalize_matches_np_linalg_norm_random(seed):
     ],
 )
 def test_magnitude_matches_np_linalg_norm(vector):
-    """magnitude must agree with np.linalg.norm (the "old", generic-numpy
-    way it replaced) for a variety of vectors: 2D, 3D, 4D (quaternions),
-    beyond, zero, near-zero and large."""
+    """magnitude must agree with np.linalg.norm for 2D, 3D, 4D (quaternions)
+    and larger vectors, zero, near-zero and large."""
     result = magnitude(vector)
     expected = np.linalg.norm(vector)
     np.testing.assert_allclose(result, expected, atol=1e-9)

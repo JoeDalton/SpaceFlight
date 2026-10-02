@@ -6,7 +6,6 @@ source =
 [run]
 branch = true
 source =
-    airthium
     tests
 parallel = true
 

@@ -1,25 +1,30 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
 from space_flight.utils import cross3, magnitude
 from space_flight.utils.state_machine import StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
 
 class GenericNavigator:
     """
-    A class to define the aim of a bot given an intent given by a tactician, and
-    passes its decision to a pilot that controls the pawn
+    Turns a tactician's intent into an aim for the pilot that controls the pawn
     """
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.FIGHTER_DEFAULT,
         debug: bool = False,
@@ -34,8 +39,8 @@ class GenericNavigator:
         self.behaviour_sm = StateMachine(
             initial_state="idle", clock=self.game.game_time.get_current_time
         )
-        # Sub-state of an ENGAGE (e.g. the strafe run's phase). Reset to "" by the
-        # non-engage intents. Initialised here so it is always defined.
+        # Reset to "" by the non-engage intents but otherwise unused: attack
+        # phases live in behaviour (e.g. "strafe_attack").
         self.engage_phase = ""
         # Per-run phase offset for the evasive weave, so successive runs (and the
         # weave itself) are not a predictable clean sinusoid. Reseeded when a run
@@ -55,7 +60,9 @@ class GenericNavigator:
         """How long the current behaviour has been running."""
         return self.behaviour_sm.time_in_state_s
 
-    def navigate(self, intent: int, target_dict: dict):
+    def navigate(
+        self, intent: Intent, target_dict: dict
+    ) -> tuple[np.ndarray, float] | np.ndarray:
         """
         Turns the tactician's intent and collision avoidance into explicit directions
 
@@ -69,10 +76,8 @@ class GenericNavigator:
         self, direction: np.ndarray, distance_m: float, lateral_speed_vector: np.ndarray
     ) -> np.ndarray:
         """
-        Constant Angle Pursuit (CAP)
-        Bring lateral velocity to zero
-        Good for closing in from a long distance
-        Also good for missiles until the end
+        Constant Angle Pursuit (CAP): bring the lateral velocity to zero.
+        Good for closing in from a long distance (and for missiles throughout).
 
         :param direction: The direction of the target
         :param distance_m: Its distance from self
@@ -93,13 +98,13 @@ class GenericNavigator:
         lead_time_s: float,
     ) -> np.ndarray:
         """
-        Intercepts the target by pointing to its future position
-        If the lead time is null, it's pure pursuit
-        If the lead time is negative, it's a lag pursuit
+        Intercepts the target by pointing to its future position.
+        A null lead time is pure pursuit, a negative one lag pursuit.
 
         :param target_current_position: The absolute position of the target
         :param target_current_speed: Its absolute speed
-        :return: The direction to point to
+        :param lead_time_s: How far ahead to predict the target's position
+        :return: The unit direction to point to (zero if within tolerance)
         """
         target_future_position = (
             target_current_position + target_current_speed * lead_time_s

@@ -58,7 +58,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.description_frame.setTransparency(True)
 
-        self.menu_selection = None
+        self.menu_selection: str | None = None
         self.create_level_list()
 
     def start_game(self):
@@ -87,7 +87,7 @@ class LevelSelectionMenuState(BaseState):
         """
         Creates a list of levels for the user to select
         """
-        # create a sample title
+        # Title
         self.title = DirectLabel(
             scale=self.title_text_scale,
             pos=(
@@ -104,8 +104,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.title.setTransparency(1)
 
-        # Change the default dialog skin.
-        self.level_buttons = []
+        self.level_buttons: list[CustomButton] = []
 
         # create the scrolled frame that will hold our list
         self.lstActionMap = DirectScrolledFrame(
@@ -128,13 +127,13 @@ class LevelSelectionMenuState(BaseState):
             verticalScroll_decButton_frameColor=(0, 0, 0, 0),
         )
 
-        self.actionLabels = {}
+        self.actionLabels: dict = {}
         for idx, level in enumerate(self.LEVELS):
             level_name = level["name"]
             item = self.makeListItem(level_name, idx)
             item.reparentTo(self.lstActionMap.getCanvas())
 
-        # Recalculate the canvas size to set scrollbars if necesary
+        # Size the canvas to the list so the scrollbar appears when needed
         self.lstActionMap["canvasSize"] = (
             self.app.a2dLeft + 0.05,
             -0.3,
@@ -143,7 +142,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.lstActionMap.setCanvasSize()
 
-    def makeListItem(self, level_name, index):
+    def makeListItem(self, level_name: str, index: int) -> DirectFrame:
         item = DirectFrame(
             text="",
             geom=None,
@@ -198,5 +197,5 @@ class LevelSelectionMenuState(BaseState):
                     btn.set_pressed()
                     self.start_button.show()
             else:
-                # Reet all other level buttons
+                # Reset all other level buttons
                 btn.reset()

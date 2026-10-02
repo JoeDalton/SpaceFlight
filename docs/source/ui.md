@@ -1,206 +1,160 @@
 # UI
 
-`ui` is the player-facing layer that sits between raw hardware and gameplay:
-the input pipeline (hardware polling → contexts that interpret it), the HUD,
-the rear-view mirror, and player waypoint guidance. This page is the guided
-tour; the per-class API is generated from the docstrings in the
-[code reference](apidocs/index.rst).
+`ui` is the player-facing layer between raw hardware and gameplay: the input
+pipeline (hardware polling → contexts that interpret it), the HUD, the
+rear-view mirror, and player waypoint guidance. This page is the guided tour;
+the per-class API is in the [code reference](apidocs/index.rst).
 
 All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
 
 ## Mental model
 
-- Input is split into two layers, each with one job:
+- Input has two layers, each with one job:
   [`input_reader.py`](../../src/space_flight/ui/input_reader.py) only knows
-  about *hardware* (which raw button/axis is active this frame — "no game
-  logic lives here", per its own docstring);
+  *hardware* (which raw button/axis is active this frame — no game logic);
   [`input_context.py`](../../src/space_flight/ui/input_context.py) only knows
-  about *meaning* (what a bound action does in the current game mode).
-  Adding a new game mode means writing a new `InputContext` and pushing it —
-  never touching the reader.
-- Only the **top** of the `InputContextStack` receives input each frame.
-  Pushing a context (e.g. the radial menu over flight) implicitly blocks
-  whatever is beneath it without either context needing to know about the
-  other.
+  *meaning* (what a bound action does in the current game mode). A new game
+  mode means a new `InputContext` pushed on the stack — never touching the
+  reader.
+- Only the **top** of the `InputContextStack` receives input each frame, so
+  pushing a context (e.g. the radial menu over flight) blocks whatever is
+  beneath it without either context knowing about the other.
 - Every action name (`"fire"`, `"pause"`, `"throttle_up"`, ...) is resolved
-  through YAML bindings (`configuration/configuration.yaml`), never
-  hardcoded to a specific key or button — the same context code drives
-  keyboard, gamepad, or joystick, since the reader always exposes the same
-  `InputState` shape regardless of hardware.
-- `HUD`/`TargetHUD` and `PlayerWaypoints` are independent presentation
-  add-ons following the same lifecycle contract as scene pieces (see
-  [docs/scenes.md](scenes.md)): construct with `game`, register a per-frame
-  update in `game.method_lists`, `clean()`. `RearViewMirror` (owned by
-  `Player`, constructed with `game` and the ship node) and `WaypointMarker`
-  (driven by `PlayerWaypoints`) have no per-frame task of their own, only
-  `clean()`.
+  through the YAML bindings (`configuration/configuration.yaml`), never
+  hardcoded to a key. Since every reader exposes the same `InputState` shape,
+  the same context code drives keyboard, gamepad and joystick.
+- `HUD`, `TargetHUD` and `PlayerWaypoints` follow the scene-piece lifecycle
+  (see [docs/scenes.md](scenes.md)): construct with `game`, register a
+  per-frame update in `game.method_lists`, `clean()`. `RearViewMirror` (owned
+  by `Player`) and `WaypointMarker` (driven by `PlayerWaypoints`) have no
+  per-frame task, only `clean()`.
 
 ## `input_reader.py` — the hardware layer
 
-[`input_reader.py`](../../src/space_flight/ui/input_reader.py) turns physical
-device state into a plain `InputState` snapshot (`buttons`/`repeats`/
-`releases`/`axes`), rebuilt fresh every frame by whichever `InputReader`
-subclass matches the configured `input_type`:
+Each frame the reader subclass matching the configured `input_type` rebuilds a
+plain `InputState` snapshot (`buttons`/`repeats`/`releases`/`axes`):
 
-- **Hybrid detection.** Each reader combines **polling** (the primary
-  source — `read_all_buttons()` each frame, compared against the previous
-  frame to derive pressed/held/released) with **`accept()` events** as a
-  safety net that catches a button pressed *and* released between two polls,
-  which polling alone would miss entirely. `event-repeat` is deliberately
-  not used — held state comes from polling only.
-- **`KeyboardReader`** polls Panda3D's `MouseWatcher` for every bound key;
-  keyboards have no analogue axes, so `read_axes` is a no-op and virtual
-  flight axes are synthesised one layer up, in `FlightInputContext`.
-- **`GamepadReader`** and **`JoystickReader`** poll their respective device
-  APIs, apply dead zones (`dz()`, a symmetric dead zone that zeroes the band
-  and shifts the rest down so the output starts at 0 at its edge — it is not
-  renormalised, so full deflection gives `1 - dead_zone`),
-  and both support connect/disconnect hot-plugging (falling back to another
-  attached device of the same class, or showing an on-screen warning label
-  when none is present). `GamepadReader` additionally registers safety-net
-  events per named button; `JoystickReader` deliberately does not, because
-  the module notes most flight-stick buttons don't generate reliable Panda3D
-  events — it's polling-only.
+- **Hybrid detection.** **Polling** is the primary source: `read_all_buttons()`
+  each frame, compared with the previous frame to derive pressed/held/released.
+  **`accept()` events** are a safety net for a button pressed *and* released
+  between two polls, which polling alone would miss. `event-repeat` is
+  deliberately unused — held state comes from polling only.
+- **`KeyboardReader`** polls Panda3D's `MouseWatcher` for every bound key.
+  Keyboards have no analogue axes, so `read_axes` is a no-op and flight axes
+  are synthesised in `FlightInputContext`.
+- **`GamepadReader`** and **`JoystickReader`** poll their device, apply dead
+  zones (`dz()`: zeroes the band and shifts the rest down so output starts at
+  0 at its edge; not renormalised, so full deflection gives `1 - dead_zone`),
+  and handle hot-plugging (falling back to another device of the same class,
+  or showing an on-screen warning when none is attached). Only
+  `GamepadReader` registers per-button safety-net events; most flight-stick
+  buttons don't generate reliable Panda3D events, so `JoystickReader` is
+  polling-only.
 - **The Windows Unicode monkey-patch.** `_patched_attachInputDevice` /
-  `_patched_detachInputDevice` replace two `ShowBase` methods to work around
-  a `UnicodeDecodeError` some controllers trigger through Panda3D's
-  `device.name` property; `safe_device_name()` is the corresponding
-  three-tier fallback (direct read → re-encode attempt → synthesise a
-  `VID_xxxx&PID_xxxx` string) used everywhere a printable device name is
-  needed instead of touching `device.name` directly.
-- **`reader_factory(app)`** loads `configuration.yaml` onto `app.bindings`
-  and instantiates the matching reader subclass. It's called once at
-  startup and again whenever input settings are saved (see
-  [docs/menus.md](menus.md)'s `InputSettingsMenuState`), so remapped
-  bindings take effect without a restart.
+  `_patched_detachInputDevice` replace two `ShowBase` methods that read
+  Panda3D's `device.name`, which raises `UnicodeDecodeError` for some
+  controllers. `safe_device_name()` provides a printable name instead, with a
+  three-tier fallback (direct read → re-encode → synthesised
+  `VID_xxxx&PID_xxxx`).
+- **`reader_factory(app)`** loads `configuration.yaml` onto `app.bindings` and
+  instantiates the matching reader. It runs at startup and again when input
+  settings are saved (see [docs/menus.md](menus.md#settings-screens)), so
+  remapped bindings apply without a restart.
 
 ## `input_context.py` — the meaning layer
 
-[`input_context.py`](../../src/space_flight/ui/input_context.py) has the
-`InputContext` abstract base (`consume(state)` is the only required method;
-`on_activate`/`on_deactivate`/`refresh_bindings` are optional hooks) and the
-`InputContextStack` that drives it — `dispatch()` only ever calls the top
-context, and `push`/`pop` handle (de)activation. Concrete contexts:
+`InputContext` is the abstract base (`consume(state)` is the only required
+method; `on_activate`/`on_deactivate`/`clean`/`refresh_bindings` are optional
+hooks). `InputContextStack.dispatch()` only calls the top context, and
+`push`/`pop` handle (de)activation. Concrete contexts:
 
-- **`FlightInputContext`** is the main gameplay context, mapping bound
-  actions onto ship controls, weapon fire, boost, targeting, camera look,
-  and pause. It reads bindings from `contexts.flight.<input_type>` in the
-  YAML and exposes small helpers (`pressed`/`held`/`active`/`released`)
-  that check both the context-specific and the `global` binding section for
-  an action (`axis` reads only the context section), so a key can be bound
-  once globally (e.g. Escape) and still work in every context that consults
-  the `global` section. `keyboard_axes` synthesises continuous flight
-  axes from discrete key presses — throttle accumulates while held
-  (`+=` each frame, clamped to `[0, 1]`), yaw/pitch/roll pass through a
-  first-order low-pass filter (`low_pass_filter_first_order`) so a keyboard
-  press doesn't snap controls instantly to full deflection — while
-  `analog_axes` reads gamepad/joystick axis values directly, since the
-  hardware already gives a continuous signal.
-- **`PauseMenuInputContext`** is a near-total input blocker pushed while
-  paused: it does nothing except watch for the pause key (device-specific or
-  global) and call `state_manager.pop()`, which pops the top menu state —
-  normally the pause menu, whose `exit()` pops this context and resumes
-  `FlightState` (if a settings screen is open above the pause menu, that
-  screen is popped instead). Because it sits above `FlightInputContext` on the stack, the ship
-  simply stops receiving input for as long as it's active — no explicit
-  "freeze" logic needed.
-- **`HyperspaceInputContext`** is the same blocking pattern applied to the
-  hyperspace loading overlay's "press key to jump out" prompt (see
-  [docs/game.md](game.md)): a one-shot trigger that fires its callback once
-  on the bound key (device-specific or global — `drop_hyperspace` is also
-  bound under `global`, so the keyboard key works even on gamepad/joystick,
-  like the pause key) and then ignores further input, relying on the
-  overlay's own reveal logic to pop it.
-- **`RadialMenuInputContext`** drives the radial target-filter menu
-  (see [docs/menus.md](menus.md)): each frame it reads a 2D direction
-  (analog axes, or discrete directional keys combined into a vector) via
-  `read_direction`, maps it to a slice index with the module-level
-  `angle_to_slice` helper (slice 0 at the top, numbered clockwise) once the
-  vector's magnitude clears `min_magnitude`, and calls the supplied
-  `on_hover` each frame so the visual overlay can highlight the pointed-at
-  slice live. Releasing the trigger button pops the radial menu state and
-  fires `on_select` with the chosen slice (or `None`). It never touches game
-  time, so gameplay keeps simulating while the wheel is open.
+- **`FlightInputContext`** — the gameplay context: ship axes, weapons, boost,
+  targeting, mirror, radial menu, head-look and pause, read from
+  `contexts.flight.<input_type>`. Its `pressed`/`held`/`active`/`released`
+  helpers also check the `global` section (`axis` does not), so a key bound
+  once globally (e.g. Escape for pause) works on every input type.
+  `keyboard_axes` synthesises continuous axes from key presses: throttle
+  accumulates while held (clamped to `[0, 1]`), and yaw/pitch/roll go through
+  `low_pass_filter_first_order` so a key press doesn't snap to full
+  deflection. `analog_axes` reads gamepad/joystick axes directly, applying
+  the `invert_*` bindings.
+- **`PauseMenuInputContext`** — pushed by the pause menu, it blocks everything
+  except the pause key (device-specific or global), which calls
+  `state_manager.pop()`: normally that pops the pause menu, whose `exit()`
+  pops this context and resumes `FlightState` (if a settings screen is open
+  above the pause menu, that screen is popped instead). Sitting above
+  `FlightInputContext`, it freezes the ship's controls with no extra logic.
+- **`HyperspaceInputContext`** — the same blocking pattern for the hyperspace
+  overlay's "press key to drop out" prompt (see [docs/game.md](game.md)): it
+  fires its callback once on the `drop_hyperspace` key (device-specific or
+  global, so the keyboard key works on any input type), then ignores input
+  until the overlay pops it.
+- **`RadialMenuInputContext`** — drives the radial target-filter menu (see
+  [docs/menus.md](menus.md#in-session-overlays)). Each frame `read_direction`
+  gets a 2D direction (analog axes, or directional keys combined into a
+  vector); once its magnitude clears `min_magnitude`, `angle_to_slice` maps it
+  to a slice (0 at the top, clockwise), and `on_hover` is called so the
+  overlay highlights it live. Releasing the trigger pops the radial menu
+  state and calls `on_select` with the slice (or `None`).
 
 ## `hud.py` — heads-up display
 
-[`hud.py`](../../src/space_flight/ui/hud.py) has two independent overlay
-classes, both driven from a per-frame `game.method_lists` task:
+[`hud.py`](../../src/space_flight/ui/hud.py) has two independent overlays:
 
-- **`HUD`** renders four text blocks: a debug panel (player speed/health/
-  shield, game time, team strengths, a target-lock flag, plus optional
-  bot/turret debug lines
-  guarded by `try`/`except AttributeError` so the HUD tolerates whichever
-  debug actors happen to exist in the current level), an FPS counter
-  (toggleable in the graphics settings menu, `hud.fps_counter`), and
-  two timed message lines — `set_event_text`/`set_chatter_text` set a string
-  plus an expiry timestamp, and `clear_scenario_hud` blanks each one once
-  its `game_time` deadline passes. `Scenario`'s `hud_text`/`speech` actions
-  (see [docs/game.md](game.md)) drive these two lines.
-- **`TargetHUD`** projects the player's current target's world position into
-  screen space each frame (`cam.getRelativePoint` + `lens.project`) to
-  position a target-box indicator and a distance/name label. While the target
-  is in view the raw projection is used, so the box encircles it. Once it goes
-  off-screen — out of the field of view *or* behind the camera — the indicator
-  is pinned to the screen border along the true bearing to the target, by
-  scaling the projected direction vector until it meets the edge rectangle
-  (ray-to-rectangle intersection, rather than clamping each axis
-  independently, which would snap the card to a corner near the camera's XZ
-  plane). Two correctness details make this robust across a full turn: when
-  the target is behind the camera the perspective divide is by a negative
-  depth, mirroring the projection through the screen centre, so its sign is
-  negated to recover the correct side (the indicator then switches sides only
-  once, as the target passes directly behind); and the forward depth is
-  clamped to a small non-zero magnitude so the projection stays finite when
-  the target crosses the camera's XZ plane. Falls back to the target's own
-  name when it has no named parent (used for subsystems, which aren't
-  bot-controlled).
-  When the target carries a scan (`pawn.scan`, a `ScanState` from
-  [`actors/scan.py`](../../src/space_flight/actors/scan.py)), a
-  transparent bar fills the target box from its left edge in proportion to
-  the scan's progress: yellow while scanning, then green (clear) or red
-  (contraband) once complete. The scan's status ("SCANNING 42%", "CLEAR",
-  "CONTRABAND") is appended to the name label. The HUD reads only that
-  attribute, so any pawn a mission makes scannable gets the bar.
+- **`HUD`** — a debug panel when `DEBUG_HUD` is set (player
+  speed/health/shield, game time, team strengths, target lock, plus
+  lead-bot/turret lines wrapped in `try`/`except AttributeError` so it
+  tolerates levels without them), an FPS counter (graphics setting
+  `hud.fps_counter`), and two timed message lines: `set_event_text` /
+  `set_chatter_text` store a string plus an expiry time, and
+  `clear_scenario_hud` blanks each once its game-time deadline passes. They
+  are driven by the mission's `hud` and `speech` actions (see
+  [docs/scenario_scripting.md](scenario_scripting.md#actions)).
+- **`TargetHUD`** — projects the player's target into screen space each frame
+  (`cam.getRelativePoint` + `lens.project`) to place a target box and
+  distance/name labels. In view, the box encircles the target. Off-screen
+  (outside the FoV *or* behind the camera) it is pinned to the screen border
+  along the true bearing, by scaling the projected vector to meet the edge
+  rectangle — clamping each axis separately would snap it to jittering
+  corners. Behind the camera the projection is mirrored, so its sign is
+  flipped; the depth is clamped away from zero so the projection stays finite
+  near the camera's XZ plane (details in the code comments). The label shows
+  the target's parent name, falling back to the target's own name
+  (subsystems). If the target has a scan (`pawn.scan`, a `ScanState` from
+  [`actors/scan.py`](../../src/space_flight/actors/scan.py)), a transparent bar
+  fills the box in proportion to its progress — yellow while scanning, then
+  green (clear) or red (contraband) — and its status ("SCANNING 42%",
+  "CLEAR", "CONTRABAND") is appended to the name. Only that attribute is
+  read, so any pawn a mission makes scannable gets the bar.
 
 ## `rear_view_mirror.py`
 
-[`rear_view_mirror.py`](../../src/space_flight/ui/rear_view_mirror.py)'s
-`RearViewMirror` renders a second, backward-facing camera into an offscreen
-texture buffer and displays it as a small flipped card at the top of the
-screen — the same offscreen-buffer-to-card pattern used by the graphics
-pipeline's composite quad (see [docs/global_architecture.md](global_architecture.md))
-and the ocean's reflection buffer (see [docs/scenes.md](scenes.md)). Its
-resolution scales with the `mirror_scale` graphics setting; `toggle_mirror()`
-(bound to a player action) disables both the camera buffer and the card so a
-hidden mirror costs nothing to render.
+`RearViewMirror` renders a backward-facing camera into an offscreen texture
+buffer shown as a small horizontally flipped card at the top of the screen.
+Its resolution scales with the `mirror_scale` graphics setting;
+`toggle_mirror()` (the `toggle_mirror` binding) deactivates the buffer as well
+as hiding the card, so a hidden mirror costs nothing to render.
 
 ## `player_waypoints.py`
 
-[`player_waypoints.py`](../../src/space_flight/ui/player_waypoints.py) gives the
-player an on-screen guided route, used by the `player_waypoints` scenario
-action (see [docs/game.md](game.md)):
+Backs the mission's `player_waypoints` action (see
+[docs/scenario_scripting.md](scenario_scripting.md#actions)):
 
-- **`WaypointMarker`** is a recoloured, semi-transparent sphere that plays
-  the role of a minimal "pawn" purely for targeting purposes: it registers
-  itself with `Interactions` (see [docs/ai.md](ai.md)) as a neutral (team 0)
-  actor exposing the small attribute contract (`id`, `team`, `position`,
-  `is_dead`, ...) the targeting system and HUD expect, tagged with
-  `category = "waypoint"` so the player's "Waypoints" target filter (see
-  [docs/actors.md](actors.md)'s `Player`) can isolate it while other filters
-  exclude it, and bots never target it (neutral team).
-- **`PlayerWaypoints`** owns an ordered list of world positions and shows
-  only the *next* one via a single reused `WaypointMarker`; each frame
-  `update()` checks distance-squared against `arrival_radius_m` and advances
-  the index once reached, hiding the marker whenever the player's target
-  filter isn't `"Waypoints"`. Reaching the last waypoint calls `_finish()`,
-  which cleans up the marker rather than leaving a stale route.
+- **`WaypointMarker`** — a recoloured, semi-transparent sphere posing as a
+  minimal pawn for targeting: it registers with `Interactions` (see
+  [docs/ai.md](ai.md)) as a neutral (team 0) actor, so bots never target it,
+  exposes the attributes the targeting system and HUD read (`id`, `team`,
+  `position`, `is_dead`, ...), and has `category = "waypoint"` so the
+  player's "Waypoints" target filter (see [docs/actors.md](actors.md)) can
+  isolate it while other filters exclude it.
+- **`PlayerWaypoints`** — shows only the *next* of an ordered list of
+  positions through one reused marker. Each frame `update()` advances once the
+  player is within `arrival_radius_m`, and shows the marker only while the
+  player's target filter is `"Waypoints"`. After the last waypoint,
+  `_finish()` removes the marker.
 
 ## Where things live
 
-Everything in this page lives directly under
-[`src/space_flight/ui/`](../../src/space_flight/ui/): the hardware layer in
-`input_reader.py`, the meaning layer in `input_context.py`, the HUD in
-`hud.py`, the rear-view mirror in `rear_view_mirror.py`, and player waypoint
-guidance in `player_waypoints.py`. The auto-generated
+Every module above sits directly under
+[`src/space_flight/ui/`](../../src/space_flight/ui/); the
 [code reference](apidocs/index.rst) has the full per-class API.

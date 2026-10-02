@@ -1,9 +1,3 @@
-from pathlib import Path
-
-from direct.showbase.DirectObject import DirectObject
-from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Filename, TexGenAttrib, TextureStage
-
 """
 Create skyboxes with Spacescape
 
@@ -16,12 +10,18 @@ soon as the game is launched from elsewhere (e.g. the MS_Windows_install scripts
 Skybox applies the cube map at runtime from an absolute path instead.
 """
 
+from pathlib import Path
+
+from direct.showbase.DirectObject import DirectObject
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import Filename, TexGenAttrib, TextureStage
+
 skybox_name = "dusk"
 SKYBOX_DIR = Path(__file__).resolve().parent
 
 
 class SkySphere(DirectObject):
-    def __init__(self, base):
+    def __init__(self, base: ShowBase):
         self.sphere = base.loader.loadModel(
             Filename.fromOsSpecific(str(SKYBOX_DIR / "InvertedSphere.egg"))
         )

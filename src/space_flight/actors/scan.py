@@ -19,6 +19,7 @@ import numpy as np
 from space_flight.game.scenario.conditions import Condition, pawns_of
 
 if TYPE_CHECKING:
+    from space_flight.actors.pawn import Pawn
     from space_flight.game.scenario.mission import Mission
 
 SCAN_DURATION_S = 15.0
@@ -89,7 +90,7 @@ class ScanHandle:
         range_m: float = SCAN_RANGE_M,
         cone_deg: float = SCAN_CONE_DEG,
         decay_ratio: float = SCAN_DECAY_RATIO,
-    ) -> None:
+    ):
         self.mission = mission
         self.who = who
         self.contraband = contraband
@@ -124,7 +125,7 @@ class ScanHandle:
     # Per-frame update
     # ------------------------------------------------------------------
 
-    def _is_held(self, pawn) -> bool:
+    def _is_held(self, pawn: Pawn) -> bool:
         """Whether the player holds pawn as a scannable target this frame."""
         player_pawn = self.mission.game.player.pawn
         if getattr(player_pawn, "target", None) is not pawn:

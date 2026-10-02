@@ -1,28 +1,26 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from space_flight.actors.capital_ship.sub_system import SubSystem
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship import CapitalShip
+    from space_flight.game.flight_state import FlightState
 
 
 class TargetingSystem(SubSystem):
     """
     A fire-control subsystem that boosts the turrets of its ship.
 
-    A targeting system is a :class:`SubSystem` whose defining feature is to grant
-    two boosts to every turret mounted on the same ship, for as long as it is
-    alive:
-
-    - auto-aim: turret shots lead the turret's target instead of flying straight
-      down the barrel, tuned by :attr:`auto_aim_params` (a better targeting
-      system grants a tighter firing solution);
-    - a faster rate of fire, scaled by :attr:`fire_rate_multiplier`.
-
-    The boosts are *pulled* by the turrets each frame (see
+    While alive, it grants every turret mounted on the same ship auto-aim
+    (tuned by :attr:`auto_aim_params`) and a faster rate of fire
+    (:attr:`fire_rate_multiplier`). The turrets *pull* these each frame (see
     :meth:`~space_flight.actors.capital_ship.turret.Turret._active_targeting_system`),
-    so the
-    coupling is one-way: the targeting system only exposes its multiplier and its
-    alive/dead state, and need not know its turrets. Destroying it (directly, or
-    together with its ship) makes it report as dead, and the boosts vanish on the
-    next frame: turrets revert to unassisted fire at their base rate.
+    so the targeting system need not know its turrets; once it is dead the
+    turrets revert to unassisted fire at their base rate.
 
     :param game: The game/flight state
     :param parent: The ship this targeting system is mounted on
@@ -41,14 +39,14 @@ class TargetingSystem(SubSystem):
 
     def __init__(
         self,
-        game,
-        parent,
+        game: FlightState,
+        parent: CapitalShip,
         relative_position: np.ndarray = np.zeros(3),
         hit_box_radius_m: float = 5.0,
         health: float = 1000.0,
         explosion_scale: float = 10.0,
         fire_rate_multiplier: float = 2.0,
-        auto_aim_params: dict = None,
+        auto_aim_params: dict | None = None,
         name: str = "targeting_system",
     ):
         super().__init__(
@@ -60,9 +58,7 @@ class TargetingSystem(SubSystem):
             explosion_scale=explosion_scale,
             name=name,
         )
-        # How much faster boosted turrets fire while this system is alive.
         self.fire_rate_multiplier = fire_rate_multiplier
-        # Auto-aim tuning granted to boosted turrets; empty uses AutoAim defaults.
         self.auto_aim_params = auto_aim_params or {}
 
         # Visible geometry: a placeholder sphere matching the collider, so the

@@ -3,174 +3,136 @@
 `global_architecture` is the application shell: the root Panda3D app, its
 stack-based state machine, and the app-lifetime services (assets, graphics
 settings) that outlive any single game session — as opposed to
-[`game/`](game.md), which is scoped to one `FlightState` session. This page
-is the guided tour; the per-class API is generated from the docstrings in the
-[code reference](apidocs/index.rst).
-
-All of it lives in
-[`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/).
+[`game/`](game.md), which is scoped to one `FlightState` session. Everything
+here lives in
+[`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/);
+the per-class API is in the [code reference](apidocs/index.rst).
 
 ## Mental model
 
-- **`SpaceFlightSimulator`** is the single root `ShowBase` instance — the
-  actual Panda3D application. It constructs every app-lifetime subsystem once
-  and pushes the first state.
+- **`SpaceFlightSimulator`** is the single root `ShowBase`: it builds every
+  app-lifetime subsystem once and pushes the first state.
 - **`StateManager`** runs a stack of `BaseState`s (splash, menus, loading,
-  flight, pause...). Only the top of the stack is fully active; the app
-  navigates by pushing and popping, not by direct transitions.
-- **`AssetManager`** and its pools cache expensive-to-load resources
-  (models, textures, sounds) once, app-wide, so any level can request the
-  same asset by path and get the already-loaded instance.
-- **`GraphicsManager`** and **`GraphicsSettings`** together own everything
-  about *how* the scene is rendered (window mode, render scale,
-  anti-aliasing) versus `game/`'s ownership of *what* is rendered.
+  flight, pause...). Only the top is fully active; the app navigates by
+  pushing and popping, not by direct transitions.
+- **`AssetManager`** caches expensive resources (models, textures, sounds)
+  app-wide by path.
+- **`GraphicsSettings`** / **`GraphicsManager`** own *how* the scene is
+  rendered (window mode, render scale, anti-aliasing); `game/` owns *what* is
+  rendered.
 
 ## `simulator.py` — the app root and its state machine
 
 [`simulator.py`](../../src/space_flight/global_architecture/simulator.py) has
 two classes:
 
-- **`StateManager`** is a stack-based state machine: `push()` instantiates
-  and enters a new state (pausing the current top first, unless the new
-  state declares `PAUSES_BELOW = False` — used by overlays like the
-  hyperspace loading screen that must let the state underneath keep running,
-  see [docs/game.md](game.md)); `pop()` exits and discards the top, resuming
-  whatever is now on top; `replace()` is pop-then-push at the same depth;
-  `clear()` collapses the stack down to just the current top, exiting
-  everything below it (used when returning to the main menu from deep in a
-  level). Every concrete state class the app can enter is declared as a
-  class attribute here (`GAME_STATE`, `HYPERSPACE_LOADING_STATE`, the
-  various menu states, ...), so any module
-  can reference `StateManager.GAME_STATE` without importing that state
-  module directly — avoiding import cycles between states that push each
-  other.
-- **`SpaceFlightSimulator`** subclasses `ShowBase` and is the literal
-  application: its `__init__` builds every app-lifetime subsystem in order
-  — `GraphicsSettings` → `GraphicsManager` → `StateManager` →
-  `InputContextStack`/input reader (see
-  [`ui/input_context.py`](../../src/space_flight/ui/input_context.py)) →
-  `AssetManager` → `MenuModels` → `SFX` (see [docs/fx.md](fx.md)) — then
-  pushes `SplashState` to begin the app. `input_task`, registered at a high sort priority (`-100`,
-  before other tasks), polls the input reader and dispatches through the
-  context stack every frame regardless of which state is active.
+- **`StateManager`**: `push()` instantiates and enters a state, pausing the
+  current top first unless the new state declares `PAUSES_BELOW = False`;
+  `pop()` exits the top and resumes the new top; `replace()` is pop-then-push;
+  `clear()` exits everything below the top and keeps only the top (used to
+  return to the main menu from deep in a level). Every concrete state class is
+  a class attribute (`GAME_STATE`, `HYPERSPACE_LOADING_STATE`, the menu
+  states...), so modules reference `StateManager.GAME_STATE` instead of
+  importing state modules that push each other — avoiding import cycles.
+- **`SpaceFlightSimulator`** builds, in order, `GraphicsSettings` →
+  `GraphicsManager` → `StateManager` → `InputContextStack` and input reader
+  (see [`ui/input_context.py`](../../src/space_flight/ui/input_context.py)) →
+  `AssetManager` → `MenuModels` → `SFX` (see [docs/fx.md](fx.md)), then pushes
+  `SplashState`. `input_task` (task sort `-100`, before other tasks) polls the
+  reader and dispatches through the context stack every frame, whatever state
+  is active. With `headless=True` there is no input reader, no `input_task`
+  and no splash: the stack stays empty for
+  [`headless/harness.py`](../../src/space_flight/headless/harness.py) to push
+  a headless `FlightState` itself.
 
-Two module-level `loadPrcFileData` calls configure Panda3D before the app
-starts: one silences ffmpeg's notices (`notify-level-ffmpeg error`), the
-other explicitly disables Panda3D's on-disk model cache (`model-cache-dir`),
-which also disables its compiled-shader cache. The cache was turned off
-because it was implicated in glTF models failing to load on some systems.
+Two module-level `loadPrcFileData` calls configure Panda3D: one silences
+ffmpeg (`notify-level-ffmpeg error`), the other disables the on-disk model
+cache (`model-cache-dir`), and with it the compiled-shader cache, because it
+was implicated in glTF models failing to load on some systems.
 
 ## `base_state.py` — the state contract
 
 [`base_state.py`](../../src/space_flight/global_architecture/base_state.py)'s
-`BaseState` is the interface every pushable state implements: `enter()`
-(build UI, start tasks) and `exit()` (tear them down) are abstract;
-`pause()`/`resume()` default to no-ops for states that don't need to react to
-being covered/uncovered. `PAUSES_BELOW` (default `True`) controls whether
-pushing this state freezes the state beneath it — flipped to `False` only for
-overlays that must let the state below keep ticking: the hyperspace loading
-screen, which builds the level underneath itself (see
-[docs/game.md](game.md)), and the radial target-filter menu (see
-[docs/menus.md](menus.md)). `force_render()` forces two synchronous frame
-renders, called at the end of a state's `exit()` so the outgoing scene
-doesn't visibly hang on screen while the next state's heavy assets start
-loading.
+`BaseState`: `enter()` (build UI, start tasks) and `exit()` (tear them down)
+are abstract; `pause()`/`resume()` default to no-ops. `PAUSES_BELOW` (default
+`True`) is `False` only for overlays that must let the state below keep
+ticking: the hyperspace loading screen, which builds the level underneath it
+(see [docs/game.md](game.md)), and the radial target-filter menu (see
+[docs/menus.md](menus.md)). `force_render()` renders two frames synchronously;
+most states call it at the end of `exit()` so the outgoing scene doesn't hang
+on screen while the next state's heavy assets load.
 
 ## `asset_manager.py` and `asset_pools.py` — caching by path
 
 [`asset_manager.py`](../../src/space_flight/global_architecture/asset_manager.py)'s
-`AssetManager` is a single app-wide `path -> loaded asset` cache:
-`get_asset()` returns the already-loaded asset for a path or loads-and-caches
-it on first request, so every caller (levels, actors, UI) that references the
-same file gets one shared instance rather than reloading it. `COMMON_ASSETS_TO_LOAD`
-is the fixed list of assets always worth preloading at boot regardless of
-level (ship models, common sounds, dust/explosion textures — see the
-inline comments on *why* specific heavy assets like capital ship glTFs and
-the cloud atlas are preloaded, to avoid mid-level load stalls);
-`load_game_assets`/`load_assets_task` drain that list one asset per frame
-during the splash screen, updating a progress bar as they go.
-`instantiate_3d_model_to_node` is the usual way actors attach a model: it
-resolves the (cached) model asset and creates a Panda3D *instance* of it
-under the caller's node, rather than a full copy.
+`AssetManager.get_asset()` returns the cached asset for a path, loading it on
+first request, so every caller shares one instance. `COMMON_ASSETS_TO_LOAD`
+is preloaded at boot whatever the level (its inline comments say why some
+heavy assets, like capital ship glTFs and the cloud atlas, are on it: to avoid
+mid-level load stalls); `load_game_assets`/`load_assets_task` load it one
+asset per frame during the splash screen, updating its progress bar.
+`instantiate_3d_model_to_node` is how actors attach a model: it attaches a
+Panda3D *instance* of the cached model under the caller's node, not a copy.
 
 [`asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py)
-implements the two non-model asset kinds `AssetManager` delegates to:
-- **`TexturePool`** loads either a single texture file or every file
-  matching a glob pattern in a directory, and `get_texture()` returns a
-  random one from the pool — used for texture *variety* (e.g. picking among
-  several dust sprite colours) rather than pure caching.
-- **`SoundPool`** pre-loads a fixed-size pool of sound instances (1000 by
-  default, `SOUND_POOL_LENGTH`) so multiple copies of the same sound can play
-  overlapping without one cutting the other off. `get_sound()` hands back an
-  instance not currently `in_use` (optionally randomising its pitch for
-  variety) and raises if the whole pool is busy; `release_sound()` stops
-  playback and frees the slot. Distinguishes 3D (positional,
-  `Audio3DManager`-loaded) from plain sounds via `is_3d`. This is the same
-  pooling model `fx/sfx.py`'s `SFX` builds its own lower-level pools on top
-  of (see [docs/fx.md](fx.md)) — `AssetManager` is the app-wide cache,
-  `SFX`'s per-category pools are the gameplay-facing API.
+holds the non-model asset kinds:
 
-## `graphics_manager.py` and `graphics_settings.py` — how the scene renders
+- **`TexturePool`** loads one texture file, or every file matching a glob in a
+  directory; `get_texture()` returns a random one (all current callers pass a
+  single file).
+- **`SoundPool`** preloads `SOUND_POOL_LENGTH` (1000) instances of a sound —
+  or, for a directory, random picks among the matching files — so copies can
+  overlap without cutting each other off. `get_sound()` hands out an instance
+  not `in_use` (optionally with a randomised pitch) and raises if the whole
+  pool is busy; `release_sound()` stops it and frees the slot. `is_3d` picks
+  positional (`Audio3DManager`) or plain loading. `SFX` (see
+  [docs/fx.md](fx.md)) fetches its per-category pools through `AssetManager`
+  and is the gameplay-facing sound API.
 
-These two modules split responsibility the same way `AssetManager` and
-`asset_pools.py` do: settings own *what the sanitised configuration says*,
-the manager owns *making the engine reflect it*.
+## `graphics_settings.py` and `graphics_manager.py` — how the scene renders
+
+The settings own *what the sanitised configuration says*; the manager owns
+*making the engine reflect it*.
 
 [`graphics_settings.py`](../../src/space_flight/global_architecture/graphics_settings.py)'s
-`GraphicsSettings` loads `configuration/graphics.yaml` layered over a
-read-only `configuration/default_graphics.yaml` (`_deep_merge`) — unlike the
-[input bindings](ui.md), which are not layered: `load_bindings` reads
+`GraphicsSettings` loads `configuration/graphics.yaml` layered over the
+read-only `configuration/default_graphics.yaml` (`_deep_merge`). The
+[input bindings](ui.md) are not layered: `load_bindings` reads
 `configuration/configuration.yaml` alone, and `default_configuration.yaml` is
-only read by the input settings menu's reset-to-defaults. It then
-`sanitise()`s the merged result so every field is
-clamped to something the renderer can safely act on (valid display mode,
-minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample counts,
-a known cloud-quality name, etc.) — a malformed or hand-edited config file
-degrades to defaults rather than crashing the renderer. `save()` re-sanitises
-and persists to the user file; `reset_to_default()` reloads just the defaults
-without touching it.
+only read by the input settings menu's reset-to-defaults. `sanitise()` then
+clamps every field to something the renderer can act on (valid display mode,
+minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample count,
+known cloud-quality name, ...), so a malformed or hand-edited file degrades to
+defaults instead of crashing. `save()` re-sanitises and writes the user file;
+`reset_to_default()` reloads the defaults without writing it.
 
-Not every setting is consumed by `GraphicsManager`. `clouds.quality` is read by
-`CloudField` itself when it builds, the same way the ocean reads
-`render.reflection_scale` — the setting belongs to the thing that can act on it,
-rather than being threaded through the manager. Its four names must match
+Not every setting goes through `GraphicsManager`: the setting belongs to the
+thing that acts on it. `CloudField` reads `clouds.quality` when it builds, and
+the ocean reads `render.reflection_scale`. The four quality names must match
 `CloudQuality` in
-[`scenes/cloud/cloud.py`](../../src/space_flight/scenes/cloud/cloud.py), since a
-name the sanitiser accepts but the enum does not know would validate and then
-silently fall back to `high`; a test asserts the two lists agree.
+[`scenes/cloud/cloud.py`](../../src/space_flight/scenes/cloud/cloud.py): a name
+the sanitiser accepts but the enum doesn't know would fall back to `high` at
+build time. A test asserts the two lists agree.
 
 [`graphics_manager.py`](../../src/space_flight/global_architecture/graphics_manager.py)'s
-`GraphicsManager` applies that sanitised config to the live engine, split
-into two independent concerns (detailed in the module's own docstring):
+`GraphicsManager` applies the sanitised config to the live engine:
 
 - **Window mode** — `open_game_window()` closes the splash window and opens
-  the real one honouring the saved fullscreen/windowed size (called once,
-  from `SplashState.exit`); `apply_window_settings()` re-applies display
-  settings to the *already-open* window at runtime (used by the graphics
-  settings menu on save) without needing a restart.
-- **Render-scale / anti-aliasing pipeline** — `begin_scene_render()` (called
-  once per level load from `FlightState.enter`, see
-  [docs/game.md](game.md)) is a no-op when scale is 1.0 and no AA is
-  requested (straight-to-window rendering); otherwise it builds a
-  `FilterManager` pipeline that renders the 3D scene into an offscreen
-  buffer sized `window * scale` (with MSAA if requested) and composites it
-  back to the window through a fullscreen quad shader (plain blit, or FXAA).
-  Critically, only the 3D scene is routed through this buffer — 2D layers
-  (HUD, menus) stay at native window resolution, so lowering render scale
-  for performance never blurs UI text. `_update_pipeline_uniforms` keeps a
-  power-of-two texture-padding correction in sync every frame, since the
-  GSG may pad the offscreen target and the correct scale factor is only
-  known after the first render. `get_render_size()` lets other
-  resolution-dependent buffers (e.g. the ocean reflection) size themselves
-  off the *internal* render resolution rather than the window size.
-  `end_scene_render()` tears the whole pipeline down and is always called
-  first inside `begin_scene_render()`, making rebuilding idempotent.
-
-## Where things live
-
-Everything in this page lives directly under
-[`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/):
-the app root and state stack in `simulator.py`, the state contract in
-`base_state.py`, asset caching in `asset_manager.py`/`asset_pools.py`, and
-display/render settings in `graphics_manager.py`/`graphics_settings.py`. The
-auto-generated [code reference](apidocs/index.rst) has the full per-class API.
+  the real one with the saved fullscreen/windowed size (once, from
+  `SplashState.exit`); `apply_window_settings()` re-applies them to the open
+  window at runtime (graphics settings menu, on save).
+- **Render scale / anti-aliasing** — `begin_scene_render()` (once per level
+  load, from `FlightState.enter`) is a no-op at scale 1.0 with no AA.
+  Otherwise it builds a `FilterManager` pipeline that renders the 3D scene
+  into an offscreen buffer of `window * scale` pixels (with MSAA if
+  requested) and composites it to the window through a fullscreen quad
+  shader (plain blit, or FXAA). Only the 3D scene goes through the buffer:
+  2D layers (HUD, menus) stay at native resolution, so lowering render scale
+  never blurs UI text. Changes therefore apply on the next level load.
+  `_update_pipeline_uniforms` refreshes a power-of-two padding correction
+  every frame, since the GSG may pad the offscreen texture and the real
+  scale is only known after the first render. `get_render_size()` lets
+  other resolution-dependent buffers (e.g. the ocean reflection) size off
+  the internal render resolution rather than the window. `end_scene_render()`
+  tears the pipeline down; `begin_scene_render()` calls it first, so
+  rebuilding is idempotent.

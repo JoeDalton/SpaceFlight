@@ -14,9 +14,16 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from space_flight.utils import low_pass_filter_first_order
+
+if TYPE_CHECKING:
+    from space_flight.actors.player import Player
+    from space_flight.game.flight_state import FlightState
+    from space_flight.global_architecture.base_state import BaseState
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
+    from space_flight.ui.input_reader import InputState
 
 THROTTLE_BOOST_VALUE = 2.0
 VIEW_BUTTON_INCREMENT = 1.0
@@ -36,14 +43,14 @@ class InputContext(ABC):
     when the context becomes or stops being the top of the stack.
     """
 
-    def on_activate(self) -> None:
+    def on_activate(self):
         pass
 
-    def on_deactivate(self) -> None:
+    def on_deactivate(self):
         pass
 
     @abstractmethod
-    def consume(self, state) -> None:
+    def consume(self, state: InputState):
         """
         Interprets *state* and drives game objects. Called once per frame
         while this context is on top of the stack.
@@ -52,10 +59,10 @@ class InputContext(ABC):
             produced by the active reader this frame.
         """
 
-    def clean(self) -> None:
+    def clean(self):
         pass
 
-    def refresh_bindings(self, app) -> None:
+    def refresh_bindings(self, app: SpaceFlightSimulator):
         pass
 
     @staticmethod
@@ -96,10 +103,10 @@ class InputContextStack:
     their own contexts on it.
     """
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.stack: list[InputContext] = []
 
-    def push(self, context: InputContext) -> None:
+    def push(self, context: InputContext):
         """
         Pushes *context* onto the stack, making it the active context.
 
@@ -110,7 +117,7 @@ class InputContextStack:
         self.stack.append(context)
         context.on_activate()
 
-    def pop(self) -> None:
+    def pop(self):
         """
         Removes the top context, cleans it, and re-activates the one below.
         """
@@ -122,7 +129,7 @@ class InputContextStack:
         if self.stack:
             self.stack[-1].on_activate()
 
-    def dispatch(self, state) -> None:
+    def dispatch(self, state: InputState):
         """
         Passes *state* to the top context.  No-op if the stack is empty.
 
@@ -132,14 +139,14 @@ class InputContextStack:
         if self.stack:
             self.stack[-1].consume(state)
 
-    def clean(self) -> None:
+    def clean(self):
         """Pops and cleans all remaining contexts."""
         while self.stack:
             top = self.stack.pop()
             top.on_deactivate()
             top.clean()
 
-    def refresh_all_bindings(self, app) -> None:
+    def refresh_all_bindings(self, app: SpaceFlightSimulator):
         """Call refresh_bindings on every context in the stack."""
         for context in self.stack:
             context.refresh_bindings(app)
@@ -166,8 +173,11 @@ class FlightInputContext(InputContext):
     """
 
     def __init__(
-        self, game, player, radial_menu_factory: Callable | None = None
-    ) -> None:
+        self,
+        game: FlightState,
+        player: Player,
+        radial_menu_factory: Callable | None = None,
+    ):
         """
         :param game: Active :class:`~space_flight.game.flight_state.FlightState`.
         :param player: The human :class:`~space_flight.actors.player.Player`.
@@ -199,7 +209,7 @@ class FlightInputContext(InputContext):
     # InputContext interface
     # ------------------------------------------------------------------
 
-    def consume(self, state) -> None:
+    def consume(self, state: InputState):
         """
         :param state: Current
             :class:`~space_flight.ui.input_reader.InputState`.
@@ -211,12 +221,12 @@ class FlightInputContext(InputContext):
         self.player.pitch_rate = pitch
         self.player.roll_rate = roll
 
-    def clean(self) -> None:
+    def clean(self):
         self.game = None
         self.player = None
         self.radial_menu_factory = None
 
-    def refresh_bindings(self, app) -> None:
+    def refresh_bindings(self, app: SpaceFlightSimulator):
         input_type = app.bindings["input_type"]
         self.input_type = input_type
         self.bindings = app.bindings["contexts"]["flight"][input_type]
@@ -226,32 +236,32 @@ class FlightInputContext(InputContext):
     # Binding helpers
     # ------------------------------------------------------------------
 
-    def pressed(self, state, action: str) -> bool:
+    def pressed(self, state: InputState, action: str) -> bool:
         key = self.bindings.get(action)
         if key and state.buttons.get(key):
             return True
         key = self.global_bindings.get(action)
         return bool(key and state.buttons.get(key))
 
-    def held(self, state, action: str) -> bool:
+    def held(self, state: InputState, action: str) -> bool:
         key = self.bindings.get(action)
         if key and state.repeats.get(key):
             return True
         key = self.global_bindings.get(action)
         return bool(key and state.repeats.get(key))
 
-    def active(self, state, action: str) -> bool:
+    def active(self, state: InputState, action: str) -> bool:
         """True on the frame of first press OR while held."""
         return self.pressed(state, action) or self.held(state, action)
 
-    def released(self, state, action: str) -> bool:
+    def released(self, state: InputState, action: str) -> bool:
         key = self.bindings.get(action)
         if key and state.releases.get(key):
             return True
         key = self.global_bindings.get(action)
         return bool(key and state.releases.get(key))
 
-    def axis(self, state, action: str) -> float:
+    def axis(self, state: InputState, action: str) -> float:
         key = self.bindings.get(action)
         if not key:
             return 0.0
@@ -264,7 +274,7 @@ class FlightInputContext(InputContext):
     # Actions
     # ------------------------------------------------------------------
 
-    def handle_actions(self, state) -> None:
+    def handle_actions(self, state: InputState):
         # Pause
         if self.pressed(state, "pause"):
             self.game.set_pause()
@@ -321,12 +331,12 @@ class FlightInputContext(InputContext):
     # Flight axes
     # ------------------------------------------------------------------
 
-    def flight_axes(self, state) -> tuple[float, float, float, float]:
+    def flight_axes(self, state: InputState) -> tuple[float, float, float, float]:
         if self.input_type == "keyboard":
             return self.keyboard_axes(state)
         return self.analog_axes(state)
 
-    def keyboard_axes(self, state) -> tuple[float, float, float, float]:
+    def keyboard_axes(self, state: InputState) -> tuple[float, float, float, float]:
         throttle_up = self.active(state, "throttle_up")
         throttle_down = self.active(state, "throttle_down")
         self.throttle += 0.005 * (float(throttle_up) - float(throttle_down))
@@ -364,7 +374,7 @@ class FlightInputContext(InputContext):
         throttle = THROTTLE_BOOST_VALUE if self.is_boost else self.throttle
         return throttle, self.yaw_smoothed, self.pitch_smoothed, self.roll_smoothed
 
-    def analog_axes(self, state) -> tuple[float, float, float, float]:
+    def analog_axes(self, state: InputState) -> tuple[float, float, float, float]:
         throttle = self.axis(state, "throttle")
         yaw = self.axis(state, "yaw")
         pitch = self.axis(state, "pitch")
@@ -384,14 +394,15 @@ class PauseMenuInputContext(InputContext):
     Pushed onto the stack when the game is paused.
 
     Blocks all flight inputs (FlightInputContext is below and not ticked).
-    Pressing the pause key again calls state_manager.pop(), which triggers
-    FlightState.resume() and pops this context.
+    Pressing the pause key again calls state_manager.pop(), popping the top
+    menu state (normally PauseMenuState, whose exit() pops this context and
+    lets FlightState resume).
 
     Both the device-specific pause binding and the global one are checked so
     that escape always works regardless of the active input type.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: SpaceFlightSimulator):
         """
         :param app: The simulator app
         """
@@ -405,7 +416,7 @@ class PauseMenuInputContext(InputContext):
             k for k in (pause_device, pause_global) if k
         )
 
-    def consume(self, state) -> None:
+    def consume(self, state: InputState):
         """
         :param state: the current input state
         """
@@ -414,7 +425,7 @@ class PauseMenuInputContext(InputContext):
                 self.app.state_manager.pop()
                 return
 
-    def refresh_bindings(self, app) -> None:
+    def refresh_bindings(self, app: SpaceFlightSimulator):
         input_type = app.bindings["input_type"]
         device_bindings = app.bindings["contexts"]["flight"].get(input_type, {})
         global_bindings = app.bindings.get("global", {})
@@ -422,7 +433,7 @@ class PauseMenuInputContext(InputContext):
         pause_global = global_bindings.get("pause")
         self.pause_keys = frozenset(k for k in (pause_device, pause_global) if k)
 
-    def clean(self) -> None:
+    def clean(self):
         self.game = None
 
 
@@ -443,7 +454,7 @@ class HyperspaceInputContext(InputContext):
     Both the device-specific binding and the global one are honoured.
     """
 
-    def __init__(self, app, on_trigger: Callable) -> None:
+    def __init__(self, app: SpaceFlightSimulator, on_trigger: Callable):
         """
         :param app: the simulator app
         :param on_trigger: zero-argument callback fired on the first key press
@@ -454,7 +465,7 @@ class HyperspaceInputContext(InputContext):
         self.drop_keys = self._resolve_keys(app)
 
     @staticmethod
-    def _resolve_keys(app) -> frozenset[str]:
+    def _resolve_keys(app: SpaceFlightSimulator) -> frozenset[str]:
         """Collect the device-specific and global drop_hyperspace keys."""
         input_type = app.bindings["input_type"]
         device = (
@@ -464,7 +475,7 @@ class HyperspaceInputContext(InputContext):
         keys = (device.get("drop_hyperspace"), global_bindings.get("drop_hyperspace"))
         return frozenset(k for k in keys if k)
 
-    def consume(self, state) -> None:
+    def consume(self, state: InputState):
         """
         :param state: the current input state
         """
@@ -476,10 +487,10 @@ class HyperspaceInputContext(InputContext):
                 self.on_trigger()
                 return
 
-    def refresh_bindings(self, app) -> None:
+    def refresh_bindings(self, app: SpaceFlightSimulator):
         self.drop_keys = self._resolve_keys(app)
 
-    def clean(self) -> None:
+    def clean(self):
         self.on_trigger = None
 
 
@@ -515,23 +526,20 @@ class RadialMenuInputContext(InputContext):
     is released the on_select callback receives the chosen slice index (or
     None if the vector magnitude was below min_magnitude).
 
-    The context pops itself by calling state_manager.pop() on release,
-    which causes :class:`~space_flight.menus.radial_menu_state.RadialMenuState`
-    to call exit() and clean up the visual overlay.
-
-    The context never touches game time, so the simulation keeps running while
-    the menu is open.
+    On release it calls state_manager.pop(); the exit() of
+    :class:`~space_flight.menus.radial_menu_state.RadialMenuState` then pops
+    this context and destroys the visual overlay.
     """
 
     def __init__(
         self,
-        game,
+        game: BaseState,
         n_slices: int,
         on_select: Callable,
         trigger_hw_name: str,
         on_hover: Callable | None = None,
         min_magnitude: float = 0.8,
-    ) -> None:
+    ):
         """
         :param game: Active game state.
         :param n_slices: Number of radial slices.
@@ -564,7 +572,7 @@ class RadialMenuInputContext(InputContext):
     # InputContext interface
     # ------------------------------------------------------------------
 
-    def consume(self, state) -> None:
+    def consume(self, state: InputState):
         """
         :param state: Current
             :class:`~space_flight.ui.input_reader.InputState`.
@@ -585,7 +593,7 @@ class RadialMenuInputContext(InputContext):
             self.game.app.state_manager.pop()
             on_select(selected)
 
-    def clean(self) -> None:
+    def clean(self):
         self.game = None
         self.on_select = None
         self.on_hover = None
@@ -594,7 +602,7 @@ class RadialMenuInputContext(InputContext):
     # Direction reading
     # ------------------------------------------------------------------
 
-    def read_direction(self, state) -> tuple[float, float]:
+    def read_direction(self, state: InputState) -> tuple[float, float]:
         """
         Return (x, y) in [-1, 1] from analog axes or keyboard keys.
 

@@ -1,7 +1,7 @@
 """
 Small, dependency-free, clock-injected mechanics shared by the game's several
 time-driven subsystems: a finite state machine (tactician intent, navigator
-behaviour/phase, shield lifecycle, auto-aim lock, tractor-beam grab), a cooldown
+behaviour, shield lifecycle, auto-aim lock, tractor-beam grab), a cooldown
 timer (shield regen, tractor re-grab), and a one-way dying-phase timer (a
 destructible or the player playing out its death before it is reaped).
 
@@ -214,8 +214,8 @@ class DyingPhase:
         """
         Whether the phase has lasted at least *duration_s*.
 
-        A non-positive duration finishes immediately and never reads the clock --
-        the legacy "reap the frame health hits zero" behaviour.
+        A non-positive duration finishes immediately and never reads the clock
+        (reap on the frame health hits zero).
 
         :param duration_s: how long the phase should last
         :return: True once it should end

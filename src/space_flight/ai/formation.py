@@ -1,13 +1,23 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from space_flight.actors.pawn import Pawn
 
 LOGGER = logging.getLogger()
 
 
 class Formation:
     """
-    A class for wing formations
+    A wing formation: a named layout of slot positions (relative to the leader,
+    in its right/forward/up frame, scaled by scale_m) and the ids of the ships
+    filling them, leader first.
     """
 
     FIGHTER_SCALE_M = 30
@@ -51,7 +61,7 @@ class Formation:
     def __init__(
         self,
         scale_m: float | None = None,
-        shape: int | None = None,
+        shape: str | None = None,
     ):
         self.ship_ids = []
         if scale_m is None:
@@ -69,12 +79,11 @@ class Formation:
         else:
             raise NotImplementedError(f"Unknown formation shape {shape}")
 
-        # Build fresh, scaled position arrays. position * scale_m allocates a
-        # new array per slot, so the shared class-level templates are never
-        # mutated (scaling them in place would compound across every Formation).
+        # position * scale_m allocates new arrays: scaling the shared class-level
+        # templates in place would compound across every Formation.
         self.relative_positions = [position * scale_m for position in template]
 
-    def get_ship_index(self, ship_id):
+    def get_ship_index(self, ship_id: UUID) -> int | None:
         """
         Returns the position of a given ship in the formation
         """
@@ -85,12 +94,10 @@ class Formation:
                 break
         return ship_index
 
-    def add_ship(self, ship, leader=False):
+    def add_ship(self, ship: Pawn, leader: bool = False):
         """
-        Adds a ship to the formation. By default, it is added as the
-        last wingman, but there is the option to set it as leader
-        If the leader option is True and the ship is already there, it is
-        simply promoted.
+        Adds a ship as the last wingman, or as leader (a ship already in the
+        formation is then promoted). Ignored, with a warning, if it is full.
         """
         ship_id = ship.id
         in_formation = False
@@ -117,9 +124,9 @@ class Formation:
         if in_formation:
             ship.formation = self
 
-    def remove_ship(self, ship_id):
+    def remove_ship(self, ship_id: UUID):
         """
-        Removes a ship from the formation. Typical case is in the event of ship death
+        Removes a ship from the formation (typically on its death)
         """
         index_to_remove = self.get_ship_index(ship_id=ship_id)
         self.ship_ids.pop(index_to_remove)

@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from collections.abc import Generator
+from typing import TYPE_CHECKING
+
 import numpy as np
 from panda3d.core import LVecBase3f, Vec3
 
@@ -10,8 +15,13 @@ from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D
 from space_flight.scenes.skybox import Skybox
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
-def scene_factory(game, scene_name: str):
+
+def scene_factory(
+    game: FlightState, scene_name: str
+) -> SceneAsteroids | SceneLavaPlanet | SceneOcean | SceneDebug:
     if scene_name == "asteroids":
         return SceneAsteroids(game=game)
     elif scene_name == "lava_planet":
@@ -27,7 +37,7 @@ def scene_factory(game, scene_name: str):
 class Scene:
     def __init__(
         self,
-        game,
+        game: FlightState,
     ):
         self.game = game
         self.up_direction = np.array([0, 0, 1])
@@ -85,7 +95,7 @@ class SceneOcean(Scene):
             self.ocean.base_node.prepare_scene(gsg)
             self.clouds.field.node.prepare_scene(gsg)
 
-    def build_decomposed(self):
+    def build_decomposed(self) -> Generator[str | None, None, None]:
         """
         Build the rest of the scene incrementally, yielding between components
         so the loading animation keeps rendering. These are all light and their
@@ -190,7 +200,7 @@ class SceneAsteroids(Scene):
             seed=2,
         )
 
-    def build_decomposed(self):
+    def build_decomposed(self) -> Generator[str, None, None]:
         """Build the asteroids scene incrementally"""
         # Skybox
         self.skybox = Skybox(game=self.game, name="purple")
@@ -269,7 +279,7 @@ class SceneLavaPlanet(Scene):
             seed=2,
         )
 
-    def build_decomposed(self):
+    def build_decomposed(self) -> Generator[str, None, None]:
         """
         Build the lava-planet scene incrementally (see
         SceneOcean.build_decomposed): lighting, dust, planet and Star Destroyer.
@@ -329,13 +339,13 @@ class SceneLavaPlanet(Scene):
 
 
 class SceneDebug(Scene):
-    def build_upfront(self) -> None:
+    def build_upfront(self):
         """
         Nothing to build upfront: the debug scene has no heavy objects.
         """
         pass
 
-    def build_decomposed(self):
+    def build_decomposed(self) -> Generator[str, None, None]:
         """
         Build the debug scene incrementally (see SceneOcean.build_decomposed):
         a skybox and lighting.

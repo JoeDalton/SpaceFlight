@@ -9,12 +9,11 @@ def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
     """
     Rotates vector by the rotation defined by quat.
 
-    Uses the scalar Rodrigues-style formula v' = v + 2*w*(q_v x v) + 2*(q_v x
-    (q_v x v)) worked out component-by-component in plain floats, instead of
-    quaternion.rotate_vectors (which builds a full rotation matrix via
-    generic, broadcasting-capable numpy ops meant for batches of vectors);
-    for a lone 3-vector that generality is pure overhead and this is
-    substantially faster (called once per ship per frame).
+    Uses the Rodrigues-style formula v' = v + 2*w*(q_v x v) + 2*(q_v x
+    (q_v x v)) in plain floats instead of quaternion.rotate_vectors, whose
+    generic, broadcasting numpy machinery (meant for batches of vectors) is
+    pure overhead for a lone 3-vector. cross3, normalize, magnitude and the
+    low-pass filter's array branch avoid numpy for the same reason.
     """
     qx, qy, qz, qw = quat.x, quat.y, quat.z, quat.w
     vx, vy, vz = vector[0], vector[1], vector[2]
@@ -61,11 +60,8 @@ def rotation_matrix_coefficients(
 
 def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """
-    Cross product of two plain 3-vectors, worked out component-by-component
-    in plain floats instead of np.cross (which, like quaternion.rotate_vectors,
-    dispatches through generic broadcasting-capable numpy machinery meant for
-    batches of vectors -- pure overhead for a lone pair of 3-vectors, and
-    substantially slower).
+    Cross product of two 3-vectors, in plain floats instead of np.cross (see
+    rotate_single_vector).
     """
     return np.array(
         (
@@ -79,24 +75,12 @@ def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 def normalize(vector: np.ndarray) -> np.ndarray:
     """
     Returns vector scaled to unit length: a 3D direction, or a quaternion's 4
-    raw components (as used when renormalizing one drifting slightly out of
-    unit norm after each integration step, e.g. in AsteroidField).
+    raw components (e.g. AsteroidField renormalizing its integrated
+    orientations).
 
-    Builds the squared norm as a plain float sum and calls math.sqrt on it
-    directly, instead of going through np.linalg.norm's generic, broadcast-
-    capable dispatch -- same pattern, and same reasoning, as
-    rotate_single_vector/cross3: for a single fixed-size vector that
-    generality is pure overhead.
-
-    A 2nd-order Taylor expansion of sqrt around 1 was tried on top of this,
-    to shortcut the sqrt call for the common near-unit-length input (a
-    direction/quaternion that only drifted by a small numerical error, not a
-    fresh arbitrary vector). It measured *slower* than calling math.sqrt
-    directly (in CPython, math.sqrt is a single fast C call, and the extra
-    branch and multiplications to evaluate the series cost more than the
-    call they replace), and its ~1e-4 relative error broke exact-orthonormal
-    assumptions elsewhere in the codebase -- so it was dropped in favour of
-    a plain, exact math.sqrt.
+    Plain floats and math.sqrt instead of np.linalg.norm (see
+    rotate_single_vector). A Taylor shortcut of sqrt near 1 was ruled out:
+    slower in CPython and not exact (see docs/source/performance.md).
     """
     if len(vector) == 3:
         x, y, z = vector[0], vector[1], vector[2]
@@ -114,11 +98,8 @@ def magnitude(vector: np.ndarray) -> float:
     Returns the Euclidean norm (magnitude) of vector: a 2D screen-space
     vector, a 3D direction/speed, or a quaternion's 4 raw components.
 
-    Same reasoning as normalize/cross3/rotate_single_vector: builds the
-    squared norm as a plain float sum and calls math.sqrt on it directly,
-    instead of going through np.linalg.norm's generic, broadcast-capable
-    dispatch -- for a single fixed-size vector that generality is pure
-    overhead.
+    Plain floats and math.sqrt instead of np.linalg.norm (see
+    rotate_single_vector).
     """
     if len(vector) == 3:
         x, y, z = vector[0], vector[1], vector[2]
@@ -134,7 +115,7 @@ def magnitude(vector: np.ndarray) -> float:
 
 def safe_angle_rad(angle_rad: float) -> float:
     """
-    Transfers an angle in the [-pi, pi[ quadrant
+    Wraps an angle into [-pi, pi[
 
     :param angle_rad: An angle in radians
     :return: The same angle in [-pi, pi[
@@ -149,21 +130,20 @@ def safe_angle_rad(angle_rad: float) -> float:
 
 
 def low_pass_filter_first_order(
-    value: Union[float, np.ndarray],  # current raw input: 1.0 if pressed, 0.0 if not
+    value: Union[float, np.ndarray],  # raw input (target)
     previous: Union[float, np.ndarray],  # previous smoothed output
     dt: float,  # Time since last call
-    rise_time: float,  # seconds to reach ~63% when pressed
-    fall_time: float,  # seconds to decay when released
+    rise_time: float,  # time constant (s) while value > previous
+    fall_time: float,  # time constant (s) otherwise
 ) -> Union[float, np.ndarray]:
     """
     First order low pass filter with a possibility for distinct fall and rise
     characteristic times.
 
-    The array branch is worked out component-by-component in plain floats
-    instead of np.where/elementwise array arithmetic, which dispatch through
-    numpy's generic, broadcast-capable machinery -- same reasoning, and same
-    pattern, as cross3/magnitude/normalize: pure overhead for the small,
-    fixed-size vectors this is actually called with (turn rates, thrust).
+    A non-positive time constant returns *value* unfiltered (for an array, the
+    whole array if any component's is). The array branch works per component
+    in plain floats (see rotate_single_vector): it is called with small
+    vectors (turn rates, thrust).
     """
     if dt == 0.0:
         return value
@@ -276,8 +256,8 @@ def sample_direction_in_cone(
     Returns a random unit vector within a cone around normal.
 
     The polar angle `theta` is sampled with a square-root bias so that
-    directions are uniformly distributed over the cone's solid angle rather
-    than clustering near the axis.
+    directions spread roughly uniformly over the cone (exactly so in the
+    small-angle limit) rather than clustering near the axis.
 
     :param normal: Cone axis (unit vector).
     :param tangent: Tangent vector perpendicular to normal.
@@ -315,8 +295,6 @@ def build_axis_billboard_quat(
     :param up_hint: The up hint vector, defaults to None
     :return: A quaternion object for axis billboards
     """
-    # Make copies to avoid modifying the original vectors
-
     # Normalize forward vector
     forward_norm = magnitude(forward)
     if forward_norm < 1e-4:
@@ -357,9 +335,9 @@ def build_axis_billboard_quat(
 
 def compute_next_power_of_2(x: float) -> float:
     """
-    Computes the next power of two for float x
+    Computes the smallest power of two greater than or equal to x
 
     :param x: The reference number
-    :return: The next power of 2 superior than x
+    :return: That power of 2, as an int (at least 1)
     """
     return 2 ** math.ceil(math.log2(max(x, 1)))

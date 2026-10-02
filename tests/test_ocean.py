@@ -1,6 +1,6 @@
 """
 Unit tests for the ocean's procedural swell-grid mesh
-(space_flight.scenes.ocean.make_swell_grid_mesh).
+(space_flight.scenes.ocean.make_swell_grid_mesh and border_coords).
 
 These build CPU-side geometry only (a GeomVertexData and its index buffer),
 so they run fully headless with no window, GPU context or ShowBase — safe for CI.
@@ -93,8 +93,8 @@ def test_swell_grid_mesh_vertex_count_and_coords():
 
 
 def test_a_flat_planet_gives_a_flat_sheet():
-    """curvature=0 must reproduce the old behaviour exactly — all displacement
-    then comes from the vertex shader's swell."""
+    """curvature=0 gives an exactly flat sheet — all displacement then comes
+    from the vertex shader's swell."""
     node = make_swell_grid_mesh(4000.0, 8, 24000.0, curvature=0.0, border_rings=5)
     np.testing.assert_array_equal(_read_positions(node)[:, 2], 0.0)
 
@@ -113,9 +113,9 @@ def test_the_surface_droops_by_the_true_radius():
 
 
 def test_the_droop_puts_the_horizon_where_geometry_says():
-    """The point of the whole change. A flat plane's horizon sits at exactly eye
-    level at every altitude; a curved one dips by sqrt(2h/R) — 1.0 degree at 1 km
-    of altitude, 3.05 at 9 km — and that dip is what the drop has to produce."""
+    """A flat plane's horizon sits at exactly eye level at every altitude; a
+    curved one dips by sqrt(2h/R) — 1.0 degree at 1 km of altitude, 3.05 at 9 km —
+    and that dip is what the drop has to produce."""
     for altitude, expected_dip in ((1000.0, 1.01), (9000.0, 3.05)):
         horizon = math.sqrt(2.0 * PLANET_RADIUS_M * altitude)
         drop = CURVATURE * horizon**2

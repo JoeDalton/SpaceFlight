@@ -1,10 +1,9 @@
 #version 140
 // Explosion particle fragment shader.
 //
-// Samples the sprite atlas for this particle's tile and applies the alpha
-// computed by the vertex shader. The tile's UV rect arrives per-particle as
-// the interpolated varying vTileRect (identical across the quad's corners),
-// so no uniform array or dynamic indexing is needed to pick the sprite.
+// Samples the sprite atlas for this particle's tile and applies the vertex
+// alpha. The tile's UV rect arrives as vTileRect (identical at all four
+// corners), so no uniform array or dynamic indexing is needed.
 
 uniform sampler2D p3d_Texture0;  // sprite atlas (auto-bound via default TextureStage)
 

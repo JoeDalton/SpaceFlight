@@ -61,10 +61,9 @@ camera never triggers a recycle and flatters this, so the probe moved the camera
 
 ### Conclusion from the above
 
-Cost is dominated by **per-billboard work and per-frame CPU**, not by fill rate.
-That corrects an earlier claim of mine that "the billboard count is where the
-frame time is *because fill rate tracks it*" — the count part holds, the fill part
-does not.
+Cost is dominated by **per-billboard work and per-frame CPU**, not by fill rate:
+the billboard count is where the frame time is, but not because fill rate tracks
+it.
 
 ### A measurement that did NOT work, recorded so it is not repeated
 
@@ -124,8 +123,8 @@ yet.** Getting one would need real GPU timer queries.
    the scene depth texture; low-res compositing additionally needs depth-aware
    (bilateral) upsampling or there are halos around every ship silhouette.
 
-   That is the plumbing `trials/cloud_harris/pure-shader/v20..v42` rejected after
-   23 prototypes. Infrastructure catch: `GraphicsManager` only builds an offscreen
+   That is the plumbing the `trials/cloud_harris/pure-shader/v20..v42`
+   prototypes (local, untracked) rejected after 23 attempts. Infrastructure catch: `GraphicsManager` only builds an offscreen
    pipeline when render scale < 1 or MSAA/FXAA is on, so a low-res slice buffer
    would need that path made unconditional.
 
@@ -153,11 +152,11 @@ The outer LOD shells hold thousands of billboards each covering a handful of
 pixels — the worst case for quad rasterisation, since a 4-pixel quad still costs
 full primitive setup and 4 vertices, and cost is linear in count. Meanwhile the
 far field is sub-pixel in detail, fully haze-coloured by 400 km
-(`HORIZON_DISTANCE`), never flown through, and never intersected by ships. Blur is
+(`CloudField`'s `horizon_distance`), never flown through, and never intersected by ships. Blur is
 free there; depth is irrelevant there.
 
-This does **not** contradict the rejection of impostors in
-`trials/cloud_harris/cards/v10..v13`: that rejection was specifically because
+This does **not** contradict the rejection of impostors in the (untracked)
+`trials/cloud_harris/cards/v10..v13` prototypes: that rejection was specifically because
 impostors cannot be flown through. The far field never is.
 
 So: keep billboards for the near shells, where the silhouette, the fly-through and
@@ -169,8 +168,8 @@ cheapest-looking, least visually critical billboards in the system.
 
 ## What would change the verdict for the near field
 
-- **Overcast targets.** At stratus's 0.82 coverage rather than scattered cumulus's
-  0.29, the empty-sky objection largely evaporates and slices become genuinely
+- **Overcast targets.** At overcast coverage (~0.8) rather than scattered
+  cumulus's 0.29, the empty-sky objection largely evaporates and slices become genuinely
   competitive.
 - **Light shafts / godrays.** A froxel grid is their natural home, which would
   change the accounting entirely.

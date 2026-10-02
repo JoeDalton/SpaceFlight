@@ -1,7 +1,7 @@
 """
-Unit tests for the pure helpers of the cockpit low-health FX
-(space_flight.fx.cockpit_fx): the health-tier mapping and the incoming-shot
-to screen-direction projection. Both are game-free, so no Panda3D app is needed.
+Unit tests for the cockpit low-health FX (space_flight.fx.cockpit_fx): the
+health-tier mapping, the incoming-shot to screen-direction projection, the
+damage-stutter scheduler and the spark-emitter loading. None needs a Panda3D app.
 """
 
 import random
@@ -65,7 +65,7 @@ def test_shot_from_above():
 
 def test_diagonal_is_unit_length():
     d = screen_direction_from_incoming([1.0, 0.0, -1.0], _RIGHT, _UP)
-    # came from lower-left of travel -> upper-left on screen, unit length.
+    # Travelling right and down -> came from the upper-left, unit length.
     np.testing.assert_allclose(d, [-np.sqrt(0.5), np.sqrt(0.5)], atol=1e-6)
     assert np.linalg.norm(d) == pytest.approx(1.0)
 

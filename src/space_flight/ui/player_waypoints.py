@@ -45,7 +45,7 @@ class WaypointMarker:
 
     def __init__(
         self, game: FlightState, radius_m: float = 120.0, name: str = "Waypoint"
-    ) -> None:
+    ):
         self.game = game
         self.id = uuid.uuid4()
         self.name = name
@@ -53,8 +53,6 @@ class WaypointMarker:
         self.parent = self
         self.team = 0  # neutral: bots never target it
         self.is_dead = False
-        # Actor category: lets the "Waypoints" target filter pick this out (and
-        # other filters exclude it).
         self.category = WAYPOINT_CATEGORY
         self.position = np.zeros(3)
         self.speed = np.zeros(3)
@@ -74,7 +72,7 @@ class WaypointMarker:
 
         game.interactions.add_actor(self)
 
-    def move_to(self, position: Sequence[float]) -> None:
+    def move_to(self, position: Sequence[float] | np.ndarray):
         """
         Move the marker to position (without changing its visibility).
 
@@ -83,7 +81,7 @@ class WaypointMarker:
         self.position = np.asarray(position, dtype=float)
         self.node.setPos(*self.position)
 
-    def set_visible(self, visible: bool) -> None:
+    def set_visible(self, visible: bool):
         """
         Show or hide the marker.
 
@@ -94,7 +92,7 @@ class WaypointMarker:
         else:
             self.node.hide()
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Remove the marker from the world and the targeting system.
 
@@ -132,7 +130,7 @@ class PlayerWaypoints:
         waypoints: Sequence[Sequence[float]],
         arrival_radius_m: float = 350.0,
         marker_radius_m: float = 120.0,
-    ) -> None:
+    ):
         self.game = game
         self.waypoints = [np.asarray(w, dtype=float) for w in waypoints]
         self.arrival_radius_sq = arrival_radius_m * arrival_radius_m
@@ -144,7 +142,7 @@ class PlayerWaypoints:
         game.method_lists[self.id] = [self.update]
         self._show_current()
 
-    def _show_current(self) -> None:
+    def _show_current(self):
         """
         Position the marker on the current waypoint, or finish if past the last.
         """
@@ -153,7 +151,7 @@ class PlayerWaypoints:
         else:
             self._finish()
 
-    def update(self) -> None:
+    def update(self):
         """
         Advance to the next waypoint once the player reaches the current one, and
         keep the marker visible only while the "Waypoints" target filter is on.
@@ -166,14 +164,14 @@ class PlayerWaypoints:
             self.index += 1
             self._show_current()
 
-    def _finish(self) -> None:
+    def _finish(self):
         """
         Mark the route complete and remove the marker.
         """
         self._done = True
         self.marker.clean()
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Tear down the marker and stop updating.
         """

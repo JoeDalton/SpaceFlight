@@ -7,7 +7,7 @@ Responsibilities:
   that polling might miss between frames.
 - Derive pressed / held / released per button by comparing current poll to the
   previous frame.
-- Apply dead zones and produce normalised axis values.
+- Apply dead zones to axis values.
 - Store everything in a plain InputState that contexts read.
 
 No game logic lives here.  Contexts (see input_context.py) decide what a
@@ -15,6 +15,8 @@ button press *means* in a given game mode.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 import yaml
@@ -30,15 +32,23 @@ from panda3d.core import (
 
 from space_flight import CONFIGURATION_PATH
 
+if TYPE_CHECKING:
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
+
 DEFAULT_STICK_DEAD_ZONE = 0.15
 DEFAULT_THROTTLE_DEAD_ZONE = 0.04
 
 # ---------------------------------------------------------------------------
-# Panda3D monkey-patch (preserves existing workaround for Windows UTF-8 bug)
+# Panda3D monkey-patch (Windows UTF-8 device-name workaround)
 # ---------------------------------------------------------------------------
 
 
-def _patched_attachInputDevice(self, device, prefix=None, watch=False):
+def _patched_attachInputDevice(
+    self: ShowBase,
+    device: InputDevice,
+    prefix: str | None = None,
+    watch: bool = False,
+):
     """
     Monkey-patch for :meth:`ShowBase.attachInputDevice` that avoids a
     UnicodeDecodeError on Windows.
@@ -50,14 +60,16 @@ def _patched_attachInputDevice(self, device, prefix=None, watch=False):
     touches device.name directly; :func:`safe_device_name` is used
     wherever a printable name is needed.
 
-    A second existing workaround is also preserved: when no *prefix* is
-    supplied the :class:`~panda3d.core.InputDeviceNode` and its
+    For the same reason, when no *prefix* is supplied the
+    :class:`~panda3d.core.InputDeviceNode` and its
     :class:`~panda3d.core.ButtonThrower` are both named "gamepad" instead
-    of falling back to the device's native name.
+    of after the device.
 
     :param device: The input device to attach.
     :param prefix: Optional event prefix string forwarded to
-        :class:`~panda3d.core.ButtonThrower`.  Defaults to None.
+        :class:`~panda3d.core.ButtonThrower`.
+    :param watch: Also route the device into the mouse watcher, as in
+        ShowBase; without a *prefix*, no button thrower is created then.
 
     TODO Propose this as a contribution to panda3d
     """
@@ -76,7 +88,7 @@ def _patched_attachInputDevice(self, device, prefix=None, watch=False):
 ShowBase.attachInputDevice = _patched_attachInputDevice
 
 
-def _patched_detachInputDevice(self, device):
+def _patched_detachInputDevice(self: ShowBase, device: InputDevice):
     """
     Monkey-patch for :meth:`ShowBase.detachInputDevice` that avoids a
     UnicodeDecodeError on Windows.
@@ -110,7 +122,7 @@ def _patched_detachInputDevice(self, device):
 ShowBase.detachInputDevice = _patched_detachInputDevice
 
 
-def safe_device_name(device) -> str:
+def safe_device_name(device: InputDevice) -> str:
     """
     Returns a printable name for *device*, working around a UTF-8 crash on
     Windows.
@@ -184,7 +196,7 @@ class InputState:
     buttons  — hardware names whose button transitioned up→down this frame.
     repeats  — hardware names that were held down both this frame and last.
     releases — hardware names that transitioned down→up this frame.
-    axes     — normalised, dead-zoned continuous axis values.
+    axes     — dead-zoned continuous axis values.
 
     All dicts are rebuilt each frame by :class:`InputReader`.  Contexts must
     not mutate them.
@@ -192,7 +204,7 @@ class InputState:
 
     __slots__ = ("buttons", "repeats", "releases", "axes")
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.buttons: dict[str, bool] = {}
         self.repeats: dict[str, bool] = {}
         self.releases: dict[str, bool] = {}
@@ -221,9 +233,9 @@ class InputReader:
       state is derived from polling alone.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: SpaceFlightSimulator):
         """
-        Initialises shared polling buffers and register global key callbacks.
+        Initialises shared polling buffers and registers global key callbacks.
 
         Sets up the per-frame comparison state and event-safety-net sets, then
         registers accept() callbacks for every key listed under
@@ -295,9 +307,9 @@ class InputReader:
         self.read_axes(self.state)
         return self.state
 
-    def clean(self) -> None:
+    def clean(self):
         """
-        Unregisters all accept() callbacks and release held references.
+        Unregisters all accept() callbacks and releases held references.
 
         Must be called before the reader is discarded — for example when the
         user saves new settings and the reader is rebuilt from the updated
@@ -332,7 +344,7 @@ class InputReader:
         """
         raise NotImplementedError
 
-    def read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState):
         """
         Populates state.axes with dead-zoned axis values for this frame.
 
@@ -381,9 +393,9 @@ class KeyboardReader(InputReader):
     accept() events as a safety net.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: SpaceFlightSimulator):
         """
-        Collects bound key names and register safety-net event callbacks.
+        Collects bound key names and registers safety-net event callbacks.
 
         Calls :meth:`~InputReader.collect_button_names` with an empty axis
         set (keyboards have no analogue axes), then registers accept()
@@ -413,7 +425,7 @@ class KeyboardReader(InputReader):
             result[key] = self.app.mouseWatcherNode.isButtonDown(handle)
         return result
 
-    def read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState):
         """
         No-op — keyboards have no physical axes.
 
@@ -424,9 +436,9 @@ class KeyboardReader(InputReader):
         """
         pass  # Keyboard has no physical axes; FlightInputContext synthesises them
 
-    def clean(self) -> None:
+    def clean(self):
         """
-        Unregisters key event callbacks, then delegate to the base class.
+        Unregisters key event callbacks, then delegates to the base class.
         """
         for key in self.button_names:
             self.app.ignore(key)
@@ -442,11 +454,11 @@ class KeyboardReader(InputReader):
 class GamepadReader(InputReader):
     """
     Reads gamepad state.  Named buttons support both polling and events.
-    Axes are dead-zoned; left stick and trigger axes are sign-corrected to
-    match the expected flight control directions.
+    Axes are dead-zoned only; sign flips come from the invert_* bindings
+    applied by :class:`~space_flight.ui.input_context.FlightInputContext`.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: SpaceFlightSimulator):
         """
         Detects a connected gamepad and registers hot-plug and button events.
 
@@ -483,7 +495,7 @@ class GamepadReader(InputReader):
 
     # ------------------------------------------------------------------
 
-    def connect(self, device) -> None:
+    def connect(self, device: InputDevice):
         """
         Attaches *device* if it is a gamepad and no gamepad is already active.
 
@@ -496,9 +508,9 @@ class GamepadReader(InputReader):
             if hasattr(self, "lbl"):
                 self.lbl.hide()
 
-    def disconnect(self, device) -> None:
+    def disconnect(self, device: InputDevice):
         """
-        Detaches *device* and fall back to another gamepad if one is available.
+        Detaches *device* and falls back to another gamepad if one is available.
 
         :param device: The device that was just disconnected.
         """
@@ -555,12 +567,9 @@ class GamepadReader(InputReader):
             return 0.0
         return value - np.sign(value) * dead_zone
 
-    def read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState):
         """
         Reads and dead-zones all six gamepad axes into state.axes.
-
-        Left-stick X/Y axes are sign-inverted to match the flight control
-        conventions used elsewhere in the game.
 
         :param state: The :class:`InputState` being built; state.axes is
             populated in place.
@@ -570,7 +579,6 @@ class GamepadReader(InputReader):
         sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
         tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
 
-        # Sign conventions match the original Gamepad.get_inputs() behaviour
         state.axes["right_trigger"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.right_trigger).value, tdz
         )
@@ -590,7 +598,7 @@ class GamepadReader(InputReader):
             self.gamepad.findAxis(InputDevice.Axis.right_y).value, sdz
         )
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Detaches the gamepad, destroys the warning label, unregisters all event
         callbacks, then delegates to the base class.
@@ -624,9 +632,9 @@ class JoystickReader(InputReader):
     safety-net accept() is registered for them.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app: SpaceFlightSimulator):
         """
-        Detects a connected flight stick and register hot-plug events.
+        Detects a connected flight stick and registers hot-plug events.
 
         Unlike :class:`GamepadReader`, no safety-net button event callbacks
         are registered because most flight-stick buttons do not generate
@@ -653,7 +661,7 @@ class JoystickReader(InputReader):
 
     # ------------------------------------------------------------------
 
-    def connect(self, device) -> None:
+    def connect(self, device: InputDevice):
         """
         Attaches *device* if it is a flight stick and none is already active.
 
@@ -669,7 +677,7 @@ class JoystickReader(InputReader):
             if hasattr(self, "lbl"):
                 self.lbl.hide()
 
-    def disconnect(self, device) -> None:
+    def disconnect(self, device: InputDevice):
         """
         Detaches *device* and falls back to another flight stick if available.
 
@@ -738,9 +746,9 @@ class JoystickReader(InputReader):
             return 0.0
         return value - np.sign(value) * dead_zone
 
-    def read_axes(self, state: InputState) -> None:
+    def read_axes(self, state: InputState):
         """
-        Reads and dead-zone the four flight-stick axes into state.axes.
+        Reads and dead-zones the four flight-stick axes into state.axes.
 
         The throttle axis is inverted (1 − raw) so that pulling the lever
         towards the pilot increases the output value.
@@ -766,7 +774,7 @@ class JoystickReader(InputReader):
             self.flightStick.findAxis(InputDevice.Axis.roll).value, sdz
         )
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Detaches the flight stick, destroys the warning label, unregisters hot-plug
         events, then delegates to the base class.
@@ -797,7 +805,7 @@ def load_bindings() -> dict:
         return yaml.safe_load(f)
 
 
-def reader_factory(app) -> InputReader:
+def reader_factory(app: SpaceFlightSimulator) -> InputReader:
     """
     Loads the configuration, stores it on app.bindings, and instantiates the
     appropriate :class:`InputReader` subclass for the configured input type.

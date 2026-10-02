@@ -1,19 +1,9 @@
 """
-Unit tests for the graphics / settings menu logic.
+Unit tests for the graphics settings menu and the settings hub navigation.
 
 Only the pure data + callback methods are exercised (mock app, no DirectGui),
 mirroring tests/test_input_settings.py. UI construction (sliders, checkbox)
 needs a real window and is verified manually / via integration.
-
-Covers:
-- :func:`_get_by_path` / :func:`_set_by_path` / :func:`_pct` helpers
-- :meth:`GraphicsSettingsMenuState.make_row_data` — row descriptor builder
-- :meth:`GraphicsSettingsMenuState.on_scale_slider`
-- :meth:`GraphicsSettingsMenuState.on_discrete_slider` (incl. freeze regression)
-- :meth:`GraphicsSettingsMenuState.on_checkbox_toggle`
-- :meth:`GraphicsSettingsMenuState.select_mode`
-- :meth:`GraphicsSettingsMenuState.save` / :meth:`cancel`
-- :class:`SettingsMenuState` navigation
 """
 
 from unittest.mock import MagicMock
@@ -260,9 +250,7 @@ class TestOnCloudQualitySlider:
         assert state.working_config["clouds"]["quality"] == expected
 
     def test_does_not_write_back_to_slider(self, state):
-        # Same freeze regression as the MSAA slider: PGSliderBar throws ADJUST
-        # asynchronously, so writing the value back from the handler re-enqueues
-        # it every dispatch and the event queue never drains.
+        # Same freeze regression as the MSAA slider.
         slider = _mock_slider(2.0)
         state.sliders = {self.PATH: slider}
         state.slider_value_labels = {self.PATH: MagicMock()}

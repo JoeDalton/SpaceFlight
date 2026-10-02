@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 import logging
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 import numpy as np
 
 from space_flight import EPSILON_TOLERANCE, RECORD_GAME
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent
 from space_flight.ai.collision_sensor import CollisionSensor
 from space_flight.ai.generic.generic_navigator import GenericNavigator
 from space_flight.utils import magnitude, smooth_step_down
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -19,15 +24,13 @@ COLLISION_REFERENCE_SPEED_MPS = 50
 
 class GenericShipNavigator(GenericNavigator):
     """
-    A class to define the aim of a bot given an intent given by a tactician, and
-    passes its decision to a pilot that steers the ship.
-
-    Outputs a direction to point to and a reference distance
+    Navigator for free-flying ships: blends the intent's direction with collision
+    avoidance, and outputs a direction to point to and a desired speed.
     """
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict,
         debug: bool = False,
@@ -42,15 +45,15 @@ class GenericShipNavigator(GenericNavigator):
         # before: navigate() runs when the bot thinks, not necessarily every frame
         self._last_navigate_s = None
         self.think_dt_s = 0.0
-        # Per-phase scaling of the collision-avoidance contribution, reset each
-        # frame and lowered by phases that deliberately fly close (formation, the
-        # strafe corridor). The surface altitude floor is a *separate* mechanism
-        # (the sensor lumps all obstacles into one repulsion, so a single scalar
-        # can't keep the floor while dropping lateral avoidance).
+        # Per-phase scaling of the collision-avoidance contribution, reset by each
+        # navigate() and lowered by phases that deliberately fly close (formation,
+        # the strafe corridor). The strafe altitude floor is separate: the sensor
+        # lumps all obstacles into one repulsion, so this scalar can't keep the
+        # floor while dropping lateral avoidance.
         self.avoidance_weight_factor = 1.0
         self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
 
-    def navigate(self, intent: int, target_dict: dict) -> tuple[np.ndarray, float]:
+    def navigate(self, intent: Intent, target_dict: dict) -> tuple[np.ndarray, float]:
         """
         Merges the tactician's intent and collision avoidance into explicit directions
 
@@ -112,7 +115,7 @@ class GenericShipNavigator(GenericNavigator):
 
         return direction, speed
 
-    def update_triggers(self, intent: int, target_dict: dict) -> None:
+    def update_triggers(self, intent: Intent, target_dict: dict):
         """
         Weapon decisions (firing, bomb release) on the frames where navigate()
         does not run. None by default.
@@ -138,7 +141,7 @@ class GenericShipNavigator(GenericNavigator):
         return avoidance_direction, avoidance_speed, avoidance_weight
 
     def navigate_intent(
-        self, intent: int, target_dict: dict
+        self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
@@ -149,7 +152,7 @@ class GenericShipNavigator(GenericNavigator):
 
     # %% ==== REGROUP ====
 
-    def regroup(self, target_dict={}) -> Tuple[np.ndarray, float]:
+    def regroup(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Regroups with allies. If none are left, go to the center of the world
 
@@ -170,7 +173,7 @@ class GenericShipNavigator(GenericNavigator):
 
     # %% ==== DISENGAGE ====
 
-    def disengage(self, target_dict={}) -> Tuple[np.ndarray, float]:
+    def disengage(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Flees from the danger zone, defined as the center of gravity of all foes
 
@@ -195,6 +198,7 @@ class GenericShipNavigator(GenericNavigator):
         Initializes waypoints for a trajectory or a loop
 
         :param waypoints: A list of waypoint coordinates
+        :param is_loop: Whether to restart from the first waypoint after the last
         """
         assert len(waypoints) >= 1
         self.waypoints = waypoints
@@ -254,12 +258,8 @@ class GenericShipNavigator(GenericNavigator):
 
     def formation(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
-        Follows the leader of the formation with the offset defined by the index of the
-        ship in the formation.
-
-        The formation leader is in the same team as self, so game.interactions does
-        not pre-compute their relative speeds/positions (cost saving).
-        Therefore, all computations are done here
+        Follows the formation leader at the ship's slot offset (in the leader's
+        frame), aiming ideal_distance_m ahead of the slot with lead pursuit.
 
         :param target_dict: A dictionary with the formation leader's id, as well as the
                             current ship's desired position in the formation
@@ -305,7 +305,7 @@ class GenericShipNavigator(GenericNavigator):
             + leader.forward
             * self.personality["navigator"]["formation"]["ideal_distance_m"]
         )  # Aim forward of the intended position to make the follow algos work
-        # Should target speed must take into account the turn speed of the leader ?
+        # TODO account for the leader's turn rate in the target speed?
         target_speed = leader.speed  # +
         # np.cross(
         #     leader.pqr, (position_in_formation - leader.position)
@@ -356,14 +356,16 @@ class GenericShipNavigator(GenericNavigator):
         intent: str,
     ) -> float:
         """
-        Computes the desired speed to follow a target
-        It must be the same as the target speed if it is at the desired follow distance
-        It must increase if the target is too far and vice-versa
-        TODO : effect of closing speed ?
+        Computes the desired speed to follow a target: the target's speed at the
+        ideal follow distance, faster when too far and slower when too close,
+        clamped to [0, max_speed_mps].
+        TODO : effect of closing speed ? (longitudinal_speed_scalar_mps is unused)
 
         :param distance_m: Distance to target
         :param target_speed_mps: Speed of target
         :param longitudinal_speed_scalar_mps: relative speed in the target's direction
+        :param intent: The navigator personality section to tune with ("attack",
+            "formation")
         :return: The desired follow speed
         """
         desired_speed_mps = (
@@ -381,10 +383,12 @@ class GenericShipNavigator(GenericNavigator):
         intent: str,
     ) -> float:
         """
-        Computes the contribution of target distance to pursuit speed
-        Far targets get high speed,
+        Computes the contribution of target distance to pursuit speed: from
+        -max_speed_mps / 2 (close) to +max_speed_mps / 2 (far), zero at
+        ideal_distance_m.
 
         :param distance_m: Distance to target
+        :param intent: The navigator personality section to tune with
         :return: The distance contribution to pursuit speed
         """
         distance_contribution_mps = self.pawn.max_speed_mps * (

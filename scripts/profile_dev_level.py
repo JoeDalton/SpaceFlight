@@ -2,11 +2,10 @@
 Profile the CPU cost of the "Dev" level's steady-state simulation loop under
 a ~20-ship load, headlessly (no window, no audio device).
 
-Steps the level through an unprofiled warm-up (until the mission's waves have
-finished spawning), then times each frame of a window of steps without
-cProfile (median / p99 / max frame time, to spot periodic spikes), then
-profiles a further window of steps with cProfile so the recorded stats reflect
-per-frame cost at full ship count rather than the one-time spawn ramp-up.
+Runs a warm-up (until the mission's waves have spawned), then a timed window
+without cProfile (median / p99 / max frame time, to spot periodic spikes),
+then a cProfile window, so the stats reflect per-frame cost at full ship count
+rather than the spawn ramp-up. See docs/source/performance.md.
 
 Usage:
     poetry run python scripts/profile_dev_level.py
@@ -26,7 +25,7 @@ import numpy as np
 from space_flight.headless.harness import DEFAULT_TIME_STEP, HeadlessHarness
 
 
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--level",

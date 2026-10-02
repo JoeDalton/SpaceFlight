@@ -20,14 +20,22 @@ single supply-gated drop), so :class:`Weapon` only owns what is genuinely shared
 the emitter refs, the reload gate, and the munition-spawn call.
 """
 
+from __future__ import annotations
+
 import logging
 import uuid
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from direct.interval.IntervalGlobal import LerpPosInterval
-from panda3d.core import LVector3, NodePath
+from panda3d.core import LVector3, NodePath, Point3
 
 from space_flight import DEBUG_DELETION
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship.turret import Turret
+    from space_flight.actors.fighter import Fighter
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -42,7 +50,13 @@ class Weapon:
     (fire / launch) and pass the munition class they spawn.
     """
 
-    def __init__(self, game, parent, parent_node=None, fire_delay: float = 0.0):
+    def __init__(
+        self,
+        game: FlightState,
+        parent: Fighter | Turret,
+        parent_node: NodePath | None = None,
+        fire_delay: float = 0.0,
+    ):
         """
         :param game: The game/flight state
         :param parent: The emitter pawn (a ship or a mounted subsystem)
@@ -75,13 +89,13 @@ class Weapon:
 
     def _spawn_munition(
         self,
-        munition_class,
-        start_position,
-        speed,
+        munition_class: type[Munition],
+        start_position: Point3,
+        speed: np.ndarray,
         power: float,
         life_time_s: float,
-        **munition_kwargs,
-    ) -> None:
+        **munition_kwargs: Any,
+    ):
         """
         Construct a munition with the common emitter/damage parameters.
 
@@ -105,7 +119,7 @@ class Weapon:
             **munition_kwargs,
         )
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Drop the upward references so the weapon can be garbage-collected.
         """
@@ -133,13 +147,13 @@ class Munition:
 
     def __init__(
         self,
-        game,
-        origin_ship_id,
+        game: FlightState,
+        origin_ship_id: uuid.UUID,
         power: float,
         life_time_s: float,
         speed: np.ndarray,
-        start_position,
-        origin_ship=None,
+        start_position: Point3,
+        origin_ship: Fighter | Turret | None = None,
     ):
         """
         :param game: The game/flight state
@@ -156,7 +170,7 @@ class Munition:
         self.power = power
         self.origin_ship_id = origin_ship_id
         self.origin_ship = origin_ship
-        # World-space velocity, read by laser_into_shield to tell an inward
+        # World-space velocity, read by munition_into_shield to tell an inward
         # crossing (blocked) from an outward one (passes through).
         self.speed = np.asarray(speed, dtype=float)
 
@@ -179,7 +193,7 @@ class Munition:
             method=self.clean,
         )
 
-    def _build_visual(self, start_position) -> NodePath:
+    def _build_visual(self, start_position: Point3) -> NodePath:
         """
         Build and return the visual node (reparented to the scene, oriented and
         textured), without setting its position -- the base places it. Subclasses
@@ -193,13 +207,13 @@ class Munition:
         """
         raise NotImplementedError
 
-    def _clean_extra(self) -> None:
+    def _clean_extra(self):
         """
         Subclass hook for tearing down extra render state (e.g. a light) before the
         shared teardown. Default: nothing.
         """
 
-    def clean(self, remove_from_game_objects: bool = True) -> None:
+    def clean(self, remove_from_game_objects: bool = True):
         """
         Tear down the munition: extra render state, collider, visual node and the
         game.game_objects registration.

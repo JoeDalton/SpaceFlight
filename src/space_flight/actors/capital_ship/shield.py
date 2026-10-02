@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import logging
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
+from panda3d.core import Point3, Vec3
 
 from space_flight.actors.capital_ship.shield_model import ShieldModel
 from space_flight.actors.destructibles import Destructible
@@ -10,6 +15,11 @@ from space_flight.game.collisions import (
     attach_collision_tube,
 )
 from space_flight.utils.state_machine import Cooldown, StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship import CapitalShip
+    from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -33,35 +43,26 @@ class Shield(Destructible):
     """
     A protective bubble projected by a *group* of :class:`ShieldGenerator`\\ s.
 
-    One shield is shared by all of a capital ship's shield generators. Its perks
-    scale **pro rata** with the surviving generators: with initial generators
-    and alive still standing, the fraction alive / initial multiplies both
-    the maximum strength and the regeneration rate (so its current strength is
-    clamped down as generators are destroyed). When the last generator -- or the
-    ship itself -- is destroyed, the shield dies for good.
+    One shield is shared by all of a capital ship's shield generators; the
+    fraction alive / initial generators scales its maximum strength and
+    regeneration rate (**pro rata** perks).
 
     This class is the shield's *game logic* -- strength, collision, lifecycle and
-    the death/appearance state machine. Everything *visual* (the bubble mesh and
-    its animated shader) lives in :class:`ShieldModel`, which this drives each
-    frame; the two coincide because the collider is built from the same resolved
-    dimensions the model exposes.
+    the death/appearance state machine; everything *visual* lives in
+    :class:`ShieldModel`, which this drives each frame. The collider is built from
+    the dimensions the model resolved, so the two coincide.
 
-    The shield is a :class:`Destructible`, but its two failure modes are kept
-    distinct:
+    Two failure modes are kept distinct:
 
-    - *Destroyed*: every generator (or the ship it is mounted on) is destroyed.
-      This is the only thing that ends the shield's life as a Destructible. The
-      shield first plays its fluid *death* animation and only then reports zero
-      to :meth:`get_health`, so the central death handling delays cleanup until
-      the collapse has finished.
-    - *Disabled*: its own strength pool reaches zero (worn down by hits, on top of
-      any pro-rata reduction). The shield collapses (death animation) and stays
-      *down* -- not protecting, hidden -- but alive. Once its regeneration cooldown
-      elapses it strengthens again and *reappears* (the death animation played in
-      reverse), coming back online.
+    - *Destroyed*: every generator (or the ship) is destroyed. Only this ends the
+      shield's life as a Destructible: it plays its fluid *death* animation and
+      only then reports zero from :meth:`get_health`, delaying cleanup.
+    - *Disabled*: its strength pool reaches zero. It collapses and stays *down*
+      (hidden, not protecting, but alive) until regeneration brings it back
+      through the *appearance* animation (the death played in reverse).
 
-    While either animation plays the shield is **not functional** (it blocks no
-    lasers and is skipped in munition_into_shield via :attr:`is_enabled`).
+    While either animation plays the shield is **not functional** (it is skipped
+    in munition_into_shield via :attr:`is_enabled`).
 
     :param game: The game/flight state
     :param ship: The ship this shield is mounted on and protects
@@ -80,18 +81,17 @@ class Shield(Destructible):
 
     def __init__(
         self,
-        game,
-        ship,
-        generators,
+        game: FlightState,
+        ship: CapitalShip,
+        generators: Iterable[ShieldGenerator],
         health: float = 4000.0,
         regen_rate: float = 0.0,
-        color=None,
-        shape: dict = None,
-        model: str = None,
+        color: Sequence[float] | None = None,
+        shape: dict | None = None,
+        model: str | None = None,
     ):
         super().__init__(game=game)
         self.name = "shield"
-        # The ship this shield belongs to, and the generators projecting it.
         self.mounted_on = ship
         self.team = ship.team
         self.generators = list(generators)
@@ -146,7 +146,7 @@ class Shield(Destructible):
         self.collision_np = None
         self._build_collision(model=model)
 
-        # Regenerate and refresh our state every frame (we are our own Destructible)
+        # Regenerate and refresh our state every frame
         self.add_task(method=self.update)
 
     @property
@@ -154,7 +154,7 @@ class Shield(Destructible):
         """The shield lifecycle state (up / dying / down / appearing)."""
         return self.state_sm.state
 
-    def _build_collision(self, model: str):
+    def _build_collision(self, model: str | None):
         """
         Attach the shield's collision solid, coinciding with the visible bubble.
 
@@ -200,7 +200,10 @@ class Shield(Destructible):
     # Damage
     # ------------------------------------------------------------------
     def take_hit(
-        self, damage: float, normal_world_vector: np.ndarray, hit_world_point=None
+        self,
+        damage: float,
+        normal_world_vector: Vec3 | np.ndarray,
+        hit_world_point: Point3 | None = None,
     ):
         """
         Take damage from a laser hit against the shield and flash the impact.
@@ -384,11 +387,9 @@ class Shield(Destructible):
         """
         Report the shield's life to the death handler.
 
-        The shield only *dies* (and is cleaned) when all its generators or its
-        ship are destroyed, and even then not until its death animation has
-        finished: while the terminal retraction plays this returns a positive
-        value, delaying cleanup. Depleting the strength pool merely disables the
-        shield, so that does not end its life here.
+        Positive until the terminal death animation (all generators or the ship
+        destroyed) has finished. A depleted strength pool merely disables the
+        shield, so it does not end its life here.
 
         :return: A positive value while the shield should live, else zero
         """
@@ -401,10 +402,8 @@ class Shield(Destructible):
         The shield's current defensive strength, for the fleet AI's fighting-shape
         estimate.
 
-        This is simply the current strength pool, which already reflects the
-        pro-rata reduction from destroyed generators (its maximum, and hence this
-        value, is scaled by the surviving fraction) and reads zero while the
-        shield is down.
+        This is the current strength pool: already pro-rata scaled, and zero
+        while the shield is down.
 
         :return: The shield's current strength (never negative)
         """
@@ -414,9 +413,8 @@ class Shield(Destructible):
         """
         Play the shield's collapse.
 
-        The fluid retraction is animated in :meth:`update` before this point (it
-        is what delayed cleanup via :meth:`get_health`), so nothing more is needed
-        here -- the bubble has already drained away.
+        Nothing to do: the fluid retraction was already animated by
+        :meth:`update` before :meth:`get_health` let cleanup proceed.
         """
         pass
 

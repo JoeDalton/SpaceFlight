@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class Pawn:
@@ -11,7 +16,7 @@ class Pawn:
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         parent: Any,
         team: int = 0,
     ):

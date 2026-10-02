@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
@@ -13,20 +15,21 @@ from space_flight.ai.generic.generic_ship_navigator import (
 from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
 from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 
 
 class FighterNavigator(GenericShipNavigator):
     """
-    A class to define the aim of a bot given an intent given by a tactician, and
-    passes its decision to a pilot that steers the ship.
-
-    Outputs a direction to point to and a reference distance
+    Fighter navigator: the attack patterns (pursuit, strafe, bomb), evasion, and
+    the weapon triggers
     """
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.FIGHTER_DEFAULT,
         debug: bool = False,
@@ -39,7 +42,7 @@ class FighterNavigator(GenericShipNavigator):
         self._armed_trigger = None
 
     def navigate_intent(
-        self, intent: int, target_dict: dict
+        self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
@@ -55,7 +58,6 @@ class FighterNavigator(GenericShipNavigator):
             self.engage_phase = ""
             return self.follow_waypoints()
         elif intent == Intent.ENGAGE:
-            # Exact behaviour is defined and recorded inside engage_target
             # TODO reset spiral time if new order ? May not be necessary
             return self.engage_target(target_dict)
         elif intent == Intent.EVADE:
@@ -272,12 +274,14 @@ class FighterNavigator(GenericShipNavigator):
         Strafing run against a slow or immobile target: a committed phase cycle
         ingress -> attack -> break -> reposition -> ingress that runs in fast,
         fires, peels off and comes around again, instead of spiralling like a chase.
+        The attack presses in until point-blank, peeling off early only if about to
+        overshoot or stalled; there is no fixed attack timer.
 
         For a surface-mounted prey (surface_normal/surface_hit_point in
-        target_dict) the ingress becomes a low-altitude corridor (a run at a set
-        altitude above the surface, then a dive), the break climbs along the normal,
-        and a hard altitude floor forces recovery. Without surface info it is a
-        straight open-space pass.
+        target_dict; no tactician sets them yet) the ingress becomes a low-altitude
+        corridor (a run at a set altitude above the surface, then a dive), the
+        break climbs along the normal, and a hard altitude floor forces recovery.
+        Without surface info it is a straight open-space pass.
 
         :param target_dict: The target info enriched with the engagement geometry
             (see _resolve_engagement); surface fields optional
@@ -292,9 +296,8 @@ class FighterNavigator(GenericShipNavigator):
         surface_normal = target_dict.get("surface_normal")
         surface_hit_point = target_dict.get("surface_hit_point")
 
-        # Lead the target: fly at where it will be when we arrive, i.e. lead by the
-        # closing time (distance / closing_speed), so a moving target is met head-on
-        # instead of chased from behind.
+        # Lead by the closing time (distance / closing_speed, capped), so a moving
+        # target is met where it will be rather than chased from behind.
         lead_time_s = 0.0
         if closing_speed_mps > 1e-3:
             lead_time_s = min(distance_m / closing_speed_mps, strafe["max_lead_time_s"])
@@ -335,9 +338,6 @@ class FighterNavigator(GenericShipNavigator):
             )
 
         if phase == "strafe_attack":
-            # Press in until point-blank; peel off early only on a geometry-driven
-            # escape (about to overshoot, or stalled and unable to close) rather
-            # than an arbitrary timer.
             reached_standoff = distance_m < strafe["break_distance_m"]
             overshooting = self.check_overshoot_risk(
                 closing_speed_mps=closing_speed_mps, distance_m=distance_m
@@ -384,7 +384,7 @@ class FighterNavigator(GenericShipNavigator):
 
     # %% ==== WEAPON TRIGGERS ====
 
-    def update_triggers(self, intent: int, target_dict: dict) -> None:
+    def update_triggers(self, intent: Intent, target_dict: dict):
         """
         Keep taking the weapon decision armed by the last navigate() on the
         frames where navigate() does not run (the bot only thinks a few times a
@@ -403,7 +403,7 @@ class FighterNavigator(GenericShipNavigator):
         self._pull_trigger(target_dict)
 
     def _arm_trigger(
-        self, target_dict: dict, weapon: str, min_cos_angle: float = None
+        self, target_dict: dict, weapon: str, min_cos_angle: float | None = None
     ) -> bool:
         """
         Take a weapon decision now, and arm it for update_triggers to keep
@@ -576,22 +576,22 @@ class FighterNavigator(GenericShipNavigator):
         Bombing run against a slow/immobile target: a committed cycle
         ingress -> approach -> run -> break -> reposition.
 
-        - The ingress is normal (banking) flight that gets the bomber onto the
-          target's track line: it swings to an entry point ``entry_distance_m`` behind
-          the target when ahead/abeam, then follows the track line in (pure-pursuit on
-          a carrot up the line) at ``run_altitude_m``, using fast banked turns to null
-          the cross-track offset the belly-down run could never remove.
-        - The approach flies belly-down (the up-reference turns the fighter pilot into
-          the capital-ship pilot: roll +Z to the reference up, yaw+pitch to aim)
-          following the track line in (carrot pure-pursuit at run altitude), so the
-          belly is settled and on the line before the run. It is entered only once on
-          the line; if the bomber drifts off, it drops back to the ingress.
-        - The run keeps that belly-down attitude, still following the (curving) track
-          line over the target at run altitude; the belly (-Z) bomb velocity sweeps
-          through the target and the cone release fires. Then it peels off.
+        - Ingress: normal (banking) flight onto the target's track line. It swings
+          to an entry point ``entry_distance_m`` behind the target when ahead/abeam,
+          then follows the track line in (pure pursuit of a carrot up the line) at
+          ``run_altitude_m``; fast banked turns null the cross-track offset that
+          the belly-down legs can't remove.
+        - Approach: entered once on the line, it flies belly-down (the
+          up-reference makes the fighter pilot fly like the capital-ship pilot:
+          roll +Z to the reference up, yaw+pitch to aim) along the track line, so
+          the belly is settled before the run. Drifting off drops it back to the
+          ingress.
+        - Run: same attitude and line-follow over the target, following its
+          *instantaneous* (curving) track; the belly (-Z) bomb velocity sweeps
+          through the target and the cone release fires. Then it breaks off.
 
-        The up-reference (approach/run) is the surface normal for a surface-mounted
-        prey, otherwise world up.
+        The up-reference is the surface normal for a surface-mounted prey,
+        otherwise scene up.
 
         :param target_dict: The target info enriched with engagement geometry
         :return: The direction to point to and the desired speed
@@ -604,17 +604,12 @@ class FighterNavigator(GenericShipNavigator):
         closing_speed_mps = -target_dict["longitudinal_speed_scalar_mps"]
         surface_normal = target_dict.get("surface_normal")
 
-        # Belly (-Z) points down the up-reference during the RUN: the surface normal
-        # for a surface prey, else world up (a level drop straight down).
         up_reference = (
             surface_normal
             if surface_normal is not None
             else self.game.scene.up_direction
         )
 
-        # Entry point: entry_distance_m behind the target along its track, at run
-        # altitude. "Behind" follows the target's velocity when it is moving, else the
-        # bomber's own bearing to a stationary target (see _bomb_track_direction).
         track_direction = self._bomb_track_direction(
             target_speed, direction, up_reference, bomb
         )
@@ -634,10 +629,8 @@ class FighterNavigator(GenericShipNavigator):
         phase = self.behaviour if self.behaviour.startswith("bomb_") else "bomb_ingress"
 
         if phase == "bomb_ingress":
-            # Hand off to the belly-down approach only once actually lined up: behind
-            # the target AND on its track line (small cross-track). Until then the
-            # ingress banks -- fast turns the belly-down run can't make -- to null the
-            # cross-track, which is the whole point of the ingress.
+            # Hand off to the belly-down approach once lined up: behind the target
+            # AND on its track line.
             if along_track_m < 0.0 and cross_track_m < bomb["lateral_tolerance_m"]:
                 self.behaviour_sm.request("bomb_approach")
                 return self._bomb_approach(
@@ -658,9 +651,8 @@ class FighterNavigator(GenericShipNavigator):
             )
 
         if phase == "bomb_approach":
-            # Lost the line (no longer behind, or drifted off the track beyond the
-            # recovery band): the belly-down approach yaws too slowly to re-acquire, so
-            # drop back to the fast-banking ingress line-follow.
+            # Lost the line: belly-down yaw is too slow to re-acquire it, so drop
+            # back to the banking ingress.
             if along_track_m >= 0.0 or cross_track_m > bomb["lateral_recovery_m"]:
                 self.behaviour_sm.request("bomb_ingress")
                 return self._bomb_ingress(
@@ -671,9 +663,7 @@ class FighterNavigator(GenericShipNavigator):
                     along_track_m,
                     bomb,
                 )
-            # Lock onto the belly-down run once within lock_time_s of flight to the
-            # target (at the bomber's current speed) AND still on the line, so the run
-            # only commits from a clean overfly setup.
+            # Lock the run once within lock_time_s of flight AND still on the line
             lock_distance_m = max(
                 magnitude(self.pawn.speed) * bomb["lock_time_s"],
                 TARGET_DISTANCE_TOLERANCE_M,
@@ -873,14 +863,10 @@ class FighterNavigator(GenericShipNavigator):
         bomb: dict,
     ) -> Tuple[np.ndarray, float]:
         """
-        Positioning leg (normal, banking flight -- NO up-reference, so it can turn fast
-        to null the cross-track).
-
-        When ahead of / abeam the target (along_track >= 0) it swings to the entry
-        point behind the target to get onto the tail. Once behind, it follows the
-        target's track line (carrot pure-pursuit) so the belly-down run can start on
-        the line. The outer sensor sphere is dropped so the long-range look-ahead
-        doesn't push the bomber off its own target.
+        Positioning leg in banking flight (no up-reference): to the entry point
+        when ahead of / abeam the target (along_track >= 0), else along the track
+        line. Drops the outer sensor sphere so the long-range look-ahead doesn't
+        push the bomber off its own target.
         """
         self.collision_sensor.active_range = self.collision_sensor.n_spheres - 1
         speed = bomb["ingress_speed_factor"] * self.pawn.max_speed_mps
@@ -908,13 +894,9 @@ class FighterNavigator(GenericShipNavigator):
         bomb: dict,
     ) -> Tuple[np.ndarray, float]:
         """
-        Approach run: fly belly-down (publishes the up-reference, so the fighter pilot
-        rolls +Z to the reference up and yaws/pitches to aim) following the target's
-        track line in (carrot pure-pursuit at run altitude). Flying belly-down here --
-        rather than banking in -- keeps the belly settled so the run starts clean;
-        following the line (not a fixed lead) keeps it tracking a turning target. If
-        the tail/line is lost, the caller falls back to the banking ingress. Avoidance
-        is dwarfed and the outer sensor dropped for the close overfly.
+        Approach leg: belly-down (publishes the up-reference) along the track line
+        with the short lookahead. Avoidance is dwarfed and the outer sensor sphere
+        dropped for the close overfly.
         """
         self.up_reference = up_reference
         self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
@@ -941,13 +923,9 @@ class FighterNavigator(GenericShipNavigator):
         bomb: dict,
     ) -> Tuple[np.ndarray, float]:
         """
-        The committed delivery leg. Locks the roll to the reference up (publishes the
-        up-reference, so the fighter pilot flies belly-down: roll only to level the
-        wings to up_reference, yaw+pitch to aim, no banking) and follows the target's
-        track line over it (carrot pure-pursuit at run altitude, short lookahead so it
-        tracks a turning target tightly). The steady belly (-Z) bomb velocity sweeps
-        through the target as it overflies -> the cone release fires. Dwarfs avoidance
-        and drops the outer sensor sphere so it can overfly closely.
+        The committed delivery leg: same as the approach (belly-down, short
+        lookahead line-follow, dwarfed avoidance, outer sphere dropped) at the run
+        speed, until the release fires.
         """
         self.up_reference = up_reference
         self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
@@ -982,13 +960,13 @@ class FighterNavigator(GenericShipNavigator):
         """Extend away to rebuild distance before coming around for the next run."""
         return -direction, bomb["reposition_speed_factor"] * self.pawn.max_speed_mps
 
-    def compute_engage_weights(self, distance_m: float):
+    def compute_engage_weights(self, distance_m: float) -> tuple[float, float, float]:
         """
-        Compute weights of the pursuit strategies as a function of
-        distance to target.
-        They are overlapping slopes
+        Weights of the pursuit strategies as overlapping smooth steps of the
+        distance to target: CAP far, lead mid-range, lag close.
 
         :param distance_m: The distance to the prey
+        :return: The CAP, lead and lag weights
         """
         cap_weight = smooth_step_up(
             x=distance_m,
@@ -1084,8 +1062,8 @@ class FighterNavigator(GenericShipNavigator):
         direction: np.ndarray,
     ) -> Tuple[np.ndarray, float]:
         """
-        Turn hard away from the target to avoid passing in front of it
-        Therefore, simply point in the opposite direction with the same distance
+        Turn hard away from the target to avoid passing in front of it: point in
+        the opposite direction at turning speed.
 
         TODO: do something for immobile targets (turrets. They should not be evaded
         the same way as ships)
@@ -1109,16 +1087,15 @@ class FighterNavigator(GenericShipNavigator):
 
     def evade_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
-        Passes behind a target: since the target is threatening, it means that it's
-        roughly pointing towards self.
-        Therefore, simply point in its direction with 2x the distance
+        Passes behind a threatening target (roughly pointing at self) by flying
+        straight at it. The returned "speed" is twice the distance to it.
 
         TODO: do something for immobile targets (turrets. They should not be evaded
         the same way as ships)
 
         TODO: add randomness to avoid locking in circles
 
-        :param target_dict: A dictionary with the target's direction and distance
+        :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
         """
         # Case where there is no target (Should not happen, but you never know...)

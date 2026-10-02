@@ -19,14 +19,11 @@ from space_flight.actors.ship_model import ShipModel
 @pytest.fixture
 def mock_game():
     """
-    Minimal game mock: root_node returns a fresh MagicMock each call so
-    that NodePath-like attribute access does not collide between tests.
+    Minimal game mock, fresh per test.
     """
     game = MagicMock()
-    # A real dict (not a MagicMock) so ShipModel's
-    # graphics_settings.config.get(...) lookups behave like the real,
-    # un-configured default (alternate_model_orientation off) instead of
-    # a truthy MagicMock chain.
+    # A real dict (not a truthy MagicMock chain) so the
+    # alternate_model_orientation flag reads as off, its un-configured default.
     game.app.graphics_settings.config = {}
     return game
 
@@ -160,8 +157,8 @@ def test_anchor_model_sets_position_from_offset(mock_game):
 
 def test_anchor_model_sets_orientation(mock_game):
     """
-    anchor_model calls setQuat on the model node; because __init__ already
-    calls it once, two calls are expected after a second explicit call.
+    Each anchor_model call sets the model node's orientation once more (on top
+    of the call made by __init__).
     """
     ship_model = make_ship_model(mock_game, "a-wing", is_cockpit=False)
     calls_after_init = ship_model.model.setQuat.call_count

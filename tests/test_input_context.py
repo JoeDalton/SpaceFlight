@@ -884,7 +884,7 @@ def test_flight_ctx_refresh_bindings_updates_global_bindings():
 
 def test_flight_ctx_refresh_bindings_updates_input_type():
     """
-    refresh_bindings must update _input_type when the active device changes.
+    refresh_bindings must update input_type when the active device changes.
     """
     ctx, game, _ = make_flight_ctx(input_type="keyboard")
     game.app.bindings["input_type"] = "gamepad"

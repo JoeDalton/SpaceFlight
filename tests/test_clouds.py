@@ -1,10 +1,9 @@
 """
 Unit tests for the in-scene cloud system (space_flight.scenes.cloud).
 
-These run fully headless: a single window-type none ShowBase gives a loader
-and a scene graph without opening a window or needing a GPU context, since the
-tests build geometry and step the per-frame CPU logic but never render.  That
-makes them safe for the GitHub CI runners.
+These run fully headless (the shared window-type none app): they build geometry
+and step the per-frame CPU logic but never render, so they need no window or GPU
+context and are safe for the GitHub CI runners.
 
 Note the hard limit of a headless suite: it cannot see a pixel, and it cannot
 even tell you whether the GLSL compiles — Panda's Shader.load succeeds with no
@@ -84,8 +83,7 @@ TEST_DOMAIN = 6000.0
 def app(spaceflight_app):
     """
     The shared headless app (ShowBase is a singleton — see
-    conftest.py::spaceflight_app). It already carries an asset_manager
-    (built by SpaceFlightSimulator.__init__), which is all the cloud atlas
+    conftest.py::spaceflight_app). Its asset_manager is all the cloud atlas
     loader needs.
     """
     return spaceflight_app
@@ -638,8 +636,7 @@ def test_shells_scale_radius_and_cap_together(game):
 
 
 def test_shells_share_one_density_field(game):
-    """They must, or their crossfades would disagree about where the cloud is —
-    and it is also what makes the noise period a one-line change later."""
+    """They must, or their crossfades would disagree about where the cloud is."""
     shells = lod_shells(CloudType.CUMULUS, count=4)
     fields = {id(shell.field or PRESETS[shell.cloud_type].field) for shell in shells}
     assert len(fields) == 1
@@ -655,17 +652,15 @@ def test_every_shell_recycles_seamlessly(game):
 def test_cell_texture_stays_well_inside_the_gl_size_limit(game):
     """The cellParams texture is wrapped into ROWS, not laid out in one line.
 
-    Laid out linearly it needs STRIDE * n_cells texels, which walks into
-    GL_MAX_TEXTURE_DIMENSION as the field grows: 4 LOD shells reached 13 900
-    against a common limit of 16 384, and 6 shells reached 21 024. Past the limit
-    the texture cannot be created, every fetch returns zero, and the entire field
-    collapses to one blob at the origin with every billboard claiming layer 0 —
-    which is silent, and looks like the LOD shells not working.
+    Laid out linearly it needs STRIDE * n_cells texels, which six shells push past
+    a common GL_MAX_TEXTURE_DIMENSION of 16 384. Past the limit the texture cannot
+    be created, every fetch returns zero, and the whole field silently collapses
+    to one blob at the origin with every billboard claiming layer 0.
     """
     field = _make_field(game, lod_shells(CloudType.CUMULUS, count=6, domain=32000.0))
     texture = field._cell_tex
     assert texture.get_x_size() == _CELL_PARAMS_STRIDE * _CELLS_PER_ROW
-    # Width is now FIXED, so it cannot creep toward the limit however many cells
+    # The width is fixed, so it cannot creep toward the limit however many cells
     # the field grows to; only the (cheap) row count moves.
     assert texture.get_x_size() <= 8192
     assert field._n_cells > _CELLS_PER_ROW, "want more than one row exercised"
@@ -732,7 +727,7 @@ def test_index_buffer_is_a_permutation_after_a_full_cycle(game):
         field.update(Vec3(120, -80, 1200), 1 / 60.0)
     assert field._stage.min() >= 0
     assert field._stage.max() < 4 * field._n
-    # Six indices per particle; the set of first-corner indices must be complete.
+    # Six indices per particle; every vertex of every quad must appear.
     assert np.array_equal(np.sort(np.unique(field._stage)), np.arange(4 * field._n))
 
 
@@ -798,7 +793,7 @@ def test_recycling_keeps_cells_within_their_box(game):
 
 
 def test_layers_recycle_within_their_own_box(game):
-    """Each layer has its own box, which is what distance LOD will use: a distant
+    """Each layer has its own box, which is what LOD shells rely on: a distant
     shell can be huge without needing the near shell's cloud density everywhere."""
     field = _make_field(
         game,
@@ -939,11 +934,8 @@ def test_set_coverage_can_change_only_the_edge(game):
     """Softness and amount are independent axes, so setting one must not move the
     other — the window's low edge is what coverage is defined against.
 
-    The width is asserted as a RATIO against the field's own starting softness
-    rather than against a fixed number, so this stays true whatever the preset
-    ships. An earlier version hardcoded "at least 3x wider for softness 2.0",
-    which quietly encoded the preset's value at the time and broke the moment it
-    was retuned.
+    The width is asserted as a RATIO against the field's own starting softness,
+    so this stays true whatever the preset ships.
     """
     field = _make_field(game, CUMULUS)
     spec = field._layer_specs[0].field
@@ -1081,7 +1073,7 @@ def test_a_field_defaults_to_the_players_setting(game):
     )
     field = _make_field(types.SimpleNamespace(app=app), CUMULUS, quality=None)
     assert field._quality is CloudQuality.LOW
-    # An explicit argument still wins, which is what the demo scripts rely on.
+    # An explicit argument still wins.
     field = _make_field(
         types.SimpleNamespace(app=app), CUMULUS, quality=CloudQuality.ULTRA
     )
@@ -1093,9 +1085,9 @@ def test_a_field_defaults_to_the_players_setting(game):
     [None, {}, {"clouds": {}}, {"clouds": {"quality": "nonsense"}}],
 )
 def test_a_missing_or_unknown_quality_means_the_authored_look(game, config):
-    """The demo scripts and this suite build fields from a stub game with no
-    settings at all. Absent or unreadable must mean HIGH — the presets' own values
-    — never a crash and never a silent downgrade."""
+    """The demo builds its field from a stub game with no settings at all. Absent
+    or unreadable must mean HIGH — the presets' own values — never a crash and
+    never a silent downgrade."""
     app = types.SimpleNamespace(
         asset_manager=game.app.asset_manager,
         loader=game.app.loader,
@@ -1108,12 +1100,10 @@ def test_a_missing_or_unknown_quality_means_the_authored_look(game, config):
 
 
 def test_the_suite_does_not_read_the_developers_quality_setting(game):
-    """Regression. The `game` fixture wraps the real app, so CloudField's default
-    quality=None reads whatever configuration/graphics.yaml happens to say on this
-    machine. That once made setting cloud quality in the menu fail an unrelated
-    test asserting the preset's sun march, and would make CI disagree with local.
-
-    _make_field therefore pins HIGH, and this asserts it keeps doing so."""
+    """The `game` fixture wraps the real app, so CloudField's default
+    quality=None would read this machine's configuration/graphics.yaml and make
+    CI disagree with local. _make_field pins HIGH; this asserts it keeps doing so.
+    """
     field = _make_field(game, CUMULUS)
     assert field._quality is CloudQuality.HIGH
     optics = field._layer_specs[0].optics

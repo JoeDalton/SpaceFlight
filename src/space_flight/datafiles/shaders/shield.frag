@@ -1,8 +1,8 @@
 #version 140
-// Shield bubble fragment shader — v2, with a "death" retraction animation.
+// Shield bubble fragment shader.
 //
-// The living look is v1: a smooth low-frequency morphing field (triplanar
-// value-noise), a fresnel rim, health-driven tint, and impact flashes.
+// Living look: a smooth low-frequency morphing field (triplanar value noise), a
+// fresnel rim, a health-driven tint and impact flashes.
 //
 // DEATH ANIMATION ("fluid retracting into random points"):
 //   A handful of random SINK points are placed on the surface. The material is
@@ -20,8 +20,8 @@ uniform float iTime;
 // (p3d_ModelMatrix), however the game root is offset under render.
 uniform mat4  p3d_ViewMatrixInverse;
 
-// --- Look knobs (set from Python; see main.py for defaults) -----------------
-uniform vec3  uColorFull;      // tint at full health (light blue)
+// --- Look knobs (set from actors/capital_ship/shield_model.py) --------------
+uniform vec3  uColorFull;      // tint at full health (the shield's colour)
 uniform vec3  uColorMid;       // tint at half health (light violet)
 uniform vec3  uColorLow;       // tint at zero health (pink-violet)
 uniform float uHealth;         // shield strength fraction in [0, 1]

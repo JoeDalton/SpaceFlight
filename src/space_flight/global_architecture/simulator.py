@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData
@@ -23,12 +26,16 @@ from space_flight.menus.splash_state import SplashState
 from space_flight.ui.input_context import InputContextStack
 from space_flight.ui.input_reader import load_bindings, reader_factory
 
+if TYPE_CHECKING:
+    from direct.task.Task import Task
+
 LOGGER = logging.getLogger()
 
 
 loadPrcFileData("", "notify-level-ffmpeg error")
 
-# Explicitly disable Panda's on-disk model cache (model-cache-dir)
+# Disable Panda's on-disk model cache (and with it the compiled-shader cache):
+# it was implicated in glTF models failing to load on some systems.
 loadPrcFileData("", "model-cache-dir")
 
 
@@ -36,11 +43,10 @@ class StateManager:
     """
     Stack-based state machine whose topmost entry is the active state.
 
-    Only one state is active at any given time; every other entry on the
-    stack is either paused or acting as an inactive background state.
-    All concrete state classes are declared as class attributes so that
-    any module in the project can reference them through StateManager
-    without needing direct imports of individual state modules.
+    Entries below the top are paused, unless the state pushed above them has
+    ``PAUSES_BELOW = False``. All concrete state classes are class attributes,
+    so any module can reference them through StateManager without importing
+    the state modules (which would create import cycles).
     """
 
     SPLASH_STATE = SplashState
@@ -55,23 +61,19 @@ class StateManager:
     GAME_STATE = FlightState
     HYPERSPACE_LOADING_STATE = HyperspaceLoadingState
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         self.app = app
         self.stack: list[BaseState] = []
 
-    def push(self, state_class: BaseState, **kwargs):
+    def push(self, state_class: type[BaseState], **kwargs: Any):
         """
-        Pushes a new state onto the stack and activates it.
+        Pushes a new state onto the stack and enters it.
 
         Pauses the current top state first, unless *state_class* declares
-        PAUSES_BELOW = False (e.g. overlays that keep game time running).
-        Extra *kwargs* are forwarded to the state constructor.
+        PAUSES_BELOW = False (overlays that keep game time running).
 
-        :param state_class:
-            The state class to instantiate and push onto the stack.
-        :param kwargs:
-            Optional keyword arguments forwarded verbatim to the
-            *state_class* constructor.
+        :param state_class: The state class to instantiate and push.
+        :param kwargs: Forwarded to the *state_class* constructor.
         """
         if self.stack and getattr(state_class, "PAUSES_BELOW", True):
             self.stack[-1].pause()
@@ -79,13 +81,10 @@ class StateManager:
         self.stack.append(state_instance)
         state_instance.enter()
 
-    def pop(self: BaseState):
+    def pop(self):
         """
-        Exits and removes the current top state, then resumes the one below it.
-
-        Calls exit() on the state that is removed. If the stack is not
-        empty afterwards, calls resume() on the new top state. Logs a
-        warning and returns early when the stack is already empty.
+        Exits and removes the current top state, then resumes the new top (if
+        any). Logs a warning and does nothing when the stack is empty.
         """
         if not self.stack:
             LOGGER.warning("No current state to pop")
@@ -97,22 +96,16 @@ class StateManager:
         if self.stack:
             self.stack[-1].resume()
 
-    def replace(self, state_class: BaseState):
+    def replace(self, state_class: type[BaseState]):
         """
-        Replaces the current top state with a new one at the same stack depth.
+        Replaces the current top state: :meth:`pop` then :meth:`push`.
 
-        Equivalent to calling :meth:`pop` followed by :meth:`push`. The
-        replaced state is exited and discarded; *state_class* is entered in
-        its place.
-
-        :param state_class:
-            The state class to instantiate and place at the top of the stack,
-            replacing whatever state was there before.
+        :param state_class: The state class to instantiate in its place.
         """
         self.pop()
         self.push(state_class)
 
-    def get_current(self):
+    def get_current(self) -> BaseState | None:
         """
         Returns the state currently at the top of the stack.
 
@@ -124,11 +117,8 @@ class StateManager:
 
     def clear(self):
         """
-        Exits and discard every state below the current top state.
-
-        The topmost state is preserved and remains active. All other entries
-        have their exit() method called before being removed from the
-        stack.
+        Exits and discards every state below the current top state, which
+        stays active.
         """
         if self.stack:
             for state_idx in range(len(self.stack) - 1):
@@ -138,15 +128,12 @@ class StateManager:
 
 class SpaceFlightSimulator(ShowBase):
     """
-    Root ShowBase subclass that wires together all subsystems of the game.
-
-    Responsible for initialising and owning every major subsystem: the
-    state machine (:class:`StateManager`), input pipeline
-    (:class:`InputContextStack` and the reader returned by
-    :func:`reader_factory`), asset loading (:class:`AssetManager`), shared
-    menu geometry (:class:`MenuModels`), and sound effects (:class:`SFX`).
-    The constructor ends by pushing the initial :class:`SplashState` onto
-    the state manager to begin the application flow.
+    Root ShowBase subclass that builds and owns every app-lifetime subsystem:
+    graphics (:class:`GraphicsSettings`, :class:`GraphicsManager`), the state
+    machine (:class:`StateManager`), input (:class:`InputContextStack` and the
+    reader from :func:`reader_factory`), assets (:class:`AssetManager`), shared
+    menu geometry (:class:`MenuModels`) and sound effects (:class:`SFX`), then
+    pushes :class:`SplashState`.
     """
 
     def __init__(self, headless: bool = False):
@@ -167,11 +154,9 @@ class SpaceFlightSimulator(ShowBase):
         self.graphics_manager = GraphicsManager(app=self)
         self.state_manager = StateManager(app=self)
         self.input_context_stack = InputContextStack()
-        # Real input (keyboard/mouse) needs a window (mouseWatcherNode);
-        # skipped headless, where actors are driven by AI or a scripted
-        # scenario instead of a live player. `bindings` is still loaded, since
-        # input contexts (e.g. FlightInputContext) read binding names/labels
-        # even when nothing will ever dispatch input through them.
+        # Real input needs a window (mouseWatcherNode), so it is skipped
+        # headless. `bindings` is still loaded: input contexts (e.g.
+        # FlightInputContext) read binding names even when nothing dispatches.
         if headless:
             self.bindings = load_bindings()
         else:
@@ -188,7 +173,7 @@ class SpaceFlightSimulator(ShowBase):
         if not headless:
             self.state_manager.push(SplashState)
 
-    def input_task(self, task):
+    def input_task(self, task: Task) -> int:
         state = self.input_reader.poll()
         self.input_context_stack.dispatch(state)
         return task.cont

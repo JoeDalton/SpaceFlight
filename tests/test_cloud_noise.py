@@ -79,7 +79,7 @@ def test_volume_is_deterministic_in_its_seed():
 def test_volume_tiles_without_a_seam(volume):
     """The volume is repeat-wrapped, so the step across the wrap must be no
     larger than an ordinary interior step — otherwise every tile boundary shows
-    as a crease, and the shader's 0.05-wide threshold window would find them."""
+    as a crease, and the shader's narrow threshold window would find them."""
     for axis in range(3):
         interior = np.abs(np.diff(volume, axis=axis)).mean()
         seam = np.abs(np.take(volume, 0, axis) - np.take(volume, -1, axis)).mean()
@@ -117,8 +117,8 @@ def test_quantise_matches_an_eight_bit_upload(volume):
 
 def test_sample_volume_reproduces_texel_centres(volume):
     """A hardware linear fetch addresses texel CENTRES: texture coordinate u maps
-    to index u*size - 0.5. Getting that half-texel wrong displaces placement from
-    drawing by half a texel, which is tens of metres at the scales in use."""
+    to index u*size - 0.5. Getting that half-texel wrong shifts every octave by
+    half its texel — hundreds of metres for the lowest octave."""
     # At coord = i + 0.5 the fetch lands exactly on texel i, with no blending.
     index = np.array([[3.5, 7.5, 11.5]])
     np.testing.assert_allclose(
@@ -196,13 +196,12 @@ def test_coverage_is_monotone_and_exact_at_the_endpoints(volume):
 
 
 def test_coverage_survives_a_change_of_octave_weights(volume):
-    """The coupling this design removes, and the reason coverage is derived rather
-    than authored as a raw threshold.
+    """Why coverage is derived rather than authored as a raw threshold.
 
     Octave weights are a SHAPE decision, but they also move the fbm's mean and
-    spread. Against a hand-authored threshold, retuning them silently changed how
-    much cloud there was — two independent things sharing one number. Deriving the
-    threshold from a measurement makes coverage invariant to them.
+    spread, so against a fixed threshold retuning them would silently change how
+    much cloud there is. Deriving the threshold from a measurement makes coverage
+    invariant to them.
     """
     spec = DensityField(noise_scale=(0.002,) * 3)
     quieter = replace(spec, octave_weights=(0.5, 0.25, 0.0625, 0.03125))
@@ -325,12 +324,10 @@ def test_the_shadow_march_agrees_with_the_field_it_approximates(volume):
     DIFFERENT amount of cloud than exists — it is tested against the same
     threshold.
 
-    This was a real bug with a very visible symptom. Renormalising the two octaves
-    by their summed weights (the obvious thing, and what this did at first) leaves
-    both the mean and the spread too high, so the march found about 1.65x as much
-    cloud as the field contains and shadowed everything far too heavily: sunlit
-    cloud tops came out grey in full sun. The affine calibration fixes the
-    distribution, not just the scale."""
+    Renormalising the two octaves by their summed weights (the obvious approach)
+    leaves both the mean and the spread too high: the march finds about 1.65x the
+    cloud and sunlit tops come out grey in full sun. The affine calibration fixes
+    the distribution, not just the scale."""
     spec = resolve_field(volume, DensityField(noise_scale=(0.002,) * 3))
     rng = np.random.default_rng(0)
     points = rng.uniform([-16000, -16000, 1000], [16000, 16000, 2000], (60_000, 3))
@@ -452,7 +449,7 @@ def test_the_cloud_top_follows_the_field(volume):
 
 def test_the_base_stays_flat_when_the_top_bulges(volume):
     """The base must NOT be eroded along with the top — a cumulus really does
-    have a flat underside, and that was the one part already right."""
+    have a flat underside."""
     spec = resolve_field(
         volume, DensityField(slab=(1000.0, 1000.0), noise_scale=(0.002,) * 3)
     )
@@ -474,9 +471,8 @@ def test_the_base_stays_flat_when_the_top_bulges(volume):
 def test_density_is_a_function_of_world_position_alone(volume):
     """The property the crisp silhouette depends on. Every billboard covering a
     pixel must agree where the cloud's boundary is, which holds only while the
-    field depends on position and nothing else. It was broken once, when each
-    cloud carried its own slab: overlapping clouds then disagreed, and one
-    cloud's ceiling sliced a flat plane through its neighbour."""
+    field depends on position and nothing else (a per-cloud slab, say, lets one
+    cloud's ceiling slice a flat plane through its neighbour)."""
     spec = resolve_field(volume, DensityField(noise_scale=(0.002,) * 3))
     points = np.random.default_rng(1).uniform(
         [-8000, -8000, 1000], [8000, 8000, 1600], (2000, 3)
@@ -520,8 +516,8 @@ def test_density_is_bounded_and_carves(volume):
 
 
 def test_anisotropic_scale_stretches_the_field(volume):
-    """Anisotropy IS the fibrous cirrus look — it replaces a sinusoidal shear
-    outright, and it costs three numbers in the coordinate scale."""
+    """Anisotropy IS the fibrous cirrus look, for the cost of three numbers in
+    the coordinate scale."""
     stretched = DensityField(
         slab=(1000.0, 600.0), noise_scale=(0.0004, 0.0025, 0.002), threshold=(0.5, 0.55)
     )
@@ -707,8 +703,9 @@ def test_the_phase_stays_positive_across_the_useful_range():
     """A negative phase renders as a dark hole, and it would fall BETWEEN the
     pinned angles where nothing else would catch it.
 
-    The range checked here is the range the demo's sweep can reach; the ceiling is
-    real and is documented in :data:`FORWARD_GAIN_CEILING`."""
+    The range checked here is the range the demo's sweep can reach; the ceiling
+    above it is real (see test_a_broad_lobe_bounds_how_large_the_forward_gain_can_be).
+    """
     for forward in (1.0, 4.72, 10.0, 15.0):
         for backward in (0.8, 1.52, 3.0):
             optics = CloudOptics(forward_gain=forward, backward_gain=backward)
@@ -760,8 +757,8 @@ def test_anisotropy_is_clamped_below_one():
 
 
 def test_both_shaders_size_layerparams_for_every_layer():
-    """A contract that has now been broken twice, in both directions, and neither
-    failure is visible in a normal test run:
+    """A contract whose breakage, in either direction, is invisible in a normal
+    test run:
 
       * too small, and the higher layers read out of bounds — undefined crossfade
         and extinction, so those layers silently stop drawing;
@@ -794,7 +791,7 @@ def test_shader_phase_constant_matches_the_python_one():
     match = re.search(r"BACKWARD_G\s*=\s*(-?[0-9.]+)", source)
     assert match, "BACKWARD_G not found in cloud.frag"
     assert float(match.group(1)) == pytest.approx(BACKWARD_ANISOTROPY)
-    # And the shader must no longer normalise: the weights already do that.
+    # And the shader must not normalise: the weights already do that.
     assert "atRightAngles" not in source
 
 

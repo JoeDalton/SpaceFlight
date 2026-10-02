@@ -17,15 +17,9 @@ if TYPE_CHECKING:
 
 class AsteroidField:
     """
-    An asteroid field
-
-    `n_asteroids` are created in a cube centered at (0,0,0)
-    and of size `field_size`.
-
-    Their position is fixed but they slowly rotate.
-
-    The shapes, positions, rotations and scales are randomly chosen
-    for each asteroid.
+    An asteroid field: `n_asteroids` randomly shaped, placed, oriented and scaled
+    instances in a cube of side `field_size` centred on the origin. Positions are
+    fixed; with `is_moving` the asteroids also slowly rotate.
 
     TODO: if I want asteroids to be destructible, I may need to isolate them :(
     """
@@ -41,7 +35,7 @@ class AsteroidField:
         scale_factor: float = 1.0,
         is_moving: bool = True,
         seed: int | None = None,
-    ) -> None:
+    ):
         """
         Populate the field with randomly placed, sized, and oriented asteroids.
 
@@ -130,7 +124,7 @@ class AsteroidField:
             )
             self.game.method_lists[self.id] = [self.move_asteriods_task]
 
-    def compute_derivatives(self) -> None:
+    def compute_derivatives(self):
         """
         Computes the derivative of the asteroids' states
         """
@@ -144,7 +138,7 @@ class AsteroidField:
                 quat_dot
             )
 
-    def move_asteriods_task(self) -> None:
+    def move_asteriods_task(self):
         """
         Gets the asteroids' states from the integrator and
         update rendered instances, then prepare the next
@@ -174,7 +168,7 @@ class AsteroidField:
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Cleans the AsteroidField object
         """

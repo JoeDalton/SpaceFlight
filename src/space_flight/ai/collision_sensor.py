@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import BitMask32
@@ -7,14 +10,17 @@ from space_flight import DEBUG_DELETION
 from space_flight.game.collisions import CollisionLayers, attach_collision_sphere
 from space_flight.utils import magnitude
 
+if TYPE_CHECKING:
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 
 
 class CollisionSensor:
     """
-    A class to define a collision sensor for bot navigators
-
-    3 consecutive collision spheres intersect with dangerous objects
+    A bot navigator's collision sensor: 3 look-ahead spheres, centred at
+    increasing distances along the ship's forward (+Y) axis, that detect obstacles
     """
 
     # Game time of the frame whose contacts `obstacles` holds, when recorded
@@ -25,25 +31,25 @@ class CollisionSensor:
 
     def __init__(
         self,
-        game,
-        ship,
-        collision_reference_distance_m=100.0,
-        ship_distance_1_m=5,
-        radius_1_m=30,
-        ship_distance_2_m=50,
-        radius_2_m=50,
-        ship_distance_3_m=125,
-        radius_3_m=100,
+        game: FlightState,
+        ship: Ship,
+        collision_reference_distance_m: float = 100.0,
+        ship_distance_1_m: float = 5,
+        radius_1_m: float = 30,
+        ship_distance_2_m: float = 50,
+        radius_2_m: float = 50,
+        ship_distance_3_m: float = 125,
+        radius_3_m: float = 100,
     ):
         self.obstacles = []
         self._clock = game.game_time.get_current_time
         self.ship = ship
         self.collision_reference_distance_m = collision_reference_distance_m
-        # The three look-ahead spheres, numbered from the innermost (1) to the
-        # outermost (3). A navigator can shorten the sensor's reach by lowering
-        # active_range (e.g. a bomb run disables the outer sphere so it can overfly
-        # a big target without being pushed off it, while the inner spheres remain
-        # a genuine anti-crash net). Reset to n_spheres each frame by the navigator.
+        # Spheres are numbered from the innermost (1) to the outermost (3). A
+        # navigator can shorten the reach by lowering active_range (a bomb run
+        # drops the outer sphere to overfly a big target without being pushed off
+        # it; the inner ones remain an anti-crash net). Reset to n_spheres by each
+        # navigate().
         self.n_spheres = 3
         self.active_range = self.n_spheres
         self.sphere_1 = attach_collision_sphere(
@@ -80,7 +86,7 @@ class CollisionSensor:
         self.sphere_3.setPythonTag("owner", self)
         self.sphere_3.setPythonTag("sensor_range", 3)
 
-    def set_active(self, active: bool) -> None:
+    def set_active(self, active: bool):
         """
         Include the spheres in collision traversal, or leave them out: an
         inactive sensor costs nothing to traverse and records no contacts (its
@@ -95,7 +101,7 @@ class CollisionSensor:
             sphere.node().setFromCollideMask(mask)
         self.active = active
 
-    def record_obstacle(self, obstacle: dict) -> None:
+    def record_obstacle(self, obstacle: dict):
         """
         Register a contact reported by the collision system this frame.
 
@@ -136,12 +142,8 @@ class CollisionSensor:
             # outer sphere while a bomb run has shortened active_range).
             if obstacle.get("range", 1) > self.active_range:
                 continue
-            # Panda3D's raw LVector3f/LPoint3f, not a numpy array: coerce it so
-            # `weight * normal` below works regardless of weight's exact type
-            # (LVector3f only supports `vec * scalar`, not `scalar * vec`,
-            # and math.sqrt-based magnitude() returns a plain float rather
-            # than np.linalg.norm's numpy.float64, which numpy's own __mul__
-            # happened to interoperate with via the buffer protocol).
+            # A Panda3D LVector3f: coerce it, since `float * LVector3f` (below,
+            # with magnitude()'s plain float weight) is unsupported.
             normal = np.asarray(obstacle["normal"], dtype=float)
             hit_point = obstacle["hit_point"]
 

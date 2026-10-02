@@ -2,10 +2,9 @@
 Unit tests for FlightState.end_level and FlightState.recenter_render_origin
 (space_flight.game.flight_state).
 
-FlightState.__init__ requires a live Panda3D ShowBase (see other actor tests'
-convention). These tests bypass __init__ via object.__new__() and set only the
-attributes each method reads. The recentering tests use real (window-less)
-NodePaths, which need no ShowBase.
+These tests bypass FlightState.__init__ (which needs a live ShowBase) via
+object.__new__() and set only the attributes each method reads. The
+recentering tests use real (window-less) NodePaths, which need no ShowBase.
 """
 
 from unittest.mock import MagicMock
@@ -49,7 +48,7 @@ def test_end_level_does_not_push_any_state_when_headless():
 
 # Far enough from the origin that float32 steps are ~8 mm
 _FAR_POSITION = np.array([123456.789, -98765.4321, 54321.123])
-# A cockpit-like offset from the ship node, a metre from the eye
+# A cockpit-like offset from the ship node, under a metre
 _COCKPIT_OFFSET = (0.0, 0.8, -0.2)
 
 

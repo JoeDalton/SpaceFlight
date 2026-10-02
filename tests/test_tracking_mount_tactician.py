@@ -39,7 +39,7 @@ def _configure_interactions_for_prey(
     distance: float,
     interaction_active: bool = True,
     alignment: float = 1.0,
-) -> None:
+):
     """
     Configure mock game interactions so that evaluate_preys returns a
     meaningful score.

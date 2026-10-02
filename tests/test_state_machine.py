@@ -271,8 +271,8 @@ def test_finished_is_false_before_begin_for_positive_duration():
 
 
 def test_finished_zero_duration_is_immediate_and_clockless():
-    # The legacy "reap the frame health hits zero" path: a non-positive duration
-    # finishes at once and must never read the clock.
+    # "Reap on the frame health hits zero": a non-positive duration finishes at
+    # once and must never read the clock.
     phase = DyingPhase(clock=RaisingClock())
     assert phase.finished(0.0) is True
     assert phase.finished(-1.0) is True

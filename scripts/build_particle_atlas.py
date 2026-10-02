@@ -1,17 +1,16 @@
 """
-build_atlas.py
-==============
-Dev-time tool — run once (or whenever sprites change).
+Dev-time tool: pack the fire and smoke sprites into the particle atlases read
+by :func:`space_flight.fx.load_atlas`. Run whenever the sprites change.
 
-Produces:
-    sprites/fire_atlas.png   + sprites/fire_atlas.json
-    sprites/smoke_atlas.png  + sprites/smoke_atlas.json
+Paths are relative to the working directory: reads ``sprites/fire/*.png`` and
+``sprites/smoke/*.png``, writes ``sprites/{fire,smoke}_atlas.{png,json}``
+(the game loads them from ``datafiles/sprites/particles/``).
 
-Each JSON is a list of {u_min, v_min, u_size, v_size} dicts (UV in 0..1)
-corresponding to each sprite, in the order they were found on disk.
+Each JSON is a list of {u_min, v_min, u_size, v_size, name} dicts (UV in 0..1,
+V flipped for OpenGL), one per sprite in filename order.
 
 Usage:
-    python build_atlas.py
+    python scripts/build_particle_atlas.py
 """
 
 import json

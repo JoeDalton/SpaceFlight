@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from simple_pid import PID
 
@@ -5,6 +9,9 @@ from space_flight.actors.pawn import Pawn
 from space_flight.ai import HALF_PI, Personality
 from space_flight.ai.generic.generic_pilot import GenericPilot
 from space_flight.utils import magnitude, safe_angle_rad
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class TrackingMountPilot(GenericPilot):
@@ -16,7 +23,10 @@ class TrackingMountPilot(GenericPilot):
     """
 
     def __init__(
-        self, game, pawn: Pawn, personality: dict = Personality.TURRET_DEFAULT
+        self,
+        game: FlightState,
+        pawn: Pawn,
+        personality: dict = Personality.TURRET_DEFAULT,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
@@ -75,7 +85,7 @@ class TrackingMountPilot(GenericPilot):
     def pilot(
         self,
         target_direction: np.ndarray = np.zeros(3),
-    ):
+    ) -> tuple[float, float]:
         """
         Given a target direction and the current orientation of the mount, compute
         the yaw and pitch rates that will be applied to it.
