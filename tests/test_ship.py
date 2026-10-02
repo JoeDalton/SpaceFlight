@@ -178,27 +178,50 @@ class _DerivativesShip(Ship):
         pass
 
 
-def _make_flying_ship(rng, quaternion_norm=1.0, speed_mps=200.0, lift_factor=0.01):
-    """A ship with a random attitude, rates, speed and forces."""
+def _make_flying_ship(
+    rng,
+    quaternion_norm=1.0,
+    speed_mps=200.0,
+    lift_factor=0.01,
+    lateral_lift_factor=None,
+    drag_factor=0.02,
+    lift_inefficiency=0.0,
+    max_thrust_n=20000.0,
+    speed=None,
+    orientation=None,
+    pqr=None,
+    zero_forces=False,
+):
+    """A ship with a random attitude, rates, speed and forces -- or, for tests
+    that need to check an exact formula, an explicit `speed`/`orientation`/`pqr`
+    and `zero_forces=True` to silence thrust and the random extra forces."""
     ship = object.__new__(_DerivativesShip)
-    orientation = rng.normal(size=4)
-    orientation *= quaternion_norm / np.linalg.norm(orientation)
+    if orientation is None:
+        orientation = rng.normal(size=4)
+        orientation *= quaternion_norm / np.linalg.norm(orientation)
     ship.state = np.zeros(10)
     ship.state_dot = rng.normal(size=10)
     ship.state_dot_previous = np.zeros(10)
     ship.orientation = orientation
-    ship.speed = speed_mps * rng.normal(size=3) / np.sqrt(3.0)
-    ship.pqr = rng.uniform(-2.0, 2.0, size=3)
-    ship.scalar_thrust_n = 5000.0
+    ship.speed = (
+        np.array(speed, dtype=float)
+        if speed is not None
+        else speed_mps * rng.normal(size=3) / np.sqrt(3.0)
+    )
+    ship.pqr = pqr if pqr is not None else rng.uniform(-2.0, 2.0, size=3)
+    ship.scalar_thrust_n = 0.0 if zero_forces else 5000.0
     ship.mass_kg = 1000.0
-    ship.additional_force_n = rng.normal(size=3)
-    ship.impact_force_n = rng.normal(size=3)
-    ship.external_force_n = rng.normal(size=3)
-    ship.drag_factor = 0.02
+    zeros = np.zeros(3)
+    ship.additional_force_n = zeros if zero_forces else rng.normal(size=3)
+    ship.impact_force_n = zeros if zero_forces else rng.normal(size=3)
+    ship.external_force_n = zeros if zero_forces else rng.normal(size=3)
+    ship.drag_factor = drag_factor
     ship.lift_factor = lift_factor
-    ship.lateral_lift_factor = 0.5 * lift_factor
-    ship.max_thrust_n = 20000.0
-    ship.lift_inefficiency = 0.0
+    ship.lateral_lift_factor = (
+        lateral_lift_factor if lateral_lift_factor is not None else 0.5 * lift_factor
+    )
+    ship.max_thrust_n = max_thrust_n
+    ship.lift_inefficiency = lift_inefficiency
     return ship
 
 
@@ -283,3 +306,137 @@ def test_compute_derivatives_matches_per_vector_rotations(seed, case):
         np.testing.assert_allclose(
             getattr(ship, name), getattr(reference, name), rtol=1e-10, atol=1e-9
         )
+
+
+# ---------------------------
+# compute_derivatives: lift-induced drag
+# ---------------------------
+
+
+def _make_simple_flying_ship(speed, lift_inefficiency, **kwargs):
+    """A non-rotating, non-rotating-rate ship with a fixed speed vector and no
+    thrust/random forces, so the resulting drag_n can be checked against a
+    hand-computed formula."""
+    return _make_flying_ship(
+        rng=np.random.default_rng(0),
+        speed=speed,
+        orientation=np.array([1.0, 0.0, 0.0, 0.0]),
+        pqr=np.zeros(3),
+        zero_forces=True,
+        lift_inefficiency=lift_inefficiency,
+        max_thrust_n=kwargs.pop("max_thrust_n", 1.0e9),
+        **kwargs,
+    )
+
+
+def test_lift_induced_drag_matches_formula():
+    """
+    drag_n is the viscous+wave drag_factor term plus a lift-induced term
+    lift_norm_n**2 * lift_inefficiency / speed_norm**2, as derived from
+    lift_inefficiency = 1/(pi * AR * e).
+    """
+    speed = np.array([0.0, 200.0, 20.0])  # forward with some AoA
+    ship = _make_simple_flying_ship(speed, lift_inefficiency=0.05)
+
+    ship.compute_derivatives()
+
+    speed_norm = magnitude(speed)
+    lift_norm_n = magnitude(ship.lift_n)
+    assert lift_norm_n > 0.0  # sanity: this case does produce lift
+    expected_drag_n = (
+        -speed_norm
+        * speed
+        * (ship.drag_factor + lift_norm_n**2 * ship.lift_inefficiency / speed_norm**2)
+    )
+    np.testing.assert_allclose(ship.drag_n, expected_drag_n, rtol=1e-10)
+
+
+def test_lift_induced_drag_is_zero_when_lift_inefficiency_is_zero():
+    """
+    With lift_inefficiency == 0.0 (the conf.get default for ships that don't
+    set it), drag_n reduces to the pure drag_factor term.
+    """
+    speed = np.array([0.0, 200.0, 20.0])
+    ship = _make_simple_flying_ship(speed, lift_inefficiency=0.0)
+
+    ship.compute_derivatives()
+
+    expected_drag_n = -magnitude(speed) * speed * ship.drag_factor
+    np.testing.assert_allclose(ship.drag_n, expected_drag_n, rtol=1e-10)
+
+
+def test_lift_induced_drag_adds_to_baseline_drag():
+    """
+    Turning on lift_inefficiency strictly increases drag magnitude relative to
+    the no-induced-drag baseline, for a flight condition that does produce lift.
+    """
+    speed = np.array([0.0, 200.0, 20.0])
+    baseline = _make_simple_flying_ship(speed, lift_inefficiency=0.0)
+    induced = _make_simple_flying_ship(speed, lift_inefficiency=0.05)
+
+    baseline.compute_derivatives()
+    induced.compute_derivatives()
+
+    assert magnitude(induced.drag_n) > magnitude(baseline.drag_n)
+
+
+def test_lift_induced_drag_scales_with_lift_inefficiency():
+    """
+    A ship with lower aspect-ratio/Oswald-efficiency wings (higher
+    lift_inefficiency) suffers more induced drag for the same flight condition.
+    """
+    speed = np.array([0.0, 200.0, 20.0])
+    low = _make_simple_flying_ship(speed, lift_inefficiency=0.03)
+    high = _make_simple_flying_ship(speed, lift_inefficiency=0.08)
+
+    low.compute_derivatives()
+    high.compute_derivatives()
+
+    assert magnitude(high.drag_n) > magnitude(low.drag_n)
+
+
+def test_lift_induced_drag_absent_at_rest():
+    """
+    No lift nor drag (induced or otherwise) is produced while the ship isn't
+    moving, regardless of lift_inefficiency.
+    """
+    ship = _make_simple_flying_ship(np.zeros(3), lift_inefficiency=0.05)
+
+    ship.compute_derivatives()
+
+    np.testing.assert_array_equal(ship.drag_n, np.zeros(3))
+
+
+def test_lift_induced_drag_uses_clipped_lift_magnitude():
+    """
+    lift_n is clipped to max_thrust_n to avoid simulation divergence, and the
+    induced-drag term uses that same clipped magnitude -- not the larger
+    unclipped one -- so drag_n stays bounded along with the lift force.
+    """
+    speed = np.array([0.0, 200.0, 20.0])
+    unclipped = _make_simple_flying_ship(
+        speed, lift_inefficiency=0.05, lift_factor=10.0, max_thrust_n=1.0e9
+    )
+    clipped = _make_simple_flying_ship(
+        speed, lift_inefficiency=0.05, lift_factor=10.0, max_thrust_n=100.0
+    )
+
+    unclipped.compute_derivatives()
+    clipped.compute_derivatives()
+
+    # The applied lift force is capped...
+    assert magnitude(clipped.lift_n) == pytest.approx(clipped.max_thrust_n)
+    assert magnitude(unclipped.lift_n) > clipped.max_thrust_n
+    # ...and so is the induced-drag contribution.
+    assert magnitude(clipped.drag_n) < magnitude(unclipped.drag_n)
+
+    speed_norm = magnitude(speed)
+    expected_drag_n = (
+        -speed_norm
+        * speed
+        * (
+            clipped.drag_factor
+            + clipped.max_thrust_n**2 * clipped.lift_inefficiency / speed_norm**2
+        )
+    )
+    np.testing.assert_allclose(clipped.drag_n, expected_drag_n, rtol=1e-10)
