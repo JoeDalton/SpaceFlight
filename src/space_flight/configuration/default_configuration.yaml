@@ -15,7 +15,8 @@ dead_zones:
 #   gamepad   — buttons: gamepad_lshoulder, gamepad_rshoulder, gamepad_start,
 #                        gamepad_back, gamepad_face_a/b/x/y,
 #                        gamepad_dpad_up/down/left/right
-#               axes:    left_x, left_y, right_x, right_trigger
+#               axes:    left_x, left_y, right_x, right_y,
+#                        left_trigger, right_trigger
 #   joystick  — buttons: stick_button_N  (1-indexed, matches physical label)
 #               axes:    pitch, roll, yaw, throttle
 
@@ -120,7 +121,7 @@ contexts:
       axis_y: pitch
 
   hyperspace:
-    # Hyperspace trasition state
+    # Hyperspace transition state
     keyboard:
       drop_hyperspace: space
     gamepad:
