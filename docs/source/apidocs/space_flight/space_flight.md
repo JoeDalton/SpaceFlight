@@ -70,10 +70,6 @@ space_flight.cli
   - ```{autodoc2-docstring} space_flight.DEBUG_HUD
     :summary:
     ```
-* - {py:obj}`FPS_COUNTER <space_flight.FPS_COUNTER>`
-  - ```{autodoc2-docstring} space_flight.FPS_COUNTER
-    :summary:
-    ```
 * - {py:obj}`RECORD_GAME <space_flight.RECORD_GAME>`
   - ```{autodoc2-docstring} space_flight.RECORD_GAME
     :summary:
@@ -194,16 +190,6 @@ space_flight.cli
    False
 
 ```{autodoc2-docstring} space_flight.DEBUG_HUD
-```
-
-````
-
-````{py:data} FPS_COUNTER
-:canonical: space_flight.FPS_COUNTER
-:value: >
-   True
-
-```{autodoc2-docstring} space_flight.FPS_COUNTER
 ```
 
 ````
