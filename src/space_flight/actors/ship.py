@@ -455,6 +455,7 @@ class Ship(Pawn):
                 if lift_norm_n > self.max_thrust_n:
                     self.lift_n /= lift_norm_n
                     self.lift_n *= self.max_thrust_n
+                    lift_norm_n = self.max_thrust_n
 
                 # Drag is opposed to speed, composed of viscous+wave drag
                 # and lift-induced drag
@@ -463,7 +464,7 @@ class Ship(Pawn):
                     * self.speed
                     * (
                         self.drag_factor
-                        + lift_norm_n * self.lift_inefficiency / speed_norm_squared
+                        + lift_norm_n**2 * self.lift_inefficiency / speed_norm_squared
                     )
                 )
 
