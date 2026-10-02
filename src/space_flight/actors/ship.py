@@ -119,6 +119,7 @@ class Ship(Pawn):
             * self.conf["reference_surface_m2"]
             * self.conf["lateral_lift_coefficient_slope_pdeg"]
         )
+        self.lift_efficiency = self.conf["lift_efficiency"]  # = 1/(pi * AR * e)
         self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
 
         # Manoeuverability signal in [0, 1] read by attackers' tacticians to pick
@@ -395,14 +396,13 @@ class Ship(Pawn):
 
         if FLIGHT_MODEL == "airplane":
             speed_norm = magnitude(self.speed)
+            speed_norm_squared = speed_norm**2
             if math.isnan(speed_norm) or (speed_norm <= 1e-4):
                 # No lift or drag without speed
                 self.drag_n = np.zeros(3)
                 self.lift_n = np.zeros(3)
                 self.lift_body_n = np.zeros(3)
             else:
-                # Drag is opposed to speed
-                self.drag_n = -self.drag_factor * speed_norm * self.speed
                 # Lift is perpendicular to ship side and airflow
                 # and proportional to angle of attack
                 # + And perpendicular to ship up and airflow
@@ -427,13 +427,11 @@ class Ship(Pawn):
                 # airflow_direction_body (e.g. cross3(a, RIGHT_BODY) == (0,
                 # a[2], -a[1])) -- measured ~0.6% of total profiled game time,
                 # so likely not worth the fragility of hardcoding it.
-                self.lift_body_n = (
+                self.lift_body_n = speed_norm_squared * (
                     self.lift_factor
-                    * speed_norm** 2
                     * angle_of_attack_deg
                     * cross3(airflow_direction_body, RIGHT_BODY)
                     + self.lateral_lift_factor
-                    * speed_norm** 2
                     * side_slip_angle_deg
                     * cross3(
                         UP_BODY,
@@ -455,6 +453,17 @@ class Ship(Pawn):
                 if lift_norm_n > self.max_thrust_n:
                     self.lift_n /= lift_norm_n
                     self.lift_n *= self.max_thrust_n
+
+                # Drag is opposed to speed, composed of viscous+wave drag
+                # and lift-induced drag
+                self.drag_n = (
+                    -speed_norm
+                    * self.speed
+                    * (
+                        self.drag_factor
+                        + lift_norm_n / (speed_norm_squared * self.lift_efficiency)
+                    )
+                )
 
         elif FLIGHT_MODEL == "space":
             # Neither lift nor drag
