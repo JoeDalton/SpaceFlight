@@ -198,6 +198,7 @@ def _make_flying_ship(rng, quaternion_norm=1.0, speed_mps=200.0, lift_factor=0.0
     ship.lift_factor = lift_factor
     ship.lateral_lift_factor = 0.5 * lift_factor
     ship.max_thrust_n = 20000.0
+    ship.lift_inefficiency = 0.0
     return ship
 
 
