@@ -10,6 +10,7 @@ drag_coefficient: 0.1
 lift_coefficient_slope_pdeg: 0.1
 lateral_lift_coefficient_slope_pdeg: 0.05
 reference_surface_m2: 10
+lift_inefficiency: 0.0332  # = 1/(pi * AR * e)
 
 health: 1200.0
 shield: 800.0

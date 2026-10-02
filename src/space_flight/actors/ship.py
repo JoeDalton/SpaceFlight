@@ -119,7 +119,9 @@ class Ship(Pawn):
             * self.conf["reference_surface_m2"]
             * self.conf["lateral_lift_coefficient_slope_pdeg"]
         )
-        self.lift_efficiency = self.conf["lift_efficiency"]  # = 1/(pi * AR * e)
+        self.lift_inefficiency = self.conf.get(
+            "lift_inefficiency", 0.0
+        )  # = 1/(pi * AR * e)
         self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
 
         # Manoeuverability signal in [0, 1] read by attackers' tacticians to pick
@@ -461,7 +463,7 @@ class Ship(Pawn):
                     * self.speed
                     * (
                         self.drag_factor
-                        + lift_norm_n / (speed_norm_squared * self.lift_efficiency)
+                        + lift_norm_n * self.lift_inefficiency / speed_norm_squared
                     )
                 )
 
