@@ -72,10 +72,8 @@ class FighterPilot(GenericShipPilot):
                 roll_error = 0.0
                 level_weight = 1.0
 
-            # Clamp the dot to [-1, 1] before arccos: right and the reference are
-            # unit vectors so it is mathematically in range, but float error can
-            # nudge it just past ±1, which would make arccos return NaN and poison
-            # the whole state.
+            # Clamp before arccos: float error can push the dot of two unit
+            # vectors past ±1, and a NaN would poison the whole state.
             right_dot_ref = np.dot(self.pawn.right, level_reference)
             right_dot_ref = min(max(right_dot_ref, -1.0), 1.0)
             is_up = np.dot(self.pawn.up, level_reference) >= 0

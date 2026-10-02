@@ -21,14 +21,12 @@ class CapitalShipTactician(GenericTactician):
 
     def update_intent(self) -> tuple[int, dict]:
         """
-        Evaluates the tactical situation around the bot.
-
-        For each foe, score its value as a threat or as a prey.
-        Also score the bot's own fighting shape
+        Picks the intent by priority: disengage if in poor fighting shape, engage
+        the scripted prey (ORBIT), patrol, hold formation, else regroup.
 
         TODO: include role/squad strategy biases
 
-        Finally, evaluates the intent of the bot with priorites
+        :return: The intent and its target dict
         """
         # Check if the bot's ship is in good enough shape to continue fighting
         fighting_shape = self.evaluate_fighting_shape()
@@ -37,10 +35,8 @@ class CapitalShipTactician(GenericTactician):
             foes_center_dict["target_id"] = Intent.DISENGAGE
             return Intent.DISENGAGE, foes_center_dict
 
-        # Check if bot has a prey.
-        # Placeholder trigger: engagement is still scenario-scripted. Deriving it
-        # from threat scoring (so capital ships pick their own orbit targets) is
-        # left for a later pass, see the design doc.
+        # Placeholder trigger: engagement is scenario-scripted. TODO derive it
+        # from threat scoring, so capital ships pick their own orbit targets.
         if self.scripted_prey_dict["active"]:
             self.scripted_prey_dict["attack_mode"] = AttackMode.ORBIT
             return Intent.ENGAGE, self.scripted_prey_dict
@@ -58,6 +54,3 @@ class CapitalShipTactician(GenericTactician):
         friends_center_dict = self.evaluate_team_center(team="friends")
         friends_center_dict["target_id"] = Intent.REGROUP
         return Intent.REGROUP, friends_center_dict
-
-    # evaluate_fighting_shape is inherited from GenericTactician (uniform
-    # health/shield_level).

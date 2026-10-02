@@ -9,11 +9,10 @@ from space_flight.game.collisions import attach_collision_sphere
 
 LOGGER = logging.getLogger()
 
-# A standalone subsystem (one whose owner is the ship it is bolted to, e.g. a
-# shield generator) smokes at full intensity for this long before it explodes --
-# it cannot tumble like a free-flying ship, so it just billows out. Bot-controlled
-# subsystems (turrets, tractor beams) are reaped by their Bot and keep the legacy
-# immediate death (zero duration).
+# A standalone subsystem (whose parent is the ship it is bolted to, e.g. a shield
+# generator) smokes at full intensity for this long before it explodes, since it
+# cannot tumble. Bot-controlled subsystems (turrets, tractor beams) are reaped by
+# their Bot and die immediately.
 SUBSYSTEM_DEATH_SMOKE_DURATION_S = 0.6
 
 
@@ -23,18 +22,16 @@ class SubSystem(Destructible):
 
     Subsystems are :class:`Destructible` objects in their own right: they own
     their health and their own collision geometry, and they explode when their
-    health is depleted. The collider uses the "subsystem" name and type: like
-    terrain it never initiates collisions (a subsystem is a rigid part of its
-    ship), it is only hit. Lasers hitting it damage it, and a ship ramming it is
-    handled by ship_into_subsystem, which pushes the subsystem's *parent* ship
-    (not the subsystem, which cannot move) while the subsystem takes the damage.
+    health is depleted. The into-only "subsystem" collider never initiates
+    collisions (a subsystem is a rigid part of its ship), it is only hit. Lasers
+    hitting it damage it, and a ship ramming it is handled by
+    ship_into_subsystem, which pushes the :attr:`mounted_on` ship (the subsystem
+    cannot move) while the subsystem takes the damage.
 
-    The collider's owner python-tag is set to the subsystem itself, and
-    :attr:`mounted_on` points at the parent ship. A subsystem therefore never
-    collides with the ship it is mounted on: the collision handlers skip
-    same-vehicle pairs through
-    :func:`~space_flight.game.collisions.owners_share_vehicle`, which reads
-    mounted_on.
+    The collider's owner python-tag is the subsystem itself; the collision
+    handlers read its :attr:`mounted_on` (through
+    :func:`~space_flight.game.collisions.owners_share_vehicle`) so a subsystem
+    never collides with the ship it is mounted on.
 
     :param game: The game/flight state
     :param parent: The subsystem's owner. Usually the ship it is on, but for a
@@ -62,20 +59,12 @@ class SubSystem(Destructible):
     ):
         super().__init__(game=game)
         self.parent = parent
-        # The ship this subsystem is bolted onto (its mount). Defaults to parent
-        # when the parent is the ship (shield generators); a turret's parent is
-        # its Bot, so the ship is passed explicitly. Read by the collision
-        # handlers (owners_share_vehicle / ship_into_subsystem) to spare the
-        # parent ship and route pushback to it, and used below for the mount node,
-        # team, health and death.
         self.mounted_on = mounted_on if mounted_on is not None else parent
         self.name = name
         self.team = self.mounted_on.team
         # Actor category, so target filters can single subsystems out.
         self.category = "sub_system"
-        # A mounted subsystem is as manoeuverable as the ship it rides: a turret on
-        # a nimble fighter is a poor STRAFE/bomb target, one on a slow capital ship
-        # a good one. Inherited once from the host (which exists by now).
+        # A mounted subsystem is as manoeuverable as the ship it rides
         self.mobility = getattr(self.mounted_on, "mobility", 0.0)
         self.is_dead = False
         self.is_clean = False
@@ -90,12 +79,7 @@ class SubSystem(Destructible):
         self.node.set_pos(*relative_position)
         self.position = np.array(self.node.getPos(self.game.root_node))
 
-        # Collision geometry.
-        # A subsystem is a rigid, destructible chunk of its parent ship, hence the
-        # into-only "subsystem" collider: lasers and ships hit it, but it never
-        # pushes anything itself. The owner python-tag (set by
-        # attach_collision_sphere) lets the handlers spare the parent ship (via
-        # owners_share_vehicle) and route pushback to the parent.
+        # Into-only collision geometry (see class docstring)
         self.hit_box_radius_m = hit_box_radius_m
         self.collision_sphere_np = attach_collision_sphere(
             game=self.game,
@@ -109,11 +93,8 @@ class SubSystem(Destructible):
         # Set explosion size for the death animation
         self.explosion_scale = explosion_scale
 
-        # Smoke/fire trail as the subsystem is worn down, burning at full
-        # intensity through its (smoke-only) death. A standalone subsystem is
-        # reaped by the central death handler, so it can billow before it blows;
-        # a bot-controlled one (turret / tractor beam) is cleaned by its Bot, so
-        # it keeps the legacy immediate death.
+        # Smoke/fire trail as the subsystem is worn down, and through its death
+        # (see SUBSYSTEM_DEATH_SMOKE_DURATION_S)
         self.damage_fx = DamageFX(game=self.game, owner=self)
         self.add_task(method=self.damage_fx.update)
         if self.parent is self.mounted_on:
@@ -131,11 +112,9 @@ class SubSystem(Destructible):
         The subsystem's velocity: it is bolted to its ship, so it *is* the host
         ship's velocity, read live rather than mirrored.
 
-        Exposing this (rather than leaving a mounted part apparently stationary)
-        keeps the interaction velocities correct, so an attacker's lead-pursuit and
-        closing solutions against a subsystem on a moving ship aim at where it
-        actually is. Turrets/tractor beams inherit this; the death explosion and a
-        turret's shots also pick up the host's motion through it.
+        Keeps attackers' lead-pursuit solutions correct against a subsystem on a
+        moving ship; the death explosion and a turret's shots also pick up the
+        host's motion through it.
 
         :return: The host ship's velocity, or zeros once detached (cleaned)
         """

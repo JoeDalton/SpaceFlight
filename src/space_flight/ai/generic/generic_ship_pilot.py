@@ -109,17 +109,19 @@ class GenericShipPilot(GenericPilot):
         up_reference: np.ndarray = None,
     ):
         """
-        Given a target direction and the current orientation of the ship, compute the
-        yaw, pitch and roll rates that will be applied to the trajectory.
-        Given a desired ship speed, compute the necessary throttle.
-
-        :param up_reference: Optional world "up" the ship should roll its +Z toward
-            (belly-aiming for a bomb run). None means level to world/scene up.
+        Compute the yaw, pitch and roll rates that turn the ship toward
+        target_direction, and the throttle that reaches desired_speed_mps.
 
         TODO : take into account the speed vector instead of ship axes to account for
         nicer flight dynamics (sideslip, AoA) ?
 
         TODO : Add pilot skill randomness ?
+
+        :param target_direction: The direction to point to (world frame)
+        :param desired_speed_mps: The speed to reach
+        :param up_reference: Optional world "up" the ship should roll its +Z toward
+            (belly-aiming for a bomb run). None means level to scene up.
+        :return: The throttle, yaw, pitch and roll rate commands
         """
 
         (

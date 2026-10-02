@@ -23,13 +23,11 @@ class Skybox:
 
         self.model.setBin("background", 1)
         self.model.setDepthWrite(0)
-        # The ocean's reflection camera applies a z>=0 clip plane to cull
-        # underwater geometry. The skybox is "at infinity" and must always fill
-        # the reflected background, so exempt it from that clip plane (priority 1
-        # overrides the reflection camera's initial state). Without this, the
-        # reflection's near-horizon rays — which strike the skybox sphere below
-        # z=0 — get clipped and fall back to the buffer's deep-blue clear colour,
-        # producing a solid band along the horizon that widens with altitude.
+        # Exempt the skybox from the ocean reflection camera's z>=0 clip plane
+        # (priority 1 overrides the camera's initial state): it is "at infinity"
+        # and must fill the reflected background. Otherwise the near-horizon
+        # reflected rays, which hit the sphere below z=0, show the buffer's clear
+        # colour as a solid horizon band that widens with altitude.
         self.model.setClipPlaneOff(1)
         self.model.reparentTo(self.node)
         self.model.set_scale(50000)

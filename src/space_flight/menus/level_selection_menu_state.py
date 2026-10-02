@@ -87,7 +87,7 @@ class LevelSelectionMenuState(BaseState):
         """
         Creates a list of levels for the user to select
         """
-        # create a sample title
+        # Title
         self.title = DirectLabel(
             scale=self.title_text_scale,
             pos=(
@@ -104,7 +104,6 @@ class LevelSelectionMenuState(BaseState):
         )
         self.title.setTransparency(1)
 
-        # Change the default dialog skin.
         self.level_buttons = []
 
         # create the scrolled frame that will hold our list
@@ -134,7 +133,7 @@ class LevelSelectionMenuState(BaseState):
             item = self.makeListItem(level_name, idx)
             item.reparentTo(self.lstActionMap.getCanvas())
 
-        # Recalculate the canvas size to set scrollbars if necesary
+        # Size the canvas to the list so the scrollbar appears when needed
         self.lstActionMap["canvasSize"] = (
             self.app.a2dLeft + 0.05,
             -0.3,
@@ -198,5 +197,5 @@ class LevelSelectionMenuState(BaseState):
                     btn.set_pressed()
                     self.start_button.show()
             else:
-                # Reet all other level buttons
+                # Reset all other level buttons
                 btn.reset()

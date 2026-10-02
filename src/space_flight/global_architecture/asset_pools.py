@@ -9,8 +9,8 @@ SOUND_POOL_LENGTH = 1000
 
 class TexturePool:
     """
-    A class to hold textures ready to be displayed, using a pool to avoid
-    reloading resources
+    One texture file, or every file matching a glob pattern in a directory,
+    from which :meth:`get_texture` picks at random
     """
 
     def __init__(self, app, path: Path, pattern: str):
@@ -34,6 +34,8 @@ def build_texture_pool(app, directory: Path, pattern: str) -> list:
     """
     Builds a texture pool from a glob pattern, loading every matching file
 
+    :param app: The ShowBase app
+    :param directory: The directory to search
     :param pattern: The glob pattern to find the texture files
     :return: a texture list
     """
@@ -49,6 +51,7 @@ def load_texture(app, texture_file: str) -> object:
     """
     Loads a texture from file
 
+    :param app: The ShowBase app
     :param texture_file: The texture file to load
     :return: The texture object
     """
@@ -57,7 +60,8 @@ def load_texture(app, texture_file: str) -> object:
 
 class SoundPool:
     """
-    A class to hold sounds ready to be played, using a pool to avoid reloading resources
+    SOUND_POOL_LENGTH preloaded instances of a sound (for a directory, random
+    picks among the matching files), so several copies can play at once
     """
 
     def __init__(self, app, path: Path, pattern: str, is_3d: bool):
@@ -67,7 +71,7 @@ class SoundPool:
                 app=app, directory=path, pattern=pattern, is_3d=is_3d
             )
         else:
-            # Path is a single file => load as many times as necessary
+            # Path is a single file => load it SOUND_POOL_LENGTH times
             self.pool = []
             for _ in range(SOUND_POOL_LENGTH):
                 if is_3d:
@@ -80,33 +84,31 @@ class SoundPool:
     def get_sound(self, randomize_pitch: bool = False) -> object:
         """
         Returns the first sound object in the pool that is not in use, ready to
-        be played
+        be played, and marks it in use until :meth:`release_sound`
 
         :param randomize_pitch: Whether the returned sound must have a randomized pitch
         :return: A sound object, ready to be played
+        :raises RuntimeError: If every sound in the pool is in use
         """
         for sound in self.pool:
-            # Must use a non-currently-playing sound, otherwise it will restart.
-            # Tracked by `id()`, not the sound object itself: under the null
-            # audio backend (headless runs), every AudioSound instance compares
-            # equal and hashes equal to every other one, so a plain `in`/`set`
-            # membership check on the objects themselves would treat any sound
-            # as already in use the moment one was taken.
+            # A sound in use would restart. Tracked by `id()`: under the null
+            # audio backend (headless runs) every AudioSound compares and
+            # hashes equal to every other, so a set of the objects themselves
+            # would mark all sounds in use as soon as one was taken.
             if id(sound) not in self.in_use:
                 self.in_use.add(id(sound))
                 if randomize_pitch:
-                    # Randomize the pitch of the sound to get a more realistic feeling
+                    # Randomize the pitch for variety
                     sound.setPlayRate(random.uniform(0.9, 1.1))
                 return sound
-        # If this state is reached, no ready-to-play sound is available
         LOGGER.error("No sound ready to play in pool: ")
         raise RuntimeError("No sound ready to play")
 
     def release_sound(self, sound):
         """
-        Releases sound from in_use set and stops the audio
+        Stops the sound and returns it to the pool
 
-        :param sound: _description_
+        :param sound: A sound previously returned by :meth:`get_sound`
         """
         sound.stop()
         self.in_use.discard(id(sound))
@@ -114,9 +116,13 @@ class SoundPool:
 
 def build_sound_pool(app, directory: Path, pattern: str, is_3d: bool) -> list:
     """
-    Builds a sound list from a glob pattern and loads a pool
+    Builds a pool of SOUND_POOL_LENGTH sounds, each loaded from a random file
+    matching the glob pattern
 
+    :param app: The ShowBase app
+    :param directory: The directory to search
     :param pattern: The glob pattern to find the sound files
+    :param is_3d: Whether to load positional (Audio3DManager) sounds
     :return: a sound list
     """
     sound_files = list(directory.glob(pattern))
@@ -136,6 +142,7 @@ def load_3d_sound(app, sound_file: str) -> object:
     """
     Loads a 3D sound from file
 
+    :param app: The ShowBase app
     :param sound_file: The sound file to load
     :return: The 3d sound object
     """
@@ -146,6 +153,7 @@ def load_generic_sound(app, sound_file: str):
     """
     Loads a non-3d sound from file
 
+    :param app: The ShowBase app
     :param sound_file: The sound file to load
     :return: The sound object
     """

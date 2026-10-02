@@ -26,15 +26,14 @@ if TYPE_CHECKING:
 # One shared fire/smoke billboard pool (:class:`FireSmokePool`) feeding three
 # effects: one-shot explosions (burst), laser-hit puffs (hit_burst), and the
 # continuous per-ship damage/death trail (trail_smoke / trail_fire, driven from
-# fx/damage_fx.py). The "explosion" naming below survives only where it names the
-# literal shader asset (shaders/explosion.vert) and the death-explosion tunables.
+# fx/damage_fx.py). "Explosion" names the shader asset (shaders/explosion.*) and
+# the death-explosion tunables.
 
 # ---------------------------------------------------------------------------
 # Tunables
 # ---------------------------------------------------------------------------
-# Public (no leading underscore): these are the look/behaviour knobs meant to be
-# tuned. Structural constants (asset paths, vertex columns, the shader) stay
-# module-private.
+# Public names are the look/behaviour knobs meant to be tuned; structural
+# constants (asset paths, vertex columns, the shader) are module-private.
 
 #: Number of fire / smoke particles emitted per death explosion.
 FIRE_COUNT = 8
@@ -53,20 +52,17 @@ SMOKE_SPEED_MIN, SMOKE_SPEED_MAX = 0.3, 1.5
 FIRE_SIZE_MIN, FIRE_SIZE_MAX = 0.6, 1.5
 SMOKE_SIZE_MIN, SMOKE_SIZE_MAX = 0.8, 2.0
 
-#: Smoke particles become visible this many seconds after fire.
-#: Implemented as a future spawn_time offset in vertex data — no CPU
-#: bookkeeping required.
+#: Smoke particles become visible this many seconds after fire (a future
+#: spawn_time in the vertex data; no CPU bookkeeping).
 SMOKE_DELAY = 0.3
 
-#: Radius of the random positional bias sphere, in units of *scale*.
-#: Gives the burst a volumetric feel rather than all particles starting from
-#: a single point.
+#: Radius of the random positional bias sphere, in units of *scale*, so a
+#: burst looks volumetric rather than starting from a single point.
 FIRE_POS_BIAS = 0.3
 SMOKE_POS_BIAS = 0.5
 
-#: Fade-in duration as a fraction of each particle's total lifetime.
-#: 0.3 means the particle reaches full opacity at 30% of its life.
-#: Uploaded to the shader as the uFadein uniform.
+#: Fraction of each particle's lifetime over which its fade-in ramp goes 0 → 1
+#: (0.3 = the ramp completes at 30% of its life). Uploaded as uFadein.
 FIRE_FADEIN = 0.3
 SMOKE_FADEIN = 0.7
 
@@ -80,7 +76,7 @@ _JSON_SMOKE = DATAFILES_PATH / "sprites/particles/smoke_atlas.json"
 # Hit-explosion knobs
 # ---------------------------------------------------------------------------
 # A small secondary explosion triggered on *some* laser hits (see
-# FireSmokePool.hit_burst and collisions.py). Tune these to taste.
+# FireSmokePool.hit_burst and collisions.py).
 
 #: Explosion scale multiplier for a hit burst. Multiplies the particle sizes /
 #: speeds / bias radii above; not a literal metre radius.
@@ -104,8 +100,8 @@ HIT_EXPLOSION_JET_ANGLE_SCALE = 1.0
 # Explosion shader
 # ---------------------------------------------------------------------------
 
-#: The explosion shader is shared by both buffers (fire and smoke); load it
-#: once, lazily. Fire and smoke differ only by the uFadein uniform.
+#: The explosion shader, shared by the fire and smoke buffers; loaded once,
+#: lazily.
 _EXPLOSION_SHADER = None
 
 
@@ -144,9 +140,9 @@ class _FireSmokeBuffer(ParticleBuffer):
     """
     Thin :class:`ParticleBuffer` sub-class for one billboard layer (fire or smoke).
 
-    Extends the base class with the shared explosion shader, a per-layer
-    fade-in value, and a :meth:`spawn_particle` that resolves each particle's
-    atlas tile to its UV rect.
+    Adds the shared explosion shader, a per-layer fade-in, and a
+    :meth:`spawn_particle` that resolves each particle's atlas tile to its UV
+    rect.
 
     :param game:       Parent game
     :param texture:    Sprite atlas :class:`Texture`.
@@ -194,9 +190,8 @@ class _FireSmokeBuffer(ParticleBuffer):
         """
         Allocate a free slot and write one explosion particle.
 
-        Every value goes straight into its own vertex column (no packing); the
-        atlas *tile_index* is resolved to its UV rect here so the shader can
-        sample the sprite directly.
+        The atlas *tile_index* is resolved to its UV rect here, so the shader
+        samples the sprite directly.
 
         :param pos:        World-space spawn position (positional bias already
                            applied by the caller).
@@ -209,7 +204,7 @@ class _FireSmokeBuffer(ParticleBuffer):
         """
         slot_index = self.alloc_slot()
         if slot_index is None:
-            return  # pool full — silently drop this particle
+            return  # pool full: drop this particle
 
         self.write_slot(
             slot_index,
@@ -227,10 +222,9 @@ class _FireSmokeBuffer(ParticleBuffer):
 # Per-layer emission config
 # ---------------------------------------------------------------------------
 
-#: Bundles the constants that differ between the fire and smoke layers so a
-#: single :func:`_emit_layer` drives both. speed / size / life / spin
-#: are (min, max) ranges; cone_half_angle is the emission-cone
-#: half-angle (radians); delay offsets the layer in time.
+#: Per-layer emission constants, so one :func:`_emit_layer` drives every layer.
+#: speed / size / life / spin are (min, max) ranges; cone_half_angle is in
+#: radians; delay offsets the layer in time.
 _Layer = namedtuple("_Layer", "cone_half_angle speed size life spin pos_bias delay")
 
 _FIRE_LAYER = _Layer(
@@ -256,12 +250,11 @@ _SMOKE_LAYER = _Layer(
 # ---------------------------------------------------------------------------
 # Damage / death trail layers
 # ---------------------------------------------------------------------------
-# Layers for the continuous per-ship damage trail (see fx/damage_fx.py). They
-# differ from the explosion layers above only in lifetime and delay: their
-# lifetimes are deliberately short so that, emitted every frame across many
-# damaged ships into this one shared pool, only a handful are ever alive at once.
-# Long-lived trail particles would saturate the pool (starving real explosions)
-# and flood the screen with transparent overdraw.
+# Layers for the continuous damage trail (fx/damage_fx.py). They differ from the
+# explosion layers only in lifetime and delay. Lifetimes are short so that,
+# emitted every frame by many ships into this shared pool, only a handful are
+# alive at once: long-lived trail particles would saturate the pool (starving
+# real explosions) and flood the screen with transparent overdraw.
 
 #: Trail particle lifetimes (seconds). Explicit, not scaled from the explosion
 #: ranges, so retuning an explosion's lifetime never silently shifts the trail.
@@ -291,21 +284,16 @@ def _emit_layer(
     """
     Emit *count* particles of one layer into *buffer*.
 
-    Each layer (a :data:`_Layer`) carries its own explicit lifetime range, so
-    long-lived explosion smoke and short-lived trail smoke are simply different
-    layers rather than one range scaled at the call site.
-
     :param buffer:      The :class:`_FireSmokeBuffer` to spawn into.
     :param layer:       The :data:`_Layer` config for this layer.
     :param count:       Number of particles to emit.
     :param position:    World-space burst centre (numpy array).
     :param base_velocity: Inherited velocity added to every particle (array).
     :param basis:       (normal, tangent, bitangent) from
-                        :func:`build_orthogonal_basis`. normal is None
-                        for a death explosion or a damage trail (no impact
-                        surface): the cone sampler then returns a zero direction,
-                        so the particles carry only *base_velocity* plus
-                        positional bias and do not fan out.
+                        :func:`build_orthogonal_basis`. normal is None for a
+                        death explosion or a damage trail: the cone sampler then
+                        returns a zero direction, so particles carry only
+                        *base_velocity* plus positional bias.
     :param scale:       Overall size/speed/bias multiplier.
     :param speed_scale: Extra launch-speed multiplier (hit bursts use < 1).
     :param jet_angle_scale: Multiplier on the emission-cone half-angle.
@@ -348,16 +336,15 @@ class FireSmokePool:
     """
     Shared fire + smoke billboard system.
 
-    Owns the two :class:`_FireSmokeBuffer` layers (fire, smoke) and is the single
-    object the rest of the game emits fire/smoke into, through three intents:
+    Owns the fire and smoke :class:`_FireSmokeBuffer` layers; the rest of the
+    game emits fire/smoke through three intents:
 
     - :meth:`burst` — a one-shot explosion (a ship or subsystem dying).
     - :meth:`hit_burst` — the small secondary puff of a laser impact.
     - :meth:`trail_smoke` / :meth:`trail_fire` — the continuous per-ship damage
       and death trail (see :mod:`space_flight.fx.damage_fx`).
 
-    All three share the same two buffers, so their particles are drawn together
-    and compete for the same pool budget.
+    All three share the two buffers and their pool budget.
 
     :param game: The game whose root node is the parent scene
     """
@@ -371,9 +358,8 @@ class FireSmokePool:
             game=self.game, texture_path=_ATLAS_SMOKE, json_path=_JSON_SMOKE
         )
 
-        # Fire and smoke share one shader and size-growth curve; they differ
-        # only in fade-in (smoke's longer fade makes it appear to emerge from
-        # the dissipating fire).
+        # Same shader and growth curve; smoke's longer fade-in makes it appear
+        # to emerge from the dissipating fire.
         self.fire = _FireSmokeBuffer(
             game,
             texture=fire_tex,
@@ -417,10 +403,10 @@ class FireSmokePool:
                          sizes, speeds, and positional bias radii.
         :param base_velocity: Inherited velocity (length-3 array) added to all
                          particles, e.g. from a moving object at impact.
-        :param normal:   Surface normal at the impact point (Point3Vec3
-                         or array); particles fan out in a cone around it. Pass
-                         None (the default, used by death explosions) for no
-                         directional spread — see :func:`_emit_layer`.
+        :param normal:   Surface normal at the impact point (Vec3 or array);
+                         particles fan out in a cone around it. None (the
+                         default, used by death explosions) for no directional
+                         spread.
         :param fire_count:  Number of fire particles (defaults to FIRE_COUNT).
         :param smoke_count: Number of smoke particles (defaults to SMOKE_COUNT).
         :param speed_scale: Extra multiplier on launch speed, on top of *scale*
@@ -456,9 +442,8 @@ class FireSmokePool:
         """
         Emit a small, cheap secondary explosion for a laser hit.
 
-        A contained burst (few billboards, low speed) sized/shaped by the
-        HIT_EXPLOSION_* module knobs, biased along the impact *normal* like
-        the hit sparks.
+        A :meth:`burst` along the impact *normal*, shaped by the
+        HIT_EXPLOSION_* knobs (few billboards, low speed).
 
         :param position:      World-space impact point.
         :param normal:        Surface normal at the impact point.
@@ -481,9 +466,8 @@ class FireSmokePool:
         """
         Emit one puff of the continuous damage/death *smoke* trail.
 
-        Short-lived (see :data:`_TRAIL_SMOKE_LAYER`) so many ships can trail at
-        once without saturating the pool. No directional spread — the puff sits
-        where it is laid and rides *base_velocity* (see :mod:`.damage_fx`).
+        Short-lived (:data:`_TRAIL_SMOKE_LAYER`), with no directional spread:
+        the puff rides *base_velocity* from where it is laid.
 
         :param position:      World-space emission point.
         :param base_velocity: Velocity the puff inherits (a fraction of the
@@ -510,8 +494,8 @@ class FireSmokePool:
         """
         Emit one puff of the continuous damage/death *fire* trail.
 
-        The fire counterpart to :meth:`trail_smoke`, even shorter-lived (see
-        :data:`_TRAIL_FIRE_LAYER`); rides fully with the ship at its hull.
+        Like :meth:`trail_smoke`, even shorter-lived
+        (:data:`_TRAIL_FIRE_LAYER`).
 
         :param position:      World-space emission point.
         :param base_velocity: Velocity the puff inherits (the ship's own).
@@ -534,11 +518,8 @@ class FireSmokePool:
     @staticmethod
     def _prepare(position, normal):
         """
-        Normalise a caller's position/normal into the numpy form the emitter
-        maths expects, and build the emission basis.
-
-        Callers may pass Panda vectors or numpy arrays; base_velocity is already
-        a world-velocity array from every caller.
+        Convert a position/normal (Panda vectors or arrays) to numpy and build
+        the emission basis.
 
         :param position: World-space emission point (Point3 or length-3 array)
         :param normal:   Surface normal, or None for no directional spread
@@ -551,7 +532,7 @@ class FireSmokePool:
 
     def clean(self) -> None:
         """
-        Destroy both particle buffers and their update tasks.
+        Destroy both particle buffers.
         """
         self.fire.clean()
         self.smoke.clean()

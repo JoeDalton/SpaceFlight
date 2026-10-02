@@ -2,15 +2,13 @@
 Radial menu overlay state.
 
 Pushed on top of :class:`~space_flight.game.flight_state.FlightState` when the
-player holds the radial-menu trigger.  Game time keeps running (PAUSES_BELOW
-= False), so the simulation continues while the menu is visible.
-
-The menu is parameterised at push time via state_manager.push() kwargs::
+player presses the radial-menu trigger, and parameterised via push() kwargs
+(see :meth:`~space_flight.actors.player.Player.open_radial_target_menu`)::
 
     app.state_manager.push(
         state_class=app.state_manager.RADIAL_MENU_STATE,
         on_select=lambda idx: ...,
-        slice_labels=["Laser", "Missile", "Bomb", "Shield"],
+        slice_labels=TARGET_FILTERS,
     )
 """
 
@@ -49,7 +47,7 @@ class RadialMenuVisual:
 
     def __init__(self, app, slice_labels: list[str]) -> None:
         """
-        :param app: The simulator app (needed for aspect2d).
+        :param app: The simulator app (unused; widgets parent to aspect2d).
         :param slice_labels: Display text for each slice
         """
         self.frame = DirectFrame(
@@ -105,14 +103,10 @@ class RadialMenuState(BaseState):
     """
     Overlay state for the radial menu.
 
-    PAUSES_BELOW = False means :class:`StateManager` will **not** call
-    pause() on the game state below, so physics and game logic keep
-    running while the menu is open.
-
-    This state owns the visual overlay.  The input is handled by
-    :class:`~space_flight.ui.input_context.RadialMenuInputContext`, which is
-    pushed onto the :class:`~space_flight.ui.input_context.InputContextStack`
-    during :meth:`enter` and popped in :meth:`exit`.
+    PAUSES_BELOW = False, so the game state below keeps simulating while the
+    menu is open. This state owns only the visual overlay; input is handled by
+    :class:`~space_flight.ui.input_context.RadialMenuInputContext`, pushed in
+    :meth:`enter` and popped in :meth:`exit`.
     """
 
     PAUSES_BELOW: bool = False

@@ -169,8 +169,8 @@ def make_swell_grid_mesh(
     :return: A :class:`GeomNode` holding the grid mesh.
     """
     # Per-axis coordinates: the border rings mirrored below the grid, the uniform
-    # inner span, then the border rings above it. Vectorised because the default
-    # grid is ~265k verts; a per-vertex Python loop was ~25x slower.
+    # inner span, then the border rings above it. Vectorised: the default mesh is
+    # ~324k verts.
     border = border_coords(grid_half, outer_half, border_rings)
     inner = -grid_half + 2.0 * grid_half * np.arange(subdivs + 1) / subdivs
     coords = np.concatenate([-border[::-1], inner, border]).astype(np.float32)
@@ -188,7 +188,7 @@ def make_swell_grid_mesh(
     vdata.setNumRows(m * m)
     memoryview(vdata.modifyArray(0)).cast("B")[: verts.nbytes] = verts.tobytes()
 
-    # Two triangles per cell, matching the original winding:
+    # Two triangles per cell:
     #   (v0, v0+1, v0+m) and (v0+1, v0+m+1, v0+m), with v0 = j*m + i.
     jj, ii = np.meshgrid(np.arange(m - 1), np.arange(m - 1), indexing="ij")
     v0 = (jj * m + ii).ravel().astype(np.uint32)
@@ -269,13 +269,13 @@ class Ocean:
             displacement.
         :param wave_fade_near: Distance, in world units, below which small waves
             are at full detail.
-        :param haze_color: Colour distant water fades toward. Should match what
-            the cloud field fades to, or sea and sky disagree at the horizon.
-        :param haze_distance: Metres over which water reaches haze_color fully.
         :param wave_fade_far: Distance, in world units, beyond which small waves
             are fully suppressed.
         :param wave_fade_k2: Exponential decay rate for the iteration count
-            (iter = max_iter * exp(-k2 * dist)).
+            (iter = wave_iterations * exp(-k2 * dist)).
+        :param haze_color: Colour distant water fades toward. Should match what
+            the cloud field fades to, or sea and sky disagree at the horizon.
+        :param haze_distance: Metres over which water reaches haze_color fully.
         :param vert_shader: Path to ocean.vert.
         :param frag_shader: Path to ocean.frag.
         """
@@ -283,13 +283,13 @@ class Ocean:
         self.id = uuid.uuid4()
         self.base_node = self.game.root_node.attachNewNode("ocean")
 
-        # ── Reflection buffer (shared by all LOD levels) ──────────────────────
+        # ── Reflection buffer ─────────────────────────────────────────────────
         refl_scale = self.game.app.graphics_settings.config["render"][
             "reflection_scale"
         ]
         self.refl_tex, uv_scale = self.make_reflection_buffer(refl_scale, water_color)
 
-        # ── Shader (shared by all LOD levels) ─────────────────────────────────
+        # ── Shader ────────────────────────────────────────────────────────────
         shader = Shader.load(Shader.SL_GLSL, vertex=vert_shader, fragment=frag_shader)
 
         # ── Camera-locked surface ─────────────────────────────────────────────
@@ -341,8 +341,7 @@ class Ocean:
         self.ocean_node.setShaderInput("uWaveFadeNear", float(wave_fade_near))
         self.ocean_node.setShaderInput("uWaveFadeFar", float(wave_fade_far))
         self.ocean_node.setShaderInput("uWaveFadeK2", float(wave_fade_k2))
-        # Aerial perspective, to meet the cloud haze at the horizon. Shorter than
-        # the clouds' distance: the air path to sea level is denser.
+        # Aerial perspective, to meet the cloud haze at the horizon.
         self.ocean_node.setShaderInput("uHazeColor", haze_color)
         self.ocean_node.setShaderInput("uHazeDistance", float(haze_distance))
         # Hide the ocean from the reflection camera
@@ -362,24 +361,22 @@ class Ocean:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def update(self) -> None:
-        """Call every frame from your update task."""
+        """Per-frame update (self-registered in ``game.method_lists``)."""
         current_time = self.game.game_time.get_current_time()
         camera_pos = self.game.app.camera.getPos(self.base_node)
         self.mirror_camera()
 
-        # Build reflection MVP once, share across all rings
+        # Reflection view-projection, for the shaders' reflection lookup
         view = LMatrix4f()
         view.invertFrom(self.refl_cam.getMat(self.base_node))
         proj = self.refl_cam_node.getLens().getProjectionMat()
         mvp = view * proj
 
-        # The valid (rendered) region of the reflection texture is buffer_size /
-        # texture_size.  The texture is padded to a power of two only on pipelines
-        # that require it (the default Panda3D pipeline); simplepbr renders into a
-        # full-size NPOT texture, so the padding-based estimate set at init is
-        # wrong there.  The texture's real size is only known once the buffer is
-        # realized on the GPU, so refresh uReflUVScale on the first realized frame
-        # from the actual dimensions — correct under either pipeline, no toggle.
+        # The valid region of the reflection texture is buffer_size /
+        # texture_size. The texture is padded to a power of two only on some
+        # pipelines (the default one pads, simplepbr does not), and its real size
+        # is known only once the buffer is realized, so refresh uReflUVScale from
+        # the actual dimensions on the first realized frame.
         if not hasattr(self, "_uv_scale_set"):
             tex_w = self.refl_tex.getXSize()
             tex_h = self.refl_tex.getYSize()
@@ -460,24 +457,20 @@ class Ocean:
         fov = self.game.app.camLens.getFov()
         refl_lens.setFov(fov.x * 1.4, fov.y * 1.4)
         # The reflection camera sits ~2*altitude further from the skybox's far
-        # side than the main camera, so the skybox (scaled to the main camera's
-        # far distance) gets clipped at the reflected zenith — a hole that grows
-        # with altitude.  Push the reflection far plane well past the skybox so
-        # it always renders in full.
+        # side than the main camera, so with the same far plane the skybox could
+        # be clipped at the reflected zenith. Push the reflection far plane well
+        # past it so it always renders in full.
         refl_lens.setFar(self.game.app.camLens.getFar() * 4.0)
         self.refl_cam_node.setLens(refl_lens)
         self.refl_cam = self.base_node.attachNewNode(self.refl_cam_node)
 
-        # Use only the lower 20 bits, excluding bit 1 (ocean rings)
+        # Use only the lower 20 bits, excluding bit 1 (_OCEAN_BIT)
         self.refl_cam_node.setCameraMask(BitMask32(0xFFFFF & ~2))
 
-        # TODO(perf): selectively cull objects from the reflection pass to save
-        # rendering cost.  The reflection re-renders all scene geometry; objects
-        # that contribute little to the reflection (small, distant, or visually
-        # unimportant) can be excluded by reserving another camera-mask bit as a
-        # "do not reflect" flag and hiding tagged objects from refl_cam_node
-        # (same mechanism as _OCEAN_BIT above).  Best when there are many minor
-        # objects; not worthwhile for a single large hero object.
+        # TODO(perf): the reflection re-renders all scene geometry. Objects that
+        # contribute little (small, distant) could be excluded with another
+        # camera-mask bit as a "do not reflect" flag, as _OCEAN_BIT does for the
+        # ocean. Worth it with many minor objects, not for one large hero object.
 
         self.refl_buffer.makeDisplayRegion(0, 1, 0, 1).setCamera(self.refl_cam)
 
@@ -489,10 +482,8 @@ class Ocean:
             self.refl_cam_node.getInitialState().addAttrib(clip_attrib)
         )
 
-        # Provisional UV scale for the first frame, before the buffer is realized
-        # and its true (possibly padded) texture size is known.  update() refreshes
-        # this from the actual texture dimensions on the first realized frame, which
-        # is correct under both the padding (default) and NPOT (simplepbr) pipelines.
+        # Provisional UV scale assuming power-of-two padding; update() corrects it
+        # from the real texture size on the first realized frame.
         uv_scale = LVecBase2f(
             buf_w / compute_next_power_of_2(buf_w),
             buf_h / compute_next_power_of_2(buf_h),

@@ -169,7 +169,7 @@ class ShipModel:
 
     def anchor_model(self, node: NodePath):
         """
-        Anchors the 3D model of the cockpit to the ship node
+        Anchors the 3D model (cockpit or exterior) to the ship node
         """
         self.model.reparent_to(node)
         self.model.setPos(*self.offset)

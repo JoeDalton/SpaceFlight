@@ -52,10 +52,8 @@ class CapitalShipPilot(GenericShipPilot):
             yaw_error = np.arctan2(target_x, target_y)
             pitch_error = np.arctan2(target_z, target_y)
             # Capital ships only roll to level with the reference up (scene up by
-            # default). Clamp the dot to [-1, 1] before arccos: right and up are
-            # unit vectors so it is mathematically in range, but float error can
-            # nudge it just past ±1, which would make arccos return NaN and poison
-            # the whole state.
+            # default). Clamp before arccos: float error can push the dot of two
+            # unit vectors past ±1, and a NaN would poison the whole state.
             level_reference = (
                 self.game.scene.up_direction if up_reference is None else up_reference
             )

@@ -67,8 +67,8 @@ class Bomb(Munition):
     """
     A bomb projectile: a slow, short-lived pink sphere with a small collision
     sphere. It inherits the whole projectile lifecycle from :class:`Munition` and
-    only supplies its visual and collider, so it reuses the laser collision-damage
-    handlers (via the shared origin_ship/power/speed/shot interface).
+    only supplies its visual and collider, so the munition collision handlers
+    treat it like a laser shot.
     """
 
     def _build_visual(self, start_position):

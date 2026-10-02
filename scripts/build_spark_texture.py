@@ -1,7 +1,10 @@
 """
-Generates textures/spark.png — a soft radial glow sprite.
-No dependencies beyond the Python standard library.
-Run once: python generate_spark.py
+Generates a soft radial glow sprite (white, alpha = brightness) as
+textures/spark_2.png, relative to the working directory; the game's sprite is
+datafiles/sprites/particles/spark.png. Standard library only.
+
+Usage:
+    python scripts/build_spark_texture.py
 """
 
 import math
@@ -46,7 +49,7 @@ def make_spark(size=64) -> list[list[tuple]]:
             d = math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / (size / 2.0)
             d = min(d, 1.0)
 
-            # Soft quadratic falloff + bright spike at the core
+            # Soft falloff + bright spike at the core
             glow = (1.0 - d) ** 2.2
             core = max(0.0, 1.0 - d / 0.18) ** 0.5  # tight bright centre
 

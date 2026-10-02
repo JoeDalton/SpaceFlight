@@ -1,17 +1,13 @@
 """
 Graphics settings menu — lets the player view and change display/render options.
 
-Mirrors :mod:`space_flight.menus.input_settings_menu_state`: a deep-copied
-working config is edited in memory while the menu is open and written back on
-*Save*, and both menus share their scrollable-list machinery (see
-:class:`~space_flight.menus.menu_utils.ScrollableList`). Display mode is a
-button group; the quality knobs are sliders; FXAA and the other toggles are
-checkboxes. Rows are grouped under one header per top-level section of
-configuration/default_graphics.yaml.
+Like :mod:`space_flight.menus.input_settings_menu_state`, a deep-copied working
+config is edited in memory and written back only on *Save*. Rows are grouped
+under one header per top-level section of configuration/default_graphics.yaml.
 
-On save the display mode is applied to the live window immediately; render
-scale, anti-aliasing and the reflection/mirror quality are picked up on the
-next level load (hence the warning shown above the Save button). See
+On save the display mode is applied to the live window immediately; every
+other setting is read on the next level load (hence the warning shown above
+the Save button). See
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
 """
 
@@ -408,7 +404,7 @@ class GraphicsSettingsMenuState(BaseState):
     # ------------------------------------------------------------------
 
     def wheel_scroll(self, direction: int):
-        """Scroll the option list by one step in *direction* (-1 = up, +1 = down)."""
+        """Scroll the option list by *direction* scroll steps (negative = up)."""
         self.scroll_list.wheel_scroll(direction)
 
     def save(self):

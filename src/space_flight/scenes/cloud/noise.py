@@ -306,8 +306,9 @@ def build_noise_texture(volume: np.ndarray) -> Texture:
 def sample_volume(volume: np.ndarray, coords: np.ndarray) -> np.ndarray:
     """Sample *volume* as ``texture(cloudNoise, coord / NOISE_SIZE)`` does:
     trilinear and repeat-wrapped, including hardware linear's half-texel offset
-    (coordinate u addresses texel centre u*size - 0.5). Getting that wrong displaces
-    placement from drawing by half a texel, ~30 m.
+    (coordinate u addresses texel centre u*size - 0.5). Getting that wrong shifts
+    every octave by half its texel (250 m for the lowest cumulus octave), moving
+    placement off the drawn cloud.
 
     :param volume: (n, n, n) float array indexed [z, y, x]
     :param coords: (..., 3) sample positions in noise coords

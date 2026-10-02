@@ -20,9 +20,8 @@ class Destructible:
         self.game.destructibles.alive_objects.append(self)
         self.game.method_lists[self.id] = []
         # Death lifecycle: an object whose health reaches zero enters a "dying"
-        # phase (a spin-out, a smoke trail, ...) before it is finally reaped. The
-        # phase lasts death_duration_s; a duration of 0 reaps immediately, which
-        # is the legacy behaviour every destructible had before this was added.
+        # phase (a spin-out, a smoke trail, ...) lasting death_duration_s before
+        # it is reaped; 0 reaps it the same frame.
         self.death_duration_s = 0.0
         self._dying = DyingPhase(clock=self.game.game_time.get_current_time)
 
@@ -103,8 +102,7 @@ class Destructible:
         """
         Fire the terminal death effect, at the end of the dying phase.
 
-        The default delegates to :meth:`play_death` so nothing regresses for
-        objects that do not animate their death.
+        The default delegates to :meth:`play_death`.
         """
         self.play_death()
 
@@ -127,10 +125,9 @@ class Destructibles:
 
     def __init__(self):
         self.alive_objects: List[Destructible] = []
-        # Objects that have reached zero health and are playing out their death
-        # (spin-out, smoke, ...). They live here, across frames, until their dying
-        # phase completes -- they are no longer "alive" but not yet reaped, so they
-        # keep integrating and colliding while their animation plays.
+        # Objects at zero health playing out their death (spin-out, smoke, ...):
+        # no longer "alive" but not yet reaped, so they keep integrating and
+        # colliding until their dying phase completes.
         self.dying_objects: List[Destructible] = []
 
     def handle_deaths(self):
@@ -149,9 +146,8 @@ class Destructibles:
                 still_alive_objects.append(destructible)
         self.alive_objects = still_alive_objects
 
-        # 2. Advance every dying object; reap those whose animation has finished
-        #    with the original terminal sequence (blast, then teardown), now
-        #    deferred to the end of the dying phase.
+        # 2. Advance every dying object; reap (blast, then teardown) those whose
+        #    dying phase has finished.
         still_dying_objects: List[Destructible] = []
         for destructible in self.dying_objects:
             # A destructible may already have been cleaned out-of-band: a

@@ -16,10 +16,7 @@ LOGGER = logging.getLogger()
 
 class CapitalShipNavigator(GenericShipNavigator):
     """
-    A class to define the aim of a bot given an intent given by a tactician, and
-    passes its decision to a pilot that steers the ship.
-
-    Outputs a direction to point to and a reference distance
+    Capital ship navigator: engages by orbiting the target (see orbit_target)
     """
 
     def __init__(
@@ -67,11 +64,6 @@ class CapitalShipNavigator(GenericShipNavigator):
         turret flank (the turrets track and fire on their own; this only maintains
         the hull geometry).
 
-        Rather than a fixed-radius circle, the ship holds a constant standoff from
-        the target's oriented bounding box and drives tangentially, so the orbit
-        shape follows the target: a circle for a compact target, a racetrack for a
-        long thin one (constant firing range off the flanks).
-
         :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
         """
@@ -112,6 +104,8 @@ class CapitalShipNavigator(GenericShipNavigator):
         """
         Hold a constant standoff from the target's horizontal oriented bounding box
         and drive tangentially around it, staggered slightly off the target plane.
+        The orbit follows the target's shape: a circle for a compact target, a
+        racetrack for a long thin one (constant firing range off the flanks).
 
         :param target: The target actor (read for its bounding box and orientation)
         :param target_position: The target's world position this frame

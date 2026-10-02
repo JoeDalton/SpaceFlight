@@ -13,16 +13,11 @@ if TYPE_CHECKING:
 # DAMAGE / DEATH FX
 # ===========================================================================
 #
-# A per-actor smoke-and-fire trail whose intensity tracks how badly the actor is
-# hurt. It is driven by a single *severity* level, derived each frame from the
-# owner's health ratio (and forced to the maximum while it is dying), so the very
-# same trail a wounded ship streams keeps burning -- and intensifies -- straight
-# through its death spin, with no visible restart at the moment of death.
-#
-# The trail emits into the shared fire/smoke pool via its trail_smoke/trail_fire
-# entry points (short-lived particles, so many ships can trail at once without
-# saturating the pool -- see fire_smoke_fx.py). It owns no scene nodes of its
-# own, so cleanup is just dropping references.
+# A per-actor smoke-and-fire trail driven by a single *severity* level, derived
+# each frame from the owner's health ratio (maximum while dying), so a wounded
+# ship's trail keeps burning -- and intensifies -- through its death spin with no
+# visible restart. It emits into the shared fire/smoke pool (trail_smoke /
+# trail_fire) and owns no scene nodes.
 
 # ---------------------------------------------------------------------------
 # Severity thresholds (health fraction) and lifecycle
@@ -31,32 +26,26 @@ if TYPE_CHECKING:
 #: Severity levels. 0 = intact, 1 = smoking, 2 = on fire, 3 = dying (max).
 _INTACT, _SMOKING, _ON_FIRE, _DYING = 0, 1, 2, 3
 
-#: Default health fractions at or below which each severity kicks in. A living
-#: actor smokes below smoke_frac and catches fire below fire_frac; the dying
-#: phase overrides both to the maximum severity.
+#: Default health fractions at or below which a living actor smokes / catches
+#: fire.
 DEFAULT_SMOKE_HEALTH_FRAC = 2.0 / 3.0
 DEFAULT_FIRE_HEALTH_FRAC = 1.0 / 3.0
 
-#: Smoke lags the actor rather than riding with it, so it reads as a trail left
-#: behind: the puffs inherit only this fraction of the actor's velocity. Kept
-#: low so the smoke stays roughly where it was emitted and the ship flies out of
-#: it, laying a continuous column rather than dragging a clump along.
+#: Fraction of the actor's velocity smoke puffs inherit. Kept low so the ship
+#: flies out of its smoke, laying a column rather than dragging a clump along.
 _SMOKE_VELOCITY_DRAG = 0.12
 
 # ---------------------------------------------------------------------------
 # Per-severity emission
 # ---------------------------------------------------------------------------
-# One spec per (wounded) severity level, bundling every knob for that level so
-# they stay together: how often each layer emits (seconds between puffs), how
-# many billboards per puff, and the puff scale (a size/speed multiplier, NOT a
-# metre radius -- see FireSmokePool.trail_smoke). fire_* are unused below
-# _ON_FIRE. Level _INTACT emits nothing and has no spec.
+# One spec per wounded severity: seconds between puffs, billboards per puff and
+# puff scale (a size/speed multiplier, NOT a metre radius) for each layer. fire_*
+# are unused below _ON_FIRE; _INTACT emits nothing.
 #
-# Continuity comes from big overlapping puffs (few, cheap on the shared pool)
+# Continuity comes from few big overlapping puffs (cheap on the shared pool)
 # rather than a dense stream of tiny ones: at typical flight speeds the large
-# sizes below bridge the gap between successive puffs into a continuous column.
-# Particle *lifetimes* are owned by the pool's trail layers (fire_smoke_fx.py),
-# kept short there so many ships can trail at once without saturating the pool.
+# sizes bridge the gaps. Particle lifetimes belong to the pool's trail layers
+# (fire_smoke_fx.py).
 
 _SeveritySpec = namedtuple(
     "_SeveritySpec",
@@ -80,7 +69,7 @@ class DamageFX:
     as a per-frame task; it derives the severity from the owner's state and emits
     accordingly.
 
-    :param game: The game/flight state (owns the shared explosion pool)
+    :param game: The game/flight state (owns the shared fire/smoke pool)
     :param owner: The actor this trail belongs to
     :param smoke_health_frac: Health fraction at/below which smoke starts
     :param fire_health_frac: Health fraction at/below which fire starts

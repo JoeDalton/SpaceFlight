@@ -47,10 +47,9 @@ class FlightState(BaseState):
     def __init__(self, app, headless: bool = False) -> None:
         """
         :param app: the ShowBase application
-        :param headless: when True, skip every UI-only step (splash-era window
-            calls have already been skipped by the caller; here it means no
-            hyperspace overlay, no HUD, no level-end screen) so the level can
-            be run with no window, for use in optimization loops.
+        :param headless: when True, skip every UI-only step (hyperspace
+            overlay, HUD, level-end screen) so the level runs with no window,
+            e.g. in optimization loops
         """
         super().__init__(app)
         self.headless = headless
@@ -138,11 +137,8 @@ class FlightState(BaseState):
 
     def _level_entry(self) -> LevelEntry:
         """
-        The selected level's registry entry.
-
-        Resolved once by the caller (:meth:`enter` / :meth:`_enter_headless`)
-        and passed to both :meth:`_build_upfront` and
-        :meth:`_make_build_generator`, since they run back to back.
+        The selected level's registry entry, resolved once and passed to both
+        build phases.
 
         :return: The :class:`~space_flight.game.levels.LevelEntry`
         """
@@ -154,8 +150,8 @@ class FlightState(BaseState):
 
     def _build_upfront(self, entry: LevelEntry) -> None:
         """
-        Run the level's up-front (on-black) build phase, if it has one. This is
-        where the heavy objects are created and GPU-prepared before the animation.
+        Run the level's up-front (on-black) build phase, where the heavy objects
+        are created and GPU-prepared before the animation.
 
         :param entry: The selected level's registry entry (see :meth:`_level_entry`)
         """
@@ -412,7 +408,8 @@ class FlightState(BaseState):
 
     def exit(self) -> None:
         """
-        Clean every object in the game session, in reverse order of creation
+        Clean every object in the game session, in roughly reverse order of
+        creation.
         """
         # Save records
         if RECORD_GAME:

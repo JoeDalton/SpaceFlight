@@ -15,8 +15,8 @@ collision, lifecycle). It bundles two things:
 
 :class:`ShieldModel` deliberately depends only on a Panda3D loader and a
 parent NodePath -- not on the game -- so the presentation can be reasoned
-about (and reused) in isolation. All per-frame state it needs (time, camera
-position, health fraction, death progress) is passed in by the owning Shield.
+about (and reused) in isolation. All per-frame state it needs (time, health
+fraction, death progress) is passed in by the owning Shield.
 """
 
 import logging
@@ -192,8 +192,8 @@ class ShieldModel:
     3D model -- under parent, applies the shield shader, and exposes a
     small API the owning Shield drives each frame:
 
-    - :meth:`render` pushes the per-frame uniforms (time, camera, health tint,
-      death progress) and the live impact flashes.
+    - :meth:`render` pushes the per-frame uniforms (time, health tint, death
+      progress) and the live impact flashes.
     - :meth:`add_impact` records a laser hit so the surface flashes there.
     - :meth:`place_sinks` seeds the random points the fluid retracts into / grows
       out of (used at the start of a death or appearance animation).

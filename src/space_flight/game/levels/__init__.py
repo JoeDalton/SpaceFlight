@@ -7,11 +7,9 @@ heavy objects, built synchronously before the hyperspace animation) and a
 :class:`~space_flight.game.scenario.Mission` once the rest of the scene has
 been built during the animation).
 
-This registry is the single place that lists the shipped levels by name, so
-:mod:`space_flight.game.flight_state` (which builds a level) and
+Both :mod:`space_flight.game.flight_state` (which builds a level) and
 :mod:`space_flight.menus.level_selection_menu_state` (which lets the player
-pick one) both read the same data instead of keeping their own, easily
-out-of-sync copies.
+pick one) read it, so they never get out of sync.
 """
 
 from __future__ import annotations

@@ -23,15 +23,14 @@ if TYPE_CHECKING:
 # spark; per-hit look is chosen from a :class:`SparkPreset`.
 #
 # Colour and gravity travel PER PARTICLE (vertex columns), not as uniforms, so
-# bursts of different presets (metal / ice / magic) can be alive at the same
-# time in the one buffer without repainting one another.
+# bursts of different presets can be alive at once in the one buffer without
+# repainting one another.
 
 # ---------------------------------------------------------------------------
 # Tuning knobs
 # ---------------------------------------------------------------------------
-# Global multipliers applied on top of *every* preset, so the whole spark look
-# can be dialled in from one place while tuning. 1.0 = the per-preset values as
-# authored below; bump these to taste.
+# Global multipliers on top of *every* preset (1.0 = the preset values as
+# authored below).
 
 #: Scales each spark's billboard size (how big the individual sparks look).
 SPARK_SIZE_SCALE = 10.0
@@ -39,8 +38,7 @@ SPARK_SIZE_SCALE = 10.0
 #: Scales spark launch speed (how far the jet of sparks sprays from the hit).
 SPARK_SPEED_SCALE = 10.0
 
-#: Scales the emission-cone (jet) half-angle for every preset (1.0 = as
-#: authored below; > 1 = wider spray, < 1 = tighter beam).
+#: Scales the emission-cone (jet) half-angle (> 1 = wider spray, < 1 = tighter).
 SPARK_JET_ANGLE_SCALE = 1.0
 
 #: Per-particle vertex columns for the spark effect, appended to the shared
@@ -92,8 +90,8 @@ class SparkPreset:
     """
     Look and emission parameters for one kind of hit spark.
 
-    :param color_inner: RGBA of fast / hot sparks (the burst's largest).
-    :param color_outer: RGBA of slow / cool sparks.
+    :param color_inner: RGBA of the burst's largest ("hottest") sparks.
+    :param color_outer: RGBA of its smallest sparks.
     :param count:       Number of sparks emitted per hit.
     :param speed:       Maximum launch speed (world units/s).
     :param spread:      Cone spread in [0, 1]; scales the emission half-angle
@@ -206,9 +204,8 @@ class SparkPool(ParticleBuffer):
         """
         Emit one burst of hit sparks.
 
-        Each spark's colour is premixed here (color_outer → color_inner
-        by its size, a proxy for launch speed) and written per-particle, so
-        concurrent bursts of different presets do not repaint each other.
+        Each spark's colour is premixed here (color_outer → color_inner by its
+        random size) and written per particle.
 
         :param position:      World-space hit position.
         :param normal:        Surface normal at the hit point; sparks are
@@ -217,22 +214,19 @@ class SparkPool(ParticleBuffer):
                               spark so they ride a moving target.
         :param preset:        Look + emission parameters (:data:`METAL`,
                               :data:`ICE`, :data:`ROCK`, :data:`MAGIC`).
-        :param size_scale:    Extra per-call multiplier on spark size, on top of
-                              the preset and the global scale -- e.g. the cockpit
-                              sparks, seen up close, use a small value.
+        :param size_scale:    Extra multiplier on spark size, on top of the
+                              preset and the global scale (small for the
+                              close-up cockpit sparks).
         :param speed_scale:   Extra per-call multiplier on launch speed, likewise.
         """
         if normal is None:
             return  # no impact surface to emit from
 
-        # Work in numpy for the emission maths; convert the normal once (callers
-        # pass a Panda Vec3). base_velocity is already a world-velocity array.
+        # Emission maths is numpy; callers pass the normal as a Panda Vec3.
         normal_np = np.array([normal[0], normal[1], normal[2]], dtype=float)
         normal_np, tangent, bitangent = build_orthogonal_basis(normal_np)
 
         half_angle = preset.spread * (np.pi * 0.5) * SPARK_JET_ANGLE_SCALE
-        # Apply the global tuning multipliers and the per-call scales on top of
-        # the preset.
         base_size = preset.size * SPARK_SIZE_SCALE * size_scale
         base_speed = preset.speed * SPARK_SPEED_SCALE * speed_scale
         max_size = base_size * 1.8
@@ -257,7 +251,8 @@ class SparkPool(ParticleBuffer):
             )
             size = base_size * random.uniform(0.5, 1.8)
             lifetime = random.uniform(preset.lifetime * 0.4, preset.lifetime)
-            # Larger sparks launch faster, so size / max_size proxies "hot".
+            # Larger sparks get the "hot" inner colour (size is independent of
+            # launch speed).
             hot = min(size / max_size, 1.0)
             color = outer + (inner - outer) * hot
 

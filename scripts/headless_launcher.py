@@ -1,10 +1,8 @@
 """
 Manually run a level headlessly — no window, no audio device, no menus.
 
-Meant as a smoke test / template for optimization loops (bot personality
-tuning, navigator strategy search, ...) that drive many simulation runs
-without ever opening a display. See scripts/launcher.py for the normal,
-windowed entry point.
+A smoke test / template for optimization loops built on
+space_flight.headless.harness. See scripts/launcher.py for the windowed game.
 
 Usage:
     poetry run python scripts/headless_launcher.py --level Dev --max-steps 1000
@@ -20,8 +18,8 @@ def main() -> None:
     parser.add_argument(
         "--level",
         default="Dev",
-        help='Level to load (as in configuration["selected_level"]),'
-        'e.g. "Dev", "Intro", "Race".',
+        help='Level to load (as in configuration["selected_level"]), '
+        'e.g. "Dev", "Mission 1: Rookies".',
     )
     parser.add_argument(
         "--max-steps",

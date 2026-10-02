@@ -64,7 +64,7 @@ class Player:
         else:
             team = 1
 
-        # Add update mehods to the game's update methods list
+        # Add update methods to the game's update methods list
         self.game.method_lists[self.id] = []
         self.add_task(method=self.move_player)
 
@@ -85,10 +85,8 @@ class Player:
         self.roll_rate = 0.0
         self.view_offset = np.zeros(2)
 
-        # Death state. The player is not a Destructible, so its death is handled
-        # in FlightState: when killed it tumbles out of control (camera and all)
-        # for the pawn's death-spin duration before the level-end screen shows.
-        # It reuses the same DyingPhase timer the destructibles compose.
+        # Death timer. The player is not a Destructible: FlightState calls
+        # begin_death, then shows the level-end screen once death_spin_finished.
         self._dying = DyingPhase(clock=self.game.game_time.get_current_time)
 
         self.has_ai = has_ai
@@ -123,16 +121,14 @@ class Player:
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
 
-        # Prepare targetting filters
+        # Prepare targeting filters
         self.target_filter: str = "All"
 
     def move_player(self):
         """
-        Moves the camera and the skybox along with the player's
-        position.
-
-        The cockpit is linked to the camera, so it should move
-        without being told to.
+        Per-frame update: fly the pawn from the flight inputs (or the optional
+        AI), move the camera, and record the state if enabled. While dying, only
+        the tumble and the camera run.
         """
         # While dying, the controls are dead: the ship tumbles out of control and
         # the camera tumbles with it until the level-end screen takes over.
@@ -425,7 +421,8 @@ class Player:
         """
         Sets the target of the player
 
-        :param target_idx: The index of the target in the actor list
+        :param target_idx: The target's position in interactions.live_actors
+            (not its grid slot)
         """
         self.pawn.target = self.game.interactions.live_actors[target_idx]
         self.pawn.target_id = self.pawn.target.id

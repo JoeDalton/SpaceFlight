@@ -7,17 +7,11 @@ class ShieldGenerator(SubSystem):
     """
     An external shield generator subsystem.
 
-    A capital ship may mount **several** shield generators that together project a
-    **single shared** :class:`~space_flight.actors.capital_ship.shield.Shield`.
-    The shield is built and owned by the ship, not by the generators, and it
-    *polls* the generators' alive state to scale its perks **pro rata**:
-    destroying one reduces the shield's strength and regeneration by its share
-    (remaining / initial generators); destroying the last one brings the shield
-    down for good.
-
-    The coupling is one-way -- the shield watches the generators, the generators
-    know nothing of the shield -- so a generator is just a plain destructible
-    :class:`SubSystem`: a shoot-off target that happens to prop up the shield.
+    A capital ship's generators together project a **single shared**
+    :class:`~space_flight.actors.capital_ship.shield.Shield`, built and owned by
+    the ship, which polls their alive state to scale its perks pro rata. The
+    generators know nothing of the shield, so a generator is just a plain
+    destructible :class:`SubSystem`.
 
     :param game: The game/flight state
     :param parent: The ship this generator is mounted on

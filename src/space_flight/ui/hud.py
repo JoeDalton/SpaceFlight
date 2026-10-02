@@ -371,10 +371,8 @@ class TargetHUD:
             # Convert to camera space
             cam_space_pos = cam.getRelativePoint(self.game.root_node, world_pos)
 
-            # Guard against the degenerate projection when the target lies in
-            # the camera's XZ plane (depth ~ 0): clamp the forward depth to a
-            # small non-zero magnitude, preserving its sign so the behind-camera
-            # handling below still triggers correctly.
+            # Clamp the depth (see MIN_PROJECTION_DEPTH), preserving its sign so
+            # the behind-camera handling below still triggers correctly.
             if abs(cam_space_pos.y) < MIN_PROJECTION_DEPTH:
                 cam_space_pos.y = (
                     MIN_PROJECTION_DEPTH

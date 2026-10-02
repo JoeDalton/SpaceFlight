@@ -8,10 +8,8 @@ LOGGER = logging.getLogger(__name__)
 class Integrator:
     def __init__(self, game, max_state_size: int = 2000):
         """
-        Initializes the integrator with pre-allocated state vectors.
-
-        All arrays are allocated once at construction and reused across frames.
-        step() zeroes only the live portion in-place instead of allocating new arrays.
+        Initializes the integrator with state vectors allocated once and reused
+        across frames.
 
         :param game: The game object, used to retrieve the current time step
         :param max_state_size: Upper bound on the total number of state variables
@@ -79,14 +77,13 @@ class Integrator:
 
     def step(self):
         """
-        A 2nd order Adams-Bashforth integrator.
-        For the first step, a 1st order forward Euler (=AB1) is used.
+        A 2nd order Adams-Bashforth integrator, with a 1st order forward Euler
+        (=AB1) for the first step.
 
-        Integration is computed in-place on the live slice [:next_idx] only.
-        x, x_dot and x_dot_previous are all zeroed in-place after the step;
-        x_dot_previous is not carried over from x_dot because every actor
-        re-registers it before the next step reads it (the number of state
-        variables can change from one step to the next).
+        Computed in-place on the live slice [:next_idx] only, which is then
+        zeroed and released. x_dot_previous is not carried over from x_dot:
+        every actor re-registers it before the next step, since the set of
+        state variables can change from one step to the next.
 
         For any new state variable at runtime, set x_dot_previous equal to x_dot
         to get an AB1 initialisation of that variable.

@@ -99,7 +99,8 @@ COMMON_ASSETS_TO_LOAD = [
 
 class AssetManager:
     """
-    A class to pre-load and store assets, with a possibility to load assets on the fly
+    App-wide ``path -> loaded asset`` cache: preloads COMMON_ASSETS_TO_LOAD and
+    loads anything else on first request.
 
     # TODO: Drop useless assets to free memory ? Ex going from one level to the other:
     we don't need the old scene's assets anymore
@@ -111,12 +112,12 @@ class AssetManager:
 
     def get_asset(self, asset_type: str, path: Path, pattern: str = "") -> object:
         """
-        Gets an asset from the dictionary of already-loaded assets or load it from file
-        and store it
+        Returns the cached asset for *path*, loading and caching it first if needed
 
-        :param asset_type: The type of asset
-        :param path: The path where the asset is found
+        :param asset_type: The type of asset (see :meth:`load_single_asset`)
+        :param path: The path where the asset is found (the cache key)
         :param pattern: The asset pattern if path is a directory
+        :return: The model, cube map, :class:`TexturePool` or :class:`SoundPool`
         """
         try:
             # Assume the asset has already been loaded
@@ -129,13 +130,11 @@ class AssetManager:
 
     def load_game_assets(self, app_state, assets_to_load: tuple = None):
         """
-        Launches the load_assets task, which loads the common assets
-        (COMMON_ASSETS_TO_LOAD)
+        Launches the load_assets task, which loads COMMON_ASSETS_TO_LOAD
 
-        :param app_state: The app's state
-        :param assets_to_load: Currently ignored: a passed list is never copied
-            into self.assets_to_load, so only the default None path (loading
-            the common assets) works as intended
+        :param app_state: The state to report progress to (the splash screen)
+        :param assets_to_load: Broken: a passed list is never stored, so only
+            the default None (load COMMON_ASSETS_TO_LOAD) works
         """
         if assets_to_load is None:
             self.assets_to_load = COMMON_ASSETS_TO_LOAD.copy()
@@ -150,9 +149,10 @@ class AssetManager:
 
     def load_assets_task(self, app_state, task):
         """
-        The task to load assets at startup
+        Loads one queued asset per frame, updating the state's progress bar, and
+        calls ``app_state.on_loading_finished()`` once the queue is empty
 
-        :param app_state: The app's state
+        :param app_state: The state to report progress to
         """
         if not self.assets_to_load:
             # Done loading
@@ -173,9 +173,9 @@ class AssetManager:
 
     def load_single_asset(self, asset_type: str, path: Path, pattern: str):
         """
-        Loads an asset from file
+        Loads an asset from file into the cache
 
-        :param asset_type: The type of asset
+        :param asset_type: "model", "texture", "cube_map", "sound" or "3d_sound"
         :param path: The path where the asset is found
         :param pattern: The asset pattern if path is a directory
         """
@@ -217,10 +217,10 @@ class AssetManager:
 
     def instantiate_3d_model_to_node(self, path: Path | str, parent_node):
         """
-        Gets a 3D model form the dict of assets and attaches an instance to
-        the provided parent node
+        Gets a cached 3D model and attaches an instance of it to the provided
+        parent node
 
-        TODO: egg and bam files don't seem to be instatiable.
+        TODO: egg and bam files don't seem to be instantiable.
         For now they are loaded directly. Do something about it
 
         :param path: The path of the asset
@@ -239,11 +239,13 @@ def gltf_model_tilt_quaternion(game) -> np.quaternion:
     orientation (cockpit and exterior alike).
 
     Some Linux systems (confirmed: an Arch install and a WSL Ubuntu install)
-    load models visibly mis-rotated relative to this value, for a root cause that could
-    not be reproduced locally. Rather than guess at platform detection
-    again, this is an explicit, user-set workaround.
+    load models mis-rotated with the standard value, for a root cause that
+    could not be reproduced locally, so the graphics setting
+    ``compatibility.alternate_model_orientation`` swaps in an alternate value
+    as an explicit, user-set workaround (no platform detection).
 
-    :param game: The current game object
+    :param game: The current game object; the standard value is used if it
+        has no graphics settings
     """
     try:
         use_alternate = bool(

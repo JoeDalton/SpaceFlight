@@ -29,13 +29,11 @@ RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
 WEAPON_DAMAGE_TO_FORCE_FACTOR = 2.0
 DAMAGE_FORCE_APPLICATION_DURATION_S = 0.1
 ZERO_THRUST_POSITION = 0.05  # TODO move to input_system ? Should be tunable ?
-# Death spin ("play death") defaults, overridable per ship in configuration.yaml.
-# The ship cuts its engines and tumbles about a random body axis for
-# DEATH_SPIN_DURATION_S seconds before the terminal explosion; the spin rate ramps
-# up with the square root of the time since death (starts near zero, accelerates)
-# up to DEATH_MAX_TUMBLE_RATE_DEGPS. This ceiling is deliberately separate from the
-# flight max_*_rate limits, and is applied by writing self.pqr directly (bypassing
-# the input clamp / actuator low-pass) so a dramatic tumble is possible.
+# Death spin defaults, overridable per ship in configuration.yaml. The tumble rate
+# ramps with sqrt(time since death) up to DEATH_MAX_TUMBLE_RATE_DEGPS, reached at
+# DEATH_SPIN_DURATION_S. This ceiling is deliberately separate from the flight
+# max_*_rate limits: it is written straight into self.pqr (bypassing the input
+# clamp / actuator low-pass) so a dramatic tumble is possible.
 DEATH_SPIN_DURATION_S = 2.5
 DEATH_MAX_TUMBLE_RATE_DEGPS = 400.0
 TUMBLE_RATE_FACTORS = np.array([0.2, 1.0, 0.2])
@@ -58,9 +56,8 @@ class Ship(Pawn):
     - orientation (4)
     - linear speed (3)
 
-    The linear speed is integrated from the ship's acceleration.
-    However, the rotation rate is given directly (from user input
-    or PNJ behaviour)
+    The linear speed is integrated from the ship's acceleration, while the
+    rotation rate is commanded directly (player input or AI).
 
     "Forward" is on an object's Y axis in panda3d, so thrust is in +Y
     X axis is to the right, Z axis is up
@@ -94,10 +91,8 @@ class Ship(Pawn):
         self.max_roll_rate_radps = np.deg2rad(self.conf["max_roll_rate_degps"])
         self.additional_force_n = np.zeros(3)  # e.g. for gravity if applicable
         self.impact_force_n = np.zeros(3)  # e.g. for collisions and laser hits
-        # Transient world-frame forces applied by other actors this frame (e.g. a
-        # tractor beam's drag and attraction). Accumulated via apply_external_force
-        # and consumed (then zeroed) by compute_derivatives, so the force simply
-        # disappears the moment nothing applies it any more.
+        # Transient world-frame forces from other actors (e.g. a tractor beam),
+        # see apply_external_force
         self.external_force_n = np.zeros(3)
         self.formation = None
 
@@ -124,9 +119,7 @@ class Ship(Pawn):
         )  # = 1/(pi * AR * e)
         self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
 
-        # Manoeuverability signal in [0, 1] read by attackers' tacticians to pick
-        # PURSUIT vs STRAFE (and, later, whether a target is bomb-able). Blended
-        # once here from the kinematic limits.
+        # Manoeuverability signal read by attackers' tacticians (see Pawn)
         self.mobility = self._compute_mobility()
 
         # Setup health
@@ -135,9 +128,7 @@ class Ship(Pawn):
         # Shield setup is ship-type dependent
         self.parent.add_task(method=self.ship_handle_health)
 
-        # Death spin state. is_dying is a property mirroring the controlling
-        # object (Bot/Player); begin_tumble kicks off the spin the trail and the
-        # damage guard react to.
+        # Death spin (see begin_tumble / tumble_step)
         self.death_spin_duration_s = self.conf.get(
             "death_spin_duration_s", DEATH_SPIN_DURATION_S
         )
@@ -193,17 +184,13 @@ class Ship(Pawn):
             is_cockpit=is_cockpit,
         )
 
-        # Damage / death smoke-and-fire trail: streams smoke as the ship's health
-        # drops, fire when it is critical, and burns at full intensity through the
-        # death spin (it reads is_dying). Registered once as a per-frame task.
+        # Damage / death smoke-and-fire trail
         self.damage_fx = DamageFX(game=self.game, owner=self)
         self.parent.add_task(method=self.damage_fx.update)
 
-        # Precompute a model-space (relative) bounding box for AI that needs the
-        # target's extents (the capital-ship orbit's oriented bounding box). It is
-        # computed once here in the ship's own body frame and rotated by the ship's
-        # orientation at runtime by the reader. Falls back to the collision-sphere
-        # radius when the render bounds are unavailable/degenerate.
+        # Body-frame bounding box for AI that needs the target's extents (the
+        # capital-ship orbit's oriented bounding box); the reader rotates it by the
+        # ship's orientation at runtime.
         self.bounding_box_half_extents = self._compute_bounding_box_half_extents()
 
         # Initialize engine sound
@@ -241,8 +228,7 @@ class Ship(Pawn):
         """
         Blend the ship's kinematic limits into a manoeuverability score in [0, 1].
 
-        PLACEHOLDER blend (the exact weighting is left for a later pass, see the
-        design doc): normalise the top speed and the mean turn rate against
+        PLACEHOLDER blend: normalise the top speed and the mean turn rate against
         reference scales and average them. Fighters land near 1, capital ships near
         0, which is all the tactician's PURSUIT-vs-STRAFE choice needs for now.
 
@@ -260,7 +246,8 @@ class Ship(Pawn):
     def _compute_bounding_box_half_extents(self) -> np.ndarray:
         """
         Measure the render model's tight bounds in the ship's own body frame and
-        return the half-extents (X right, Y forward, Z up), in metres.
+        return the half-extents (X right, Y forward, Z up), in metres. Falls back
+        to hit_box_radius_m when the bounds are unavailable or degenerate.
 
         :return: The model-space bounding-box half-extents
         """
@@ -288,11 +275,15 @@ class Ship(Pawn):
         """
         Sets the scalar thrust and rotational rates of the ship.
 
-        Square throttle so the velocity is easier to modulate
+        The throttle is squared so the velocity is easier to modulate; below
+        ZERO_THRUST_POSITION it brakes (airplane model) or cuts thrust (space).
+        Both are low-pass filtered to emulate delay in physical systems.
+        pqr is stored in Panda3D's pitch-roll-yaw order.
 
-        Run a low pass filter on them afterwards to emulate delay in physical systems
-
-        Panda3d seems to use the pitch-roll-yaw convention
+        :param throttle: Throttle command in [0, 1]
+        :param yaw_rate: Yaw rate command in [-1, 1] (fraction of the max rate)
+        :param pitch_rate: Pitch rate command in [-1, 1]
+        :param roll_rate: Roll rate command in [-1, 1]
         """
         dt = self.game.game_time.get_time_step()
 
@@ -359,12 +350,8 @@ class Ship(Pawn):
         - "airplane": airplane-like flight with lift, drag, AoA, sideslip
         - "space": Thrust is all you have, if you dare !
 
-        Rotation rates are assumed to be perfectly-controlled inputs
-
-        A Ship has 10 state variables
-        - position (3)
-        - orientation (4)
-        - linear speed (3)
+        Rotation rates are assumed to be perfectly-controlled inputs. Consumes
+        (zeroes) external_force_n.
         """
 
         # Save last derivative
@@ -582,12 +569,12 @@ class Ship(Pawn):
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
         """
-        Moves the ship given throttle and turn rates
+        Moves the ship given throttle and turn rates (see :meth:`set_inputs`)
 
-        :param throttle: _description_
-        :param yaw_rate: _description_
-        :param pitch_rate: _description_
-        :param roll_rate: _description_
+        :param throttle: Throttle command in [0, 1]
+        :param yaw_rate: Yaw rate command in [-1, 1]
+        :param pitch_rate: Pitch rate command in [-1, 1]
+        :param roll_rate: Roll rate command in [-1, 1]
         """
         # Register flight inputs
         self.set_inputs(
@@ -699,8 +686,8 @@ class Ship(Pawn):
         We don't use collision forces because they are too stiff.
         Instead, we use impulse and position correction
 
-        The corrections are stored and taken into account at the next "move_ship" call,
-        then reset to zero.
+        The corrections are stored and applied (then reset) by the next
+        :meth:`move_ship_physics`.
 
         :param damage: The damage to take
         :param velocity_correction: The velocity correction to apply
@@ -743,6 +730,7 @@ class Ship(Pawn):
         Apply damage to the ship
         Ship-type dependent
 
+        :param damage: The amount of damage to apply
         :param damage_type: the type of damage to apply (physical, energy)
         """
         raise NotImplementedError

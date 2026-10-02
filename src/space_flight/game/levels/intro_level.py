@@ -1,5 +1,6 @@
 """
-The intro level: escort a convoy of transports past an enemy blockade.
+The intro level (Mission 3: Escort): escort a convoy of transports past an
+enemy blockade.
 """
 
 from __future__ import annotations
@@ -119,12 +120,11 @@ def build_intro_upfront(game: FlightState) -> None:
 
 def intro_mission(m: Mission) -> Iterator[None]:
     """
-    The intro level's mission body: escort a convoy of transports past an
-    enemy blockade.
+    The intro level's mission body.
 
-    Three timed waves, plus reactive rules registered up front (they must
-    hold wherever the timed sequence currently is): reinforcements once the
-    first wave is wiped, and the win/lose conditions on the convoy.
+    Two timed waves, plus reactive rules registered up front (they must hold
+    wherever the timed sequence currently is): a third wave at 200s or once
+    the first wave is wiped, and the win/lose conditions on the convoy.
 
     :param m: The level's :class:`Mission`
     """

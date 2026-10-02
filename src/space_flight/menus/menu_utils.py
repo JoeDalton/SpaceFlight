@@ -21,14 +21,9 @@ from space_flight import DATAFILES_PATH
 
 class ProgressBar:
     """
-    A progress bar that attaches to the bottom of a parent node and cycles
-    through short hint strings ("blurbs") above it while loading progresses.
-
-    "Lean" here means the bar is a plain white DirectFrame with no border or
-    background — just a thin filled rectangle that grows from left to right.
-    Blurbs are arbitrary strings chosen at random from the supplied list and
-    swapped out on a fixed time interval so the player has something to read
-    during long loading screens.
+    A thin white fill bar along the bottom of a parent node, growing left to
+    right, with a hint string ("blurb") above it picked at random from a list
+    and swapped on a fixed interval while loading progresses.
     """
 
     def __init__(
@@ -552,7 +547,7 @@ class CustomEntry:
 class CustomSlider:
     """
     A styled horizontal :class:`DirectSlider` wrapper using the game's thumb
-    geometry, consistent with the scrollbar in the input settings menu.
+    geometry, consistent with the settings menus' scrollbars.
 
     The caller supplies a value range and a command invoked on every change;
     read the live value with :meth:`get_value`.
@@ -620,9 +615,6 @@ class CustomSlider:
 class CustomCheckButton:
     """
     A styled :class:`DirectCheckButton` wrapper rendering a simple on/off box.
-
-    The command is invoked with the new boolean state (followed by *extraArgs*)
-    on every toggle.
     """
 
     def __init__(

@@ -25,14 +25,13 @@ if TYPE_CHECKING:
 # ===========================================================================
 #
 # The exterior DamageFX trail is emitted at the hull -- i.e. at the camera in
-# first person -- so it gives the player no read on their own ship's condition.
+# first person -- so it tells the player nothing about their own ship.
 # CockpitFX is the player-only, display-only counterpart: a red damage vignette,
-# a cockpit rattle, a directional laser-coloured hit flash, and electrical sparks
-# (engine sputter lives on Ship, at the engine-sound source). It is built by
-# Player only when not headless and cleaned with the player.
+# a directional laser-coloured hit flash, electrical sparks, and the stutter
+# envelope behind the cockpit rattle and the engine sputter (applied by Ship, at
+# the engine-sound source). Built by Player only when not headless.
 #
-# Everything keys off the SAME two health tiers the exterior FX use, so interior
-# and exterior stay in sync.
+# Everything keys off the SAME health thresholds as the exterior FX.
 
 # ---------------------------------------------------------------------------
 # Health tiers (shared with the exterior thresholds)
@@ -99,8 +98,8 @@ def screen_direction_from_incoming(
 _OVERLAY_VERT = DATAFILES_PATH / "shaders/cockpit_overlay.vert"
 _OVERLAY_FRAG = DATAFILES_PATH / "shaders/cockpit_overlay.frag"
 
-#: render2d bin sort for the overlay: above the game scene, below the target
-#: reticle (fixed 10) and prompts so they stay readable over the tint.
+#: render2d "fixed" bin sort for the overlay: below the HUD's target reticle
+#: (fixed 10) so it stays readable over the tint.
 _OVERLAY_BIN_SORT = 5
 
 #: Vignette tint and per-tier strength; a slow pulse is added when critical.
@@ -109,19 +108,17 @@ _VIGNETTE_STRENGTH = {DAMAGED: 0.35, CRITICAL: 0.75}
 _CRIT_PULSE_AMP = 0.1
 _CRIT_PULSE_RATE = 2.0  # rad/s
 
-#: Hit-flash peak strength (the value each new hit resets the flash to) and its
-#: fade time (seconds from that peak to nothing).
+#: Hit-flash strength each new hit resets to, and its fade time (s) to zero.
 _FLASH_PEAK = 0.7
 _FLASH_DECAY_S = 0.35
 
-#: Electrical-spark cadence and burst size per tier. The count is how many of the
-#: ship's authored cockpit emitters fire on each burst (a random subset); each
-#: fires a small cone of sparks from the shared SparkPool.
+#: Electrical-spark cadence (s) and, per burst, how many of the ship's authored
+#: emitters fire (a random subset), each a small cone from the shared SparkPool.
 _SPARK_INTERVAL_S = {DAMAGED: 1.5, CRITICAL: 0.8}
 _SPARK_COUNT = {DAMAGED: 2, CRITICAL: 4}
-#: Cockpit sparks reuse the hit-spark pool/shader (game.spark_fx_pool), just a
-#: small preset seen up close. size_scale/speed_scale shrink it against the pool's
-#: global scales (tuned for distant hits), since the cockpit is right at the camera.
+#: Cockpit sparks reuse game.spark_fx_pool with a small preset; the size/speed
+#: multipliers shrink it against the pool's global scales, tuned for distant
+#: hits, since the cockpit is right at the camera.
 _COCKPIT_SPARK_PRESET = SparkPreset(
     color_inner=(0.55, 0.7, 1.0, 1.0),
     color_outer=(0.1, 0.3, 1.0, 1.0),
@@ -138,18 +135,16 @@ _COCKPIT_SPEED_MULT = 0.05
 #: emitter file. Absent -> the ship emits no cockpit sparks.
 _SPARK_EMITTERS_CONF_KEY = "cockpit_spark_emitters"
 
-#: Damage "stutter": synchronized, random discrete events (rather than a
-#: continuous vibration) that jolt the camera and cut the engine at the same
-#: instant -- see :meth:`CockpitFX.sputter_intensity`, read by both. Per tier: a
-#: random gap between events, a single-jolt duration, and a peak amplitude in
-#: [0, 1] (both consumers scale their own magnitude by the shared envelope).
+#: Damage "stutter": random discrete events (not a continuous vibration) that
+#: jolt the camera and cut the engine at the same instant, via the shared
+#: :meth:`CockpitFX.sputter_intensity` envelope. Per tier, (min, max) ranges for
+#: the gap between events, an event's duration, and its peak in [0, 1].
 _STUTTER_GAP_S = {DAMAGED: (0.8, 2.6), CRITICAL: (0.1, 1.2)}
 _STUTTER_DURATION_S = {DAMAGED: (0.3, 0.8), CRITICAL: (0.5, 1.2)}
 _STUTTER_PEAK = {DAMAGED: (0.5, 0.8), CRITICAL: (0.8, 1.0)}
 
-#: Cockpit rattle amplitude (metres) and roll (degrees) per tier: the peak of a
-#: fast vibration whose amplitude is faded in and out by the stutter envelope, so
-#: the camera buzzes during each event and settles between them.
+#: Peak cockpit rattle offset (metres) and roll (degrees) per tier, scaled by
+#: the stutter envelope.
 _RATTLE_AMP_M = {DAMAGED: 0.0015, CRITICAL: 0.005}
 _RATTLE_ROLL_DEG = {DAMAGED: 0.3, CRITICAL: 0.7}
 #: (rad/s) frequencies of the sines summed into the vibration.
@@ -167,9 +162,9 @@ def load_cockpit_spark_emitters(conf: dict):
 
     The config key :data:`_SPARK_EMITTERS_CONF_KEY` gives a path (under
     ``datafiles``) to a YAML file of ``emitters: [{position, normal}, ...]``,
-    both length-3 vectors in the ship body frame (X right, Y forward, Z up). Tie
-    variants share one file (``models/ships/tie_common/cockpit``); other fighters
-    have their own. A ship with no such key emits no cockpit sparks.
+    both length-3 vectors in the ship body frame (X right, Y forward, Z up). TIE
+    variants share ``models/ships/tie_common/cockpit/spark_emitters.yaml``. A
+    ship with no such key emits no cockpit sparks.
 
     :param conf: the ship's loaded ``configuration.yaml`` dict
     :return: list of (position, normal) numpy pairs in the ship body frame
@@ -197,10 +192,9 @@ class CockpitFX:
     """
     Player-only, display-only hub for first-person low-health feedback: the
     damage vignette + directional hit flash (one fullscreen overlay shader),
-    electrical sparks from the ship's authored cockpit emitters (emitted through
-    the shared ``game.spark_fx_pool``), and the cockpit rattle offset consumed by
-    :meth:`Player.move_camera`. Driven each frame off the player pawn's health
-    tier; built by :class:`Player` only when not headless.
+    electrical sparks from the ship's cockpit emitters (via
+    ``game.spark_fx_pool``), and the shared stutter behind the cockpit rattle
+    and engine sputter. Driven each frame by the player pawn's health tier.
 
     :param game: The game/flight state
     :param player: The player whose pawn's health drives the effects
@@ -214,22 +208,18 @@ class CockpitFX:
         self._flash_strength = 0.0
         self._next_spark_at = 0.0
 
-        # Shared random damage-stutter state (drives both the camera jolt and the
-        # engine cut, so they fire together). intensity is the current [0,1]
-        # envelope of the active event; between events it is 0.
+        # Shared damage-stutter state; intensity is the active event's [0,1]
+        # envelope, 0 between events.
         self._stutter_intensity = 0.0
         self._stutter_elapsed = 0.0
         self._stutter_duration = 0.0
         self._stutter_peak = 0.0
         self._next_stutter_at = 0.0
 
-        # Authored cockpit spark emitters (body-frame position + normal), from the
-        # ship config; empty for ships that declare none.
         self._emitters = load_cockpit_spark_emitters(player.pawn.conf)
 
         self._overlay = self._make_overlay_quad()
 
-        # Drive ourselves each frame, under our own id so clean() can drop it.
         self.game.method_lists[self.id] = [self.update]
 
     # ------------------------------------------------------------------
@@ -287,10 +277,9 @@ class CockpitFX:
 
     def _emit_sparks(self, tier: int) -> None:
         """
-        Fire a random subset of the cockpit's authored emitters (skipped headless
-        or when the ship declares none). Each chosen emitter's body-frame position
-        and normal are transformed to world through the ship node, and a spark
-        streaks out along that normal with a small random cone spread.
+        Fire a random subset of the cockpit's emitters (skipped headless or when
+        the ship declares none): each emits a small cone of sparks along its
+        normal, transformed to world through the ship node.
         """
         if self.game.headless or not self._emitters:
             return
@@ -313,11 +302,9 @@ class CockpitFX:
 
     def _advance_stutter(self, now: float, dt: float, tier: int) -> None:
         """
-        Advance the shared random damage-stutter one frame: decay the current
-        jolt, and fire a fresh one (a kick in a random direction + a matching
-        engine cut) at random intervals while damaged. Computed once per frame so
-        the camera jolt (:meth:`rattle_offset`) and the engine cut
-        (:meth:`sputter_intensity`) read one synchronized value.
+        Advance the shared damage stutter one frame: decay the current event,
+        and start a new one at random intervals while damaged. Computed once per
+        frame so :meth:`rattle_offset` and :meth:`sputter_intensity` agree.
 
         :param now: current (pause-aware) game time
         :param dt: frame timestep
@@ -351,9 +338,9 @@ class CockpitFX:
 
     def sputter_intensity(self) -> float:
         """
-        The current [0, 1] intensity of the shared damage stutter (0 between
-        events / when intact), read by both the cockpit jolt and the engine
-        sputter (:meth:`Ship._engine_sputter_factor`) so they fire together.
+        The current [0, 1] stutter envelope (0 between events / when intact),
+        read by the cockpit rattle and by the engine sputter
+        (:meth:`Ship._engine_sputter_factor`).
 
         :return: the stutter envelope this frame
         """
@@ -361,10 +348,10 @@ class CockpitFX:
 
     def rattle_offset(self):
         """
-        The current cockpit rattle, for :meth:`Player.move_camera` to add to the
-        head position: a fast multi-frequency vibration whose amplitude is faded
-        in and out by the shared stutter envelope, so the camera buzzes during
-        each random event and settles to nothing between them.
+        The current cockpit rattle, added to the head position by
+        :meth:`Player.move_camera`: a fast multi-frequency vibration scaled by
+        the stutter envelope, so the camera buzzes during each event and settles
+        between them.
 
         :return: (offset_m length-3 array, roll_deg float); zeros when idle
         """
@@ -427,7 +414,7 @@ class CockpitFX:
 
 
 def _health_fraction(pawn) -> float:
-    """Pawn health as a fraction of its maximum, clamped so max<=0 reads as 0."""
+    """Pawn health as a fraction of its maximum (0 if max_health <= 0)."""
     if getattr(pawn, "max_health", 0.0) > 0.0:
         return pawn.health / pawn.max_health
     return 0.0

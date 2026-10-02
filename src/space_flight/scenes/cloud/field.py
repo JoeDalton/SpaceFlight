@@ -181,8 +181,8 @@ def _ensure_cloud_bins():
 
 
 def _settings_quality(game) -> CloudQuality:
-    """The player's cloud quality, or HIGH when there is no setting to read (the
-    demo and the tests build from a stub game): never a crash or a downgrade."""
+    """The player's cloud quality, or HIGH when there is no setting to read (e.g.
+    the demo's stub game): never a crash or a downgrade."""
     config = getattr(getattr(game, "app", None), "graphics_settings", None)
     name = (getattr(config, "config", None) or {}).get("clouds", {}).get("quality")
     try:
@@ -464,7 +464,7 @@ class CloudField:
             verts
         ).cast("B")
 
-        # ── Index buffer, re-sorted by _restage (uint32 for >16k verts) ────────
+        # ── Index buffer, re-sorted by _restage (uint32: >65535 verts) ────────
         self._tris = GeomTriangles(GeomEnums.UH_dynamic)
         self._tris.set_index_type(GeomEnums.NT_uint32)
         self._tris.add_next_vertices(6 * n)

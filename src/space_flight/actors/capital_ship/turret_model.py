@@ -33,7 +33,7 @@ class TurretModel:
 
     def anchor_model(self, node: NodePath):
         """
-        Anchors the 3D model of the cockpit to the ship node
+        Anchors the 3D model to the mount node
         """
         self.model.reparent_to(node)
         self.model.setPos(*self.offset)
@@ -48,7 +48,7 @@ class TurretModel:
 
     def clean(self):
         """
-        Cleans the ShipModel object
+        Cleans the TurretModel object
         """
         self.model.removeNode()
         self.model = None

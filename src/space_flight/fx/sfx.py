@@ -22,12 +22,11 @@ SFX_MAX_SOUND_DURATION_S = 5
 TERRAIN_HIT_SOUND_MULTIPLIER = 0.01
 TARGET_HIT_SOUND_MULTIPLIER = 0.5
 PLAYER_HIT_SOUND_MULTIPLIER = 1.0
-# Cannon fire is louder from the player's own guns (right in the cockpit) than
-# from anyone else's, at any distance.
+# Cannon-fire volume for the player's own guns vs everyone else's.
 PLAYER_CANNON_FIRE_VOLUME = 1.0
 NPC_CANNON_FIRE_VOLUME = 3.0
-# Same idea for distant impacts (someone else's shot landing on a target or on
-# terrain): differentiate the player's own shots from an NPC's.
+# Same for distant impacts (a shot landing on a target or on terrain away from
+# the player): the player's own shots vs an NPC's.
 PLAYER_DISTANT_IMPACT_VOLUME = 1.0
 NPC_DISTANT_IMPACT_VOLUME = 0.2
 
@@ -61,14 +60,13 @@ class PhysicsAudio3DManager(Audio3DManager.Audio3DManager):
     are zero for nodes moved with plain setPos, i.e. every node in the game.
     Instead, each sound (and the listener) can be given a velocity source: any
     object with a world-frame ``speed`` (a ship, a subsystem...), read at every
-    update. Velocities are world-frame even though positions are relative to
+    update. Velocities stay world-frame although positions are relative to
     render, which only translates with the player: OpenAL's Doppler needs
-    velocities relative to the medium, and directions are unaffected.
+    velocities relative to the medium.
 
-    Sources are held by weak reference, so a destroyed ship's sound falls back
-    to zero velocity instead of keeping the ship alive. The stock
-    setSoundVelocity / setSoundVelocityAuto / setListenerVelocity(Auto) are
-    superseded.
+    Sources are weak references, so a destroyed ship's sound falls back to zero
+    velocity instead of keeping the ship alive. This supersedes the stock
+    setSoundVelocity / setSoundVelocityAuto / setListenerVelocity(Auto).
     """
 
     def __init__(self, *args, **kwargs):
@@ -150,10 +148,13 @@ class SFX:
 
     def build_sound_pool(self, directory: Path, pattern: str, is_3d: bool) -> List[str]:
         """
-        Builds a sound pool from a glob pattern
+        Builds a sound pool from a glob pattern (unused legacy helper: pools
+        come from ``asset_pools.build_sound_pool`` via the asset manager)
 
+        :param directory: The directory to search
         :param pattern: The glob pattern to find the sound files
-        :return: a sound pool
+        :param is_3d: Whether to load the sounds as 3D sounds
+        :return: a list of SOUND_POOL_LENGTH randomly chosen sounds
         """
         sound_files = list(directory.glob(pattern))
         sound_pool = []
@@ -218,20 +219,20 @@ class SFX:
         """
         Play an impact sound where the impact took place
 
-        TODO: add pitch randmoness for variation ?
+        TODO: add pitch randomness for variation ?
 
         :param game: The game object
         :param player_ship_pos: The location of the player
         :param hit_pos: The location of impact
         :param impact_type: The type of impact (target, terrain, etc.)
         :param is_player: Whether the player's own shot caused this impact
-            (as opposed to an NPC's), see PLAYER_DISTANT_IMPACT_VOLUME
+            (PLAYER_DISTANT_IMPACT_VOLUME, else NPC_DISTANT_IMPACT_VOLUME)
 
         """
         # No one to hear it, and no camera to hang a 3D sound off of, headless.
         if game.headless:
             return
-        # Set the volume according to the distance fromm the impact to the player
+        # Set the volume according to the distance from the impact to the player
         impact_distance = magnitude(hit_pos - player_ship_pos)
 
         # Ignore distant events
@@ -267,11 +268,9 @@ class SFX:
 
     def tractor_beam_grab(self, game):
         """
-        Placeholder cue for a tractor beam locking onto the player.
+        Placeholder cue for a tractor beam locking onto the player (only logs).
 
-        TODO: play a looping tractor-beam hum for the duration of the grab. For
-        now this only logs, so the grab mechanic can be wired and exercised
-        without a dedicated audio asset.
+        TODO: play a looping tractor-beam hum for the duration of the grab.
 
         :param game: The game object
         """
@@ -279,10 +278,9 @@ class SFX:
 
     def tractor_beam_release(self, game):
         """
-        Placeholder cue for a tractor beam releasing the player.
+        Placeholder cue for a tractor beam releasing the player (only logs).
 
-        TODO: play a release/power-down sound (and stop the grab hum started by
-        tractor_beam_grab). For now this only logs.
+        TODO: play a release sound and stop the grab hum of tractor_beam_grab.
 
         :param game: The game object
         """
@@ -295,7 +293,8 @@ class SFX:
         Play a random impact sound where the impact took place
 
         :param game: The game object
-        :param relative_hit_point: The position of the hit relative to the player node
+        :param relative_hit_point: The hit position relative to the player,
+            applied in the camera's frame (the dummy node is parented to it)
         :param is_shield: Whether the player's shield is active
         """
         # No one to hear it, and no camera to hang a 3D sound off of, headless.
@@ -340,15 +339,16 @@ class SFX:
         If the crash is in terrain, add rock impact sound
 
         :param game: The game object
-        :param relative_hit_point: The position of the hit relative to the player node
-        :param in_rock: Whether the player has crashed in terrain shield is active
+        :param relative_hit_point: The hit position relative to the player,
+            applied in the camera's frame (the dummy node is parented to it)
+        :param in_terrain: Whether the player has crashed into terrain
         """
         # No one to hear it, and no camera to hang a 3D sound off of, headless.
         if game.headless:
             return
         # Create ad-hoc dummy node to place the sound
         dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
-        dummy_node.setPos(*relative_hit_point)  # slightly to the right
+        dummy_node.setPos(*relative_hit_point)
         # Delete it in the near future
         game.delayed_methods.do_method_later(
             delay_s=SFX_MAX_SOUND_DURATION_S,
@@ -361,7 +361,6 @@ class SFX:
         if in_terrain:
             sound_pool = self.terrain_hit_sound_pool
             sound = sound_pool.get_sound(randomize_pitch=True)
-            # Attach sound to the cdumy node
             self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
             sound.setVolume(multiplier)
             sound.play()
@@ -376,7 +375,6 @@ class SFX:
         sound_pool = self.player_crash_short_sound_pool
         sound = sound_pool.get_sound(randomize_pitch=True)
 
-        # Attach sound to the dumy node
         self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
         sound.setVolume(multiplier)
         sound.play()
@@ -391,7 +389,6 @@ class SFX:
         sound_pool = self.player_crash_long_sound_pool
         sound = sound_pool.get_sound(randomize_pitch=True)
 
-        # Attach sound to the dumy node
         self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
         sound.setVolume(multiplier)
         sound.play()
@@ -414,7 +411,7 @@ class SFX:
         :param velocity_source: The firing actor (its ``speed`` drives the
             Doppler shift), or None
         :param is_player: Whether the player's own cannon fired the shot
-            (louder than an NPC's, see PLAYER_CANNON_FIRE_VOLUME)
+            (PLAYER_CANNON_FIRE_VOLUME, else NPC_CANNON_FIRE_VOLUME)
         """
         # No one to hear it, headless.
         if game.headless:

@@ -1,10 +1,5 @@
 """
 Input settings menu — lets the player view and remap all input bindings.
-
-Reads configuration/configuration.yaml on entry, keeps an in-memory
-working copy while the menu is open, and writes changes back on *Save*.
-After saving the active :class:`~space_flight.ui.input_reader.InputReader`
-is rebuilt so the new bindings take effect immediately without a restart.
 """
 
 import copy
@@ -298,18 +293,12 @@ class InputSettingsMenuState(BaseState):
     """
     Full-screen overlay for viewing and editing all input bindings.
 
-    Loads configuration/configuration.yaml on entry and keeps an unsaved
-    working copy in memory.  Three bottom buttons govern the outcome:
-
-    - **Save** — flush dead-zone edits, write the YAML, rebuild the
-      :class:`~space_flight.ui.input_reader.InputReader`, and return to the
-      settings screen it was opened from.
-    - **Cancel** — discard all edits and return to the settings screen.
-    - **Default** — reload the working copy from
-      configuration/default_configuration.yaml without writing to disk.
-
-    Individual bindings are changed through :class:`ChangeBindingDialog`,
-    which is opened by the *Change* button on each binding row.
+    Loads configuration/configuration.yaml on entry into an in-memory working
+    copy. *Save* writes it back and rebuilds the
+    :class:`~space_flight.ui.input_reader.InputReader` so new bindings apply
+    without a restart; *Cancel* discards it; *Default* reloads
+    configuration/default_configuration.yaml into it without writing to disk.
+    Each binding row's *Change* button opens a :class:`ChangeBindingDialog`.
     """
 
     def __init__(self, app):
@@ -474,8 +463,9 @@ class InputSettingsMenuState(BaseState):
 
         Called on :meth:`enter` and again each time the input type is changed so
         the binding list always reflects the active device's mappings.  Also
-        resets the :attr:`dz_entries` and :attr:`binding_labels` caches so
-        stale widget references are never kept.
+        resets the :attr:`dz_entries`, :attr:`binding_labels` and
+        :attr:`checkbox_buttons` caches so stale widget references are never
+        kept.
         """
         self.dz_entries.clear()
         self.binding_labels.clear()
@@ -713,12 +703,9 @@ class InputSettingsMenuState(BaseState):
 
     def on_checkbox_toggle(self, status, path: tuple):
         """
-        Write a toggled checkbox value straight into :attr:`working_config`.
-
-        Unlike dead-zone edits, checkbox state is written immediately rather
-        than flushed on save, since :class:`~space_flight.menus.menu_utils.
-        CustomCheckButton`
-        already reports the new value on every toggle.
+        Write a toggled checkbox value straight into :attr:`working_config`
+        (unlike dead-zone entries, which are only flushed on save or input-type
+        switch).
 
         :param status: 1 (checked) or 0 (unchecked), as reported by
             :class:`~space_flight.menus.menu_utils.CustomCheckButton`.
@@ -785,13 +772,13 @@ class InputSettingsMenuState(BaseState):
 
     def wheel_scroll(self, direction: int):
         """
-        Scroll the binding list by one step in *direction* (-1 = up, +1 = down).
+        Scroll the binding list by *direction* scroll steps (negative = up).
 
-        Silently ignored when a dialog is open so wheel events do not interfere
-        with binding capture.
+        Ignored while a dialog is open so wheel events do not interfere with
+        binding capture.
 
-        :param direction: -1 to scroll toward the top, +1 toward the
-            bottom.
+        :param direction: Number of scroll steps; negative scrolls toward the
+            top.
         """
         if self.active_dialog is not None:
             return
@@ -818,11 +805,11 @@ class InputSettingsMenuState(BaseState):
         """
         Flush edits, write the configuration to disk, and rebuild the reader.
 
-        Writes :attr:`working_config` to configuration/configuration.yaml
-        then reinitialises the running
-        :class:`~space_flight.ui.input_reader.InputReader` so the new bindings
-        are active in the current session without a restart.  Finally pops back
-        to the settings screen.  Silently ignored if a dialog is open.
+        Writes :attr:`working_config` to configuration/configuration.yaml,
+        rebuilds the :class:`~space_flight.ui.input_reader.InputReader` and
+        refreshes every input context's bindings so the new bindings apply
+        without a restart, then pops back to the settings screen.  Silently
+        ignored if a dialog is open.
         """
         if self.active_dialog is not None:
             return

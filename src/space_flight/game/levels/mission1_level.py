@@ -1,12 +1,11 @@
 """
-Mission 1: Rookies -- a tutorial mission that replaces the old Race level.
+Mission 1: Rookies -- a tutorial mission.
 
 Teaches the radial target-filter menu (select "Waypoints", then "Fighters",
 cycling targets within a filter with "loop"), then an escort-formation
 sequence (stay close to any member of the formation, not just its leader)
 with two distinct fail conditions, ending in an impromptu race against the
-very ships the player was just escorting. More steps are expected to be
-appended later -- keep the mission body easy to extend.
+very ships the player was just escorting.
 """
 
 from __future__ import annotations
@@ -67,8 +66,8 @@ BLUE_SQUADRON = WaveSpec(
     loop=True,
 )
 
-# The 5 new waypoints given to the player AND every former formation member
-# once the circuit is done, per issue's step 5. The last one is the finish.
+# The race route, given to the player AND every formation member once the
+# circuit is done. The last waypoint is the finish.
 RACE_WAYPOINTS = [
     [-3000, 6000, 600],
     [-1000, 8000, 700],

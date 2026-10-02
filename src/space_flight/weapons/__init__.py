@@ -156,7 +156,7 @@ class Munition:
         self.power = power
         self.origin_ship_id = origin_ship_id
         self.origin_ship = origin_ship
-        # World-space velocity, read by laser_into_shield to tell an inward
+        # World-space velocity, read by munition_into_shield to tell an inward
         # crossing (blocked) from an outward one (passes through).
         self.speed = np.asarray(speed, dtype=float)
 

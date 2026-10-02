@@ -13,10 +13,8 @@ MAX_DUST_ALPHA = 0.8
 
 class SpeedDustCloud:
     """
-    A class to make a cloud of dust around the player
-    to get them a feeling of their ship's speed
-
-    Dust particles are sprites zooming past the player's ship
+    A cloud of dust sprites zooming past the player's ship, to convey its
+    speed.
     """
 
     def __init__(
@@ -113,8 +111,8 @@ class SpeedDustCloud:
 
     def dust_update(self):
         """
-        Updates the position of all particles and resets them if need be.
-        The dust's opacity increases with player speed to reinforce the feeling
+        Move all particles back at the player's speed, recycling those behind
+        the ship. The dust's opacity increases with speed.
         """
         dt = self.game.game_time.get_time_step()
         speed = magnitude(self.game.player.pawn.speed)

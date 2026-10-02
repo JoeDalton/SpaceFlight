@@ -268,7 +268,7 @@ class CollisionSystem:
                 LOGGER.info("destructible being removed while it hits. Ignoring.")
             return
 
-        # Check if the munition as encountered its own emitter => no "real" collision
+        # The munition has met its own emitter => no "real" collision
         try:
             destructible_id = destructible.id
         except AttributeError:
@@ -515,8 +515,8 @@ class CollisionSystem:
 
     def ship_again_terrain(self, entry: CollisionEntry) -> None:
         """
-        Handles the case where a ship hits immobile terrain, and it already has
-        at the last frame : calls ship_into_terrain_pushback
+        Handles a ship still touching immobile terrain from a previous frame:
+        calls ship_into_terrain_pushback
 
         :param entry: Panda3d's description of the collision
         """
@@ -610,8 +610,8 @@ class CollisionSystem:
 
     def ship_again_ship(self, entry: CollisionEntry) -> None:
         """
-        Handle the case where a ship hits another ship, and it already has
-        at the last frame : call ship_into_ship_pushback
+        Handle a ship still touching another ship from a previous frame:
+        call ship_into_ship_pushback
 
         :param entry: Panda3d's description of the collision
         """
@@ -620,7 +620,7 @@ class CollisionSystem:
     def ship_into_ship_pushback(self, entry: CollisionEntry) -> None:
         """
         Handle the case where a ship hits another ship:
-        The collisions is registered on both sides.
+        The collision is registered on both sides.
         So: hit only the "into" node. The other side of the collision
         will receive its damage when the inverse collision is handled.
 
@@ -723,8 +723,8 @@ class CollisionSystem:
 
     def ship_again_massive_actor(self, entry: CollisionEntry) -> None:
         """
-        Handle the case where a ship hits a massive actor, and it already has
-        at the last frame : call ship_into_massive_actor_pushback
+        Handle a ship still touching a massive actor from a previous frame:
+        call ship_into_massive_actor_pushback
 
         :param entry: Panda3d's description of the collision
         """
@@ -970,7 +970,6 @@ def attach_collision_sphere(
 ) -> NodePath:
     """
     Attach a collision sphere to an existing node.
-    This does not work well with lasers and low FPS. Could work for missiles, though ?
 
     :param game: The game stage
     :param name: The name of the collision sphere
@@ -996,10 +995,10 @@ def attach_collision_sphere(
     # Define masks
     cnode.setFromCollideMask(from_mask_bit)
     cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and objct
+    # Attach to parent node and object
     node_path = parent_node.attachNewNode(cnode)
     node_path.setPythonTag("owner", parent_object)
-    # Register in collosion handler
+    # Register in collision handler
     if add_to_collision_handler:
         handler = (
             game.collision_system.sensor_queue
@@ -1105,10 +1104,10 @@ def attach_collision_segment(
     # Define masks
     cnode.setFromCollideMask(from_mask_bit)
     cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and objct
+    # Attach to parent node and object
     node_path = parent_node.attachNewNode(cnode)
     node_path.setPythonTag("owner", parent_object)
-    # Register in collosion handler
+    # Register in collision handler
     if add_to_collision_handler:
         game.collision_system.traverser.addCollider(
             node_path, game.collision_system.handler
@@ -1150,10 +1149,10 @@ def attach_collision_plane(
     # Define masks
     cnode.setFromCollideMask(from_mask_bit)
     cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and objct
+    # Attach to parent node and object
     node_path = parent_node.attachNewNode(cnode)
     node_path.setPythonTag("owner", parent_object)
-    # Register in collosion handler
+    # Register in collision handler
     if add_to_collision_handler:
         game.collision_system.traverser.addCollider(
             node_path, game.collision_system.handler

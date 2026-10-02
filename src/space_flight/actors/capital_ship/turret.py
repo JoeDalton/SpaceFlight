@@ -17,15 +17,13 @@ class Turret(TrackingMount):
     """
     A laser turret: a :class:`TrackingMount` that fires laser cannons.
 
-    It inherits all of its aiming from :class:`TrackingMount` and adds the weapon:
-    laser cannons, an auto-aim held ready, and the per-frame fire decision in
-    :meth:`_operate`. The fire gate keys off the navigator's published lead
-    solution (:attr:`aim_direction` / :attr:`target_distance_m`), so the turret
-    fires when its barrel is aligned with where the prey is *going* and the prey
-    is in range.
+    It adds laser cannons, an auto-aim held ready, and the per-frame fire
+    decision in :meth:`_operate`: the turret fires when its barrel is aligned
+    with the navigator's published lead solution (:attr:`aim_direction`) and the
+    prey is in range (:attr:`target_distance_m`).
 
-    A ship-mounted targeting system, while alive, grants the turret auto-aim and a
-    faster rate of fire (see :meth:`_apply_targeting_support`).
+    A living targeting system on the ship grants auto-aim and a faster rate of
+    fire (see :meth:`_apply_targeting_support`).
 
     :param game: The game/flight state
     :param parent: The controlling Bot
@@ -69,19 +67,14 @@ class Turret(TrackingMount):
             name="turret",
         )
 
-        # Cannons. A turret fires straight down its barrel by default; a living
-        # targeting system on the ship grants auto-aim and a faster fire rate,
-        # pulled each frame in _operate() (see _apply_targeting_support).
         self.laser_cannon = LaserCannon(
             game=self.game, parent=self, parent_node=self.turret_model.cannon_node
         )
         self.base_fire_delay = self.laser_cannon.fire_delay
-        # Auto-aim is held ready but only exposed to the cannon (through
-        # self.auto_aim) while a targeting system is alive. self.auto_aim is None
-        # otherwise, which the cannon reads as "fire straight ahead". It is
-        # retuned from the parameters of whichever targeting system is boosting
-        # us; _targeting_source tracks that system so we only reconfigure on a
-        # change.
+        # Auto-aim is held ready but only exposed as self.auto_aim while a
+        # targeting system is alive (None makes the cannon fire straight ahead).
+        # _targeting_source is the system it was last tuned from, so it is only
+        # reconfigured on a change.
         self._auto_aim = AutoAim(game=self.game, parent=self)
         self.auto_aim = None
         self._targeting_source = None
@@ -120,11 +113,9 @@ class Turret(TrackingMount):
 
     def _apply_targeting_support(self):
         """
-        Applies (or removes) the boosts granted by the ship's targeting system.
-
-        While a targeting system is alive the turret gains auto-aim (its shots
-        lead the target) and a faster fire rate; with none alive it fires
-        straight down the barrel at its base rate.
+        Applies (or removes) the boosts granted by the ship's targeting system:
+        auto-aim and a faster fire rate, or straight shots at the base rate when
+        none is alive.
         """
         targeting_system = self._active_targeting_system()
         if targeting_system is None:

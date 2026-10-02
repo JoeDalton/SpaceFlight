@@ -384,8 +384,9 @@ class PauseMenuInputContext(InputContext):
     Pushed onto the stack when the game is paused.
 
     Blocks all flight inputs (FlightInputContext is below and not ticked).
-    Pressing the pause key again calls state_manager.pop(), which triggers
-    FlightState.resume() and pops this context.
+    Pressing the pause key again calls state_manager.pop(), popping the top
+    menu state (normally PauseMenuState, whose exit() pops this context and
+    lets FlightState resume).
 
     Both the device-specific pause binding and the global one are checked so
     that escape always works regardless of the active input type.
@@ -515,12 +516,9 @@ class RadialMenuInputContext(InputContext):
     is released the on_select callback receives the chosen slice index (or
     None if the vector magnitude was below min_magnitude).
 
-    The context pops itself by calling state_manager.pop() on release,
-    which causes :class:`~space_flight.menus.radial_menu_state.RadialMenuState`
-    to call exit() and clean up the visual overlay.
-
-    The context never touches game time, so the simulation keeps running while
-    the menu is open.
+    On release it calls state_manager.pop(); the exit() of
+    :class:`~space_flight.menus.radial_menu_state.RadialMenuState` then pops
+    this context and destroys the visual overlay.
     """
 
     def __init__(

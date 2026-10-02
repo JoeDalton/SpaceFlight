@@ -17,15 +17,9 @@ if TYPE_CHECKING:
 
 class AsteroidField:
     """
-    An asteroid field
-
-    `n_asteroids` are created in a cube centered at (0,0,0)
-    and of size `field_size`.
-
-    Their position is fixed but they slowly rotate.
-
-    The shapes, positions, rotations and scales are randomly chosen
-    for each asteroid.
+    An asteroid field: `n_asteroids` randomly shaped, placed, oriented and scaled
+    instances in a cube of side `field_size` centred on the origin. Positions are
+    fixed; with `is_moving` the asteroids also slowly rotate.
 
     TODO: if I want asteroids to be destructible, I may need to isolate them :(
     """

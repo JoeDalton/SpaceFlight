@@ -7,7 +7,7 @@ Responsibilities:
   that polling might miss between frames.
 - Derive pressed / held / released per button by comparing current poll to the
   previous frame.
-- Apply dead zones and produce normalised axis values.
+- Apply dead zones to axis values.
 - Store everything in a plain InputState that contexts read.
 
 No game logic lives here.  Contexts (see input_context.py) decide what a
@@ -34,7 +34,7 @@ DEFAULT_STICK_DEAD_ZONE = 0.15
 DEFAULT_THROTTLE_DEAD_ZONE = 0.04
 
 # ---------------------------------------------------------------------------
-# Panda3D monkey-patch (preserves existing workaround for Windows UTF-8 bug)
+# Panda3D monkey-patch (Windows UTF-8 device-name workaround)
 # ---------------------------------------------------------------------------
 
 
@@ -50,14 +50,16 @@ def _patched_attachInputDevice(self, device, prefix=None, watch=False):
     touches device.name directly; :func:`safe_device_name` is used
     wherever a printable name is needed.
 
-    A second existing workaround is also preserved: when no *prefix* is
-    supplied the :class:`~panda3d.core.InputDeviceNode` and its
+    For the same reason, when no *prefix* is supplied the
+    :class:`~panda3d.core.InputDeviceNode` and its
     :class:`~panda3d.core.ButtonThrower` are both named "gamepad" instead
-    of falling back to the device's native name.
+    of after the device.
 
     :param device: The input device to attach.
     :param prefix: Optional event prefix string forwarded to
-        :class:`~panda3d.core.ButtonThrower`.  Defaults to None.
+        :class:`~panda3d.core.ButtonThrower`.
+    :param watch: Also route the device into the mouse watcher, as in
+        ShowBase; without a *prefix*, no button thrower is created then.
 
     TODO Propose this as a contribution to panda3d
     """
@@ -184,7 +186,7 @@ class InputState:
     buttons  — hardware names whose button transitioned up→down this frame.
     repeats  — hardware names that were held down both this frame and last.
     releases — hardware names that transitioned down→up this frame.
-    axes     — normalised, dead-zoned continuous axis values.
+    axes     — dead-zoned continuous axis values.
 
     All dicts are rebuilt each frame by :class:`InputReader`.  Contexts must
     not mutate them.
@@ -223,7 +225,7 @@ class InputReader:
 
     def __init__(self, app) -> None:
         """
-        Initialises shared polling buffers and register global key callbacks.
+        Initialises shared polling buffers and registers global key callbacks.
 
         Sets up the per-frame comparison state and event-safety-net sets, then
         registers accept() callbacks for every key listed under
@@ -297,7 +299,7 @@ class InputReader:
 
     def clean(self) -> None:
         """
-        Unregisters all accept() callbacks and release held references.
+        Unregisters all accept() callbacks and releases held references.
 
         Must be called before the reader is discarded — for example when the
         user saves new settings and the reader is rebuilt from the updated
@@ -383,7 +385,7 @@ class KeyboardReader(InputReader):
 
     def __init__(self, app) -> None:
         """
-        Collects bound key names and register safety-net event callbacks.
+        Collects bound key names and registers safety-net event callbacks.
 
         Calls :meth:`~InputReader.collect_button_names` with an empty axis
         set (keyboards have no analogue axes), then registers accept()
@@ -426,7 +428,7 @@ class KeyboardReader(InputReader):
 
     def clean(self) -> None:
         """
-        Unregisters key event callbacks, then delegate to the base class.
+        Unregisters key event callbacks, then delegates to the base class.
         """
         for key in self.button_names:
             self.app.ignore(key)
@@ -442,8 +444,8 @@ class KeyboardReader(InputReader):
 class GamepadReader(InputReader):
     """
     Reads gamepad state.  Named buttons support both polling and events.
-    Axes are dead-zoned; left stick and trigger axes are sign-corrected to
-    match the expected flight control directions.
+    Axes are dead-zoned only; sign flips come from the invert_* bindings
+    applied by :class:`~space_flight.ui.input_context.FlightInputContext`.
     """
 
     def __init__(self, app) -> None:
@@ -498,7 +500,7 @@ class GamepadReader(InputReader):
 
     def disconnect(self, device) -> None:
         """
-        Detaches *device* and fall back to another gamepad if one is available.
+        Detaches *device* and falls back to another gamepad if one is available.
 
         :param device: The device that was just disconnected.
         """
@@ -559,9 +561,6 @@ class GamepadReader(InputReader):
         """
         Reads and dead-zones all six gamepad axes into state.axes.
 
-        Left-stick X/Y axes are sign-inverted to match the flight control
-        conventions used elsewhere in the game.
-
         :param state: The :class:`InputState` being built; state.axes is
             populated in place.
         """
@@ -570,7 +569,6 @@ class GamepadReader(InputReader):
         sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
         tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
 
-        # Sign conventions match the original Gamepad.get_inputs() behaviour
         state.axes["right_trigger"] = self.dz(
             self.gamepad.findAxis(InputDevice.Axis.right_trigger).value, tdz
         )
@@ -626,7 +624,7 @@ class JoystickReader(InputReader):
 
     def __init__(self, app) -> None:
         """
-        Detects a connected flight stick and register hot-plug events.
+        Detects a connected flight stick and registers hot-plug events.
 
         Unlike :class:`GamepadReader`, no safety-net button event callbacks
         are registered because most flight-stick buttons do not generate
@@ -740,7 +738,7 @@ class JoystickReader(InputReader):
 
     def read_axes(self, state: InputState) -> None:
         """
-        Reads and dead-zone the four flight-stick axes into state.axes.
+        Reads and dead-zones the four flight-stick axes into state.axes.
 
         The throttle axis is inverted (1 − raw) so that pulling the lever
         towards the pilot increases the output value.

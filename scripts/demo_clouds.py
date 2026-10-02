@@ -87,7 +87,7 @@ GROUND_RADIUS = 550000.0
 GROUND_RINGS = 96
 GROUND_SEGMENTS = 256  # sets how round the horizon looks; 256 is below acuity
 
-# Inside the far plane, and beyond the cloud field so cloud occludes it.
+# Inside the far plane, and far enough that cloud in front of it occludes it.
 SUN_MARKER_DISTANCE = 60000.0
 SUN_MARKER_ANGLE = 0.9  # degrees; a few times the real sun, to be findable
 SUN_MARKER_SEGMENTS = 48
@@ -168,8 +168,8 @@ _TRANSLATIONS = (
     ("w", "x", "set_z", SPEED, "W/X up-down"),
 )
 # Live sweeps. Each re-packs uniforms with no rebuild. forward_gain stops at 15:
-# well into saturation, and clear of the ~20 where the phase solve goes
-# infeasible. Elevation stops short of the pole.
+# well into saturation, and clear of where the phase solve goes infeasible (~30
+# at the cumulus anisotropy). Elevation stops short of the pole.
 # fmt: off
 _SWEEPS = (
     # (plus key, minus key, attribute, rate/s, low, high,
@@ -369,7 +369,11 @@ class CloudDemo(ShowBase):
     # ── internals ──────────────────────────────────────────────────────────────
 
     def _set_key(self, key, pressed):
-        """Record a held key. :param key: Panda key name :param pressed: state"""
+        """Record a held key.
+
+        :param key: Panda key name
+        :param pressed: whether it is now held
+        """
         self._keys[key] = pressed
 
     def _reset_camera(self):

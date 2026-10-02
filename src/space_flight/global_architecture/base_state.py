@@ -14,7 +14,7 @@ class BaseState:
     may override :meth:`pause` and :meth:`resume`.
     """
 
-    # Set to False on subclasses that should not pause the state below them when pushed.
+    # False on overlays that must not pause the state below them when pushed.
     PAUSES_BELOW: bool = True
 
     def __init__(self, app: ShowBase):
@@ -30,7 +30,8 @@ class BaseState:
 
     def exit(self):
         """
-        Called by the state manager when this state is popped off the stack.
+        Called by the state manager when this state is popped off (or cleared
+        from) the stack.
 
         Destroy all UI elements, remove tasks, and unregister event handlers
         here to avoid resource leaks.
@@ -59,11 +60,11 @@ class BaseState:
 
     def force_render(self):
         """
-        Immediately render two frames so the display updates before the next
-        state's assets begin loading.
+        Immediately render two frames so the display updates before heavy
+        loading starts.
 
-        Call this at the end of :meth:`exit` to avoid flickering the old
-        scene on screen while heavy resources are loaded.
+        Typically called at the end of :meth:`exit`, so the old scene does not
+        linger on screen while the next state loads its assets.
         """
         self.app.graphicsEngine.renderFrame()
         self.app.graphicsEngine.renderFrame()

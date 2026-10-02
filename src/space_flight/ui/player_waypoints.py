@@ -53,8 +53,6 @@ class WaypointMarker:
         self.parent = self
         self.team = 0  # neutral: bots never target it
         self.is_dead = False
-        # Actor category: lets the "Waypoints" target filter pick this out (and
-        # other filters exclude it).
         self.category = WAYPOINT_CATEGORY
         self.position = np.zeros(3)
         self.speed = np.zeros(3)

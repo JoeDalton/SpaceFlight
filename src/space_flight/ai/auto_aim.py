@@ -16,11 +16,9 @@ _LOCKED = "locked"  # held long enough; shots lead the target
 
 class AutoAim:
     """
-    A class for the autoaim of laser cannons
-
-    If the parent does not have a target, the shot direction is straight ahead.
-    If the parent has a target and target lock is acquired, turn laser towards the
-    target's predicted position
+    Auto-aim for laser cannons: shots go straight ahead, unless the parent's
+    target is locked, in which case they are bent (within the assist cone)
+    toward its predicted position.
     """
 
     def __init__(
@@ -82,9 +80,10 @@ class AutoAim:
         """
         Computes the speed vector at which the next laser shot will be emitted
 
-        # TODO : Add random spread ? (Very small, subject to parent health ?)
+        TODO : Add random spread ? (Very small, subject to parent health ?)
 
         :param start_position: The starting point of the laser
+        :return: The shot's world velocity (includes the parent's velocity)
         """
         if not self.is_target_acquired:
             # No acquisition: fire straight ahead
@@ -110,9 +109,7 @@ class AutoAim:
                 target_found = False
 
             if target_found and parent_found:
-                # Target acquired and exists: fire in its predicted prediction
-
-                # Get necessary info from interactions and pre compute target properties
+                # Target acquired and exists: fire at its predicted position
                 distance_m = self.game.interactions.distances[
                     my_actor_index, target_actor_index
                 ]
@@ -150,10 +147,9 @@ class AutoAim:
                 np.dot(desired_shot_dir, self.parent.forward)
                 < self.min_assist_alignment
             ):
-                # Transform the desired shot direction in parent coordinates and
-                # Prolong the "forward" component so the final direction lies on
-                # the assist cone, with the same lateral component.
-                # Then make it unit length, then transform it back in world coordinates
+                # In parent coordinates, stretch the forward component so the
+                # direction lies on the assist cone with the same lateral component,
+                # normalise, and transform back to world coordinates
                 quat = np.quaternion(*self.parent.orientation)
                 desired_shot_dir_body = rotate_single_vector(
                     quat.conjugate(), desired_shot_dir

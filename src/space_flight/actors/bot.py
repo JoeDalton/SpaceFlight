@@ -174,16 +174,17 @@ class Bot(Destructible):
     def move_bot_task(self):
         """
         Find how the bot should move:
-        - The tactician decides which targets to point and the weights
-            to associate to each behaviour
-        - The navigator bundles the tactician's wishes and outputs a direction
-            to point to and a distance
-        - The pilot steers the ship and adjusts the throttle to follow its aim
-        - The ship moves according to the games physics
+        - The tactician picks the intent and target
+        - The navigator turns them into a direction to point to (and, for
+            ships, a desired speed)
+        - The pilot turns that into throttle/rate commands
+        - The pawn moves according to the game's physics
+
+        The navigator (ships only) and the pilot run only on think frames; the
+        pawn flies the last commands in between.
         """
-        # Dead ships fly no more: while dying, the AI is silenced and the pawn is
-        # driven by the out-of-control death spin instead (ships only; a mounted
-        # subsystem pawn cannot tumble and simply waits out its death).
+        # While dying, the AI is silenced and a ship pawn tumbles instead (a
+        # mounted subsystem pawn cannot tumble and simply waits out its death).
         if self.is_dying:
             if hasattr(self.pawn, "tumble_step"):
                 self.pawn.tumble_step(elapsed_s=self.death_elapsed_s())
@@ -382,9 +383,8 @@ class Bot(Destructible):
         Reassign this bot's team, cascading to everything that caches it.
 
         A fighter's team is read live every frame, but a capital ship's
-        dependents cache it at construction: each sub_system (including
-        shield generators), the shield, and each mounted bot (turret /
-        tractor beam, itself a Bot with its own pawn.team).
+        dependents cache it at construction: each sub_system, the shield, and
+        each mounted bot (itself a Bot with its own pawn.team).
 
         :param team: The new team id
         """
@@ -406,8 +406,7 @@ class Bot(Destructible):
         The bot stays alive -- integrating and colliding -- for the length of the
         pawn's death spin; :meth:`move_bot_task` then drives the tumble each frame
         and :meth:`finish_death` fires the terminal explosion. A mounted subsystem
-        pawn (turret / tractor beam) cannot tumble, so it just waits out a zero-length
-        death and explodes at once, as before.
+        pawn (turret / tractor beam) cannot tumble, so its death is zero-length.
         """
         if self.is_dying:
             return
@@ -437,11 +436,9 @@ class Bot(Destructible):
 
     def play_death(self):
         """
-        Plays the death animation of the ship
+        Procedural explosion at the pawn's last location, after the death spin.
 
-        Procedural explosion at the ship's last location, after the death spin.
-        Pawn-type dependent ! TODO
-        Associated sound TODO
+        TODO: pawn-type dependent animation, associated sound
         """
         self.game.fire_smoke_pool.burst(
             position=self.pawn.position,
