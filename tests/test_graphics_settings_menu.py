@@ -43,6 +43,7 @@ def state():
         "antialiasing": {"msaa": 0, "fxaa": False},
         "compatibility": {"alternate_model_orientation": False},
         "clouds": {"quality": "high"},
+        "hud": {"fps_counter": True},
     }
     return s
 
@@ -278,6 +279,15 @@ class TestOnAlternateModelOrientationToggle:
 # ---------------------------------------------------------------------------
 # select_mode
 # ---------------------------------------------------------------------------
+
+
+class TestOnFpsCounterToggle:
+    @pytest.mark.parametrize(
+        "status,expected", [(1, True), (0, False), (True, True), (False, False)]
+    )
+    def test_stores_bool(self, state, status, expected):
+        state.on_fps_counter_toggle(status)
+        assert state.working_config["hud"]["fps_counter"] is expected
 
 
 class TestSelectMode:

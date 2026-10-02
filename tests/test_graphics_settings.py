@@ -28,6 +28,7 @@ _VALID = {
     "antialiasing": {"msaa": 4, "fxaa": True},
     "compatibility": {"alternate_model_orientation": False},
     "clouds": {"quality": "mid"},
+    "hud": {"fps_counter": False},
 }
 
 
@@ -159,6 +160,14 @@ class TestSanitise:
         )
         assert out["compatibility"]["alternate_model_orientation"] is expected
 
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [(True, True), (False, False), (1, True), (0, False), ("y", True)],
+    )
+    def test_fps_counter_coerced_to_bool(self, raw, expected):
+        out = GraphicsSettings.sanitise({"hud": {"fps_counter": raw}})
+        assert out["hud"]["fps_counter"] is expected
+
     @pytest.mark.parametrize("quality", ["low", "mid", "high", "ultra"])
     def test_valid_cloud_quality_preserved(self, quality):
         out = GraphicsSettings.sanitise({"clouds": {"quality": quality}})
@@ -187,6 +196,7 @@ class TestSanitise:
         assert out["antialiasing"]["fxaa"] is False
         assert out["compatibility"]["alternate_model_orientation"] is False
         assert out["clouds"]["quality"] == "high"
+        assert out["hud"]["fps_counter"] is True
 
 
 # ---------------------------------------------------------------------------
