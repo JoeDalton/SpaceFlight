@@ -19,9 +19,9 @@ class _StubReader(InputReader):
     """
     Concrete InputReader whose Panda3D-dependent __init__ is bypassed.
 
-    Call poll() normally; control what _read_all_buttons returns by setting
+    Call poll() normally; control what read_all_buttons returns by setting
     self.hw_state, and what axes are produced by setting self.hw_axes.
-    Safety-net events can be injected directly into _ev_pressed / _ev_released.
+    Safety-net events can be injected directly into ev_pressed / ev_released.
     """
 
     def __init__(self):
@@ -172,7 +172,7 @@ def test_poll_multiple_buttons_independent(reader):
 
 def test_poll_safety_net_pressed_merges_into_buttons(reader):
     """
-    A name in _ev_pressed must be merged into state.buttons even if
+    A name in ev_pressed must be merged into state.buttons even if
     polling does not see the button down this frame (brief tap between frames).
     """
     reader.ev_pressed.add("fire")
@@ -183,7 +183,7 @@ def test_poll_safety_net_pressed_merges_into_buttons(reader):
 
 def test_poll_safety_net_released_merges_into_releases(reader):
     """
-    A name in _ev_released must be merged into state.releases.
+    A name in ev_released must be merged into state.releases.
     """
     reader.ev_released.add("fire")
     reader.hw_state = {}
@@ -193,7 +193,7 @@ def test_poll_safety_net_released_merges_into_releases(reader):
 
 def test_poll_safety_net_ev_pressed_cleared_after_poll(reader):
     """
-    _ev_pressed must be empty after poll() so events are not replayed
+    ev_pressed must be empty after poll() so events are not replayed
     on the next frame.
     """
     reader.ev_pressed.add("fire")
@@ -203,7 +203,7 @@ def test_poll_safety_net_ev_pressed_cleared_after_poll(reader):
 
 def test_poll_safety_net_ev_released_cleared_after_poll(reader):
     """
-    _ev_released must be empty after poll() so events are not replayed
+    ev_released must be empty after poll() so events are not replayed
     on the next frame.
     """
     reader.ev_released.add("fire")
@@ -225,7 +225,7 @@ def test_poll_safety_net_and_polling_agree_no_duplicate(reader):
 
 def test_poll_axes_populated(reader):
     """
-    Axis values returned by _read_axes must appear in state.axes.
+    Axis values returned by read_axes must appear in state.axes.
     """
     reader.hw_axes = {"throttle": 0.75, "yaw": -0.3}
     reader.hw_state = {}
@@ -236,7 +236,7 @@ def test_poll_axes_populated(reader):
 
 def test_poll_axes_cleared_between_frames(reader):
     """
-    Axes from frame N must not bleed into frame N+1 when _read_axes no
+    Axes from frame N must not bleed into frame N+1 when read_axes no
     longer produces them.
     """
     reader.hw_axes = {"throttle": 0.5}

@@ -19,8 +19,8 @@ from space_flight.utils.state_machine import DyingPhase
 
 def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     """
-    Build a Bot that bypasses __init__ and has all lifecycle attributes
-    pre-populated with MagicMocks.
+    Build a Bot that bypasses __init__, with MagicMock pawn/AI/game and a real
+    dying phase and think slot.
 
     :param bot_type: the bot_type string stored on the instance
     :return: a Bot whose methods can be tested in isolation
@@ -200,9 +200,6 @@ def test_begin_death_removes_pawn_as_players_target():
     """
     begin_death() asks the player to drop this bot's pawn as its current
     target, so a dying wreck can't stay locked on.
-
-    Regression test: this call used to raise AttributeError (silently
-    swallowed) because Player had no remove_target method.
     """
     bot = make_bot_without_init()
 

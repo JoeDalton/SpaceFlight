@@ -161,11 +161,8 @@ def test_slot_reused_after_remove(interactions):
 
 def test_slot_stable_across_other_removals(interactions):
     """
-    Removing actor B must not shift the slot indices of A or C.
-
-    This is the key correctness guarantee of the pre-allocated design:
-    stable slot indices eliminate the stale target_idx bug that existed
-    in the previous compact-list implementation.
+    Removing actor B must not shift the slot indices of A or C: the key
+    guarantee of the pre-allocated design (no stale target indices).
     """
     a = MockActor(team=1, position=[0, 0, 0])
     b = MockActor(team=2, position=[100, 0, 0])
@@ -477,8 +474,6 @@ def test_dead_slot_not_selectable_as_target(interactions):
     After an actor is removed its slot's entire interact row must be
     False, so it can never appear in np.where(interact_mask) and
     therefore can never be selected as a target by the player or a bot.
-
-    This is the primary regression guard for the pre-allocated refactor.
     """
     player = MockActor(team=1, position=[0, 0, 0])
     enemy = MockActor(team=2, position=[100, 0, 0])

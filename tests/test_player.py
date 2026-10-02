@@ -330,10 +330,9 @@ def make_player_for_loop_target(pawn, interactions, target_filter: str = "All"):
 
 def test_loop_target_advances_through_all_targets_despite_a_gap():
     """
-    Regression test: a dead actor's slot leaves a gap between currently-alive
-    slots. Repeatedly looping "next target" must still visit every other
-    live actor exactly once before wrapping back to the first one -- it must
-    not get stuck jumping between the same one or two entries.
+    A dead actor's slot leaves a gap between alive slots. Repeatedly looping
+    "next target" must still visit every other live actor exactly once before
+    wrapping back to the first one.
     """
     interactions = Interactions()
     pawn = MockTargetableActor("player")
@@ -415,10 +414,9 @@ def test_loop_target_keeps_current_target_selected_on_repeated_calls_with_one_ta
 @pytest.mark.parametrize("select", ["loop_target", "point_target"])
 def test_player_never_targets_itself_after_a_slot_gap(select):
     """
-    Regression test: the player's own entry in the target mask must be found
-    by its position in live_actors, not by its grid slot. With a dead slot
-    before the player's, the slot index used to hide the *next* actor and
-    leave the player itself targetable.
+    The player's own entry in the target mask must be found by its position
+    in live_actors, not by its grid slot: with a dead slot before the player's,
+    the slot index would hide the *next* actor and leave the player targetable.
     """
     interactions = Interactions()
     filler = MockTargetableActor("filler")  # removed, leaving slot 0 free
@@ -450,11 +448,9 @@ def test_player_never_targets_itself_after_a_slot_gap(select):
 )
 def test_point_target_scores_non_interacting_candidates(target_filter, category, team):
     """
-    Regression test: candidates that never interact with the player (neutral
-    waypoints, friendly capital ships) must be scored on their real distance
-    and alignment, so the near one straight ahead wins over a far one behind.
-    Their geometry used to be left at zero, so every such candidate tied and
-    the first slot won.
+    Candidates that never interact with the player (neutral waypoints,
+    friendly capital ships) must be scored on their real distance and
+    alignment, so the near one straight ahead wins over a far one behind.
     """
     interactions = Interactions()
     pawn = MockTargetableActor("player")
@@ -545,8 +541,7 @@ def test_compute_head_acceleration_spring_pulls_displaced_head_back():
     spring_contribution = (
         -HEAD_SPRING_COEFFICIENT_NPM * displacement * player.head_inv_mass_pkg
     )
-    # Sign: inertial pseudo-force is negated in the formula, spring is added
-    # With no ship acceleration the head_acceleration is purely spring + damping
+    # No ship acceleration and no head velocity: purely the spring term
     np.testing.assert_array_almost_equal(
         player.head_acceleration_mps2, spring_contribution
     )
@@ -554,8 +549,8 @@ def test_compute_head_acceleration_spring_pulls_displaced_head_back():
 
 def test_compute_head_acceleration_damping_opposes_velocity():
     """
-    A head moving along Y at constant velocity experiences a negative
-    (damping) acceleration along that axis when displaced.
+    A head moving along Y experiences a negative (damping) acceleration along
+    that axis.
     """
     velocity = np.array([0.0, 1.0, 0.0])
     player = make_player_for_head_physics(head_velocity_mps=velocity)

@@ -443,7 +443,8 @@ def test_strafe_break_surface_climbs_along_normal():
 
 def test_strafe_reposition_extends_away_at_speeding_speed():
     """
-    Reposition extends directly away from the target at the speeding speed.
+    Reposition extends directly away from the target at reposition_speed_factor
+    of the ship's top speed.
     """
     nav = make_fighter_navigator()
     strafe = nav.personality["navigator"]["strafe"]
@@ -528,7 +529,7 @@ def test_strafe_attack_presses_in_while_closing():
     nav = make_fighter_navigator()
     _augment_pawn_for_strafe(nav)
     strafe = nav.personality["navigator"]["strafe"]
-    _enter_behaviour(nav, "strafe_attack", 10.0)  # well past the old timer
+    _enter_behaviour(nav, "strafe_attack", 10.0)  # long in the phase
     target_dict = _strafe_target_dict(400.0)
     target_dict["longitudinal_speed_scalar_mps"] = -200.0  # closing at 200 m/s
 
@@ -708,8 +709,8 @@ def test_bomb_ingress_aims_at_entry_point_along_target_track():
 
 def test_bomb_ingress_reaches_entry_transitions_to_approach():
     """
-    Once within entry_tolerance_m of the entry point the ingress hands off to the
-    approach run.
+    At the entry point (behind the target, on its track line) the ingress hands
+    off to the approach run.
     """
     nav = make_fighter_navigator()
     _augment_pawn_for_bomb(nav)

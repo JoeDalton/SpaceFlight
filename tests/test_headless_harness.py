@@ -2,15 +2,12 @@
 Integration test for the headless simulation harness
 (space_flight.headless.harness).
 
-Unlike the rest of the suite (which stubs out Player/FlightState via
-object.__new__ + mocks), this test builds a real, live FlightState — level
-loaded, actors spawned, physics stepped — with no window, no audio device, no
-menus and no HUD, exactly as an optimization loop (bot personality tuning,
-navigator strategy search, ...) would use it.
+Unlike the rest of the suite (which stubs Player/FlightState via
+object.__new__ + mocks), this builds a real, live FlightState with no window,
+audio device, menus or HUD, as an optimization loop would.
 
-Reuses the session-wide spaceflight_app fixture (see conftest.py):
-ShowBase is a per-process singleton, so this cannot construct its own app if
-other test modules (e.g. test_clouds.py) already share one.
+Reuses the session-wide spaceflight_app fixture (see conftest.py), since
+ShowBase is a per-process singleton.
 """
 
 import pytest

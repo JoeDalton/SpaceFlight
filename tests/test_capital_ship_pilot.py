@@ -119,8 +119,8 @@ def test_capital_ship_pilot_target_to_right_has_positive_yaw(mock_game):
 def test_capital_ship_pilot_roll_error_only_uses_scene_orientation(mock_game):
     """
     Unlike FighterPilot, CapitalShipPilot does not add a target-based roll
-    contribution.  The roll error must be non-zero only due to the scene
-    orientation even when the target is directly ahead.
+    contribution: the roll error depends only on the scene orientation, not on
+    the target direction.
     """
     pilot = make_capital_ship_pilot(mock_game)
 

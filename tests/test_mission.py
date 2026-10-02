@@ -1,7 +1,7 @@
 """
 Tests for the mission scripting framework (:mod:`space_flight.game.scenario`):
 Mission (running, sequencing, rules, clock conditions, actions), WaveSpec,
-WaveHandle (spawning, state, mutations) and the spatial conditions.
+WaveHandle (spawning, state, mutations), the conditions and scanning.
 """
 
 import uuid

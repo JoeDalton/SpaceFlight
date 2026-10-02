@@ -45,7 +45,7 @@ def ig():
 @pytest.fixture
 def ig_debug():
     """
-    Returns a fresh Integrator with debug mode enabled and 100-variable capacity.
+    Unused: Integrator has no debug parameter, so this fixture would raise.
     """
     return Integrator(game=MockGame(dt=0.1), max_state_size=100, debug=True)
 
@@ -335,9 +335,8 @@ def test_step_zeroes_live_x_dot_portion(ig):
 
 def test_step_does_not_touch_x_dot_previous(ig):
     """
-    step() must not modify x_dot_previous at all: the region is always
-    overwritten by set_state_variables before the next step reads it, so
-    zeroing it would be wasted work.
+    step() only zeroes x_dot_previous over the live slice; values beyond
+    next_idx are left untouched.
     """
     sentinel = 42.0
     ig.x_dot_previous[50] = sentinel

@@ -1,9 +1,8 @@
 """
-Unit tests for the collision helpers and the subsystem collision handling.
-
-These exercise pure logic (bitmask selection, the same-vehicle owner test) and
-the ship_into_subsystem pushback, which is built without __init__ and fed
-a mocked collision entry so no ShowBase/traversal is needed.
+Unit tests for collisions.py: bitmask selection, the same-vehicle owner test,
+and the handlers (subsystem pushback, munition hits on shields and
+destructibles, sensor contacts). Handlers run on a CollisionSystem built
+without __init__, fed mocked collision entries, so no ShowBase is needed.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ def test_subsystem_masks_are_into_only() -> None:
     """
     A "subsystem" collider is into-only (like terrain): it never initiates
     collisions and is not added to the collision handler, but it is hit by
-    lasers, sensors and destructibles.
+    munitions, sensors and destructibles.
     """
     from_mask, into_mask, add_to_handler = CollisionLayers.define_collision_masks(
         "subsystem"
@@ -246,8 +245,8 @@ def test_ship_into_subsystem_ignores_own_ship() -> None:
 
 def test_ship_into_subsystem_no_pushback_when_separating() -> None:
     """
-    If the ship is already moving away from the subsystem, no impulse is applied,
-    though the (zero-speed) grazing contact still registers no damage push.
+    If the ship is already moving away from the subsystem, no impulse is
+    applied to either body.
     """
     system = make_collision_system_without_init()
 
@@ -280,8 +279,9 @@ def test_ship_into_subsystem_no_pushback_when_separating() -> None:
 
 def test_shield_masks_are_laser_only_into() -> None:
     """
-    A "shield" collider is into-only and only lasers hit it: its into-mask is the
-    SHIELD bit alone, so ships/sensors (whose from-masks lack SHIELD) pass through.
+    A "shield" collider is into-only and only munitions hit it: its into-mask is
+    the SHIELD bit alone, so ships/sensors (whose from-masks lack SHIELD) pass
+    through.
     """
     from_mask, into_mask, add_to_handler = CollisionLayers.define_collision_masks(
         "shield"
@@ -294,8 +294,8 @@ def test_shield_masks_are_laser_only_into() -> None:
 
 def test_lasers_test_against_shields_but_ships_do_not() -> None:
     """
-    Only lasers interact with a shield: the laser from-mask carries SHIELD while
-    the ship/sensor from-masks do not.
+    Only munitions interact with a shield: the munition from-mask carries SHIELD
+    while the ship/sensor from-masks do not.
     """
     assert bool(CollisionLayers.MUNITION_FROM & CollisionLayers.SHIELD)
     assert not bool(CollisionLayers.DESTRUCTIBLE_FROM & CollisionLayers.SHIELD)

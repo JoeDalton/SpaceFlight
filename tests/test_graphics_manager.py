@@ -1,6 +1,6 @@
 """
-Unit tests for :class:
-`space_flight.global_architecture.graphics_manager.GraphicsManager`.
+Unit tests for
+:class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
 
 These cover the parts that can run headless (no GSG / FilterManager):
 - :meth:`get_render_size` — window vs render-scale buffer size

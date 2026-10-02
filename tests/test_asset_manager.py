@@ -1,18 +1,13 @@
 """
 Integration test for AssetManager's real (non-mocked) loading path.
 
-Regression test for the x-wing cockpit `OSError`: that bug (a stray glTF
-primitive that only breaks Panda3D's *first*, uncached conversion of a
-model) never reproduced on the dev machine because a pre-existing on-disk
-model cache silently skipped the buggy conversion path. Every other test
-that touches ship models mocks out `instantiate_3d_model_to_node`, so
-nothing in the suite actually exercised a real, from-scratch load of
-every asset the game preloads at startup. This test does exactly that: it
-points Panda3D's on-disk model cache at an empty directory, clears
-AssetManager's in-memory cache, and drives `load_game_assets` through the
-task manager the same way `SplashState.enter()` does, so any asset that
-only fails to convert once, before it's cached, gets caught here instead
-of on a player's first launch.
+Regression test for stray glTF primitives that
+only breaks Panda3D's *first*, uncached conversion of a model, so a warm
+on-disk model cache hid it. Other tests mock `instantiate_3d_model_to_node`;
+this one points the model cache at an empty directory, clears AssetManager's
+in-memory cache, and drives `load_game_assets` the way `SplashState.enter()`
+does, so an asset that fails only before it is cached is caught here rather
+than on a player's first launch.
 """
 
 import types
@@ -50,9 +45,8 @@ class _StubSplashState:
 def test_common_assets_load_through_splash_state_path(spaceflight_app, tmp_path):
     """
     Every COMMON_ASSETS_TO_LOAD entry loads without error via
-    AssetManager.load_game_assets -- the exact call SplashState.enter()
-    makes -- starting from an empty in-memory asset cache and an empty
-    on-disk model cache, i.e. a fresh install.
+    load_game_assets, from empty in-memory and on-disk caches (a fresh
+    install).
     """
     asset_manager = spaceflight_app.asset_manager
 
@@ -92,10 +86,9 @@ def test_common_assets_load_through_splash_state_path(spaceflight_app, tmp_path)
 @pytest.fixture
 def mock_game():
     """
-    Minimal game mock with a real dict (not a MagicMock) for
-    graphics_settings.config, so config.get(...) lookups behave like the
-    real, un-configured default (alternate_model_orientation off) instead
-    of a truthy MagicMock chain.
+    Minimal game mock with a real, empty dict for graphics_settings.config,
+    so config.get(...) finds no alternate_model_orientation instead of a
+    truthy MagicMock chain.
     """
     game = MagicMock()
     game.app.graphics_settings.config = {}
@@ -104,8 +97,8 @@ def mock_game():
 
 def test_gltf_model_tilt_quaternion_defaults_to_standard_value(mock_game):
     """
-    With the compatibility flag off (the default), the tilt quaternion is
-    the value that has shipped since it replaced the pre-f833c5c value.
+    With the compatibility flag absent, the tilt quaternion is the standard
+    value.
     """
     tilt = gltf_model_tilt_quaternion(mock_game)
     expected = np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
@@ -114,8 +107,8 @@ def test_gltf_model_tilt_quaternion_defaults_to_standard_value(mock_game):
 
 def test_gltf_model_tilt_quaternion_uses_alternate_value_when_flag_set(mock_game):
     """
-    Setting compatibility.alternate_model_orientation swaps in the
-    pre-f833c5c tilt quaternion instead.
+    Setting compatibility.alternate_model_orientation swaps in the alternate
+    (pre-f833c5c) tilt quaternion.
     """
     mock_game.app.graphics_settings.config = {
         "compatibility": {"alternate_model_orientation": True}

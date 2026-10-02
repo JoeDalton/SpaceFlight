@@ -28,8 +28,8 @@ def make_fighter_tactician(
     Build a FighterTactician with the given pawn health and shield.
 
     :param mock_game: the mocked game object
-    :param health: normalised pawn health in [0, 1]
-    :param shield: normalised pawn shield level in [0, 1]
+    :param health: pawn health
+    :param shield: pawn shield level
     :return: a FighterTactician ready for testing
     """
     pawn = MagicMock()
