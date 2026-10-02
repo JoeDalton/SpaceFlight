@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData
@@ -22,6 +25,9 @@ from space_flight.menus.settings_menu_state import SettingsMenuState
 from space_flight.menus.splash_state import SplashState
 from space_flight.ui.input_context import InputContextStack
 from space_flight.ui.input_reader import load_bindings, reader_factory
+
+if TYPE_CHECKING:
+    from direct.task.Task import Task
 
 LOGGER = logging.getLogger()
 
@@ -55,11 +61,11 @@ class StateManager:
     GAME_STATE = FlightState
     HYPERSPACE_LOADING_STATE = HyperspaceLoadingState
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         self.app = app
         self.stack: list[BaseState] = []
 
-    def push(self, state_class: BaseState, **kwargs):
+    def push(self, state_class: type[BaseState], **kwargs: Any):
         """
         Pushes a new state onto the stack and enters it.
 
@@ -75,7 +81,7 @@ class StateManager:
         self.stack.append(state_instance)
         state_instance.enter()
 
-    def pop(self: BaseState):
+    def pop(self):
         """
         Exits and removes the current top state, then resumes the new top (if
         any). Logs a warning and does nothing when the stack is empty.
@@ -90,7 +96,7 @@ class StateManager:
         if self.stack:
             self.stack[-1].resume()
 
-    def replace(self, state_class: BaseState):
+    def replace(self, state_class: type[BaseState]):
         """
         Replaces the current top state: :meth:`pop` then :meth:`push`.
 
@@ -99,7 +105,7 @@ class StateManager:
         self.pop()
         self.push(state_class)
 
-    def get_current(self):
+    def get_current(self) -> BaseState | None:
         """
         Returns the state currently at the top of the stack.
 
@@ -167,7 +173,7 @@ class SpaceFlightSimulator(ShowBase):
         if not headless:
             self.state_manager.push(SplashState)
 
-    def input_task(self, task):
+    def input_task(self, task: Task) -> int:
         state = self.input_reader.poll()
         self.input_context_stack.dispatch(state)
         return task.cont

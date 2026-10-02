@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 import numpy as np
 from panda3d.core import (
@@ -37,12 +37,12 @@ if TYPE_CHECKING:
     from space_flight.weapons import Munition
 
     # Any object that can own a collider (stored as its "owner" python tag).
-    ColliderOwner = (
+    ColliderOwner: TypeAlias = (
         Ship | SubSystem | Shield | Ocean | AsteroidField | Munition | CollisionSensor
     )
     # Owners that are part of a vehicle (the share-vehicle / hit-velocity logic
     # only ever sees ships, their subsystems, and their shields).
-    VehicleOwner = Ship | SubSystem | Shield
+    VehicleOwner: TypeAlias = Ship | SubSystem | Shield
 
 SOLID_COLLISION_ELASTICITY = 0.3  # 0 = inelastic, 1 = elastic
 POSITION_CORRECTION_RATIO = 0.1
@@ -107,7 +107,7 @@ class CollisionLayers:
     SHIELD_INTO = SHIELD
 
     @staticmethod
-    def define_collision_masks(collider_type: str) -> tuple[BitMask32]:
+    def define_collision_masks(collider_type: str) -> tuple[BitMask32, BitMask32, bool]:
         """
         Defines the from and into values of collider given its type
 
@@ -196,7 +196,7 @@ def _hit_velocity(obj: VehicleOwner | None) -> np.ndarray:
 
 
 class CollisionSystem:
-    def __init__(self, game: FlightState) -> None:
+    def __init__(self, game: FlightState):
         """
         Set up the collision traverser and register the collision-event handlers.
 
@@ -236,7 +236,7 @@ class CollisionSystem:
         self.game.app.accept("ship-into-subsystem", self.ship_into_subsystem)
         self.game.app.accept("ship-again-subsystem", self.ship_again_subsystem)
 
-    def update_collisions(self) -> None:
+    def update_collisions(self):
         """
         Computes collisions via panda3d internal methods: it triggers the
         "%fn-into-%in" / "%fn-again-%in" events, and fills the sensor queue,
@@ -246,7 +246,7 @@ class CollisionSystem:
         for entry in self.sensor_queue.entries:
             self.sensor_into_obstacle(entry)
 
-    def munition_into_destructible(self, entry: CollisionEntry) -> None:
+    def munition_into_destructible(self, entry: CollisionEntry):
         """
         Handles the case where a munition hits a destructible object:
         Damages the destructible object and remove the munition.
@@ -342,7 +342,7 @@ class CollisionSystem:
                     base_velocity=hit_velocity,
                 )
 
-    def munition_into_terrain(self, entry: CollisionEntry) -> None:
+    def munition_into_terrain(self, entry: CollisionEntry):
         """
         Handles the case where a munition hits a terrain object:
         Removes the munition and throws sparks at the impact point, picking the
@@ -397,7 +397,7 @@ class CollisionSystem:
         # Delete munition
         munition.shot.removeNode()
 
-    def munition_into_shield(self, entry: CollisionEntry) -> None:
+    def munition_into_shield(self, entry: CollisionEntry):
         """
         Handle a munition crossing a shield bubble.
 
@@ -479,7 +479,7 @@ class CollisionSystem:
             is_player=munition.origin_ship_id == self.game.player.pawn.id,
         )
 
-    def ship_into_terrain(self, entry: CollisionEntry) -> None:
+    def ship_into_terrain(self, entry: CollisionEntry):
         """
         Handles the case where a ship hits immobile terrain.
         If ship_from is the player, plays a crash sfx
@@ -513,7 +513,7 @@ class CollisionSystem:
                 game=self.game, relative_hit_point=relative_hit_point, in_terrain=True
             )
 
-    def ship_again_terrain(self, entry: CollisionEntry) -> None:
+    def ship_again_terrain(self, entry: CollisionEntry):
         """
         Handles a ship still touching immobile terrain from a previous frame:
         calls ship_into_terrain_pushback
@@ -522,7 +522,7 @@ class CollisionSystem:
         """
         self.ship_into_terrain_pushback(entry)
 
-    def ship_into_terrain_pushback(self, entry: CollisionEntry) -> None:
+    def ship_into_terrain_pushback(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits immobile terrain.
         We don't use collision forces because they are too stiff.
@@ -569,7 +569,7 @@ class CollisionSystem:
             position_correction=np.zeros(3),
         )
 
-    def ship_into_ship(self, entry: CollisionEntry) -> None:
+    def ship_into_ship(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits another ship for the first time
         If ship_from is the player, play a crash sfx
@@ -608,7 +608,7 @@ class CollisionSystem:
             )
         self.ship_into_ship_pushback(entry)
 
-    def ship_again_ship(self, entry: CollisionEntry) -> None:
+    def ship_again_ship(self, entry: CollisionEntry):
         """
         Handle a ship still touching another ship from a previous frame:
         call ship_into_ship_pushback
@@ -617,7 +617,7 @@ class CollisionSystem:
         """
         self.ship_into_ship_pushback(entry)
 
-    def ship_into_ship_pushback(self, entry: CollisionEntry) -> None:
+    def ship_into_ship_pushback(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits another ship:
         The collision is registered on both sides.
@@ -687,7 +687,7 @@ class CollisionSystem:
             position_correction=position_correction,
         )
 
-    def ship_into_massive_actor(self, entry: CollisionEntry) -> None:
+    def ship_into_massive_actor(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits a massive actor for the first time
         If ship_from is the player, play a crash sfx
@@ -721,7 +721,7 @@ class CollisionSystem:
             )
         self.ship_into_massive_actor_pushback(entry)
 
-    def ship_again_massive_actor(self, entry: CollisionEntry) -> None:
+    def ship_again_massive_actor(self, entry: CollisionEntry):
         """
         Handle a ship still touching a massive actor from a previous frame:
         call ship_into_massive_actor_pushback
@@ -730,7 +730,7 @@ class CollisionSystem:
         """
         self.ship_into_massive_actor_pushback(entry)
 
-    def ship_into_massive_actor_pushback(self, entry: CollisionEntry) -> None:
+    def ship_into_massive_actor_pushback(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits massive actor.
         We don't use collision forces because they are too stiff.
@@ -777,7 +777,7 @@ class CollisionSystem:
         # Apply damage to the massive actor
         massive_actor_into.apply_damage(damage=damage, damage_type="physical")
 
-    def ship_into_subsystem(self, entry: CollisionEntry) -> None:
+    def ship_into_subsystem(self, entry: CollisionEntry):
         """
         Handle a ship hitting a subsystem for the first time.
         Play a crash sfx if the incoming ship is the player, then push back.
@@ -809,7 +809,7 @@ class CollisionSystem:
             )
         self.ship_into_subsystem_pushback(entry)
 
-    def ship_again_subsystem(self, entry: CollisionEntry) -> None:
+    def ship_again_subsystem(self, entry: CollisionEntry):
         """
         Handle a ship still touching a subsystem from a previous frame:
         call ship_into_subsystem_pushback.
@@ -818,7 +818,7 @@ class CollisionSystem:
         """
         self.ship_into_subsystem_pushback(entry)
 
-    def ship_into_subsystem_pushback(self, entry: CollisionEntry) -> None:
+    def ship_into_subsystem_pushback(self, entry: CollisionEntry):
         """
         Resolve a ship hitting a subsystem bolted onto another ship.
 
@@ -892,7 +892,7 @@ class CollisionSystem:
         # The subsystem itself takes the collision damage
         subsystem_into.apply_damage(damage=damage, damage_type="physical")
 
-    def sensor_into_obstacle(self, entry: CollisionEntry) -> None:
+    def sensor_into_obstacle(self, entry: CollisionEntry):
         """
         Handles the case where a sensor hits an obstacle
         Register the hit in the sensor
@@ -932,7 +932,7 @@ class CollisionSystem:
             {"normal": normal, "hit_point": hit_point, "range": sensor_range}
         )
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Cleans the CollisionSystem object
         """

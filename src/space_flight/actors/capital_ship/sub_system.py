@@ -1,11 +1,19 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import NodePath
+from panda3d.core import NodePath, Vec3
 
 from space_flight.actors.destructibles import Destructible
 from space_flight.fx.damage_fx import DamageFX
 from space_flight.game.collisions import attach_collision_sphere
+
+if TYPE_CHECKING:
+    from space_flight.actors.bot import Bot
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -48,9 +56,9 @@ class SubSystem(Destructible):
 
     def __init__(
         self,
-        game,
-        parent,
-        mounted_on=None,
+        game: FlightState,
+        parent: Ship | Bot,
+        mounted_on: Ship | None = None,
         relative_position: np.ndarray = np.zeros(3),
         hit_box_radius_m: float = 5.0,
         health: float = 1000.0,
@@ -122,7 +130,7 @@ class SubSystem(Destructible):
             return np.zeros(3)
         return np.asarray(getattr(self.mounted_on, "speed", np.zeros(3)), dtype=float)
 
-    def take_hit(self, damage: float, normal_world_vector: np.ndarray):
+    def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
         """
         Takes damage from a hit.
 

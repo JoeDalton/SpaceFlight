@@ -35,7 +35,7 @@ class AsteroidField:
         scale_factor: float = 1.0,
         is_moving: bool = True,
         seed: int | None = None,
-    ) -> None:
+    ):
         """
         Populate the field with randomly placed, sized, and oriented asteroids.
 
@@ -124,7 +124,7 @@ class AsteroidField:
             )
             self.game.method_lists[self.id] = [self.move_asteriods_task]
 
-    def compute_derivatives(self) -> None:
+    def compute_derivatives(self):
         """
         Computes the derivative of the asteroids' states
         """
@@ -138,7 +138,7 @@ class AsteroidField:
                 quat_dot
             )
 
-    def move_asteriods_task(self) -> None:
+    def move_asteriods_task(self):
         """
         Gets the asteroids' states from the integrator and
         update rendered instances, then prepare the next
@@ -168,7 +168,7 @@ class AsteroidField:
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Cleans the AsteroidField object
         """

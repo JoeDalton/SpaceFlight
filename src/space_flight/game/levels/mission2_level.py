@@ -26,6 +26,7 @@ from space_flight.ui.input_context import InputContext
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
     from space_flight.game.scenario import Mission, WaveHandle
+    from space_flight.game.scenario.conditions import Condition
 
 # --- tunable numbers -------------------------------------------------------
 # Sized to fit inside the "asteroids" scene's field (field_size=15000, so
@@ -141,14 +142,14 @@ CLEAR_LINES = [
 class _Civilians:
     """The still-neutral live pawns of some waves, usable as a ``who``."""
 
-    def __init__(self, waves: Sequence[WaveHandle]) -> None:
+    def __init__(self, waves: Sequence[WaveHandle]):
         self.waves = waves
 
     def pawns(self) -> list:
         return [p for w in self.waves for p in w.pawns() if p.team == 0]
 
 
-def build_mission2_upfront(game: FlightState) -> None:
+def build_mission2_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
@@ -192,7 +193,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     endings = []
     ended = []
 
-    def end(outcome: str, text: str) -> None:
+    def end(outcome: str, text: str):
         if ended:
             return
         ended.append(outcome)
@@ -200,7 +201,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             rule.cancel()
         m.end_level(outcome, text)
 
-    def lose_later(condition, speaker: str, line: str, text: str) -> None:
+    def lose_later(condition: Condition, speaker: str, line: str, text: str):
         """A defeat DEFEAT_DELAY_S after condition, announced at once."""
         endings.append(m.on(condition, lambda: m.speech(line, speaker=speaker)))
         endings.append(
@@ -257,7 +258,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     )
     cleared = []
 
-    def on_clear() -> None:
+    def on_clear():
         m.hud("Scan complete: CLEAR")
         m.speech(CLEAR_LINES[len(cleared)], speaker="Blue Two")
         cleared.append(True)
@@ -273,7 +274,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # Spawned first, so the formation leader.
     leader = blue.pawns()[0]
 
-    def on_first_ally_lost() -> None:
+    def on_first_ally_lost():
         if leader in blue.pawns():
             m.speech("Blue Two is down! Stay sharp, Three.", speaker="Blue Leader")
         else:

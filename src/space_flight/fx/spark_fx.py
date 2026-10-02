@@ -173,7 +173,7 @@ class SparkPool(ParticleBuffer):
     :param game: The game whose root node is the parent scene.
     """
 
-    def __init__(self, game: FlightState) -> None:
+    def __init__(self, game: FlightState):
         texture = game.app.asset_manager.get_asset(
             asset_type="texture", path=_SPARK_TEXTURE
         ).get_texture()
@@ -200,7 +200,7 @@ class SparkPool(ParticleBuffer):
         preset: SparkPreset,
         size_scale: float = 1.0,
         speed_scale: float = 1.0,
-    ) -> None:
+    ):
         """
         Emit one burst of hit sparks.
 

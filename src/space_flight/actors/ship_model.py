@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from panda3d.core import NodePath, Quat
@@ -5,10 +9,17 @@ from panda3d.core import NodePath, Quat
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_manager import gltf_model_tilt_quaternion
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 
 class ShipModel:
     def __init__(
-        self, game, parent_node: NodePath, ship_type: str = "a-wing", is_cockpit=True
+        self,
+        game: FlightState,
+        parent_node: NodePath,
+        ship_type: str = "a-wing",
+        is_cockpit: bool = True,
     ):
         self.game = game
         self.ship_type = ship_type

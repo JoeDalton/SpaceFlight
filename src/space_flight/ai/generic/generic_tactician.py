@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -7,6 +10,9 @@ from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent
 from space_flight.utils import smooth_step_down
 from space_flight.utils.state_machine import StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -18,7 +24,7 @@ class GenericTactician:
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict,
         debug: bool = False,
@@ -43,11 +49,11 @@ class GenericTactician:
         self.debug = debug
 
     @property
-    def intent(self):
+    def intent(self) -> Intent:
         """The current intent (the intent state machine's state)."""
         return self.intent_sm.state
 
-    def think(self):
+    def think(self) -> tuple[Intent, dict]:
         """
         Evaluates the intent of the bot at the correct frequency
         """
@@ -96,7 +102,7 @@ class GenericTactician:
 
         return self.intent_sm.state, self.target_dict
 
-    def update_intent(self):
+    def update_intent(self) -> tuple[Intent, dict]:
         """
         Evaluates the tactical situation around the bot and computes the bot's intent
         """

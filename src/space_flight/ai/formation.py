@@ -1,6 +1,14 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from space_flight.actors.pawn import Pawn
 
 LOGGER = logging.getLogger()
 
@@ -75,7 +83,7 @@ class Formation:
         # templates in place would compound across every Formation.
         self.relative_positions = [position * scale_m for position in template]
 
-    def get_ship_index(self, ship_id):
+    def get_ship_index(self, ship_id: UUID) -> int | None:
         """
         Returns the position of a given ship in the formation
         """
@@ -86,7 +94,7 @@ class Formation:
                 break
         return ship_index
 
-    def add_ship(self, ship, leader=False):
+    def add_ship(self, ship: Pawn, leader: bool = False):
         """
         Adds a ship as the last wingman, or as leader (a ship already in the
         formation is then promoted). Ignored, with a warning, if it is full.
@@ -116,7 +124,7 @@ class Formation:
         if in_formation:
             ship.formation = self
 
-    def remove_ship(self, ship_id):
+    def remove_ship(self, ship_id: UUID):
         """
         Removes a ship from the formation (typically on its death)
         """

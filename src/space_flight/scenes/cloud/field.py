@@ -19,10 +19,12 @@ from __future__ import annotations
 import functools
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, fields, replace
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
+from numpy.typing import ArrayLike
 from panda3d.core import (
     ColorBlendAttrib,
     CullBinManager,
@@ -35,6 +37,7 @@ from panda3d.core import (
     GeomVertexFormat,
     InternalName,
     LVecBase4f,
+    NodePath,
     OmniBoundingVolume,
     PTA_LVecBase4f,
     SamplerState,
@@ -48,6 +51,7 @@ from space_flight import DATAFILES_PATH, PLANET_RADIUS_M
 from space_flight.scenes.cloud.cloud import (
     PRESETS,
     CloudQuality,
+    CloudSpec,
     CloudType,
     at_quality,
     atlas_mean_alpha,
@@ -70,6 +74,9 @@ from space_flight.scenes.cloud.noise import (
     with_threshold,
 )
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -112,8 +119,8 @@ def lod_shells(
     domain: float = 32000.0,
     cell_size: float = 1000.0,
     crossfade: tuple = (0.62, 0.85),
-    **overrides,
-):
+    **overrides: Any,
+) -> list[CloudLayer]:
     """Nested camera-centred shells carrying one cloud type out to the horizon.
 
     Optical depth through billboards goes as n·r³, so doubling each shell's radius
@@ -162,7 +169,7 @@ def lod_shells(
     return shells
 
 
-def _default_layers():
+def _default_layers() -> list[CloudLayer]:
     """:returns: a cumulus deck in LOD shells — the type the field is tuned on."""
     return lod_shells(CloudType.CUMULUS)
 
@@ -180,7 +187,7 @@ def _ensure_cloud_bins():
         manager.add_bin(_CLOUD_BIN, CullBinManager.BT_fixed, _CLOUD_BIN_SORT)
 
 
-def _settings_quality(game) -> CloudQuality:
+def _settings_quality(game: FlightState) -> CloudQuality:
     """The player's cloud quality, or HIGH when there is no setting to read (e.g.
     the demo's stub game): never a crash or a downgrade."""
     config = getattr(getattr(game, "app", None), "graphics_settings", None)
@@ -210,7 +217,7 @@ def _noise_volume(seed: int) -> np.ndarray:
 
 
 @functools.cache
-def _calibration(seed: int, field: DensityField):
+def _calibration(seed: int, field: DensityField) -> tuple[np.ndarray, float]:
     """(sorted column peaks, fbm sigma) for an unresolved field: ~300 ms to measure,
     determined by field and seed alone, so shared across shells, scenes and tests."""
     volume = _noise_volume(seed)
@@ -259,7 +266,7 @@ _CORNERS = np.array([(-1, -1), (1, -1), (1, 1), (-1, 1)], dtype=np.float32)
 _QUAD_TRIS = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)
 
 
-def _vec3(value) -> Vec3:
+def _vec3(value: ArrayLike) -> Vec3:
     return Vec3(*np.asarray(value, dtype=float)[:3])
 
 
@@ -273,26 +280,26 @@ class CloudField:
 
     def __init__(
         self,
-        parent,
-        game,
-        layers=None,
+        parent: NodePath,
+        game: FlightState,
+        layers: list[CloudLayer] | None = None,
         *,
-        domain=32000.0,
-        wind=(20.0, 0.0, 0.0),
-        sun_direction=(0.2, 1.0, 0.1),
-        sun_color=(1.0, 0.95, 0.85),
-        sky_color=(0.45, 0.6, 0.85),
-        haze_color=None,
-        sun_brightness=2.8,
-        sky_strength=0.35,
-        sky_occlusion=0.55,
-        exposure=1.15,
-        horizon_distance=400000.0,
-        planet_radius=PLANET_RADIUS_M,
-        near_fade_radii=2.5,
-        quality=None,
-        resort_frames=8,
-        seed=7,
+        domain: float = 32000.0,
+        wind: ArrayLike = (20.0, 0.0, 0.0),
+        sun_direction: ArrayLike = (0.2, 1.0, 0.1),
+        sun_color: ArrayLike = (1.0, 0.95, 0.85),
+        sky_color: ArrayLike = (0.45, 0.6, 0.85),
+        haze_color: ArrayLike | None = None,
+        sun_brightness: float = 2.8,
+        sky_strength: float = 0.35,
+        sky_occlusion: float = 0.55,
+        exposure: float = 1.15,
+        horizon_distance: float = 400000.0,
+        planet_radius: float = PLANET_RADIUS_M,
+        near_fade_radii: float = 2.5,
+        quality: CloudQuality | None = None,
+        resort_frames: int = 8,
+        seed: int = 7,
     ):
         """
         :param parent: NodePath the cloud geometry goes under
@@ -352,7 +359,7 @@ class CloudField:
         self._seed = seed
         self._build()
 
-    def _layer_spec(self, layer: CloudLayer):
+    def _layer_spec(self, layer: CloudLayer) -> CloudSpec:
         overrides = {
             name: getattr(layer, name)
             for name in _SPEC_OVERRIDES
@@ -430,7 +437,7 @@ class CloudField:
                 )
             )
 
-        def cat(key):
+        def cat(key: str) -> np.ndarray:
             return np.concatenate([placed[key] for placed in placements])
 
         # One ragged particle array: cell c owns [cell_start[c], cell_start[c+1]).
@@ -541,7 +548,7 @@ class CloudField:
 
     # ── Live edits ────────────────────────────────────────────────────────────
 
-    def _repack(self, index):
+    def _repack(self, index: int):
         spec = self._layer_specs[index]
         self._layer_params[index] = pack_layer_params(
             spec.field, optics=spec.optics, **self._layer_pack_args[index]
@@ -553,7 +560,9 @@ class CloudField:
             pta.push_back(LVecBase4f(*(float(v) for v in row)))
         self.node.set_shader_input("layerParams", pta)
 
-    def _edit_layers(self, layer, edit):
+    def _edit_layers(
+        self, layer: int | None, edit: Callable[[int, CloudSpec], CloudSpec]
+    ):
         """Apply ``edit(index, spec) -> spec`` to one layer (or all), re-pack and
         re-upload."""
         indices = range(len(self._layer_specs)) if layer is None else [layer]
@@ -562,7 +571,12 @@ class CloudField:
             self._repack(index)
         self._upload_layer_params()
 
-    def set_coverage(self, layer=None, coverage=None, edge_softness=None):
+    def set_coverage(
+        self,
+        layer: int | None = None,
+        coverage: float | None = None,
+        edge_softness: float | None = None,
+    ) -> list[DensityField]:
         """Change how much of the sky one cloud type (or all) covers, live.
 
         A new threshold is an index into the cached column peaks, but billboards
@@ -576,7 +590,7 @@ class CloudField:
         :returns: the resulting :class:`DensityField` per layer
         """
 
-        def edit(index, spec):
+        def edit(index: int, spec: CloudSpec) -> CloudSpec:
             field = spec.field
             changed = replace(
                 field,
@@ -592,7 +606,9 @@ class CloudField:
         self._edit_layers(layer, edit)
         return [spec.field for spec in self._layer_specs]
 
-    def set_optics(self, layer=None, **changes):
+    def set_optics(
+        self, layer: int | None = None, **changes: float
+    ) -> list[CloudOptics]:
         """Change :class:`CloudOptics` fields of one layer (or all), live. Shape
         lives in the DensityField and needs a rebuild.
 
@@ -611,7 +627,13 @@ class CloudField:
         )
         return [spec.optics for spec in self._layer_specs]
 
-    def set_sun(self, direction, sun_color=None, sky_color=None, haze_color=None):
+    def set_sun(
+        self,
+        direction: ArrayLike,
+        sun_color: ArrayLike | None = None,
+        sky_color: ArrayLike | None = None,
+        haze_color: ArrayLike | None = None,
+    ):
         """Move the sun and/or restate its colours; nothing is baked, so this is a
         few uniform writes.
 
@@ -677,7 +699,7 @@ class CloudField:
             self._stage.tobytes()
         )
 
-    def _restage(self, cam_xyz):
+    def _restage(self, cam_xyz: np.ndarray):
         """Re-sort one round-robin slice of cells into the staged index buffer.
 
         A cell draw order (far → near) is snapshotted per cycle, with each rank's
@@ -731,7 +753,12 @@ class Clouds:
     arguments pass straight through to CloudField.
     """
 
-    def __init__(self, game, layers=None, **field_kwargs):
+    def __init__(
+        self,
+        game: FlightState,
+        layers: list[CloudLayer] | None = None,
+        **field_kwargs: Any,
+    ):
         self.game = game
         self.id = uuid.uuid4()
         self.field = CloudField(

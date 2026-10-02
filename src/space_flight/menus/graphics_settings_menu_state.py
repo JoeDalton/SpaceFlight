@@ -11,7 +11,10 @@ the Save button). See
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
 """
 
+from __future__ import annotations
+
 import copy
+from typing import TYPE_CHECKING, Any
 
 from direct.gui.DirectGui import DirectFrame, DirectLabel
 from panda3d.core import TextNode
@@ -24,6 +27,9 @@ from space_flight.global_architecture.graphics_settings import (
     GraphicsSettings,
 )
 from space_flight.menus.menu_utils import CustomButton, CustomSlider, ScrollableList
+
+if TYPE_CHECKING:
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 # Display mode is a small fixed button group.
 _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
@@ -76,7 +82,7 @@ def _section_label(name: str) -> str:
     return _SECTION_LABELS.get(name, name.replace("_", " ").title())
 
 
-def _get_by_path(cfg: dict, path: tuple):
+def _get_by_path(cfg: dict, path: tuple) -> Any:
     """Return the value at *path* (a tuple of keys) within nested dict *cfg*."""
     d = cfg
     for key in path:
@@ -84,7 +90,7 @@ def _get_by_path(cfg: dict, path: tuple):
     return d
 
 
-def _set_by_path(cfg: dict, path: tuple, value):
+def _set_by_path(cfg: dict, path: tuple, value: Any):
     """Set the value at *path* (a tuple of keys) within nested dict *cfg*."""
     d = cfg
     for key in path[:-1]:
@@ -105,7 +111,7 @@ class GraphicsSettingsMenuState(BaseState):
     mode live; Cancel discards; Default reloads factory settings (unsaved).
     """
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         super().__init__(app)
         self.working_config: dict = {}
         # Display-mode button group: list of (value, CustomButton).
@@ -395,7 +401,7 @@ class GraphicsSettingsMenuState(BaseState):
         _set_by_path(self.working_config, path, values[idx])
         self.slider_value_labels[path]["text"] = labels[idx]
 
-    def on_checkbox_toggle(self, status, path: tuple):
+    def on_checkbox_toggle(self, status: int, path: tuple):
         """Store a toggled checkbox value straight into :attr:`working_config`."""
         _set_by_path(self.working_config, path, bool(status))
 
@@ -403,7 +409,7 @@ class GraphicsSettingsMenuState(BaseState):
     # Button callbacks
     # ------------------------------------------------------------------
 
-    def wheel_scroll(self, direction: int):
+    def wheel_scroll(self, direction: float):
         """Scroll the option list by *direction* scroll steps (negative = up)."""
         self.scroll_list.wheel_scroll(direction)
 

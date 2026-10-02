@@ -1,11 +1,20 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from panda3d.core import NodePath, Quat
 
 from space_flight import DATAFILES_PATH
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 
 class TurretModel:
-    def __init__(self, game, parent_node: NodePath, turret_type: str = "test"):
+    def __init__(
+        self, game: FlightState, parent_node: NodePath, turret_type: str = "test"
+    ):
         self.game = game
         self.turret_type = turret_type
         # Instantiate already-loaded models to a new node

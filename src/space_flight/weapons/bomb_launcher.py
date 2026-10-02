@@ -1,7 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
+from panda3d.core import NodePath, Point3
 
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.weapons import Munition, Weapon
+
+if TYPE_CHECKING:
+    from space_flight.actors.fighter import Fighter
+    from space_flight.game.flight_state import FlightState
 
 # Bombs are launched slowly along the belly (-Z); this base speed plus the ship's
 # inherited velocity is the bomb's initial world velocity. Kept as a module global
@@ -31,7 +40,12 @@ class BombLauncher(Weapon):
     the projectile.
     """
 
-    def __init__(self, game, parent, parent_node=None):
+    def __init__(
+        self,
+        game: FlightState,
+        parent: Fighter,
+        parent_node: NodePath | None = None,
+    ):
         super().__init__(game, parent, parent_node, fire_delay=BASE_RELOAD_S)
 
         self.range_m = BOMB_RANGE_M
@@ -71,7 +85,7 @@ class Bomb(Munition):
     treat it like a laser shot.
     """
 
-    def _build_visual(self, start_position):
+    def _build_visual(self, start_position: Point3) -> NodePath:
         # Placeholder visual: a small pink sphere, flat-shaded.
         shot = self.game.app.loader.loadModel("models/misc/sphere")
         shot.reparent_to(self.game.root_node)
@@ -81,7 +95,7 @@ class Bomb(Munition):
         shot.set_color(*BOMB_COLOR)
         return shot
 
-    def _attach_collider(self):
+    def _attach_collider(self) -> NodePath:
         # Small collision sphere (child of the visual, so removing the visual
         # removes the collider too).
         return attach_collision_sphere(

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import importlib.metadata
 import platform
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
@@ -9,6 +12,13 @@ from panda3d.core import Filename
 
 from space_flight import DATAFILES_PATH, LOGGER
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
+
+if TYPE_CHECKING:
+    from direct.task.Task import Task
+    from panda3d.core import NodePath
+
+    from space_flight.game.flight_state import FlightState
+    from space_flight.menus.splash_state import SplashState
 
 # TODO use bam files for faster loading of 3D models
 
@@ -110,7 +120,7 @@ class AssetManager:
         self.app = app
         self.assets = {}
 
-    def get_asset(self, asset_type: str, path: Path, pattern: str = "") -> object:
+    def get_asset(self, asset_type: str, path: Path, pattern: str = "") -> Any:
         """
         Returns the cached asset for *path*, loading and caching it first if needed
 
@@ -128,7 +138,11 @@ class AssetManager:
             asset = self.assets[path]
         return asset
 
-    def load_game_assets(self, app_state, assets_to_load: tuple = None):
+    def load_game_assets(
+        self,
+        app_state: SplashState,
+        assets_to_load: list[tuple[str, Path, str]] | None = None,
+    ):
         """
         Launches the load_assets task, which loads COMMON_ASSETS_TO_LOAD
 
@@ -147,7 +161,7 @@ class AssetManager:
             appendTask=True,
         )
 
-    def load_assets_task(self, app_state, task):
+    def load_assets_task(self, app_state: SplashState, task: Task) -> int:
         """
         Loads one queued asset per frame, updating the state's progress bar, and
         calls ``app_state.on_loading_finished()`` once the queue is empty
@@ -215,7 +229,7 @@ class AssetManager:
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
 
-    def instantiate_3d_model_to_node(self, path: Path | str, parent_node):
+    def instantiate_3d_model_to_node(self, path: Path | str, parent_node: NodePath):
         """
         Gets a cached 3D model and attaches an instance of it to the provided
         parent node
@@ -233,7 +247,7 @@ class AssetManager:
         model.instanceTo(parent_node)
 
 
-def gltf_model_tilt_quaternion(game) -> np.quaternion:
+def gltf_model_tilt_quaternion(game: FlightState) -> np.quaternion:
     """
     The second-stage rotation composed into every glTF ship model's
     orientation (cockpit and exterior alike).

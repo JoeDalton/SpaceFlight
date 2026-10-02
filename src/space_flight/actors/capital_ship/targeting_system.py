@@ -1,6 +1,14 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from space_flight.actors.capital_ship.sub_system import SubSystem
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship import CapitalShip
+    from space_flight.game.flight_state import FlightState
 
 
 class TargetingSystem(SubSystem):
@@ -31,14 +39,14 @@ class TargetingSystem(SubSystem):
 
     def __init__(
         self,
-        game,
-        parent,
+        game: FlightState,
+        parent: CapitalShip,
         relative_position: np.ndarray = np.zeros(3),
         hit_box_radius_m: float = 5.0,
         health: float = 1000.0,
         explosion_scale: float = 10.0,
         fire_rate_multiplier: float = 2.0,
-        auto_aim_params: dict = None,
+        auto_aim_params: dict | None = None,
         name: str = "targeting_system",
     ):
         super().__init__(

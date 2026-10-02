@@ -41,12 +41,12 @@ class LevelEndState(BaseState):
     :param text: Explanatory text shown beneath the title
     """
 
-    def __init__(self, app: ShowBase, outcome: str = "victory", text: str = "") -> None:
+    def __init__(self, app: ShowBase, outcome: str = "victory", text: str = ""):
         super().__init__(app)
         self.outcome = outcome
         self.text = text
 
-    def enter(self) -> None:
+    def enter(self):
         """
         Build the end-of-level overlay: title, explanation, and the menu buttons.
         """
@@ -100,7 +100,7 @@ class LevelEndState(BaseState):
             layout="center",
         )
 
-    def return_to_main(self) -> None:
+    def return_to_main(self):
         """
         Clear the state stack and return to the main menu.
         """
@@ -110,7 +110,7 @@ class LevelEndState(BaseState):
         self.app.state_manager.clear()
         self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
 
-    def quit_game(self) -> None:
+    def quit_game(self):
         """
         Quit the application.
         """
@@ -119,7 +119,7 @@ class LevelEndState(BaseState):
             self.app.state_manager.stack[-2].record.save()
         sys.exit()
 
-    def exit(self) -> None:
+    def exit(self):
         """
         Destroy the overlay's widgets.
         """

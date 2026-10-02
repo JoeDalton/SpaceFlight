@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Tuple
+from typing import TYPE_CHECKING, Any, Tuple
 
 import numpy as np
 
@@ -11,6 +13,9 @@ from space_flight.ai.generic.generic_ship_navigator import (
 )
 from space_flight.utils import cross3, magnitude
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 
 
@@ -21,7 +26,7 @@ class CapitalShipNavigator(GenericShipNavigator):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
         debug: bool = False,
@@ -29,7 +34,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
 
     def navigate_intent(
-        self, intent: int, target_dict: dict
+        self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
@@ -100,7 +105,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         self.behaviour_sm.request("orbit")
         return self.orbit_target(target=target, target_position=target_position)
 
-    def orbit_target(self, target, target_position: np.ndarray) -> tuple:
+    def orbit_target(self, target: Any, target_position: np.ndarray) -> tuple:
         """
         Hold a constant standoff from the target's horizontal oriented bounding box
         and drive tangentially around it, staggered slightly off the target plane.
@@ -168,7 +173,7 @@ class CapitalShipNavigator(GenericShipNavigator):
         return axis - np.dot(axis, world_up) * world_up
 
     def _nearest_point_on_horizontal_obb(
-        self, target, center: np.ndarray, point: np.ndarray
+        self, target: Any, center: np.ndarray, point: np.ndarray
     ) -> np.ndarray:
         """
         Closest point to point on the target's horizontal oriented bounding box

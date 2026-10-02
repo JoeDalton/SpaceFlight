@@ -15,12 +15,15 @@ player presses the radial-menu trigger, and parameterised via push() kwargs
 from __future__ import annotations
 
 import math
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from direct.gui.DirectGui import DirectFrame, DirectLabel
 
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.ui.input_context import RadialMenuInputContext
+
+if TYPE_CHECKING:
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 # Visual constants
 _RADIUS = 0.4
@@ -45,7 +48,7 @@ class RadialMenuVisual:
     slice.
     """
 
-    def __init__(self, app, slice_labels: list[str]) -> None:
+    def __init__(self, app: SpaceFlightSimulator, slice_labels: list[str]):
         """
         :param app: The simulator app (unused; widgets parent to aspect2d).
         :param slice_labels: Display text for each slice
@@ -73,7 +76,7 @@ class RadialMenuVisual:
             )
             self.labels.append(lbl)
 
-    def update(self, selected: int | None) -> None:
+    def update(self, selected: int | None):
         """
         Highlight *selected* and dim all other slices.
 
@@ -85,7 +88,7 @@ class RadialMenuVisual:
             lbl["text_scale"] = _SELECTED_SCALE if active else _UNSELECTED_SCALE
             lbl["text_fg"] = _SELECTED_FG if active else _UNSELECTED_FG
 
-    def destroy(self) -> None:
+    def destroy(self):
         """Remove all Panda3D nodes."""
         for lbl in self.labels:
             lbl.destroy()
@@ -113,11 +116,11 @@ class RadialMenuState(BaseState):
 
     def __init__(
         self,
-        app,
+        app: SpaceFlightSimulator,
         on_select: Callable,
         slice_labels: list[str],
         min_magnitude: float = 0.3,
-    ) -> None:
+    ):
         """
         :param app: The simulator app.
         :param on_select: Called with the selected slice index (int) or
@@ -134,7 +137,7 @@ class RadialMenuState(BaseState):
         self.min_magnitude = min_magnitude
         self.visual: RadialMenuVisual | None = None
 
-    def enter(self) -> None:
+    def enter(self):
         # Resolve the trigger hardware name from the flight context bindings
         # so we don't duplicate it in the YAML.
         input_type = self.app.bindings["input_type"]
@@ -156,13 +159,13 @@ class RadialMenuState(BaseState):
         )
         self.app.input_context_stack.push(ctx)
 
-    def pause(self) -> None:
+    def pause(self):
         pass
 
-    def resume(self) -> None:
+    def resume(self):
         pass
 
-    def exit(self) -> None:
+    def exit(self):
         self.app.input_context_stack.pop()
         if self.visual is not None:
             self.visual.destroy()

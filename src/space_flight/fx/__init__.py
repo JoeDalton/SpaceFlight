@@ -148,7 +148,7 @@ def make_particle_format(columns: list[tuple[str, int]]) -> GeomVertexFormat:
     return GeomVertexFormat.registerFormat(fmt)
 
 
-def _add_column_data(writer: GeomVertexWriter, width: int, value: object) -> None:
+def _add_column_data(writer: GeomVertexWriter, width: int, value: object):
     """
     Append one column value of *width* components to *writer*.
 
@@ -208,7 +208,7 @@ class ParticleBuffer:
         additive: bool = False,
         bin_order: int = 20,
         task_name: str = "particle_buffer_update",
-    ) -> None:
+    ):
         self.game = game
         self.id = uuid.uuid4()
         self.game.method_lists[self.id] = []
@@ -328,7 +328,7 @@ class ParticleBuffer:
         spawn_delay: float = 0.0,
         slot_duration: float | None = None,
         **columns: object,
-    ) -> None:
+    ):
         """
         Write one particle quad into *slot_index*.
 
@@ -381,7 +381,7 @@ class ParticleBuffer:
     # Per-frame update
     # ------------------------------------------------------------------
 
-    def update(self) -> None:
+    def update(self):
         """
         Push the three per-frame uniforms to the GPU.
 
@@ -405,7 +405,7 @@ class ParticleBuffer:
     # Convenience wrappers
     # ------------------------------------------------------------------
 
-    def set_input(self, name: str, value: object) -> None:
+    def set_input(self, name: str, value: object):
         """
         Set a shader uniform by name.
 
@@ -414,7 +414,7 @@ class ParticleBuffer:
         """
         self.node_path.setShaderInput(name, value)
 
-    def set_texture(self, texture: Texture) -> None:
+    def set_texture(self, texture: Texture):
         """
         Replace the texture bound to the default :class:`TextureStage`.
 
@@ -422,7 +422,7 @@ class ParticleBuffer:
         """
         self.node_path.setTexture(TextureStage.getDefault(), texture)
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Unregister the per-frame update and destroy the geometry node.
         """

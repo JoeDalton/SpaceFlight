@@ -94,7 +94,7 @@ THIRD_WAVE = WaveSpec(
 )
 
 
-def build_intro_upfront(game: FlightState) -> None:
+def build_intro_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
@@ -139,7 +139,7 @@ def intro_mission(m: Mission) -> Iterator[None]:
 
     # Reinforcements at 200s, or 3s after the first wave is wiped -- whichever
     # comes first, and only once.
-    def spawn_third_wave() -> None:
+    def spawn_third_wave():
         m.hud("Enemy reinforcements detected!")
         m.speech(
             "More bombers, eight of them, dropping out of the clouds!",
@@ -154,7 +154,7 @@ def intro_mission(m: Mission) -> Iterator[None]:
         reached_waypoint(transports, CONVOY_LAST_WAYPOINT), second_wave.all_destroyed
     )
 
-    def on_blockade_past() -> None:
+    def on_blockade_past():
         m.hud("Convoy past the blockade — well done.")
         m.speech(
             "We're through! Thank you, Red squadron. We owe you one.",

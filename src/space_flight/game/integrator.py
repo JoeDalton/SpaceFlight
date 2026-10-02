@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Integrator:
-    def __init__(self, game, max_state_size: int = 2000):
+    def __init__(self, game: FlightState, max_state_size: int = 2000):
         """
         Initializes the integrator with state vectors allocated once and reused
         across frames.
@@ -19,7 +25,7 @@ class Integrator:
         self.x_new = np.zeros(max_state_size)
         self.x_dot = np.zeros(max_state_size)
         self.x_dot_previous = np.zeros(max_state_size)
-        self.dt_previous = None
+        self.dt_previous: float | None = None
         self.next_idx = 0
         self.max_state_size = max_state_size
 
@@ -28,7 +34,7 @@ class Integrator:
         partial_x: np.ndarray,
         partial_x_dot: np.ndarray,
         partial_x_dot_previous: np.ndarray,
-    ):
+    ) -> int:
         """
         Sets consecutive state variables and returns the index at which they
         should be retrieved after the next step.

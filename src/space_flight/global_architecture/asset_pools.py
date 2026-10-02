@@ -1,6 +1,14 @@
+from __future__ import annotations
+
 import logging
 import random
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from panda3d.core import AudioSound, Texture
+
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 LOGGER = logging.getLogger()
 
@@ -13,7 +21,7 @@ class TexturePool:
     from which :meth:`get_texture` picks at random
     """
 
-    def __init__(self, app, path: Path, pattern: str):
+    def __init__(self, app: SpaceFlightSimulator, path: Path, pattern: str):
         if path.is_dir():
             # path is a directory => Find all matching files
             self.pool = build_texture_pool(app=app, directory=path, pattern=pattern)
@@ -21,7 +29,7 @@ class TexturePool:
             # Path is a single file
             self.pool = [load_texture(app=app, texture_file=path)]
 
-    def get_texture(self) -> object:
+    def get_texture(self) -> Texture:
         """
         Returns a random texture from the pool
 
@@ -30,7 +38,9 @@ class TexturePool:
         return random.choice(self.pool)
 
 
-def build_texture_pool(app, directory: Path, pattern: str) -> list:
+def build_texture_pool(
+    app: SpaceFlightSimulator, directory: Path, pattern: str
+) -> list:
     """
     Builds a texture pool from a glob pattern, loading every matching file
 
@@ -47,7 +57,7 @@ def build_texture_pool(app, directory: Path, pattern: str) -> list:
     return texture_pool
 
 
-def load_texture(app, texture_file: str) -> object:
+def load_texture(app: SpaceFlightSimulator, texture_file: Path) -> Texture:
     """
     Loads a texture from file
 
@@ -64,7 +74,9 @@ class SoundPool:
     picks among the matching files), so several copies can play at once
     """
 
-    def __init__(self, app, path: Path, pattern: str, is_3d: bool):
+    def __init__(
+        self, app: SpaceFlightSimulator, path: Path, pattern: str, is_3d: bool
+    ):
         if path.is_dir():
             # path is a directory => Find all matching files
             self.pool = build_sound_pool(
@@ -81,7 +93,7 @@ class SoundPool:
                 self.pool.append(sound)
         self.in_use = set()
 
-    def get_sound(self, randomize_pitch: bool = False) -> object:
+    def get_sound(self, randomize_pitch: bool = False) -> AudioSound:
         """
         Returns the first sound object in the pool that is not in use, ready to
         be played, and marks it in use until :meth:`release_sound`
@@ -104,7 +116,7 @@ class SoundPool:
         LOGGER.error("No sound ready to play in pool: ")
         raise RuntimeError("No sound ready to play")
 
-    def release_sound(self, sound):
+    def release_sound(self, sound: AudioSound):
         """
         Stops the sound and returns it to the pool
 
@@ -114,7 +126,9 @@ class SoundPool:
         self.in_use.discard(id(sound))
 
 
-def build_sound_pool(app, directory: Path, pattern: str, is_3d: bool) -> list:
+def build_sound_pool(
+    app: SpaceFlightSimulator, directory: Path, pattern: str, is_3d: bool
+) -> list:
     """
     Builds a pool of SOUND_POOL_LENGTH sounds, each loaded from a random file
     matching the glob pattern
@@ -138,7 +152,7 @@ def build_sound_pool(app, directory: Path, pattern: str, is_3d: bool) -> list:
     return sound_pool
 
 
-def load_3d_sound(app, sound_file: str) -> object:
+def load_3d_sound(app: SpaceFlightSimulator, sound_file: Path) -> AudioSound:
     """
     Loads a 3D sound from file
 
@@ -149,7 +163,7 @@ def load_3d_sound(app, sound_file: str) -> object:
     return app.sfx.audio3d.loadSfx(sound_file)
 
 
-def load_generic_sound(app, sound_file: str):
+def load_generic_sound(app: SpaceFlightSimulator, sound_file: Path) -> AudioSound:
     """
     Loads a non-3d sound from file
 

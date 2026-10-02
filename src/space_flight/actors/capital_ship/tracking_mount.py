@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 import quaternion
@@ -9,6 +12,11 @@ from space_flight.actors.capital_ship.sub_system import SubSystem
 from space_flight.actors.capital_ship.turret_model import TurretModel
 from space_flight.ai import Personality
 from space_flight.utils import low_pass_filter_first_order, rotate_single_vector
+
+if TYPE_CHECKING:
+    from space_flight.actors.bot import Bot
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -47,9 +55,9 @@ class TrackingMount(SubSystem):
 
     def __init__(
         self,
-        game,
-        parent,
-        mounted_on,
+        game: FlightState,
+        parent: Bot,
+        mounted_on: Ship,
         conf: dict,
         model_type: str,
         base_position: np.ndarray = np.zeros(3),

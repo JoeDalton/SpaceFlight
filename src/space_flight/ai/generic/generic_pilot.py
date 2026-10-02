@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any
 
 from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Personality
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -13,7 +19,10 @@ class GenericPilot:
     """
 
     def __init__(
-        self, game, pawn: Pawn, personality: dict = Personality.FIGHTER_DEFAULT
+        self,
+        game: FlightState,
+        pawn: Pawn,
+        personality: dict = Personality.FIGHTER_DEFAULT,
     ):
         self.game = game
         self.pawn: Pawn = pawn
@@ -35,7 +44,7 @@ class GenericPilot:
 
     def set_on(
         self,
-        **kwargs,
+        **kwargs: Any,
     ):
         """
         Sets the Auto pilot on
@@ -50,8 +59,8 @@ class GenericPilot:
 
     def pilot(
         self,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> tuple[float, ...]:
         """
         Compute the pawn's inputs
         """

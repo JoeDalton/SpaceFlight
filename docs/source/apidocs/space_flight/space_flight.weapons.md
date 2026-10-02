@@ -79,7 +79,7 @@ space_flight.weapons.laser_cannon
 
 ````
 
-````{py:method} _spawn_munition(munition_class, start_position, speed, power: float, life_time_s: float, **munition_kwargs) -> None
+````{py:method} _spawn_munition(munition_class, start_position, speed, power: float, life_time_s: float, **munition_kwargs) 
 :canonical: space_flight.weapons.Weapon._spawn_munition
 
 ```{autodoc2-docstring} space_flight.weapons.Weapon._spawn_munition
@@ -87,7 +87,7 @@ space_flight.weapons.laser_cannon
 
 ````
 
-````{py:method} clean() -> None
+````{py:method} clean() 
 :canonical: space_flight.weapons.Weapon.clean
 
 ```{autodoc2-docstring} space_flight.weapons.Weapon.clean
@@ -135,7 +135,7 @@ space_flight.weapons.laser_cannon
 
 ````
 
-````{py:method} _clean_extra() -> None
+````{py:method} _clean_extra() 
 :canonical: space_flight.weapons.Munition._clean_extra
 
 ```{autodoc2-docstring} space_flight.weapons.Munition._clean_extra
@@ -143,7 +143,7 @@ space_flight.weapons.laser_cannon
 
 ````
 
-````{py:method} clean(remove_from_game_objects: bool = True) -> None
+````{py:method} clean(remove_from_game_objects: bool = True) 
 :canonical: space_flight.weapons.Munition.clean
 
 ```{autodoc2-docstring} space_flight.weapons.Munition.clean

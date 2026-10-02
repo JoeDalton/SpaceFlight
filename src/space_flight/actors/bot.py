@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import gc
 import logging
 import math
 import sys
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -11,7 +14,7 @@ from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
 from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
-from space_flight.ai import Personality
+from space_flight.ai import Intent, Personality
 from space_flight.ai.capital_ship.capital_ship_navigator import CapitalShipNavigator
 from space_flight.ai.capital_ship.capital_ship_pilot import CapitalShipPilot
 from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTactician
@@ -27,6 +30,9 @@ from space_flight.ai.tracking_mount.tracking_mount_tactician import (
 )
 from space_flight.utils import magnitude
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 WAYPOINT_MEETING_TOLERANCE = 10
 
@@ -34,13 +40,13 @@ WAYPOINT_MEETING_TOLERANCE = 10
 class Bot(Destructible):
     def __init__(
         self,
-        game,
+        game: FlightState,
         name: str,
         bot_type: str,
         pawn_model: str,
         team: int = 0,
         debug_decisions: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(game=game)
         self.name = name
@@ -255,7 +261,7 @@ class Bot(Destructible):
         self._next_think_s = self._think_slot.next_due_time_s(now_s)
         return True
 
-    def _schedule_sensor(self) -> None:
+    def _schedule_sensor(self):
         """
         Keep the collision sensor in the collision traversal only for the frame
         the bot next thinks in: it only reads contacts then. The traversal runs
@@ -266,13 +272,13 @@ class Bot(Destructible):
         next_frame_s = game_time.get_current_time() + game_time.get_time_step()
         self.navigator.collision_sensor.set_active(next_frame_s >= self._next_think_s)
 
-    def _release_think_slot(self) -> None:
+    def _release_think_slot(self):
         """Give the bot's think slot back to the scheduler (once)."""
         if self._think_slot is not None:
             self._think_slot.scheduler.unregister(self._think_slot)
             self._think_slot = None
 
-    def record_state(self, intent, target_dict: dict, desired_speed_mps: float):
+    def record_state(self, intent: Intent, target_dict: dict, desired_speed_mps: float):
         """
         Step-by-step recording of the bot's tactical decision (intent, attack mode,
         target and the resulting kinematics), namespaced by bot name, for post-hoc
@@ -378,7 +384,7 @@ class Bot(Destructible):
         self.navigator.personality = personality
         self.pilot.personality = personality
 
-    def set_team(self, team: int) -> None:
+    def set_team(self, team: int):
         """
         Reassign this bot's team, cascading to everything that caches it.
 
@@ -485,13 +491,13 @@ class Bot(Destructible):
 
 
 def spawn_bot(
-    game,
+    game: FlightState,
     name: str,
     bot_type: str,
     pawn_model: str,
     team: int = 0,
     debug_decisions: bool = False,
-    **kwargs,
+    **kwargs: Any,
 ) -> Bot:
     # TODO useless function, just use the constructor directly ?
     bot = Bot(

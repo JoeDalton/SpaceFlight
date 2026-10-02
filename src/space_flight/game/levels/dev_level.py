@@ -93,7 +93,7 @@ ALLIED_PATROL = WaveSpec(
 )
 
 
-def build_dev_upfront(game: FlightState) -> None:
+def build_dev_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.

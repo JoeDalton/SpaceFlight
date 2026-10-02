@@ -31,9 +31,10 @@ from space_flight.ui.input_context import (
 )
 
 if TYPE_CHECKING:
-    from direct.task import Task
+    from direct.task.Task import Task
 
     from space_flight.game.levels import LevelEntry
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 LOGGER = logging.getLogger()
 
@@ -44,7 +45,7 @@ WAIT_FOR_JUMP_KEY = True
 
 
 class FlightState(BaseState):
-    def __init__(self, app, headless: bool = False) -> None:
+    def __init__(self, app: SpaceFlightSimulator, headless: bool = False):
         """
         :param app: the ShowBase application
         :param headless: when True, skip every UI-only step (hyperspace
@@ -58,7 +59,7 @@ class FlightState(BaseState):
         # when to stop stepping the simulation.
         self.outcome: str | None = None
 
-    def enter(self) -> None:
+    def enter(self):
         """
         Enter the flight state: apply this session's graphics settings, build
         the level, and run its reveal animation (skipped headless).
@@ -101,7 +102,7 @@ class FlightState(BaseState):
         )
         self.loading_overlay = self.app.state_manager.get_current()
 
-    def _enter_headless(self) -> None:
+    def _enter_headless(self):
         """
         Enter the flight state with no window: build the level synchronously
         (no per-frame animation) and start the simulation immediately.
@@ -148,7 +149,7 @@ class FlightState(BaseState):
             raise NotImplementedError(f"Level `{selected_level}` does not exist.")
         return entry
 
-    def _build_upfront(self, entry: LevelEntry) -> None:
+    def _build_upfront(self, entry: LevelEntry):
         """
         Run the level's up-front (on-black) build phase, where the heavy objects
         are created and GPU-prepared before the animation.
@@ -183,7 +184,7 @@ class FlightState(BaseState):
             return False
         return True
 
-    def _on_build_complete(self) -> None:
+    def _on_build_complete(self):
         """
         Wire up the level once every build step has run. Called by the overlay
         (still during "inside"), so this work is hidden behind the animation.
@@ -227,7 +228,7 @@ class FlightState(BaseState):
             )
             self.app.input_context_stack.push(self._jump_context)
 
-    def _on_reveal(self) -> None:
+    def _on_reveal(self):
         """
         Start the simulation as the overlay fades out, so the world is alive
         the moment it becomes visible. Called by the overlay when the reveal
@@ -241,7 +242,7 @@ class FlightState(BaseState):
         self.loading_overlay = None
         self.resume()
 
-    def initialize_game_structure(self) -> None:
+    def initialize_game_structure(self):
         """
         Initializes all the necessary game objects
         """
@@ -339,7 +340,7 @@ class FlightState(BaseState):
                 self.end_level(outcome="death", text="Your ship was destroyed.")
         return task.cont
 
-    def recenter_render_origin(self) -> None:
+    def recenter_render_origin(self):
         """
         Offset the game root under render so the player's ship sits at the
         render origin. Panda3D composes net transforms in float32 from render:
@@ -355,7 +356,7 @@ class FlightState(BaseState):
         x, y, z = self.player.pawn.position
         self.root_node.setPos(-x, -y, -z)
 
-    def end_level(self, outcome: str, text: str = "") -> None:
+    def end_level(self, outcome: str, text: str = ""):
         """
         Record the level's terminal outcome and, unless headless, show the
         level-end screen.
@@ -385,28 +386,28 @@ class FlightState(BaseState):
         self.mission.update()
         return task.cont
 
-    def set_pause(self) -> None:
+    def set_pause(self):
         """Open the pause menu, unless the game is already paused."""
         if not self.is_paused:
             self.app.state_manager.push(
                 state_class=self.app.state_manager.PAUSE_MENU_STATE,
             )
 
-    def pause(self) -> None:
+    def pause(self):
         """Freeze game time and intervals while a menu is open."""
         if not self.is_paused:
             self.is_paused = True
             self.interval_manager.pause()
             self.game_time.pause()
 
-    def resume(self) -> None:
+    def resume(self):
         """Resume game time and intervals after a pause."""
         if self.is_paused:
             self.is_paused = False
             self.interval_manager.resume()
             self.game_time.resume()
 
-    def exit(self) -> None:
+    def exit(self):
         """
         Clean every object in the game session, in roughly reverse order of
         creation.
@@ -494,7 +495,7 @@ class FlightState(BaseState):
             LOGGER.info(f"game nref = {sys.getrefcount(self)}")
             LOGGER.info(f"game references {gc.get_referrers(self)}")
 
-    def __del__(self) -> None:
+    def __del__(self):
         """Log when the flight state is garbage-collected (debug aid)."""
         if DEBUG_DELETION:
             LOGGER.info("Game instance deleted.")

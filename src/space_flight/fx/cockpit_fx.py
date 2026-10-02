@@ -7,7 +7,16 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import yaml
-from panda3d.core import CardMaker, LVecBase2f, Point3, Shader, TransparencyAttrib, Vec3
+from numpy.typing import ArrayLike
+from panda3d.core import (
+    CardMaker,
+    LVecBase2f,
+    NodePath,
+    Point3,
+    Shader,
+    TransparencyAttrib,
+    Vec3,
+)
 
 from space_flight import DATAFILES_PATH
 from space_flight.fx.damage_fx import (
@@ -18,6 +27,8 @@ from space_flight.fx.spark_fx import SparkPreset
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
+    from space_flight.actors.player import Player
+    from space_flight.actors.ship import Ship
     from space_flight.game.flight_state import FlightState
 
 # ===========================================================================
@@ -58,7 +69,7 @@ def health_tier(fraction: float) -> int:
 
 
 def screen_direction_from_incoming(
-    incoming_world_dir, pawn_right, pawn_up
+    incoming_world_dir: ArrayLike, pawn_right: ArrayLike, pawn_up: ArrayLike
 ) -> np.ndarray:
     """
     Project an incoming shot's world direction onto the pilot's screen axes and
@@ -156,7 +167,7 @@ _RATTLE_FREQS = (61.0, 43.0, 89.0, 71.0, 53.0, 97.0)
 # ---------------------------------------------------------------------------
 
 
-def load_cockpit_spark_emitters(conf: dict):
+def load_cockpit_spark_emitters(conf: dict) -> list[tuple[np.ndarray, np.ndarray]]:
     """
     Load a cockpit's authored spark emitters from the ship config.
 
@@ -200,7 +211,7 @@ class CockpitFX:
     :param player: The player whose pawn's health drives the effects
     """
 
-    def __init__(self, game: FlightState, player) -> None:
+    def __init__(self, game: FlightState, player: Player):
         self.game = game
         self.player = player
         self.id = uuid.uuid4()
@@ -225,7 +236,7 @@ class CockpitFX:
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
-    def _make_overlay_quad(self):
+    def _make_overlay_quad(self) -> NodePath:
         """Build the fullscreen render2d overlay quad + shader (vignette+flash)."""
         cm = CardMaker("cockpit_overlay")
         cm.setFrameFullscreenQuad()
@@ -247,7 +258,7 @@ class CockpitFX:
     # ------------------------------------------------------------------
     # Per-frame
     # ------------------------------------------------------------------
-    def update(self) -> None:
+    def update(self):
         """Drive the vignette, decay the flash, and emit sparks for the tier."""
         if self.game is None or self._overlay is None:
             return
@@ -275,7 +286,7 @@ class CockpitFX:
             self._next_spark_at = now + _SPARK_INTERVAL_S[tier]
             self._emit_sparks(tier)
 
-    def _emit_sparks(self, tier: int) -> None:
+    def _emit_sparks(self, tier: int):
         """
         Fire a random subset of the cockpit's emitters (skipped headless or when
         the ship declares none): each emits a small cone of sparks along its
@@ -300,7 +311,7 @@ class CockpitFX:
                 speed_scale=_COCKPIT_SPEED_MULT,
             )
 
-    def _advance_stutter(self, now: float, dt: float, tier: int) -> None:
+    def _advance_stutter(self, now: float, dt: float, tier: int):
         """
         Advance the shared damage stutter one frame: decay the current event,
         and start a new one at random intervals while damaged. Computed once per
@@ -346,7 +357,7 @@ class CockpitFX:
         """
         return self._stutter_intensity
 
-    def rattle_offset(self):
+    def rattle_offset(self) -> tuple[np.ndarray, float]:
         """
         The current cockpit rattle, added to the head position by
         :meth:`Player.move_camera`: a fast multi-frequency vibration scaled by
@@ -378,7 +389,7 @@ class CockpitFX:
     # ------------------------------------------------------------------
     # Events
     # ------------------------------------------------------------------
-    def flash(self, color, screen_dir) -> None:
+    def flash(self, color: Vec3 | tuple[float, float, float], screen_dir: np.ndarray):
         """
         Trigger a directional hit flash tinted *color*, biased toward *screen_dir*.
 
@@ -399,7 +410,7 @@ class CockpitFX:
     # ------------------------------------------------------------------
     # Teardown
     # ------------------------------------------------------------------
-    def clean(self) -> None:
+    def clean(self):
         """Drop the per-frame task and overlay quad (sparks use the shared pool)."""
         if self.game is not None and self.game.method_lists:
             try:
@@ -413,7 +424,7 @@ class CockpitFX:
         self.player = None
 
 
-def _health_fraction(pawn) -> float:
+def _health_fraction(pawn: Ship) -> float:
     """Pawn health as a fraction of its maximum (0 if max_health <= 0)."""
     if getattr(pawn, "max_health", 0.0) > 0.0:
         return pawn.health / pawn.max_health

@@ -15,7 +15,7 @@ class Record:
             / "target"
             / f"{timestamp}_record.parquet"
         )
-        self.data = []
+        self.data: list[dict[str, float | int | bool | str]] = []
 
     def new_time(self, time: float):
         self.data.append({"time_s": time})

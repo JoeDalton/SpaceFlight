@@ -2,11 +2,16 @@
 Input settings menu — lets the player view and remap all input bindings.
 """
 
+from __future__ import annotations
+
 import copy
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 from direct.gui.DirectGui import DGG, DirectFrame, DirectLabel, OkCancelDialog
-from panda3d.core import InputDevice, TextNode, VBase4, Vec2
+from panda3d.core import ButtonHandle, InputDevice, NodePath, TextNode, VBase4, Vec2
 
 from space_flight import CONFIGURATION_PATH
 from space_flight.global_architecture.base_state import BaseState
@@ -21,6 +26,11 @@ from space_flight.ui.input_reader import (
     JOYSTICK_AXIS_NAMES,
     reader_factory,
 )
+
+if TYPE_CHECKING:
+    from direct.task.Task import Task
+
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 _CONFIG_FILE = CONFIGURATION_PATH / "configuration.yaml"
 _DEFAULT_CONFIG_FILE = CONFIGURATION_PATH / "default_configuration.yaml"
@@ -81,7 +91,14 @@ class ChangeBindingDialog(object):
     position drift from registering as a deliberate movement.
     """
 
-    def __init__(self, app, action: str, input_type: str, button_geom, command):
+    def __init__(
+        self,
+        app: SpaceFlightSimulator,
+        action: str,
+        input_type: str,
+        button_geom: tuple[NodePath, NodePath, NodePath, NodePath],
+        command: Callable[[str, str | None, str | None], None],
+    ):
         """
         Open the dialog and start intercepting hardware input.
 
@@ -176,7 +193,7 @@ class ChangeBindingDialog(object):
 
         app.taskMgr.add(self.watchControls, "checkControls")
 
-    def buttonPressed(self, button, from_device: bool = False):
+    def buttonPressed(self, button: ButtonHandle, from_device: bool = False):
         """
         Handle a button-down event captured by the redirected button thrower.
 
@@ -204,7 +221,7 @@ class ChangeBindingDialog(object):
         text = self.newInput.replace("_", " ").title()
         self.dialog["text"] = "New event will be:\n\nButton: " + text
 
-    def axisMoved(self, axis):
+    def axisMoved(self, axis: InputDevice.Axis):
         """
         Record an axis movement that exceeded the dead zone.
 
@@ -220,7 +237,7 @@ class ChangeBindingDialog(object):
         self.newInputType = "axis"
         self.newInput = axis.name
 
-    def watchControls(self, task):
+    def watchControls(self, task: Task) -> int:
         """
         Per-frame task that polls all device axes and fires :meth:`axisMoved`
         when movement exceeds the dead zone.
@@ -253,7 +270,7 @@ class ChangeBindingDialog(object):
                         self.axisMoved(axis.axis)
         return task.cont
 
-    def onClose(self, result):
+    def onClose(self, result: int):
         """
         Clean up input interception and invoke the command callback.
 
@@ -301,7 +318,7 @@ class InputSettingsMenuState(BaseState):
     Each binding row's *Change* button opens a :class:`ChangeBindingDialog`.
     """
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         super().__init__(app)
         self.working_config: dict = {}
         self.saved_config: dict = {}
@@ -486,7 +503,7 @@ class InputSettingsMenuState(BaseState):
             else:
                 self.add_binding_row(content, row, y)
 
-    def add_deadzone_row(self, canvas, row: dict, y: float):
+    def add_deadzone_row(self, canvas: NodePath, row: dict, y: float):
         """
         Add a dead-zone label and editable entry to the scroll canvas.
 
@@ -531,7 +548,7 @@ class InputSettingsMenuState(BaseState):
             y, row["value"], self.on_checkbox_toggle, extraArgs=[row["path"]]
         )
 
-    def add_binding_row(self, canvas, row: dict, y: float):
+    def add_binding_row(self, canvas: NodePath, row: dict, y: float):
         """
         Add an action-binding row to the scroll canvas.
 
@@ -669,7 +686,7 @@ class InputSettingsMenuState(BaseState):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def load_file(path) -> dict:
+    def load_file(path: Path) -> dict:
         """
         Parse a YAML configuration file and return its contents as a dict.
 
@@ -701,7 +718,7 @@ class InputSettingsMenuState(BaseState):
                     pass
             d[path[-1]] = val
 
-    def on_checkbox_toggle(self, status, path: tuple):
+    def on_checkbox_toggle(self, status: int, path: tuple):
         """
         Write a toggled checkbox value straight into :attr:`working_config`
         (unlike dead-zone entries, which are only flushed on save or input-type
@@ -770,7 +787,7 @@ class InputSettingsMenuState(BaseState):
     # Button callbacks
     # ------------------------------------------------------------------
 
-    def wheel_scroll(self, direction: int):
+    def wheel_scroll(self, direction: float):
         """
         Scroll the binding list by *direction* scroll steps (negative = up).
 

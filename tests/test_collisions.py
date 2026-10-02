@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 # ---------------------------
 
 
-def test_subsystem_masks_are_into_only() -> None:
+def test_subsystem_masks_are_into_only():
     """
     A "subsystem" collider is into-only (like terrain): it never initiates
     collisions and is not added to the collision handler, but it is hit by
@@ -50,7 +50,7 @@ def test_subsystem_masks_are_into_only() -> None:
     assert add_to_handler is False
 
 
-def test_unknown_collider_type_raises() -> None:
+def test_unknown_collider_type_raises():
     """
     An unrecognised collider type is rejected.
     """
@@ -63,7 +63,7 @@ def test_unknown_collider_type_raises() -> None:
 # ---------------------------
 
 
-def test_same_object_shares_vehicle() -> None:
+def test_same_object_shares_vehicle():
     """
     An owner always shares a vehicle with itself.
     """
@@ -72,7 +72,7 @@ def test_same_object_shares_vehicle() -> None:
     assert owners_share_vehicle(owner, owner) is True
 
 
-def test_subsystem_shares_vehicle_with_its_ship_both_orders() -> None:
+def test_subsystem_shares_vehicle_with_its_ship_both_orders():
     """
     A subsystem and the ship it is mounted on are the same vehicle, whichever
     way round the collision is reported.
@@ -84,7 +84,7 @@ def test_subsystem_shares_vehicle_with_its_ship_both_orders() -> None:
     assert owners_share_vehicle(ship, subsystem) is True
 
 
-def test_sibling_subsystems_share_vehicle() -> None:
+def test_sibling_subsystems_share_vehicle():
     """
     Two subsystems bolted onto the same ship are the same vehicle.
     """
@@ -95,7 +95,7 @@ def test_sibling_subsystems_share_vehicle() -> None:
     assert owners_share_vehicle(generator, turret) is True
 
 
-def test_unrelated_ships_do_not_share_vehicle() -> None:
+def test_unrelated_ships_do_not_share_vehicle():
     """
     Two independent ships (and a subsystem vs a foreign ship) are not exempt.
     """
@@ -107,7 +107,7 @@ def test_unrelated_ships_do_not_share_vehicle() -> None:
     assert owners_share_vehicle(subsystem_a, ship_b) is False
 
 
-def test_standalone_mountables_do_not_share_vehicle() -> None:
+def test_standalone_mountables_do_not_share_vehicle():
     """
     Two owners that are mounted on nothing (mounted_on=None) are not exempt just
     because they both stand alone.
@@ -118,7 +118,7 @@ def test_standalone_mountables_do_not_share_vehicle() -> None:
     assert owners_share_vehicle(standalone_a, standalone_b) is False
 
 
-def test_none_owner_never_shares_vehicle() -> None:
+def test_none_owner_never_shares_vehicle():
     """
     A missing owner (mid-removal) never shares a vehicle.
     """
@@ -128,7 +128,7 @@ def test_none_owner_never_shares_vehicle() -> None:
     assert owners_share_vehicle(owner, None) is False
 
 
-def test_owner_without_mounted_on_attribute_is_safe() -> None:
+def test_owner_without_mounted_on_attribute_is_safe():
     """
     Owners that predate the mounted_on convention are treated as unmounted.
     """
@@ -173,7 +173,7 @@ def make_pushback_entry(
     return entry
 
 
-def test_ship_into_subsystem_pushes_parent_not_subsystem() -> None:
+def test_ship_into_subsystem_pushes_parent_not_subsystem():
     """
     A ship ramming a subsystem pushes the incoming ship and the subsystem's
     parent ship apart, damages the incoming ship and the subsystem, but never
@@ -223,7 +223,7 @@ def test_ship_into_subsystem_pushes_parent_not_subsystem() -> None:
     )
 
 
-def test_ship_into_subsystem_ignores_own_ship() -> None:
+def test_ship_into_subsystem_ignores_own_ship():
     """
     A ship never collides with its own subsystems: the handler bails out with no
     pushback or damage.
@@ -243,7 +243,7 @@ def test_ship_into_subsystem_ignores_own_ship() -> None:
     subsystem.apply_damage.assert_not_called()
 
 
-def test_ship_into_subsystem_no_pushback_when_separating() -> None:
+def test_ship_into_subsystem_no_pushback_when_separating():
     """
     If the ship is already moving away from the subsystem, no impulse is
     applied to either body.
@@ -277,7 +277,7 @@ def test_ship_into_subsystem_no_pushback_when_separating() -> None:
 # ---------------------------
 
 
-def test_shield_masks_are_laser_only_into() -> None:
+def test_shield_masks_are_laser_only_into():
     """
     A "shield" collider is into-only and only munitions hit it: its into-mask is
     the SHIELD bit alone, so ships/sensors (whose from-masks lack SHIELD) pass
@@ -292,7 +292,7 @@ def test_shield_masks_are_laser_only_into() -> None:
     assert add_to_handler is False
 
 
-def test_lasers_test_against_shields_but_ships_do_not() -> None:
+def test_lasers_test_against_shields_but_ships_do_not():
     """
     Only munitions interact with a shield: the munition from-mask carries SHIELD
     while the ship/sensor from-masks do not.
@@ -349,7 +349,7 @@ def make_shield_entry(
     return entry
 
 
-def test_laser_from_outside_is_blocked() -> None:
+def test_laser_from_outside_is_blocked():
     """
     A laser crossing inward (velocity opposed to the outward normal, dot < 0) is
     absorbed by the shield and removed.
@@ -365,7 +365,7 @@ def test_laser_from_outside_is_blocked() -> None:
     laser.shot.removeNode.assert_called_once()
 
 
-def test_laser_from_inside_passes_through() -> None:
+def test_laser_from_inside_passes_through():
     """
     A laser fired from inside, crossing outward (dot > 0), is not blocked.
     """
@@ -379,7 +379,7 @@ def test_laser_from_inside_passes_through() -> None:
     laser.shot.removeNode.assert_not_called()
 
 
-def test_laser_with_degenerate_normal_passes_through() -> None:
+def test_laser_with_degenerate_normal_passes_through():
     """
     A segment originating inside the solid yields a degenerate (zero) normal;
     dot == 0 is treated as a pass, so the laser is not blocked.
@@ -394,7 +394,7 @@ def test_laser_with_degenerate_normal_passes_through() -> None:
     laser.shot.removeNode.assert_not_called()
 
 
-def test_disabled_shield_lets_lasers_through() -> None:
+def test_disabled_shield_lets_lasers_through():
     """
     A downed (disabled) shield stops nothing, even a laser crossing inward.
     """
@@ -408,7 +408,7 @@ def test_disabled_shield_lets_lasers_through() -> None:
     laser.shot.removeNode.assert_not_called()
 
 
-def test_munition_into_shield_ignores_missing_owners() -> None:
+def test_munition_into_shield_ignores_missing_owners():
     """
     A laser or shield removed mid-frame (owner None) is handled without error.
     """
@@ -424,7 +424,7 @@ def test_munition_into_shield_ignores_missing_owners() -> None:
     shield.take_hit.assert_not_called()
 
 
-def test_laser_does_not_hit_its_own_ships_shield() -> None:
+def test_laser_does_not_hit_its_own_ships_shield():
     """
     A laser fired by a turret mounted on a ship passes through that ship's own
     shield, even crossing inward (which would otherwise be blocked).
@@ -469,7 +469,7 @@ def make_destructible_entry(
     return entry
 
 
-def test_laser_does_not_hit_the_ship_it_was_fired_from() -> None:
+def test_laser_does_not_hit_the_ship_it_was_fired_from():
     """
     A turret's laser passes through the very ship it is mounted on.
     """
@@ -488,7 +488,7 @@ def test_laser_does_not_hit_the_ship_it_was_fired_from() -> None:
     laser.shot.removeNode.assert_not_called()
 
 
-def test_laser_does_not_hit_a_sibling_subsystem() -> None:
+def test_laser_does_not_hit_a_sibling_subsystem():
     """
     A turret's laser passes through another subsystem bolted onto the same ship
     (e.g. a shield generator or a second turret).
@@ -552,7 +552,7 @@ def spawned_spark_preset(system: CollisionSystem) -> object:
     return system.game.spark_fx_pool.spawn.call_args.kwargs["preset"]
 
 
-def test_hit_on_shielded_fighter_sparks_ice() -> None:
+def test_hit_on_shielded_fighter_sparks_ice():
     """
     A laser hitting an enemy fighter whose shield is still up throws blue ICE
     sparks -- even though take_hit then drains that shield (state read first).
@@ -567,7 +567,7 @@ def test_hit_on_shielded_fighter_sparks_ice() -> None:
     assert spawned_spark_preset(system) is spark_fx.ICE
 
 
-def test_hit_on_bare_hull_sparks_metal() -> None:
+def test_hit_on_bare_hull_sparks_metal():
     """
     A laser hitting an enemy fighter with no shield left throws metal sparks.
     """
@@ -586,7 +586,7 @@ def test_hit_on_bare_hull_sparks_metal() -> None:
 # ---------------------------
 
 
-def test_npc_hit_on_a_target_is_not_marked_as_the_players() -> None:
+def test_npc_hit_on_a_target_is_not_marked_as_the_players():
     """
     A bot's shot landing on another (non-player) ship is reported to SFX as not
     the player's own shot.
@@ -602,7 +602,7 @@ def test_npc_hit_on_a_target_is_not_marked_as_the_players() -> None:
     assert kwargs["is_player"] is False
 
 
-def test_player_hit_on_a_target_is_marked_as_the_players() -> None:
+def test_player_hit_on_a_target_is_marked_as_the_players():
     """
     The player's own shot landing on another ship is reported to SFX as the
     player's shot.
@@ -620,7 +620,7 @@ def test_player_hit_on_a_target_is_marked_as_the_players() -> None:
     assert kwargs["is_player"] is True
 
 
-def test_npc_hit_on_a_shield_is_not_marked_as_the_players() -> None:
+def test_npc_hit_on_a_shield_is_not_marked_as_the_players():
     """
     A bot's shot absorbed by a shield is reported to SFX as not the player's
     own shot.
@@ -637,7 +637,7 @@ def test_npc_hit_on_a_shield_is_not_marked_as_the_players() -> None:
     assert kwargs["is_player"] is False
 
 
-def test_player_hit_on_a_shield_is_marked_as_the_players() -> None:
+def test_player_hit_on_a_shield_is_marked_as_the_players():
     """
     The player's own shot absorbed by a shield is reported to SFX as the
     player's shot.

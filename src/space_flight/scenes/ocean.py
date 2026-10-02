@@ -240,7 +240,7 @@ class Ocean:
         haze_distance: float = 150000.0,
         vert_shader: Path = DATAFILES_PATH / "shaders/ocean.vert",
         frag_shader: Path = DATAFILES_PATH / "shaders/ocean.frag",
-    ) -> None:
+    ):
         """
         Build the ocean surface, its shared reflection buffer, and shader.
 
@@ -360,7 +360,7 @@ class Ocean:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def update(self) -> None:
+    def update(self):
         """Per-frame update (self-registered in ``game.method_lists``)."""
         current_time = self.game.game_time.get_current_time()
         camera_pos = self.game.app.camera.getPos(self.base_node)
@@ -399,7 +399,7 @@ class Ocean:
         self.ocean_node.setShaderInput("iCameraPos", camera_pos)
         self.ocean_node.setShaderInput("uReflMVP", mvp)
 
-    def set_wave_iterations(self, iterations: int) -> None:
+    def set_wave_iterations(self, iterations: int):
         """Adjust wave-detail quality at runtime (e.g. from a settings menu).
 
         Higher = sharper waves up close but more expensive per pixel; lower =
@@ -490,14 +490,14 @@ class Ocean:
         )
         return refl_tex, uv_scale
 
-    def mirror_camera(self) -> None:
+    def mirror_camera(self):
         """Mirror the reflection camera across the water plane (Z = 0)."""
         pos = self.game.app.camera.getPos(self.base_node)
         hpr = self.game.app.camera.getHpr(self.base_node)
         self.refl_cam.setPos(self.base_node, pos.x, pos.y, -pos.z)
         self.refl_cam.setHpr(self.base_node, hpr.x, -hpr.y, -hpr.z)
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Cleans the Ocean object
         """

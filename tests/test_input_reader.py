@@ -42,7 +42,7 @@ class _StubReader(InputReader):
         """
         return dict(self.hw_state)
 
-    def read_axes(self, state) -> None:
+    def read_axes(self, state):
         """
         :param state: The InputState whose axes dict will be updated.
         """

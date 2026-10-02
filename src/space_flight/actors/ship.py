@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import logging
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import yaml
-from panda3d.core import NodePath, Quat
+from panda3d.core import NodePath, Quat, Vec3
 
 from space_flight import (
     DATAFILES_PATH,
@@ -23,6 +25,9 @@ from space_flight.utils import (
     magnitude,
     rotation_matrix_coefficients,
 )
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 RHO = 1  # A fictive "air" density" for atmospheric-like flight feeling
@@ -65,7 +70,7 @@ class Ship(Pawn):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
@@ -650,7 +655,7 @@ class Ship(Pawn):
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
 
-    def take_hit(self, damage: float, normal_world_vector: np.ndarray):
+    def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
         """
         Take damage from hits and jolt from the impact
         # TODO move force calculations to collisions.py

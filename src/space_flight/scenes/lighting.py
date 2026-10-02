@@ -1,13 +1,19 @@
-from typing import List
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, List
+
+import numpy as np
 from panda3d.core import AmbientLight, DirectionalLight, Point3, Vec4
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class Lighting:
     def __init__(
         self,
-        game,
-        directional_color: List = [0.5, 0.5, 0.45, 1],
+        game: FlightState,
+        directional_color: list[float] | np.ndarray = [0.5, 0.5, 0.45, 1],
         directional_direction: List = [-30, -60, 0],  # FROM scene TOWARD sun
         ambient_color: List = [0.1, 0.2, 0.4, 1],
     ):

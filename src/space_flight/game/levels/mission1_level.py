@@ -102,7 +102,7 @@ WINNER_LINES = {
 }
 
 
-def build_mission1_upfront(game: FlightState) -> None:
+def build_mission1_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
@@ -290,7 +290,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
             lambda racer=racer: finish_order.append(racer),
         )
 
-    def wingman_won() -> None:
+    def wingman_won():
         name = BLUE_NAMES[racers.index(finish_order[0]) - 1]
         m.speech(WINNER_LINES[name], speaker=name)
 

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 import yaml
@@ -9,6 +12,11 @@ from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.weapons.laser_cannon import LaserCannon
+
+if TYPE_CHECKING:
+    from space_flight.actors.bot import Bot
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -38,10 +46,10 @@ class Turret(TrackingMount):
 
     def __init__(
         self,
-        game,
-        parent,
+        game: FlightState,
+        parent: Bot,
         turret_type: str,
-        mounted_on,
+        mounted_on: Ship,
         base_position: np.ndarray = np.zeros(3),
         base_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_yaw_deg: float = 0.0,
@@ -99,7 +107,7 @@ class Turret(TrackingMount):
         ):
             self.laser_cannon.fire()
 
-    def _active_targeting_system(self):
+    def _active_targeting_system(self) -> TargetingSystem | None:
         """
         Finds a living targeting system on the ship this turret is mounted on.
 

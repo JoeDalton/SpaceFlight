@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING
 
 from space_flight import DATAFILES_PATH
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 
 class Skybox:
-    def __init__(self, game, name: str = "purple"):
+    def __init__(self, game: FlightState, name: str = "purple"):
         self.game = game
         self.id = uuid.uuid4()
 

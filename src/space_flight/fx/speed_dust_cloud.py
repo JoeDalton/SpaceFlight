@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import random
 import uuid
-from typing import List
+from collections.abc import Generator
+from typing import TYPE_CHECKING, List
 
 from panda3d.core import CardMaker, NodePath, TransparencyAttrib
 
 from space_flight import DATAFILES_PATH
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 MIN_DUST_ALPHA = 0.2
 MAX_DUST_ALPHA = 0.8
@@ -19,7 +25,7 @@ class SpeedDustCloud:
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         num_particles: int = 100,
         spread: float = 30,
         depth: float = 100.0,
@@ -54,7 +60,7 @@ class SpeedDustCloud:
             for _ in self.build():
                 pass
 
-    def build(self, chunk: int = 25):
+    def build(self, chunk: int = 25) -> Generator[None, None, None]:
         """
         Create the dust particles a chunk at a time, yielding after each chunk,
         then register the per-frame update once they all exist. Use with
@@ -78,7 +84,7 @@ class SpeedDustCloud:
         # Add the update task to the game's methods
         self.game.method_lists[self.id] = [self.dust_update]
 
-    def init_particle(self, particle):
+    def init_particle(self, particle: NodePath):
         """
         Initializes a particle with random color, scale and position
 
@@ -98,7 +104,7 @@ class SpeedDustCloud:
         )
         particle.setScale(scaling, scaling, scaling)
 
-    def reset_particle(self, particle):
+    def reset_particle(self, particle: NodePath):
         """
         Resets a particle upstream of the player, at a random transversal location
 

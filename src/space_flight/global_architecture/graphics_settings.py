@@ -8,6 +8,7 @@ missing or invalid key falls back to a sane default.
 
 import copy
 import logging
+from pathlib import Path
 
 import yaml
 
@@ -59,7 +60,7 @@ class GraphicsSettings:
         self.config = self.load()
 
     @staticmethod
-    def load_file(path) -> dict:
+    def load_file(path: Path) -> dict:
         """Parse a YAML file and return its contents as a dict ({} if empty)."""
         with open(path, "r") as f:
             return yaml.safe_load(f) or {}

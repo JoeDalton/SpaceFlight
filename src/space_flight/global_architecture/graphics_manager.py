@@ -21,8 +21,11 @@ Render-scale and anti-aliasing live on a :class:`FilterManager` pipeline that is
 level load.
 """
 
+from __future__ import annotations
+
 import logging
 from time import sleep
+from typing import TYPE_CHECKING
 
 from direct.filter.FilterManager import FilterManager
 from panda3d.core import (
@@ -34,6 +37,12 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH
+
+if TYPE_CHECKING:
+    from direct.task.Task import Task
+    from panda3d.core import NodePath
+
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 LOGGER = logging.getLogger()
 
@@ -52,15 +61,15 @@ class GraphicsManager:
     Applies the graphics settings to the running engine.
     """
 
-    def __init__(self, app):
+    def __init__(self, app: SpaceFlightSimulator):
         self.app = app
         # FilterManager pipeline state (None when the scene renders straight to
         # the window — i.e. scale == 1.0 and no AA).
-        self._filter_manager = None
-        self._scene_tex = None
-        self._scene_quad = None
-        self._render_size = None
-        self._uniform_task = None
+        self._filter_manager: FilterManager | None = None
+        self._scene_tex: Texture | None = None
+        self._scene_quad: NodePath | None = None
+        self._render_size: tuple[int, int] | None = None
+        self._uniform_task: Task | None = None
 
     @property
     def settings(self) -> dict:
@@ -209,7 +218,7 @@ class GraphicsManager:
             f"(scale {scale}), msaa={msaa}, fxaa={fxaa}"
         )
 
-    def _update_pipeline_uniforms(self, task):
+    def _update_pipeline_uniforms(self, task: Task) -> int:
         """
         Keep the composite shader's pad-correction in sync with the render
         target.

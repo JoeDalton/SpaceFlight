@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import logging
+import uuid
+from typing import TYPE_CHECKING
 
 import numpy as np
 import yaml
@@ -8,6 +12,11 @@ from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.actors.bot import Bot
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
 
 # Grab state machine states.
 _SEARCHING = "searching"
@@ -52,10 +61,10 @@ class TractorBeamProjector(TrackingMount):
 
     def __init__(
         self,
-        game,
-        parent,
+        game: FlightState,
+        parent: Bot,
         projector_type: str,
-        mounted_on,
+        mounted_on: Ship,
         base_position: np.ndarray = np.zeros(3),
         base_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
         ini_yaw_deg: float = 0.0,
@@ -161,7 +170,9 @@ class TractorBeamProjector(TrackingMount):
 
         self._apply_tractor_forces(prey, v_rel, to_prey_dir)
 
-    def _apply_tractor_forces(self, prey, v_rel: np.ndarray, to_prey_dir: np.ndarray):
+    def _apply_tractor_forces(
+        self, prey: Ship, v_rel: np.ndarray, to_prey_dir: np.ndarray
+    ):
         """
         Apply the drag and attraction forces to the grabbed prey for this frame.
 
@@ -175,7 +186,7 @@ class TractorBeamProjector(TrackingMount):
         attraction_force = -self.attraction_force_n * to_prey_dir
         prey.apply_external_force(drag_force + attraction_force)
 
-    def _start_grab(self, prey):
+    def _start_grab(self, prey: Ship):
         """
         Begin grabbing a prey, cueing the player-grab SFX if it is the player.
 
@@ -206,7 +217,7 @@ class TractorBeamProjector(TrackingMount):
         self.grabbed_prey_id = None
         self.regrab_cooldown.trigger()
 
-    def _resolve_prey(self, prey_id):
+    def _resolve_prey(self, prey_id: uuid.UUID | None) -> Ship | None:
         """
         Resolve a prey id to a live, grabbable actor (one that can receive a
         force), or None.
@@ -226,7 +237,7 @@ class TractorBeamProjector(TrackingMount):
             return None
         return prey
 
-    def _prey_kinematics(self, prey):
+    def _prey_kinematics(self, prey: Ship) -> tuple[float, np.ndarray, np.ndarray]:
         """
         Compute the projector-to-prey geometry and the prey's relative velocity.
 

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import BitMask32
@@ -6,6 +9,10 @@ from panda3d.core import BitMask32
 from space_flight import DEBUG_DELETION
 from space_flight.game.collisions import CollisionLayers, attach_collision_sphere
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.actors.ship import Ship
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -24,15 +31,15 @@ class CollisionSensor:
 
     def __init__(
         self,
-        game,
-        ship,
-        collision_reference_distance_m=100.0,
-        ship_distance_1_m=5,
-        radius_1_m=30,
-        ship_distance_2_m=50,
-        radius_2_m=50,
-        ship_distance_3_m=125,
-        radius_3_m=100,
+        game: FlightState,
+        ship: Ship,
+        collision_reference_distance_m: float = 100.0,
+        ship_distance_1_m: float = 5,
+        radius_1_m: float = 30,
+        ship_distance_2_m: float = 50,
+        radius_2_m: float = 50,
+        ship_distance_3_m: float = 125,
+        radius_3_m: float = 100,
     ):
         self.obstacles = []
         self._clock = game.game_time.get_current_time
@@ -79,7 +86,7 @@ class CollisionSensor:
         self.sphere_3.setPythonTag("owner", self)
         self.sphere_3.setPythonTag("sensor_range", 3)
 
-    def set_active(self, active: bool) -> None:
+    def set_active(self, active: bool):
         """
         Include the spheres in collision traversal, or leave them out: an
         inactive sensor costs nothing to traverse and records no contacts (its
@@ -94,7 +101,7 @@ class CollisionSensor:
             sphere.node().setFromCollideMask(mask)
         self.active = active
 
-    def record_obstacle(self, obstacle: dict) -> None:
+    def record_obstacle(self, obstacle: dict):
         """
         Register a contact reported by the collision system this frame.
 

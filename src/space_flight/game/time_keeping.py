@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import uuid
-from typing import Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from direct.interval.Interval import Interval
 from direct.showbase.ShowBaseGlobal import ClockObject
 
 from space_flight import EPSILON_TOLERANCE
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class GameTimeManager:
@@ -12,7 +17,7 @@ class GameTimeManager:
     The game clock: Panda3D's real clock minus the time spent paused.
     """
 
-    def __init__(self, game, pause_on_init: bool = True):
+    def __init__(self, game: FlightState, pause_on_init: bool = True):
         self.game = game
         # The game starts after the splash and menu states: count that delay as
         # pause time, so game time starts near zero
@@ -87,7 +92,7 @@ class IntervalManager:
     A class to handle the creation, destruction and pausing/resuming of time intervals
     """
 
-    def __init__(self, game, pause_on_init: bool = True):
+    def __init__(self, game: FlightState, pause_on_init: bool = True):
         self.active_intervals: list[Interval] = []
         self.game = game
         if pause_on_init:
@@ -145,12 +150,16 @@ class DelayedMethodManager:
     Panda3D's doMethodLater on game time, so scheduled calls respect pauses
     """
 
-    def __init__(self, game):
+    def __init__(self, game: FlightState):
         self.game = game
-        self.methods_to_run_dict = {}
+        self.methods_to_run_dict: dict[str, dict[str, Any]] = {}
 
     def do_method_later(
-        self, delay_s: float, name: str, method: Callable, extra_args: list = None
+        self,
+        delay_s: float,
+        name: str,
+        method: Callable,
+        extra_args: list | None = None,
     ):
         """
         Schedule a method to run at some time in the future

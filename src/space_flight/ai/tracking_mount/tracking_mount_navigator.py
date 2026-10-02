@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -7,6 +10,9 @@ from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent, Personality
 from space_flight.ai.generic.generic_navigator import GenericNavigator
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -29,14 +35,14 @@ class TrackingMountNavigator(GenericNavigator):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.TURRET_DEFAULT,
         debug: bool = False,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
 
-    def navigate(self, intent: int, target_dict: dict) -> np.ndarray:
+    def navigate(self, intent: Intent, target_dict: dict) -> np.ndarray:
         """
         Turns the tactician's intent into an explicit aim direction.
 

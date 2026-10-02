@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import logging
 import uuid
-from typing import Callable, List
+from typing import TYPE_CHECKING, Callable, List
 
 from space_flight import DEBUG_DELETION
 from space_flight.utils.state_machine import DyingPhase
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -13,7 +18,7 @@ class Destructible:
     A class for destructible objects in the simulation
     """
 
-    def __init__(self, game):
+    def __init__(self, game: FlightState):
         self.game = game
         self.tasks = []
         self.id = uuid.uuid4()
@@ -54,7 +59,7 @@ class Destructible:
         """
         raise NotImplementedError
 
-    def get_health(self):
+    def get_health(self) -> float:
         """
         Find the health of the destructible object, to be done for each subclass
         """

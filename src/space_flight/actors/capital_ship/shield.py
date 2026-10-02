@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import logging
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
+from panda3d.core import Point3, Vec3
 
 from space_flight.actors.capital_ship.shield_model import ShieldModel
 from space_flight.actors.destructibles import Destructible
@@ -10,6 +15,11 @@ from space_flight.game.collisions import (
     attach_collision_tube,
 )
 from space_flight.utils.state_machine import Cooldown, StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship import CapitalShip
+    from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -71,14 +81,14 @@ class Shield(Destructible):
 
     def __init__(
         self,
-        game,
-        ship,
-        generators,
+        game: FlightState,
+        ship: CapitalShip,
+        generators: Iterable[ShieldGenerator],
         health: float = 4000.0,
         regen_rate: float = 0.0,
-        color=None,
-        shape: dict = None,
-        model: str = None,
+        color: Sequence[float] | None = None,
+        shape: dict | None = None,
+        model: str | None = None,
     ):
         super().__init__(game=game)
         self.name = "shield"
@@ -144,7 +154,7 @@ class Shield(Destructible):
         """The shield lifecycle state (up / dying / down / appearing)."""
         return self.state_sm.state
 
-    def _build_collision(self, model: str):
+    def _build_collision(self, model: str | None):
         """
         Attach the shield's collision solid, coinciding with the visible bubble.
 
@@ -190,7 +200,10 @@ class Shield(Destructible):
     # Damage
     # ------------------------------------------------------------------
     def take_hit(
-        self, damage: float, normal_world_vector: np.ndarray, hit_world_point=None
+        self,
+        damage: float,
+        normal_world_vector: Vec3 | np.ndarray,
+        hit_world_point: Point3 | None = None,
     ):
         """
         Take damage from a laser hit against the shield and flash the impact.

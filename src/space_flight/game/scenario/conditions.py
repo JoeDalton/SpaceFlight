@@ -169,7 +169,7 @@ def not_(cond: Condition) -> Condition:
 class _After:
     """True once seconds have passed since construction."""
 
-    def __init__(self, clock: Callable[[], float], seconds: float) -> None:
+    def __init__(self, clock: Callable[[], float], seconds: float):
         self.clock = clock
         self.deadline = clock() + seconds
 
@@ -185,9 +185,7 @@ class _Delay:
     flickers back to false.
     """
 
-    def __init__(
-        self, clock: Callable[[], float], inner: Condition, seconds: float
-    ) -> None:
+    def __init__(self, clock: Callable[[], float], inner: Condition, seconds: float):
         self.clock = clock
         self.inner = inner
         self.seconds = seconds
@@ -209,9 +207,7 @@ class _Sustained:
     The mirror image of :class:`_Delay`: resets the moment inner goes false.
     """
 
-    def __init__(
-        self, clock: Callable[[], float], inner: Condition, seconds: float
-    ) -> None:
+    def __init__(self, clock: Callable[[], float], inner: Condition, seconds: float):
         self.clock = clock
         self.inner = inner
         self.seconds = seconds

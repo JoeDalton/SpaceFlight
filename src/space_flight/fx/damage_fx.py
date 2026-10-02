@@ -81,7 +81,7 @@ class DamageFX:
         owner: Any,
         smoke_health_frac: float = DEFAULT_SMOKE_HEALTH_FRAC,
         fire_health_frac: float = DEFAULT_FIRE_HEALTH_FRAC,
-    ) -> None:
+    ):
         self.game = game
         self.owner = owner
         self.smoke_health_frac = smoke_health_frac
@@ -110,7 +110,7 @@ class DamageFX:
             return _SMOKING
         return _INTACT
 
-    def update(self) -> None:
+    def update(self):
         """
         Emit this frame's smoke/fire puffs for the owner's current severity.
 
@@ -150,7 +150,7 @@ class DamageFX:
                 count=spec.fire_count,
             )
 
-    def clean(self) -> None:
+    def clean(self):
         """Drop references (the effect owns no scene nodes)."""
         self.game = None
         self.owner = None

@@ -92,7 +92,7 @@ class ThinkScheduler:
         self.load[phase::n_slots] += 1
         return ThinkSlot(scheduler=self, phase=phase, n_slots=n_slots)
 
-    def unregister(self, slot: ThinkSlot) -> None:
+    def unregister(self, slot: ThinkSlot):
         """
         Free a bot's slot (the bot died or was cleaned up).
 

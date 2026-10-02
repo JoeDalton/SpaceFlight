@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import gc
 import logging
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -11,6 +13,9 @@ from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 from space_flight.game.collisions import attach_collision_sphere
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -23,7 +28,7 @@ class CapitalShip(Ship):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),

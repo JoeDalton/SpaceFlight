@@ -24,6 +24,11 @@ below it stays alive (its game tasks are created during the build and only
 start simulating once we trigger the reveal).
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import (
     CardMaker,
@@ -37,6 +42,12 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.base_state import BaseState
+
+if TYPE_CHECKING:
+    from direct.task.Task import Task
+    from panda3d.core import GraphicsWindow, NodePath
+
+    from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 _VERT = DATAFILES_PATH / "shaders/hyperspace.vert"
 _FRAGS = {
@@ -67,7 +78,7 @@ CENTER_OFFSET = 0.1
 _TASK_NAME = "hyperspace_update"
 
 
-def _smoothstep(x):
+def _smoothstep(x: float) -> float:
     """Ease 0..1 with a Hermite curve for a softer-feeling fade."""
     x = min(max(x, 0.0), 1.0)
     return x * x * (3.0 - 2.0 * x)
@@ -81,12 +92,12 @@ class HyperspaceLoadingState(BaseState):
 
     def __init__(
         self,
-        app,
-        build_step=None,
-        on_build_complete=None,
-        on_reveal=None,
-        wait_for_key=False,
-        await_prompt="",
+        app: SpaceFlightSimulator,
+        build_step: Callable[[], bool] | None = None,
+        on_build_complete: Callable[[], None] | None = None,
+        on_reveal: Callable[[], None] | None = None,
+        wait_for_key: bool = False,
+        await_prompt: str = "",
     ):
         """
         Create the overlay and store the callbacks the level drives it with.
@@ -142,13 +153,13 @@ class HyperspaceLoadingState(BaseState):
 
         self._transitioning = False
         self._fade_t = 0.0
-        self._next_state = None
+        self._next_state: str | None = None
         self._build_done = self._build_step is None
         self._popped = False
         # Wait-for-jump state (only used when wait_for_key is True).
         self._awaiting_jump = False
         self._jump_requested = False
-        self._prompt = None
+        self._prompt: OnscreenText | None = None
         # Final reveal (fade overlay out to show the game scene).
         self._revealing = False
         self._reveal_t = 0.0
@@ -175,7 +186,7 @@ class HyperspaceLoadingState(BaseState):
 
     # -- internals -----------------------------------------------------------
 
-    def _make_quad(self, sort):
+    def _make_quad(self, sort: int) -> NodePath:
         cm = CardMaker("hyperspace_quad")
         cm.setFrameFullscreenQuad()
         quad = self.app.render2d.attachNewNode(cm.generate())
@@ -185,14 +196,14 @@ class HyperspaceLoadingState(BaseState):
         quad.setBin("fixed", sort)
         return quad
 
-    def _show_shader(self, idx, name, alpha):
+    def _show_shader(self, idx: int, name: str, alpha: float):
         """Assign a phase shader to a quad, reset its clock, reveal it."""
         self._quads[idx].setShader(self._shaders[name])
         self._quad_time[idx] = 0.0
         self._quads[idx].setShaderInput("iAlpha", alpha)
         self._quads[idx].show()
 
-    def _start_transition(self, next_state):
+    def _start_transition(self, next_state: str):
         self._transitioning = True
         self._fade_t = 0.0
         self._next_state = next_state
@@ -254,7 +265,7 @@ class HyperspaceLoadingState(BaseState):
             self._prompt.destroy()
             self._prompt = None
 
-    def _update(self, task):
+    def _update(self, task: Task) -> int:
         dt = self._clock.getDt()
 
         # Final reveal: the animation is frozen on its last (black) frame; fade
@@ -324,7 +335,7 @@ class HyperspaceLoadingState(BaseState):
         # FlightState below.
         self.app.state_manager.pop()
 
-    def _on_window(self, win):
+    def _on_window(self, win: GraphicsWindow):
         # Accepting "window-event" on the app replaces ShowBase's own handler,
         # so call it explicitly to preserve default behaviour — in particular,
         # closing the window must still quit the app. We only piggy-back to keep

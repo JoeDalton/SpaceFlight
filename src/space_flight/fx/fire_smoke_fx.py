@@ -164,7 +164,7 @@ class _FireSmokeBuffer(ParticleBuffer):
         bin_order: int,
         additive: bool,
         task_name: str,
-    ) -> None:
+    ):
         super().__init__(
             game=game,
             shader=_explosion_shader(),
@@ -186,7 +186,7 @@ class _FireSmokeBuffer(ParticleBuffer):
         tile_index: int,
         spin_rate: float,
         delay: float = 0.0,
-    ) -> None:
+    ):
         """
         Allocate a free slot and write one explosion particle.
 
@@ -280,7 +280,7 @@ def _emit_layer(
     scale: float,
     speed_scale: float,
     jet_angle_scale: float,
-) -> None:
+):
     """
     Emit *count* particles of one layer into *buffer*.
 
@@ -349,7 +349,7 @@ class FireSmokePool:
     :param game: The game whose root node is the parent scene
     """
 
-    def __init__(self, game: FlightState) -> None:
+    def __init__(self, game: FlightState):
         self.game = game
         fire_tex, self.fire_rects = load_atlas(
             game=self.game, texture_path=_ATLAS_FIRE, json_path=_JSON_FIRE
@@ -393,7 +393,7 @@ class FireSmokePool:
         smoke_count: int = SMOKE_COUNT,
         speed_scale: float = 1.0,
         jet_angle_scale: float = 1.0,
-    ) -> None:
+    ):
         """
         Emit one one-shot explosion burst (both fire and smoke layers).
 
@@ -438,7 +438,7 @@ class FireSmokePool:
             jet_angle_scale,
         )
 
-    def hit_burst(self, position: Point3, normal: Vec3, base_velocity: Vec3) -> None:
+    def hit_burst(self, position: Point3, normal: Vec3, base_velocity: Vec3):
         """
         Emit a small, cheap secondary explosion for a laser hit.
 
@@ -462,7 +462,7 @@ class FireSmokePool:
 
     def trail_smoke(
         self, position: Vec3, base_velocity: Vec3, scale: float, count: int
-    ) -> None:
+    ):
         """
         Emit one puff of the continuous damage/death *smoke* trail.
 
@@ -488,9 +488,7 @@ class FireSmokePool:
             1.0,
         )
 
-    def trail_fire(
-        self, position: Vec3, base_velocity: Vec3, scale: float, count: int
-    ) -> None:
+    def trail_fire(self, position: Vec3, base_velocity: Vec3, scale: float, count: int):
         """
         Emit one puff of the continuous damage/death *fire* trail.
 
@@ -516,7 +514,9 @@ class FireSmokePool:
         )
 
     @staticmethod
-    def _prepare(position, normal):
+    def _prepare(
+        position: Point3 | Vec3 | np.ndarray, normal: Vec3 | np.ndarray | None
+    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray, np.ndarray]]:
         """
         Convert a position/normal (Panda vectors or arrays) to numpy and build
         the emission basis.
@@ -530,7 +530,7 @@ class FireSmokePool:
             normal = np.array([normal[0], normal[1], normal[2]], dtype=float)
         return position, build_orthogonal_basis(normal)
 
-    def clean(self) -> None:
+    def clean(self):
         """
         Destroy both particle buffers.
         """

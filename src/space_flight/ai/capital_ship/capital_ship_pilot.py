@@ -1,9 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import HALF_PI, Personality
 from space_flight.ai.generic.generic_ship_pilot import GenericShipPilot
 from space_flight.utils import magnitude
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class CapitalShipPilot(GenericShipPilot):
@@ -12,15 +19,18 @@ class CapitalShipPilot(GenericShipPilot):
     """
 
     def __init__(
-        self, game, pawn: Pawn, personality: dict = Personality.CAPITAL_SHIP_DEFAULT
+        self,
+        game: FlightState,
+        pawn: Pawn,
+        personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
     def compute_angular_error(
         self,
         target_direction: np.ndarray = np.zeros(3),
-        up_reference: np.ndarray = None,
-    ):
+        up_reference: np.ndarray | None = None,
+    ) -> tuple[float, float, float, float]:
         """
         Computes the angular error of the ship. Adapted to capital ships
 

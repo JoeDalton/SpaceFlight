@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import gc
 import logging
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -11,6 +13,9 @@ from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.weapons.bomb_launcher import BombLauncher
 from space_flight.weapons.laser_cannon import LaserCannon
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -23,7 +28,7 @@ class Fighter(Ship):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         parent: Any,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),

@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
@@ -13,6 +15,9 @@ from space_flight.ai.generic.generic_ship_navigator import (
 from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
 from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 LOGGER = logging.getLogger()
 
 
@@ -24,7 +29,7 @@ class FighterNavigator(GenericShipNavigator):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.FIGHTER_DEFAULT,
         debug: bool = False,
@@ -37,7 +42,7 @@ class FighterNavigator(GenericShipNavigator):
         self._armed_trigger = None
 
     def navigate_intent(
-        self, intent: int, target_dict: dict
+        self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
@@ -379,7 +384,7 @@ class FighterNavigator(GenericShipNavigator):
 
     # %% ==== WEAPON TRIGGERS ====
 
-    def update_triggers(self, intent: int, target_dict: dict) -> None:
+    def update_triggers(self, intent: Intent, target_dict: dict):
         """
         Keep taking the weapon decision armed by the last navigate() on the
         frames where navigate() does not run (the bot only thinks a few times a
@@ -398,7 +403,7 @@ class FighterNavigator(GenericShipNavigator):
         self._pull_trigger(target_dict)
 
     def _arm_trigger(
-        self, target_dict: dict, weapon: str, min_cos_angle: float = None
+        self, target_dict: dict, weapon: str, min_cos_angle: float | None = None
     ) -> bool:
         """
         Take a weapon decision now, and arm it for update_triggers to keep
@@ -955,7 +960,7 @@ class FighterNavigator(GenericShipNavigator):
         """Extend away to rebuild distance before coming around for the next run."""
         return -direction, bomb["reposition_speed_factor"] * self.pawn.max_speed_mps
 
-    def compute_engage_weights(self, distance_m: float):
+    def compute_engage_weights(self, distance_m: float) -> tuple[float, float, float]:
         """
         Weights of the pursuit strategies as overlapping smooth steps of the
         distance to target: CAP far, lead mid-range, lag close.

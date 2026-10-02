@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -6,6 +9,11 @@ from space_flight import DEBUG_DELETION
 from space_flight.utils import magnitude, rotate_single_vector
 from space_flight.utils.state_machine import StateMachine
 from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship.turret import Turret
+    from space_flight.actors.fighter import Fighter
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -23,8 +31,8 @@ class AutoAim:
 
     def __init__(
         self,
-        game,
-        parent,
+        game: FlightState,
+        parent: Fighter | Turret,
         target_lock_delay_s: float = 1.0,
         acquisition_cone_angle_deg: float = 30.0,
         max_assist_angle_deg: float = 5.0,
@@ -76,7 +84,7 @@ class AutoAim:
         self.inv_max_assist_tan_angle = 1 / np.tan(np.deg2rad(max_assist_angle_deg))
         self.max_assist_distance_m = max_assist_distance_m
 
-    def compute_shot_speed(self, start_position: np.ndarray):
+    def compute_shot_speed(self, start_position: np.ndarray) -> np.ndarray:
         """
         Computes the speed vector at which the next laser shot will be emitted
 

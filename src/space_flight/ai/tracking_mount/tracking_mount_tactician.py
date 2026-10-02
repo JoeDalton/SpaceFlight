@@ -1,6 +1,13 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 
 class TrackingMountTactician(GenericTactician):
@@ -13,14 +20,14 @@ class TrackingMountTactician(GenericTactician):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.TURRET_DEFAULT,
         debug: bool = False,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
 
-    def update_intent(self) -> tuple[int, dict]:
+    def update_intent(self) -> tuple[Intent, dict]:
         """
         Evaluates the tactical situation around the bot.
         For each foe, score its value as a prey and choose the most interesting one

@@ -21,7 +21,7 @@ SKYBOX_DIR = Path(__file__).resolve().parent
 
 
 class SkySphere(DirectObject):
-    def __init__(self, base):
+    def __init__(self, base: ShowBase):
         self.sphere = base.loader.loadModel(
             Filename.fromOsSpecific(str(SKYBOX_DIR / "InvertedSphere.egg"))
         )

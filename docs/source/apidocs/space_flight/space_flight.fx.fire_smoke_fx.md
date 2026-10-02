@@ -344,7 +344,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._FireSmokeBuffer.__init__
 ```
 
-````{py:method} spawn_particle(pos: numpy.ndarray, vel: numpy.ndarray, size: float, lifetime: float, tile_index: int, spin_rate: float, delay: float = 0.0) -> None
+````{py:method} spawn_particle(pos: numpy.ndarray, vel: numpy.ndarray, size: float, lifetime: float, tile_index: int, spin_rate: float, delay: float = 0.0) 
 :canonical: space_flight.fx.fire_smoke_fx._FireSmokeBuffer.spawn_particle
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._FireSmokeBuffer.spawn_particle
@@ -404,7 +404,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 
 ````
 
-````{py:function} _emit_layer(buffer: space_flight.fx.fire_smoke_fx._FireSmokeBuffer, layer: space_flight.fx.fire_smoke_fx._Layer, count: int, position: numpy.ndarray, base_velocity: numpy.ndarray, basis: tuple, scale: float, speed_scale: float, jet_angle_scale: float) -> None
+````{py:function} _emit_layer(buffer: space_flight.fx.fire_smoke_fx._FireSmokeBuffer, layer: space_flight.fx.fire_smoke_fx._Layer, count: int, position: numpy.ndarray, base_velocity: numpy.ndarray, basis: tuple, scale: float, speed_scale: float, jet_angle_scale: float) 
 :canonical: space_flight.fx.fire_smoke_fx._emit_layer
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._emit_layer
@@ -423,7 +423,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.__init__
 ```
 
-````{py:method} burst(position: panda3d.core.Point3, scale: float, base_velocity: panda3d.core.Vec3, normal: panda3d.core.Vec3 | None = None, *, fire_count: int = FIRE_COUNT, smoke_count: int = SMOKE_COUNT, speed_scale: float = 1.0, jet_angle_scale: float = 1.0) -> None
+````{py:method} burst(position: panda3d.core.Point3, scale: float, base_velocity: panda3d.core.Vec3, normal: panda3d.core.Vec3 | None = None, *, fire_count: int = FIRE_COUNT, smoke_count: int = SMOKE_COUNT, speed_scale: float = 1.0, jet_angle_scale: float = 1.0) 
 :canonical: space_flight.fx.fire_smoke_fx.FireSmokePool.burst
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.burst
@@ -431,7 +431,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 
 ````
 
-````{py:method} hit_burst(position: panda3d.core.Point3, normal: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3) -> None
+````{py:method} hit_burst(position: panda3d.core.Point3, normal: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3) 
 :canonical: space_flight.fx.fire_smoke_fx.FireSmokePool.hit_burst
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.hit_burst
@@ -439,7 +439,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 
 ````
 
-````{py:method} trail_smoke(position: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, scale: float, count: int) -> None
+````{py:method} trail_smoke(position: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, scale: float, count: int) 
 :canonical: space_flight.fx.fire_smoke_fx.FireSmokePool.trail_smoke
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.trail_smoke
@@ -447,7 +447,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 
 ````
 
-````{py:method} trail_fire(position: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, scale: float, count: int) -> None
+````{py:method} trail_fire(position: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, scale: float, count: int) 
 :canonical: space_flight.fx.fire_smoke_fx.FireSmokePool.trail_fire
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.trail_fire
@@ -464,7 +464,7 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 
 ````
 
-````{py:method} clean() -> None
+````{py:method} clean() 
 :canonical: space_flight.fx.fire_smoke_fx.FireSmokePool.clean
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.clean

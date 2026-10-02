@@ -390,7 +390,7 @@
 
 ````
 
-````{py:method} update() -> None
+````{py:method} update() 
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.update
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.update
@@ -398,7 +398,7 @@
 
 ````
 
-````{py:method} _emit_sparks(tier: int) -> None
+````{py:method} _emit_sparks(tier: int) 
 :canonical: space_flight.fx.cockpit_fx.CockpitFX._emit_sparks
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX._emit_sparks
@@ -406,7 +406,7 @@
 
 ````
 
-````{py:method} _advance_stutter(now: float, dt: float, tier: int) -> None
+````{py:method} _advance_stutter(now: float, dt: float, tier: int) 
 :canonical: space_flight.fx.cockpit_fx.CockpitFX._advance_stutter
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX._advance_stutter
@@ -430,7 +430,7 @@
 
 ````
 
-````{py:method} flash(color, screen_dir) -> None
+````{py:method} flash(color, screen_dir) 
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.flash
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.flash
@@ -438,7 +438,7 @@
 
 ````
 
-````{py:method} clean() -> None
+````{py:method} clean() 
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.clean
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.clean

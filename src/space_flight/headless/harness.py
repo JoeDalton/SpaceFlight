@@ -36,7 +36,11 @@ DEFAULT_TIME_STEP = 1.0 / 60.0
 class HeadlessHarness:
     """Owns one windowless :class:`SpaceFlightSimulator` reused across runs."""
 
-    def __init__(self, time_step: float = DEFAULT_TIME_STEP, app=None) -> None:
+    def __init__(
+        self,
+        time_step: float = DEFAULT_TIME_STEP,
+        app: SpaceFlightSimulator | None = None,
+    ):
         """
         :param time_step: fixed dt (seconds) applied to Panda3D's clock
             for every simulation step, independent of wall-clock time, so
@@ -88,7 +92,7 @@ class HeadlessHarness:
         finally:
             self.app.state_manager.pop()
 
-    def destroy(self) -> None:
+    def destroy(self):
         """
         Tear down the underlying app at the end of the optimization loop.
 

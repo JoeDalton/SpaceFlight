@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 import logging
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 import numpy as np
 
 from space_flight import EPSILON_TOLERANCE, RECORD_GAME
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent
 from space_flight.ai.collision_sensor import CollisionSensor
 from space_flight.ai.generic.generic_navigator import GenericNavigator
 from space_flight.utils import magnitude, smooth_step_down
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -25,7 +30,7 @@ class GenericShipNavigator(GenericNavigator):
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict,
         debug: bool = False,
@@ -48,7 +53,7 @@ class GenericShipNavigator(GenericNavigator):
         self.avoidance_weight_factor = 1.0
         self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
 
-    def navigate(self, intent: int, target_dict: dict) -> tuple[np.ndarray, float]:
+    def navigate(self, intent: Intent, target_dict: dict) -> tuple[np.ndarray, float]:
         """
         Merges the tactician's intent and collision avoidance into explicit directions
 
@@ -110,7 +115,7 @@ class GenericShipNavigator(GenericNavigator):
 
         return direction, speed
 
-    def update_triggers(self, intent: int, target_dict: dict) -> None:
+    def update_triggers(self, intent: Intent, target_dict: dict):
         """
         Weapon decisions (firing, bomb release) on the frames where navigate()
         does not run. None by default.
@@ -136,7 +141,7 @@ class GenericShipNavigator(GenericNavigator):
         return avoidance_direction, avoidance_speed, avoidance_weight
 
     def navigate_intent(
-        self, intent: int, target_dict: dict
+        self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float]:
         """
         Turns the tactician's intent into explicit directions
@@ -147,7 +152,7 @@ class GenericShipNavigator(GenericNavigator):
 
     # %% ==== REGROUP ====
 
-    def regroup(self, target_dict={}) -> Tuple[np.ndarray, float]:
+    def regroup(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Regroups with allies. If none are left, go to the center of the world
 
@@ -168,7 +173,7 @@ class GenericShipNavigator(GenericNavigator):
 
     # %% ==== DISENGAGE ====
 
-    def disengage(self, target_dict={}) -> Tuple[np.ndarray, float]:
+    def disengage(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """
         Flees from the danger zone, defined as the center of gravity of all foes
 

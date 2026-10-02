@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 import numpy as np
+from numpy.typing import ArrayLike
 from panda3d.core import SamplerState, Texture
 
 # Volume resolution, and the random lattice it is upsampled from. NOISE_SIZE must be
@@ -148,7 +149,7 @@ def delta_eddington(asymmetry: float, applicability: float = 1.0) -> float:
     return asymmetry + (scaled - asymmetry) * applicability
 
 
-def henyey_greenstein(cos_angle, anisotropy: float):
+def henyey_greenstein(cos_angle: ArrayLike, anisotropy: float) -> np.ndarray | float:
     """The Henyey-Greenstein phase function, matching the shader's ``hgPhase``.
 
     :param cos_angle: cosine between the light and the view ray (1 = into the light)
@@ -164,7 +165,7 @@ def clamped_anisotropy(optics: CloudOptics) -> float:
     return min(max(optics.forward_anisotropy, 0.0), FORWARD_ANISOTROPY_MAX)
 
 
-def _basis(g: float, cos_angle) -> np.ndarray:
+def _basis(g: float, cos_angle: ArrayLike) -> np.ndarray:
     """:returns: (..., 3) forward-lobe, backward-lobe and isotropic phase terms."""
     cos_angle = np.asarray(cos_angle, dtype=np.float64)
     return np.stack(
@@ -177,7 +178,7 @@ def _basis(g: float, cos_angle) -> np.ndarray:
     )
 
 
-def phase_weights(optics: CloudOptics):
+def phase_weights(optics: CloudOptics) -> tuple[float, ...]:
     """Solve the three lobe weights that hit this type's gains exactly.
 
     Two lobes alone leave one degree of freedom for two observables, so the forward
@@ -205,7 +206,7 @@ def phase_weights(optics: CloudOptics):
     return tuple(float(w) for w in weights)
 
 
-def phase(optics: CloudOptics, cos_angle):
+def phase(optics: CloudOptics, cos_angle: ArrayLike) -> np.ndarray | float:
     """The shader's phase function on the CPU; 1 when side-lit (90°).
 
     :param cos_angle: cosine between the sun and the view ray (1 = into the sun)
@@ -236,7 +237,7 @@ def field_offset(seed: int) -> tuple:
 # ── The noise volume ───────────────────────────────────────────────────────────
 
 
-def _axis_weights(size: int, lattice: int):
+def _axis_weights(size: int, lattice: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """:returns: (i0, i1, t) wrapping lattice indices and smoothstep weights."""
     coord = np.arange(size, dtype=np.float64) * (lattice / size)
     i0 = np.floor(coord).astype(np.int64) % lattice
@@ -492,7 +493,7 @@ def density(volume: np.ndarray, spec: DensityField, points: np.ndarray) -> np.nd
 # ── The GPU copy of a field's parameters ───────────────────────────────────────
 
 
-def shadow_calibration(spec: DensityField, octave_mean: float):
+def shadow_calibration(spec: DensityField, octave_mean: float) -> tuple[float, float]:
     """Affine correction making the sun march's 2-octave fbm match the full field.
 
     The two lowest octaves correlate with the full fbm at 0.97 but have the wrong
@@ -518,9 +519,9 @@ def pack_layer_params(
     octave_mean: float = 0.5,
     optics: CloudOptics = CloudOptics(),
     aspect: float = 1.0,
-    fade_in: tuple = None,
-    fade_out: tuple = None,
-):
+    fade_in: tuple | None = None,
+    fade_out: tuple | None = None,
+) -> np.ndarray:
     """Flatten one type into its LAYER_VEC4S rows of the layerParams array.
 
     The row layout IS the contract with cloud.frag's getField; change both together.

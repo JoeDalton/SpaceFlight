@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Personality
+from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
 from space_flight.utils import cross3, magnitude
 from space_flight.utils.state_machine import StateMachine
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
 
@@ -18,7 +24,7 @@ class GenericNavigator:
 
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.FIGHTER_DEFAULT,
         debug: bool = False,
@@ -54,7 +60,9 @@ class GenericNavigator:
         """How long the current behaviour has been running."""
         return self.behaviour_sm.time_in_state_s
 
-    def navigate(self, intent: int, target_dict: dict):
+    def navigate(
+        self, intent: Intent, target_dict: dict
+    ) -> tuple[np.ndarray, float] | np.ndarray:
         """
         Turns the tactician's intent and collision avoidance into explicit directions
 

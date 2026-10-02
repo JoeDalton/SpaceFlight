@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
 from simple_pid import PID
@@ -8,13 +11,16 @@ from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS
 from space_flight.ai.generic.generic_pilot import GenericPilot
 from space_flight.utils import magnitude, safe_angle_rad
 
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
+
 
 class GenericShipPilot(GenericPilot):
     """
     A generic class for ship autopilots
     """
 
-    def __init__(self, game, pawn: Pawn, personality: dict):
+    def __init__(self, game: FlightState, pawn: Pawn, personality: dict):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
         self.pid_yaw = PID(
@@ -106,8 +112,8 @@ class GenericShipPilot(GenericPilot):
         self,
         target_direction: np.ndarray = np.zeros(3),
         desired_speed_mps: float = 0.0,
-        up_reference: np.ndarray = None,
-    ):
+        up_reference: np.ndarray | None = None,
+    ) -> tuple[float, float, float, float]:
         """
         Compute the yaw, pitch and roll rates that turn the ship toward
         target_direction, and the throttle that reaches desired_speed_mps.
@@ -158,8 +164,8 @@ class GenericShipPilot(GenericPilot):
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
 
     def compute_angular_error(
-        self, target_direction: np.ndarray, up_reference: np.ndarray = None
-    ) -> tuple[float]:
+        self, target_direction: np.ndarray, up_reference: np.ndarray | None = None
+    ) -> tuple[float, float, float, float]:
         """
         Computes the angular error of the ship. Depends on the ship type.
 

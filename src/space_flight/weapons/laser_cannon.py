@@ -1,4 +1,7 @@
-from typing import Tuple
+from __future__ import annotations
+
+import uuid
+from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 import quaternion
@@ -9,6 +12,7 @@ from panda3d.core import (
     CullFaceAttrib,
     LPoint3,
     NodePath,
+    Point3,
     PointLight,
     Quat,
     Shader,
@@ -19,6 +23,11 @@ from space_flight import DATAFILES_PATH
 from space_flight.game.collisions import attach_collision_segment
 from space_flight.utils import build_axis_billboard_quat, magnitude
 from space_flight.weapons import Munition, Weapon
+
+if TYPE_CHECKING:
+    from space_flight.actors.capital_ship.turret import Turret
+    from space_flight.actors.fighter import Fighter
+    from space_flight.game.flight_state import FlightState
 
 LASER_SPEED_MPS = 2000.0
 SQT2_S = np.sqrt(2.0) / 2.0
@@ -70,7 +79,12 @@ class LaserCannon(Weapon):
     :class:`LaserShot` and plays the fire sound.
     """
 
-    def __init__(self, game, parent, parent_node=None):
+    def __init__(
+        self,
+        game: FlightState,
+        parent: Fighter | Turret,
+        parent_node: NodePath | None = None,
+    ):
         fire_delay = 1.0 / parent.conf["laser_fire_rate"]
         super().__init__(game, parent, parent_node, fire_delay=fire_delay)
 
@@ -184,15 +198,15 @@ class LaserShot(Munition):
 
     def __init__(
         self,
-        game,
-        origin_ship_id: str,
+        game: FlightState,
+        origin_ship_id: uuid.UUID,
         color: Vec3,
         power: float,
         life_time_s: float,
         light_color: Tuple,
         speed: np.ndarray,
-        start_position,
-        origin_ship=None,
+        start_position: Point3,
+        origin_ship: Fighter | Turret | None = None,
     ):
         # Store the visual parameters before the base __init__ calls _build_visual.
         self.color = color
@@ -207,7 +221,7 @@ class LaserShot(Munition):
             origin_ship=origin_ship,
         )
 
-    def _build_visual(self, start_position) -> NodePath:
+    def _build_visual(self, start_position: Point3) -> NodePath:
         # Camera-facing card; the shader expands it and draws the capsule.
         cm = CardMaker("laser")
         cm.set_frame(-1.0, 1.0, -1.0, 1.0)
@@ -296,7 +310,7 @@ class LaserShot(Munition):
             relative_end_position=LPoint3(*relative_end_position),
         )
 
-    def _clean_extra(self) -> None:
+    def _clean_extra(self):
         # Clear the laser's own light (if any) before the shared teardown removes
         # the node.
         if self.plnp is not None:

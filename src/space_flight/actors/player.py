@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import uuid
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
@@ -13,6 +15,13 @@ from space_flight.fx.cockpit_fx import CockpitFX, screen_direction_from_incoming
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
 from space_flight.utils.state_machine import DyingPhase
+
+if TYPE_CHECKING:
+    from panda3d.core import Vec3
+
+    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.pawn import Pawn
+    from space_flight.game.flight_state import FlightState
 
 # Fallback flash tint for a hit with no colour of its own (e.g. a bomb).
 _DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
@@ -47,7 +56,7 @@ TARGET_FILTERS = [
 class Player:
     def __init__(
         self,
-        game,
+        game: FlightState,
         ship_type: str,
         ini_position: np.ndarray = np.zeros(3),
         ini_orientation: np.ndarray = np.array([1.0, 0.0, 0.0, 0.0]),
@@ -323,7 +332,7 @@ class Player:
         else:
             raise NotImplementedError
 
-    def on_laser_hit(self, incoming_world_dir, color):
+    def on_laser_hit(self, incoming_world_dir: np.ndarray, color: Vec3 | None):
         """
         React to a laser hitting the player with a directional, laser-coloured
         cockpit flash (called from the collision handler). No-op headless or
@@ -430,7 +439,7 @@ class Player:
             self.pawn.target_id
         )
 
-    def remove_target(self, target_to_remove) -> None:
+    def remove_target(self, target_to_remove: Pawn | SubSystem):
         """
         Clears the current target if it is target_to_remove.
 
@@ -444,7 +453,7 @@ class Player:
             self.pawn.target_id = None
             self.pawn.target_idx = None
 
-    def update_target_mask(self, player_actor_index: int) -> None:
+    def update_target_mask(self, player_actor_index: int):
         """
         Updates ``self.target_mask`` (one entry per actor in
         ``interactions.live_actors``) depending on the player's filter choice

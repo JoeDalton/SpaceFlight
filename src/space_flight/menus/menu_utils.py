@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 from collections.abc import Callable
 
@@ -14,7 +16,7 @@ from direct.gui.DirectGui import (
 )
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject
-from panda3d.core import TextNode
+from panda3d.core import NodePath, TextNode
 
 from space_flight import DATAFILES_PATH
 
@@ -29,7 +31,7 @@ class ProgressBar:
     def __init__(
         self,
         app: ShowBase,
-        parent,
+        parent: NodePath,
         blurbs: list[str] = [""],
         blurb_update_delay_s: float = 2.0,
         bar_height: float = 0.01,
@@ -205,7 +207,7 @@ class ScrollableList:
         self.v_scrollbar: DirectScrollBar | None = None
         self.content = None
 
-    def rebuild(self, n_rows: int):
+    def rebuild(self, n_rows: int) -> NodePath:
         """
         Destroy any existing frame/scrollbar and build new ones sized for
         *n_rows* rows.
@@ -280,7 +282,7 @@ class ScrollableList:
         """Return the content-space Z offset for row *index* (0-based)."""
         return -(index * self.row_height)
 
-    def add_header(self, text: str, y: float):
+    def add_header(self, text: str, y: float) -> DirectLabel:
         """Add a blue section-header label spanning the row's width at *y*."""
         left = self.app.a2dLeft + 0.14
         scale = 0.055
@@ -298,7 +300,7 @@ class ScrollableList:
         hdr.setTransparency(True)
         return hdr
 
-    def add_row_label(self, text: str, y: float):
+    def add_row_label(self, text: str, y: float) -> DirectLabel:
         """Add a left-aligned row label (rendered as "*text*:") at *y*."""
         label = DirectLabel(
             parent=self.content,
@@ -314,7 +316,7 @@ class ScrollableList:
 
     def add_checkbox(
         self, y: float, value: bool, command: Callable, extraArgs: list = []
-    ):
+    ) -> CustomCheckButton:
         """Add a boolean checkbox at the row's right edge, at *y*."""
         return CustomCheckButton(
             app=self.app,
@@ -360,7 +362,7 @@ class CustomButton:
     def __init__(
         self,
         app: ShowBase,
-        pos: tuple[float],
+        pos: tuple[float, float, float],
         command: Callable,
         text: str,
         scale: float,
@@ -368,7 +370,7 @@ class CustomButton:
         layout: str = "left",
         width_scale: float = 1.0,
         extraArgs: list = [],
-        parent=None,
+        parent: NodePath | None = None,
     ):
         """
         Create and configure the underlying DirectButton.
@@ -492,11 +494,11 @@ class CustomEntry:
     def __init__(
         self,
         app: ShowBase,
-        pos: tuple[float],
+        pos: tuple[float, float, float],
         initial_text: str = "",
         width: float = 14,
         scale: float = 0.05,
-        parent=None,
+        parent: NodePath | None = None,
     ):
         """
         Create the underlying DirectEntry with game-standard styling.
@@ -531,7 +533,7 @@ class CustomEntry:
         """
         return self.entry.get()
 
-    def set(self, text: str) -> None:
+    def set(self, text: str):
         """
         Replace the entry field's contents with the given string.
 
@@ -539,7 +541,7 @@ class CustomEntry:
         """
         self.entry.set(text)
 
-    def destroy(self) -> None:
+    def destroy(self):
         """Remove the entry widget from the scene graph and free its resources."""
         self.entry.destroy()
 
@@ -556,12 +558,12 @@ class CustomSlider:
     def __init__(
         self,
         app: ShowBase,
-        pos: tuple[float],
+        pos: tuple[float, float, float],
         value: float,
         value_range: tuple[float, float],
         command: Callable,
         extraArgs: list = [],
-        parent=None,
+        parent: NodePath | None = None,
         scale: float = 0.4,
     ):
         """
@@ -603,11 +605,11 @@ class CustomSlider:
         """Return the slider's current value."""
         return self.slider["value"]
 
-    def set_value(self, value: float) -> None:
+    def set_value(self, value: float):
         """Set the slider's value (does not fire the command)."""
         self.slider["value"] = value
 
-    def destroy(self) -> None:
+    def destroy(self):
         """Remove the slider from the scene graph and free its resources."""
         self.slider.destroy()
 
@@ -620,11 +622,11 @@ class CustomCheckButton:
     def __init__(
         self,
         app: ShowBase,
-        pos: tuple[float],
+        pos: tuple[float, float, float],
         value: bool,
         command: Callable,
         extraArgs: list = [],
-        parent=None,
+        parent: NodePath | None = None,
         scale: float = 0.07,
     ):
         """
@@ -670,6 +672,6 @@ class CustomCheckButton:
         """Return the current checked state."""
         return bool(self.checkbox["indicatorValue"])
 
-    def destroy(self) -> None:
+    def destroy(self):
         """Remove the checkbox from the scene graph and free its resources."""
         self.checkbox.destroy()

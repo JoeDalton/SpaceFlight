@@ -58,7 +58,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.description_frame.setTransparency(True)
 
-        self.menu_selection = None
+        self.menu_selection: str | None = None
         self.create_level_list()
 
     def start_game(self):
@@ -104,7 +104,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.title.setTransparency(1)
 
-        self.level_buttons = []
+        self.level_buttons: list[CustomButton] = []
 
         # create the scrolled frame that will hold our list
         self.lstActionMap = DirectScrolledFrame(
@@ -127,7 +127,7 @@ class LevelSelectionMenuState(BaseState):
             verticalScroll_decButton_frameColor=(0, 0, 0, 0),
         )
 
-        self.actionLabels = {}
+        self.actionLabels: dict = {}
         for idx, level in enumerate(self.LEVELS):
             level_name = level["name"]
             item = self.makeListItem(level_name, idx)
@@ -142,7 +142,7 @@ class LevelSelectionMenuState(BaseState):
         )
         self.lstActionMap.setCanvasSize()
 
-    def makeListItem(self, level_name, index):
+    def makeListItem(self, level_name: str, index: int) -> DirectFrame:
         item = DirectFrame(
             text="",
             geom=None,

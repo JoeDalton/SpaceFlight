@@ -1,6 +1,13 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
+
+if TYPE_CHECKING:
+    from space_flight.game.flight_state import FlightState
 
 # TODO Add an intent to go back to the fight area if too far
 
@@ -11,7 +18,7 @@ from space_flight.ai.generic.generic_tactician import GenericTactician
 class CapitalShipTactician(GenericTactician):
     def __init__(
         self,
-        game,
+        game: FlightState,
         pawn: Pawn,
         personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
         debug: bool = False,
@@ -19,7 +26,7 @@ class CapitalShipTactician(GenericTactician):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
         self.scripted_prey_dict = {"active": False}
 
-    def update_intent(self) -> tuple[int, dict]:
+    def update_intent(self) -> tuple[Intent, dict]:
         """
         Picks the intent by priority: disengage if in poor fighting shape, engage
         the scripted prey (ORBIT), patrol, hold formation, else regroup.
