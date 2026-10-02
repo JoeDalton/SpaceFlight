@@ -45,7 +45,7 @@
 
 ````
 
-`````{py:class} Formation(scale_m: float | None = None, shape: int | None = None)
+`````{py:class} Formation(scale_m: float | None = None, shape: str | None = None)
 :canonical: space_flight.ai.formation.Formation
 
 ```{autodoc2-docstring} space_flight.ai.formation.Formation

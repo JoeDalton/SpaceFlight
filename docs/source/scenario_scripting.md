@@ -7,7 +7,8 @@ level's own module under
 [`game/scenario/`](../../src/space_flight/game/scenario/).
 
 > [`all_features_example.py`](examples/all_features_example.py) exercises
-> every feature on this page in one file, and is run end-to-end by
+> the features on this page in one file (all but scanning, `damaged`,
+> `follow`, `orientation=` and `m.schedule`), and is run end-to-end by
 > [`tests/test_all_features_example.py`](../../tests/test_all_features_example.py).
 > It is not a shipped level: copy its patterns, not its story.
 
@@ -25,7 +26,8 @@ level's own module under
   through a `WaveHandle` that tracks its members.
 
 Each frame, the mission first fires its due rules, then advances the body
-(and every spawning wave) by one step.
+and every other job (spawning waves, scans, `m.schedule`d generators) by one
+step.
 
 ## A level, end to end
 
@@ -91,14 +93,16 @@ The level is then registered in
 
 `FlightState` calls the upfront function on a black screen, builds the rest
 of the scene during the hyperspace animation, then creates the level's
-`Mission` (`game.mission`) and starts the body.
+`Mission` (`game.mission`) and starts the body (see
+[docs/game.md](game.md#levels)).
 
 ## Waves
 
 ### `WaveSpec`
 
-A frozen dataclass: an unknown field raises `TypeError`, and a missing
-`size` raises `ValueError`, as soon as the level module is imported.
+A frozen dataclass, checked as soon as the level module is imported: an
+unknown field raises `TypeError`; a missing `size` for a single model, or a
+`size` given for a mixed wave, raises `ValueError`.
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -127,7 +131,8 @@ wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
 ```
 
 - **One ship per frame**: a large wave never stalls the simulation on one
-  long frame. The first ship appears on the next update.
+  long frame. No ship exists yet when `spawn()` returns, so wait with
+  `m.wait_until(wave.alive)` before reading `wave.pawns()`.
 - `spawn_point=` overrides the spec's, e.g. when it depends on the player's
   position at that moment.
 - `orientation=` overrides the spec's `spawn_orientation` (a `(w, x, y, z)`
@@ -158,7 +163,7 @@ and after the wave exists:
 | `set_targets(who)` | every live member attacks every live pawn of `who` |
 | `set_team(team)` | reassigns every live member, cascading a capital ship's cached team to its sub-systems, shield and mounted turrets/tractor beams |
 | `set_waypoints(points, loop=True)` | gives every live member a new route |
-| `follow(who)` | every live member forms up on `who` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, since a bot with waypoints patrols rather than holds formation |
+| `follow(leader)` | every live member forms up on `leader` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, since a bot with waypoints patrols rather than holds formation |
 
 `alive`, `all_destroyed` and `any_destroyed` are plain methods. Call one to
 get a bool; pass it **uncalled** to use it as a condition:
@@ -170,7 +175,12 @@ get a bool; pass it **uncalled** to use it as a condition:
 yield from m.wait(10)                                  # 10 game-seconds
 yield from m.wait_until(wave.all_destroyed)            # until a condition holds
 ok = yield from m.wait_until(cond, timeout=30)         # True if met, False on timeout
+m.schedule(chatter())                                  # run another generator alongside
 ```
+
+`m.schedule(job)` steps any generator once per frame next to the body, e.g.
+radio chatter that must not hold back the main sequence (see
+[`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py)).
 
 ## Reactive rules
 
@@ -268,8 +278,8 @@ second"). Use `m.on` when it must hold wherever the body currently is.
 
 ### Build stateful conditions once
 
-`m.after`, `m.delay` and `m.sustained` keep a timer, so each must be built
-once, when the rule is declared. Pass them to `m.on`, `m.wait_until`,
+`m.after`, `m.delay` and `m.sustained` keep a timer (and `damaged` a
+baseline), so each must be built once, when the rule is declared. Pass them to `m.on`, `m.wait_until`,
 `all_of` or `any_of` directly, or name them first:
 
 ```python

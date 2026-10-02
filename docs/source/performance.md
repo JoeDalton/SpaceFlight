@@ -116,9 +116,8 @@ Each is worth a few percent at most.
 Optimizations so far, in order:
 
 1. **Small-vector math out of numpy's generic routines:**
-   - `rotate_single_vector`, `cross3`, `normalize` and `magnitude` use plain
-     floats;
-   - the scalar low-pass filter branch;
+   - `rotate_single_vector`, `cross3`, `normalize`, `magnitude` and the
+     low-pass filter's array branch use plain floats;
    - one rotation matrix per ship per frame in `compute_derivatives`;
    - scalar `np.clip` calls replaced by `min`/`max`.
 2. **`Interactions.update_interactions` vectorized** over all live pairs.

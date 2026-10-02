@@ -2,15 +2,10 @@
 
 Every controllable or destructible thing in the game — the player's fighter,
 enemy bots, capital ships and their turrets, laser shots — is built from a
-small set of composable base classes. This page is the guided tour of how
-they fit together; the per-class API (constructor arguments, methods) is
-generated from the docstrings in the [code reference](apidocs/index.rst).
-
-Most of the code lives in
-[`src/space_flight/actors/`](../../src/space_flight/actors/), with the
-capital-ship-specific subsystems (turrets, shields, tractor beams, ...) under
-[`actors/capital_ship/`](../../src/space_flight/actors/capital_ship/) — see
-[Capital-ship subsystems](subsystems.md) for that family in detail.
+small set of composable base classes. This page is the guided tour; the
+per-class API is in the [code reference](apidocs/index.rst). The
+capital-ship family (turrets, shields, tractor beams, ...) is detailed in
+[Capital-ship subsystems](subsystems.md).
 
 ## Mental model
 
@@ -23,9 +18,9 @@ capital-ship-specific subsystems (turrets, shields, tractor beams, ...) under
   every frame, decides how to move it — either from AI (tactician →
   navigator → pilot) or from player input.
 - A **Destructible** is anything with health that the central death handler
-  tracks and can kill. Bots (and capital-ship subsystems) are destructibles;
-  ships take damage but are cleaned up by their owning bot/player rather than
-  registering themselves.
+  tracks and can kill: bots, capital-ship subsystems and the shared shield.
+  Ships take damage but are not destructibles: each is cleaned up by its
+  owning bot/player as part of that owner's teardown.
 - Rendering is kept separate from game logic: a `Ship` (state, physics,
   health) is paired with a `ShipModel` (the 3D model, purely presentation),
   the same split used for shields (`Shield`/`ShieldModel`) and tracking
@@ -35,36 +30,34 @@ capital-ship-specific subsystems (turrets, shields, tractor beams, ...) under
 
 [`pawn.py`](../../src/space_flight/actors/pawn.py) is the minimal shared state
 of a controllable game element: an id, a team, a `parent` (its controller —
-a `Bot` or the `Player`), and the kinematic quantities every flying thing
-needs (`position`, `speed`, `forward`/`right`/`up`, plus target-lock state
-read by the auto-aim and AI). It carries no physics or rendering of its own;
-`Ship` builds on top of it.
+a `Bot` or the `Player`), the kinematic quantities every flying thing needs
+(`position`, `speed`, `forward`/`right`/`up`), target-lock state read by the
+auto-aim and AI, and the `mobility` / `shield_level` signals the AI reads to
+size up a target. It carries no physics or rendering of its own.
 
 ## `Ship` — flight physics and state
 
 [`ship.py`](../../src/space_flight/actors/ship.py) is a `Pawn` with a full
 flight model. Its 10-variable state (position, orientation quaternion,
 linear speed) is integrated by the game's central integrator; rotation rates
-are treated as directly-commanded inputs (from player input or AI), passed
-through a low-pass filter to emulate physical actuator delay. Two flight
-models are supported (`FLIGHT_MODEL`): `"space"` (thrust only) and
-`"airplane"` (thrust, lift from angle of attack/side-slip, and drag —
-viscous/wave plus lift-induced, the latter growing with the square of the
+are directly-commanded inputs (player or AI), low-pass filtered to emulate
+actuator delay. Two flight models are supported (`FLIGHT_MODEL`): `"space"`
+(thrust only) and `"airplane"` (thrust, lift from angle of attack/side-slip,
+and drag — viscous/wave plus lift-induced, the latter quadratic in the
 (clipped) lift force).
 
 Key responsibilities:
 - **Per-ship-type configuration.** Mass, thrust, turn rates, drag/lift
   coefficients, `lift_inefficiency` (= 1/(π·AR·e), from wing aspect ratio and
-  Oswald efficiency) and health all come from that ship type's
+  Oswald efficiency) and health come from that ship type's
   [`configuration.yaml`](../../src/space_flight/datafiles/models/ships/).
-- **External forces.** `impact_force_n` (from hits; each hit's force is
-  removed in one step after `DAMAGE_FORCE_APPLICATION_DURATION_S`, 0.1 s)
-  and `external_force_n` (e.g. a tractor beam's pull, re-applied every frame
-  it should act and zeroed otherwise by `compute_derivatives`) are
-  accumulated separately from thrust/drag/lift.
-- **Damage is deferred.** `apply_damage` and `ship_handle_health` are
-  `NotImplementedError` stubs — each concrete ship type defines how damage
-  interacts with its own health/shield.
+- **External forces**, accumulated separately from thrust/drag/lift:
+  `impact_force_n` (each hit's force is removed after
+  `DAMAGE_FORCE_APPLICATION_DURATION_S`, 0.1 s) and `external_force_n` (e.g.
+  a tractor beam's pull, added via `apply_external_force` every frame it
+  should act and zeroed by `compute_derivatives`).
+- **Damage is ship-type dependent.** `apply_damage` and `ship_handle_health`
+  are `NotImplementedError` stubs overridden by each concrete ship type.
 - Owns its engine sound (interior loop for the player's cockpit, 3D-attached
   exterior loop for everyone else) and its `ShipModel`.
 
@@ -84,28 +77,25 @@ Its collision sphere is sized from `hit_box_radius_m` in its config.
 
 ### `CapitalShip`
 
-Has **no built-in weapons or shield of its own** — instead it assembles
-itself from `sub_systems` declared in its config:
-- **Shield generators** it owns directly and feeds into a single shared
-  `Shield` (see [subsystems.md](subsystems.md) — no generators means no
-  shield).
+Has **no built-in weapons or shield of its own**; it assembles itself from
+the `sub_systems` declared in its config:
+- **Shield generators**, owned directly, feeding a single shared `Shield`
+  (no generators means no shield; see [subsystems.md](subsystems.md)).
 - **Targeting systems**, likewise owned directly.
-- **Turrets and tractor beams**, which are not owned directly but spawned as
-  their own `Bot`s (`_spawn_mounted_bots`) whose pawn is mounted on this
-  ship — they have their own tracking AI and die on their own once the ship
-  dies (`mounted_on.is_dead`), so `CapitalShip.clean()` only drops its
-  references to them rather than tearing them down itself.
+- **Turrets and tractor beams**, spawned as their own `Bot`s
+  (`_spawn_mounted_bots`) whose pawn is mounted on this ship. They die on
+  their own once the ship dies (`mounted_on.is_dead`), so
+  `CapitalShip.clean()` only drops its references to them.
 
-Damage goes straight to hull health (no self-shield); the shared shield, if
-any, absorbs hits separately via the collision system.
+Damage goes straight to hull health; the shared shield, if any, absorbs hits
+separately via the collision system.
 
 ## `ShipModel` — the presentation half
 
-[`ship_model.py`](../../src/space_flight/actors/ship_model.py) loads and
-positions the 3D model (cockpit or exterior) for a given `ship_type`, with
-per-type offset/orientation/scale tables. It knows nothing about physics or
-health — `Ship` drives its position/orientation each frame by moving the
-node it's parented to.
+[`ship_model.py`](../../src/space_flight/actors/ship_model.py) loads the 3D
+model (cockpit or exterior) for a given `ship_type`, with a per-type
+offset/orientation/scale, and parents it to the ship node. It knows nothing
+about physics or health: `Ship` moves that node each frame.
 
 ## Weapons and munitions
 
@@ -120,28 +110,26 @@ base classes the concrete weapons share:
   world velocity, a straight-line coast for its lifetime, registration in
   `game.game_objects`, and a timed self-clean. It exposes the interface the
   collision handlers read (`origin_ship`/`origin_ship_id`/`power`/`speed`/
-  `shot`). Subclasses fill in only two hooks — `_build_visual` and
-  `_attach_collider` — plus an optional `_clean_extra`.
+  `shot`). Subclasses fill in only `_build_visual` and `_attach_collider`,
+  plus an optional `_clean_extra`.
 
 **`LaserCannon` / `LaserShot`**
 ([`weapons/laser_cannon.py`](../../src/space_flight/weapons/laser_cannon.py))
-fires one of
-a ship's configured cannon positions in round-robin, rate-limited by
-`laser_fire_rate`. It defers to the parent's `AutoAim` for shot leading if
-present, otherwise fires straight down the parent's forward vector plus its
-own velocity. Each `LaserShot` renders as an analytic capsule impostor — a
-camera-facing quad whose shader draws a glowing 3D capsule (see
-[docs/shaders.md](shaders.md)) — with a collision segment (long enough to bridge
-one frame's travel at laser speed) and an optional self-cast point light behind
-a global toggle (`EMIT_LASER_LIGHT`).
+fires a ship's configured cannon positions in round-robin, rate-limited by
+`laser_fire_rate`. It uses the parent's `AutoAim` for shot leading if
+present, otherwise fires along the parent's forward vector plus its own
+velocity. Each `LaserShot` renders as an analytic capsule impostor (see
+[shaders.md](shaders.md)), with a collision segment long enough to bridge
+one frame's travel and an optional point light behind the global
+`EMIT_LASER_LIGHT` toggle.
 
 **`BombLauncher` / `Bomb`**
 ([`weapons/bomb_launcher.py`](../../src/space_flight/weapons/bomb_launcher.py))
 drops a bomb along the ship's belly (`-Z`) at `BOMB_SPEED_MPS` plus the ship's
-inherited velocity, rate-limited by a reload delay; `launch()` returns whether
-a bomb was actually released so the fighter only spends supply on a real drop.
-Each `Bomb` is a slow pink sphere with a small collision sphere, and reuses the
-laser collision-damage handlers through the shared munition interface.
+velocity, rate-limited by a reload delay; `launch()` returns whether a bomb
+was actually released so the fighter only spends supply on a real drop. Each
+`Bomb` is a slow pink sphere with a small collision sphere, handled by the
+same munition collision handlers as lasers.
 
 ## `Destructible` and `Destructibles` — central death handling
 
@@ -152,49 +140,43 @@ generic "has health, dies, gets cleaned up" contract, independent of the
 - **`Destructible`** registers itself with the game's single
   `Destructibles` tracker on construction. Subclasses implement
   `get_health`, `play_death` and `clean`.
-- Death is a **timed phase**, not instantaneous. Each object composes a
-  `DyingPhase` (see below) and exposes overridable hooks:
+- Death is a **timed phase**. Each object composes a `DyingPhase` (see
+  below) and exposes overridable hooks:
   - `begin_death()` — entered once when `get_health()` first hits zero: kick
-    off the death animation (start a spin, cut engines, ramp up smoke, drop out
-    of targeting, ...).
+    off the death animation (spin, cut engines, smoke, drop out of
+    targeting, ...).
   - `update_death()` — polled each frame while dying; returns `True` once the
-    phase has lasted `death_duration_s`. The default duration `0` reaps the
-    same frame, which is the legacy instantaneous behaviour.
+    phase has lasted `death_duration_s` (default `0`: reaped the same frame).
   - `finish_death()` — the terminal effect, defaulting to `play_death`.
 - **`Destructibles`** runs once per frame: it moves objects whose health has
   reached zero into a *dying* list (calling `begin_death`), advances every
   dying object (`update_death`), and only when one reports finished does it
   fire `finish_death`, clear its tasks and clean it up. So a killed ship can
-  spin out of control for a few seconds — still collidable — before it finally
-  explodes and is removed. (A guard skips objects already cleaned out-of-band,
-  e.g. a turret whose controlling `Bot` cleaned it first.)
+  spin out of control for a few seconds — still collidable — before it
+  explodes and is removed. Objects already cleaned out-of-band (e.g. a turret
+  pawn whose `Bot` cleaned it first) are skipped.
 
-`Bot` and every capital-ship `SubSystem` are `Destructible`s. A `Ship` itself
-is not — it's cleaned up by whichever `Bot`/`Player` owns it as part of that
-owner's own teardown, rather than being tracked independently.
-
-The dying-phase *timer* is a small composable helper, **`DyingPhase`** in
-[`utils/state_machine.py`](../../src/space_flight/utils/state_machine.py) (beside
-`StateMachine` and `Cooldown`): an is-dying flag plus an injected, pause-aware
-clock, exposing `begin()` / `elapsed_s()` / `finished(duration_s)`. It carries
-no policy, so both `Destructible` and the non-Destructible `Player` compose it
-to time their death identically. The spin-out animation itself lives on `Ship`
-(`begin_tumble` / `tumble_step`, a √time-ramped body-rate about a random axis)
-and its smoke/fire trail in [`DamageFX`](fx.md). A mounted `SubSystem` cannot
-tumble: a standalone one (shield generator, targeting system — its `parent` is
-the ship it's `mounted_on`) smokes for `SUBSYSTEM_DEATH_SMOKE_DURATION_S`
-(~0.6 s) before exploding, while a bot-controlled mount (turret, tractor beam)
-explodes immediately.
+The dying-phase *timer* is **`DyingPhase`** in
+[`utils/state_machine.py`](../../src/space_flight/utils/state_machine.py):
+an is-dying flag plus an injected, pause-aware clock, exposing `begin()` /
+`elapsed_s()` / `finished(duration_s)`. It carries no policy, so both
+`Destructible` and the non-Destructible `Player` compose it. The spin-out
+itself lives on `Ship` (`begin_tumble` / `tumble_step`, a √time-ramped
+body-rate about a random axis) and its smoke/fire trail in
+[`DamageFX`](fx.md). A mounted `SubSystem` cannot tumble: a standalone one
+(shield generator, targeting system — its `parent` is the ship it's
+`mounted_on`) smokes for `SUBSYSTEM_DEATH_SMOKE_DURATION_S` (0.6 s) before
+exploding, while a bot-controlled mount (turret, tractor beam) explodes
+immediately.
 
 ## `Bot` — the AI controller
 
 [`bot.py`](../../src/space_flight/actors/bot.py) is a `Destructible` that owns
-a pawn and drives it via the tactician → navigator → pilot pipeline (see the
-[`ai`](../../src/space_flight/ai/) package). The pawn moves every frame, but
-the navigator and pilot only run when the bot thinks, a few times a second on
-a frame balanced against the other bots (see
-[When a bot thinks](ai.md#when-a-bot-thinks)). `bot_type`
-selects both the pawn class and the matching AI trio:
+a pawn and drives it via the tactician → navigator → pilot pipeline (see
+[AI](ai.md)). The pawn moves every frame, but the bot only *thinks* a few
+times a second, on a frame balanced against the other bots (see
+[When a bot thinks](ai.md#when-a-bot-thinks)). `bot_type` selects both the
+pawn class and the matching AI trio:
 
 | `bot_type` | Pawn | AI trio |
 |------------|------|---------|
@@ -203,70 +185,63 @@ selects both the pawn class and the matching AI trio:
 | `"turret"` | `Turret` (subsystem, mounted via `parent_object`) | `TrackingMountTactician` / `...Navigator` / `...Pilot` |
 | `"tractor_beam"` | `TractorBeamProjector` (subsystem) | Same tracking-mount trio, with `Personality.TRACTOR_BEAM_DEFAULT` |
 
-A turret or tractor-beam bot doesn't fly a free-standing ship: its pawn is a
-subsystem *mounted on* another ship (`parent_object`), and the pawn may
-already have registered itself with the interaction system, so `Bot` skips
-the duplicate registration if it finds one.
+A turret or tractor-beam pawn is a subsystem *mounted on* another ship
+(`parent_object`) that has already registered itself with the interaction
+system, so `Bot` skips the duplicate registration.
 
-`move_bot_task` branches on `bot_type` in the shapes of the navigator/pilot
-I/O — for ships, a direction plus desired speed becomes
-`throttle`/yaw/pitch/roll (with the navigator's optional up-reference); for
-tracking mounts, a direction becomes just yaw/pitch — the
-tactician→navigator→pilot call pattern is otherwise identical. While the bot
-is dying it skips the AI entirely and drives the pawn's tumble instead.
+`move_bot_task` differs by `bot_type` only in the navigator/pilot I/O: for
+ships, a direction plus desired speed becomes `throttle`/yaw/pitch/roll (with
+the navigator's optional up-reference); for tracking mounts, a direction
+becomes just yaw/pitch, and the navigator runs every frame (only the pilot
+waits for a think). While the bot is dying it skips the AI entirely and
+drives the pawn's tumble instead.
 
 ## `Player` — the human-controlled equivalent of a `Bot`
 
 [`player.py`](../../src/space_flight/actors/player.py) plays the same role as
-`Bot` for the user's own ship (always a `Fighter`, with a cockpit model), but
-adds everything specific to being watched by a human:
+`Bot` for the user's own ship (always a `Fighter`, with a cockpit model), plus
+everything specific to being watched by a human:
 
 - **Camera rig.** A jolt/pivot node hierarchy anchors the camera to the
   ship, driven by a damped spring model (`compute_head_acceleration` /
   `compute_head_position`) so the head reacts to acceleration, impacts and
   roll rate, plus the player's free-look input.
 - **Targeting.** `open_radial_target_menu` pushes a `RadialMenuState` over
-  `TARGET_FILTERS` — All, Enemies, Capital ships, Subsystems, Turrets,
-  Fighters, Waypoints, plus an empty slot — and the chosen label becomes
-  `target_filter` (an empty slot or no selection means All).
-  `loop_target(±1)` (cycle) and `point_target` (auto-pick the best nearby,
-  forward target) both call `update_target_mask`, which builds
-  `target_mask` over `interactions.live_actors`: "All" excludes waypoint
-  markers; "Enemies" uses the player's `interact` row; "Capital ships",
-  "Subsystems", "Fighters" and "Waypoints" match each actor's `category`
-  (`capital_ship`/`sub_system`/`fighter`/`waypoint`); "Turrets" matches
-  `isinstance(actor, Turret)` — turrets inherit `category="sub_system"`, so
-  they show up under both Subsystems and Turrets; an unknown filter matches
-  nothing. The pick is then handed to `set_target_from_actor_index`.
+  `TARGET_FILTERS` (All, Enemies, Capital ships, Subsystems, Turrets,
+  Fighters, Waypoints, plus an empty slot); the chosen label becomes
+  `target_filter` (empty slot or no selection means All). `loop_target(±1)`
+  (cycle) and `point_target` (best nearby, forward target) both build
+  `target_mask` over `interactions.live_actors` via `update_target_mask`:
+  "All" excludes waypoint markers, "Enemies" uses the player's `interact`
+  row, "Turrets" matches `isinstance(actor, Turret)`, and the other filters
+  match the actor's `category`. Turrets have `category="sub_system"`, so they
+  show under both Subsystems and Turrets; an unknown filter matches nothing.
 - **Optional AI passenger.** `has_ai=True` gives the player the same
-  tactician/navigator/pilot trio a `Bot` would use, letting the "player" ship
-  fly itself (not used by the current levels, which all pass
-  `has_ai=False`).
+  fighter trio a `Bot` uses, letting the ship fly itself (all current levels
+  pass `has_ai=False`).
 - **State recording** for offline analysis (`record_state`), gated by the
   `RECORD_GAME` flag.
 
-Unlike `Bot`, `Player` is not a `Destructible` — the player's ship dying ends
-the level rather than being cleaned up mid-session. It still plays the same
-spin-out death: it composes the same `DyingPhase` timer and, while dying, hands
-control to the pawn's tumble (camera and all) until the spin finishes, at which
-point `FlightState` shows the level-end screen.
+`Player` is not a `Destructible`: the player's death ends the level rather
+than being cleaned up mid-session. It still plays the same spin-out: it
+composes a `DyingPhase` and, while dying, hands control (camera included) to
+the pawn's tumble until `death_spin_finished()`, when `FlightState` shows the
+level-end screen.
 
 ## `Trihedron`
 
-[`trihedron.py`](../../src/space_flight/actors/trihedron.py) is a tiny debug
-helper: it attaches a scaled coordinate-axis gizmo to a node, always drawn on
-top. Not part of the gameplay actor hierarchy — a visualisation aid only.
+[`trihedron.py`](../../src/space_flight/actors/trihedron.py) is a debug
+helper that attaches a scaled coordinate-axis gizmo to a node, always drawn
+on top. Not part of the gameplay hierarchy.
 
 ## Where things live
 
 `Pawn`, `Ship`/`ShipModel`, `Fighter`, `Bot`, `Player`, `Destructible(s)`
-and `Trihedron` live directly under
-[`src/space_flight/actors/`](../../src/space_flight/actors/);
-`Weapon`/`Munition` (with `LaserCannon`/`LaserShot` and `BombLauncher`/`Bomb`)
-live under [`src/space_flight/weapons/`](../../src/space_flight/weapons/).
-`CapitalShip`
-and everything it's built from (subsystems, shields, tracking mounts,
-turrets, tractor beams) live under
-[`actors/capital_ship/`](../../src/space_flight/actors/capital_ship/) — see
-[Capital-ship subsystems](subsystems.md) for that part of the tree. The
-auto-generated [code reference](apidocs/index.rst) has the full per-class API.
+and `Trihedron` live under
+[`src/space_flight/actors/`](../../src/space_flight/actors/) (beside
+`scan.py`, the mission scan state, see [Game](game.md));
+`Weapon`/`Munition`, `LaserCannon`/`LaserShot` and `BombLauncher`/`Bomb`
+under [`src/space_flight/weapons/`](../../src/space_flight/weapons/);
+`CapitalShip` and everything it is built from under
+[`actors/capital_ship/`](../../src/space_flight/actors/capital_ship/) (see
+[Capital-ship subsystems](subsystems.md)).

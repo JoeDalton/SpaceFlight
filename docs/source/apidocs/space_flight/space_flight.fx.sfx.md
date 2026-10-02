@@ -156,7 +156,7 @@
 ````{py:data} TARGET_HIT_SOUND_MULTIPLIER
 :canonical: space_flight.fx.sfx.TARGET_HIT_SOUND_MULTIPLIER
 :value: >
-   1.0
+   0.5
 
 ```{autodoc2-docstring} space_flight.fx.sfx.TARGET_HIT_SOUND_MULTIPLIER
 ```
@@ -206,7 +206,7 @@
 ````{py:data} NPC_DISTANT_IMPACT_VOLUME
 :canonical: space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
 :value: >
-   1.0
+   0.2
 
 ```{autodoc2-docstring} space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
 ```

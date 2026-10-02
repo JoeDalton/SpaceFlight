@@ -5,255 +5,212 @@ is flown by the same three-stage pipeline: a **tactician** decides *what* to
 do, a **navigator** turns that into an explicit direction, and a **pilot**
 converts the direction into control inputs the pawn's `move()` understands.
 [`Bot.move_bot_task`](../../src/space_flight/actors/bot.py) (and `Player`, for
-an optionally AI-flown player ship) simply calls the three in sequence each
-frame. This page is the guided tour; the per-class API is generated from the
-docstrings in the [code reference](apidocs/index.rst).
-
-Most of the code lives in [`src/space_flight/ai/`](../../src/space_flight/ai/):
-a `generic/` package with the shared base classes, and one package per pawn
-family (`fighter/`, `capital_ship/`, `tracking_mount/`) with the concrete
-subclasses. `auto_aim.py`, `collision_sensor.py`, `formation.py` and
-`interactions.py` are supporting systems used by several of the above.
+an optionally AI-flown player ship) calls the three in sequence. This page is
+the guided tour; the per-class API is in the [code reference](apidocs/index.rst).
 
 ## The tactician → navigator → pilot pipeline
 
 - **Tactician** ([`generic_tactician.py`](../../src/space_flight/ai/generic/generic_tactician.py)):
   a finite state machine over `Intent` (`ENGAGE`, `EVADE`, `DISENGAGE`,
   `REGROUP`, `PATROL`, `FORMATION`, `IDLE`). `think()` re-evaluates the
-  intent at a capped frequency (`intent_update_delay`) and only switches
-  intent once a **commitment time** for the current intent has elapsed —
-  hysteresis that stops a bot flip-flopping between behaviours every frame.
-  `update_intent()` (subclass-specific) scores the tactical situation and
-  returns `(intent, target_dict)`.
+  intent every `intent_update_delay` and only switches once the current
+  intent's **commitment time** has elapsed — hysteresis that stops a bot
+  flip-flopping between behaviours. `update_intent()` (subclass-specific)
+  scores the situation and returns `(intent, target_dict)`.
 - **Navigator** ([`generic_navigator.py`](../../src/space_flight/ai/generic/generic_navigator.py)):
-  turns `(intent, target_dict)` into an explicit direction (plus, for ships,
-  a desired speed). Provides shared aiming primitives: **Constant Angle
-  Pursuit** (kill lateral velocity — good for closing from long range) and
-  **lead/lag pursuit** (aim at the target's position at `now + lead_time_s`;
-  negative lead time is a lag pursuit for close-in fights).
+  turns `(intent, target_dict)` into a direction (plus, for ships, a desired
+  speed). Shared aiming primitives: **Constant Angle Pursuit** (kill lateral
+  velocity — closing from long range) and **lead/lag pursuit** (aim at the
+  target's position at `now + lead_time_s`; a negative lead time lags).
 - **Pilot** ([`generic_pilot.py`](../../src/space_flight/ai/generic/generic_pilot.py)):
-  the actual control loop. `pilot()` is subclass-specific; concrete pilots
-  wrap `simple_pid.PID` controllers (one per axis) that null out an angular
-  error once per sample period (`sample_time_s` in the personality, 0.1 s
-  for fighters, 0.2 s for capital ships).
+  the control loop. Concrete pilots wrap one `simple_pid.PID` per axis, nulling
+  an angular error once per sample period (`sample_time_s` in the personality:
+  0.1 s for fighters and mounts, 0.2 s for capital ships).
+
+`target_dict` is an informally-typed payload (`target_id`, `score`, and per
+intent `position`, `formation_index`, `attack_mode`…). For `DISENGAGE`,
+`PATROL` and `REGROUP`, `target_id` holds the `Intent` itself as a sentinel;
+every navigator method that consumes the dict handles the "no target" case.
 
 ### When a bot thinks
 
-The pilot's commands only change once per sample period, so a bot
-(`Bot.move_bot_task`) only *thinks* (runs its navigator and pilot) on those
-frames. Its ship flies the last commands in between; the tactician, cheap
-and already on its own timer, still runs every frame.
-[`think_scheduler.py`](../../src/space_flight/ai/think_scheduler.py) spreads
-the bots over frames: time is cut into one-frame slots, and each bot gets
-the least-busy slot of its period, so every frame carries about the same
-share of bots instead of all of them thinking on the same frame (a periodic
-hitch). The bot then drives its pilot's PIDs itself (`sample_externally`).
+The pilot's commands only change once per sample period, so a bot only
+*thinks* (runs its navigator and pilot) on those frames and its ship flies the
+last commands in between; the tactician, cheap and on its own timer, runs
+every frame. [`think_scheduler.py`](../../src/space_flight/ai/think_scheduler.py)
+cuts time into one-frame slots and gives each bot the least-busy slot of its
+period, so every frame carries about the same share of bots instead of a
+periodic hitch. The bot then drives its pilot's PIDs itself
+(`sample_externally`).
 
 Two things can't wait for the next think:
 - **Weapons.** A fighter's gun reloads faster than the bot thinks, and a
   late bomb release misses. So `navigate()` arms its fire / release decision,
-  and on the frames in between, `FighterNavigator.update_triggers` takes it
+  and on the frames in between `FighterNavigator.update_triggers` takes it
   again on fresh geometry from [`Interactions`](#interactions).
 - **Obstacle contacts.** The collision sensor only collects contacts for the
   frame the bot thinks in (see [`CollisionSensor`](#collisionsensor-and-formation)).
 
-Turrets and tractor beams still navigate every frame: their navigator is
-cheap and publishes the firing solution the mount checks every frame. Only
-their pilot follows the schedule. The player's AI mode (`has_ai`) is not
-scheduled.
-
-`target_dict` is a small, informally-typed payload (`target_id`, `score`,
-sometimes `position`/`formation_index`) threaded from tactician through
-navigator; its exact keys depend on the intent, which is why every navigator
-method that consumes it defensively handles the "no target" case.
+Turrets and tractor beams still navigate every frame (cheap, and it publishes
+the firing solution the mount checks every frame); only their pilot follows
+the schedule. The player's AI mode (`has_ai`) is not scheduled.
 
 ## `Personality` and per-role tuning
 
 [`ai/__init__.py`](../../src/space_flight/ai/__init__.py) defines the shared
-`Intent` and `AttackMode` (`PURSUIT`, `STRAFE`, `ORBIT`, `BOMB`) enums and a
-`Personality` class holding pre-baked parameter
-dictionaries — `FIGHTER_DEFAULT`, `TURRET_DEFAULT`, `TRACTOR_BEAM_DEFAULT`,
-`CAPITAL_SHIP_DEFAULT` — one per pawn family. Each dictionary has a
-`tactician`/`navigator`/`pilot` (and, for tractor beams, `tractor_beam`)
-section holding most of the tunable constants for that trio: commitment
-times, engagement thresholds, PID gains, pursuit biases and cutoff distances.
-A personality dict is passed in at construction and is largely the bot's
-behavioural fingerprint, so retuning or adding a new archetype mostly means
-adding a new `Personality` entry rather than touching code. A few tunables
-are still module-level constants rather than personality entries (e.g.
-`SCENE_ROLL_MULTIPLIER` in `fighter_pilot.py`,
-`COLLISION_REFERENCE_SPEED_MPS` in `generic_ship_navigator.py`,
-`REFERENCE_ERROR_VELOCITY_MPS` in `ai/__init__.py`, the `CollisionSensor`
-geometry and the `AutoAim` defaults). `Bot.set_personality()` swaps the dict
-on all three components: values read each frame (tactician thresholds,
-navigator parameters) take effect immediately, but the pilots' PID gains are
-baked in at construction, and a mount pawn keeps its own personality.
+`Intent` and `AttackMode` (`PURSUIT`, `STRAFE`, `ORBIT`, `BOMB`) enums and
+`Personality`, whose dictionaries — `FIGHTER_DEFAULT`, `TURRET_DEFAULT`,
+`TRACTOR_BEAM_DEFAULT`, `CAPITAL_SHIP_DEFAULT` — hold, per
+`tactician`/`navigator`/`pilot` section (plus `tractor_beam` for tractor
+beams), most tunables: commitment times, engagement thresholds, PID gains,
+pursuit biases, cutoff distances. A new archetype is mostly a new
+`Personality` entry. Some tunables are still module constants
+(`SCENE_ROLL_MULTIPLIER` in `fighter_pilot.py`, `COLLISION_REFERENCE_SPEED_MPS`
+in `generic_ship_navigator.py`, `REFERENCE_ERROR_VELOCITY_MPS` in
+`ai/__init__.py`, the `CollisionSensor` geometry, the `AutoAim` defaults).
+`Bot.set_personality()` swaps the dict on all three components: values read
+at use (tactician thresholds, navigator parameters) take effect immediately,
+but PID gains are baked in at construction, and a mount pawn keeps its own
+personality.
 
 ## Ship-flying trio: `Fighter` and `CapitalShip`
 
 Both free-flying ship types share
-[`generic_ship_navigator.py`](../../src/space_flight/ai/generic/generic_ship_navigator.py)
-(`GenericShipNavigator`) and
-[`generic_ship_pilot.py`](../../src/space_flight/ai/generic/generic_ship_pilot.py)
-(`GenericShipPilot`):
+[`GenericShipNavigator`](../../src/space_flight/ai/generic/generic_ship_navigator.py)
+and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py):
 
 - **`GenericShipNavigator`** blends an *intentional* direction
-  (`navigate_intent`, subclass-specific) with a *collision-avoidance*
-  direction from a [`CollisionSensor`](#collisionsensor-and-formation), the
-  two weighted so avoidance can be dwarfed while flying in formation. It also
-  implements the intent-agnostic behaviours every ship shares: `regroup`,
-  `disengage`, waypoint following (`set_waypoints`/`follow_waypoints`) and
-  `formation` (station-keeping relative to a wing leader, itself resolved via
+  (`navigate_intent`, subclass-specific) with a *collision-avoidance* one from
+  a [`CollisionSensor`](#collisionsensor-and-formation), with an avoidance
+  weight that phases flying deliberately close (formation, strafe corridor,
+  bomb run) dwarf. It also implements the behaviours every ship shares:
+  `regroup`, `disengage`, waypoint following (`set_waypoints` /
+  `follow_waypoints`) and `formation` (station-keeping on a wing leader by
   lead pursuit).
 - **`GenericShipPilot`** owns four PID loops (yaw, pitch, roll, throttle),
-  driven at each think by `compute_angular_error` (subclass-specific — a
-  fighter and a capital ship point their axes at a target differently) and a
-  velocity error against the navigator's desired speed.
+  fed at each think by `compute_angular_error` (subclass-specific — a fighter
+  and a capital ship point their axes differently) and the velocity error
+  against the desired speed.
 
 | Family | Tactician | Navigator | Pilot |
 |--------|-----------|-----------|-------|
 | Fighter | [`fighter_tactician.py`](../../src/space_flight/ai/fighter/fighter_tactician.py) | [`fighter_navigator.py`](../../src/space_flight/ai/fighter/fighter_navigator.py) | [`fighter_pilot.py`](../../src/space_flight/ai/fighter/fighter_pilot.py) |
 | Capital ship | [`capital_ship_tactician.py`](../../src/space_flight/ai/capital_ship/capital_ship_tactician.py) | [`capital_ship_navigator.py`](../../src/space_flight/ai/capital_ship/capital_ship_navigator.py) | [`capital_ship_pilot.py`](../../src/space_flight/ai/capital_ship/capital_ship_pilot.py) |
 
-**`FighterTactician`** prioritises, in order: evade an overwhelming threat
-(`evaluate_threats` against `max_threat_score`), disengage if its own
-`evaluate_fighting_shape` (health + shield) is too low, engage the best-scored
-prey (`evaluate_preys`, boosted for `primary_target_ids`), follow patrol
-waypoints, hold formation, or regroup with allies — falling through a
-priority list rather than a weighted blend. When it engages it also picks an
-`AttackMode` (carried in `target_dict["attack_mode"]`): a weapon-suitability
-score decides guns vs. a limited bomb (`_choose_weapon` — a bomb is only worth
-it against a target both tough and valuable, when stationary enough and supply
-allows), then the geometry decides the mode — `BOMB`, or for guns `STRAFE` vs.
-`PURSUIT` by the target's mobility.
+**`FighterTactician`** falls through a priority list (not a weighted blend):
+evade an overwhelming threat (`evaluate_threats` ≥ `max_threat_score`),
+disengage if `evaluate_fighting_shape` (half health + shield) is too low,
+engage the best-scored prey (`evaluate_preys`, boosted for
+`primary_target_ids`), patrol, hold formation, else regroup. When engaging it
+also picks the `AttackMode` (in `target_dict["attack_mode"]`): first the weapon
+(`_choose_weapon` — a limited bomb only against a target both tough and
+valuable, stationary enough, with supply to spare), then the geometry: `BOMB`,
+or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
 
 **`FighterNavigator.engage_target`** dispatches on that attack mode:
-- **`PURSUIT`** — the constant-angle chase: it blends Constant Angle Pursuit,
-  lead pursuit and lag pursuit with distance-dependent weights
-  (`compute_engage_weights`, overlapping smooth step functions), fires the
-  laser cannon once aligned and in range, and can override pursuit entirely to
-  `reposition` (hard turn away to avoid overshooting a closing target) or
-  `extend` (break off if stuck in a low-closing-speed "spiral of death" for too
-  long). Good against agile prey.
-- **`STRAFE`** — a committed `ingress → attack → break → reposition` run for a
+- **`PURSUIT`** — blends Constant Angle Pursuit, lead and lag pursuit with
+  distance-dependent weights (`compute_engage_weights`, overlapping smooth
+  steps), fires once aligned and in range, and can override pursuit to
+  `reposition` (hard turn away before overshooting a closing target) or
+  `extend` (break off a low-closing-speed "spiral of death"). For agile prey.
+- **`STRAFE`** — a committed `ingress → attack → break → reposition` run on a
   slow or immobile target: press in firing, peel off at point-blank, extend,
-  and come around for another pass.
-- **`BOMB`** — a committed `ingress → approach → run → break → reposition` cycle
-  that overflies a slow/immobile target and drops a bomb along the belly (`-Z`).
-  The ingress banks onto the target's track line (swinging to an entry point
-  behind it, then a pure-pursuit line-follow) so the belly-down run starts on the
-  line; the approach and run then fly belly-down (via the pilot's up-reference,
-  which makes the fighter fly like the capital ship — roll only to level to the
-  reference up), following the target's *instantaneous* track line so they stay
-  with it through a turn. `compute_release_condition` times the drop off the
-  bomb's linear (no-gravity) velocity: it releases when the flight-time-led
-  intercept falls inside a cone of that velocity, then breaks and comes around.
+  come around.
+- **`BOMB`** — a committed `ingress → approach → run → break → reposition`
+  cycle that overflies a slow/immobile target and drops a bomb from the belly
+  (`-Z`). The ingress banks onto the target's track line; the approach and run
+  fly belly-down along it (the pilot's up-reference makes the fighter roll only
+  to level with that reference, like the capital ship).
+  `compute_release_condition` treats the bomb as a straight (no-gravity)
+  projectile and releases when the flight-time-led intercept falls inside a
+  cone of its velocity.
 
-**`CapitalShipTactician`** mirrors the fighter's priority list minus threat
-evasion (no `evaluate_threats`) and per-target engagement scoring: a capital
-ship engages a scripted/assigned prey rather than hunting, via
-`scripted_prey_dict`, tagging it `AttackMode.ORBIT`. Its fighting-shape
-estimate reads `pawn.shield_level`, which is the shared
-`Shield.get_shield_level()` (0 when the ship is unshielded).
-**`CapitalShipNavigator.engage_target`** flies an **orbit**: it holds a
-constant standoff off the nearest point of the target's oriented bounding box
-and drives tangentially, so the target stays abeam on the side-mounted
-turrets' flank (round targets give a circle, long/thin ones a racetrack).
-**`CapitalShipPilot`** only corrects yaw/pitch toward a target and rolls
-purely to stay upright with the scene (no roll-to-target, unlike the more
-acrobatic fighter).
+**`CapitalShipTactician`** is the fighter's list without threat evasion or
+prey scoring: it engages a scripted prey (`scripted_prey_dict`) tagged
+`AttackMode.ORBIT`. **`CapitalShipNavigator`** orbits it: a constant standoff
+off the nearest point of the target's oriented bounding box, driven
+tangentially so the target stays abeam on the turret flank (a circle round a
+compact target, a racetrack round a long one). **`CapitalShipPilot`** only
+yaws/pitches toward the target and rolls to stay level with the scene (no
+roll-to-target).
 
 ## Tracking-mount trio: turrets and tractor beams
 
 [`tracking_mount/`](../../src/space_flight/ai/tracking_mount/) is the AI for
-anything that swivels in place rather than flies — shared by `Turret` and
-`TractorBeamProjector`, both mounted subsystems of a capital ship (see
+anything that swivels in place — `Turret` and `TractorBeamProjector`, both
+mounted subsystems of a capital ship (see
 [Capital-ship subsystems](subsystems.md)):
 
-- **`TrackingMountTactician`** is a stripped-down fighter tactician: score
-  preys, engage the best one above `min_engagement_score`, otherwise `IDLE`.
-  No evade/disengage/regroup — a mount can't flee.
-- **`TrackingMountNavigator`** is purely an *aimer*: it computes a lead-pursuit
-  direction and **publishes it onto the pawn** (`pawn.aim_direction`,
-  `pawn.target_distance_m`) rather than acting on it. This is the same
-  loose-coupling principle used throughout the subsystem code — the navigator
-  doesn't know or care whether the mount will fire a laser or extend a
-  tractor beam; the pawn's own per-frame logic reads the published solution
+- **`TrackingMountTactician`**: engage the best prey above
+  `min_engagement_score`, otherwise `IDLE`. No evade/disengage/regroup — a
+  mount can't flee.
+- **`TrackingMountNavigator`** is purely an *aimer*: it computes a
+  lead-pursuit direction and **publishes it onto the pawn**
+  (`pawn.aim_direction`, `pawn.target_distance_m`). It doesn't know whether the
+  mount will fire or grab; the pawn's own per-frame logic reads the solution
   and decides.
-- **`TrackingMountPilot`** runs yaw/pitch PID loops against the mount's own
-  *base* axes (`base_right`/`base_forward`/`base_up` — the socket it's bolted
-  into) rather than world or ship axes, since a mount's yaw/pitch are always
-  relative to its mounting.
+- **`TrackingMountPilot`** runs yaw/pitch PID loops against the mount's
+  *base* axes (`base_right`/`base_forward`/`base_up`, the socket it's bolted
+  into), since a mount's yaw/pitch are relative to its mounting.
 
-A tractor beam bot uses the identical trio (`Personality.TRACTOR_BEAM_DEFAULT`
-just adds a `tractor_beam` tuning section for grab timing) — see
-[`Bot.__init__`](../../src/space_flight/actors/bot.py) for how `bot_type`
-selects one shared trio for both mount kinds.
+Both mount kinds share this trio; `Personality.TRACTOR_BEAM_DEFAULT` only adds
+a `tractor_beam` section for grab timing (see
+[`Bot.__init__`](../../src/space_flight/actors/bot.py)).
 
 ## Supporting systems
 
 ### `AutoAim`
 
-[`auto_aim.py`](../../src/space_flight/ai/auto_aim.py) is a per-shot targeting
-assist used by fighters and by turrets boosted by a living targeting system
-(`Turret._apply_targeting_support`). It is distinct from the
-tactician/navigator/pilot pipeline: it's driven from `Fighter.move()` /
-`Turret._operate()` and `LaserCannon.fire()`, not `Bot`. It tracks
-whether the current target has stayed inside an acquisition cone for
-`target_lock_delay_s`; once acquired, `compute_shot_speed` aims each shot at
-the target's *predicted* impact-time position, clamped inside a maximum
-assist angle around the barrel so the visual effect stays a "nudge" rather
-than a snap-to-target. `configure()` is separated from `__init__` specifically
-so a targeting system's boost (see [subsystems.md](subsystems.md)) can
-retune a turret's auto-aim quality at runtime.
+[`auto_aim.py`](../../src/space_flight/ai/auto_aim.py) is a per-shot
+targeting assist for fighters and for turrets boosted by a living targeting
+system (`Turret._apply_targeting_support`). It sits outside the pipeline:
+driven from `Fighter.move()` / `Turret._operate()` and `LaserCannon.fire()`,
+not `Bot`. Once the target has stayed inside an acquisition cone for
+`target_lock_delay_s`, `compute_shot_speed` aims each shot at the target's
+predicted impact-time position, clamped to a maximum assist angle around the
+barrel (a "nudge", not a snap). `configure()` is separate from `__init__` so a
+targeting system can retune a turret's auto-aim at runtime.
 
 ### `CollisionSensor` and `Formation`
 
 [`collision_sensor.py`](../../src/space_flight/ai/collision_sensor.py) gives a
-ship three overlapping look-ahead collision spheres, centred at increasing
-distances ahead of the nose (by default ~5/50/125 m, radii ~30/50/100 m); the
-outer ones can be disabled via `active_range` (e.g. during a bomb run).
-Each contact contributes a weighted repulsion vector (closer obstacles weigh
-more), consumed by `GenericShipNavigator.navigate_avoidance` when the bot
-thinks and wiped after reading. The collision system records contacts into
-the sensor (`record_obstacle`, current frame only) right after each
-traversal, and `set_active` takes the spheres out of the traversal on the
-frames their bot won't think. The whole flow, from traversal to avoidance, is
-described in [game.md](game.md#sensor-contacts-from-traversal-to-avoidance).
+ship three overlapping look-ahead spheres, centred 5/50/125 m ahead of the nose
+with radii 30/50/100 m by default; the outer ones can be disabled via
+`active_range` (e.g. during a bomb run). Each contact adds a repulsion along
+its surface normal, weighted by inverse distance; `navigate_avoidance` consumes
+them when the bot thinks. The collision system records contacts
+(`record_obstacle`, current frame only) right after each traversal, and
+`set_active` takes the spheres out of the traversal on frames their bot won't
+think — the full flow is in
+[game.md](game.md#sensor-contacts-from-traversal-to-avoidance).
 
-[`formation.py`](../../src/space_flight/ai/formation.py) is data, not AI logic:
-`Formation` holds a named layout (`arrowhead`, `diamond`, `around_diamond`)
-of scaled relative slot positions and the list of ship ids currently
-occupying them. Ships read their own slot via `pawn.formation` +
-`get_ship_index`; the actual station-keeping math lives in
+[`formation.py`](../../src/space_flight/ai/formation.py) is data, not logic:
+`Formation` holds a named layout (`arrowhead`, `diamond`, `around_diamond`) of
+scaled slot positions and the ids of the ships in them, leader first. Ships
+find their slot via `pawn.formation.get_ship_index`; the station-keeping is
 `GenericShipNavigator.formation`.
 
 ### `Interactions`
 
-[`interactions.py`](../../src/space_flight/ai/interactions.py) is the central
-per-frame relationship cache every tactician/navigator/auto-aim query reads
-from instead of recomputing pairwise geometry themselves. For every pair of
-live actors it computes distance, unit direction, relative velocity and
-forward alignment, and flags in `interact` the pairs that can fight: opposing
-teams (different, non-neutral) within `INTERACT_MAX_DISTANCE_M` of each other
-(10 km, in `ai/__init__.py`). The diagonal (an actor with itself) is always
-zero. Actors occupy stable pre-allocated slots (`add_actor`/`remove_actor`,
-`MAX_ACTORS = 64` by default) so slot indices never shift and no per-frame
-allocation is needed. `update_interactions()` computes all live pairs at once
-with numpy and writes them into the matrices in place (callers keep views
-into them), so cost scales with the number of live actors, not the
-pre-allocated capacity. Note that
-`live_actors` (and masks built over it, or rows sliced with `alive`) are
-compacted, so their positions are not the stable slot indices returned by
-`get_actor_index_from_id`; translate via `np.where(alive)[0]` before
-comparing the two.
+[`interactions.py`](../../src/space_flight/ai/interactions.py) is the
+per-frame relationship cache every tactician/navigator/auto-aim reads instead
+of recomputing pairwise geometry. For every pair of live actors it stores
+distance, unit direction, relative velocity and forward alignment, and flags in
+`interact` the pairs that can fight: different non-neutral teams within
+`INTERACT_MAX_DISTANCE_M` (10 km). The diagonal is always zero. Actors occupy
+stable pre-allocated slots (`add_actor`/`remove_actor`, `MAX_ACTORS = 64` by
+default), so indices never shift and nothing is allocated per frame.
+`update_interactions()` computes all live pairs at once with numpy and writes
+them into the matrices in place (callers keep views), so cost scales with live
+actors, not capacity. Gotcha: `live_actors` (and masks over it, or rows sliced
+with `alive`) are compacted, so their positions are not the slot indices from
+`get_actor_index_from_id`; translate via `np.where(alive)[0]`.
 
 ## Where things live
 
-The tactician/navigator/pilot base classes live in
-[`ai/generic/`](../../src/space_flight/ai/generic/); each pawn family's
-concrete subclasses live in their own subpackage
-(`ai/fighter/`, `ai/capital_ship/`, `ai/tracking_mount/`). `Personality`,
-`Intent` and `AttackMode` are defined once in [`ai/__init__.py`](../../src/space_flight/ai/__init__.py)
-and shared by all of them. The auto-generated
-[code reference](apidocs/index.rst) has the full per-class API.
+[`ai/`](../../src/space_flight/ai/): `generic/` holds the
+tactician/navigator/pilot base classes, `fighter/`, `capital_ship/` and
+`tracking_mount/` each family's subclasses, and `__init__.py` the shared
+`Personality`, `Intent` and `AttackMode`. `auto_aim.py`, `collision_sensor.py`,
+`formation.py`, `interactions.py` and `think_scheduler.py` are the supporting
+systems.
