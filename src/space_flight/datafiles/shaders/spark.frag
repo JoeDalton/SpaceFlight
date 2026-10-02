@@ -1,11 +1,10 @@
 #version 140
 // Spark particle fragment shader (hit sparks).
 //
-// Renders each billboard quad as a round, glowing spark: an SDF circle discards
-// the quad's corners, a soft glow + hard core builds the shape, and the
-// per-spark tint (vColor, premixed CPU-side) colours it. An optional texture
-// (spark.png) adds detail via its red channel; the shape floors to the
-// procedural glow so it still reads if the texture is flat.
+// Renders each quad as a round, glowing spark: an SDF circle discards the
+// corners, a soft glow + hard core builds the shape, and the per-spark vColor
+// (premixed CPU-side) tints it. The spark.png texture (red * alpha) can only
+// add to the procedural shape, so a flat texture still reads.
 
 uniform sampler2D p3d_Texture0;  // spark sprite (auto-bound via default TextureStage)
 

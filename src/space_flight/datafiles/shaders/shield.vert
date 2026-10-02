@@ -1,10 +1,10 @@
 #version 140
-// Shield bubble vertex shader (v2 — identical to v1).
-// Passes to the fragment shader:
+// Shield bubble vertex shader. Passes to the fragment shader:
 //   - object-space position/normal: a stable domain for the surface field and
-//     the death "retraction" (both are anchored to the hull, so they stay put
-//     as the ship rotates).
-//   - world position/normal: used for the view-dependent fresnel rim glow.
+//     the death "retraction" (anchored to the hull, so they stay put as the
+//     ship rotates).
+//   - render-space ("world") position/normal, via p3d_ModelMatrix: for the
+//     view-dependent fresnel rim.
 
 in vec4 p3d_Vertex;
 in vec3 p3d_Normal;
