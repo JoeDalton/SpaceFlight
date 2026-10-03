@@ -1,17 +1,19 @@
 """
 Unit tests for the HUD's ordnance cues (space_flight.ui.hud): the target box
-tint while auto-aim is locked, and the selected secondary weapon's name.
+tint while auto-aim is locked, and the ordnance HUD (secondary weapons drum and
+flares left).
 """
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from panda3d.core import NodePath
 
 from space_flight.ui.hud import (
-    HUD,
     TARGET_BOX_COLOR,
     TARGET_BOX_LOCKED_COLOR,
+    OrdnanceHUD,
     TargetHUD,
 )
 
@@ -39,32 +41,98 @@ def test_target_box_is_red_while_locked(locked, color):
     target_hud.square.setColorScale.assert_called_once_with(*color)
 
 
-def make_hud(selected_secondary) -> HUD:
-    """A HUD bypassing __init__, its player's selected secondary as given."""
-    hud = object.__new__(HUD)
-    hud.game = MagicMock()
-    hud.game.player.pawn.selected_secondary = selected_secondary
-    hud.secondary = MagicMock()
-    return hud
+class FakeClock:
+    def __init__(self):
+        self.time_s = 0.0
+
+    def get_current_time(self) -> float:
+        return self.time_s
 
 
-def test_secondary_label_shows_the_selected_weapon():
+class FakePawn:
+    """A fighter's ordnance, as the ordnance HUD reads it."""
+
+    def __init__(self, launchers, flare_launcher=None):
+        self.launchers = list(launchers)
+        self.selected_secondary = self.launchers[0] if self.launchers else None
+        self.flare_launcher = flare_launcher
+
+    def secondary_cycle(self):
+        return list(self.launchers)
+
+    def cycle_secondary(self, step: int = 1):
+        cycle = self.secondary_cycle()
+        index = cycle.index(self.selected_secondary)
+        self.selected_secondary = cycle[(index + step) % len(cycle)]
+
+
+def launcher(name: str, stock: int = 4) -> SimpleNamespace:
+    return SimpleNamespace(display_name=name, stock=stock)
+
+
+def make_ordnance_hud(pawn: FakePawn) -> OrdnanceHUD:
+    game = SimpleNamespace(game_time=FakeClock(), player=SimpleNamespace(pawn=pawn))
+    return OrdnanceHUD(game=game, parent_node=NodePath("corner"))
+
+
+def drum_texts(ordnance_hud: OrdnanceHUD) -> dict:
+    """The visible drum lines' text, by slot offset from the selection."""
+    return {
+        offset: line.node().getText()
+        for offset, line in ordnance_hud.drum.slots.items()
+    }
+
+
+def test_drum_shows_the_secondary_weapons_with_their_stock():
     """
-    The label shows the selected secondary weapon's name.
+    The secondary weapons are on the drum, the selected one in the middle,
+    each with the number left.
     """
-    hud = make_hud(SimpleNamespace(display_name="PROTON TORPEDO"))
+    pawn = FakePawn([launcher("A", 1), launcher("B", 2), launcher("C", 3)])
+    ordnance_hud = make_ordnance_hud(pawn)
 
-    hud.update_secondary_hud()
+    ordnance_hud.update()
 
-    hud.secondary.setText.assert_called_once_with("PROTON TORPEDO")
+    assert drum_texts(ordnance_hud) == {-1: "C 3", 0: "A 1", 1: "B 2"}
 
 
-def test_secondary_label_is_empty_without_secondary():
+def test_spent_secondary_weapons_keep_their_line():
     """
-    Without a secondary weapon (none carried, or all spent), the label is empty.
+    A spent secondary weapon stays on the drum, at x0.
     """
-    hud = make_hud(None)
+    pawn = FakePawn([launcher("A", 0), launcher("B", 2)])
+    ordnance_hud = make_ordnance_hud(pawn)
 
-    hud.update_secondary_hud()
+    ordnance_hud.update()
 
-    hud.secondary.setText.assert_called_once_with("")
+    assert drum_texts(ordnance_hud)[0] == "A 0"
+
+
+def test_drum_rolls_when_the_selection_changes():
+    """
+    Cycling the secondary weapon rolls the drum.
+    """
+    pawn = FakePawn([launcher("A"), launcher("B"), launcher("C")])
+    ordnance_hud = make_ordnance_hud(pawn)
+    ordnance_hud.update()
+
+    pawn.cycle_secondary()
+    ordnance_hud.update()
+
+    assert ordnance_hud.drum.roll_rad() > 0.0
+
+
+@pytest.mark.parametrize(
+    "flare_launcher, text", [(launcher("FLARE", 7), "FLARE 7"), (None, "FLARE 0")]
+)
+def test_flare_line_always_shows_the_flares_left(flare_launcher, text):
+    """
+    The flares line is always shown, in the secondary weapons' format, even
+    for a ship without flares.
+    """
+    ordnance_hud = make_ordnance_hud(FakePawn([], flare_launcher=flare_launcher))
+
+    ordnance_hud.update()
+
+    assert ordnance_hud.flare_line.node().getText() == text
+    assert not ordnance_hud.flare_line.isHidden()

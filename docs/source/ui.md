@@ -112,8 +112,11 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   `set_chatter_text` store a string plus an expiry time, and
   `clear_scenario_hud` blanks each once its game-time deadline passes. They
   are driven by the mission's `hud` and `speech` actions (see
-  [docs/scenario_scripting.md](scenario_scripting.md#actions)). A bottom-right
-  line names the player's selected secondary weapon (`update_secondary_hud`).
+  [docs/scenario_scripting.md](scenario_scripting.md#actions)). Bottom right, an
+  `OrdnanceHUD` shows the secondary weapons of the cycle
+  (`Fighter.secondary_cycle`) with their stock, spent ones at x0, on a
+  [`RollingDrum`](#utilspy--generic-ui-items), the selected one facing the
+  player. Under it, a line always shows the flares left.
 - **`TargetHUD`** — projects the player's target into screen space each frame
   (`cam.getRelativePoint` + `lens.project`) to place a target box and
   distance/name labels. In view, the box encircles the target. The box turns
@@ -158,6 +161,17 @@ Backs the mission's `player_waypoints` action (see
   player is within `arrival_radius_m`, and shows the marker only while the
   player's target filter is `"Waypoints"`. After the last waypoint,
   `_finish()` removes the marker.
+
+## `utils.py` — generic UI items
+
+- **`make_text_line`** — a HUD-style line of text (small caps, drop shadow,
+  fadable).
+- **`RollingDrum`** — a looping list of text lines written round a cylinder
+  seen from the side: the selected item faces the viewer, the previous and
+  next ones are above and below, smaller, flattened by the curvature and
+  fainter, until they turn out of sight. `update(items, selected, label)`
+  rolls it to a new selection, by as many slots as it moved, the shorter way
+  round, easing out over `roll_time_s` (on the clock it is given).
 
 ## Where things live
 

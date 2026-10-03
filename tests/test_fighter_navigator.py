@@ -598,7 +598,7 @@ def _augment_pawn_for_bomb(nav):
     nav.pawn.forward = np.array([0.0, 1.0, 0.0])
     nav.pawn.up = np.array([0.0, 0.0, 1.0])
     nav.pawn.speed = np.array([0.0, 100.0, 0.0])
-    launcher = MagicMock(category="bomb")
+    launcher = MagicMock(category="bomb", stock=6)
     launcher.initial_velocity.side_effect = lambda: (
         nav.pawn.speed - BOMB_LAUNCH_SPEED_MPS * nav.pawn.up
     )
@@ -873,17 +873,19 @@ def test_bomb_run_releases_and_breaks():
     nav.pawn.fire_secondary.assert_called_once()
 
 
-@pytest.mark.parametrize("selected", ["missile", None])
+@pytest.mark.parametrize(
+    "selected",
+    [MagicMock(category="missile", stock=4), MagicMock(category="bomb", stock=0), None],
+    ids=["missile", "spent bomb", "nothing"],
+)
 def test_bomb_run_does_not_release_without_a_bomb_selected(selected):
     """
     The bomb is the selected secondary weapon: with a missile selected instead,
-    or nothing left, the run releases nothing even on a perfect solution.
+    spent bombs, or nothing, the run releases nothing even on a perfect solution.
     """
     nav = make_fighter_navigator()
     _augment_pawn_for_bomb(nav)
-    nav.pawn.selected_secondary = (
-        None if selected is None else MagicMock(category=selected)
-    )
+    nav.pawn.selected_secondary = selected
     _enter_behaviour(nav, "bomb_run")
     direction = _bomb_velocity_dir(nav)
     engagement = _bomb_engagement(

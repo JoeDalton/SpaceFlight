@@ -164,17 +164,17 @@ def _fighter_with_loadout(*launchers: FakeLauncher, locked: bool = False):
     return fighter
 
 
-def test_first_secondary_with_stock_is_selected_initially():
+def test_first_secondary_is_selected_initially():
     """
     The initial secondary weapon is the first bomb, rocket or missile launcher
-    with stock left, in loadout order; flares are never a secondary.
+    in loadout order; flares are never a secondary.
     """
-    rocket = FakeLauncher("rocket", 3)
+    missile = FakeLauncher("missile", 2)
     fighter = _fighter_with_loadout(
-        FakeLauncher("flare", 10), FakeLauncher("missile", 0), rocket
+        FakeLauncher("flare", 10), missile, FakeLauncher("rocket", 3)
     )
 
-    assert fighter.selected_secondary is rocket
+    assert fighter.selected_secondary is missile
 
 
 def test_fire_secondary_gives_a_missile_the_target_only_when_locked():
@@ -205,28 +205,46 @@ def test_fire_secondary_launches_the_selected_launcher():
 
 def test_fire_secondary_moves_on_once_the_selection_is_spent():
     """
-    Once the selected launcher runs out, the next one with stock is selected.
+    Once the selected launcher runs out, the next one with stock is selected,
+    skipping spent ones.
     """
     missile = FakeLauncher("missile", 1)
+    spent_bomb = FakeLauncher("bomb", 0)
     rocket = FakeLauncher("rocket", 3)
-    fighter = _fighter_with_loadout(missile, rocket)
+    fighter = _fighter_with_loadout(missile, spent_bomb, rocket)
     assert fighter.selected_secondary is missile
 
     assert fighter.fire_secondary() is True
     assert fighter.selected_secondary is rocket
 
 
-def test_cycle_secondary_loops_over_launchers_with_stock_and_skips_flares():
+def test_spent_selection_stays_when_nothing_else_is_left():
     """
-    cycle_secondary goes through the bomb/rocket/missile launchers with stock,
-    in loadout order, and wraps around; flares and empty launchers are skipped.
+    When every secondary weapon is spent, the last one used stays selected,
+    and firing it launches nothing.
+    """
+    missile = FakeLauncher("missile", 1)
+    fighter = _fighter_with_loadout(missile, FakeLauncher("rocket", 0))
+
+    assert fighter.fire_secondary() is True
+    assert fighter.selected_secondary is missile
+    assert fighter.fire_secondary() is False
+
+
+def test_cycle_secondary_loops_over_all_secondaries_and_skips_flares():
+    """
+    cycle_secondary goes through the bomb/rocket/missile launchers, spent ones
+    included, in loadout order, and wraps around; flares are skipped.
     """
     missile = FakeLauncher("missile", 2)
     flare = FakeLauncher("flare", 10)
-    empty_bomb = FakeLauncher("bomb", 0)
+    spent_bomb = FakeLauncher("bomb", 0)
     rocket = FakeLauncher("rocket", 3)
-    fighter = _fighter_with_loadout(missile, flare, empty_bomb, rocket)
+    fighter = _fighter_with_loadout(missile, flare, spent_bomb, rocket)
 
+    assert fighter.secondary_cycle() == [missile, spent_bomb, rocket]
+    fighter.cycle_secondary()
+    assert fighter.selected_secondary is spent_bomb
     fighter.cycle_secondary()
     assert fighter.selected_secondary is rocket
     fighter.cycle_secondary()

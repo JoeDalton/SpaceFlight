@@ -88,9 +88,10 @@ Its collision sphere is sized from `hit_box_radius_m` in its config.
 
 Ordnance is used the same way by the player and the AI, through the
 *selected secondary* weapon (`selected_secondary`, a bomb, rocket or missile
-launcher with stock left): `cycle_secondary` selects the next one in loadout
-order, looping, and `fire_secondary` launches it, then moves on once it is
-spent. A missile gets the current target only while auto-aim is locked on it.
+launcher): `cycle_secondary` selects the next one in loadout order, looping
+over `secondary_cycle()` — spent ones included, they just launch nothing — and
+`fire_secondary` launches it, then moves on to the next one with stock left
+once it is spent. A missile gets the current target only while auto-aim is locked on it.
 Flares have their own trigger, `drop_flare`, from the loadout's flare launcher
 (`flare_launcher`).
 

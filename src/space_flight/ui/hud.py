@@ -16,6 +16,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
+from space_flight.ui.utils import RollingDrum, make_text_line
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
@@ -33,6 +34,12 @@ MIN_PROJECTION_DEPTH = 1e-3
 # Target box half-extents, shared by the box and the scan bar filling it.
 TARGET_BOX_HALF_WIDTH = 0.038
 TARGET_BOX_HALF_HEIGHT = 0.03
+
+# Ordnance HUD (see OrdnanceHUD), in the bottom-right corner's coordinates
+ORDNANCE_HUD_RIGHT_X = -0.05
+ORDNANCE_TEXT_SCALE = 0.05
+DRUM_CENTER_Z = 0.25
+FLARE_LINE_Z = 0.08
 
 # Target box tint, by auto-aim state: locked (a missile launched now would be
 # guided to the target) or not.
@@ -103,16 +110,10 @@ class HUD:
         self.chatter_textNodePath.setScale(0.075)
         self.chatter_textNodePath.setPos(0.0, 0, -0.8)
 
-        # Selected secondary weapon (bomb, rocket or missile)
-        self.secondary = TextNode("Secondary")
-        self.secondary.setSmallCaps(True)
-        self.secondary.setShadow(0.05, 0.05)
-        self.secondary.setShadowColor(0, 0, 0, 1)
-        self.secondary.setAlign(TextNode.ARight)
-        self.secondary_textNodePath = aspect2d.attachNewNode(self.secondary)
-        self.secondary_textNodePath.setScale(0.06)
-        self.secondary_textNodePath.reparentTo(self.game.app.a2dBottomRight)
-        self.secondary_textNodePath.setPos(-0.05, 0, 0.1)
+        # Ordnance: secondary weapons and flares left
+        self.ordnance_hud = OrdnanceHUD(
+            game=self.game, parent_node=self.game.app.a2dBottomRight
+        )
 
         # Wrap long lines before they run off the edges of the screen.
         text_wrap_width = 3.5 * EDGE_HORIZONTAL / self.events_textNodePath.getScale()[0]
@@ -127,7 +128,7 @@ class HUD:
         and updates the text displayed in the HUD.
         """
         self.update_debug_hud()
-        self.update_secondary_hud()
+        self.ordnance_hud.update()
         self.clear_scenario_hud()
 
     def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
@@ -149,14 +150,6 @@ class HUD:
             self.game.game_time.get_current_time() + display_time_s
         )
         self.chatter.setAlign(TextNode.ACenter)
-
-    def update_secondary_hud(self) -> None:
-        """
-        Show the name of the player's selected secondary weapon (nothing when the
-        ship carries none, or has used them all)
-        """
-        launcher = getattr(self.game.player.pawn, "selected_secondary", None)
-        self.secondary.setText(launcher.display_name if launcher is not None else "")
 
     def clear_scenario_hud(self) -> None:
         """
@@ -260,8 +253,79 @@ class HUD:
         self.events = None
         self.chatter_textNodePath.removeNode()
         self.chatter = None
-        self.secondary_textNodePath.removeNode()
-        self.secondary = None
+        self.ordnance_hud.clean()
+        self.ordnance_hud = None
+        self.game = None
+
+
+class OrdnanceHUD:
+    """
+    The player's ordnance, bottom right: the secondary weapons on a rolling
+    drum (see :class:`~space_flight.ui.utils.RollingDrum`), the selected one
+    facing the player, and the flares left under it. Spent ordnance keeps its
+    line, at x0.
+    """
+
+    def __init__(self, game: FlightState, parent_node: NodePath) -> None:
+        """
+        :param game: The flight state
+        :param parent_node: The node the lines are anchored to (bottom-right
+            corner of the screen)
+        """
+        self.game = game
+        self.root = parent_node.attachNewNode("ordnanceHud")
+        self.root.setPos(ORDNANCE_HUD_RIGHT_X, 0, 0)
+
+        self.drum = RollingDrum(
+            parent_node=self.root,
+            clock=self.game.game_time.get_current_time,
+            text_scale=ORDNANCE_TEXT_SCALE,
+        )
+        self.drum.root.setZ(DRUM_CENTER_Z)
+        self.flare_line = make_text_line(self.root, "flares")
+        self.flare_line.setPos(0, 0, FLARE_LINE_Z)
+        self.flare_line.setScale(ORDNANCE_TEXT_SCALE)
+
+    @staticmethod
+    def format_line(name: str, stock: int) -> str:
+        """
+        :param name: The ordnance's display name
+        :param stock: How many are left
+        :return: The HUD line for it
+        """
+        return f"{name} {stock}"
+
+    def update(self) -> None:
+        """
+        Refresh the secondary weapons drum (rolling it if the selection changed)
+        and the flares line.
+        """
+        pawn = self.game.player.pawn
+        self.drum.update(
+            items=pawn.secondary_cycle(),
+            selected=pawn.selected_secondary,
+            label=lambda launcher: self.format_line(
+                launcher.display_name, launcher.stock
+            ),
+        )
+
+        flare_launcher = pawn.flare_launcher
+        self.flare_line.node().setText(
+            self.format_line(
+                flare_launcher.display_name if flare_launcher else "FLARE",
+                flare_launcher.stock if flare_launcher else 0,
+            )
+        )
+
+    def clean(self) -> None:
+        """
+        Cleans the OrdnanceHUD object
+        """
+        self.drum.clean()
+        self.drum = None
+        self.root.removeNode()
+        self.root = None
+        self.flare_line = None
         self.game = None
 
 

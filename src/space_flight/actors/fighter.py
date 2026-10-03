@@ -126,16 +126,24 @@ class Fighter(Ship):
         """
         return self.shield
 
-    def cycle_secondary(self):
+    def secondary_cycle(self) -> list[OrdnanceLauncher]:
         """
-        Select the next secondary weapon (bomb, rocket or missile launcher) with
-        stock left, in loadout order, looping back to the first.
+        :return: The secondary weapons cycle_secondary loops over: the bomb,
+            rocket and missile launchers, spent ones included, in loadout order
         """
-        candidates = [
+        return [
             launcher
             for launcher in self.ordnance_launchers
-            if launcher.category in SECONDARY_TYPES and launcher.stock > 0
+            if launcher.category in SECONDARY_TYPES
         ]
+
+    def cycle_secondary(self):
+        """
+        Select the next secondary weapon (bomb, rocket or missile launcher), in
+        loadout order, looping back to the first. A spent one can be selected
+        too: it just launches nothing.
+        """
+        candidates = self.secondary_cycle()
         if not candidates:
             self.selected_secondary = None
             return
@@ -147,9 +155,9 @@ class Fighter(Ship):
 
     def fire_secondary(self) -> bool:
         """
-        Launch the selected secondary weapon, then select the next one once its
-        stock runs out. A missile is given the current target only if auto-aim
-        has locked onto it; otherwise it flies blind, like a rocket.
+        Launch the selected secondary weapon, then select the next one with stock
+        left once its stock runs out. A missile is given the current target only
+        if auto-aim has locked onto it; otherwise it flies blind, like a rocket.
 
         The launcher is rate-limited, so a launch can be refused while reloading
         even with stock to spare; stock is only spent on an actual launch.
@@ -157,9 +165,22 @@ class Fighter(Ship):
         :return: True if launched, False if out of stock or reloading
         """
         launched = self._launch(self.selected_secondary)
-        if self.selected_secondary is None or self.selected_secondary.stock <= 0:
-            self.cycle_secondary()
+        if launched and self.selected_secondary.stock <= 0:
+            self._select_next_secondary_with_stock()
         return launched
+
+    def _select_next_secondary_with_stock(self):
+        """
+        Move the selection on to the next secondary weapon with stock left, if
+        any (the selection stays put otherwise).
+        """
+        cycle = self.secondary_cycle()
+        index = cycle.index(self.selected_secondary)
+        for step in range(1, len(cycle)):
+            launcher = cycle[(index + step) % len(cycle)]
+            if launcher.stock > 0:
+                self.selected_secondary = launcher
+                return
 
     def drop_flare(self) -> bool:
         """

@@ -432,7 +432,7 @@ class FighterNavigator(GenericShipNavigator):
         target_speed = target_dict["target_current_speed"]
         if weapon == "bomb":
             launcher = self.pawn.selected_secondary
-            if launcher is None or launcher.category != "bomb":
+            if launcher is None or launcher.category != "bomb" or launcher.stock <= 0:
                 return False
             if not self.compute_release_condition(
                 target_position,
