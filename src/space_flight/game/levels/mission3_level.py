@@ -1,5 +1,5 @@
 """
-The intro level (Mission 3: Escort): escort a convoy of transports past an
+Mission 3: Escort -- escort a convoy of transports past an
 enemy blockade.
 """
 
@@ -94,7 +94,7 @@ THIRD_WAVE = WaveSpec(
 )
 
 
-def build_intro_upfront(game: FlightState):
+def build_mission3_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
@@ -118,9 +118,9 @@ def build_intro_upfront(game: FlightState):
     game.scene.build_upfront()
 
 
-def intro_mission(m: Mission) -> Iterator[None]:
+def mission3_mission(m: Mission) -> Iterator[None]:
     """
-    The intro level's mission body.
+    The mission3 level's mission body.
 
     Two timed waves, plus reactive rules registered up front (they must hold
     wherever the timed sequence currently is): a third wave at 200s or once
@@ -264,7 +264,8 @@ def intro_mission(m: Mission) -> Iterator[None]:
 
     yield from m.wait(20)  # total: 30s
     m.hud("Second wave")
-    second_wave.spawn(target=escort)
+    # Interceptors hunt fighters: the escort and the player's A-wing.
+    second_wave.spawn(target=[escort, m.game.player])
     m.speech("Interceptors! They're coming for us this time!", speaker="Red Two")
     yield from m.wait(3)
     m.speech(

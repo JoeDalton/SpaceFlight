@@ -31,7 +31,7 @@ step.
 
 ## A level, end to end
 
-Trimmed from [`intro_level.py`](../../src/space_flight/game/levels/intro_level.py):
+Trimmed from [`mission3_level.py`](../../src/space_flight/game/levels/mission3_level.py):
 
 ```python
 TRANSPORTS = WaveSpec(
@@ -49,13 +49,13 @@ FIRST_WAVE = WaveSpec(name="first_wave", ship_model="tie-bomber", size=5, ...)
 THIRD_WAVE = WaveSpec(name="third_wave", ship_model="tie-bomber", size=8, ...)
 
 
-def build_intro_upfront(game):
+def build_mission3_upfront(game):
     game.player = Player(game=game, ship_type="a-wing", ...)
     game.scene = scene_factory(game=game, scene_name="ocean_planet")
     game.scene.build_upfront()
 
 
-def intro_mission(m: Mission) -> Iterator[None]:
+def mission3_mission(m: Mission) -> Iterator[None]:
     # Handles first, so rules can refer to waves that haven't spawned yet.
     transports = m.wave(TRANSPORTS)
     first_wave = m.wave(FIRST_WAVE)
@@ -85,8 +85,8 @@ The level is then registered in
 
 ```python
 "Mission 3: Escort": LevelEntry(
-    upfront=build_intro_upfront,
-    mission=intro_mission,
+    upfront=build_mission3_upfront,
+    mission=mission3_mission,
     description="...",
 ),
 ```
@@ -201,7 +201,8 @@ Every condition or method taking a `who` accepts:
 
 - a `WaveHandle` (any of its live members);
 - the player or a bot (`game.player`, its pawn);
-- a single pawn (e.g. `leader = wave.pawns()[0]`).
+- a single pawn (e.g. `leader = wave.pawns()[0]`);
+- a list or tuple of any of these (e.g. `[escort, game.player]`).
 
 ### Available conditions
 

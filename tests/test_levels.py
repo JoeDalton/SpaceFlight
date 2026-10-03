@@ -13,7 +13,7 @@ from space_flight.game.levels import LEVELS
 from space_flight.game.levels import mission1_level as mission1
 from space_flight.game.levels import mission2_level as mission2
 from space_flight.game.levels.dev_level import dev_mission
-from space_flight.game.levels.intro_level import intro_mission
+from space_flight.game.levels.mission3_level import mission3_mission
 from space_flight.game.scenario import Mission
 
 
@@ -52,12 +52,12 @@ def test_dev_mission_spawns_the_frigate(game, spawned):
 
 
 # ---------------------------------------------------------------------------
-# Intro
+# mission3
 # ---------------------------------------------------------------------------
 
 
-def test_intro_victory(game, spawned):
-    m = start(game, intro_mission)
+def test_mission3_victory(game, spawned):
+    m = start(game, mission3_mission)
 
     # Transports at 0.1s, escort at 1s, first wave at 10s.
     advance(game, m, 12)
@@ -86,8 +86,8 @@ def test_intro_victory(game, spawned):
     assert game.end_level_calls[-1][0] == "victory"
 
 
-def test_intro_defeat(game, spawned):
-    m = start(game, intro_mission)
+def test_mission3_defeat(game, spawned):
+    m = start(game, mission3_mission)
     advance(game, m, 2)  # transports and escort spawned
     kill_all(game, live(game, spawned, "transports"))
     advance(game, m, 1)

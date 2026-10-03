@@ -515,6 +515,24 @@ def test_pawns_of(game, mission, spawned):
     assert pawns_of(game.player) == []
 
 
+def test_pawns_of_a_list(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    assert pawns_of([wave, game.player]) == wave.pawns() + [game.player.pawn]
+    game.player.pawn.is_dead = True
+    assert pawns_of((wave, game.player)) == wave.pawns()
+
+
+def test_spawn_target_accepts_a_list(game, mission, spawned):
+    escort = mission.spawn(WAVE)
+    run_jobs(mission)
+    hunters = mission.spawn(WAVE, target=[escort, game.player])
+    run_jobs(mission)
+    expected = [pawn.id for pawn in escort.pawns()] + [game.player.pawn.id]
+    for pawn in hunters.pawns():
+        assert pawn.parent.tactician.primary_target_ids == expected
+
+
 def test_near(game):
     cond = near(game.player, [0, 0, 0], 100)
     assert cond() is True
