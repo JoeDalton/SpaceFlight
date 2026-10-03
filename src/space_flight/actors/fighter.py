@@ -86,7 +86,7 @@ class Fighter(Ship):
         """
         Moves the ship (see :meth:`Ship.move`), then updates auto-aim acquisition
 
-        :param throttle: Throttle command in [0, 1]
+        :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
         :param pitch_rate: Pitch rate command in [-1, 1]
         :param roll_rate: Roll rate command in [-1, 1]

@@ -434,12 +434,12 @@ def test_lift_induced_drag_uses_clipped_lift_magnitude():
 
 def test_turn_rate_scale_anchor_points():
     """
-    The profile hits its anchors: 20% at idle, 100% at 60% throttle, 30% at
+    The profile hits its anchors: 50% at idle, 100% at 60% throttle, 70% at
     full thrust and 10% at max boost.
     """
-    assert turn_rate_scale(0.0) == pytest.approx(0.2)
+    assert turn_rate_scale(0.0) == pytest.approx(0.5)
     assert turn_rate_scale(0.6) == pytest.approx(1.0)
-    assert turn_rate_scale(1.0) == pytest.approx(0.3)
+    assert turn_rate_scale(1.0) == pytest.approx(0.7)
     assert turn_rate_scale(2.0) == pytest.approx(0.1)
 
 
@@ -447,7 +447,7 @@ def test_turn_rate_scale_boost_is_linear():
     """
     Between full thrust and max boost the scale falls linearly.
     """
-    assert turn_rate_scale(1.5) == pytest.approx(0.2)
+    assert turn_rate_scale(1.5) == pytest.approx(0.4)
 
 
 def test_turn_rate_scale_bounded_and_clamped():
@@ -457,7 +457,7 @@ def test_turn_rate_scale_bounded_and_clamped():
     """
     throttles = np.linspace(0.0, 2.0, 201)
     assert max(turn_rate_scale(t) for t in throttles) == pytest.approx(1.0)
-    assert turn_rate_scale(-1.0) == pytest.approx(0.2)
+    assert turn_rate_scale(-1.0) == pytest.approx(0.5)
     assert turn_rate_scale(5.0) == pytest.approx(0.1)
 
 
@@ -492,4 +492,4 @@ def test_set_inputs_scales_turn_rates_with_throttle():
 
     ship.set_inputs(throttle=1.0, yaw_rate=1.0, pitch_rate=1.0, roll_rate=1.0)
 
-    np.testing.assert_allclose(ship.pqr, [0.3, 0.3, 0.3], atol=1e-3)
+    np.testing.assert_allclose(ship.pqr, [0.7, 0.7, 0.7], atol=1e-3)

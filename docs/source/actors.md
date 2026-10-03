@@ -52,9 +52,10 @@ Key responsibilities:
   Oswald efficiency) and health come from that ship type's
   [`configuration.yaml`](../../src/space_flight/datafiles/models/ships/).
 - **Throttle-dependent turn rate.** The commanded rates are scaled by
-  `turn_rate_scale(throttle)`: a parabola from 20% of the max rates at idle,
-  through 100% at 60% throttle, to 30% at full thrust, then a linear drop to
-  10% at max boost.
+  `turn_rate_scale(throttle)`: a parabola from 50% of the max rates at idle,
+  through 100% at 60% throttle (the fitted peak sits at about 56% throttle
+  and is clipped to 100%), to 70% at full thrust, then a linear drop to
+  10% at max boost (`THROTTLE_BOOST_VALUE`).
 - **External forces**, accumulated separately from thrust/drag/lift:
   `impact_force_n` (each hit's force is removed after
   `DAMAGE_FORCE_APPLICATION_DURATION_S`, 0.1 s) and `external_force_n` (e.g.

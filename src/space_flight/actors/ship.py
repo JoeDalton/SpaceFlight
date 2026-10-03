@@ -72,7 +72,7 @@ def turn_rate_scale(throttle: float) -> float:
     """
     Fraction of the max turn rates available at a given throttle command.
 
-    The fitted parabola peaks slightly above 1 (near throttle 0.52), so it is
+    The fitted parabola peaks marginally above 1 (near throttle 0.56), so it is
     clipped to 1. Above full throttle (boost) the scale falls linearly.
 
     :param throttle: Throttle command, in [0, THROTTLE_BOOST_VALUE]
@@ -610,7 +610,7 @@ class Ship(Pawn):
         """
         Moves the ship given throttle and turn rates (see :meth:`set_inputs`)
 
-        :param throttle: Throttle command in [0, 1]
+        :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
         :param pitch_rate: Pitch rate command in [-1, 1]
         :param roll_rate: Roll rate command in [-1, 1]
@@ -740,7 +740,7 @@ class Ship(Pawn):
         """
         Updates the pitch of the engine noise
 
-        :param throttle: The throttle value of the ship [0, 1]
+        :param throttle: The throttle value of the ship [0, 1], above 1 for boost
         """
         pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
         pitch_multiplier *= self._engine_sputter_factor()
