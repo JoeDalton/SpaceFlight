@@ -23,7 +23,7 @@
 
 ### API
 
-`````{py:class} TrackingMountPilot(game, pawn: space_flight.actors.pawn.Pawn, personality: dict = Personality.TURRET_DEFAULT)
+`````{py:class} TrackingMountPilot(game: space_flight.game.flight_state.FlightState, pawn: space_flight.actors.pawn.Pawn, personality: dict = Personality.TURRET_DEFAULT)
 :canonical: space_flight.ai.tracking_mount.tracking_mount_pilot.TrackingMountPilot
 
 Bases: {py:obj}`space_flight.ai.generic.generic_pilot.GenericPilot`
@@ -58,7 +58,7 @@ Bases: {py:obj}`space_flight.ai.generic.generic_pilot.GenericPilot`
 
 ````
 
-````{py:method} pilot(target_direction: numpy.ndarray = np.zeros(3))
+````{py:method} pilot(target_direction: numpy.ndarray = np.zeros(3)) -> tuple[float, float]
 :canonical: space_flight.ai.tracking_mount.tracking_mount_pilot.TrackingMountPilot.pilot
 
 ```{autodoc2-docstring} space_flight.ai.tracking_mount.tracking_mount_pilot.TrackingMountPilot.pilot

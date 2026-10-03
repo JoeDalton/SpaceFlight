@@ -59,7 +59,7 @@
 
 ````
 
-`````{py:class} TrackingMountNavigator(game, pawn: space_flight.actors.pawn.Pawn, personality: dict = Personality.TURRET_DEFAULT, debug: bool = False)
+`````{py:class} TrackingMountNavigator(game: space_flight.game.flight_state.FlightState, pawn: space_flight.actors.pawn.Pawn, personality: dict = Personality.TURRET_DEFAULT, debug: bool = False)
 :canonical: space_flight.ai.tracking_mount.tracking_mount_navigator.TrackingMountNavigator
 
 Bases: {py:obj}`space_flight.ai.generic.generic_navigator.GenericNavigator`
@@ -73,7 +73,7 @@ Bases: {py:obj}`space_flight.ai.generic.generic_navigator.GenericNavigator`
 ```{autodoc2-docstring} space_flight.ai.tracking_mount.tracking_mount_navigator.TrackingMountNavigator.__init__
 ```
 
-````{py:method} navigate(intent: int, target_dict: dict) -> numpy.ndarray
+````{py:method} navigate(intent: space_flight.ai.Intent, target_dict: dict) -> numpy.ndarray
 :canonical: space_flight.ai.tracking_mount.tracking_mount_navigator.TrackingMountNavigator.navigate
 
 ```{autodoc2-docstring} space_flight.ai.tracking_mount.tracking_mount_navigator.TrackingMountNavigator.navigate

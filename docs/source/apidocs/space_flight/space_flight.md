@@ -78,6 +78,10 @@ space_flight.cli
   - ```{autodoc2-docstring} space_flight.FLIGHT_MODEL
     :summary:
     ```
+* - {py:obj}`THROTTLE_BOOST_VALUE <space_flight.THROTTLE_BOOST_VALUE>`
+  - ```{autodoc2-docstring} space_flight.THROTTLE_BOOST_VALUE
+    :summary:
+    ```
 * - {py:obj}`FORWARD_BODY <space_flight.FORWARD_BODY>`
   - ```{autodoc2-docstring} space_flight.FORWARD_BODY
     :summary:
@@ -210,6 +214,16 @@ space_flight.cli
    'airplane'
 
 ```{autodoc2-docstring} space_flight.FLIGHT_MODEL
+```
+
+````
+
+````{py:data} THROTTLE_BOOST_VALUE
+:canonical: space_flight.THROTTLE_BOOST_VALUE
+:value: >
+   2.0
+
+```{autodoc2-docstring} space_flight.THROTTLE_BOOST_VALUE
 ```
 
 ````

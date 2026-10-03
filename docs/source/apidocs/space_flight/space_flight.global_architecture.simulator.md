@@ -49,7 +49,7 @@
 
 ````
 
-`````{py:class} StateManager(app)
+`````{py:class} StateManager(app: space_flight.global_architecture.simulator.SpaceFlightSimulator)
 :canonical: space_flight.global_architecture.simulator.StateManager
 
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.StateManager
@@ -171,7 +171,7 @@
 
 ````
 
-````{py:method} push(state_class: space_flight.global_architecture.base_state.BaseState, **kwargs)
+````{py:method} push(state_class: type[space_flight.global_architecture.base_state.BaseState], **kwargs: typing.Any)
 :canonical: space_flight.global_architecture.simulator.StateManager.push
 
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.StateManager.push
@@ -187,7 +187,7 @@
 
 ````
 
-````{py:method} replace(state_class: space_flight.global_architecture.base_state.BaseState)
+````{py:method} replace(state_class: type[space_flight.global_architecture.base_state.BaseState])
 :canonical: space_flight.global_architecture.simulator.StateManager.replace
 
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.StateManager.replace
@@ -195,7 +195,7 @@
 
 ````
 
-````{py:method} get_current()
+````{py:method} get_current() -> space_flight.global_architecture.base_state.BaseState | None
 :canonical: space_flight.global_architecture.simulator.StateManager.get_current
 
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.StateManager.get_current
@@ -227,7 +227,7 @@ Bases: {py:obj}`direct.showbase.ShowBase.ShowBase`
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.SpaceFlightSimulator.__init__
 ```
 
-````{py:method} input_task(task)
+````{py:method} input_task(task: direct.task.Task.Task) -> int
 :canonical: space_flight.global_architecture.simulator.SpaceFlightSimulator.input_task
 
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.SpaceFlightSimulator.input_task

@@ -89,7 +89,7 @@
 
 ````
 
-````{py:method} add_actor(actor)
+````{py:method} add_actor(actor: typing.Any)
 :canonical: space_flight.ai.interactions.Interactions.add_actor
 
 ```{autodoc2-docstring} space_flight.ai.interactions.Interactions.add_actor
@@ -97,7 +97,7 @@
 
 ````
 
-````{py:method} remove_actor(actor)
+````{py:method} remove_actor(actor: typing.Any)
 :canonical: space_flight.ai.interactions.Interactions.remove_actor
 
 ```{autodoc2-docstring} space_flight.ai.interactions.Interactions.remove_actor

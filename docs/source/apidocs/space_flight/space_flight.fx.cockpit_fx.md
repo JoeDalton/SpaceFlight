@@ -146,7 +146,7 @@
 ```
 ````
 
-````{py:function} screen_direction_from_incoming(incoming_world_dir, pawn_right, pawn_up) -> numpy.ndarray
+````{py:function} screen_direction_from_incoming(incoming_world_dir: numpy.typing.ArrayLike, pawn_right: numpy.typing.ArrayLike, pawn_up: numpy.typing.ArrayLike) -> numpy.ndarray
 :canonical: space_flight.fx.cockpit_fx.screen_direction_from_incoming
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.screen_direction_from_incoming
@@ -363,14 +363,14 @@
 
 ````
 
-````{py:function} load_cockpit_spark_emitters(conf: dict)
+````{py:function} load_cockpit_spark_emitters(conf: dict) -> list[tuple[numpy.ndarray, numpy.ndarray]]
 :canonical: space_flight.fx.cockpit_fx.load_cockpit_spark_emitters
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.load_cockpit_spark_emitters
 ```
 ````
 
-`````{py:class} CockpitFX(game: space_flight.game.flight_state.FlightState, player)
+`````{py:class} CockpitFX(game: space_flight.game.flight_state.FlightState, player: space_flight.actors.player.Player)
 :canonical: space_flight.fx.cockpit_fx.CockpitFX
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX
@@ -382,7 +382,7 @@
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.__init__
 ```
 
-````{py:method} _make_overlay_quad()
+````{py:method} _make_overlay_quad() -> panda3d.core.NodePath
 :canonical: space_flight.fx.cockpit_fx.CockpitFX._make_overlay_quad
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX._make_overlay_quad
@@ -390,7 +390,7 @@
 
 ````
 
-````{py:method} update() 
+````{py:method} update()
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.update
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.update
@@ -398,7 +398,7 @@
 
 ````
 
-````{py:method} _emit_sparks(tier: int) 
+````{py:method} _emit_sparks(tier: int)
 :canonical: space_flight.fx.cockpit_fx.CockpitFX._emit_sparks
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX._emit_sparks
@@ -406,7 +406,7 @@
 
 ````
 
-````{py:method} _advance_stutter(now: float, dt: float, tier: int) 
+````{py:method} _advance_stutter(now: float, dt: float, tier: int)
 :canonical: space_flight.fx.cockpit_fx.CockpitFX._advance_stutter
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX._advance_stutter
@@ -422,7 +422,7 @@
 
 ````
 
-````{py:method} rattle_offset()
+````{py:method} rattle_offset() -> tuple[numpy.ndarray, float]
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.rattle_offset
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.rattle_offset
@@ -430,7 +430,7 @@
 
 ````
 
-````{py:method} flash(color, screen_dir) 
+````{py:method} flash(color: panda3d.core.Vec3 | tuple[float, float, float], screen_dir: numpy.ndarray)
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.flash
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.flash
@@ -438,7 +438,7 @@
 
 ````
 
-````{py:method} clean() 
+````{py:method} clean()
 :canonical: space_flight.fx.cockpit_fx.CockpitFX.clean
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx.CockpitFX.clean
@@ -448,7 +448,7 @@
 
 `````
 
-````{py:function} _health_fraction(pawn) -> float
+````{py:function} _health_fraction(pawn: space_flight.actors.ship.Ship) -> float
 :canonical: space_flight.fx.cockpit_fx._health_fraction
 
 ```{autodoc2-docstring} space_flight.fx.cockpit_fx._health_fraction

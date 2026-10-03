@@ -68,8 +68,8 @@ on screen while the next state's heavy assets load.
 `AssetManager.get_asset()` returns the cached asset for a path, loading it on
 first request, so every caller shares one instance. `COMMON_ASSETS_TO_LOAD`
 is preloaded at boot whatever the level (its inline comments say why some
-heavy assets, like capital ship glTFs and the cloud atlas, are on it: to avoid
-mid-level load stalls); `load_game_assets`/`load_assets_task` load it one
+heavy assets, like capital ship glTFs, their turret and the cloud atlas, are
+on it: to avoid mid-level load stalls); `load_game_assets`/`load_assets_task` load it one
 asset per frame during the splash screen, updating its progress bar.
 `instantiate_3d_model_to_node` is how actors attach a model: it attaches a
 Panda3D *instance* of the cached model under the caller's node, not a copy.

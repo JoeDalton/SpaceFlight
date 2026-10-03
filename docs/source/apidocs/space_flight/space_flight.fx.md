@@ -142,7 +142,7 @@ space_flight.fx.spark_fx
 ```
 ````
 
-````{py:function} _add_column_data(writer: panda3d.core.GeomVertexWriter, width: int, value: object) 
+````{py:function} _add_column_data(writer: panda3d.core.GeomVertexWriter, width: int, value: object)
 :canonical: space_flight.fx._add_column_data
 
 ```{autodoc2-docstring} space_flight.fx._add_column_data
@@ -169,7 +169,7 @@ space_flight.fx.spark_fx
 
 ````
 
-````{py:method} write_slot(slot_index: int, pos: panda3d.core.Point3, spawn_delay: float = 0.0, slot_duration: float | None = None, **columns: object) 
+````{py:method} write_slot(slot_index: int, pos: panda3d.core.Point3, spawn_delay: float = 0.0, slot_duration: float | None = None, **columns: object)
 :canonical: space_flight.fx.ParticleBuffer.write_slot
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.write_slot
@@ -177,7 +177,7 @@ space_flight.fx.spark_fx
 
 ````
 
-````{py:method} update() 
+````{py:method} update()
 :canonical: space_flight.fx.ParticleBuffer.update
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.update
@@ -185,7 +185,7 @@ space_flight.fx.spark_fx
 
 ````
 
-````{py:method} set_input(name: str, value: object) 
+````{py:method} set_input(name: str, value: object)
 :canonical: space_flight.fx.ParticleBuffer.set_input
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.set_input
@@ -193,7 +193,7 @@ space_flight.fx.spark_fx
 
 ````
 
-````{py:method} set_texture(texture: panda3d.core.Texture) 
+````{py:method} set_texture(texture: panda3d.core.Texture)
 :canonical: space_flight.fx.ParticleBuffer.set_texture
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.set_texture
@@ -201,7 +201,7 @@ space_flight.fx.spark_fx
 
 ````
 
-````{py:method} clean() 
+````{py:method} clean()
 :canonical: space_flight.fx.ParticleBuffer.clean
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer.clean

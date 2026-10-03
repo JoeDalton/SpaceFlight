@@ -95,6 +95,8 @@ void main()
 
     // The black background dissolves into the scene behind the overlay while
     // the streaks keep their brightness (alpha follows the colour intensity).
+    // The 0.35 start must match REVEAL_START / T_MAX in
+    // hyperspace_loading_state.py, which starts the simulation at that moment.
     float bg = 1.0 - smoothstep(0.35, 0.9, t);
     float a = clamp(max(bg, max(color.r, max(color.g, color.b))), 0.0, 1.0);
     p3d_FragColor = vec4(a > 0.0 ? color / a : vec3(0.0), a * iAlpha);

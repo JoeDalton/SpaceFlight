@@ -6,8 +6,9 @@ Plays a hyperspace jump animation while the level builds underneath it:
     into   (entering, fixed duration — nothing heavy runs, so it is smooth)
       -> inside (looping tunnel; the level is built here, one step per frame,
                  and the loop is held until the build finishes)
-      -> outof  (dropping out, fixed duration)
-      -> reveal (fade the overlay out into the live game scene), then pops.
+      -> outof  (dropping out, fixed duration; from REVEAL_START its black
+                 background dissolves into the live game scene behind the
+                 streaks), then pops.
 
 The build is driven *by this state*: it calls build_step once per frame
 during the inside phase only. Keeping all heavy work out of into (and
@@ -21,7 +22,7 @@ through); only the incoming front quad fades in, eased with a smoothstep.
 
 This state declares PAUSES_BELOW = False so the :class:`FlightState`
 below it stays alive (its game tasks are created during the build and only
-start simulating once we trigger the reveal).
+start simulating once we trigger the reveal, partway through outof).
 """
 
 from __future__ import annotations
@@ -64,8 +65,9 @@ INTO_DURATION = 2.5
 # Minimum time the looping tunnel is shown, even if the level loads instantly,
 # so the "inside" phase never flashes by.
 INSIDE_MIN_DURATION = 2.0
-# Kept just under the shader's own 2.0s loop (T_MAX) so the effect settles to
-# black at the end instead of wrapping back to the opening white flash.
+# Kept just under the shader's own 2.0s loop (T_MAX) so the effect has fully
+# dissolved into the scene at the end instead of wrapping back to the opening
+# white flash.
 OUTOF_DURATION = 1.9
 # Cross-fade length between two consecutive phases.
 FADE_DURATION = 1.0
@@ -115,8 +117,9 @@ class HyperspaceLoadingState(BaseState):
             overlay behaves as if the build is already finished.
         :param on_build_complete: called once, on the frame the build finishes
             (still during inside). Good place to wire up input/HUD/tasks.
-        :param on_reveal: called once, when the final reveal fade begins — i.e.
-            as the world becomes visible. Good place to start the simulation.
+        :param on_reveal: called once, REVEAL_START seconds into the outof
+            phase, when its black background starts dissolving into the world
+            behind it. Good place to start the simulation.
         :param wait_for_key: when True, hold the looping tunnel after the build
             finishes (showing await_prompt) until :meth:`request_jump_out`
             is called, instead of dropping out of hyperspace automatically.
@@ -166,7 +169,7 @@ class HyperspaceLoadingState(BaseState):
         self._awaiting_jump = False
         self._jump_requested = False
         self._prompt: OnscreenText | None = None
-        # Final reveal (fade overlay out to show the game scene).
+        # Set once on_reveal has fired (outof's background is dissolving).
         self._revealing = False
 
         # Start on the "into" phase, fully opaque on the back quad.
@@ -216,6 +219,7 @@ class HyperspaceLoadingState(BaseState):
 
     def _finish_transition(self):
         self._transitioning = False
+        assert self._next_state is not None  # set by _start_transition
         self._state = self._next_state
         # Hide the outgoing quad so it stops rendering and advancing its clock.
         self._quads[self._back].hide()
@@ -229,6 +233,8 @@ class HyperspaceLoadingState(BaseState):
         """Advance the level build by one step during the inside phase."""
         if self._build_done:
             return
+        # Without a build_step, _build_done starts True and we returned above.
+        assert self._build_step is not None
         if not self._build_step():
             self._build_done = True
             if self._on_build_complete is not None:

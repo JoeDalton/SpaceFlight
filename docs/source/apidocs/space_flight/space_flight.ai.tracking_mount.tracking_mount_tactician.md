@@ -23,7 +23,7 @@
 
 ### API
 
-`````{py:class} TrackingMountTactician(game, pawn: space_flight.actors.pawn.Pawn, personality: dict = Personality.TURRET_DEFAULT, debug: bool = False)
+`````{py:class} TrackingMountTactician(game: space_flight.game.flight_state.FlightState, pawn: space_flight.actors.pawn.Pawn, personality: dict = Personality.TURRET_DEFAULT, debug: bool = False)
 :canonical: space_flight.ai.tracking_mount.tracking_mount_tactician.TrackingMountTactician
 
 Bases: {py:obj}`space_flight.ai.generic.generic_tactician.GenericTactician`
@@ -37,7 +37,7 @@ Bases: {py:obj}`space_flight.ai.generic.generic_tactician.GenericTactician`
 ```{autodoc2-docstring} space_flight.ai.tracking_mount.tracking_mount_tactician.TrackingMountTactician.__init__
 ```
 
-````{py:method} update_intent() -> tuple[int, dict]
+````{py:method} update_intent() -> tuple[space_flight.ai.Intent, dict]
 :canonical: space_flight.ai.tracking_mount.tracking_mount_tactician.TrackingMountTactician.update_intent
 
 ```{autodoc2-docstring} space_flight.ai.tracking_mount.tracking_mount_tactician.TrackingMountTactician.update_intent
