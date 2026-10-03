@@ -27,7 +27,7 @@ def make_tracking_mount_without_init(
     mount.conf = {"min_pitch_deg": 5.0, "max_pitch_deg": 70.0}
     mount.max_yaw_rate_degps = 30.0
     mount.max_pitch_rate_degps = 30.0
-    mount.physics_filter_time_s = 0.3
+    mount.inputs_filter_time_s = 0.3
     mount.state = np.array([yaw_deg, pitch_deg])
     mount.state_derivative = np.zeros(2)
 

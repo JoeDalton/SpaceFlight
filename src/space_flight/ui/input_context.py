@@ -16,6 +16,7 @@ import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
+from space_flight import THROTTLE_BOOST_VALUE
 from space_flight.utils import low_pass_filter_first_order
 
 if TYPE_CHECKING:
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
     from space_flight.ui.input_reader import InputState
 
-THROTTLE_BOOST_VALUE = 2.0
 VIEW_BUTTON_INCREMENT = 1.0
 
 

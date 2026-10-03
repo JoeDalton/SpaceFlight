@@ -48,7 +48,7 @@ class HUD:
     simulation parameters on screen.
     """
 
-    def __init__(self, game: FlightState):
+    def __init__(self, game: FlightState) -> None:
         self.game = game
         self.id = uuid.uuid4()
         self.fps_counter_enabled = game.app.graphics_settings.config["hud"][
@@ -105,7 +105,7 @@ class HUD:
 
         self.game.method_lists[self.id] = [self.hud_update_task]
 
-    def hud_update_task(self):
+    def hud_update_task(self) -> None:
         """
         A method that gets the relevant informations from the sim
         and updates the text displayed in the HUD.
@@ -113,7 +113,7 @@ class HUD:
         self.update_debug_hud()
         self.clear_scenario_hud()
 
-    def set_event_text(self, text: str, display_time_s: float = 2.5):
+    def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
         """
         Sets an event text and its display time
         """
@@ -123,7 +123,7 @@ class HUD:
         )
         self.events.setAlign(TextNode.ACenter)
 
-    def set_chatter_text(self, text: str, display_time_s: float = 2.5):
+    def set_chatter_text(self, text: str, display_time_s: float = 2.5) -> None:
         """
         Sets a chatter text and its display time
         """
@@ -133,7 +133,7 @@ class HUD:
         )
         self.chatter.setAlign(TextNode.ACenter)
 
-    def clear_scenario_hud(self):
+    def clear_scenario_hud(self) -> None:
         """
         A method to clear the scenario text on screen if the display time is spent
         """
@@ -143,7 +143,7 @@ class HUD:
         if current_time > self.chatter_text_endtime:
             self.chatter.set_text("")
 
-    def update_debug_hud(self):
+    def update_debug_hud(self) -> None:
         """
         A method to update debug info on screen
         """
@@ -167,6 +167,8 @@ class HUD:
                 f"{magnitude(self.game.player.pawn.state[7:10]):.1f}m/s\n"
                 f"Player health = {self.game.player.pawn.health:.1f}\n"
                 f"Player shield = {self.game.player.pawn.shield:.1f}\n"
+                f"Player lift = {magnitude(self.game.player.pawn.lift_n):.1f}N\n"
+                f"Player drag = {magnitude(self.game.player.pawn.drag_n):.1f}N\n"
                 f"Time = {self.game.game_time.get_current_time():.0f}\n"
                 f"Team 1 strength = {n_team_1}\n"
                 f"Team 2 strength = {n_team_2}\n"
@@ -214,7 +216,7 @@ class HUD:
 
             self.debug.setText(hud_text)
 
-    def clean(self):
+    def clean(self) -> None:
         """
         Cleans the HUD object
         """
@@ -237,7 +239,7 @@ class HUD:
 
 
 class TargetHUD:
-    def __init__(self, game: FlightState):
+    def __init__(self, game: FlightState) -> None:
         # TODO add lead indicator
         self.game = game
         self.id = uuid.uuid4()
@@ -325,7 +327,7 @@ class TargetHUD:
         self.square.hide()
         self.scan_bar.hide()
 
-    def target_hud_update_task(self):
+    def target_hud_update_task(self) -> None:
         target = self.game.player.pawn.target
         if target is None:
             # Either there is no target selected or it has been purged recently
@@ -352,7 +354,7 @@ class TargetHUD:
             )
             scan = getattr(target, "scan", None)
             status = scan.status_text if scan is not None else ""
-            if status:
+            if status and scan is not None:
                 self.name_label["text"] = f"{display_name} - {status}"
                 self.scan_bar.setScale(max(scan.progress, 1e-3), 1, 1)
                 self.scan_bar.setColor(*SCAN_BAR_COLORS[scan.result])
@@ -371,7 +373,7 @@ class TargetHUD:
             self.aspect.setScale(1, 1, aspect)
 
             # World position of target
-            target_pos = self.game.player.pawn.target.position
+            target_pos = target.position
             world_pos = Point3(*target_pos)
 
             # Convert to camera space
@@ -447,7 +449,7 @@ class TargetHUD:
             ).length()
             self.distance_label["text"] = f"{distance:.0f} m"
 
-    def clean(self):
+    def clean(self) -> None:
         """
         Clean the TargetHud object
         """
@@ -462,4 +464,4 @@ class TargetHUD:
         self.scan_bar.removeNode()
         self.aspect.removeNode()
         self.root.removeNode()
-        self.game = None
+        self.game = None  # type: ignore[assignment]  # released on clean

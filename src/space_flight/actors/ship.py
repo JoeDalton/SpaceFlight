@@ -14,6 +14,7 @@ from space_flight import (
     FLIGHT_MODEL,
     RECORD_GAME,
     RIGHT_BODY,
+    THROTTLE_BOOST_VALUE,
     UP_BODY,
 )
 from space_flight.actors.pawn import Pawn
@@ -52,6 +53,38 @@ MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
 # velocity is max_speed_mps); it only happens when the explicit integrator
 # diverges. Detected here and snapped back to terminal before it overflows.
 DIVERGENCE_SPEED_FACTOR = 4.0
+# Turn rate profile: fraction of the max turn rates available as a function of the
+# throttle command. A parabola through (0, IDLE), (PEAK_THROTTLE, 1.0) and
+# (1, FULL) up to full throttle, then linear down to BOOST_MAX_FRACTION at
+# THROTTLE_BOOST_VALUE.
+TURN_RATE_IDLE_FRACTION = 0.5
+TURN_RATE_PEAK_THROTTLE = 0.6
+TURN_RATE_FULL_THRUST_FRACTION = 0.7
+TURN_RATE_BOOST_MAX_FRACTION = 0.1
+_TURN_RATE_PARABOLA = np.polyfit(
+    [0.0, TURN_RATE_PEAK_THROTTLE, 1.0],
+    [TURN_RATE_IDLE_FRACTION, 1.0, TURN_RATE_FULL_THRUST_FRACTION],
+    2,
+)
+
+
+def turn_rate_scale(throttle: float) -> float:
+    """
+    Fraction of the max turn rates available at a given throttle command.
+
+    The fitted parabola peaks marginally above 1 (near throttle 0.56), so it is
+    clipped to 1. Above full throttle (boost) the scale falls linearly.
+
+    :param throttle: Throttle command, in [0, THROTTLE_BOOST_VALUE]
+    :return: Scale in [TURN_RATE_BOOST_MAX_FRACTION, 1]
+    """
+    throttle = min(max(throttle, 0.0), THROTTLE_BOOST_VALUE)
+    if throttle <= 1.0:
+        return min(1.0, float(np.polyval(_TURN_RATE_PARABOLA, throttle)))
+    boost_ratio = (throttle - 1.0) / (THROTTLE_BOOST_VALUE - 1.0)
+    return TURN_RATE_FULL_THRUST_FRACTION + boost_ratio * (
+        TURN_RATE_BOOST_MAX_FRACTION - TURN_RATE_FULL_THRUST_FRACTION
+    )
 
 
 class Ship(Pawn):
@@ -87,7 +120,7 @@ class Ship(Pawn):
             self.conf = yaml.safe_load(f)
         # Set a low-pass filter time to emulate physical delay in
         # thrust and rotational rates
-        self.physics_filter_time_s = self.conf["physics_filter_time_s"]
+        self.inputs_filter_time_s = self.conf["inputs_filter_time_s"]
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
         self.brake_factor_nspm = self.conf["brake_factor_nspm"]
@@ -282,10 +315,11 @@ class Ship(Pawn):
 
         The throttle is squared so the velocity is easier to modulate; below
         ZERO_THRUST_POSITION it brakes (airplane model) or cuts thrust (space).
+        The turn rates are scaled by turn_rate_scale(throttle).
         Both are low-pass filtered to emulate delay in physical systems.
         pqr is stored in Panda3D's pitch-roll-yaw order.
 
-        :param throttle: Throttle command in [0, 1]
+        :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1] (fraction of the max rate)
         :param pitch_rate: Pitch rate command in [-1, 1]
         :param roll_rate: Roll rate command in [-1, 1]
@@ -312,7 +346,7 @@ class Ship(Pawn):
             else:
                 raise Exception
 
-        pqr = np.array(
+        pqr = turn_rate_scale(throttle) * np.array(
             [
                 pitch_rate * self.max_pitch_rate_radps,
                 roll_rate * self.max_roll_rate_radps,
@@ -343,8 +377,8 @@ class Ship(Pawn):
                 ]
             ),
             dt=dt,
-            rise_time=self.physics_filter_time_s,
-            fall_time=self.physics_filter_time_s,
+            rise_time=self.inputs_filter_time_s,
+            fall_time=self.inputs_filter_time_s,
         )
 
     def compute_derivatives(self):
@@ -576,7 +610,7 @@ class Ship(Pawn):
         """
         Moves the ship given throttle and turn rates (see :meth:`set_inputs`)
 
-        :param throttle: Throttle command in [0, 1]
+        :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
         :param pitch_rate: Pitch rate command in [-1, 1]
         :param roll_rate: Roll rate command in [-1, 1]
@@ -706,7 +740,7 @@ class Ship(Pawn):
         """
         Updates the pitch of the engine noise
 
-        :param throttle: The throttle value of the ship [0, 1]
+        :param throttle: The throttle value of the ship [0, 1], above 1 for boost
         """
         pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
         pitch_multiplier *= self._engine_sputter_factor()

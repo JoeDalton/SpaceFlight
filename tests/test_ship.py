@@ -3,7 +3,7 @@ import pytest
 import quaternion
 
 from space_flight import RIGHT_BODY, UP_BODY
-from space_flight.actors.ship import Ship
+from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.utils import cross3, magnitude, rotate_single_vector
 
 
@@ -425,3 +425,71 @@ def test_lift_induced_drag_uses_clipped_lift_magnitude():
         )
     )
     np.testing.assert_allclose(clipped.drag_n, expected_drag_n, rtol=1e-10)
+
+
+# ---------------------------
+# turn rate profile
+# ---------------------------
+
+
+def test_turn_rate_scale_anchor_points():
+    """
+    The profile hits its anchors: 50% at idle, 100% at 60% throttle, 70% at
+    full thrust and 10% at max boost.
+    """
+    assert turn_rate_scale(0.0) == pytest.approx(0.5)
+    assert turn_rate_scale(0.6) == pytest.approx(1.0)
+    assert turn_rate_scale(1.0) == pytest.approx(0.7)
+    assert turn_rate_scale(2.0) == pytest.approx(0.1)
+
+
+def test_turn_rate_scale_boost_is_linear():
+    """
+    Between full thrust and max boost the scale falls linearly.
+    """
+    assert turn_rate_scale(1.5) == pytest.approx(0.4)
+
+
+def test_turn_rate_scale_bounded_and_clamped():
+    """
+    The scale never exceeds 1 (the parabola peak is clipped) and the throttle
+    is clamped to [0, boost max].
+    """
+    throttles = np.linspace(0.0, 2.0, 201)
+    assert max(turn_rate_scale(t) for t in throttles) == pytest.approx(1.0)
+    assert turn_rate_scale(-1.0) == pytest.approx(0.5)
+    assert turn_rate_scale(5.0) == pytest.approx(0.1)
+
+
+def test_set_inputs_scales_turn_rates_with_throttle():
+    """
+    set_inputs applies the throttle-dependent scale to the commanded rates.
+    """
+
+    class ConcreteShip(Ship):
+        def apply_damage(self, damage, damage_type):
+            pass
+
+        def ship_handle_health(self):
+            pass
+
+    class FakeTime:
+        def get_time_step(self):
+            return 1.0
+
+    class FakeGame:
+        game_time = FakeTime()
+
+    ship = object.__new__(ConcreteShip)
+    ship.game = FakeGame()
+    ship.max_pitch_rate_radps = 1.0
+    ship.max_roll_rate_radps = 1.0
+    ship.max_yaw_rate_radps = 1.0
+    ship.max_thrust_n = 1.0
+    ship.inputs_filter_time_s = 1e-6  # effectively no filtering
+    ship.scalar_thrust_n = 0.0
+    ship.pqr = np.zeros(3)
+
+    ship.set_inputs(throttle=1.0, yaw_rate=1.0, pitch_rate=1.0, roll_rate=1.0)
+
+    np.testing.assert_allclose(ship.pqr, [0.7, 0.7, 0.7], atol=1e-3)
