@@ -86,13 +86,13 @@ health), a `LaserCannon`, `AutoAim` for target leading, and one
 (`{ordnance_name: count}`, see [ordnance](#ordnance-bombs-rockets-missiles-flares)).
 Its collision sphere is sized from `hit_box_radius_m` in its config.
 
-The ordnance API is generic, used alike by the player and the AI:
-`launchers(*types)`, `first_launcher(*types)` (the first with stock left),
-`stock(*types)` and `launch_ordnance(launcher)`, which gives a missile the
-current target only while auto-aim is locked on it. On top of it, the player
-picks a *secondary* weapon (a bomb, rocket or missile launcher):
-`cycle_secondary`, `fire_secondary` (which moves on once the selection is
-spent), and `drop_flare`.
+Ordnance is used the same way by the player and the AI, through the
+*selected secondary* weapon (`selected_secondary`, a bomb, rocket or missile
+launcher with stock left): `cycle_secondary` selects the next one in loadout
+order, looping, and `fire_secondary` launches it, then moves on once it is
+spent. A missile gets the current target only while auto-aim is locked on it.
+Flares have their own trigger, `drop_flare`, from the loadout's flare launcher
+(`flare_launcher`).
 
 ### `CapitalShip`
 

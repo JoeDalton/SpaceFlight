@@ -431,7 +431,9 @@ class FighterNavigator(GenericShipNavigator):
         target_position = target_dict["target_current_position"]
         target_speed = target_dict["target_current_speed"]
         if weapon == "bomb":
-            launcher = self.pawn.first_launcher("bomb")
+            launcher = self.pawn.selected_secondary
+            if launcher is None or launcher.category != "bomb":
+                return False
             if not self.compute_release_condition(
                 target_position,
                 target_speed,
@@ -439,7 +441,7 @@ class FighterNavigator(GenericShipNavigator):
                 launcher,
             ):
                 return False
-            self.pawn.launch_ordnance(launcher)
+            self.pawn.fire_secondary()
             self.behaviour_sm.request("bomb_break")
             self._armed_trigger = None
             return True
@@ -740,7 +742,7 @@ class FighterNavigator(GenericShipNavigator):
         target_position: np.ndarray,
         target_speed: np.ndarray,
         bomb: dict,
-        launcher: OrdnanceLauncher | None,
+        launcher: OrdnanceLauncher,
     ) -> bool:
         """
         Whether a bomb dropped this frame would hit the target.
@@ -756,11 +758,9 @@ class FighterNavigator(GenericShipNavigator):
         :param target_position: The target's world position
         :param target_speed: The target's world velocity
         :param bomb: The bomb personality sub-dict
-        :param launcher: The bomb launcher that would drop it (None: no bomb left)
+        :param launcher: The bomb launcher that would drop it
         :return: True if a drop is on target now
         """
-        if launcher is None:
-            return False
         v_bomb = launcher.initial_velocity()
         v_bomb_norm = magnitude(v_bomb)
         if v_bomb_norm < 1e-6:

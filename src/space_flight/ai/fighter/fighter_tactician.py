@@ -112,13 +112,15 @@ class FighterTactician(GenericTactician):
         """
         Pick the weapon system for a target by suitability: a limited bomb only
         beats guns on a target that is stationary, tough AND valuable, with supply
-        to spare. Any non-numeric input (e.g. a mocked target) or no supply falls
-        back to guns.
+        to spare (the selected secondary weapon's stock, when it is a bomb). Any
+        non-numeric input (e.g. a mocked target) or no supply falls back to guns.
 
         :param target: The prey actor
         :return: "bomb" or "guns"
         """
-        bomb_supply = self.pawn.stock("bomb")
+        launcher = self.pawn.selected_secondary
+        is_bomb = launcher is not None and launcher.category == "bomb"
+        bomb_supply = launcher.stock if is_bomb else 0
         scoring = self.personality["tactician"]["bomb_scoring"]
         try:
             if bomb_supply <= 0:

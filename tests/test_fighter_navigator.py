@@ -592,18 +592,18 @@ BOMB_LAUNCH_SPEED_MPS = 75.0
 def _augment_pawn_for_bomb(nav):
     """
     Give the mocked pawn what the bomb run + release solver read: a bomb
-    launcher dropping bombs along the belly, and the launch call.
+    launcher, dropping bombs along the belly, as its selected secondary weapon.
     """
     nav.pawn.position = np.zeros(3)
     nav.pawn.forward = np.array([0.0, 1.0, 0.0])
     nav.pawn.up = np.array([0.0, 0.0, 1.0])
     nav.pawn.speed = np.array([0.0, 100.0, 0.0])
-    launcher = MagicMock()
+    launcher = MagicMock(category="bomb")
     launcher.initial_velocity.side_effect = lambda: (
         nav.pawn.speed - BOMB_LAUNCH_SPEED_MPS * nav.pawn.up
     )
-    nav.pawn.first_launcher = MagicMock(return_value=launcher)
-    nav.pawn.launch_ordnance = MagicMock(return_value=True)
+    nav.pawn.selected_secondary = launcher
+    nav.pawn.fire_secondary = MagicMock(return_value=True)
     nav.bomb_launcher = launcher
     nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
     nav.up_reference = None
@@ -643,20 +643,6 @@ def test_compute_release_condition_aligned_in_range_returns_true():
             target_position, np.zeros(3), bomb, nav.bomb_launcher
         )
         is True
-    )
-
-
-def test_compute_release_condition_without_bomb_launcher_returns_false():
-    """
-    With no bomb left (no launcher with stock), there is nothing to release.
-    """
-    nav = make_fighter_navigator()
-    _augment_pawn_for_bomb(nav)
-    bomb = nav.personality["navigator"]["bomb"]
-    target_position = _bomb_velocity_dir(nav) * 100.0  # on the bomb line, 100 m
-
-    assert (
-        nav.compute_release_condition(target_position, np.zeros(3), bomb, None) is False
     )
 
 
@@ -884,7 +870,32 @@ def test_bomb_run_releases_and_breaks():
     nav.bomb_target(engagement)
 
     assert nav.behaviour == "bomb_break"
-    nav.pawn.launch_ordnance.assert_called_once_with(nav.bomb_launcher)
+    nav.pawn.fire_secondary.assert_called_once()
+
+
+@pytest.mark.parametrize("selected", ["missile", None])
+def test_bomb_run_does_not_release_without_a_bomb_selected(selected):
+    """
+    The bomb is the selected secondary weapon: with a missile selected instead,
+    or nothing left, the run releases nothing even on a perfect solution.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    nav.pawn.selected_secondary = (
+        None if selected is None else MagicMock(category=selected)
+    )
+    _enter_behaviour(nav, "bomb_run")
+    direction = _bomb_velocity_dir(nav)
+    engagement = _bomb_engagement(
+        distance_m=100.0,
+        direction=direction,
+        target_position=direction * 100.0,  # aligned, in range
+        longitudinal=-55.0,
+    )
+
+    nav.bomb_target(engagement)
+
+    nav.pawn.fire_secondary.assert_not_called()
 
 
 def test_bomb_run_without_solution_holds_and_aims_belly():
@@ -907,7 +918,7 @@ def test_bomb_run_without_solution_holds_and_aims_belly():
 
     assert nav.behaviour == "bomb_run"
     assert nav.up_reference is not None  # belly aim published
-    nav.pawn.launch_ordnance.assert_not_called()
+    nav.pawn.fire_secondary.assert_not_called()
 
 
 def test_bomb_run_follows_track_line_and_publishes_up_reference():
@@ -1024,7 +1035,7 @@ def test_bomb_released_between_thinks_once_the_solution_is_met():
 
     nav.bomb_target(target_dict)  # the think
     assert nav.behaviour == "bomb_run"
-    nav.pawn.launch_ordnance.assert_not_called()
+    nav.pawn.fire_secondary.assert_not_called()
 
     # A few frames later (fresh geometry): the target now lies on the bomb path
     direction = _bomb_velocity_dir(nav)
@@ -1036,7 +1047,7 @@ def test_bomb_released_between_thinks_once_the_solution_is_met():
     nav.update_triggers(Intent.ENGAGE, target_dict)
     nav.update_triggers(Intent.ENGAGE, target_dict)
 
-    nav.pawn.launch_ordnance.assert_called_once_with(nav.bomb_launcher)
+    nav.pawn.fire_secondary.assert_called_once()
     assert nav.behaviour == "bomb_break"
 
 

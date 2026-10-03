@@ -148,61 +148,48 @@ class FakeLauncher:
 
 
 def _fighter_with_loadout(*launchers: FakeLauncher, locked: bool = False):
+    """
+    A fighter carrying these launchers, its secondary and flare launcher picked
+    as at construction.
+    """
     fighter = make_fighter_without_init()
     fighter.ordnance_launchers = list(launchers)
-    fighter.selected_secondary = fighter.first_launcher("bomb", "rocket", "missile")
+    fighter.selected_secondary = None
+    fighter.cycle_secondary()
+    fighter.flare_launcher = next(
+        (launcher for launcher in launchers if launcher.category == "flare"), None
+    )
     fighter.target_id = "target"
     fighter.auto_aim = MagicMock(is_target_acquired=locked)
     return fighter
 
 
-def test_stock_sums_the_launchers_of_a_category():
+def test_first_secondary_with_stock_is_selected_initially():
     """
-    stock adds up the remaining units of every launcher of the given types.
+    The initial secondary weapon is the first bomb, rocket or missile launcher
+    with stock left, in loadout order; flares are never a secondary.
     """
+    rocket = FakeLauncher("rocket", 3)
     fighter = _fighter_with_loadout(
-        FakeLauncher("bomb", 3), FakeLauncher("missile", 2), FakeLauncher("bomb", 1)
+        FakeLauncher("flare", 10), FakeLauncher("missile", 0), rocket
     )
 
-    assert fighter.stock("bomb") == 4
-    assert fighter.stock("missile", "rocket") == 2
-    assert fighter.stock("flare") == 0
+    assert fighter.selected_secondary is rocket
 
 
-def test_first_launcher_skips_empty_launchers():
+def test_fire_secondary_gives_a_missile_the_target_only_when_locked():
     """
-    first_launcher returns the first launcher of the types that has stock left.
-    """
-    empty_bomb = FakeLauncher("bomb", 0)
-    full_bomb = FakeLauncher("bomb", 2)
-    fighter = _fighter_with_loadout(empty_bomb, full_bomb)
-
-    assert fighter.first_launcher("bomb") is full_bomb
-    assert fighter.first_launcher("flare") is None
-
-
-def test_launch_ordnance_gives_the_target_only_when_locked():
-    """
-    A launch carries the current target only while auto-aim is locked on it;
-    otherwise the ordnance flies blind.
+    A missile carries the current target only while auto-aim is locked on it;
+    otherwise it flies blind.
     """
     missile = FakeLauncher("missile", 2)
     fighter = _fighter_with_loadout(missile, locked=False)
 
-    assert fighter.launch_ordnance(missile) is True
+    assert fighter.fire_secondary() is True
     fighter.auto_aim.is_target_acquired = True
-    assert fighter.launch_ordnance(missile) is True
+    assert fighter.fire_secondary() is True
 
     assert missile.targets == [None, "target"]
-
-
-def test_launch_ordnance_without_launcher_returns_false():
-    """
-    Launching from no launcher (none with stock left) is a harmless no-op.
-    """
-    fighter = _fighter_with_loadout()
-
-    assert fighter.launch_ordnance(None) is False
 
 
 def test_fire_secondary_launches_the_selected_launcher():
@@ -255,6 +242,15 @@ def test_secondary_is_none_without_secondary_ordnance():
 
     assert fighter.selected_secondary is None
     assert fighter.fire_secondary() is False
+
+
+def test_drop_flare_without_flares_returns_false():
+    """
+    A ship without flares drops nothing.
+    """
+    fighter = _fighter_with_loadout(FakeLauncher("missile", 2))
+
+    assert fighter.drop_flare() is False
 
 
 def test_drop_flare_launches_a_flare_not_the_secondary():

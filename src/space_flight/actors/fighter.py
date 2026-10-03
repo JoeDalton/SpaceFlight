@@ -63,13 +63,24 @@ class Fighter(Ship):
         self.laser_cannon = LaserCannon(game=self.game, parent=self)
 
         # Ordnance: one launcher per loadout entry, in the configuration's order,
-        # each with its own limited stock (see launch_ordnance)
+        # each with its own limited stock
         self.ordnance_launchers = [
             OrdnanceLauncher(game=self.game, parent=self, name=name, stock=stock)
             for name, stock in self.conf.get("loadout", {}).items()
         ]
-        # The secondary weapon picked by the player (bomb, rocket or missile)
-        self.selected_secondary = self.first_launcher(*SECONDARY_TYPES)
+        # The selected secondary weapon (a bomb, rocket or missile launcher),
+        # fired by fire_secondary
+        self.selected_secondary = None
+        self.cycle_secondary()
+        # Flares have their own trigger (see drop_flare)
+        self.flare_launcher = next(
+            (
+                launcher
+                for launcher in self.ordnance_launchers
+                if launcher.category == "flare"
+            ),
+            None,
+        )
 
         # Initialize collisions
         self.hit_box_radius_m = self.conf["hit_box_radius_m"]
@@ -115,60 +126,15 @@ class Fighter(Ship):
         """
         return self.shield
 
-    def launchers(self, *categories: str) -> list[OrdnanceLauncher]:
-        """
-        :param categories: Ordnance types (bomb, rocket, missile, flare)
-        :return: The ship's launchers of these types, in loadout order
-        """
-        return [
-            launcher
-            for launcher in self.ordnance_launchers
-            if launcher.category in categories
-        ]
-
-    def first_launcher(self, *categories: str) -> OrdnanceLauncher | None:
-        """
-        :param categories: Ordnance types (bomb, rocket, missile, flare)
-        :return: The first launcher of these types with stock left, or None
-        """
-        for launcher in self.launchers(*categories):
-            if launcher.stock > 0:
-                return launcher
-        return None
-
-    def stock(self, *categories: str) -> int:
-        """
-        :param categories: Ordnance types (bomb, rocket, missile, flare)
-        :return: How many of these the ship has left
-        """
-        return sum(launcher.stock for launcher in self.launchers(*categories))
-
-    def launch_ordnance(self, launcher: OrdnanceLauncher | None) -> bool:
-        """
-        Launch one unit from a launcher. A missile is given the current target
-        only if auto-aim has locked onto it; otherwise it flies blind, like a
-        rocket.
-
-        The launcher is rate-limited, so a launch can be refused while reloading
-        even with stock to spare; stock is only spent on an actual launch.
-
-        :param launcher: One of the ship's launchers (None is a no-op)
-        :return: True if launched, False if out of stock or reloading
-        """
-        if launcher is None:
-            return False
-        target_id = self.target_id if self.auto_aim.is_target_acquired else None
-        return launcher.launch(target_id=target_id)
-
     def cycle_secondary(self):
         """
         Select the next secondary weapon (bomb, rocket or missile launcher) with
-        stock left, in loadout order.
+        stock left, in loadout order, looping back to the first.
         """
         candidates = [
             launcher
-            for launcher in self.launchers(*SECONDARY_TYPES)
-            if launcher.stock > 0
+            for launcher in self.ordnance_launchers
+            if launcher.category in SECONDARY_TYPES and launcher.stock > 0
         ]
         if not candidates:
             self.selected_secondary = None
@@ -181,12 +147,16 @@ class Fighter(Ship):
 
     def fire_secondary(self) -> bool:
         """
-        Launch the selected secondary weapon, moving to the next one once its
-        stock runs out.
+        Launch the selected secondary weapon, then select the next one once its
+        stock runs out. A missile is given the current target only if auto-aim
+        has locked onto it; otherwise it flies blind, like a rocket.
 
-        :return: True if launched
+        The launcher is rate-limited, so a launch can be refused while reloading
+        even with stock to spare; stock is only spent on an actual launch.
+
+        :return: True if launched, False if out of stock or reloading
         """
-        launched = self.launch_ordnance(self.selected_secondary)
+        launched = self._launch(self.selected_secondary)
         if self.selected_secondary is None or self.selected_secondary.stock <= 0:
             self.cycle_secondary()
         return launched
@@ -195,9 +165,22 @@ class Fighter(Ship):
         """
         Drop a flare behind the ship, if any is left.
 
-        :return: True if dropped
+        :return: True if dropped, False if out of flares or reloading
         """
-        return self.launch_ordnance(self.first_launcher("flare"))
+        return self._launch(self.flare_launcher)
+
+    def _launch(self, launcher: OrdnanceLauncher | None) -> bool:
+        """
+        Launch one unit from one of the ship's launchers, giving it the current
+        target only if auto-aim has locked onto it (only a missile uses it).
+
+        :param launcher: The launcher (None is a no-op)
+        :return: True if launched
+        """
+        if launcher is None:
+            return False
+        target_id = self.target_id if self.auto_aim.is_target_acquired else None
+        return launcher.launch(target_id=target_id)
 
     def apply_damage(self, damage: float, damage_type: str):
         """

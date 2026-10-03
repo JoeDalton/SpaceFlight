@@ -105,8 +105,8 @@ engage the best-scored prey (`evaluate_preys`, boosted for
 `primary_target_ids`), patrol, hold formation, else regroup. When engaging it
 also picks the `AttackMode` (in `target_dict["attack_mode"]`): first the weapon
 (`_choose_weapon` — a limited bomb only against a target both tough and
-valuable, stationary enough, with stock to spare, `pawn.stock("bomb")`), then
-the geometry: `BOMB`,
+valuable, stationary enough, with stock to spare — only while the selected
+secondary weapon is a bomb launcher), then the geometry: `BOMB`,
 or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
 
 **`FighterNavigator.engage_target`** dispatches on that attack mode:
@@ -129,7 +129,8 @@ or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
   `compute_release_condition` treats the bomb as a straight (no-gravity)
   projectile at its launcher's `initial_velocity()` and releases when the
   flight-time-led intercept falls inside a cone of that velocity; the drop
-  goes through the generic `pawn.launch_ordnance(pawn.first_launcher("bomb"))`.
+  goes through the player's own `pawn.fire_secondary()`, with the selected
+  secondary weapon (nothing is released if it is not a bomb).
 
 **`CapitalShipTactician`** is the fighter's list without threat evasion or
 prey scoring: it engages a scripted prey (`scripted_prey_dict`) tagged

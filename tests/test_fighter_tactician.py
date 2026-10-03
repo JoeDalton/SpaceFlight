@@ -186,7 +186,7 @@ def test_select_bomb_for_hard_stationary_primary_target(mock_game):
     attacked with a BOMB.
     """
     tactician = make_fighter_tactician(mock_game)
-    tactician.pawn.stock.return_value = 6
+    tactician.pawn.selected_secondary = MagicMock(category="bomb", stock=6)
     _wire_numeric_target(
         mock_game,
         tactician,
@@ -205,7 +205,7 @@ def test_select_strafe_not_bomb_for_soft_target(mock_game):
     (being slow) a STRAFE run.
     """
     tactician = make_fighter_tactician(mock_game)
-    tactician.pawn.stock.return_value = 6
+    tactician.pawn.selected_secondary = MagicMock(category="bomb", stock=6)
     _wire_numeric_target(
         mock_game,
         tactician,
@@ -223,12 +223,36 @@ def test_select_no_bomb_without_supply(mock_game):
     With no bombs left, even the ideal bomb target falls to guns (STRAFE).
     """
     tactician = make_fighter_tactician(mock_game)
-    tactician.pawn.stock.return_value = 0
+    tactician.pawn.selected_secondary = MagicMock(category="bomb", stock=0)
     _wire_numeric_target(
         mock_game,
         tactician,
         mobility=0.05,
         health=2000.0,
+        shield_level=0.0,
+        primary=True,
+    )
+
+    assert tactician._select_attack_mode(target_id="t") == AttackMode.STRAFE
+
+
+@pytest.mark.parametrize(
+    "selected_secondary",
+    [None, MagicMock(category="missile", stock=6)],
+    ids=["nothing", "missile"],
+)
+def test_select_no_bomb_without_a_bomb_selected(mock_game, selected_secondary):
+    """
+    Bombs are only used while they are the selected secondary weapon: with
+    nothing left, or missiles selected, the ideal bomb target falls to guns.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    tactician.pawn.selected_secondary = selected_secondary
+    _wire_numeric_target(
+        mock_game,
+        tactician,
+        mobility=0.05,
+        health=8000.0,
         shield_level=0.0,
         primary=True,
     )
