@@ -53,7 +53,7 @@ CONVOY_HALFWAY_WAYPOINT = 4
 ESCORT = WaveSpec(
     name="escort",
     ship_model="x-wing",
-    size=6,
+    size=8,
     team=1,
     spawn_point=[200, -2100, 300],
     spawn_orientation=FACING_NORTH,
@@ -93,7 +93,7 @@ THIRD_WAVE = WaveSpec(
 )
 
 FOURTH_WAVE = WaveSpec(
-    name="third_wave",
+    name="fourth_wave",
     ship_model="tie-fighter",
     size=5,
     spawn_point=[300, 300, 800],

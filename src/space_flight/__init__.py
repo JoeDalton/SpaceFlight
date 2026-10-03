@@ -15,7 +15,7 @@ CACHE_PATH = Path(__file__).parent.parent.parent / ".cache"
 
 DEBUG_DELETION = False
 DEBUG_COLLISION = False
-DEBUG_HUD = True
+DEBUG_HUD = False
 RECORD_GAME = False
 FLIGHT_MODEL = "airplane"  # "airplane", "space"
 THROTTLE_BOOST_VALUE = 2.0  # Throttle command when boosting (1.0 is full thrust)
