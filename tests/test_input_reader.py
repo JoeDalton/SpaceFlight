@@ -30,6 +30,7 @@ class _StubReader(InputReader):
         """
         self.state = InputState()
         self.previous = {}
+        self.logical_down = {}
         self.ev_pressed = set()
         self.ev_released = set()
         self.global_keys = []
@@ -221,6 +222,87 @@ def test_poll_safety_net_and_polling_agree_no_duplicate(reader):
     state = reader.poll()
     assert state.buttons.get("fire") is True
     assert list(state.buttons.keys()).count("fire") == 1
+
+
+def test_poll_event_after_polling_is_not_a_second_press(reader):
+    """
+    A press seen by polling, then reported again by its event one frame later,
+    is a single press: the second frame is a hold.
+    """
+    reader.hw_state = {"cycle": True}
+    assert reader.poll().buttons.get("cycle") is True
+
+    reader.ev_pressed.add("cycle")
+    state = reader.poll()
+
+    assert "cycle" not in state.buttons
+    assert state.repeats.get("cycle") is True
+
+
+def test_poll_polling_after_event_is_not_a_second_press(reader):
+    """
+    A press reported by its event first, then seen by polling one frame later,
+    is a single press: the second frame is a hold.
+    """
+    reader.ev_pressed.add("cycle")
+    assert reader.poll().buttons.get("cycle") is True
+
+    reader.hw_state = {"cycle": True}
+    state = reader.poll()
+
+    assert "cycle" not in state.buttons
+    assert state.repeats.get("cycle") is True
+
+
+def test_poll_release_reported_once_by_both_sources(reader):
+    """
+    A release reported by its event, then seen by polling one frame later, is
+    a single release.
+    """
+    reader.hw_state = {"boost": True}
+    reader.poll()  # press
+    reader.ev_released.add("boost")
+    assert reader.poll().releases.get("boost") is True  # event first
+
+    reader.hw_state = {"boost": False}
+    state = reader.poll()  # polling catches up
+
+    assert "boost" not in state.releases
+
+
+def test_poll_successive_presses_each_count_once(reader):
+    """
+    Two distinct presses, each seen by polling and by a late event, count as
+    two presses.
+    """
+    n_presses = 0
+    for _ in range(2):
+        reader.hw_state = {"cycle": True}
+        n_presses += "cycle" in reader.poll().buttons
+        reader.ev_pressed.add("cycle")
+        n_presses += "cycle" in reader.poll().buttons
+        reader.hw_state = {"cycle": False}
+        reader.poll()
+        reader.ev_released.add("cycle")
+        reader.poll()
+
+    assert n_presses == 2
+
+
+def test_poll_release_and_press_between_polls_while_held(reader):
+    """
+    A button released and pressed again between two polls (polling sees it held
+    throughout) reports both the release and the new press.
+    """
+    reader.hw_state = {"fire": True}
+    reader.poll()
+    reader.ev_released.add("fire")
+    reader.ev_pressed.add("fire")
+
+    state = reader.poll()
+
+    assert state.releases.get("fire") is True
+    assert state.buttons.get("fire") is True
 
 
 def test_poll_axes_populated(reader):

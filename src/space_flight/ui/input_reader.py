@@ -226,9 +226,14 @@ class InputReader:
       hardware state each frame.  Comparison with previous gives
       pressed / held / released without duplicates.
     * **Events** (safety net) — accept() callbacks for press and release
-      write into ev_pressed / ev_released.  After the comparison
-      pass these sets are OR-merged into buttons / releases to catch
-      inputs that were pressed *and* released between two frames.
+      write into ev_pressed / ev_released.  They are merged with the
+      comparison pass to catch inputs that were pressed *and* released
+      between two frames.
+    * **Deduplication** — the two sources may report the same press (or
+      release) on different frames, e.g. the event one frame after polling
+      saw the button go down.  A per-button logical state (``logical_down``)
+      reports a press only if the button is not already known to be down,
+      and a release only if it is not already known to be up.
     * event-repeat is intentionally **not** registered; repeated-held
       state is derived from polling alone.
     """
@@ -248,6 +253,10 @@ class InputReader:
         self.app = app
         self.state = InputState()
         self.previous: dict[str, bool] = {}
+        # Whether each button is known to be down, from either source (absent
+        # until first seen): dedupes a press reported by both polling and an
+        # event on different frames
+        self.logical_down: dict[str, bool] = {}
         self.ev_pressed: set[str] = set()
         self.ev_released: set[str] = set()
         self.app.disableMouse()
@@ -271,10 +280,11 @@ class InputReader:
         Steps performed each call:
 
         1. :meth:`read_all_buttons` returns the raw current button state.
-        2. Comparison with the previous frame produces buttons (newly
-           pressed), repeats (held), and releases (newly released).
-        3. The event-safety-net sets are OR-merged to catch inputs that were
-           both pressed and released between two polls.
+        2. Comparison with the previous frame, merged with the event
+           safety-net sets (which catch inputs both pressed and released
+           between two polls), produces buttons (newly pressed), repeats
+           (held), and releases (newly released) -- each press or release
+           reported once, even when both sources see it on different frames.
         4. :meth:`read_axes` populates state.axes.
 
         :return: The updated :class:`InputState` for this frame.
@@ -286,20 +296,38 @@ class InputReader:
         self.state.releases.clear()
         self.state.axes.clear()
 
-        for name, is_down in current.items():
+        for name in current.keys() | self.ev_pressed | self.ev_released:
+            is_down = current.get(name, False)
             was_down = self.previous.get(name, False)
-            if is_down and not was_down:
-                self.state.buttons[name] = True
+            pressed = (is_down and not was_down) or name in self.ev_pressed
+            released = (not is_down and was_down) or name in self.ev_released
+            known_down = self.logical_down.get(name)
+
+            if pressed and released:
+                if known_down:
+                    # Released, then pressed again, between two polls
+                    self.state.releases[name] = True
+                    self.state.buttons[name] = True
+                else:
+                    # A brief tap between two polls
+                    self.state.buttons[name] = True
+                    self.state.releases[name] = True
+                    self.logical_down[name] = False
+            elif pressed:
+                if known_down:
+                    # The other source already reported this press
+                    if is_down:
+                        self.state.repeats[name] = True
+                else:
+                    self.state.buttons[name] = True
+                    self.logical_down[name] = True
+            elif released:
+                if known_down is not False:
+                    self.state.releases[name] = True
+                self.logical_down[name] = False
             elif is_down and was_down:
                 self.state.repeats[name] = True
-            elif not is_down and was_down:
-                self.state.releases[name] = True
 
-        # Safety-net: catch brief press/release invisible to frame-rate polling
-        for name in self.ev_pressed:
-            self.state.buttons[name] = True
-        for name in self.ev_released:
-            self.state.releases[name] = True
         self.ev_pressed.clear()
         self.ev_released.clear()
 
