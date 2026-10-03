@@ -2,7 +2,7 @@
 mass_kg: 80
 inputs_filter_time_s: 0.3
 max_thrust_n: 6612.5
-brake_factor_nspm: 100
+brake_factor_nspm: 50
 max_pitch_rate_degps: 35
 max_yaw_rate_degps: 15
 max_roll_rate_degps: 90
@@ -10,7 +10,7 @@ drag_coefficient: 0.1
 lift_coefficient_slope_pdeg: 0.1
 lateral_lift_coefficient_slope_pdeg: 0.05
 reference_surface_m2: 10
-lift_inefficiency: 0.0796  # = 1/(pi * AR * e)
+lift_inefficiency: 0.0008  # = 1/(pi * AR * e)
 
 health: 2500.0
 shield: 0.0
