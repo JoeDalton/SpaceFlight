@@ -451,9 +451,10 @@ class HyperspaceInputContext(InputContext):
     """
     Pushed while the hyperspace loading screen waits for the player to drop out.
 
-    It is a thin trigger: the first time the drop_hyperspace key is pressed
-    it calls *on_trigger* once and then ignores further input (the level reveal
-    pops it). Being on top of the stack, it also blocks the flight context below
+    It is a thin trigger: each time the drop_hyperspace key is pressed it
+    calls *on_trigger* until the callback accepts it (returns True), then
+    ignores further input (the level reveal pops it).
+    Being on top of the stack, it also blocks the flight context below
     so the ship cannot be controlled until the world is revealed.
 
     Both the device-specific binding and the global one are honoured.
@@ -462,7 +463,8 @@ class HyperspaceInputContext(InputContext):
     def __init__(self, app: SpaceFlightSimulator, on_trigger: Callable):
         """
         :param app: the simulator app
-        :param on_trigger: zero-argument callback fired on the first key press
+        :param on_trigger: zero-argument callback fired on key press; returns
+            True when the press was accepted (the context then latches)
         """
         self.app = app
         self.on_trigger = on_trigger
@@ -488,8 +490,11 @@ class HyperspaceInputContext(InputContext):
             return
         for key in self.drop_keys:
             if state.buttons.get(key):
-                self.triggered = True
-                self.on_trigger()
+                # Latch only once the callback accepts the press: the overlay
+                # may not be waiting for the key yet, and an early press must
+                # not use up the trigger.
+                if self.on_trigger():
+                    self.triggered = True
                 return
 
     def refresh_bindings(self, app: SpaceFlightSimulator):

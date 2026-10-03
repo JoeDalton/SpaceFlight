@@ -229,16 +229,21 @@ class HyperspaceLoadingState(BaseState):
             if self._on_build_complete is not None:
                 self._on_build_complete()
 
-    def request_jump_out(self):
+    def request_jump_out(self) -> bool:
         """
         Ask the overlay to drop out of hyperspace now.
 
         Only has an effect while the overlay is waiting for the jump-out key
         (wait_for_key); the outof transition then begins on the next
         frame. Wired to the player's input via the hyperspace input context.
+
+        :return: True if the request was accepted, False if the overlay is not
+            waiting yet (the request is ignored, not buffered)
         """
         if self._awaiting_jump:
             self._jump_requested = True
+            return True
+        return False
 
     def _enter_await(self):
         """Begin waiting for the jump-out key, showing the prompt message."""
