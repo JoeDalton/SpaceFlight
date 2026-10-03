@@ -107,7 +107,7 @@
 
 ````
 
-````{py:method} get_ship_index(ship_id)
+````{py:method} get_ship_index(ship_id: uuid.UUID) -> int | None
 :canonical: space_flight.ai.formation.Formation.get_ship_index
 
 ```{autodoc2-docstring} space_flight.ai.formation.Formation.get_ship_index
@@ -115,7 +115,7 @@
 
 ````
 
-````{py:method} add_ship(ship, leader=False)
+````{py:method} add_ship(ship: space_flight.actors.pawn.Pawn, leader: bool = False)
 :canonical: space_flight.ai.formation.Formation.add_ship
 
 ```{autodoc2-docstring} space_flight.ai.formation.Formation.add_ship
@@ -123,7 +123,7 @@
 
 ````
 
-````{py:method} remove_ship(ship_id)
+````{py:method} remove_ship(ship_id: uuid.UUID)
 :canonical: space_flight.ai.formation.Formation.remove_ship
 
 ```{autodoc2-docstring} space_flight.ai.formation.Formation.remove_ship

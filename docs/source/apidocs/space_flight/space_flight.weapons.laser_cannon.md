@@ -180,7 +180,7 @@
 ```
 ````
 
-`````{py:class} LaserCannon(game, parent, parent_node=None)
+`````{py:class} LaserCannon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None)
 :canonical: space_flight.weapons.laser_cannon.LaserCannon
 
 Bases: {py:obj}`space_flight.weapons.Weapon`
@@ -209,7 +209,7 @@ Bases: {py:obj}`space_flight.weapons.Weapon`
 
 `````
 
-`````{py:class} LaserShot(game, origin_ship_id: str, color: panda3d.core.Vec3, power: float, life_time_s: float, light_color: typing.Tuple, speed: numpy.ndarray, start_position, origin_ship=None)
+`````{py:class} LaserShot(game: space_flight.game.flight_state.FlightState, origin_ship_id: uuid.UUID, color: panda3d.core.Vec3, power: float, life_time_s: float, light_color: typing.Tuple, speed: numpy.ndarray, start_position: panda3d.core.Point3, origin_ship: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret | None = None)
 :canonical: space_flight.weapons.laser_cannon.LaserShot
 
 Bases: {py:obj}`space_flight.weapons.Munition`
@@ -223,7 +223,7 @@ Bases: {py:obj}`space_flight.weapons.Munition`
 ```{autodoc2-docstring} space_flight.weapons.laser_cannon.LaserShot.__init__
 ```
 
-````{py:method} _build_visual(start_position) -> panda3d.core.NodePath
+````{py:method} _build_visual(start_position: panda3d.core.Point3) -> panda3d.core.NodePath
 :canonical: space_flight.weapons.laser_cannon.LaserShot._build_visual
 
 ````
@@ -233,7 +233,7 @@ Bases: {py:obj}`space_flight.weapons.Munition`
 
 ````
 
-````{py:method} _clean_extra() 
+````{py:method} _clean_extra()
 :canonical: space_flight.weapons.laser_cannon.LaserShot._clean_extra
 
 ````

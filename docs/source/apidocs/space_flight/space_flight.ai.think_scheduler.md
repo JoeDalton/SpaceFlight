@@ -100,7 +100,7 @@
 
 ````
 
-````{py:method} unregister(slot: space_flight.ai.think_scheduler.ThinkSlot) 
+````{py:method} unregister(slot: space_flight.ai.think_scheduler.ThinkSlot)
 :canonical: space_flight.ai.think_scheduler.ThinkScheduler.unregister
 
 ```{autodoc2-docstring} space_flight.ai.think_scheduler.ThinkScheduler.unregister

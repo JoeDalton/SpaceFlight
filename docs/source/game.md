@@ -31,8 +31,12 @@ HUD, and drives the per-frame update.
      during its looping "inside" phase;
   3. `_on_build_complete` wires up input, HUD and tasks, still hidden behind
      the animation;
-  4. `_on_reveal` starts the simulation as the overlay fades out, so the
-     world is alive the moment it becomes visible.
+  4. `_on_reveal` starts the simulation partway through the drop-out
+     ("outof") phase, when its black background starts dissolving into the
+     scene behind the streaks (`REVEAL_START`), so the world is alive the
+     moment it becomes visible. The overlay pops when the drop ends. Its
+     frame time is clamped (`MAX_DT`), so a stall in the first simulated
+     frames shows as a hitch instead of cutting the dissolve short.
 
   With `WAIT_FOR_JUMP_KEY` (`True` by default) the overlay holds the tunnel
   after the build until the player presses the jump-out key. Headless runs

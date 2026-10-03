@@ -14,6 +14,7 @@
 :maxdepth: 3
 
 space_flight.ai.tracking_mount
+space_flight.ai.missile
 ```
 
 ## Submodules
@@ -329,6 +330,16 @@ Bases: {py:obj}`enum.Enum`
    None
 
 ```{autodoc2-docstring} space_flight.ai.Personality.CAPITAL_SHIP_DEFAULT
+```
+
+````
+
+````{py:attribute} MISSILE_DEFAULT
+:canonical: space_flight.ai.Personality.MISSILE_DEFAULT
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.ai.Personality.MISSILE_DEFAULT
 ```
 
 ````

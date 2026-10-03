@@ -243,14 +243,14 @@
 
 ````
 
-````{py:function} _velocity_of(source_ref) -> panda3d.core.VBase3
+````{py:function} _velocity_of(source_ref: weakref.ref[space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem] | None) -> panda3d.core.VBase3
 :canonical: space_flight.fx.sfx._velocity_of
 
 ```{autodoc2-docstring} space_flight.fx.sfx._velocity_of
 ```
 ````
 
-`````{py:class} PhysicsAudio3DManager(*args, **kwargs)
+`````{py:class} PhysicsAudio3DManager(*args: typing.Any, **kwargs: typing.Any)
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager
 
 Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
@@ -264,7 +264,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.__init__
 ```
 
-````{py:method} set_sound_velocity_source(sound, source) 
+````{py:method} set_sound_velocity_source(sound: panda3d.core.AudioSound, source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None)
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
@@ -272,7 +272,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} set_listener_velocity_source(source) 
+````{py:method} set_listener_velocity_source(source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None)
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
@@ -280,7 +280,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} getSoundVelocity(sound) -> panda3d.core.VBase3
+````{py:method} getSoundVelocity(sound: panda3d.core.AudioSound) -> panda3d.core.VBase3
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.getSoundVelocity
 
 ````
@@ -290,14 +290,14 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} detachSound(sound)
+````{py:method} detachSound(sound: panda3d.core.AudioSound) -> int
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.detachSound
 
 ````
 
 `````
 
-`````{py:class} SFX(app)
+`````{py:class} SFX(app: space_flight.global_architecture.simulator.SpaceFlightSimulator)
 :canonical: space_flight.fx.sfx.SFX
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX
@@ -309,7 +309,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.__init__
 ```
 
-````{py:method} attach_sound(sound, node, velocity_source=None) 
+````{py:method} attach_sound(sound: panda3d.core.AudioSound, node: panda3d.core.NodePath, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None = None)
 :canonical: space_flight.fx.sfx.SFX.attach_sound
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.attach_sound
@@ -317,7 +317,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} set_listener_velocity_source(source) 
+````{py:method} set_listener_velocity_source(source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None)
 :canonical: space_flight.fx.sfx.SFX.set_listener_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.set_listener_velocity_source
@@ -325,7 +325,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} build_sound_pool(directory: pathlib.Path, pattern: str, is_3d: bool) -> typing.List[str]
+````{py:method} build_sound_pool(directory: pathlib.Path, pattern: str, is_3d: bool) -> list[panda3d.core.AudioSound]
 :canonical: space_flight.fx.sfx.SFX.build_sound_pool
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.build_sound_pool
@@ -333,7 +333,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} get_3d_sound(sound_file: str) -> object
+````{py:method} get_3d_sound(sound_file: str | pathlib.Path) -> panda3d.core.AudioSound
 :canonical: space_flight.fx.sfx.SFX.get_3d_sound
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.get_3d_sound
@@ -349,7 +349,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} distant_impact_hit(game, player_ship_pos: numpy.ndarray, hit_pos: numpy.ndarray, impact_type: str, is_player: bool = False)
+````{py:method} distant_impact_hit(game: space_flight.game.flight_state.FlightState, player_ship_pos: numpy.ndarray, hit_pos: numpy.ndarray, impact_type: str, is_player: bool = False)
 :canonical: space_flight.fx.sfx.SFX.distant_impact_hit
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.distant_impact_hit
@@ -357,7 +357,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} tractor_beam_grab(game)
+````{py:method} tractor_beam_grab(game: space_flight.game.flight_state.FlightState)
 :canonical: space_flight.fx.sfx.SFX.tractor_beam_grab
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.tractor_beam_grab
@@ -365,7 +365,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} tractor_beam_release(game)
+````{py:method} tractor_beam_release(game: space_flight.game.flight_state.FlightState)
 :canonical: space_flight.fx.sfx.SFX.tractor_beam_release
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.tractor_beam_release
@@ -373,7 +373,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} laser_impact_hit_on_player(game, relative_hit_point: numpy.ndarray, is_shield: bool)
+````{py:method} laser_impact_hit_on_player(game: space_flight.game.flight_state.FlightState, relative_hit_point: numpy.ndarray, is_shield: bool)
 :canonical: space_flight.fx.sfx.SFX.laser_impact_hit_on_player
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.laser_impact_hit_on_player
@@ -381,7 +381,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} player_crash(game, relative_hit_point: numpy.ndarray, in_terrain: bool)
+````{py:method} player_crash(game: space_flight.game.flight_state.FlightState, relative_hit_point: numpy.ndarray, in_terrain: bool)
 :canonical: space_flight.fx.sfx.SFX.player_crash
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.player_crash
@@ -389,7 +389,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} cannon_fire(game, sound_pool, node, velocity_source=None, is_player=False)
+````{py:method} cannon_fire(game: space_flight.game.flight_state.FlightState, sound_pool: space_flight.global_architecture.asset_pools.SoundPool, node: panda3d.core.NodePath, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None = None, is_player: bool = False)
 :canonical: space_flight.fx.sfx.SFX.cannon_fire
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.cannon_fire
@@ -397,7 +397,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} update_task(task)
+````{py:method} update_task(task: direct.task.Task.Task) -> int
 :canonical: space_flight.fx.sfx.SFX.update_task
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.update_task

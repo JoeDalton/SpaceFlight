@@ -133,7 +133,7 @@
 
 ````
 
-````{py:method} update() 
+````{py:method} update()
 :canonical: space_flight.fx.damage_fx.DamageFX.update
 
 ```{autodoc2-docstring} space_flight.fx.damage_fx.DamageFX.update
@@ -141,7 +141,7 @@
 
 ````
 
-````{py:method} clean() 
+````{py:method} clean()
 :canonical: space_flight.fx.damage_fx.DamageFX.clean
 
 ```{autodoc2-docstring} space_flight.fx.damage_fx.DamageFX.clean

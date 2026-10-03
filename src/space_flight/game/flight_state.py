@@ -230,9 +230,10 @@ class FlightState(BaseState):
 
     def _on_reveal(self):
         """
-        Start the simulation as the overlay fades out, so the world is alive
-        the moment it becomes visible. Called by the overlay when the reveal
-        fade begins.
+        Start the simulation as the overlay dissolves, so the world is alive
+        the moment it becomes visible. Called by the overlay partway through
+        its outof phase, when the black background starts fading into the
+        scene (the streaks are still playing on top).
         """
         # Drop the jump-out context so the flight context regains input as the
         # world appears.

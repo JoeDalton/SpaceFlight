@@ -59,7 +59,7 @@
 
 ````
 
-`````{py:class} SpeedDustCloud(game, num_particles: int = 100, spread: float = 30, depth: float = 100.0, colors: typing.List = ['white'], *, defer_build: bool = False)
+`````{py:class} SpeedDustCloud(game: space_flight.game.flight_state.FlightState, num_particles: int = 100, spread: float = 30, depth: float = 100.0, colors: typing.List = ['white'], *, defer_build: bool = False)
 :canonical: space_flight.fx.speed_dust_cloud.SpeedDustCloud
 
 ```{autodoc2-docstring} space_flight.fx.speed_dust_cloud.SpeedDustCloud
@@ -71,7 +71,7 @@
 ```{autodoc2-docstring} space_flight.fx.speed_dust_cloud.SpeedDustCloud.__init__
 ```
 
-````{py:method} build(chunk: int = 25)
+````{py:method} build(chunk: int = 25) -> collections.abc.Generator[None, None, None]
 :canonical: space_flight.fx.speed_dust_cloud.SpeedDustCloud.build
 
 ```{autodoc2-docstring} space_flight.fx.speed_dust_cloud.SpeedDustCloud.build
@@ -79,7 +79,7 @@
 
 ````
 
-````{py:method} init_particle(particle)
+````{py:method} init_particle(particle: panda3d.core.NodePath)
 :canonical: space_flight.fx.speed_dust_cloud.SpeedDustCloud.init_particle
 
 ```{autodoc2-docstring} space_flight.fx.speed_dust_cloud.SpeedDustCloud.init_particle
@@ -87,7 +87,7 @@
 
 ````
 
-````{py:method} reset_particle(particle)
+````{py:method} reset_particle(particle: panda3d.core.NodePath)
 :canonical: space_flight.fx.speed_dust_cloud.SpeedDustCloud.reset_particle
 
 ```{autodoc2-docstring} space_flight.fx.speed_dust_cloud.SpeedDustCloud.reset_particle

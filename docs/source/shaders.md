@@ -62,7 +62,12 @@ jump, sharing the position-only passthrough
   loop period `T_LOOP` and there is no seam.
 - **[`hyperspace_outof.frag`](../../src/space_flight/datafiles/shaders/hyperspace_outof.frag)**
   (dropping out): the reverse of `hyperspace_into.frag` — streaks collapsing
-  into the revealed level, fading from an initial whiteout.
+  into the revealed level, fading from an initial whiteout. From 35% of its
+  loop the black background turns transparent, so the live scene shows
+  through while the streaks still play: alpha is the larger of that
+  background opacity and the streak brightness, and the colour is divided
+  by alpha so the streaks keep their brightness over the scene. The 35% must
+  match Python's `REVEAL_START`, which starts the simulation at that moment.
 
 `into` and `outof` are adapted from one ShaderToy source and `inside` from
 another (MIT); the header comments carry the credits.

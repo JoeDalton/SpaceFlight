@@ -101,7 +101,7 @@
 
 ````
 
-`````{py:class} GraphicsManager(app)
+`````{py:class} GraphicsManager(app: space_flight.global_architecture.simulator.SpaceFlightSimulator)
 :canonical: space_flight.global_architecture.graphics_manager.GraphicsManager
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_manager.GraphicsManager
@@ -162,7 +162,7 @@
 
 ````
 
-````{py:method} _update_pipeline_uniforms(task)
+````{py:method} _update_pipeline_uniforms(task: direct.task.Task.Task) -> int
 :canonical: space_flight.global_architecture.graphics_manager.GraphicsManager._update_pipeline_uniforms
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_manager.GraphicsManager._update_pipeline_uniforms

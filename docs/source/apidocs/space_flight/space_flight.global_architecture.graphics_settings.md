@@ -230,7 +230,7 @@
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.__init__
 ```
 
-````{py:method} load_file(path) -> dict
+````{py:method} load_file(path: pathlib.Path) -> dict
 :canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.load_file
 :staticmethod:
 

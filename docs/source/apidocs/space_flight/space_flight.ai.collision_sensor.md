@@ -45,7 +45,7 @@
 
 ````
 
-`````{py:class} CollisionSensor(game, ship, collision_reference_distance_m=100.0, ship_distance_1_m=5, radius_1_m=30, ship_distance_2_m=50, radius_2_m=50, ship_distance_3_m=125, radius_3_m=100)
+`````{py:class} CollisionSensor(game: space_flight.game.flight_state.FlightState, ship: space_flight.actors.ship.Ship, collision_reference_distance_m: float = 100.0, ship_distance_1_m: float = 5, radius_1_m: float = 30, ship_distance_2_m: float = 50, radius_2_m: float = 50, ship_distance_3_m: float = 125, radius_3_m: float = 100)
 :canonical: space_flight.ai.collision_sensor.CollisionSensor
 
 ```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor
@@ -77,7 +77,7 @@
 
 ````
 
-````{py:method} set_active(active: bool) 
+````{py:method} set_active(active: bool)
 :canonical: space_flight.ai.collision_sensor.CollisionSensor.set_active
 
 ```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.set_active
@@ -85,7 +85,7 @@
 
 ````
 
-````{py:method} record_obstacle(obstacle: dict) 
+````{py:method} record_obstacle(obstacle: dict)
 :canonical: space_flight.ai.collision_sensor.CollisionSensor.record_obstacle
 
 ```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.record_obstacle
