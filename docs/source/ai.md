@@ -86,7 +86,8 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
   weight that phases flying deliberately close (formation, strafe corridor,
   bomb run) dwarf. It also implements the behaviours every ship shares:
   `regroup`, `disengage`, waypoint following (`set_waypoints` /
-  `follow_waypoints`) and `formation` (station-keeping on a wing leader by
+  `follow_waypoints`, which decelerates a ship that stops getting closer to its
+  waypoint, e.g. orbiting it because its turn radius is too large) and `formation` (station-keeping on a wing leader by
   lead pursuit).
 - **`GenericShipPilot`** owns four PID loops (yaw, pitch, roll, throttle),
   fed at each think by `compute_angular_error` (subclass-specific — a fighter

@@ -40,6 +40,11 @@ class GenericShipNavigator(GenericNavigator):
         self.next_waypoint_idx = 0
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
+        # Patrol progress tracking: when the bot can't get closer to its waypoint
+        # (turn radius too large for its speed), it slows down to tighten its turn
+        self._best_distance_to_waypoint_m = float("inf")
+        self._time_without_progress_s = 0.0
+        self.patrol_speed_factor = 1.0
         self.time_in_spiral_s = 0.0
         # Game time of the last navigate() and the time elapsed since the one
         # before: navigate() runs when the bot thinks, not necessarily every frame
@@ -204,6 +209,7 @@ class GenericShipNavigator(GenericNavigator):
         self.waypoints = waypoints
         self.next_waypoint_idx = 0
         self.has_waypoint_loop = is_loop
+        self._reset_patrol_progress()
 
     def clear_waypoints(self):
         """
@@ -212,6 +218,15 @@ class GenericShipNavigator(GenericNavigator):
         self.waypoints = []
         self.next_waypoint_idx = 0
         self.has_waypoint_loop = False
+        self._reset_patrol_progress()
+
+    def _reset_patrol_progress(self):
+        """
+        Forgets the approach history of the current waypoint and restores full speed
+        """
+        self._best_distance_to_waypoint_m = float("inf")
+        self._time_without_progress_s = 0.0
+        self.patrol_speed_factor = 1.0
 
     def follow_waypoints(self) -> Tuple[np.ndarray, float]:
         """
@@ -248,11 +263,29 @@ class GenericShipNavigator(GenericNavigator):
         ):
             # Do nothing this turn and target the next waypoint next time
             self.next_waypoint_idx += 1
+            self._reset_patrol_progress()
             return NO_DIRECTION
+
+        # Slow down if we are not getting any closer (orbiting the waypoint)
+        patrol = self.personality["navigator"]["patrol"]
+        if (
+            self.distance_to_waypoint_m
+            < self._best_distance_to_waypoint_m - patrol["progress_epsilon_m"]
+        ):
+            self._best_distance_to_waypoint_m = self.distance_to_waypoint_m
+            self._time_without_progress_s = 0.0
+        else:
+            self._time_without_progress_s += self.think_dt_s
+            if self._time_without_progress_s > patrol["stall_time_s"]:
+                self.patrol_speed_factor = max(
+                    self.patrol_speed_factor * patrol["stall_deceleration_factor"],
+                    patrol["min_speed_factor"],
+                )
+                self._time_without_progress_s = 0.0
 
         # Go to the next waypoint
         direction = waypoint_direction / self.distance_to_waypoint_m
-        return direction, self.personality["navigator"]["patrol"]["speed_mps"]
+        return direction, patrol["speed_mps"] * self.patrol_speed_factor
 
     # %% ==== formation ====
 

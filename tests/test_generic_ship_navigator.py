@@ -48,6 +48,9 @@ def make_ship_navigator(
     nav.next_waypoint_idx = 0
     nav.distance_to_waypoint_m = 0.0
     nav.has_waypoint_loop = False
+    nav._best_distance_to_waypoint_m = float("inf")
+    nav._time_without_progress_s = 0.0
+    nav.patrol_speed_factor = 1.0
     nav.time_in_spiral_s = 0.0
     nav._last_navigate_s = None
     nav.think_dt_s = 0.0
@@ -168,6 +171,60 @@ def test_follow_waypoints_advances_index_when_within_tolerance():
     nav.follow_waypoints()
 
     assert nav.next_waypoint_idx == 1
+
+
+def test_follow_waypoints_decelerates_when_not_getting_closer():
+    """
+    A ship orbiting a waypoint (distance not shrinking) must slow down, but
+    never below min_speed_factor.
+    """
+    patrol = Personality.FIGHTER_DEFAULT["navigator"]["patrol"]
+    nav = make_ship_navigator(pawn_position=np.zeros(3))
+    nav.set_waypoints([np.array([0.0, 500.0, 0.0])], is_loop=True)
+    nav.think_dt_s = 1.0
+
+    _, first_speed = nav.follow_waypoints()
+    assert first_speed == patrol["speed_mps"]
+    speeds = [nav.follow_waypoints()[1] for _ in range(200)]
+
+    assert speeds[-1] < patrol["speed_mps"]
+    assert min(speeds) >= patrol["speed_mps"] * patrol["min_speed_factor"] - 1e-9
+    assert speeds == sorted(speeds, reverse=True)
+
+
+def test_follow_waypoints_keeps_speed_when_approaching():
+    """
+    A ship steadily closing on its waypoint keeps the full patrol speed.
+    """
+    patrol = Personality.FIGHTER_DEFAULT["navigator"]["patrol"]
+    nav = make_ship_navigator(pawn_position=np.zeros(3))
+    nav.set_waypoints([np.array([0.0, 5000.0, 0.0])], is_loop=False)
+    nav.think_dt_s = 1.0
+
+    for step in range(50):
+        nav.pawn.position = np.array([0.0, 20.0 * step, 0.0])
+        _, speed = nav.follow_waypoints()
+        assert speed == patrol["speed_mps"]
+
+
+def test_follow_waypoints_resets_speed_when_waypoint_reached():
+    """
+    Reaching a waypoint restores full speed for the next leg.
+    """
+    nav = make_ship_navigator(pawn_position=np.zeros(3))
+    nav.set_waypoints(
+        [np.array([0.0, 500.0, 0.0]), np.array([0.0, 5000.0, 0.0])], is_loop=False
+    )
+    nav.think_dt_s = 1.0
+    for _ in range(100):
+        nav.follow_waypoints()
+    assert nav.patrol_speed_factor < 1.0
+
+    nav.pawn.position = np.array([0.0, 490.0, 0.0])
+    nav.follow_waypoints()
+
+    assert nav.next_waypoint_idx == 1
+    assert nav.patrol_speed_factor == 1.0
 
 
 def test_follow_waypoints_loops_when_has_waypoint_loop():

@@ -63,6 +63,9 @@ def make_fighter_navigator(
     nav.next_waypoint_idx = 0
     nav.distance_to_waypoint_m = 0.0
     nav.has_waypoint_loop = False
+    nav._best_distance_to_waypoint_m = float("inf")
+    nav._time_without_progress_s = 0.0
+    nav.patrol_speed_factor = 1.0
     nav.time_in_spiral_s = 0.0
     nav._last_navigate_s = None
     nav.think_dt_s = 0.1  # matches get_time_step above
