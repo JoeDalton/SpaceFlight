@@ -24,7 +24,11 @@ cannon_positions: [[-3, 5, -1], [3, 5, -1]]
 laser_sound: sounds/weapons/YWING_BLASTER.wav
 shot_power: 60.0
 
-bomb_supply: 6
+loadout:
+  proton_bomb: 6
+  proton_torpedo: 4
+  flare: 10
+
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 350.0

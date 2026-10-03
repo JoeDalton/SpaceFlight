@@ -1,0 +1,15 @@
+# Flare: a decoy dropped just behind the ship, drifting with the ship's velocity
+# at release. Enemy ordnance hitting it is spent, and so is the flare.
+type: flare
+life_time_s: 5.0
+damage: 0.0
+damage_type: physical
+reload_s: 0.5
+# Launch: speed relative to the launching ship, kept for its whole life
+launch_direction: backward
+speed_mps: 0.0
+launch_offset_m: 12.0
+# Placeholder look and collision
+visual_radius_m: 1.0
+collision_radius_m: 8.0
+color: [1.0, 1.0, 0.8, 0.5]

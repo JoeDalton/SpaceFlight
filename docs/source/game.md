@@ -150,12 +150,15 @@ Panda3D collision layers and owns the handlers that turn a raw collision
 entry into game effects.
 
 - **`CollisionLayers`** defines bitmask layers (`MUNITION`, `SHIELD`,
-  `DESTRUCTIBLE`, `ENVIRONMENT`, plus `SENSOR` sharing bit 0 with
+  `DESTRUCTIBLE`, `ENVIRONMENT`, `DECOY`, plus `SENSOR` sharing bit 0 with
   `MUNITION`) and, for each collider type
-  (`laser`/`bomb`/`sensor`/`destructible`/`terrain`/`subsystem`/`shield`),
-  which layers it collides *from* and *into*. `terrain`, `subsystem` and
-  `shield` are into-only (they are only ever hit), so they are not
+  (`laser`/`ordnance`/`flare`/`sensor`/`destructible`/`terrain`/`subsystem`/`shield`),
+  which layers it collides *from* and *into*. `terrain`, `subsystem`,
+  `shield` and `flare` are into-only (they are only ever hit), so they are not
   registered with the traverser at all (`add_to_collision_handler=False`).
+  `ordnance` (bombs, rockets, missiles) hits what a laser hits plus `DECOY`,
+  the flares' layer; nothing hits ordnance, and only ordnance hits flares, so
+  two flares never collide.
 - **`owners_share_vehicle()`** spares a ship from colliding with its own
   bolted-on parts: two collision owners are the "same vehicle" if they're
   identical, one is `mounted_on` the other, or both share the same
@@ -173,11 +176,13 @@ entry into game effects.
   traverser, then hands each queued sensor contact to `sensor_into_obstacle`.
   The game logic lives in the handler methods:
   - **Munition hits** (`munition_into_destructible`, `munition_into_terrain`,
-    `munition_into_shield`, shared by lasers and bombs) apply damage, delete
-    the munition node, and trigger sparks and sound. A shield only blocks a
+    `munition_into_shield`, shared by lasers and ordnance) apply damage, spend
+    the munition (`on_impact()`), and trigger sparks and sound. A shield only blocks a
     munition crossing *inward* — one fired from inside passes through —
     decided by the sign of the munition's velocity dotted with the shield's
     surface normal.
+  - **Flares** (`ordnance_into_flare`): ordnance hitting a flare of another
+    team is spent, and so is the flare.
   - **Ship physical hits** (`ship_into_*` / `ship_again_*` pairs, against
     ships, terrain, turrets and subsystems) resolve an impulse collision
     tuned by `SOLID_COLLISION_ELASTICITY`, rather than Panda3D's collision

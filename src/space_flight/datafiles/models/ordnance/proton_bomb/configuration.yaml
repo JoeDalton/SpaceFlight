@@ -1,0 +1,15 @@
+# Proton bomb: heavy, slow ordnance dropped from the belly onto ground and capital
+# targets
+type: bomb
+life_time_s: 6.67  # 500 m at its launch speed
+damage: 4000.0
+damage_type: physical
+reload_s: 0.5
+# Launch: speed relative to the launching ship, kept for its whole life
+launch_direction: down
+speed_mps: 75.0
+launch_offset_m: 0.0
+# Placeholder look and collision
+visual_radius_m: 0.5
+collision_radius_m: 0.5
+color: [1.0, 0.4, 0.7, 1.0]

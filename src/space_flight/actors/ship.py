@@ -115,9 +115,7 @@ class Ship(Pawn):
         super().__init__(game=game, parent=parent, team=team)
 
         # Load configuration
-        filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
-        with open(filepath, "r") as f:
-            self.conf = yaml.safe_load(f)
+        self.conf = self._load_configuration(ship_type)
         # Set a low-pass filter time to emulate physical delay in
         # thrust and rotational rates
         self.inputs_filter_time_s = self.conf["inputs_filter_time_s"]
@@ -155,7 +153,7 @@ class Ship(Pawn):
         self.lift_inefficiency = self.conf.get(
             "lift_inefficiency", 0.0
         )  # = 1/(pi * AR * e)
-        self.max_speed_mps = np.sqrt(self.max_thrust_n / self.drag_factor)
+        self.max_speed_mps = self._compute_max_speed_mps()
 
         # Manoeuverability signal read by attackers' tacticians (see Pawn)
         self.mobility = self._compute_mobility()
@@ -192,6 +190,8 @@ class Ship(Pawn):
         self.state = np.zeros(10)  # position (3), orientation (4), speed (3)
         self.state[:3] = ini_position
         self.state[3:7] = ini_orientation
+        # TODO ini_speed is never written to self.state[7:10], so a ship spawned
+        # with an initial speed loses it after the first integration step.
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
         self.pqr = np.zeros(3)
@@ -215,23 +215,21 @@ class Ship(Pawn):
         # Death animation is ship-type dependent
 
         # Create render
-        self.model = ShipModel(
-            game=self.game,
-            parent_node=self.node,
-            ship_type=ship_type,
-            is_cockpit=is_cockpit,
-        )
+        self.model = self._build_model(ship_type=ship_type, is_cockpit=is_cockpit)
 
         # Damage / death smoke-and-fire trail
-        self.damage_fx = DamageFX(game=self.game, owner=self)
-        self.parent.add_task(method=self.damage_fx.update)
+        self.damage_fx = self._build_damage_fx()
+        if self.damage_fx is not None:
+            self.parent.add_task(method=self.damage_fx.update)
 
         # Body-frame bounding box for AI that needs the target's extents (the
         # capital-ship orbit's oriented bounding box); the reader rotates it by the
         # ship's orientation at runtime.
         self.bounding_box_half_extents = self._compute_bounding_box_half_extents()
 
-        # Initialize engine sound
+        # Initialize engine sound (optional: a ship type without one is silent)
+        self.sound = None
+        self.sound_pool = None
         if self.parent.name == "player":
             sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
@@ -241,7 +239,7 @@ class Ship(Pawn):
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
             self.sound.setVolume(0.1)
-        else:
+        elif "exterior_engine_sound" in self.conf:
             sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
                 asset_type="3d_sound",
@@ -256,11 +254,66 @@ class Ship(Pawn):
             # TODO Attach engine sound to a node located at the engine location
 
         # Play a bit later to avoid audio artifacts at startup
-        self.game.delayed_methods.do_method_later(
-            delay_s=0.5,
-            name="Play_engine_sound",
-            method=self.sound.play,
+        if self.sound is not None:
+            self.game.delayed_methods.do_method_later(
+                delay_s=0.5,
+                name="Play_engine_sound",
+                method=self.sound.play,
+            )
+
+    def _load_configuration(self, ship_type: str) -> dict:
+        """
+        Load the ship type's configuration. Overridden by pawns configured
+        elsewhere (e.g. ordnance).
+
+        :param ship_type: The ship type, i.e. its configuration directory name
+        :return: The configuration dictionary
+        """
+        filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
+        with open(filepath, "r") as f:
+            return yaml.safe_load(f)
+
+    def _compute_max_speed_mps(self) -> float:
+        """
+        The ship's top speed: its terminal velocity, where full thrust balances
+        drag.
+
+        :return: The top speed, in m/s
+        """
+        return np.sqrt(self.max_thrust_n / self.drag_factor)
+
+    def _build_damage_fx(self) -> DamageFX | None:
+        """
+        Create the damage / death smoke-and-fire trail.
+
+        :return: The trail, or None for a pawn that never smokes
+        """
+        return DamageFX(game=self.game, owner=self)
+
+    def _build_model(self, ship_type: str, is_cockpit: bool) -> ShipModel:
+        """
+        Create the render model, anchored to the ship node.
+
+        :param ship_type: The ship type
+        :param is_cockpit: Whether to show the cockpit rather than the exterior
+        :return: The model
+        """
+        return ShipModel(
+            game=self.game,
+            parent_node=self.node,
+            ship_type=ship_type,
+            is_cockpit=is_cockpit,
         )
+
+    def _turn_rate_scale(self, throttle: float) -> float:
+        """
+        Fraction of the max turn rates available at a given throttle command
+        (see turn_rate_scale).
+
+        :param throttle: Throttle command
+        :return: The scale applied to the turn rate commands
+        """
+        return turn_rate_scale(throttle)
 
     def _compute_mobility(self) -> float:
         """
@@ -315,7 +368,7 @@ class Ship(Pawn):
 
         The throttle is squared so the velocity is easier to modulate; below
         ZERO_THRUST_POSITION it brakes (airplane model) or cuts thrust (space).
-        The turn rates are scaled by turn_rate_scale(throttle).
+        The turn rates are scaled by _turn_rate_scale(throttle).
         Both are low-pass filtered to emulate delay in physical systems.
         pqr is stored in Panda3D's pitch-roll-yaw order.
 
@@ -346,7 +399,7 @@ class Ship(Pawn):
             else:
                 raise Exception
 
-        pqr = turn_rate_scale(throttle) * np.array(
+        pqr = self._turn_rate_scale(throttle) * np.array(
             [
                 pitch_rate * self.max_pitch_rate_radps,
                 roll_rate * self.max_roll_rate_radps,
@@ -398,25 +451,10 @@ class Ship(Pawn):
 
         # Compute derivative of position
         self.state_dot[0:3] = self.speed
-        # Compute derivative of orientation: q_dot = 0.5 * q * (0, pqr), the
-        # rates being in body axes (Hamilton product written out in floats)
-        w, x, y, z = self.orientation
-        p, q, r = self.pqr
-        self.state_dot[3:7] = (
-            -0.5 * (x * p + y * q + z * r),
-            0.5 * (w * p + y * r - z * q),
-            0.5 * (w * q + z * p - x * r),
-            0.5 * (w * r + x * q - y * p),
+        # Compute derivative of orientation, and the body axes
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = (
+            self._compute_attitude_derivative()
         )
-
-        # Body-to-world rotation, built once for every vector rotated below:
-        # its columns are the ship's right, forward and up directions
-        r00, r01, r02, r10, r11, r12, r20, r21, r22 = rotation_matrix_coefficients(
-            w, x, y, z
-        )
-        self.right = np.array((r00, r10, r20))
-        self.forward = np.array((r01, r11, r21))
-        self.up = np.array((r02, r12, r22))
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
@@ -516,6 +554,34 @@ class Ship(Pawn):
         # another actor (e.g. a tractor beam) keeps holding this ship, and drops
         # to zero on the first frame nothing applies it.
         self.external_force_n = np.zeros(3)
+
+    def _compute_attitude_derivative(self) -> tuple[float, ...]:
+        """
+        Compute the derivative of the orientation from the body rates, and the
+        ship's right, forward and up directions.
+
+        :return: The body-to-world rotation matrix coefficients, row by row (its
+            columns are the right, forward and up directions)
+        """
+        # q_dot = 0.5 * q * (0, pqr), the rates being in body axes (Hamilton
+        # product written out in floats)
+        w, x, y, z = self.orientation
+        p, q, r = self.pqr
+        self.state_dot[3:7] = (
+            -0.5 * (x * p + y * q + z * r),
+            0.5 * (w * p + y * r - z * q),
+            0.5 * (w * q + z * p - x * r),
+            0.5 * (w * r + x * q - y * p),
+        )
+
+        # Body-to-world rotation, built once for every vector rotated by the
+        # caller
+        coefficients = rotation_matrix_coefficients(w, x, y, z)
+        r00, r01, r02, r10, r11, r12, r20, r21, r22 = coefficients
+        self.right = np.array((r00, r10, r20))
+        self.forward = np.array((r01, r11, r21))
+        self.up = np.array((r02, r12, r22))
+        return coefficients
 
     def move_ship_physics(self):
         """
@@ -742,6 +808,8 @@ class Ship(Pawn):
 
         :param throttle: The throttle value of the ship [0, 1], above 1 for boost
         """
+        if self.sound is None:
+            return
         pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
         pitch_multiplier *= self._engine_sputter_factor()
         self.sound.setPlayRate(pitch_multiplier)
@@ -820,16 +888,18 @@ class Ship(Pawn):
             self.collision_sphere_np.remove_node()
             self.collision_sphere_np = None
             # Remove sound
-            self.sound_pool.release_sound(self.sound)
-            self.game.app.sfx.audio3d.detachSound(self.sound)
-            self.sound = None
+            if self.sound is not None:
+                self.sound_pool.release_sound(self.sound)
+                self.game.app.sfx.audio3d.detachSound(self.sound)
+                self.sound = None
             # Remove model
             self.model.clean()
             self.model = None
             # Drop the damage/death trail (owns no scene nodes; its per-frame task
             # is removed with the rest by clear_tasks)
-            self.damage_fx.clean()
-            self.damage_fx = None
+            if self.damage_fx is not None:
+                self.damage_fx.clean()
+                self.damage_fx = None
             # Remove node
             self.node.remove_node()
             self.node = None

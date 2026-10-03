@@ -397,24 +397,55 @@ def test_flight_ctx_handle_actions_fires_on_fire_binding():
     handle_actions must fire the laser cannon while the fire binding is active.
     """
     ctx, _, player = make_flight_ctx(
-        device_bindings={"fire": "space", "drop_bomb": "x"}
+        device_bindings={"fire": "space", "fire_secondary": "x"}
     )
     ctx.handle_actions(make_state(buttons={"space": True}))
     player.pawn.laser_cannon.fire.assert_called_once()
-    player.pawn.drop_bomb.assert_not_called()
+    player.pawn.fire_secondary.assert_not_called()
 
 
-def test_flight_ctx_handle_actions_drops_bomb_on_drop_bomb_binding():
+def test_flight_ctx_handle_actions_fires_secondary_on_fire_secondary_binding():
     """
-    handle_actions must drop a bomb while the drop_bomb binding is active, without
-    firing the guns.
+    handle_actions must fire the secondary weapon while the fire_secondary
+    binding is active, without firing the guns.
     """
     ctx, _, player = make_flight_ctx(
-        device_bindings={"fire": "space", "drop_bomb": "x"}
+        device_bindings={"fire": "space", "fire_secondary": "x"}
     )
     ctx.handle_actions(make_state(buttons={"x": True}))
-    player.pawn.drop_bomb.assert_called_once()
+    player.pawn.fire_secondary.assert_called_once()
     player.pawn.laser_cannon.fire.assert_not_called()
+
+
+def test_flight_ctx_handle_actions_fires_secondary_while_held():
+    """
+    Holding fire_secondary keeps firing (the launcher's reload limits the rate).
+    """
+    ctx, _, player = make_flight_ctx(device_bindings={"fire_secondary": "x"})
+    ctx.handle_actions(make_state(repeats={"x": True}))
+    player.pawn.fire_secondary.assert_called_once()
+
+
+def test_flight_ctx_handle_actions_cycles_secondary_on_press_only():
+    """
+    cycle_secondary selects the next secondary weapon once per press, not while
+    held.
+    """
+    ctx, _, player = make_flight_ctx(device_bindings={"cycle_secondary": "c"})
+    ctx.handle_actions(make_state(buttons={"c": True}))
+    player.pawn.cycle_secondary.assert_called_once()
+    ctx.handle_actions(make_state(repeats={"c": True}))
+    player.pawn.cycle_secondary.assert_called_once()
+
+
+def test_flight_ctx_handle_actions_drops_flare_on_drop_flare_binding():
+    """
+    handle_actions must drop a flare while the drop_flare binding is active.
+    """
+    ctx, _, player = make_flight_ctx(device_bindings={"drop_flare": "f"})
+    ctx.handle_actions(make_state(buttons={"f": True}))
+    player.pawn.drop_flare.assert_called_once()
+    player.pawn.fire_secondary.assert_not_called()
 
 
 def test_flight_ctx_handle_actions_ignores_weapons_and_targeting_while_dying():
@@ -425,7 +456,9 @@ def test_flight_ctx_handle_actions_ignores_weapons_and_targeting_while_dying():
     ctx, game, player = make_flight_ctx(
         device_bindings={
             "fire": "space",
-            "drop_bomb": "x",
+            "fire_secondary": "x",
+            "cycle_secondary": "c",
+            "drop_flare": "f",
             "loop_target": ",",
             "point_target": "t",
             "pause": "p",
@@ -433,24 +466,43 @@ def test_flight_ctx_handle_actions_ignores_weapons_and_targeting_while_dying():
     )
     player.is_dying = True
     ctx.handle_actions(
-        make_state(buttons={"space": True, "x": True, ",": True, "t": True, "p": True})
+        make_state(
+            buttons={
+                "space": True,
+                "x": True,
+                "c": True,
+                "f": True,
+                ",": True,
+                "t": True,
+                "p": True,
+            }
+        )
     )
     player.pawn.laser_cannon.fire.assert_not_called()
-    player.pawn.drop_bomb.assert_not_called()
+    player.pawn.fire_secondary.assert_not_called()
+    player.pawn.cycle_secondary.assert_not_called()
+    player.pawn.drop_flare.assert_not_called()
     player.loop_target.assert_not_called()
     player.point_target.assert_not_called()
     game.set_pause.assert_called_once()
 
 
-def test_flight_ctx_handle_actions_no_bomb_when_idle():
+def test_flight_ctx_handle_actions_no_ordnance_when_idle():
     """
-    handle_actions must not drop a bomb when the drop_bomb binding is inactive.
+    handle_actions must not launch ordnance when their bindings are inactive.
     """
     ctx, _, player = make_flight_ctx(
-        device_bindings={"fire": "space", "drop_bomb": "x"}
+        device_bindings={
+            "fire": "space",
+            "fire_secondary": "x",
+            "cycle_secondary": "c",
+            "drop_flare": "f",
+        }
     )
     ctx.handle_actions(make_state(buttons={}))
-    player.pawn.drop_bomb.assert_not_called()
+    player.pawn.fire_secondary.assert_not_called()
+    player.pawn.cycle_secondary.assert_not_called()
+    player.pawn.drop_flare.assert_not_called()
 
 
 def test_flight_ctx_axis_returns_value():

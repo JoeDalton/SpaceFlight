@@ -11,8 +11,8 @@ from space_flight import DEBUG_DELETION
 from space_flight.actors.ship import Ship
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
-from space_flight.weapons.bomb_launcher import BombLauncher
 from space_flight.weapons.laser_cannon import LaserCannon
+from space_flight.weapons.ordnance_launcher import SECONDARY_TYPES, OrdnanceLauncher
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -62,9 +62,25 @@ class Fighter(Ship):
         self.auto_aim = AutoAim(game=self.game, parent=self)
         self.laser_cannon = LaserCannon(game=self.game, parent=self)
 
-        # Limited bomb ordnance + its launcher (see drop_bomb)
-        self.bomb_supply = self.conf.get("bomb_supply", 0)
-        self.bomb_launcher = BombLauncher(game=self.game, parent=self)
+        # Ordnance: one launcher per loadout entry, in the configuration's order,
+        # each with its own limited stock
+        self.ordnance_launchers = [
+            OrdnanceLauncher(game=self.game, parent=self, name=name, stock=stock)
+            for name, stock in self.conf.get("loadout", {}).items()
+        ]
+        # The selected secondary weapon (a bomb, rocket or missile launcher),
+        # fired by fire_secondary
+        self.selected_secondary = None
+        self.cycle_secondary()
+        # Flares have their own trigger (see drop_flare)
+        self.flare_launcher = next(
+            (
+                launcher
+                for launcher in self.ordnance_launchers
+                if launcher.category == "flare"
+            ),
+            None,
+        )
 
         # Initialize collisions
         self.hit_box_radius_m = self.conf["hit_box_radius_m"]
@@ -110,24 +126,82 @@ class Fighter(Ship):
         """
         return self.shield
 
-    def drop_bomb(self) -> bool:
+    def secondary_cycle(self) -> list[OrdnanceLauncher]:
         """
-        Release one bomb from the limited supply.
-
-        The launcher is rate-limited, so a drop can be refused while reloading
-        even with ordnance to spare; supply is only spent on an actual release.
-        The bombing-run navigator's counterpart of laser_cannon.fire().
-
-        :return: True if a bomb was released, False if out of ordnance or reloading
+        :return: The secondary weapons cycle_secondary loops over: the bomb,
+            rocket and missile launchers, spent ones included, in loadout order
         """
-        if self.bomb_supply <= 0:
+        return [
+            launcher
+            for launcher in self.ordnance_launchers
+            if launcher.category in SECONDARY_TYPES
+        ]
+
+    def cycle_secondary(self):
+        """
+        Select the next secondary weapon (bomb, rocket or missile launcher), in
+        loadout order, looping back to the first. A spent one can be selected
+        too: it just launches nothing.
+        """
+        candidates = self.secondary_cycle()
+        if not candidates:
+            self.selected_secondary = None
+            return
+        if self.selected_secondary in candidates:
+            index = candidates.index(self.selected_secondary)
+            self.selected_secondary = candidates[(index + 1) % len(candidates)]
+        else:
+            self.selected_secondary = candidates[0]
+
+    def fire_secondary(self) -> bool:
+        """
+        Launch the selected secondary weapon, then select the next one with stock
+        left once its stock runs out. A missile is given the current target only
+        if auto-aim has locked onto it; otherwise it flies blind, like a rocket.
+
+        The launcher is rate-limited, so a launch can be refused while reloading
+        even with stock to spare; stock is only spent on an actual launch.
+
+        :return: True if launched, False if out of stock or reloading
+        """
+        launched = self._launch(self.selected_secondary)
+        if launched and self.selected_secondary.stock <= 0:
+            self._select_next_secondary_with_stock()
+        return launched
+
+    def _select_next_secondary_with_stock(self):
+        """
+        Move the selection on to the next secondary weapon with stock left, if
+        any (the selection stays put otherwise).
+        """
+        cycle = self.secondary_cycle()
+        index = cycle.index(self.selected_secondary)
+        for step in range(1, len(cycle)):
+            launcher = cycle[(index + step) % len(cycle)]
+            if launcher.stock > 0:
+                self.selected_secondary = launcher
+                return
+
+    def drop_flare(self) -> bool:
+        """
+        Drop a flare behind the ship, if any is left.
+
+        :return: True if dropped, False if out of flares or reloading
+        """
+        return self._launch(self.flare_launcher)
+
+    def _launch(self, launcher: OrdnanceLauncher | None) -> bool:
+        """
+        Launch one unit from one of the ship's launchers, giving it the current
+        target only if auto-aim has locked onto it (only a missile uses it).
+
+        :param launcher: The launcher (None is a no-op)
+        :return: True if launched
+        """
+        if launcher is None:
             return False
-        if not self.bomb_launcher.launch():
-            # Still reloading -- do not spend a unit of ordnance.
-            return False
-        self.bomb_supply -= 1
-        LOGGER.info("%s dropped a bomb (%d left)", self.parent.name, self.bomb_supply)
-        return True
+        target_id = self.target_id if self.auto_aim.is_target_acquired else None
+        return launcher.launch(target_id=target_id)
 
     def apply_damage(self, damage: float, damage_type: str):
         """
@@ -173,8 +247,10 @@ class Fighter(Ship):
             self.auto_aim = None
             self.laser_cannon.clean()
             self.laser_cannon = None
-            self.bomb_launcher.clean()
-            self.bomb_launcher = None
+            for launcher in self.ordnance_launchers:
+                launcher.clean()
+            self.ordnance_launchers = []
+            self.selected_secondary = None
 
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")

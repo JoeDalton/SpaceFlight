@@ -70,7 +70,10 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
 
 - **`FlightInputContext`** — the gameplay context: ship axes, weapons, boost,
   targeting, mirror, radial menu, head-look and pause, read from
-  `contexts.flight.<input_type>`. Its `pressed`/`held`/`active`/`released`
+  `contexts.flight.<input_type>`. Weapons are `fire` (lasers),
+  `fire_secondary` (the selected bomb, rocket or missile launcher, while
+  held), `cycle_secondary` (on press) and `drop_flare` (while held); held
+  launches are paced by each launcher's reload. Its `pressed`/`held`/`active`/`released`
   helpers also check the `global` section (`axis` does not), so a key bound
   once globally (e.g. Escape for pause) works on every input type.
   `keyboard_axes` synthesises continuous axes from key presses: throttle
@@ -109,10 +112,16 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   `set_chatter_text` store a string plus an expiry time, and
   `clear_scenario_hud` blanks each once its game-time deadline passes. They
   are driven by the mission's `hud` and `speech` actions (see
-  [docs/scenario_scripting.md](scenario_scripting.md#actions)).
+  [docs/scenario_scripting.md](scenario_scripting.md#actions)). Bottom right, an
+  `OrdnanceHUD` shows the secondary weapons of the cycle
+  (`Fighter.secondary_cycle`) with their stock, spent ones at x0, on a
+  [`RollingDrum`](#utilspy--generic-ui-items), the selected one facing the
+  player. Under it, a line always shows the flares left.
 - **`TargetHUD`** — projects the player's target into screen space each frame
   (`cam.getRelativePoint` + `lens.project`) to place a target box and
-  distance/name labels. In view, the box encircles the target. Off-screen
+  distance/name labels. In view, the box encircles the target. The box turns
+  red while auto-aim is locked on the target (`update_lock_tint`): a missile
+  launched then is guided to it. Off-screen
   (outside the FoV *or* behind the camera) it is pinned to the screen border
   along the true bearing, by scaling the projected vector to meet the edge
   rectangle — clamping each axis separately would snap it to jittering
@@ -152,6 +161,17 @@ Backs the mission's `player_waypoints` action (see
   player is within `arrival_radius_m`, and shows the marker only while the
   player's target filter is `"Waypoints"`. After the last waypoint,
   `_finish()` removes the marker.
+
+## `utils.py` — generic UI items
+
+- **`make_text_line`** — a HUD-style line of text (small caps, drop shadow,
+  fadable).
+- **`RollingDrum`** — a looping list of text lines written round a cylinder
+  seen from the side: the selected item faces the viewer, the previous and
+  next ones are above and below, smaller, flattened by the curvature and
+  fainter, until they turn out of sight. `update(items, selected, label)`
+  rolls it to a new selection, by as many slots as it moved, the shorter way
+  round, easing out over `roll_time_s` (on the clock it is given).
 
 ## Where things live
 

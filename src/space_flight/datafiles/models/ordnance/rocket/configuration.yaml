@@ -1,0 +1,14 @@
+# Rocket: unguided, fired straight ahead
+type: rocket
+life_time_s: 10.0
+damage: 300.0
+damage_type: physical
+reload_s: 0.25
+# Launch: speed relative to the launching ship, kept for its whole life
+launch_direction: forward
+speed_mps: 400.0
+launch_offset_m: 0.0
+# Placeholder look and collision
+visual_radius_m: 0.5
+collision_radius_m: 1.0
+color: [1.0, 0.5, 0.0, 1.0]

@@ -2,22 +2,19 @@
 Generic weapon / munition base classes.
 
 Ship weapons (the :class:`~space_flight.weapons.laser_cannon.LaserCannon`, the
-:class:`~space_flight.weapons.bomb_launcher.BombLauncher`) and their projectiles
-(LaserShot, Bomb) share the same skeleton:
+:class:`~space_flight.weapons.ordnance_launcher.OrdnanceLauncher`) share
+:class:`Weapon`: the emitter references and a reload (rate) limit.
 
-* a *weapon* holds the emitter references, enforces a reload (rate) limit, and
-  spawns munitions;
-* a *munition* is a short-lived object that carries damage + world velocity, shows
-  a visual node, drags a child collider, registers in game.game_objects and
-  self-cleans at the end of its life.
+Laser shots are *munitions*: short-lived objects that carry damage + world
+velocity, show a visual node, drag a child collider, coast in a straight line,
+register in game.game_objects and self-clean at the end of their life.
+:class:`Munition` is a template: subclasses fill in _build_visual and
+_attach_collider (and optionally _clean_extra) and inherit the whole lifecycle.
 
-Only two things differ between munitions -- the **visual** (a camera-facing laser
-quad vs. a pink bomb sphere) and the **collider** (a swept segment vs. a sphere) --
-so :class:`Munition` is a template: subclasses fill in _build_visual and
-_attach_collider (and optionally _clean_extra) and inherit the whole
-lifecycle. Weapons differ more (multi-cannon cycling + auto-aim + sound vs. a
-single supply-gated drop), so :class:`Weapon` only owns what is genuinely shared:
-the emitter refs, the reload gate, and the munition-spawn call.
+Ordnance (bombs, rockets, missiles, flares) are flown pawns instead (see
+:mod:`space_flight.actors.ordnance`), but expose the same interface to the
+collision handlers: origin_ship / origin_ship_id / power / speed / color,
+on_impact() and impact_position().
 """
 
 from __future__ import annotations
@@ -28,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from direct.interval.IntervalGlobal import LerpPosInterval
-from panda3d.core import LVector3, NodePath, Point3
+from panda3d.core import LVector3, NodePath, Point3, TransparencyAttrib
 
 from space_flight import DEBUG_DELETION
 
@@ -38,6 +35,33 @@ if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
+
+
+def build_ordnance_sphere(
+    game: FlightState,
+    parent_node: NodePath,
+    radius_m: float,
+    color: tuple[float, float, float, float],
+) -> NodePath:
+    """
+    Placeholder ordnance visual: a flat-shaded coloured sphere, semi-transparent
+    when the colour's alpha is below 1.
+
+    :param game: The game/flight state
+    :param parent_node: The node to attach the sphere to
+    :param radius_m: The sphere's radius
+    :param color: Its RGBA colour
+    :return: The sphere's node path
+    """
+    sphere = game.app.loader.loadModel("models/misc/sphere")
+    sphere.reparent_to(parent_node)
+    sphere.set_scale(radius_m)
+    sphere.set_light_off()
+    sphere.set_color(*color)
+    if color[3] < 1.0:
+        sphere.set_transparency(TransparencyAttrib.MAlpha)
+        sphere.set_depth_write(False)
+    return sphere
 
 
 class Weapon:
@@ -212,6 +236,19 @@ class Munition:
         Subclass hook for tearing down extra render state (e.g. a light) before the
         shared teardown. Default: nothing.
         """
+
+    def on_impact(self):
+        """
+        The munition hit something: remove its visual (and thus its collider). The
+        timed clean still runs at the end of its life.
+        """
+        self.shot.removeNode()
+
+    def impact_position(self) -> Point3:
+        """
+        :return: The munition's current position, in the game root's frame
+        """
+        return self.shot.getPos(self.game.root_node)
 
     def clean(self, remove_from_game_objects: bool = True):
         """

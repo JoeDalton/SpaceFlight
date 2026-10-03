@@ -167,8 +167,9 @@ class Personality:
                 "swivel_frequency_hz": 0.5,
                 "swivel_distance_scale_m": 800.0,  # amplitude ramps within this range
             },
-            # Bombing run (see FighterNavigator.bomb_target). The bomb launch speed
-            # is BOMB_SPEED_MPS in bomb_launcher, shared with the release solver.
+            # Bombing run (see FighterNavigator.bomb_target). The bomb's launch
+            # velocity comes from its launcher (OrdnanceLauncher.initial_velocity),
+            # shared with the release solver.
             "bomb": {
                 # Entry point distance behind the target along its track
                 "entry_distance_m": 750.0,
@@ -184,8 +185,8 @@ class Personality:
                 "lateral_tolerance_m": 30.0,
                 "lateral_recovery_m": 80.0,
                 # Overfly height. Must stay below the bomb's fall over its lifetime
-                # (BOMB_SPEED_MPS * life_time_s) or it expires before reaching the
-                # target.
+                # (its launch speed_mps * life_time_s, see its configuration) or it
+                # expires before reaching the target.
                 "run_altitude_m": 100.0,
                 # Below this target speed, the bomber's bearing defines the track
                 "min_track_speed_mps": 5.0,
@@ -358,6 +359,28 @@ class Personality:
             "roll_kd": 0.0,
             "throttle_kp": 2.0,
             "throttle_ki": 0.1,
+            "throttle_kd": 0.0,
+        },
+    }
+
+    # A guided missile has no tactician (it always engages the target given at
+    # launch) and its navigator only does constant-angle pursuit, so only its
+    # pilot is tuned. Its speed is constant, so the throttle gains are unused.
+    MISSILE_DEFAULT = {
+        "pilot": {
+            "sample_time_s": 0.05,
+            "minimum_throttle": 1.0,
+            "yaw_kp": 3.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -3.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
+            "roll_kp": -1.0,
+            "roll_ki": 0.0,
+            "roll_kd": 0.0,
+            "throttle_kp": 0.0,
+            "throttle_ki": 0.0,
             "throttle_kd": 0.0,
         },
     }

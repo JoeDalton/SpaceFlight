@@ -64,7 +64,12 @@ Key responsibilities:
 - **Damage is ship-type dependent.** `apply_damage` and `ship_handle_health`
   are `NotImplementedError` stubs overridden by each concrete ship type.
 - Owns its engine sound (interior loop for the player's cockpit, 3D-attached
-  exterior loop for everyone else) and its `ShipModel`.
+  exterior loop for everyone else; none if its config has none) and its
+  `ShipModel`.
+- **Hooks for pawns that fly like ships but are not quite ships** (ordnance):
+  `_load_configuration`, `_compute_max_speed_mps`, `_build_model`,
+  `_build_damage_fx`, `_turn_rate_scale`, and `_compute_attitude_derivative`
+  (the orientation derivative and body axes, shared by `compute_derivatives`).
 
 `Ship` has two concrete subclasses:
 
@@ -76,9 +81,19 @@ Key responsibilities:
 ### `Fighter`
 
 Adds a self-contained regenerating shield (damage drains the shield before
-health), a `LaserCannon`, a `BombLauncher` fed from a limited `bomb_supply`
-(`drop_bomb` spends one unit per release), and `AutoAim` for target leading.
+health), a `LaserCannon`, `AutoAim` for target leading, and one
+`OrdnanceLauncher` per entry of its config's `loadout`
+(`{ordnance_name: count}`, see [ordnance](#ordnance-bombs-rockets-missiles-flares)).
 Its collision sphere is sized from `hit_box_radius_m` in its config.
+
+Ordnance is used the same way by the player and the AI, through the
+*selected secondary* weapon (`selected_secondary`, a bomb, rocket or missile
+launcher): `cycle_secondary` selects the next one in loadout order, looping
+over `secondary_cycle()` — spent ones included, they just launch nothing — and
+`fire_secondary` launches it, then moves on to the next one with stock left
+once it is spent. A missile gets the current target only while auto-aim is locked on it.
+Flares have their own trigger, `drop_flare`, from the loadout's flare launcher
+(`flare_launcher`).
 
 ### `CapitalShip`
 
@@ -111,12 +126,13 @@ base classes the concrete weapons share:
   (`fire_delay` + `_ready_to_fire`, an atomic check-and-consume so a weapon
   cannot fire faster than its rate), and the munition-spawn call. Subclasses
   define the trigger itself.
-- **`Munition`** — the whole projectile lifecycle: identity, damage, emitter,
-  world velocity, a straight-line coast for its lifetime, registration in
-  `game.game_objects`, and a timed self-clean. It exposes the interface the
-  collision handlers read (`origin_ship`/`origin_ship_id`/`power`/`speed`/
-  `shot`). Subclasses fill in only `_build_visual` and `_attach_collider`,
-  plus an optional `_clean_extra`.
+- **`Munition`** — the whole projectile lifecycle of a laser shot: identity,
+  damage, emitter, world velocity, a straight-line coast for its lifetime,
+  registration in `game.game_objects`, and a timed self-clean. It exposes the
+  interface the collision handlers read (`origin_ship`/`origin_ship_id`/
+  `power`/`speed`, `on_impact()`/`impact_position()`), which ordnance exposes
+  too. Subclasses fill in only `_build_visual` and `_attach_collider`, plus an
+  optional `_clean_extra`.
 
 **`LaserCannon` / `LaserShot`**
 ([`weapons/laser_cannon.py`](../../src/space_flight/weapons/laser_cannon.py))
@@ -128,13 +144,44 @@ velocity. Each `LaserShot` renders as an analytic capsule impostor (see
 one frame's travel and an optional point light behind the global
 `EMIT_LASER_LIGHT` toggle.
 
-**`BombLauncher` / `Bomb`**
-([`weapons/bomb_launcher.py`](../../src/space_flight/weapons/bomb_launcher.py))
-drops a bomb along the ship's belly (`-Z`) at `BOMB_SPEED_MPS` plus the ship's
-velocity, rate-limited by a reload delay; `launch()` returns whether a bomb
-was actually released so the fighter only spends supply on a real drop. Each
-`Bomb` is a slow pink sphere with a small collision sphere, handled by the
-same munition collision handlers as lasers.
+### Ordnance: bombs, rockets, missiles, flares
+
+All four share the same code; they differ only by their configuration,
+[`datafiles/models/ordnance/<name>/configuration.yaml`](../../src/space_flight/datafiles/models/ordnance/):
+`type` (`bomb`/`rocket`/`missile`/`flare`), `life_time_s`, `damage` and
+`damage_type` (`physical` only for now), `reload_s`, the launch
+(`launch_direction` — `forward`, `down` or `backward` — `speed_mps` relative to
+the launching ship, `launch_offset_m`), the placeholder look and collision
+(`visual_radius_m`, `collision_radius_m`, RGBA `color`) and, for missiles, the
+turn rates.
+
+- **`OrdnanceLauncher`**
+  ([`weapons/ordnance_launcher.py`](../../src/space_flight/weapons/ordnance_launcher.py))
+  holds a limited `stock` and a reload gate, and is the single source of the
+  launch properties: `initial_velocity()` is the ship's velocity plus
+  `speed_mps` along the launch direction — read by the bomb-run release solver
+  as well. `launch(target_id)` spends one unit only on an actual launch, and
+  only a missile keeps the target.
+- **`Ordnance`** ([`actors/ordnance.py`](../../src/space_flight/actors/ordnance.py))
+  is a `Ship` flying at a constant speed: its velocity is frozen in its body
+  axes (no engine, no aerodynamics), so it flies straight unless it turns —
+  which only a guided missile does, its velocity turning with it. Its pilot's
+  rates still go through `Ship.set_inputs`. Toward the collision handlers it is
+  a munition (`origin_ship`, `power`, `on_impact()`...). Its look is a
+  coloured sphere (`build_ordnance_sphere`).
+- **`OrdnanceController`** (same file) flies it for its life, then removes
+  it — at once on impact too, silently (no explosion, no smoke), through the
+  `Destructible` death handling. It is not a `Bot`: a missile has no tactician
+  (it always engages the target its launcher gave it), and ordnance is not
+  registered in `Interactions` (not targetable, and kept off its 64 slots).
+  A missile with a target is steered by a
+  [`MissileNavigator`](../../src/space_flight/ai/missile/missile_navigator.py)
+  (constant-angle pursuit) and a `FighterPilot`
+  (`Personality.MISSILE_DEFAULT`); everything else — and a missile whose target
+  is lost — flies straight on.
+
+Flares are decoys: they only stop other ordnance (both are spent), never
+each other, and never their own team's ordnance (see [Game](game.md)).
 
 ## `Destructible` and `Destructibles` — central death handling
 
@@ -245,8 +292,9 @@ on top. Not part of the gameplay hierarchy.
 and `Trihedron` live under
 [`src/space_flight/actors/`](../../src/space_flight/actors/) (beside
 `scan.py`, the mission scan state, see [Game](game.md));
-`Weapon`/`Munition`, `LaserCannon`/`LaserShot` and `BombLauncher`/`Bomb`
-under [`src/space_flight/weapons/`](../../src/space_flight/weapons/);
+`Weapon`/`Munition`, `LaserCannon`/`LaserShot` and `OrdnanceLauncher`
+under [`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
+`Ordnance` pawn and its controller in `actors/ordnance.py`);
 `CapitalShip` and everything it is built from under
 [`actors/capital_ship/`](../../src/space_flight/actors/capital_ship/) (see
 [Capital-ship subsystems](subsystems.md)).

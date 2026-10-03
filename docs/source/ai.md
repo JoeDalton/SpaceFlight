@@ -60,7 +60,8 @@ the schedule. The player's AI mode (`has_ai`) is not scheduled.
 [`ai/__init__.py`](../../src/space_flight/ai/__init__.py) defines the shared
 `Intent` and `AttackMode` (`PURSUIT`, `STRAFE`, `ORBIT`, `BOMB`) enums and
 `Personality`, whose dictionaries — `FIGHTER_DEFAULT`, `TURRET_DEFAULT`,
-`TRACTOR_BEAM_DEFAULT`, `CAPITAL_SHIP_DEFAULT` — hold, per
+`TRACTOR_BEAM_DEFAULT`, `CAPITAL_SHIP_DEFAULT`, and `MISSILE_DEFAULT` (pilot
+only) — hold, per
 `tactician`/`navigator`/`pilot` section (plus `tractor_beam` for tractor
 beams), most tunables: commitment times, engagement thresholds, PID gains,
 pursuit biases, cutoff distances. A new archetype is mostly a new
@@ -104,11 +105,15 @@ engage the best-scored prey (`evaluate_preys`, boosted for
 `primary_target_ids`), patrol, hold formation, else regroup. When engaging it
 also picks the `AttackMode` (in `target_dict["attack_mode"]`): first the weapon
 (`_choose_weapon` — a limited bomb only against a target both tough and
-valuable, stationary enough, with supply to spare), then the geometry: `BOMB`,
+valuable, stationary enough, with stock to spare — only while the selected
+secondary weapon is a bomb launcher), then the geometry: `BOMB`,
 or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
 
 **`FighterNavigator.engage_target`** dispatches on that attack mode:
-- **`PURSUIT`** — blends Constant Angle Pursuit, lead and lag pursuit with
+- **`PURSUIT`** — blends Constant Angle Pursuit (`compute_constant_angle_pursuit`
+  aims at where the target will be, laterally, a second from now: it is fed
+  the lateral part of `v_target − v_self`, the convention of
+  `Interactions.rel_velocities[self, target]`), lead and lag pursuit with
   distance-dependent weights (`compute_engage_weights`, overlapping smooth
   steps), fires once aligned and in range, and can override pursuit to
   `reposition` (hard turn away before overshooting a closing target) or
@@ -122,8 +127,10 @@ or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
   fly belly-down along it (the pilot's up-reference makes the fighter roll only
   to level with that reference, like the capital ship).
   `compute_release_condition` treats the bomb as a straight (no-gravity)
-  projectile and releases when the flight-time-led intercept falls inside a
-  cone of its velocity.
+  projectile at its launcher's `initial_velocity()` and releases when the
+  flight-time-led intercept falls inside a cone of that velocity; the drop
+  goes through the player's own `pawn.fire_secondary()`, with the selected
+  secondary weapon (nothing is released if it is not a bomb).
 
 **`CapitalShipTactician`** is the fighter's list without threat evasion or
 prey scoring: it engages a scripted prey (`scripted_prey_dict`) tagged
@@ -157,6 +164,19 @@ Both mount kinds share this trio; `Personality.TRACTOR_BEAM_DEFAULT` only adds
 a `tractor_beam` section for grab timing (see
 [`Bot.__init__`](../../src/space_flight/actors/bot.py)).
 
+## Guided missiles: a navigator and a pilot, no tactician
+
+A missile's intent is always to engage the target its launcher gave it (the
+launching ship's target, only if auto-aim was locked on it), so it has no
+tactician. Its
+[`MissileNavigator`](../../src/space_flight/ai/missile/missile_navigator.py)
+does constant-angle pursuit of that target at the missile's (constant) speed,
+and returns a zero direction once the target is lost (destroyed or gone from
+`Interactions`): the missile then drops its guidance and flies straight on. It
+is flown by an ordinary `FighterPilot` with `Personality.MISSILE_DEFAULT`,
+every frame (an `OrdnanceController` is not scheduled by the
+`ThinkScheduler`). See [ordnance](actors.md#ordnance-bombs-rockets-missiles-flares).
+
 ## Supporting systems
 
 ### `AutoAim`
@@ -169,7 +189,8 @@ not `Bot`. Once the target has stayed inside an acquisition cone for
 `target_lock_delay_s`, `compute_shot_speed` aims each shot at the target's
 predicted impact-time position, clamped to a maximum assist angle around the
 barrel (a "nudge", not a snap). `configure()` is separate from `__init__` so a
-targeting system can retune a turret's auto-aim at runtime.
+targeting system can retune a turret's auto-aim at runtime. The same lock
+(`is_target_acquired`) decides whether a launched missile is guided.
 
 ### `CollisionSensor` and `Formation`
 
@@ -210,7 +231,8 @@ with `alive`) are compacted, so their positions are not the slot indices from
 
 [`ai/`](../../src/space_flight/ai/): `generic/` holds the
 tactician/navigator/pilot base classes, `fighter/`, `capital_ship/` and
-`tracking_mount/` each family's subclasses, and `__init__.py` the shared
+`tracking_mount/` each family's subclasses, `missile/` the missile navigator,
+and `__init__.py` the shared
 `Personality`, `Intent` and `AttackMode`. `auto_aim.py`, `collision_sensor.py`,
 `formation.py`, `interactions.py` and `think_scheduler.py` are the supporting
 systems.

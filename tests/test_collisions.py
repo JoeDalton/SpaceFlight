@@ -303,6 +303,125 @@ def test_lasers_test_against_shields_but_ships_do_not():
 
 
 # ---------------------------
+# ordnance and flare masks
+# ---------------------------
+
+
+def _collide(from_type: str, into_type: str) -> bool:
+    """Whether a from_type collider tests against an into_type collider."""
+    from_mask, _, _ = CollisionLayers.define_collision_masks(from_type)
+    _, into_mask, _ = CollisionLayers.define_collision_masks(into_type)
+    return bool(from_mask & into_mask)
+
+
+def test_ordnance_hits_what_munitions_hit_plus_flares():
+    """
+    Ordnance hits ships, terrain, subsystems and shields like a laser, and also
+    flares; nothing hits ordnance.
+    """
+    for into_type in ("destructible", "terrain", "subsystem", "shield", "flare"):
+        assert _collide("ordnance", into_type), into_type
+    for from_type in ("laser", "ordnance", "destructible", "sensor"):
+        assert not _collide(from_type, "ordnance"), from_type
+
+
+def test_flares_only_stop_ordnance():
+    """
+    A flare is into-only and only ordnance hits it: two flares never collide,
+    and lasers, ships and sensors pass through.
+    """
+    from_mask, _, add_to_handler = CollisionLayers.define_collision_masks("flare")
+
+    assert from_mask == BitMask32.allOff()
+    assert add_to_handler is False
+    assert _collide("ordnance", "flare")
+    for from_type in ("flare", "laser", "destructible", "sensor"):
+        assert not _collide(from_type, "flare"), from_type
+
+
+# ---------------------------
+# ordnance_into_flare
+# ---------------------------
+
+
+def make_flare_entry(ordnance, flare) -> MagicMock:
+    entry = MagicMock()
+    entry.from_node_path.python_tags = {"owner": ordnance}
+    entry.into_node_path.python_tags = {"owner": flare}
+    return entry
+
+
+def test_enemy_ordnance_and_flare_are_both_spent():
+    """
+    Ordnance hitting an enemy flare is stopped, and the flare is spent too.
+    """
+    system = make_collision_system_without_init()
+    ordnance, flare = MagicMock(team=2), MagicMock(team=1)
+
+    system.ordnance_into_flare(make_flare_entry(ordnance, flare))
+
+    ordnance.on_impact.assert_called_once()
+    flare.on_impact.assert_called_once()
+
+
+def test_own_team_flares_do_not_stop_ordnance():
+    """
+    A team's own flares never stop its ordnance.
+    """
+    system = make_collision_system_without_init()
+    ordnance, flare = MagicMock(team=1), MagicMock(team=1)
+
+    system.ordnance_into_flare(make_flare_entry(ordnance, flare))
+
+    ordnance.on_impact.assert_not_called()
+    flare.on_impact.assert_not_called()
+
+
+@pytest.mark.parametrize("spent", ["ordnance", "flare"])
+def test_ordnance_into_flare_ignores_an_already_spent_one(spent):
+    """
+    An ordnance or flare already spent this frame (its owner tag cleared) takes
+    no part in further contacts.
+    """
+    system = make_collision_system_without_init()
+    ordnance, flare = MagicMock(team=2), MagicMock(team=1)
+    entry = make_flare_entry(
+        None if spent == "ordnance" else ordnance, None if spent == "flare" else flare
+    )
+
+    system.ordnance_into_flare(entry)
+
+    ordnance.on_impact.assert_not_called()
+    flare.on_impact.assert_not_called()
+
+
+# ---------------------------
+# munition_into_terrain
+# ---------------------------
+
+
+def test_munition_into_terrain_spends_it_at_its_own_position_without_contact_point():
+    """
+    On a terrain collider that reports no contact point or normal (an infinite
+    plane), the sparks fall back to the munition's own position, and it is spent.
+    """
+    system = make_collision_system_without_init()
+    munition = MagicMock(speed=np.array([0.0, 100.0, -50.0]))
+    munition.impact_position.return_value = Vec3(1.0, 2.0, 3.0)
+    entry = MagicMock()
+    entry.from_node_path.python_tags = {"owner": munition}
+    entry.into_node_path.python_tags = {"owner": SimpleNamespace(material="rock")}
+    entry.hasSurfaceNormal.return_value = False
+    entry.hasSurfacePoint.return_value = False
+
+    system.munition_into_terrain(entry)
+
+    spark_kwargs = system.game.spark_fx_pool.spawn.call_args.kwargs
+    assert spark_kwargs["position"] == Vec3(1.0, 2.0, 3.0)
+    munition.on_impact.assert_called_once()
+
+
+# ---------------------------
 # munition_into_shield
 # ---------------------------
 
@@ -362,7 +481,7 @@ def test_laser_from_outside_is_blocked():
 
     shield.take_hit.assert_called_once()
     assert shield.take_hit.call_args.kwargs["damage"] == pytest.approx(60.0)
-    laser.shot.removeNode.assert_called_once()
+    laser.on_impact.assert_called_once()
 
 
 def test_laser_from_inside_passes_through():
@@ -376,7 +495,7 @@ def test_laser_from_inside_passes_through():
     system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
-    laser.shot.removeNode.assert_not_called()
+    laser.on_impact.assert_not_called()
 
 
 def test_laser_with_degenerate_normal_passes_through():
@@ -391,7 +510,7 @@ def test_laser_with_degenerate_normal_passes_through():
     system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
-    laser.shot.removeNode.assert_not_called()
+    laser.on_impact.assert_not_called()
 
 
 def test_disabled_shield_lets_lasers_through():
@@ -405,7 +524,7 @@ def test_disabled_shield_lets_lasers_through():
     system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
-    laser.shot.removeNode.assert_not_called()
+    laser.on_impact.assert_not_called()
 
 
 def test_munition_into_shield_ignores_missing_owners():
@@ -441,7 +560,7 @@ def test_laser_does_not_hit_its_own_ships_shield():
     system.munition_into_shield(entry)
 
     shield.take_hit.assert_not_called()
-    laser.shot.removeNode.assert_not_called()
+    laser.on_impact.assert_not_called()
 
 
 # ---------------------------
@@ -485,7 +604,7 @@ def test_laser_does_not_hit_the_ship_it_was_fired_from():
     system.munition_into_destructible(entry)
 
     ship.take_hit.assert_not_called()
-    laser.shot.removeNode.assert_not_called()
+    laser.on_impact.assert_not_called()
 
 
 def test_laser_does_not_hit_a_sibling_subsystem():
@@ -507,7 +626,7 @@ def test_laser_does_not_hit_a_sibling_subsystem():
     system.munition_into_destructible(entry)
 
     sibling.take_hit.assert_not_called()
-    laser.shot.removeNode.assert_not_called()
+    laser.on_impact.assert_not_called()
 
 
 # ---------------------------

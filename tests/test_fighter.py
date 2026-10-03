@@ -123,51 +123,165 @@ def test_apply_damage_parametrized(
 
 
 # ---------------------------
-# drop_bomb
+# ordnance (loadout launchers)
 # ---------------------------
 
 
-def _fighter_with_bombs(bomb_supply: int):
+class FakeLauncher:
+    """
+    Stands in for an OrdnanceLauncher: spends one unit of stock per launch and
+    records the target it was given.
+    """
+
+    def __init__(self, category: str, stock: int, name: str = ""):
+        self.category = category
+        self.stock = stock
+        self.name = name or category
+        self.targets = []
+
+    def launch(self, target_id=None) -> bool:
+        if self.stock <= 0:
+            return False
+        self.stock -= 1
+        self.targets.append(target_id)
+        return True
+
+
+def _fighter_with_loadout(*launchers: FakeLauncher, locked: bool = False):
+    """
+    A fighter carrying these launchers, its secondary and flare launcher picked
+    as at construction.
+    """
     fighter = make_fighter_without_init()
-    fighter.bomb_supply = bomb_supply
-    fighter.bomb_launcher = MagicMock()
-    fighter.parent = MagicMock()
-    fighter.parent.name = "bomber"
+    fighter.ordnance_launchers = list(launchers)
+    fighter.selected_secondary = None
+    fighter.cycle_secondary()
+    fighter.flare_launcher = next(
+        (launcher for launcher in launchers if launcher.category == "flare"), None
+    )
+    fighter.target_id = "target"
+    fighter.auto_aim = MagicMock(is_target_acquired=locked)
     return fighter
 
 
-def test_drop_bomb_spends_one_launches_and_reports_success():
+def test_first_secondary_is_selected_initially():
     """
-    Dropping a bomb decrements the supply, launches a bomb, and returns True.
+    The initial secondary weapon is the first bomb, rocket or missile launcher
+    in loadout order; flares are never a secondary.
     """
-    fighter = _fighter_with_bombs(bomb_supply=3)
+    missile = FakeLauncher("missile", 2)
+    fighter = _fighter_with_loadout(
+        FakeLauncher("flare", 10), missile, FakeLauncher("rocket", 3)
+    )
 
-    assert fighter.drop_bomb() is True
-    assert fighter.bomb_supply == 2
-    fighter.bomb_launcher.launch.assert_called_once()
+    assert fighter.selected_secondary is missile
 
 
-def test_drop_bomb_out_of_ordnance_returns_false():
+def test_fire_secondary_gives_a_missile_the_target_only_when_locked():
     """
-    With no bombs left, drop_bomb releases nothing and returns False.
+    A missile carries the current target only while auto-aim is locked on it;
+    otherwise it flies blind.
     """
-    fighter = _fighter_with_bombs(bomb_supply=0)
+    missile = FakeLauncher("missile", 2)
+    fighter = _fighter_with_loadout(missile, locked=False)
 
-    assert fighter.drop_bomb() is False
-    assert fighter.bomb_supply == 0
-    fighter.bomb_launcher.launch.assert_not_called()
+    assert fighter.fire_secondary() is True
+    fighter.auto_aim.is_target_acquired = True
+    assert fighter.fire_secondary() is True
+
+    assert missile.targets == [None, "target"]
 
 
-def test_drop_bomb_empties_supply_then_refuses():
+def test_fire_secondary_launches_the_selected_launcher():
     """
-    The supply floors at zero: draining it makes further drops fail.
+    fire_secondary spends one unit of the selected secondary weapon.
     """
-    fighter = _fighter_with_bombs(bomb_supply=1)
+    rocket = FakeLauncher("rocket", 5)
+    fighter = _fighter_with_loadout(rocket)
 
-    assert fighter.drop_bomb() is True
-    assert fighter.drop_bomb() is False
-    assert fighter.bomb_supply == 0
-    fighter.bomb_launcher.launch.assert_called_once()
+    assert fighter.fire_secondary() is True
+    assert rocket.stock == 4
+
+
+def test_fire_secondary_moves_on_once_the_selection_is_spent():
+    """
+    Once the selected launcher runs out, the next one with stock is selected,
+    skipping spent ones.
+    """
+    missile = FakeLauncher("missile", 1)
+    spent_bomb = FakeLauncher("bomb", 0)
+    rocket = FakeLauncher("rocket", 3)
+    fighter = _fighter_with_loadout(missile, spent_bomb, rocket)
+    assert fighter.selected_secondary is missile
+
+    assert fighter.fire_secondary() is True
+    assert fighter.selected_secondary is rocket
+
+
+def test_spent_selection_stays_when_nothing_else_is_left():
+    """
+    When every secondary weapon is spent, the last one used stays selected,
+    and firing it launches nothing.
+    """
+    missile = FakeLauncher("missile", 1)
+    fighter = _fighter_with_loadout(missile, FakeLauncher("rocket", 0))
+
+    assert fighter.fire_secondary() is True
+    assert fighter.selected_secondary is missile
+    assert fighter.fire_secondary() is False
+
+
+def test_cycle_secondary_loops_over_all_secondaries_and_skips_flares():
+    """
+    cycle_secondary goes through the bomb/rocket/missile launchers, spent ones
+    included, in loadout order, and wraps around; flares are skipped.
+    """
+    missile = FakeLauncher("missile", 2)
+    flare = FakeLauncher("flare", 10)
+    spent_bomb = FakeLauncher("bomb", 0)
+    rocket = FakeLauncher("rocket", 3)
+    fighter = _fighter_with_loadout(missile, flare, spent_bomb, rocket)
+
+    assert fighter.secondary_cycle() == [missile, spent_bomb, rocket]
+    fighter.cycle_secondary()
+    assert fighter.selected_secondary is spent_bomb
+    fighter.cycle_secondary()
+    assert fighter.selected_secondary is rocket
+    fighter.cycle_secondary()
+    assert fighter.selected_secondary is missile
+
+
+def test_secondary_is_none_without_secondary_ordnance():
+    """
+    A ship without bombs, rockets or missiles has no secondary weapon, and
+    firing it does nothing.
+    """
+    fighter = _fighter_with_loadout(FakeLauncher("flare", 10))
+
+    assert fighter.selected_secondary is None
+    assert fighter.fire_secondary() is False
+
+
+def test_drop_flare_without_flares_returns_false():
+    """
+    A ship without flares drops nothing.
+    """
+    fighter = _fighter_with_loadout(FakeLauncher("missile", 2))
+
+    assert fighter.drop_flare() is False
+
+
+def test_drop_flare_launches_a_flare_not_the_secondary():
+    """
+    drop_flare spends a flare, whatever the selected secondary weapon.
+    """
+    missile = FakeLauncher("missile", 2)
+    flare = FakeLauncher("flare", 10)
+    fighter = _fighter_with_loadout(missile, flare)
+
+    assert fighter.drop_flare() is True
+    assert flare.stock == 9
+    assert missile.stock == 2
 
 
 # ---------------------------

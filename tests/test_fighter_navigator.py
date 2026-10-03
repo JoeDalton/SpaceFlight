@@ -14,7 +14,6 @@ import pytest
 from space_flight.ai import Intent, Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.utils.state_machine import StateMachine
-from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
 
 class _Clock:
@@ -587,13 +586,25 @@ def test_strafe_attack_breaks_when_stalled():
 # ---------------------------------------------------------------------------
 
 
+BOMB_LAUNCH_SPEED_MPS = 75.0
+
+
 def _augment_pawn_for_bomb(nav):
-    """Give the mocked pawn what the bomb run + release solver read."""
+    """
+    Give the mocked pawn what the bomb run + release solver read: a bomb
+    launcher, dropping bombs along the belly, as its selected secondary weapon.
+    """
     nav.pawn.position = np.zeros(3)
     nav.pawn.forward = np.array([0.0, 1.0, 0.0])
     nav.pawn.up = np.array([0.0, 0.0, 1.0])
     nav.pawn.speed = np.array([0.0, 100.0, 0.0])
-    nav.pawn.drop_bomb = MagicMock(return_value=True)
+    launcher = MagicMock(category="bomb", stock=6)
+    launcher.initial_velocity.side_effect = lambda: (
+        nav.pawn.speed - BOMB_LAUNCH_SPEED_MPS * nav.pawn.up
+    )
+    nav.pawn.selected_secondary = launcher
+    nav.pawn.fire_secondary = MagicMock(return_value=True)
+    nav.bomb_launcher = launcher
     nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
     nav.up_reference = None
 
@@ -613,7 +624,7 @@ def _bomb_engagement(
 
 def _bomb_velocity_dir(nav):
     """The bomb's launch direction for the current pawn (speed - launch * up)."""
-    v_bomb = nav.pawn.speed - BOMB_SPEED_MPS * nav.pawn.up
+    v_bomb = nav.pawn.speed - BOMB_LAUNCH_SPEED_MPS * nav.pawn.up
     return v_bomb / np.linalg.norm(v_bomb)
 
 
@@ -627,7 +638,12 @@ def test_compute_release_condition_aligned_in_range_returns_true():
     bomb = nav.personality["navigator"]["bomb"]
     target_position = _bomb_velocity_dir(nav) * 100.0  # on the bomb line, 100 m
 
-    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is True
+    assert (
+        nav.compute_release_condition(
+            target_position, np.zeros(3), bomb, nav.bomb_launcher
+        )
+        is True
+    )
 
 
 def test_compute_release_condition_out_of_range_returns_false():
@@ -639,7 +655,12 @@ def test_compute_release_condition_out_of_range_returns_false():
     bomb = nav.personality["navigator"]["bomb"]
     target_position = _bomb_velocity_dir(nav) * 500.0  # aligned but too far
 
-    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
+    assert (
+        nav.compute_release_condition(
+            target_position, np.zeros(3), bomb, nav.bomb_launcher
+        )
+        is False
+    )
 
 
 def test_compute_release_condition_misaligned_returns_false():
@@ -651,7 +672,12 @@ def test_compute_release_condition_misaligned_returns_false():
     bomb = nav.personality["navigator"]["bomb"]
     target_position = np.array([0.0, 100.0, 0.0])  # straight ahead, level
 
-    assert nav.compute_release_condition(target_position, np.zeros(3), bomb) is False
+    assert (
+        nav.compute_release_condition(
+            target_position, np.zeros(3), bomb, nav.bomb_launcher
+        )
+        is False
+    )
 
 
 def test_bomb_target_not_yet_behind_runs_ingress():
@@ -844,7 +870,34 @@ def test_bomb_run_releases_and_breaks():
     nav.bomb_target(engagement)
 
     assert nav.behaviour == "bomb_break"
-    nav.pawn.drop_bomb.assert_called_once()
+    nav.pawn.fire_secondary.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "selected",
+    [MagicMock(category="missile", stock=4), MagicMock(category="bomb", stock=0), None],
+    ids=["missile", "spent bomb", "nothing"],
+)
+def test_bomb_run_does_not_release_without_a_bomb_selected(selected):
+    """
+    The bomb is the selected secondary weapon: with a missile selected instead,
+    spent bombs, or nothing, the run releases nothing even on a perfect solution.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_bomb(nav)
+    nav.pawn.selected_secondary = selected
+    _enter_behaviour(nav, "bomb_run")
+    direction = _bomb_velocity_dir(nav)
+    engagement = _bomb_engagement(
+        distance_m=100.0,
+        direction=direction,
+        target_position=direction * 100.0,  # aligned, in range
+        longitudinal=-55.0,
+    )
+
+    nav.bomb_target(engagement)
+
+    nav.pawn.fire_secondary.assert_not_called()
 
 
 def test_bomb_run_without_solution_holds_and_aims_belly():
@@ -867,7 +920,7 @@ def test_bomb_run_without_solution_holds_and_aims_belly():
 
     assert nav.behaviour == "bomb_run"
     assert nav.up_reference is not None  # belly aim published
-    nav.pawn.drop_bomb.assert_not_called()
+    nav.pawn.fire_secondary.assert_not_called()
 
 
 def test_bomb_run_follows_track_line_and_publishes_up_reference():
@@ -984,7 +1037,7 @@ def test_bomb_released_between_thinks_once_the_solution_is_met():
 
     nav.bomb_target(target_dict)  # the think
     assert nav.behaviour == "bomb_run"
-    nav.pawn.drop_bomb.assert_not_called()
+    nav.pawn.fire_secondary.assert_not_called()
 
     # A few frames later (fresh geometry): the target now lies on the bomb path
     direction = _bomb_velocity_dir(nav)
@@ -996,7 +1049,7 @@ def test_bomb_released_between_thinks_once_the_solution_is_met():
     nav.update_triggers(Intent.ENGAGE, target_dict)
     nav.update_triggers(Intent.ENGAGE, target_dict)
 
-    nav.pawn.drop_bomb.assert_called_once()
+    nav.pawn.fire_secondary.assert_called_once()
     assert nav.behaviour == "bomb_break"
 
 

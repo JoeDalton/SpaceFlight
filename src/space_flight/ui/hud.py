@@ -16,6 +16,7 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
+from space_flight.ui.utils import RollingDrum, make_text_line
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
@@ -33,6 +34,17 @@ MIN_PROJECTION_DEPTH = 1e-3
 # Target box half-extents, shared by the box and the scan bar filling it.
 TARGET_BOX_HALF_WIDTH = 0.038
 TARGET_BOX_HALF_HEIGHT = 0.03
+
+# Ordnance HUD (see OrdnanceHUD), in the bottom-right corner's coordinates
+ORDNANCE_HUD_RIGHT_X = -0.05
+ORDNANCE_TEXT_SCALE = 0.05
+DRUM_CENTER_Z = 0.25
+FLARE_LINE_Z = 0.08
+
+# Target box tint, by auto-aim state: locked (a missile launched now would be
+# guided to the target) or not.
+TARGET_BOX_COLOR = (1.0, 1.0, 1.0, 1.0)
+TARGET_BOX_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
 
 # Transparent fill of the scan bar: while scanning, then by scan result.
 SCAN_BAR_COLORS = {
@@ -98,6 +110,11 @@ class HUD:
         self.chatter_textNodePath.setScale(0.075)
         self.chatter_textNodePath.setPos(0.0, 0, -0.8)
 
+        # Ordnance: secondary weapons and flares left
+        self.ordnance_hud = OrdnanceHUD(
+            game=self.game, parent_node=self.game.app.a2dBottomRight
+        )
+
         # Wrap long lines before they run off the edges of the screen.
         text_wrap_width = 3.5 * EDGE_HORIZONTAL / self.events_textNodePath.getScale()[0]
         self.events.setWordwrap(text_wrap_width)
@@ -111,6 +128,7 @@ class HUD:
         and updates the text displayed in the HUD.
         """
         self.update_debug_hud()
+        self.ordnance_hud.update()
         self.clear_scenario_hud()
 
     def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
@@ -235,6 +253,79 @@ class HUD:
         self.events = None
         self.chatter_textNodePath.removeNode()
         self.chatter = None
+        self.ordnance_hud.clean()
+        self.ordnance_hud = None
+        self.game = None
+
+
+class OrdnanceHUD:
+    """
+    The player's ordnance, bottom right: the secondary weapons on a rolling
+    drum (see :class:`~space_flight.ui.utils.RollingDrum`), the selected one
+    facing the player, and the flares left under it. Spent ordnance keeps its
+    line, at x0.
+    """
+
+    def __init__(self, game: FlightState, parent_node: NodePath) -> None:
+        """
+        :param game: The flight state
+        :param parent_node: The node the lines are anchored to (bottom-right
+            corner of the screen)
+        """
+        self.game = game
+        self.root = parent_node.attachNewNode("ordnanceHud")
+        self.root.setPos(ORDNANCE_HUD_RIGHT_X, 0, 0)
+
+        self.drum = RollingDrum(
+            parent_node=self.root,
+            clock=self.game.game_time.get_current_time,
+            text_scale=ORDNANCE_TEXT_SCALE,
+        )
+        self.drum.root.setZ(DRUM_CENTER_Z)
+        self.flare_line = make_text_line(self.root, "flares")
+        self.flare_line.setPos(0, 0, FLARE_LINE_Z)
+        self.flare_line.setScale(ORDNANCE_TEXT_SCALE)
+
+    @staticmethod
+    def format_line(name: str, stock: int) -> str:
+        """
+        :param name: The ordnance's display name
+        :param stock: How many are left
+        :return: The HUD line for it
+        """
+        return f"{name} {stock}"
+
+    def update(self) -> None:
+        """
+        Refresh the secondary weapons drum (rolling it if the selection changed)
+        and the flares line.
+        """
+        pawn = self.game.player.pawn
+        self.drum.update(
+            items=pawn.secondary_cycle(),
+            selected=pawn.selected_secondary,
+            label=lambda launcher: self.format_line(
+                launcher.display_name, launcher.stock
+            ),
+        )
+
+        flare_launcher = pawn.flare_launcher
+        self.flare_line.node().setText(
+            self.format_line(
+                flare_launcher.display_name if flare_launcher else "FLARE",
+                flare_launcher.stock if flare_launcher else 0,
+            )
+        )
+
+    def clean(self) -> None:
+        """
+        Cleans the OrdnanceHUD object
+        """
+        self.drum.clean()
+        self.drum = None
+        self.root.removeNode()
+        self.root = None
+        self.flare_line = None
         self.game = None
 
 
@@ -365,6 +456,7 @@ class TargetHUD:
             self.distance_label.show()
             self.name_label.show()
             self.square.show()
+            self.update_lock_tint()
 
             cam = self.game.app.cam
             lens = self.game.app.camLens
@@ -448,6 +540,16 @@ class TargetHUD:
                 world_pos - self.game.app.camera.getPos(self.game.root_node)
             ).length()
             self.distance_label["text"] = f"{distance:.0f} m"
+
+    def update_lock_tint(self) -> None:
+        """
+        Turn the target box red while auto-aim is locked on the target (a
+        missile launched now would be guided to it), white otherwise.
+        """
+        locked = self.game.player.pawn.auto_aim.is_target_acquired
+        self.square.setColorScale(
+            *(TARGET_BOX_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
+        )
 
     def clean(self) -> None:
         """

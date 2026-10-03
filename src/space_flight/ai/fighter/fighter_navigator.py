@@ -13,10 +13,10 @@ from space_flight.ai.generic.generic_ship_navigator import (
     GenericShipNavigator,
 )
 from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
-from space_flight.weapons.bomb_launcher import BOMB_SPEED_MPS
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
+    from space_flight.weapons.ordnance_launcher import OrdnanceLauncher
 
 LOGGER = logging.getLogger()
 
@@ -431,11 +431,17 @@ class FighterNavigator(GenericShipNavigator):
         target_position = target_dict["target_current_position"]
         target_speed = target_dict["target_current_speed"]
         if weapon == "bomb":
+            launcher = self.pawn.selected_secondary
+            if launcher is None or launcher.category != "bomb" or launcher.stock <= 0:
+                return False
             if not self.compute_release_condition(
-                target_position, target_speed, self.personality["navigator"]["bomb"]
+                target_position,
+                target_speed,
+                self.personality["navigator"]["bomb"],
+                launcher,
             ):
                 return False
-            self.pawn.drop_bomb()
+            self.pawn.fire_secondary()
             self.behaviour_sm.request("bomb_break")
             self._armed_trigger = None
             return True
@@ -732,14 +738,19 @@ class FighterNavigator(GenericShipNavigator):
         return self._bomb_reposition(direction, bomb)
 
     def compute_release_condition(
-        self, target_position: np.ndarray, target_speed: np.ndarray, bomb: dict
+        self,
+        target_position: np.ndarray,
+        target_speed: np.ndarray,
+        bomb: dict,
+        launcher: OrdnanceLauncher,
     ) -> bool:
         """
         Whether a bomb dropped this frame would hit the target.
 
-        The bomb travels in a straight line (no gravity) at v_bomb = ship.speed -
-        launch_speed * ship.up (i.e. the belly -Z plus inherited ship velocity),
-        so it is forward-and-down. Release when the target -- led by the bomb's
+        The bomb travels in a straight line (no gravity) at the launcher's
+        initial velocity (the ship's velocity plus the bomb's launch speed along
+        the belly -Z), so it is forward-and-down. Release when the target -- led by
+        the bomb's
         flight time to it (distance / |v_bomb|, the closing time at the bomb's true
         speed) -- lies within a tight cone of that velocity and in range. The lead
         makes the cone track the intercept point, so it can stay tight (accurate).
@@ -747,9 +758,10 @@ class FighterNavigator(GenericShipNavigator):
         :param target_position: The target's world position
         :param target_speed: The target's world velocity
         :param bomb: The bomb personality sub-dict
+        :param launcher: The bomb launcher that would drop it
         :return: True if a drop is on target now
         """
-        v_bomb = self.pawn.speed - BOMB_SPEED_MPS * self.pawn.up
+        v_bomb = launcher.initial_velocity()
         v_bomb_norm = magnitude(v_bomb)
         if v_bomb_norm < 1e-6:
             return False

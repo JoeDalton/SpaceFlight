@@ -289,11 +289,16 @@ class FlightInputContext(InputContext):
         if self.active(state, "fire"):
             self.player.pawn.laser_cannon.fire()
 
-        # Drop a bomb (bombers only). drop_bomb is self-guarding: it refuses while
-        # reloading or out of ordnance, so holding the key just drops at the reload
-        # rate, and a ship with no bomb supply is a harmless no-op.
-        if self.active(state, "drop_bomb"):
-            self.player.pawn.drop_bomb()
+        # Secondary weapon (bombs, rockets, missiles) and flares. Launches are
+        # self-guarding: they refuse while reloading or out of stock, so holding
+        # the key just fires at the reload rate, and a ship without that ordnance
+        # is a harmless no-op.
+        if self.pressed(state, "cycle_secondary"):
+            self.player.pawn.cycle_secondary()
+        if self.active(state, "fire_secondary"):
+            self.player.pawn.fire_secondary()
+        if self.active(state, "drop_flare"):
+            self.player.pawn.drop_flare()
 
         # Boost
         if self.pressed(state, "boost_on"):

@@ -493,3 +493,14 @@ def test_set_inputs_scales_turn_rates_with_throttle():
     ship.set_inputs(throttle=1.0, yaw_rate=1.0, pitch_rate=1.0, roll_rate=1.0)
 
     np.testing.assert_allclose(ship.pqr, [0.7, 0.7, 0.7], atol=1e-3)
+
+
+def test_adjust_engine_pitch_without_engine_sound_is_a_no_op():
+    """
+    A ship type without an engine sound (e.g. ordnance) is silent: adjusting the
+    engine pitch does nothing.
+    """
+    ship = make_ship_without_init()
+    ship.sound = None
+
+    ship.adjust_engine_pitch(throttle=1.0)
