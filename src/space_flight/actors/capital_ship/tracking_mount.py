@@ -85,7 +85,7 @@ class TrackingMount(SubSystem):
         self.position = np.array(self.node.getPos(self.game.root_node))
 
         # Agility and physical delay of the mount's aim
-        self.physics_filter_time_s = conf["physics_filter_time_s"]
+        self.inputs_filter_time_s = conf["inputs_filter_time_s"]
         self.max_pitch_rate_degps = conf["max_pitch_rate_degps"]
         self.max_yaw_rate_degps = conf["max_yaw_rate_degps"]
 
@@ -145,8 +145,8 @@ class TrackingMount(SubSystem):
             ),
             previous=self.state_derivative,
             dt=dt,
-            rise_time=self.physics_filter_time_s,
-            fall_time=self.physics_filter_time_s,
+            rise_time=self.inputs_filter_time_s,
+            fall_time=self.inputs_filter_time_s,
         )
 
         # Compute new angles

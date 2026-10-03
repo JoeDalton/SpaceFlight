@@ -87,7 +87,7 @@ class Ship(Pawn):
             self.conf = yaml.safe_load(f)
         # Set a low-pass filter time to emulate physical delay in
         # thrust and rotational rates
-        self.physics_filter_time_s = self.conf["physics_filter_time_s"]
+        self.inputs_filter_time_s = self.conf["inputs_filter_time_s"]
         self.mass_kg = self.conf["mass_kg"]
         self.max_thrust_n = self.conf["max_thrust_n"]
         self.brake_factor_nspm = self.conf["brake_factor_nspm"]
@@ -343,8 +343,8 @@ class Ship(Pawn):
                 ]
             ),
             dt=dt,
-            rise_time=self.physics_filter_time_s,
-            fall_time=self.physics_filter_time_s,
+            rise_time=self.inputs_filter_time_s,
+            fall_time=self.inputs_filter_time_s,
         )
 
     def compute_derivatives(self):
