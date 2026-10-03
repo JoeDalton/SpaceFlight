@@ -62,7 +62,7 @@ def test_mission3_victory(game, spawned):
     # Transports at 0.1s, escort at 1s, first wave at 10s.
     advance(game, m, 12)
     assert len(live(game, spawned, "transports")) == 3
-    assert len(live(game, spawned, "escort")) == 6
+    assert len(live(game, spawned, "escort")) == 8
     first_wave = live(game, spawned, "first_wave")
     assert len(first_wave) == 5
     transport_ids = {p.id for p in live(game, spawned, "transports")}
