@@ -54,6 +54,7 @@ COMMON_ASSETS_TO_LOAD = [
     # Capital ships (heavy glTF — preload so the level build never blocks on them)
     ("model", DATAFILES_PATH / "models/ships/gr-75/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/cr-90/scene.gltf", ""),
+    ("model", DATAFILES_PATH / "models/turrets/test/turret.glb", ""),
     (
         "model",
         DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf",

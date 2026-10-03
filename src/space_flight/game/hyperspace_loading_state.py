@@ -73,6 +73,10 @@ FADE_DURATION = 1.0
 # dissolving into the live scene (0.35 * its 2.0s T_MAX; keep in sync with the
 # `bg` smoothstep in hyperspace_outof.frag). The world is revealed from here.
 REVEAL_START = 0.7
+# Longest frame time the animation advances by. A one-off stall (e.g. a first
+# spawn after the reveal) then shows as a brief hitch instead of skipping the
+# rest of the current phase in a single frame.
+MAX_DT = 1 / 30
 # Tunnel vanishing-point offset below the screen centre, shared by all three
 # phases so their centres line up across transitions.
 CENTER_OFFSET = 0.1
@@ -272,7 +276,7 @@ class HyperspaceLoadingState(BaseState):
             self._prompt = None
 
     def _update(self, task: Task) -> int:
-        dt = self._clock.getDt()
+        dt = min(self._clock.getDt(), MAX_DT)
 
         # Advance time only on visible quads.
         for i in range(2):
