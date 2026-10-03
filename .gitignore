@@ -45,6 +45,7 @@ nosetests.xml
 coverage.xml
 htmlcov
 target
+.ruff_cache
 
 # Translations
 *.mo

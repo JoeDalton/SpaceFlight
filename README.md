@@ -12,6 +12,17 @@ Most graphical assets are borrowed from Creative Commons sources; their licence 
 
 # User
 
+## Input devices
+
+You can play with :
+- Your keyboard (possible but not the best experience)
+- A gamepad (tested with xbox one and ps4 controllers)
+- A joystick/HOTAS (developped with a ThrustMaster T.Flight Hotas One, possible fiddling necessary for other devices)
+
+Only one input device can be selected at a time. Default is `keyboard`. You can change
+the input device and remap bindings to your liking within the game interface.
+
+
 ## Windows user
 
 To install and run the game without a development environment, use the scripts in `MS_Windows_install/`. They install from your local clone, so you need the full repository on disk, not just that folder.
