@@ -34,6 +34,11 @@ MIN_PROJECTION_DEPTH = 1e-3
 TARGET_BOX_HALF_WIDTH = 0.038
 TARGET_BOX_HALF_HEIGHT = 0.03
 
+# Target box tint, by auto-aim state: locked (a missile launched now would be
+# guided to the target) or not.
+TARGET_BOX_COLOR = (1.0, 1.0, 1.0, 1.0)
+TARGET_BOX_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
+
 # Transparent fill of the scan bar: while scanning, then by scan result.
 SCAN_BAR_COLORS = {
     None: (1.0, 0.85, 0.0, 0.35),
@@ -365,6 +370,7 @@ class TargetHUD:
             self.distance_label.show()
             self.name_label.show()
             self.square.show()
+            self.update_lock_tint()
 
             cam = self.game.app.cam
             lens = self.game.app.camLens
@@ -448,6 +454,16 @@ class TargetHUD:
                 world_pos - self.game.app.camera.getPos(self.game.root_node)
             ).length()
             self.distance_label["text"] = f"{distance:.0f} m"
+
+    def update_lock_tint(self) -> None:
+        """
+        Turn the target box red while auto-aim is locked on the target (a
+        missile launched now would be guided to it), white otherwise.
+        """
+        locked = self.game.player.pawn.auto_aim.is_target_acquired
+        self.square.setColorScale(
+            *(TARGET_BOX_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
+        )
 
     def clean(self) -> None:
         """
