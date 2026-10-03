@@ -391,7 +391,8 @@ class GenericShipNavigator(GenericNavigator):
         """
         Computes the desired speed to follow a target: the target's speed at the
         ideal follow distance, faster when too far and slower when too close,
-        clamped to [0, max_speed_mps].
+        clamped to [minimum_speed_mps, max_speed_mps] (the personality's optional
+        minimum_speed_mps for that intent, 0 by default).
         TODO : effect of closing speed ? (longitudinal_speed_scalar_mps is unused)
 
         :param distance_m: Distance to target
@@ -407,7 +408,12 @@ class GenericShipNavigator(GenericNavigator):
                 distance_m=distance_m, intent=intent
             )
         )
-        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.pawn.max_speed_mps)
+        minimum_speed_mps = self.personality["navigator"][intent].get(
+            "minimum_speed_mps", 0.0
+        )
+        desired_speed_mps = min(
+            max(desired_speed_mps, minimum_speed_mps), self.pawn.max_speed_mps
+        )
         return desired_speed_mps
 
     def compute_speed_target_distance_contribution(

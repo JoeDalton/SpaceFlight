@@ -6,6 +6,7 @@ Panda3D collision nodes.  All tests bypass __init__ via object.__new__() and
 populate the instance with the minimal attributes consumed by each method.
 """
 
+import copy
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -296,6 +297,25 @@ def test_compute_follow_speed_clamped_above_zero():
     )
 
     assert speed >= 0.0
+
+
+def test_compute_follow_speed_respects_minimum_speed():
+    """
+    With a minimum_speed_mps in the intent's personality section, the follow
+    speed never drops below it, even when the target is slow and close.
+    """
+    personality = copy.deepcopy(Personality.FIGHTER_DEFAULT)
+    personality["navigator"]["attack"]["minimum_speed_mps"] = 80.0
+    nav = make_ship_navigator(max_speed_mps=300.0, personality=personality)
+
+    speed = nav.compute_follow_speed(
+        distance_m=0.0,
+        target_speed_mps=0.0,
+        longitudinal_speed_scalar_mps=0.0,
+        intent="attack",
+    )
+
+    assert speed == 80.0
 
 
 def test_compute_follow_speed_clamped_below_max_speed():

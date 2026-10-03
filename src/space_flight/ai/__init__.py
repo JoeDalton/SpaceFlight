@@ -129,6 +129,7 @@ class Personality:
                 "cap_lead_cutoff_slope": 0.04,
                 "ideal_distance_m": 200.0,
                 "speed_distance_slope": 0.01,
+                "minimum_speed_mps": 80.0,  # never slow below this when attacking
             },
             "intercept": {
                 "lead_time_s": 1.5,
