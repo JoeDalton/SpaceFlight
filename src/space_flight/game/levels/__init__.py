@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from space_flight.game.levels.dev_level import build_dev_upfront, dev_mission
-from space_flight.game.levels.intro_level import build_intro_upfront, intro_mission
 from space_flight.game.levels.mission1_level import (
     build_mission1_upfront,
     mission1_mission,
@@ -26,6 +25,10 @@ from space_flight.game.levels.mission1_level import (
 from space_flight.game.levels.mission2_level import (
     build_mission2_upfront,
     mission2_mission,
+)
+from space_flight.game.levels.mission3_level import (
+    build_mission3_upfront,
+    mission3_mission,
 )
 
 if TYPE_CHECKING:
@@ -68,8 +71,8 @@ LEVELS: dict[str, LevelEntry] = {
         "running guns.",
     ),
     "Mission 3: Escort": LevelEntry(
-        upfront=build_intro_upfront,
-        mission=intro_mission,
+        upfront=build_mission3_upfront,
+        mission=mission3_mission,
         description="The first `game ready` level.",
     ),
     "Dev": LevelEntry(

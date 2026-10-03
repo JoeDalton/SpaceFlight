@@ -29,9 +29,11 @@ def pawns_of(who: Any) -> list:
     The live pawns designated by who.
 
     :param who: A :class:`WaveHandle` (its live members), a Player or Bot
-        (its pawn), or a pawn
+        (its pawn), a pawn, or a list/tuple of any of these
     :return: The live pawns; empty if none are alive
     """
+    if isinstance(who, (list, tuple)):
+        return [pawn for one in who for pawn in pawns_of(one)]
     if hasattr(who, "pawns"):
         return who.pawns()
     pawn = getattr(who, "pawn", who)

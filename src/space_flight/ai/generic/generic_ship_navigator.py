@@ -40,6 +40,11 @@ class GenericShipNavigator(GenericNavigator):
         self.next_waypoint_idx = 0
         self.distance_to_waypoint_m = 0.0
         self.has_waypoint_loop = False
+        # Patrol progress tracking: when the bot can't get closer to its waypoint
+        # (turn radius too large for its speed), it slows down to tighten its turn
+        self._best_distance_to_waypoint_m = float("inf")
+        self._time_without_progress_s = 0.0
+        self.patrol_speed_factor = 1.0
         self.time_in_spiral_s = 0.0
         # Game time of the last navigate() and the time elapsed since the one
         # before: navigate() runs when the bot thinks, not necessarily every frame
@@ -204,6 +209,7 @@ class GenericShipNavigator(GenericNavigator):
         self.waypoints = waypoints
         self.next_waypoint_idx = 0
         self.has_waypoint_loop = is_loop
+        self._reset_patrol_progress()
 
     def clear_waypoints(self):
         """
@@ -212,6 +218,15 @@ class GenericShipNavigator(GenericNavigator):
         self.waypoints = []
         self.next_waypoint_idx = 0
         self.has_waypoint_loop = False
+        self._reset_patrol_progress()
+
+    def _reset_patrol_progress(self):
+        """
+        Forgets the approach history of the current waypoint and restores full speed
+        """
+        self._best_distance_to_waypoint_m = float("inf")
+        self._time_without_progress_s = 0.0
+        self.patrol_speed_factor = 1.0
 
     def follow_waypoints(self) -> Tuple[np.ndarray, float]:
         """
@@ -248,11 +263,29 @@ class GenericShipNavigator(GenericNavigator):
         ):
             # Do nothing this turn and target the next waypoint next time
             self.next_waypoint_idx += 1
+            self._reset_patrol_progress()
             return NO_DIRECTION
+
+        # Slow down if we are not getting any closer (orbiting the waypoint)
+        patrol = self.personality["navigator"]["patrol"]
+        if (
+            self.distance_to_waypoint_m
+            < self._best_distance_to_waypoint_m - patrol["progress_epsilon_m"]
+        ):
+            self._best_distance_to_waypoint_m = self.distance_to_waypoint_m
+            self._time_without_progress_s = 0.0
+        else:
+            self._time_without_progress_s += self.think_dt_s
+            if self._time_without_progress_s > patrol["stall_time_s"]:
+                self.patrol_speed_factor = max(
+                    self.patrol_speed_factor * patrol["stall_deceleration_factor"],
+                    patrol["min_speed_factor"],
+                )
+                self._time_without_progress_s = 0.0
 
         # Go to the next waypoint
         direction = waypoint_direction / self.distance_to_waypoint_m
-        return direction, self.personality["navigator"]["patrol"]["speed_mps"]
+        return direction, patrol["speed_mps"] * self.patrol_speed_factor
 
     # %% ==== formation ====
 
@@ -292,6 +325,8 @@ class GenericShipNavigator(GenericNavigator):
                     "Formation leader has been destroyed since last intent update."
                 )
             return NO_DIRECTION
+
+        self._sync_route_progress(leader)
 
         # Compute pursuit variables
         relative_position_in_formation = target_dict["target_relative_position"]
@@ -347,6 +382,27 @@ class GenericShipNavigator(GenericNavigator):
 
         return aim_vector, pursuit_speed_mps
 
+    def _sync_route_progress(self, leader: Pawn):
+        """
+        Keeps a wingman's progress along its route in step with its leader's, so
+        that if it takes the lead it resumes the route where the leader left it
+        rather than from its first waypoint. Only when both follow the same route
+        (a player leader has no navigator).
+
+        :param leader: The formation leader's pawn
+        """
+        leader_navigator = getattr(leader.parent, "navigator", None)
+        if leader_navigator is None or not self.waypoints:
+            return
+        if len(leader_navigator.waypoints) != len(self.waypoints) or not all(
+            np.array_equal(own, leaders)
+            for own, leaders in zip(self.waypoints, leader_navigator.waypoints)
+        ):
+            return
+        if self.next_waypoint_idx != leader_navigator.next_waypoint_idx:
+            self.next_waypoint_idx = leader_navigator.next_waypoint_idx
+            self._reset_patrol_progress()
+
     # %% ==== COMMON METHODS ====
     def compute_follow_speed(
         self,
@@ -358,7 +414,8 @@ class GenericShipNavigator(GenericNavigator):
         """
         Computes the desired speed to follow a target: the target's speed at the
         ideal follow distance, faster when too far and slower when too close,
-        clamped to [0, max_speed_mps].
+        clamped to [minimum_speed_mps, max_speed_mps] (the personality's optional
+        minimum_speed_mps for that intent, 0 by default).
         TODO : effect of closing speed ? (longitudinal_speed_scalar_mps is unused)
 
         :param distance_m: Distance to target
@@ -374,7 +431,12 @@ class GenericShipNavigator(GenericNavigator):
                 distance_m=distance_m, intent=intent
             )
         )
-        desired_speed_mps = min(max(desired_speed_mps, 0.0), self.pawn.max_speed_mps)
+        minimum_speed_mps = self.personality["navigator"][intent].get(
+            "minimum_speed_mps", 0.0
+        )
+        desired_speed_mps = min(
+            max(desired_speed_mps, minimum_speed_mps), self.pawn.max_speed_mps
+        )
         return desired_speed_mps
 
     def compute_speed_target_distance_contribution(

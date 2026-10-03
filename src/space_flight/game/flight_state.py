@@ -446,6 +446,11 @@ class FlightState(BaseState):
             actor.clean()
         self.interactions.actors = None
 
+        # A dead player pawn was removed from the interactions: clean it here
+        # (no-op if already clean) so its engine sound is released
+        if self.player.pawn is not None:
+            self.player.pawn.clean()
+
         # Clean all session-specific contexts before removing actors they reference
         self.app.input_context_stack.clean()
 

@@ -5,12 +5,15 @@ FighterTactician can be instantiated directly since its __init__ only
 delegates to GenericTactician which stores plain references.
 """
 
+import uuid
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 
-from space_flight.ai import AttackMode, Personality
+from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
+from space_flight.ai.formation import Formation
 
 
 @pytest.fixture
@@ -268,3 +271,36 @@ def test_choose_weapon_falls_back_to_guns_on_non_numeric(mock_game):
     target = MagicMock()  # mobility/health/shield_level are MagicMocks
 
     assert tactician._choose_weapon(target) == "guns"
+
+
+# ---------------------------------------------------------------------------
+# update_intent — formation vs. patrol
+# ---------------------------------------------------------------------------
+
+
+def test_update_intent_wingman_with_waypoints_holds_formation(mock_game):
+    """
+    With no threat nor prey, a wingman carrying the wave's route holds
+    formation; once the leader is gone, it takes the lead and patrols.
+    """
+    # Healthy enough not to disengage
+    tactician = make_fighter_tactician(mock_game, health=100.0, shield=100.0)
+    tactician.evaluate_threats = MagicMock(return_value={"score": 0})
+    tactician.evaluate_preys = MagicMock(return_value={"score": 0})
+    tactician.pawn.id = uuid.uuid4()
+    tactician.pawn.parent.navigator.waypoints = [np.array([0.0, 1000.0, 0.0])]
+    leader = MagicMock()
+    leader.id = uuid.uuid4()
+    formation = Formation()
+    formation.add_ship(leader)
+    formation.add_ship(tactician.pawn)
+
+    intent, target_dict = tactician.update_intent()
+
+    assert intent == Intent.FORMATION
+    assert target_dict["target_id"] == leader.id
+
+    formation.remove_ship(leader.id)
+    intent, _ = tactician.update_intent()
+
+    assert intent == Intent.PATROL

@@ -190,8 +190,7 @@ class Ship(Pawn):
         self.state = np.zeros(10)  # position (3), orientation (4), speed (3)
         self.state[:3] = ini_position
         self.state[3:7] = ini_orientation
-        # TODO ini_speed is never written to self.state[7:10], so a ship spawned
-        # with an initial speed loses it after the first integration step.
+        self.state[7:10] = ini_speed
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
         self.pqr = np.zeros(3)
@@ -488,11 +487,6 @@ class Ship(Pawn):
                 side_slip_angle_deg = math.degrees(
                     math.asin(min(max(airflow_x / speed_norm, -1.0), 1.0))
                 )
-                # TODO RIGHT_BODY/UP_BODY are axis-aligned unit vectors, so
-                # these two cross3 calls are just component permutations of
-                # airflow_direction_body (e.g. cross3(a, RIGHT_BODY) == (0,
-                # a[2], -a[1])) -- measured ~0.6% of total profiled game time,
-                # so likely not worth the fragility of hardcoding it.
                 self.lift_body_n = speed_norm_squared * (
                     self.lift_factor
                     * angle_of_attack_deg
@@ -724,6 +718,8 @@ class Ship(Pawn):
         :meth:`tumble_step` then drives the spin each frame.
         """
         self.scalar_thrust_n = 0.0
+        if self.sound is not None:
+            self.sound.stop()
         axis = np.random.normal(size=3)
         norm = magnitude(axis)
         if norm > 1e-6:

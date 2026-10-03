@@ -92,6 +92,10 @@ class Personality:
             "patrol": {
                 "speed_mps": 100.0,
                 "waypoint_meeting_tolerance_m": 50.0,
+                "stall_time_s": 6.0,
+                "stall_deceleration_factor": 0.5,
+                "min_speed_factor": 0.1,
+                "progress_epsilon_m": 5.0,
             },
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 100.0},
@@ -125,6 +129,7 @@ class Personality:
                 "cap_lead_cutoff_slope": 0.04,
                 "ideal_distance_m": 200.0,
                 "speed_distance_slope": 0.01,
+                "minimum_speed_mps": 80.0,  # never slow below this when attacking
             },
             "intercept": {
                 "lead_time_s": 1.5,
@@ -317,6 +322,10 @@ class Personality:
             "patrol": {
                 "speed_mps": 80.0,
                 "waypoint_meeting_tolerance_m": 200.0,
+                "stall_time_s": 12.0,
+                "stall_deceleration_factor": 0.5,
+                "min_speed_factor": 0.1,
+                "progress_epsilon_m": 5.0,
             },
             "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 80.0},

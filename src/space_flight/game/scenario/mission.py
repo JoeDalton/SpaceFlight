@@ -4,7 +4,7 @@ Mission scripting.
 A level scripts its events as a plain generator function, the mission body,
 run by a :class:`Mission` one step per frame::
 
-    def intro_mission(m: Mission) -> Iterator[None]:
+    def mission3_mission(m: Mission) -> Iterator[None]:
         transports = m.spawn(TRANSPORTS)
         m.on(m.delay(transports.all_destroyed, 3),
              lambda: m.defeat("The convoy was lost."))

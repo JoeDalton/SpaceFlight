@@ -86,7 +86,8 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
   weight that phases flying deliberately close (formation, strafe corridor,
   bomb run) dwarf. It also implements the behaviours every ship shares:
   `regroup`, `disengage`, waypoint following (`set_waypoints` /
-  `follow_waypoints`) and `formation` (station-keeping on a wing leader by
+  `follow_waypoints`, which decelerates a ship that stops getting closer to its
+  waypoint, e.g. orbiting it because its turn radius is too large) and `formation` (station-keeping on a wing leader by
   lead pursuit).
 - **`GenericShipPilot`** owns four PID loops (yaw, pitch, roll, throttle),
   fed at each think by `compute_angular_error` (subclass-specific — a fighter
@@ -102,7 +103,11 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
 evade an overwhelming threat (`evaluate_threats` ≥ `max_threat_score`),
 disengage if `evaluate_fighting_shape` (half health + shield) is too low,
 engage the best-scored prey (`evaluate_preys`, boosted for
-`primary_target_ids`), patrol, hold formation, else regroup. When engaging it
+`primary_target_ids`), hold formation, patrol, else regroup. A wingman holds
+formation even when it carries waypoints (`evaluate_orders`): every member of a
+wave gets the route, so whoever takes the lead after the leader's death follows
+it from where the leader left it (wingmen keep their route progress in step
+with the leader's). When engaging it
 also picks the `AttackMode` (in `target_dict["attack_mode"]`): first the weapon
 (`_choose_weapon` — a limited bomb only against a target both tough and
 valuable, stationary enough, with stock to spare — only while the selected

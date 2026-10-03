@@ -1,5 +1,5 @@
 """
-The intro level (Mission 3: Escort): escort a convoy of transports past an
+Mission 3: Escort -- escort a convoy of transports past an
 enemy blockade.
 """
 
@@ -26,8 +26,7 @@ FACING_SOUTH = [0, 0, 0, 1]
 
 TRANSPORTS = WaveSpec(
     name="transports",
-    ship_model="cr-90",  # or gr-75
-    size=3,
+    ship_model=[("cr-90", 1), ("gr-75", 2)],  # leader, then two wingmen
     bot_type="capital_ship",
     team=1,
     spawn_point=[0, -2000, 200],
@@ -54,7 +53,7 @@ CONVOY_HALFWAY_WAYPOINT = 4
 ESCORT = WaveSpec(
     name="escort",
     ship_model="x-wing",
-    size=6,
+    size=8,
     team=1,
     spawn_point=[200, -2100, 300],
     spawn_orientation=FACING_NORTH,
@@ -75,9 +74,9 @@ FIRST_WAVE = WaveSpec(
 
 SECOND_WAVE = WaveSpec(
     name="second_wave",
-    ship_model="tie-interceptor",
+    ship_model="tie-fighter",
     size=5,
-    spawn_point=[300, 6300, 800],
+    spawn_point=[300, 5700, 800],
     spawn_orientation=FACING_SOUTH,
     formation="diamond",
     waypoints=[[300, 0, 500], [300, -6000, 500]],
@@ -87,14 +86,24 @@ THIRD_WAVE = WaveSpec(
     name="third_wave",
     ship_model="tie-bomber",
     size=8,
-    spawn_point=[300, 0, 800],
-    spawn_orientation=FACING_SOUTH,
+    spawn_point=[300, 0, 500],
+    spawn_orientation=FACING_NORTH,
+    formation="diamond",
+    waypoints=[[300, 6000, 500], [300, 0, 500]],
+)
+
+FOURTH_WAVE = WaveSpec(
+    name="fourth_wave",
+    ship_model="tie-fighter",
+    size=5,
+    spawn_point=[300, 300, 800],
+    spawn_orientation=FACING_NORTH,
     formation="diamond",
     waypoints=[[300, 6000, 500], [300, 0, 500]],
 )
 
 
-def build_intro_upfront(game: FlightState):
+def build_mission3_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
@@ -113,14 +122,13 @@ def build_intro_upfront(game: FlightState):
         is_neutral=False,
         has_ai=False,
     )
-    # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     game.scene = scene_factory(game=game, scene_name="ocean_planet")
     game.scene.build_upfront()
 
 
-def intro_mission(m: Mission) -> Iterator[None]:
+def mission3_mission(m: Mission) -> Iterator[None]:
     """
-    The intro level's mission body.
+    The mission3 level's mission body.
 
     Two timed waves, plus reactive rules registered up front (they must hold
     wherever the timed sequence currently is): a third wave at 200s or once
@@ -134,18 +142,19 @@ def intro_mission(m: Mission) -> Iterator[None]:
     first_wave = m.wave(FIRST_WAVE)
     second_wave = m.wave(SECOND_WAVE)
     third_wave = m.wave(THIRD_WAVE)
+    fourth_wave = m.wave(FOURTH_WAVE)
 
     # --- reactive rules, live for the whole mission --------------------------
 
     # Reinforcements at 200s, or 3s after the first wave is wiped -- whichever
     # comes first, and only once.
     def spawn_third_wave():
-        m.hud("Enemy reinforcements detected!")
         m.speech(
             "More bombers, eight of them, dropping out of the clouds!",
             speaker="Red Two",
         )
         third_wave.spawn(target=transports)
+        fourth_wave.spawn(target=[escort, m.game.player])
 
     m.on(any_of(m.after(200), m.delay(first_wave.all_destroyed, 3)), spawn_third_wave)
 
@@ -210,7 +219,7 @@ def intro_mission(m: Mission) -> Iterator[None]:
     m.on(
         second_wave.all_destroyed,
         lambda: m.speech(
-            "Interceptors are down! They're off our backs.", speaker="Red Three"
+            "TIE-Fighters are down! They're off our backs.", speaker="Red Three"
         ),
     )
     m.on(
@@ -254,7 +263,6 @@ def intro_mission(m: Mission) -> Iterator[None]:
     )
 
     yield from m.wait(4)  # total: 10s
-    m.hud("First wave")
     first_wave.spawn(target=transports)
     m.speech(
         "Bombers, dead ahead and coming in low! They're after the transports.\n"
@@ -263,9 +271,9 @@ def intro_mission(m: Mission) -> Iterator[None]:
     )
 
     yield from m.wait(20)  # total: 30s
-    m.hud("Second wave")
-    second_wave.spawn(target=escort)
-    m.speech("Interceptors! They're coming for us this time!", speaker="Red Two")
+    # Interceptors hunt fighters: the escort and the player's A-wing.
+    second_wave.spawn(target=[escort, m.game.player])
+    m.speech("TIE-Fighters! They're coming for us this time!", speaker="Red Two")
     yield from m.wait(3)
     m.speech(
         "Red Two, Three, with me on the fighters.\n"

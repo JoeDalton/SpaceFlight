@@ -3,7 +3,7 @@ Unit tests for GenericTactician (space_flight.ai.generic.generic_tactician).
 
 GenericTactician can be instantiated directly since its __init__ only stores
 plain references.  Tests cover compute_alignment_score, evaluate_team_center,
-evaluate_formation, and clean.
+evaluate_formation, evaluate_orders, and clean.
 """
 
 import uuid
@@ -12,7 +12,8 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.ai import Personality
+from space_flight.ai import Intent, Personality
+from space_flight.ai.formation import Formation
 from space_flight.ai.generic.generic_tactician import GenericTactician
 
 
@@ -211,6 +212,77 @@ def test_evaluate_formation_wingman_returns_active_with_leader_id(tactician):
     assert result["target_id"] == leader_id
     assert result["formation_index"] == 1
     np.testing.assert_array_equal(result["target_relative_position"], relative_position)
+
+
+# ---------------------------------------------------------------------------
+# evaluate_orders
+# ---------------------------------------------------------------------------
+
+
+def _form_up(tactician, n_wingmen_ahead: int = 0, waypoints=None):
+    """
+    Put the tactician's pawn in a real formation, behind n_wingmen_ahead other
+    ships (0 makes it the leader), every member carrying the same route.
+
+    :return: The formation and the ships ahead of the pawn, in order
+    """
+    route = [np.array([0.0, 1000.0, 0.0])] if waypoints is None else waypoints
+    tactician.pawn.id = uuid.uuid4()
+    tactician.pawn.parent.navigator.waypoints = route
+    formation = Formation()
+    ahead = []
+    for _ in range(n_wingmen_ahead):
+        ship = MagicMock()
+        ship.id = uuid.uuid4()
+        formation.add_ship(ship)
+        ahead.append(ship)
+    formation.add_ship(tactician.pawn)
+    return formation, ahead
+
+
+def test_evaluate_orders_wingman_holds_formation_despite_waypoints(tactician):
+    """
+    A wingman carrying the wave's route must hold formation, not patrol.
+    """
+    formation, (leader,) = _form_up(tactician, n_wingmen_ahead=1)
+
+    intent, target_dict = tactician.evaluate_orders()
+
+    assert intent == Intent.FORMATION
+    assert target_dict["target_id"] == leader.id
+
+
+def test_evaluate_orders_leader_patrols(tactician):
+    """
+    The formation leader follows the route.
+    """
+    _form_up(tactician, n_wingmen_ahead=0)
+
+    intent, _ = tactician.evaluate_orders()
+
+    assert intent == Intent.PATROL
+
+
+def test_evaluate_orders_wingman_patrols_once_promoted(tactician):
+    """
+    Once the leader leaves the formation (its death), the next ship takes the
+    lead and follows the route it carries.
+    """
+    formation, (leader,) = _form_up(tactician, n_wingmen_ahead=1)
+
+    formation.remove_ship(leader.id)
+    intent, _ = tactician.evaluate_orders()
+
+    assert intent == Intent.PATROL
+
+
+def test_evaluate_orders_without_formation_or_route_returns_none(tactician):
+    """
+    No formation and no waypoints: no standing orders.
+    """
+    tactician.pawn.parent.navigator.waypoints = []
+
+    assert tactician.evaluate_orders() is None
 
 
 # ---------------------------------------------------------------------------

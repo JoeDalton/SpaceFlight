@@ -993,7 +993,7 @@ def make_hyperspace_ctx(device_key=None, global_key=None, input_type="keyboard")
         },
         "global": {"drop_hyperspace": global_key} if global_key else {},
     }
-    on_trigger = MagicMock()
+    on_trigger = MagicMock(return_value=True)
     ctx = HyperspaceInputContext(app=app, on_trigger=on_trigger)
     return ctx, app, on_trigger
 
@@ -1011,6 +1011,19 @@ def test_hyperspace_ctx_triggers_only_once():
     ctx.consume(make_state(buttons={"space": True}))
     ctx.consume(make_state(buttons={"space": True}))
     on_trigger.assert_called_once()
+
+
+def test_hyperspace_ctx_not_latched_when_trigger_rejected():
+    """A press the overlay refuses (not waiting yet) must not use up the trigger."""
+    ctx, _, on_trigger = make_hyperspace_ctx(device_key="space")
+    on_trigger.return_value = False
+    ctx.consume(make_state(buttons={"space": True}))
+    assert not ctx.triggered
+    on_trigger.return_value = True
+    ctx.consume(make_state(buttons={"space": True}))
+    assert ctx.triggered
+    ctx.consume(make_state(buttons={"space": True}))
+    assert on_trigger.call_count == 2
 
 
 def test_hyperspace_ctx_ignores_unbound_keys():
