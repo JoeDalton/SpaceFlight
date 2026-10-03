@@ -326,6 +326,8 @@ class GenericShipNavigator(GenericNavigator):
                 )
             return NO_DIRECTION
 
+        self._sync_route_progress(leader)
+
         # Compute pursuit variables
         relative_position_in_formation = target_dict["target_relative_position"]
         position_in_formation = leader.position + (
@@ -379,6 +381,27 @@ class GenericShipNavigator(GenericNavigator):
         )
 
         return aim_vector, pursuit_speed_mps
+
+    def _sync_route_progress(self, leader: Pawn):
+        """
+        Keeps a wingman's progress along its route in step with its leader's, so
+        that if it takes the lead it resumes the route where the leader left it
+        rather than from its first waypoint. Only when both follow the same route
+        (a player leader has no navigator).
+
+        :param leader: The formation leader's pawn
+        """
+        leader_navigator = getattr(leader.parent, "navigator", None)
+        if leader_navigator is None or not self.waypoints:
+            return
+        if len(leader_navigator.waypoints) != len(self.waypoints) or not all(
+            np.array_equal(own, leaders)
+            for own, leaders in zip(self.waypoints, leader_navigator.waypoints)
+        ):
+            return
+        if self.next_waypoint_idx != leader_navigator.next_waypoint_idx:
+            self.next_waypoint_idx = leader_navigator.next_waypoint_idx
+            self._reset_patrol_progress()
 
     # %% ==== COMMON METHODS ====
     def compute_follow_speed(

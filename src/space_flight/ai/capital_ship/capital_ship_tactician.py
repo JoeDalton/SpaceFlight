@@ -29,7 +29,8 @@ class CapitalShipTactician(GenericTactician):
     def update_intent(self) -> tuple[Intent, dict]:
         """
         Picks the intent by priority: disengage if in poor fighting shape, engage
-        the scripted prey (ORBIT), patrol, hold formation, else regroup.
+        the scripted prey (ORBIT), hold formation (wingmen), patrol (leader),
+        else regroup.
 
         TODO: include role/squad strategy biases
 
@@ -48,14 +49,10 @@ class CapitalShipTactician(GenericTactician):
             self.scripted_prey_dict["attack_mode"] = AttackMode.ORBIT
             return Intent.ENGAGE, self.scripted_prey_dict
 
-        # Check if bot has patrol orders
-        if len(self.pawn.parent.navigator.waypoints) != 0:
-            return Intent.PATROL, {"target_id": Intent.PATROL}
-
-        # Check if bot has formation orders
-        formation_dict = self.evaluate_formation()
-        if formation_dict["active"] is True:
-            return Intent.FORMATION, formation_dict
+        # Check if bot has formation or patrol orders
+        orders = self.evaluate_orders()
+        if orders is not None:
+            return orders
 
         # Nothing specific to do for now. Regroup with friends
         friends_center_dict = self.evaluate_team_center(team="friends")

@@ -234,8 +234,8 @@ class WaveHandle:
         wave's formation (created from the spec if the wave has none); the
         former leader and wingmen shift down one slot each.
 
-        Members drop their routes: a bot with waypoints patrols rather than
-        holds formation.
+        Members drop their routes, so none patrols a stale one if it ever
+        takes the lead.
 
         :param leader: See :func:`pawns_of` (typically ``game.player``); its
             first live pawn leads
@@ -252,6 +252,20 @@ class WaveHandle:
             self.formation.add_ship(ship=pawn)
             pawn.parent.navigator.clear_waypoints()
         self.formation.add_ship(ship=leader_pawns[0], leader=True)
+
+    def break_formation(self):
+        """
+        Every live member leaves the wave's formation and flies on its own: each
+        then follows its own route (wingmen hold formation even when they carry
+        one).
+        """
+        if self.formation is None:
+            return
+        for pawn in self.pawns():
+            if pawn.formation is self.formation:
+                self.formation.remove_ship(pawn.id)
+                pawn.formation = None
+        self.formation = None
 
 
 def _add_targets(bot: Bot, who: Any):

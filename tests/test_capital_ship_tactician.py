@@ -5,12 +5,15 @@ CapitalShipTactician can be instantiated directly since its __init__ only
 delegates to GenericTactician and adds a scripted_prey_dict attribute.
 """
 
+import uuid
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 
 from space_flight.ai import Intent, Personality
 from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTactician
+from space_flight.ai.formation import Formation
 
 
 def make_capital_ship_tactician(
@@ -145,3 +148,34 @@ def test_update_intent_poor_fighting_shape_returns_disengage():
     intent, _ = tactician.update_intent()
 
     assert intent == Intent.DISENGAGE
+
+
+# ---------------------------------------------------------------------------
+# update_intent — formation vs. patrol
+# ---------------------------------------------------------------------------
+
+
+def test_update_intent_wingman_with_waypoints_holds_formation():
+    """
+    A convoy wingman carrying the convoy's route holds formation; only its
+    leader patrols.
+    """
+    mock_game = MagicMock()
+    tactician = make_capital_ship_tactician(mock_game, health=10.0)
+    tactician.pawn.parent.navigator.waypoints = [np.array([0.0, 1000.0, 0.0])]
+    leader = MagicMock()
+    leader.id = uuid.uuid4()
+    tactician.pawn.id = uuid.uuid4()
+    formation = Formation(scale_m=Formation.CAPITAL_SHIP_SCALE_M)
+    formation.add_ship(leader)
+    formation.add_ship(tactician.pawn)
+
+    intent, target_dict = tactician.update_intent()
+
+    assert intent == Intent.FORMATION
+    assert target_dict["target_id"] == leader.id
+
+    formation.remove_ship(leader.id)
+    intent, _ = tactician.update_intent()
+
+    assert intent == Intent.PATROL

@@ -359,3 +359,76 @@ def test_navigate_with_zero_avoidance_equals_intent_output():
 
     np.testing.assert_allclose(result_direction, intent_direction, atol=1e-6)
     assert result_speed == pytest.approx(intent_speed)
+
+
+# ---------------------------------------------------------------------------
+# formation — route progress kept in step with the leader
+# ---------------------------------------------------------------------------
+
+ROUTE = [np.array([0.0, 1000.0, 0.0]), np.array([1000.0, 1000.0, 0.0])]
+
+
+def _wingman_and_leader(leader_waypoints, leader_idx: int, has_navigator=True):
+    """
+    A wingman navigator on ROUTE (at its first waypoint) and its leader's pawn,
+    registered in the mocked interactions.
+
+    :return: The wingman navigator and the formation target dict
+    """
+    nav = make_ship_navigator(pawn_position=np.array([0.0, -100.0, 0.0]))
+    nav.pawn.speed = np.array([0.0, 100.0, 0.0])
+    nav.waypoints = list(ROUTE)
+    nav._best_distance_to_waypoint_m = 42.0
+    leader = MagicMock()
+    leader.position = np.zeros(3)
+    leader.speed = np.array([0.0, 100.0, 0.0])
+    leader.forward = np.array([0.0, 1.0, 0.0])
+    leader.right = np.array([1.0, 0.0, 0.0])
+    leader.up = np.array([0.0, 0.0, 1.0])
+    if has_navigator:
+        leader.parent.navigator.waypoints = leader_waypoints
+        leader.parent.navigator.next_waypoint_idx = leader_idx
+    else:
+        leader.parent = MagicMock(spec=[])  # e.g. the player: no navigator
+    nav.game.interactions.get_actor_index_from_id.return_value = 0
+    nav.game.interactions.actors = [leader]
+    target_dict = {
+        "target_id": "leader",
+        "target_relative_position": np.array([30.0, -60.0, 0.0]),
+    }
+    return nav, target_dict
+
+
+def test_formation_syncs_route_progress_with_the_leader():
+    """
+    A wingman on the leader's route mirrors its progress, so it resumes the
+    route where the leader left it if it takes the lead.
+    """
+    nav, target_dict = _wingman_and_leader([w.copy() for w in ROUTE], leader_idx=1)
+
+    nav.formation(target_dict)
+
+    assert nav.next_waypoint_idx == 1
+    assert nav._best_distance_to_waypoint_m == float("inf")
+
+
+def test_formation_does_not_sync_a_different_route():
+    """
+    A leader on another route leaves the wingman's progress alone.
+    """
+    nav, target_dict = _wingman_and_leader([ROUTE[1], ROUTE[0]], leader_idx=1)
+
+    nav.formation(target_dict)
+
+    assert nav.next_waypoint_idx == 0
+
+
+def test_formation_does_not_sync_without_a_leader_navigator():
+    """
+    A leader without a navigator (the player) leaves the progress alone.
+    """
+    nav, target_dict = _wingman_and_leader(None, leader_idx=1, has_navigator=False)
+
+    nav.formation(target_dict)
+
+    assert nav.next_waypoint_idx == 0

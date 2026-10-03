@@ -103,7 +103,11 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
 evade an overwhelming threat (`evaluate_threats` ≥ `max_threat_score`),
 disengage if `evaluate_fighting_shape` (half health + shield) is too low,
 engage the best-scored prey (`evaluate_preys`, boosted for
-`primary_target_ids`), patrol, hold formation, else regroup. When engaging it
+`primary_target_ids`), hold formation, patrol, else regroup. A wingman holds
+formation even when it carries waypoints (`evaluate_orders`): every member of a
+wave gets the route, so whoever takes the lead after the leader's death follows
+it from where the leader left it (wingmen keep their route progress in step
+with the leader's). When engaging it
 also picks the `AttackMode` (in `target_dict["attack_mode"]`): first the weapon
 (`_choose_weapon` — a limited bomb only against a target both tough and
 valuable, stationary enough, with stock to spare — only while the selected

@@ -462,6 +462,26 @@ def test_follow_puts_the_leader_first_and_drops_routes(game, mission, spawned):
     assert all(bot.navigator.waypoints == [] for bot in spawned)
 
 
+def test_break_formation(mission, spawned):
+    spec = WaveSpec(
+        name="flight",
+        ship_model="x-wing",
+        size=3,
+        spawn_point=[0, 0, 0],
+        formation="arrowhead",
+        waypoints=[[0, 100, 0]],
+    )
+    wave = mission.spawn(spec)
+    run_jobs(mission)
+    formation = wave.formation
+    wave.break_formation()
+    assert wave.formation is None
+    assert formation.ship_ids == []
+    assert all(pawn.formation is None for pawn in wave.pawns())
+    # Each keeps its own route
+    assert all(len(bot.navigator.waypoints) == 1 for bot in spawned)
+
+
 def test_follow_creates_a_formation_if_the_wave_has_none(game, mission, spawned):
     wave = mission.spawn(WAVE)
     run_jobs(mission)

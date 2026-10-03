@@ -69,7 +69,7 @@ BLUE_SQUADRON = WaveSpec(
 # The race route, given to the player AND every formation member once the
 # circuit is done. The last waypoint is the finish.
 RACE_WAYPOINTS = [
-    [-3000, 6000, 600],
+    [-3000, 6000, 1500],
     [-1000, 8000, 700],
     [1500, 8500, 500],
     [3000, 6500, 600],
@@ -259,6 +259,8 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         speaker="Blue Leader",
     )
     m.player_waypoints(RACE_WAYPOINTS)
+    # Every man for himself: wingmen would otherwise hold formation.
+    blue.break_formation()
     blue.set_waypoints(RACE_WAYPOINTS, loop=False)
 
     def race_chatter() -> Iterator[None]:

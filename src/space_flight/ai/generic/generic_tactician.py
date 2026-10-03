@@ -288,6 +288,28 @@ class GenericTactician:
                 ],
             }
 
+    def evaluate_orders(self) -> tuple[Intent, dict] | None:
+        """
+        The standing orders of a bot with nothing better to do: a wingman holds
+        formation, a formation leader (or a ship outside any formation) follows
+        its waypoints.
+
+        Every member of a wave carries the route so that whoever takes the lead
+        after the leader's death can follow it: the formation slot, not the route,
+        decides who patrols.
+
+        :return: The FORMATION or PATROL intent and its target dict, or None
+            without orders
+        """
+        formation_dict = self.evaluate_formation()
+        if formation_dict["active"] is True:
+            return Intent.FORMATION, formation_dict
+
+        if len(self.pawn.parent.navigator.waypoints) != 0:
+            return Intent.PATROL, {"target_id": Intent.PATROL}
+
+        return None
+
     def evaluate_fighting_shape(self) -> float:
         """
         The bot's fitness to keep fighting: half its health plus its shield
