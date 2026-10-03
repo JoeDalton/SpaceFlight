@@ -190,8 +190,7 @@ class Ship(Pawn):
         self.state = np.zeros(10)  # position (3), orientation (4), speed (3)
         self.state[:3] = ini_position
         self.state[3:7] = ini_orientation
-        # TODO ini_speed is never written to self.state[7:10], so a ship spawned
-        # with an initial speed loses it after the first integration step.
+        self.state[7:10] = ini_speed
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
         self.pqr = np.zeros(3)
