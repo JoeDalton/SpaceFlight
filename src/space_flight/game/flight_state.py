@@ -326,7 +326,8 @@ class FlightState(BaseState):
         self.integrator.step()
         # Run the update tasks of all actors
         # TODO Could be parallelized from python 3.14 ?
-        for method_list in self.method_lists.values():
+        # (over a snapshot: a task may spawn a new actor, e.g. a launched ordnance)
+        for method_list in list(self.method_lists.values()):
             for method in method_list:
                 method()
         # After the actors: move() has written (and sanitised) the player's pose

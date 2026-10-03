@@ -23,6 +23,12 @@ laser_fire_rate: 7.5
 cannon_positions: [[5.2, 5, 0.5], [-5.2, 5, -2.5], [-5.2, 5, 0.5], [5.2, 5, -2.5]]
 laser_sound: sounds/weapons/XWING_BLASTER.wav
 shot_power: 60.0
+
+loadout:
+  proton_torpedo: 4
+  concussion_missile: 4
+  flare: 10
+
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 400.0

@@ -118,7 +118,7 @@ class FighterTactician(GenericTactician):
         :param target: The prey actor
         :return: "bomb" or "guns"
         """
-        bomb_supply = getattr(self.pawn, "bomb_supply", 0)
+        bomb_supply = self.pawn.stock("bomb")
         scoring = self.personality["tactician"]["bomb_scoring"]
         try:
             if bomb_supply <= 0:

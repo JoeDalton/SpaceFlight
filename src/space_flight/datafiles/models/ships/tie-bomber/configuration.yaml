@@ -24,7 +24,10 @@ cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 80.0
 
-bomb_supply: 8
+loadout:
+  proton_bomb: 8
+  concussion_missile: 4
+
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 300.0

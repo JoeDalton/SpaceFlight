@@ -103,6 +103,17 @@ class HUD:
         self.chatter_textNodePath.setScale(0.075)
         self.chatter_textNodePath.setPos(0.0, 0, -0.8)
 
+        # Selected secondary weapon (bomb, rocket or missile)
+        self.secondary = TextNode("Secondary")
+        self.secondary.setSmallCaps(True)
+        self.secondary.setShadow(0.05, 0.05)
+        self.secondary.setShadowColor(0, 0, 0, 1)
+        self.secondary.setAlign(TextNode.ARight)
+        self.secondary_textNodePath = aspect2d.attachNewNode(self.secondary)
+        self.secondary_textNodePath.setScale(0.06)
+        self.secondary_textNodePath.reparentTo(self.game.app.a2dBottomRight)
+        self.secondary_textNodePath.setPos(-0.05, 0, 0.1)
+
         # Wrap long lines before they run off the edges of the screen.
         text_wrap_width = 3.5 * EDGE_HORIZONTAL / self.events_textNodePath.getScale()[0]
         self.events.setWordwrap(text_wrap_width)
@@ -116,6 +127,7 @@ class HUD:
         and updates the text displayed in the HUD.
         """
         self.update_debug_hud()
+        self.update_secondary_hud()
         self.clear_scenario_hud()
 
     def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
@@ -137,6 +149,14 @@ class HUD:
             self.game.game_time.get_current_time() + display_time_s
         )
         self.chatter.setAlign(TextNode.ACenter)
+
+    def update_secondary_hud(self) -> None:
+        """
+        Show the name of the player's selected secondary weapon (nothing when the
+        ship carries none, or has used them all)
+        """
+        launcher = getattr(self.game.player.pawn, "selected_secondary", None)
+        self.secondary.setText(launcher.display_name if launcher is not None else "")
 
     def clear_scenario_hud(self) -> None:
         """
@@ -240,6 +260,8 @@ class HUD:
         self.events = None
         self.chatter_textNodePath.removeNode()
         self.chatter = None
+        self.secondary_textNodePath.removeNode()
+        self.secondary = None
         self.game = None
 
 

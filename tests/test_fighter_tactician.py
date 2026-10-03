@@ -186,7 +186,7 @@ def test_select_bomb_for_hard_stationary_primary_target(mock_game):
     attacked with a BOMB.
     """
     tactician = make_fighter_tactician(mock_game)
-    tactician.pawn.bomb_supply = 6
+    tactician.pawn.stock.return_value = 6
     _wire_numeric_target(
         mock_game,
         tactician,
@@ -205,7 +205,7 @@ def test_select_strafe_not_bomb_for_soft_target(mock_game):
     (being slow) a STRAFE run.
     """
     tactician = make_fighter_tactician(mock_game)
-    tactician.pawn.bomb_supply = 6
+    tactician.pawn.stock.return_value = 6
     _wire_numeric_target(
         mock_game,
         tactician,
@@ -223,7 +223,7 @@ def test_select_no_bomb_without_supply(mock_game):
     With no bombs left, even the ideal bomb target falls to guns (STRAFE).
     """
     tactician = make_fighter_tactician(mock_game)
-    tactician.pawn.bomb_supply = 0
+    tactician.pawn.stock.return_value = 0
     _wire_numeric_target(
         mock_game,
         tactician,

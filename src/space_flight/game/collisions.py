@@ -72,11 +72,22 @@ class CollisionLayers:
     SHIELD = BitMask32.bit(1)
     DESTRUCTIBLE = BitMask32.bit(2)
     ENVIRONMENT = BitMask32.bit(3)
+    DECOY = BitMask32.bit(4)
 
     # Munitions hit environment, destructibles and shields
     # Nothing hits them
     MUNITION_FROM = DESTRUCTIBLE | ENVIRONMENT | SHIELD
     MUNITION_INTO = BitMask32.allOff()
+
+    # Ordnance (bombs, rockets, missiles) are munitions that decoys (flares) also
+    # stop. Nothing hits them.
+    ORDNANCE_FROM = MUNITION_FROM | DECOY
+    ORDNANCE_INTO = BitMask32.allOff()
+
+    # A decoy (flare) never initiates collisions: only ordnance hits it, so two
+    # flares never collide, and lasers, sensors and ships pass through.
+    DECOY_FROM = BitMask32.allOff()
+    DECOY_INTO = DECOY
 
     # Same for sensors
     SENSOR_FROM = DESTRUCTIBLE | ENVIRONMENT
@@ -116,9 +127,16 @@ class CollisionLayers:
             the collision handler
         """
         add_to_collision_handler = True
-        if collider_type == "laser" or collider_type == "bomb":
+        if collider_type == "laser":
             from_mask_bit = CollisionLayers.MUNITION_FROM
             into_mask_bit = CollisionLayers.MUNITION_INTO
+        elif collider_type == "ordnance":
+            from_mask_bit = CollisionLayers.ORDNANCE_FROM
+            into_mask_bit = CollisionLayers.ORDNANCE_INTO
+        elif collider_type == "flare":
+            from_mask_bit = CollisionLayers.DECOY_FROM
+            into_mask_bit = CollisionLayers.DECOY_INTO
+            add_to_collision_handler = False
         elif collider_type == "sensor":
             from_mask_bit = CollisionLayers.SENSOR_FROM
             into_mask_bit = CollisionLayers.SENSOR_INTO
@@ -220,12 +238,14 @@ class CollisionSystem:
         self.game.app.accept("laser-into-turret", self.munition_into_destructible)
         self.game.app.accept("laser-into-subsystem", self.munition_into_destructible)
         self.game.app.accept("laser-into-shield", self.munition_into_shield)
-        # Bomb hits reuse the laser damage handlers (same projectile interface).
-        self.game.app.accept("bomb-into-ship", self.munition_into_destructible)
-        self.game.app.accept("bomb-into-terrain", self.munition_into_terrain)
-        self.game.app.accept("bomb-into-turret", self.munition_into_destructible)
-        self.game.app.accept("bomb-into-subsystem", self.munition_into_destructible)
-        self.game.app.accept("bomb-into-shield", self.munition_into_shield)
+        # Ordnance hits reuse the laser damage handlers (same projectile
+        # interface), and are stopped by flares.
+        self.game.app.accept("ordnance-into-ship", self.munition_into_destructible)
+        self.game.app.accept("ordnance-into-terrain", self.munition_into_terrain)
+        self.game.app.accept("ordnance-into-turret", self.munition_into_destructible)
+        self.game.app.accept("ordnance-into-subsystem", self.munition_into_destructible)
+        self.game.app.accept("ordnance-into-shield", self.munition_into_shield)
+        self.game.app.accept("ordnance-into-flare", self.ordnance_into_flare)
         # Collision physics = detected at each frame
         self.game.app.accept("ship-into-ship", self.ship_into_ship)
         self.game.app.accept("ship-again-ship", self.ship_again_ship)
@@ -299,8 +319,8 @@ class CollisionSystem:
 
         destructible.take_hit(damage=munition.power, normal_world_vector=normal)
 
-        # Delete munition
-        munition.shot.removeNode()
+        # Spend the munition
+        munition.on_impact()
 
         # Apply hit effect depending on player or bot
         if destructible_id == self.game.player.pawn.id:
@@ -383,7 +403,7 @@ class CollisionSystem:
         if entry.hasSurfacePoint():
             hit_point = entry.getSurfacePoint(self.game.root_node)
         else:
-            hit_point = munition.shot.getPos(self.game.root_node)
+            hit_point = munition.impact_position()
         terrain = entry.into_node_path.python_tags["owner"]
         material = getattr(terrain, "material", None)
         preset = _TERRAIN_SPARK_PRESET.get(material, spark_fx.ROCK)
@@ -394,8 +414,28 @@ class CollisionSystem:
             preset=preset,
         )
 
-        # Delete munition
-        munition.shot.removeNode()
+        # Spend the munition
+        munition.on_impact()
+
+    def ordnance_into_flare(self, entry: CollisionEntry):
+        """
+        Handles the case where an ordnance hits a flare: both are spent, unless
+        the flare was dropped by the ordnance's own team.
+
+        :param entry: Panda3d's description of the collision
+        """
+        ordnance = entry.from_node_path.python_tags["owner"]
+        flare = entry.into_node_path.python_tags["owner"]
+        if ordnance is None or flare is None:
+            # One of them was already spent this frame
+            return
+        if ordnance.team == flare.team:
+            return
+
+        if DEBUG_COLLISION:
+            LOGGER.info("ordnance into flare")
+        ordnance.on_impact()
+        flare.on_impact()
 
     def munition_into_shield(self, entry: CollisionEntry):
         """
@@ -467,8 +507,8 @@ class CollisionSystem:
             preset=spark_fx.ICE,
         )
 
-        # Delete munition
-        munition.shot.removeNode()
+        # Spend the munition
+        munition.on_impact()
 
         # Impact feedback
         self.game.app.sfx.distant_impact_hit(
@@ -942,14 +982,10 @@ class CollisionSystem:
         # Clean handler
         self.handler.clearInPatterns()
         self.handler.clearOutPatterns()
-        self.game.app.ignore("laser-into-ship")
-        self.game.app.ignore("laser-into-terrain")
-        self.game.app.ignore("laser-into-subsystem")
-        self.game.app.ignore("laser-into-shield")
-        self.game.app.ignore("bomb-into-ship")
-        self.game.app.ignore("bomb-into-terrain")
-        self.game.app.ignore("bomb-into-subsystem")
-        self.game.app.ignore("bomb-into-shield")
+        for munition_type in ("laser", "ordnance"):
+            for into_type in ("ship", "terrain", "turret", "subsystem", "shield"):
+                self.game.app.ignore(f"{munition_type}-into-{into_type}")
+        self.game.app.ignore("ordnance-into-flare")
         self.game.app.ignore("ship-into-terrain")
         self.game.app.ignore("ship-into-ship")
         self.game.app.ignore("ship-into-subsystem")
