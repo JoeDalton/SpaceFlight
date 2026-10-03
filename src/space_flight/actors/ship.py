@@ -718,6 +718,8 @@ class Ship(Pawn):
         :meth:`tumble_step` then drives the spin each frame.
         """
         self.scalar_thrust_n = 0.0
+        if self.sound is not None:
+            self.sound.stop()
         axis = np.random.normal(size=3)
         norm = magnitude(axis)
         if norm > 1e-6:
