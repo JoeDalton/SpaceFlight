@@ -69,8 +69,10 @@ INSIDE_MIN_DURATION = 2.0
 OUTOF_DURATION = 1.9
 # Cross-fade length between two consecutive phases.
 FADE_DURATION = 1.0
-# Final fade from the (now black) overlay into the live game scene.
-REVEAL_DURATION = 0.8
+# Time into the outof phase at which the shader's black background starts
+# dissolving into the live scene (0.35 * its 2.0s T_MAX; keep in sync with the
+# `bg` smoothstep in hyperspace_outof.frag). The world is revealed from here.
+REVEAL_START = 0.7
 # Tunnel vanishing-point offset below the screen centre, shared by all three
 # phases so their centres line up across transitions.
 CENTER_OFFSET = 0.1
@@ -162,7 +164,6 @@ class HyperspaceLoadingState(BaseState):
         self._prompt: OnscreenText | None = None
         # Final reveal (fade overlay out to show the game scene).
         self._revealing = False
-        self._reveal_t = 0.0
 
         # Start on the "into" phase, fully opaque on the back quad.
         self._show_shader(self._back, "into", alpha=1.0)
@@ -273,17 +274,6 @@ class HyperspaceLoadingState(BaseState):
     def _update(self, task: Task) -> int:
         dt = self._clock.getDt()
 
-        # Final reveal: the animation is frozen on its last (black) frame; fade
-        # the overlay out so the game scene behind it appears, then pop.
-        if self._revealing:
-            self._reveal_t += dt
-            alpha = 1.0 - _smoothstep(self._reveal_t / REVEAL_DURATION)
-            self._quads[self._back].setShaderInput("iAlpha", alpha)
-            if self._reveal_t >= REVEAL_DURATION:
-                self._pop_self()
-                return task.done
-            return task.cont
-
         # Advance time only on visible quads.
         for i in range(2):
             if not self._quads[i].isHidden():
@@ -322,13 +312,15 @@ class HyperspaceLoadingState(BaseState):
                         self._exit_await()
                         self._start_transition("outof")
         elif self._state == "outof":
-            if back_time >= OUTOF_DURATION:
-                # Begin the final reveal: freeze the (now black) animation, fade
-                # the overlay out, and bring the world to life as it appears.
+            if not self._revealing and back_time >= REVEAL_START:
+                # The shader's black background is now dissolving into the
+                # scene: bring the world to life as it appears.
                 self._revealing = True
-                self._reveal_t = 0.0
                 if self._on_reveal is not None:
                     self._on_reveal()
+            if back_time >= OUTOF_DURATION:
+                self._pop_self()
+                return task.done
 
         return task.cont
 

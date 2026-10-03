@@ -93,5 +93,9 @@ void main()
     // Whiteout (fade from white at start)
     color += mix(1.0, 0.0, smoothstep(0.0, 0.2, t));
 
-    p3d_FragColor = vec4(color, iAlpha);
+    // The black background dissolves into the scene behind the overlay while
+    // the streaks keep their brightness (alpha follows the colour intensity).
+    float bg = 1.0 - smoothstep(0.35, 0.9, t);
+    float a = clamp(max(bg, max(color.r, max(color.g, color.b))), 0.0, 1.0);
+    p3d_FragColor = vec4(a > 0.0 ? color / a : vec3(0.0), a * iAlpha);
 }
