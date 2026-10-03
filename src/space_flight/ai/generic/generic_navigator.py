@@ -79,14 +79,20 @@ class GenericNavigator:
         Constant Angle Pursuit (CAP): bring the lateral velocity to zero.
         Good for closing in from a long distance (and for missiles throughout).
 
+        Aims at where the target will be, laterally, cap_strength_s from now: the
+        self's velocity then gains the target's lateral motion, which stops the
+        line of sight from rotating.
+
         :param direction: The direction of the target
         :param distance_m: Its distance from self
-        :param lateral_speed_vector: Its relative velocity on the lateral plane
+        :param lateral_speed_vector: The target's velocity relative to self
+            (v_target - v_self, as in interactions.rel_velocities[self, target]),
+            projected on the plane perpendicular to direction
         :return: The direction to point to
         """
         # TODO Dynamic CAP strength, should vary with distance/closing_speed
         cap_strength_s = 1.0  # Or =1/omega_max_radps
-        desired_vector = direction * distance_m - cap_strength_s * lateral_speed_vector
+        desired_vector = direction * distance_m + cap_strength_s * lateral_speed_vector
         desired_vector_norm = magnitude(desired_vector)
         # Norm can't be zero if distance != 0
         return desired_vector / desired_vector_norm

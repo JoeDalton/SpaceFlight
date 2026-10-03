@@ -128,6 +128,63 @@ def test_compute_cap_nonzero_lateral_speed_shifts_direction(navigator):
     assert not np.allclose(result, direction)
 
 
+def test_compute_cap_leads_the_target_lateral_motion(navigator):
+    """
+    A target drifting to the right (lateral v_target - v_self along +X) must be
+    led: the CAP direction leans right, not behind it.
+    """
+    direction = np.array([0.0, 1.0, 0.0])
+    distance_m = 500.0
+    lateral_speed = np.array([50.0, 0.0, 0.0])
+
+    result = navigator.compute_constant_angle_pursuit(
+        direction, distance_m, lateral_speed
+    )
+
+    assert result[0] > 0.0
+
+
+def test_compute_cap_intercepts_a_crossing_target(navigator):
+    """
+    A turn-rate-limited pursuer steering by CAP (fed the interactions convention,
+    v_target - v_self) intercepts a target crossing its path. Pure kinematics:
+    constant speed, the heading turns toward the CAP direction at most
+    turn_rate per step.
+    """
+    dt = 1 / 60
+    speed_mps = 400.0
+    turn_rate_radps = np.deg2rad(120.0)
+    position = np.zeros(3)
+    heading = np.array([0.0, 1.0, 0.0])
+    target_position = np.array([0.0, 1500.0, 0.0])
+    target_velocity = np.array([150.0, 0.0, 0.0])
+
+    min_distance_m = np.inf
+    for _ in range(int(10.0 / dt)):
+        offset = target_position - position
+        distance_m = np.linalg.norm(offset)
+        min_distance_m = min(min_distance_m, distance_m)
+        if distance_m < 1.0:
+            break
+        direction = offset / distance_m
+        relative_velocity = target_velocity - speed_mps * heading
+        lateral = relative_velocity - np.dot(relative_velocity, direction) * direction
+        wanted = navigator.compute_constant_angle_pursuit(
+            direction, distance_m, lateral
+        )
+        # Rotate the heading toward wanted, rate-limited
+        angle = np.arccos(np.clip(np.dot(heading, wanted), -1.0, 1.0))
+        if angle > 1e-9:
+            step = min(angle, turn_rate_radps * dt)
+            axis = wanted - np.dot(wanted, heading) * heading
+            axis /= np.linalg.norm(axis)
+            heading = np.cos(step) * heading + np.sin(step) * axis
+        position = position + speed_mps * heading * dt
+        target_position = target_position + target_velocity * dt
+
+    assert min_distance_m < 10.0
+
+
 # ---------------------------------------------------------------------------
 # compute_lead_pursuit
 # ---------------------------------------------------------------------------
