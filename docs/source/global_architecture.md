@@ -98,11 +98,11 @@ The settings own *what the sanitised configuration says*; the manager owns
 
 [`graphics_settings.py`](../../src/space_flight/global_architecture/graphics_settings.py)'s
 `GraphicsSettings` loads `configuration/graphics.yaml` layered over the
-read-only `configuration/default_graphics.yaml` (`_deep_merge`). The
-[input bindings](ui.md) are not layered: `load_bindings` reads
-`configuration/bindings.yaml` alone, and `default_bindings.yaml` is
-only read by the input settings menu's reset-to-defaults. `sanitise()` then
-clamps every field to something the renderer can act on (valid display mode,
+read-only `datafiles/default_configuration/default_graphics.yaml`
+(`_deep_merge`). The [input bindings](ui.md) are not layered: `load_bindings`
+reads `configuration/bindings.yaml` alone, and
+`datafiles/default_configuration/default_bindings.yaml` is only read by the
+input settings menu's reset-to-defaults. `sanitise()` then clamps every field to something the renderer can act on (valid display mode,
 minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample count,
 known cloud-quality name, ...), so a malformed or hand-edited file degrades to
 defaults instead of crashing. `save()` re-sanitises and writes the user file;
@@ -145,7 +145,7 @@ build time. A test asserts the two lists agree.
 `GameplaySettings` holds the difficulty, as `app.gameplay_settings`. Two files
 make it up:
 
-- **`configuration/gameplay_presets.yaml`** (read-only) holds the presets —
+- **`datafiles/default_configuration/gameplay_presets.yaml`** (read-only) holds the presets —
   easy, normal, hard, ace, in the order the menu lists them — each setting
   every value. `normal` reproduces the untuned game, and is the only source
   of defaults: the fallback for anything missing or invalid. `load_presets()`

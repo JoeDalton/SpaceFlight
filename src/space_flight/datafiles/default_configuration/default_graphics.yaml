@@ -1,6 +1,6 @@
-# User graphics settings, layered over default_graphics.yaml (see
-# space_flight.global_architecture.graphics_settings). Saving from the in-game
-# graphics menu rewrites this file without comments.
+# Default graphics settings (read-only), under the user-editable
+# configuration/graphics.yaml (see
+# space_flight.global_architecture.graphics_settings).
 
 display:
   mode: fullscreen        # fullscreen | windowed

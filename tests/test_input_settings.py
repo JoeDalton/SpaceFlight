@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from space_flight import CONFIGURATION_PATH
+from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 from space_flight.menus.input_settings_menu_state import (
     _BINDINGS_FILE,
     _DEFAULT_BINDINGS_FILE,
@@ -140,7 +140,10 @@ class TestLoadFile:
 class TestBindingsFiles:
     def test_menu_paths_point_to_bindings_files(self):
         assert _BINDINGS_FILE == CONFIGURATION_PATH / "bindings.yaml"
-        assert _DEFAULT_BINDINGS_FILE == CONFIGURATION_PATH / "default_bindings.yaml"
+        assert (
+            _DEFAULT_BINDINGS_FILE
+            == DEFAULT_CONFIGURATION_PATH / "default_bindings.yaml"
+        )
 
     @pytest.mark.parametrize("path", [_BINDINGS_FILE, _DEFAULT_BINDINGS_FILE])
     def test_shipped_file_loads(self, path):

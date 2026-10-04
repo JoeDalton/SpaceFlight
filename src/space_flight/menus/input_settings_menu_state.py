@@ -13,7 +13,7 @@ import yaml
 from direct.gui.DirectGui import DGG, DirectFrame, DirectLabel, OkCancelDialog
 from panda3d.core import ButtonHandle, InputDevice, NodePath, TextNode, VBase4, Vec2
 
-from space_flight import CONFIGURATION_PATH
+from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.menu_utils import (
     CustomButton,
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 _BINDINGS_FILE = CONFIGURATION_PATH / "bindings.yaml"
-_DEFAULT_BINDINGS_FILE = CONFIGURATION_PATH / "default_bindings.yaml"
+_DEFAULT_BINDINGS_FILE = DEFAULT_CONFIGURATION_PATH / "default_bindings.yaml"
 
 _CONTEXT_LABELS = {"flight": "Flight", "radial_menu": "Radial Menu"}
 _ROW_HEIGHT = 0.09
@@ -314,7 +314,8 @@ class InputSettingsMenuState(BaseState):
     copy. *Save* writes it back and rebuilds the
     :class:`~space_flight.ui.input_reader.InputReader` so new bindings apply
     without a restart; *Cancel* discards it; *Default* reloads
-    configuration/default_bindings.yaml into it without writing to disk.
+    datafiles/default_configuration/default_bindings.yaml into it without
+    writing to disk.
     Each binding row's *Change* button opens a :class:`ChangeBindingDialog`.
     """
 
@@ -857,9 +858,9 @@ class InputSettingsMenuState(BaseState):
         """
         Replace the working configuration with the factory defaults.
 
-        Reads from configuration/default_bindings.yaml and rebuilds the
-        binding list.  Changes are not written to disk until the user clicks
-        *Save*.  Silently ignored if a dialog is open.
+        Reads from datafiles/default_configuration/default_bindings.yaml and
+        rebuilds the binding list.  Changes are not written to disk until the
+        user clicks *Save*.  Silently ignored if a dialog is open.
         """
         if self.active_dialog is not None:
             return
