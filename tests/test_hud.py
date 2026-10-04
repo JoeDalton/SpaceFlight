@@ -7,14 +7,20 @@ flares left).
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 from panda3d.core import NodePath
 
+from space_flight.actors.energy import ENGINES, LASERS, SHIELDS, EnergySystem
 from space_flight.ui.hud import (
+    FAVOURED_GAUGE_BRIGHTNESS,
+    GAUGE_BRIGHTNESS,
     TARGET_BOX_COLOR,
     TARGET_BOX_LOCKED_COLOR,
+    EnergyHUD,
     OrdnanceHUD,
     TargetHUD,
+    gauge_brightness,
 )
 
 
@@ -136,3 +142,97 @@ def test_flare_line_always_shows_the_flares_left(flare_launcher, text):
 
     assert ordnance_hud.flare_line.node().getText() == text
     assert not ordnance_hud.flare_line.isHidden()
+
+
+# ---------------------------
+# Energy HUD
+# ---------------------------
+
+
+def make_energy_hud(has_shields: bool = True) -> tuple[EnergyHUD, SimpleNamespace]:
+    """An energy HUD on a fake player pawn, with that pawn."""
+    pawn = SimpleNamespace(
+        health=600.0,
+        max_health=1200.0,
+        shield=200.0,
+        max_shield=800.0 if has_shields else 0.0,
+        speed=np.array([0.0, 120.4, 0.0]),
+        energy=EnergySystem(has_shields=has_shields, laser_shot_energy_cost=0.02),
+    )
+    game = SimpleNamespace(player=SimpleNamespace(pawn=pawn))
+    return EnergyHUD(game=game, parent_node=NodePath("corner")), pawn
+
+
+def test_energy_hud_shows_hp_speed_and_shield():
+    """
+    The half-ring gauges show the health left, the speed and the shield
+    strength, filled to their share of the maximum.
+    """
+    energy_hud, pawn = make_energy_hud()
+    pawn.energy.engines = 0.5
+    pawn.energy.lasers = 0.25
+
+    energy_hud.update()
+
+    assert energy_hud.hp_gauge.text.node().getText() == "600"
+    assert energy_hud.hp_gauge.fill_steps == energy_hud.hp_gauge.n_segments // 2
+    assert energy_hud.engine_gauge.text.node().getText() == "120 m/s"
+    assert energy_hud.engine_gauge.fill_steps == energy_hud.engine_gauge.n_segments // 2
+    assert energy_hud.shield_gauge.text.node().getText() == "200"
+    assert energy_hud.shield_gauge.fill_steps == energy_hud.shield_gauge.n_segments // 4
+    assert energy_hud.laser_gauge.level == pytest.approx(0.25)
+
+
+def test_energy_hud_hides_the_shield_gauge_without_shields():
+    """
+    An unshielded ship (a TIE) has no shield gauge, and updating does not trip
+    over its zero max shield.
+    """
+    energy_hud, _ = make_energy_hud(has_shields=False)
+
+    energy_hud.update()
+
+    assert energy_hud.shield_gauge.root.isHidden()
+    assert not energy_hud.engine_gauge.root.isHidden()
+
+
+def test_energy_hud_clamps_negative_health():
+    """
+    A dead ship's negative health reads as 0.
+    """
+    energy_hud, pawn = make_energy_hud()
+    pawn.health = -35.0
+
+    energy_hud.update()
+
+    assert energy_hud.hp_gauge.text.node().getText() == "0"
+    assert energy_hud.hp_gauge.fill_steps == 0
+
+
+@pytest.mark.parametrize("favoured", [ENGINES, LASERS, SHIELDS])
+def test_favoured_system_gauge_is_brighter(favoured):
+    """
+    The gauge of the system power is redirected to is brighter than the others.
+    """
+    energy_hud, pawn = make_energy_hud()
+    pawn.energy.set_mode(favoured)
+
+    energy_hud.update()
+
+    gauges = {
+        ENGINES: energy_hud.engine_gauge,
+        LASERS: energy_hud.laser_gauge,
+        SHIELDS: energy_hud.shield_gauge,
+    }
+    for system, gauge in gauges.items():
+        expected = FAVOURED_GAUGE_BRIGHTNESS if system == favoured else GAUGE_BRIGHTNESS
+        assert gauge.brightness == expected
+
+
+def test_balanced_power_brightens_no_gauge():
+    """
+    With balanced power, every gauge has the normal brightness.
+    """
+    energy = EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
+    for system in (ENGINES, LASERS, SHIELDS):
+        assert gauge_brightness(energy, system) == GAUGE_BRIGHTNESS

@@ -16,10 +16,17 @@ from panda3d.core import (
 )
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
-from space_flight.ui.utils import RollingDrum, make_text_line
+from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
+from space_flight.ui.utils import (
+    ArcGauge,
+    ColumnGauge,
+    RollingDrum,
+    make_text_line,
+)
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
+    from space_flight.actors.energy import EnergySystem
     from space_flight.game.flight_state import FlightState
 
 EDGE_HORIZONTAL = 0.94
@@ -40,6 +47,28 @@ ORDNANCE_HUD_RIGHT_X = -0.05
 ORDNANCE_TEXT_SCALE = 0.05
 DRUM_CENTER_Z = 0.25
 FLARE_LINE_Z = 0.08
+
+# Chatter text height: at the top of the screen, above the rear-view mirror
+CHATTER_Z = 0.88
+
+# Energy HUD (see EnergyHUD), in the bottom-left corner's coordinates: the HP,
+# laser, engine and shield gauges, left to right
+ENERGY_HUD_LEFT_X = 0.06
+ENERGY_HUD_BOTTOM_Z = 0.06
+GAUGE_SPACING = 0.04
+ARC_GAUGE_RADIUS = 0.13
+ARC_GAUGE_THICKNESS = 0.03
+ARC_GAUGE_SEGMENTS = 60
+GAUGE_TEXT_SCALE = 0.055
+COLUMN_GAUGE_WIDTH = 0.04
+COLUMN_GAUGE_HEIGHT = ARC_GAUGE_RADIUS
+HP_GAUGE_COLOR = (1.0, 0.45, 0.75)
+LASER_GAUGE_COLOR = (1.0, 0.15, 0.1)
+ENGINE_GAUGE_COLOR = (0.15, 1.0, 0.25)
+SHIELD_GAUGE_COLOR = (0.2, 0.55, 1.0)
+# Gauge brightness, raised for the system power is redirected to
+GAUGE_BRIGHTNESS = 0.6
+FAVOURED_GAUGE_BRIGHTNESS = 1.0
 
 # Target box tint, by auto-aim state: locked (a missile launched now would be
 # guided to the target) or not.
@@ -108,11 +137,16 @@ class HUD:
         self.chatter.setShadowColor(0, 0, 0, 1)
         self.chatter_textNodePath = aspect2d.attachNewNode(self.chatter)
         self.chatter_textNodePath.setScale(0.075)
-        self.chatter_textNodePath.setPos(0.0, 0, -0.8)
+        self.chatter_textNodePath.setPos(0.0, 0, CHATTER_Z)
 
         # Ordnance: secondary weapons and flares left
         self.ordnance_hud = OrdnanceHUD(
             game=self.game, parent_node=self.game.app.a2dBottomRight
+        )
+
+        # HP and energy gauges
+        self.energy_hud = EnergyHUD(
+            game=self.game, parent_node=self.game.app.a2dBottomLeft
         )
 
         # Wrap long lines before they run off the edges of the screen.
@@ -129,6 +163,7 @@ class HUD:
         """
         self.update_debug_hud()
         self.ordnance_hud.update()
+        self.energy_hud.update()
         self.clear_scenario_hud()
 
     def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
@@ -255,6 +290,8 @@ class HUD:
         self.chatter = None
         self.ordnance_hud.clean()
         self.ordnance_hud = None
+        self.energy_hud.clean()
+        self.energy_hud = None
         self.game = None
 
 
@@ -326,6 +363,123 @@ class OrdnanceHUD:
         self.root.removeNode()
         self.root = None
         self.flare_line = None
+        self.game = None
+
+
+def gauge_brightness(energy: EnergySystem, system: str) -> float:
+    """
+    :param energy: The ship's energy system
+    :param system: The system the gauge shows (ENGINES, LASERS or SHIELDS)
+    :return: The gauge's brightness: raised if power is redirected to it
+    """
+    if energy.is_favoured(system):
+        return FAVOURED_GAUGE_BRIGHTNESS
+    return GAUGE_BRIGHTNESS
+
+
+class EnergyHUD:
+    """
+    The player's gauges, bottom left. Left to right:
+
+    - HP: a pink half-ring, the health left written at its centre
+    - lasers: a red column
+    - engines: a green half-ring, the ship's speed written at its centre
+    - shields: a blue half-ring, the shield strength written at its centre
+      (only for shielded ships)
+
+    The energy gauges of the system power is redirected to are brighter.
+    """
+
+    def __init__(self, game: FlightState, parent_node: NodePath) -> None:
+        """
+        :param game: The flight state
+        :param parent_node: The node the gauges are anchored to (bottom-left
+            corner of the screen)
+        """
+        self.game = game
+        self.root = parent_node.attachNewNode("energyHud")
+        self.root.setPos(ENERGY_HUD_LEFT_X, 0, ENERGY_HUD_BOTTOM_Z)
+
+        x = ARC_GAUGE_RADIUS
+        self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, x)
+        self.hp_gauge.set_brightness(GAUGE_BRIGHTNESS)
+        x += ARC_GAUGE_RADIUS + GAUGE_SPACING + 0.5 * COLUMN_GAUGE_WIDTH
+        self.laser_gauge = ColumnGauge(
+            parent_node=self.root,
+            name="laserGauge",
+            color=LASER_GAUGE_COLOR,
+            width=COLUMN_GAUGE_WIDTH,
+            height=COLUMN_GAUGE_HEIGHT,
+        )
+        self.laser_gauge.root.setX(x)
+        x += 0.5 * COLUMN_GAUGE_WIDTH + GAUGE_SPACING + ARC_GAUGE_RADIUS
+        self.engine_gauge = self._make_arc_gauge("engineGauge", ENGINE_GAUGE_COLOR, x)
+        x += 2.0 * ARC_GAUGE_RADIUS + GAUGE_SPACING
+        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, x)
+        if not self.game.player.pawn.energy.has_shields:
+            self.shield_gauge.root.hide()
+
+    def _make_arc_gauge(
+        self, name: str, color: tuple[float, float, float], x: float
+    ) -> ArcGauge:
+        """
+        :param name: The gauge's node name
+        :param color: The gauge's colour
+        :param x: The gauge's centre's position along the row
+        :return: A half-ring gauge in the row
+        """
+        gauge = ArcGauge(
+            parent_node=self.root,
+            name=name,
+            color=color,
+            radius=ARC_GAUGE_RADIUS,
+            thickness=ARC_GAUGE_THICKNESS,
+            n_segments=ARC_GAUGE_SEGMENTS,
+            text_scale=GAUGE_TEXT_SCALE,
+        )
+        gauge.root.setX(x)
+        return gauge
+
+    def update(self) -> None:
+        """
+        Refresh the gauges' levels, texts and brightness.
+        """
+        pawn = self.game.player.pawn
+        energy = pawn.energy
+
+        health = max(pawn.health, 0.0)
+        self.hp_gauge.set_level(health / pawn.max_health)
+        self.hp_gauge.set_text(f"{health:.0f}")
+
+        self.laser_gauge.set_level(energy.lasers)
+        self.laser_gauge.set_brightness(gauge_brightness(energy, LASERS))
+
+        self.engine_gauge.set_level(energy.engines)
+        self.engine_gauge.set_text(f"{magnitude(pawn.speed):.0f} m/s")
+        self.engine_gauge.set_brightness(gauge_brightness(energy, ENGINES))
+
+        if energy.has_shields:
+            self.shield_gauge.set_level(pawn.shield / pawn.max_shield)
+            self.shield_gauge.set_text(f"{pawn.shield:.0f}")
+            self.shield_gauge.set_brightness(gauge_brightness(energy, SHIELDS))
+
+    def clean(self) -> None:
+        """
+        Cleans the EnergyHUD object
+        """
+        for gauge in (
+            self.hp_gauge,
+            self.laser_gauge,
+            self.engine_gauge,
+            self.shield_gauge,
+        ):
+            gauge.clean()
+        self.hp_gauge = None
+        self.laser_gauge = None
+        self.engine_gauge = None
+        self.shield_gauge = None
+        self.root.removeNode()
+        self.root = None
         self.game = None
 
 
