@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
 from space_flight import THROTTLE_BOOST_VALUE
+from space_flight.actors.energy import BALANCED, ENGINES, LASERS, SHIELDS
 from space_flight.utils import low_pass_filter_first_order
 
 if TYPE_CHECKING:
@@ -27,6 +28,14 @@ if TYPE_CHECKING:
     from space_flight.ui.input_reader import InputState
 
 VIEW_BUTTON_INCREMENT = 1.0
+
+# Flight actions selecting an energy distribution mode
+ENERGY_MODE_ACTIONS = {
+    "energy_engines": ENGINES,
+    "energy_lasers": LASERS,
+    "energy_shields": SHIELDS,
+    "energy_balanced": BALANCED,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +314,14 @@ class FlightInputContext(InputContext):
             self.is_boost = True
         if self.released(state, "boost_off"):
             self.is_boost = False
+
+        # Energy distribution: favour one system, back to balanced, or cycle
+        energy = self.player.pawn.energy
+        for action, mode in ENERGY_MODE_ACTIONS.items():
+            if self.pressed(state, action):
+                energy.set_mode(mode)
+        if self.pressed(state, "cycle_energy"):
+            energy.cycle_mode()
 
         # Target selection
         if self.pressed(state, "loop_target"):

@@ -2,7 +2,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from space_flight.actors.energy import (
+    SHIELD_REGEN_DELAY_S,
+    SHIELDS,
+    EnergySystem,
+)
 from space_flight.actors.fighter import Fighter
+from space_flight.utils.state_machine import Cooldown
+
+LASER_SHOT_ENERGY_COST = 0.02
 
 
 def make_fighter_without_init(
@@ -11,10 +19,13 @@ def make_fighter_without_init(
     max_shield: float = 100.0,
     current_shield: float = 100.0,
     shield_regen_rate: float = 10.0,
+    clock: MagicMock | None = None,
 ):
     """
     Build a Fighter instance that bypasses __init__ so tests can exercise
     individual methods without requiring Panda3D or YAML assets.
+
+    :param clock: The shield regeneration cooldown's clock (time 0 if None)
     """
     fighter = object.__new__(Fighter)
     fighter.max_health = max_health
@@ -22,6 +33,13 @@ def make_fighter_without_init(
     fighter.max_shield = max_shield
     fighter.shield = current_shield
     fighter.shield_regen_rate = shield_regen_rate
+    fighter.shield_regen_cooldown = Cooldown(
+        duration_s=SHIELD_REGEN_DELAY_S,
+        clock=clock if clock is not None else MagicMock(return_value=0.0),
+    )
+    fighter.energy = EnergySystem(
+        has_shields=max_shield > 0.0, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
+    )
     # apply_damage reads is_dying -- a property mirroring the controlling
     # Bot/Player -- to make a dying wreck inert; give it a live controller.
     fighter.parent = MagicMock(is_dying=False)
@@ -383,3 +401,74 @@ def test_ship_handle_health_shield_stays_zero_when_fully_depleted_and_no_regen()
     fighter.ship_handle_health()
 
     assert fighter.shield == pytest.approx(0.0)
+
+
+def test_ship_handle_health_holds_shield_regen_after_a_hit():
+    """
+    The shield does not regenerate until SHIELD_REGEN_DELAY_S after a hit.
+    """
+    clock = MagicMock(return_value=10.0)
+    fighter = make_fighter_without_init(
+        current_shield=100.0, max_shield=100.0, shield_regen_rate=5.0, clock=clock
+    )
+    fighter.game = MagicMock()
+    fighter.game.game_time.get_time_step.return_value = 1.0
+
+    fighter.apply_damage(damage=20.0, damage_type="physical")
+    clock.return_value = 10.0 + 0.9 * SHIELD_REGEN_DELAY_S
+    fighter.ship_handle_health()
+    assert fighter.shield == pytest.approx(80.0)
+
+    clock.return_value = 10.0 + SHIELD_REGEN_DELAY_S
+    fighter.ship_handle_health()
+    assert fighter.shield == pytest.approx(85.0)
+
+
+def test_ship_handle_health_hull_hit_also_holds_shield_regen():
+    """
+    A hit landing on the hull (shield already down) holds regeneration too.
+    """
+    clock = MagicMock(return_value=0.0)
+    fighter = make_fighter_without_init(
+        current_shield=0.0, max_shield=100.0, shield_regen_rate=5.0, clock=clock
+    )
+    fighter.game = MagicMock()
+    fighter.game.game_time.get_time_step.return_value = 1.0
+
+    fighter.apply_damage(damage=20.0, damage_type="physical")
+    fighter.ship_handle_health()
+
+    assert fighter.shield == pytest.approx(0.0)
+
+
+def test_ship_handle_health_shield_regen_follows_energy_distribution():
+    """
+    Favouring shields speeds their regeneration up by 0.75 / (1/3).
+    """
+    fighter = make_fighter_with_game(
+        current_shield=0.0,
+        max_shield=100.0,
+        current_health=200.0,
+        max_health=200.0,
+        shield_regen_rate=4.0,
+        time_step_s=1.0,
+    )
+    fighter.energy.set_mode(SHIELDS)
+
+    fighter.ship_handle_health()
+
+    assert fighter.shield == pytest.approx(4.0 * 0.75 * 3.0)
+
+
+def test_fighter_turn_rate_and_thrust_follow_engine_gauge():
+    """
+    A fighter's turn rate scale and thrust factor include the engine gauge's
+    bonus or penalty.
+    """
+    fighter = make_fighter_without_init()
+    full = (fighter._turn_rate_scale(0.6), fighter._thrust_factor())
+    fighter.energy.engines = 0.5
+    half = (fighter._turn_rate_scale(0.6), fighter._thrust_factor())
+
+    assert full[0] > half[0]
+    assert full[1] > half[1] == pytest.approx(1.0)

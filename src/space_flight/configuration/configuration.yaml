@@ -52,6 +52,11 @@ contexts:
       point_target:        ";"
       toggle_mirror:       alt
       radial_menu:         r
+      # Energy distribution
+      energy_engines:      "1"
+      energy_lasers:       "2"
+      energy_shields:      "3"
+      energy_balanced:     "4"
 
     gamepad:
       # Flight axes
@@ -76,6 +81,7 @@ contexts:
       point_target:        gamepad_dpad_up
       toggle_mirror:       gamepad_back
       radial_menu:         gamepad_dpad_down
+      cycle_energy:        gamepad_face_y
 
     joystick:
       # Flight axes
@@ -105,6 +111,7 @@ contexts:
       point_target:        stick_button_11
       toggle_mirror:       stick_button_12
       radial_menu:         stick_button_3
+      cycle_energy:        stick_button_6
 
   radial_menu:
     # Direction input while the radial menu is open.

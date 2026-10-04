@@ -95,6 +95,30 @@ once it is spent. A missile gets the current target only while auto-aim is locke
 Flares have their own trigger, `drop_flare`, from the loadout's flare launcher
 (`flare_launcher`).
 
+#### Energy management
+
+Each fighter owns an `EnergySystem`
+([`energy.py`](../../src/space_flight/actors/energy.py)) feeding three gauges:
+
+| Gauge | Spent by | Bonus over half full |
+|-------|----------|----------------------|
+| Engines (`energy.engines`, 0–1) | boost, hard manoeuvres (pitch/yaw command above 90% of the current max rate) | more thrust and turn rate |
+| Lasers (`energy.lasers`, 0–1) | each bolt; no firing below one bolt's cost | more bolt damage |
+| Shields (the fighter's `shield`) | hits | none (it is the shield strength) |
+
+Bonuses ramp linearly from a half-full gauge to a full one. An empty engine
+gauge locks boost out (until it refills a little) and cuts thrust and turn rate.
+
+The power plant refills the gauges at each system's share of its output. With
+balanced power (the default, and the only mode bots use for now) the share is
+1/3 each, or 1/2 each on ships without shields. The pilot can redirect most of
+it to one system (75/7/7, or 80/10 without shields), at a loss of efficiency.
+A balanced fighter regenerates its shield at its configured
+`shield_regen_rate`; any hit holds regeneration off for `SHIELD_REGEN_DELAY_S`.
+
+Every tuning value is a module-level constant in `energy.py`, except the
+per-bolt laser cost, `laser_shot_energy_cost` in each fighter's configuration.
+
 ### `CapitalShip`
 
 Has **no built-in weapons or shield of its own**; it assembles itself from

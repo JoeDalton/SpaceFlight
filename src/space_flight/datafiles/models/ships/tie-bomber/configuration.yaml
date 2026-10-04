@@ -23,6 +23,7 @@ laser_fire_rate: 8
 cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 80.0
+laser_shot_energy_cost: 0.02  # laser gauge fraction per bolt
 
 loadout:
   proton_bomb: 8

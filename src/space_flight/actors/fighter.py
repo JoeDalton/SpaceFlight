@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.actors.ship import Ship
+from space_flight.actors.energy import SHIELD_REGEN_DELAY_S, EnergySystem
+from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.utils.state_machine import Cooldown
 from space_flight.weapons.laser_cannon import LaserCannon
 from space_flight.weapons.ordnance_launcher import SECONDARY_TYPES, OrdnanceLauncher
 
@@ -54,13 +56,24 @@ class Fighter(Ship):
         # Setup integrated shield
         self.max_shield = self.conf["shield"]
         self.shield = self.max_shield
+        # Rate with balanced power (see EnergySystem.shield_regen_rate)
         self.shield_regen_rate = self.conf["shield_regen_rate"]
+        # The shield does not regenerate for a while after a hit
+        self.shield_regen_cooldown = Cooldown(
+            duration_s=SHIELD_REGEN_DELAY_S, clock=self.game.game_time.get_current_time
+        )
+
+        # Engine and laser gauges, and the power distribution between systems
+        self.energy = EnergySystem(
+            has_shields=self.max_shield > 0.0,
+            laser_shot_energy_cost=self.conf["laser_shot_energy_cost"],
+        )
 
         # Initialize cannons
         # TODO auto-aim parameters from difficulty config file
         self.target_id = None
         self.auto_aim = AutoAim(game=self.game, parent=self)
-        self.laser_cannon = LaserCannon(game=self.game, parent=self)
+        self.laser_cannon = LaserCannon(game=self.game, parent=self, energy=self.energy)
 
         # Ordnance: one launcher per loadout entry, in the configuration's order,
         # each with its own limited stock
@@ -100,22 +113,47 @@ class Fighter(Ship):
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
     ):
         """
-        Moves the ship (see :meth:`Ship.move`), then updates auto-aim acquisition
+        Moves the ship (see :meth:`Ship.move`), boost permitting, spends and
+        refills the engine and laser gauges, then updates auto-aim acquisition
 
         :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
         :param pitch_rate: Pitch rate command in [-1, 1]
         :param roll_rate: Roll rate command in [-1, 1]
         """
+        # No boost on an exhausted engine gauge
+        throttle = self.energy.limit_throttle(throttle)
         super().move(
             throttle=throttle,
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,
             roll_rate=roll_rate,
         )
+        self.energy.update(
+            dt=self.game.game_time.get_time_step(),
+            throttle=throttle,
+            yaw_rate=yaw_rate,
+            pitch_rate=pitch_rate,
+        )
 
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
+
+    def _turn_rate_scale(self, throttle: float) -> float:
+        """
+        Fraction of the max turn rates available, given the throttle command
+        (see turn_rate_scale) and the engine gauge's bonus or penalty.
+
+        :param throttle: Throttle command
+        :return: The scale applied to the turn rate commands
+        """
+        return turn_rate_scale(throttle) * self.energy.turn_rate_factor()
+
+    def _thrust_factor(self) -> float:
+        """
+        :return: The engine gauge's bonus or penalty on thrust
+        """
+        return self.energy.thrust_factor()
 
     @property
     def shield_level(self) -> float:
@@ -205,7 +243,8 @@ class Fighter(Ship):
 
     def apply_damage(self, damage: float, damage_type: str):
         """
-        Apply damage to the shield first, the overflow to health
+        Apply damage to the shield first, the overflow to health. Any hit holds
+        off shield regeneration for a while.
 
         :param damage: The amount of damage to apply
         :param damage_type: the type of damage to apply (physical, energy)
@@ -214,6 +253,8 @@ class Fighter(Ship):
         # re-trigger death), though collision pushes still shove it around.
         if self.is_dying:
             return
+        if damage > 0.0:
+            self.shield_regen_cooldown.trigger()
         # Apply damage to health and shield
         if damage_type == "physical":
             if self.shield - damage >= 0.0:
@@ -227,12 +268,13 @@ class Fighter(Ship):
 
     def ship_handle_health(self):
         """
-        Regenerates the shield and clamps health to its maximum
+        Regenerates the shield at its share of the power (unless just hit) and
+        clamps health to its maximum
         """
-        dt = self.game.game_time.get_time_step()
-        self.shield = min(
-            max(0.0, self.shield + dt * self.shield_regen_rate), self.max_shield
-        )
+        if self.shield_regen_cooldown.ready():
+            dt = self.game.game_time.get_time_step()
+            regen_rate = self.energy.shield_regen_rate(self.shield_regen_rate)
+            self.shield = min(max(0.0, self.shield + dt * regen_rate), self.max_shield)
         self.health = min(self.health, self.max_health)
 
     def clean(self):

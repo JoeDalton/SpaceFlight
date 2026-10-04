@@ -487,6 +487,38 @@ def test_flight_ctx_handle_actions_ignores_weapons_and_targeting_while_dying():
     game.set_pause.assert_called_once()
 
 
+@pytest.mark.parametrize(
+    "action, mode",
+    [
+        ("energy_engines", "engines"),
+        ("energy_lasers", "lasers"),
+        ("energy_shields", "shields"),
+        ("energy_balanced", "balanced"),
+    ],
+)
+def test_flight_ctx_handle_actions_sets_energy_mode(action, mode):
+    """
+    The energy actions redirect the pawn's power to their system, or back to
+    balanced.
+    """
+    ctx, _, player = make_flight_ctx(device_bindings={action: "1"})
+    ctx.handle_actions(make_state(buttons={"1": True}))
+    player.pawn.energy.set_mode.assert_called_once_with(mode)
+    player.pawn.energy.cycle_mode.assert_not_called()
+
+
+def test_flight_ctx_handle_actions_cycles_energy_mode_on_press_only():
+    """
+    cycle_energy cycles the distribution once per press, not while held.
+    """
+    ctx, _, player = make_flight_ctx(device_bindings={"cycle_energy": "y"})
+    ctx.handle_actions(make_state(repeats={"y": True}))
+    player.pawn.energy.cycle_mode.assert_not_called()
+    ctx.handle_actions(make_state(buttons={"y": True}))
+    player.pawn.energy.cycle_mode.assert_called_once()
+    player.pawn.energy.set_mode.assert_not_called()
+
+
 def test_flight_ctx_handle_actions_no_ordnance_when_idle():
     """
     handle_actions must not launch ordnance when their bindings are inactive.
