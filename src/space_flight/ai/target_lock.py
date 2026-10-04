@@ -22,13 +22,11 @@ _LOCKED = "locked"  # held long enough
 
 class TargetLock:
     """
-    A lock on the parent's target: the target must stay inside a cone around
-    the parent's nose for a delay before it locks. Any disturbance (no target,
-    target changed or gone, target out of the cone) restarts the delay, so a
-    lock requires *continuous* alignment.
+    A lock on the parent's target: it locks once the target has stayed inside
+    a cone around the parent's nose for a delay. Anything else (no target,
+    target changed or gone, out of the cone) restarts the delay.
 
-    Used by the laser auto-aim (see :class:`~space_flight.ai.auto_aim.AutoAim`)
-    and by missile launchers, each with its own tuning.
+    Used by the laser auto-aim and by each missile launcher.
     """
 
     def __init__(
@@ -41,8 +39,7 @@ class TargetLock:
         self.game = game
         self.parent = parent
         self.previous_target_id = None
-        # Target lock is a two-state machine: the target must stay in the cone for
-        # lock_delay_s (time-in-state of "acquiring") before it "locks".
+        # The delay is the time spent in the "acquiring" state
         self.lock_sm = StateMachine(
             initial_state=_ACQUIRING,
             clock=self.game.game_time.get_current_time,
@@ -51,8 +48,6 @@ class TargetLock:
 
     def configure(self, lock_delay_s: float = 1.0, cone_angle_deg: float = 30.0):
         """
-        Sets the lock tuning parameters, recomputing the derived threshold.
-
         :param lock_delay_s: Time the target must stay in the cone before it locks
         :param cone_angle_deg: Half-angle of the cone the target must stay in
         """
@@ -80,15 +75,15 @@ class TargetLock:
 
     def reset(self):
         """
-        Drop any lock and forget the target, e.g. while the lock is not in use
-        (a missile launcher that is not selected).
+        Drop any lock and forget the target (e.g. a missile launcher that is
+        not selected).
         """
         self.previous_target_id = None
         self._restart()
 
     def update(self):
         """
-        Identifies the parent's target and determines whether it is locked
+        Follow the parent's target, locking or restarting the delay
         """
         if not self.parent.target_id:
             # Parent has no target => Nothing to lock

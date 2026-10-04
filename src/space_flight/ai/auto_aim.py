@@ -21,9 +21,8 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger()
 
-# Time constant of the low-pass filter on the lead offset (see update_lead). It
-# damps the velocity kicks of hits on the target or the parent, which would
-# otherwise make the lead jump around.
+# Time constant of the low-pass filter on the lead offset (see update_lead):
+# damps the velocity kicks of hits, which would make the lead jump around.
 LEAD_SMOOTHING_TIME_S = 0.2
 
 
@@ -47,8 +46,7 @@ class AutoAim:
         self.parent = parent
         # Shots lead the target once it is locked (see TargetLock)
         self.target_lock = TargetLock(game=self.game, parent=self.parent)
-        # Low-pass filtered lead offset (see update_lead), for lead_target_id,
-        # last updated at lead_update_time_s
+        # Smoothed lead offset on lead_target_id (see update_lead)
         self.lead_offset_m = None
         self.lead_target_id = None
         self.lead_update_time_s = None
@@ -93,13 +91,10 @@ class AutoAim:
 
     def _target_kinematics(self) -> tuple[np.ndarray, np.ndarray] | None:
         """
-        The parent's target's current position, and its raw lead offset: how
-        far it moves during a laser bolt's time of flight (distance / laser
-        speed), at its velocity *relative* to the parent (bolts inherit the
-        parent's velocity).
-
-        :return: The target's position and raw lead offset (world frame), or None
-            if the parent or its target is not (or no longer) in the interactions
+        :return: The target's current position, and its raw lead offset: how far
+            it moves, relative to the parent (bolts inherit the parent's
+            velocity), during a bolt's time of flight. None if the parent or its
+            target is not in the interactions.
         """
         try:
             my_actor_index = self.game.interactions.get_actor_index_from_id(
@@ -134,25 +129,22 @@ class AutoAim:
 
     def update_lead(self):
         """
-        Low-pass filter the lead offset (see LEAD_SMOOTHING_TIME_S), once per
-        frame. Filtering the offset rather than the predicted position keeps the
-        lead glued to the target: only its velocity kicks are damped.
+        Low-pass filter the lead offset, once per frame. Filtering the offset
+        rather than the predicted position keeps the lead on the target.
 
-        The filter restarts from the raw offset on a new target. Its time step
-        is the game time since its last update, so after a pause in updates
-        (e.g. a turret's fire control offline) it catches up at once rather than
-        sliding from a stale offset.
+        The filter restarts on a new target. Its time step is the time since its
+        last update, so it catches up at once after a gap in updates (e.g. a
+        turret's fire control offline).
         """
         kinematics = self._target_kinematics()
         if kinematics is None:
             self.lead_offset_m = None
             self.lead_target_id = None
-            self.lead_update_time_s = None
             return
         _, raw_offset_m = kinematics
         now_s = self.game.game_time.get_current_time()
-        if self.lead_offset_m is None or self.lead_target_id != self.parent.target_id:
-            self.lead_offset_m = np.array(raw_offset_m, dtype=float)
+        if self.lead_target_id != self.parent.target_id:
+            self.lead_offset_m = raw_offset_m
         else:
             self.lead_offset_m = low_pass_filter_first_order(
                 value=raw_offset_m,
@@ -166,22 +158,16 @@ class AutoAim:
 
     def predict_target_position(self) -> np.ndarray | None:
         """
-        Predicts where to aim at the parent's target: its current position moved
-        by the smoothed lead offset (see update_lead), i.e. the point a bolt
-        fired at now meets the target. Before the filter has caught the target,
-        the raw lead offset is used.
-
-        :return: The predicted position (world frame), or None if the parent or
-            its target is not (or no longer) in the interactions
+        :return: Where a bolt fired now meets the parent's target: its current
+            position plus the smoothed lead offset (the raw one until
+            update_lead has run on it). None if the parent or its target is not
+            in the interactions.
         """
         kinematics = self._target_kinematics()
         if kinematics is None:
             return None
         target_current_position, raw_offset_m = kinematics
-        if (
-            self.lead_offset_m is not None
-            and self.lead_target_id == self.parent.target_id
-        ):
+        if self.lead_target_id == self.parent.target_id:
             return target_current_position + self.lead_offset_m
         return target_current_position + raw_offset_m
 
@@ -198,7 +184,7 @@ class AutoAim:
             # No acquisition: fire straight ahead
             shot_dir = self.parent.forward
         else:
-            # Target acquired: fire at its predicted position, if it still exists
+            # Target locked: fire at its predicted position, if it still exists
             target_predicted_position = self.predict_target_position()
             if target_predicted_position is None:
                 desired_shot_dir = self.parent.forward
@@ -261,8 +247,7 @@ class AutoAim:
 
     def compute_acquisition(self):
         """
-        Identifies the ship's target, determines whether it has been acquired,
-        and updates the smoothed lead (see update_lead)
+        Updates the target lock and the smoothed lead
         """
         self.target_lock.update()
         self.update_lead()

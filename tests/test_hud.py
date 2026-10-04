@@ -101,6 +101,7 @@ def make_aim_hud() -> AimHUD:
     pawn.auto_aim.predict_target_position.return_value = np.array([0.0, 100.0, 0.0])
     for node in (
         "target_anchor",
+        "target_aspect",
         "square",
         "scan_bar",
         "name_label",
@@ -238,10 +239,6 @@ def _no_target(pawn):
     pawn.target = None
 
 
-def _dead_target(pawn):
-    pawn.target.is_dead = True
-
-
 def _no_prediction(pawn):
     pawn.auto_aim.predict_target_position.return_value = None
 
@@ -258,7 +255,6 @@ def _prediction_off_screen(pawn):
     "setup",
     [
         _no_target,
-        _dead_target,
         _no_prediction,
         _prediction_behind,
         _prediction_off_screen,
@@ -266,15 +262,28 @@ def _prediction_off_screen(pawn):
 )
 def test_lead_indicator_is_hidden(setup):
     """
-    The lead indicator is hidden without a live target, without a prediction,
-    or when the prediction is behind the camera or off screen.
+    The lead indicator is hidden without a target, without a prediction, or
+    when the prediction is behind the camera or off screen.
     """
     aim_hud = make_aim_hud()
     setup(aim_hud.game.player.pawn)
 
     aim_hud.update_lead_indicator()
 
-    assert aim_hud.lead_indicator_position() is None
+    aim_hud.lead_indicator.hide.assert_called_once()
+    aim_hud.lead_indicator.show.assert_not_called()
+
+
+def test_lead_indicator_is_hidden_on_a_dead_target():
+    """
+    A target that has just died is dropped by the target box, updated first,
+    so the lead indicator is hidden.
+    """
+    aim_hud = make_aim_hud()
+    aim_hud.game.player.pawn.target.is_dead = True
+
+    aim_hud.aim_hud_update_task()
+
     aim_hud.lead_indicator.hide.assert_called_once()
     aim_hud.lead_indicator.show.assert_not_called()
 

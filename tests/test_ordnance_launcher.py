@@ -122,8 +122,6 @@ def write_ordnance(directory, name, **overrides):
         ({"type": "torpedo"}, ValueError),
         ({"launch_direction": "sideways"}, ValueError),
         ({"damage_type": "energy"}, NotImplementedError),
-        ({"type": "missile", "lock_delay_s": 1.0}, ValueError),
-        ({"type": "missile", "lock_cone_angle_deg": 20.0}, ValueError),
     ],
 )
 def test_invalid_ordnance_configuration_raises(ordnance_directory, overrides, error):
@@ -224,6 +222,7 @@ def test_launch_spends_one_and_passes_the_target_to_a_missile():
     """
     launcher = make_launcher("concussion_missile", stock=2)
     launcher.last_fire_time = -np.inf
+    launcher.target_lock = MagicMock(is_locked=True)
 
     with patch.object(ordnance_launcher, "OrdnanceController") as controller:
         assert launcher.launch(target_id="target") is True
@@ -231,6 +230,19 @@ def test_launch_spends_one_and_passes_the_target_to_a_missile():
     assert launcher.stock == 1
     assert controller.call_args.kwargs["target_id"] == "target"
     assert controller.call_args.kwargs["launcher"] is launcher
+
+
+def test_launch_fires_an_unlocked_missile_blind():
+    """
+    A missile not locked on the target ignores it, flying blind like a rocket.
+    """
+    launcher = make_launcher("concussion_missile")
+    launcher.last_fire_time = -np.inf
+
+    with patch.object(ordnance_launcher, "OrdnanceController") as controller:
+        launcher.launch(target_id="target")
+
+    assert controller.call_args.kwargs["target_id"] is None
 
 
 def test_launch_does_not_give_a_target_to_unguided_ordnance():

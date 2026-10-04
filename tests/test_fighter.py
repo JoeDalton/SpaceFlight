@@ -175,6 +175,10 @@ class FakeLauncher:
         self.target_lock = FakeLock() if category == "missile" else None
         self.reloads = 0
 
+    @property
+    def is_locked(self) -> bool:
+        return self.target_lock is not None and self.target_lock.is_locked
+
     def restart_reload(self):
         self.reloads += 1
 
@@ -216,21 +220,17 @@ def test_first_secondary_is_selected_initially():
     assert fighter.selected_secondary is missile
 
 
-def test_fire_secondary_gives_a_missile_the_target_only_when_missile_locked():
+def test_fire_secondary_launches_at_the_current_target():
     """
-    A missile carries the current target only while its own lock holds;
-    otherwise it flies blind. The laser auto-aim lock plays no part.
+    The launcher is given the current target (whether a missile follows it is
+    up to its lock, see test_ordnance_launcher.py).
     """
     missile = FakeLauncher("missile", 3)
-    fighter = _fighter_with_loadout(missile, auto_aim_locked=True)
+    fighter = _fighter_with_loadout(missile)
 
     assert fighter.fire_secondary() is True
-    missile.target_lock.is_locked = True
-    assert fighter.fire_secondary() is True
-    fighter.auto_aim.is_target_acquired = False
-    assert fighter.fire_secondary() is True
 
-    assert missile.targets == [None, "target", "target"]
+    assert missile.targets == ["target"]
 
 
 def test_cycling_to_another_secondary_restarts_its_reload():

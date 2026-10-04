@@ -37,8 +37,6 @@ ORDNANCE_TYPES = ("bomb", "rocket", "missile", "flare")
 SECONDARY_TYPES = ("bomb", "rocket", "missile")
 LAUNCH_DIRECTIONS = ("forward", "down", "backward")
 DAMAGE_TYPES = ("physical",)
-# What a missile's configuration must hold to tune its target lock
-MISSILE_LOCK_KEYS = ("lock_delay_s", "lock_cone_angle_deg")
 
 
 @functools.cache
@@ -62,10 +60,6 @@ def _read_ordnance_configuration(name: str) -> dict:
         raise NotImplementedError(
             f"Ordnance {name}: unsupported damage type {conf.get('damage_type')!r}"
         )
-    if conf["type"] == "missile":
-        missing = [key for key in MISSILE_LOCK_KEYS if key not in conf]
-        if missing:
-            raise ValueError(f"Ordnance {name}: missile without {', '.join(missing)}")
     return conf
 
 
@@ -109,8 +103,8 @@ class OrdnanceLauncher(Weapon):
         # Launch speed relative to the launching ship, along launch_direction
         self.speed_mps = self.conf["speed_mps"]
         self.launch_direction = self.conf["launch_direction"]
-        # A missile is guided to the target only once locked on it, which the
-        # ship updates while the missile is selected (see Fighter.move)
+        # Missiles only: guided to the target once locked on it (the ship
+        # updates the lock while the launcher is selected, see Fighter.move)
         self.target_lock = None
         if self.category == "missile":
             self.target_lock = TargetLock(
@@ -152,8 +146,8 @@ class OrdnanceLauncher(Weapon):
         """
         Launch one unit of ordnance, if any is left and the launcher is ready.
 
-        :param target_id: The target a missile pursues (ignored by the other
-            types). None fires it blind, like a rocket.
+        :param target_id: The target a missile pursues if locked on it (ignored
+            by the other types). Otherwise it flies blind, like a rocket.
         :return: True if launched, False if out of stock or reloading
         """
         if self.stock <= 0:
@@ -164,7 +158,7 @@ class OrdnanceLauncher(Weapon):
         OrdnanceController(
             game=self.game,
             launcher=self,
-            target_id=target_id if self.category == "missile" else None,
+            target_id=target_id if self.is_locked else None,
         )
         self.stock -= 1
         LOGGER.info(
@@ -172,10 +166,14 @@ class OrdnanceLauncher(Weapon):
         )
         return True
 
+    @property
+    def is_locked(self) -> bool:
+        """Whether this is a missile launcher locked on the target."""
+        return self.target_lock is not None and self.target_lock.is_locked
+
     def clean(self):
         """
-        Cleans the target lock, then drops the upward references (see
-        :meth:`Weapon.clean`).
+        Cleans the target lock, then the weapon
         """
         if self.target_lock is not None:
             self.target_lock.clean()
