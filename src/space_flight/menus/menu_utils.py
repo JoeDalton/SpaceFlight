@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
+from typing import Any
 
 from direct.gui.DirectGui import (
     DGG,
@@ -10,6 +11,7 @@ from direct.gui.DirectGui import (
     DirectEntry,
     DirectFrame,
     DirectLabel,
+    DirectOptionMenu,
     DirectScrollBar,
     DirectScrolledFrame,
     DirectSlider,
@@ -675,3 +677,76 @@ class CustomCheckButton:
     def destroy(self):
         """Remove the checkbox from the scene graph and free its resources."""
         self.checkbox.destroy()
+
+
+class CustomOptionMenu:
+    """
+    A styled :class:`DirectOptionMenu` (drop-down list) wrapper, in the
+    settings menus' palette.
+
+    Each option is a (label, value) pair: the list shows the labels, while
+    :meth:`get_value`, :meth:`set_value` and the command deal in values.
+
+    Its popup list is drawn above every other widget, but is clipped like any
+    child of a :class:`ScrollableList`: place it outside one.
+    """
+
+    def __init__(
+        self,
+        app: ShowBase,
+        pos: tuple[float, float, float],
+        options: list[tuple[str, Any]],
+        value: Any,
+        command: Callable,
+        parent: NodePath | None = None,
+        scale: float = 0.06,
+    ):
+        """
+        Create the underlying DirectOptionMenu with game-standard styling.
+
+        :param app: The running ShowBase application (accepted for API
+            consistency with the other custom widgets).
+        :param pos: 3-tuple (x, y, z) of the menu button's left end.
+        :param options: The (label, value) pairs listed, in order.
+        :param value: The initially selected option's value.
+        :param command: Callable invoked as command(value) when the user picks
+            an option (even the selected one again), not on :meth:`set_value`.
+        :param parent: Panda3D node to attach to. Defaults to aspect2d.
+        :param scale: Uniform scale applied to the menu node.
+        """
+        self.values = [option_value for _, option_value in options]
+        self.command = command
+        self.menu = DirectOptionMenu(
+            parent=parent,
+            pos=pos,
+            scale=scale,
+            items=[label for label, _ in options],
+            initialitem=self.values.index(value),
+            command=self._on_select,
+            relief=DGG.FLAT,
+            frameColor=(0.12, 0.12, 0.18, 0.92),
+            text_fg=(0.898, 0.839, 0.730, 1.0),
+            popupMarker_relief=DGG.FLAT,
+            popupMarker_frameColor=(0.65, 0.82, 1.0, 1.0),
+            highlightColor=(0.1, 0.1, 0.3, 1.0),
+            item_relief=DGG.FLAT,
+            item_frameColor=(0.12, 0.12, 0.18, 1.0),
+            item_text_fg=(0.898, 0.839, 0.730, 1.0),
+        )
+        self.menu.setTransparency(True)
+
+    def _on_select(self, _label: str):
+        """Forward a pick to the command, as the picked option's value."""
+        self.command(self.get_value())
+
+    def get_value(self) -> Any:
+        """Return the selected option's value."""
+        return self.values[self.menu.selectedIndex]
+
+    def set_value(self, value: Any):
+        """Select the option of the given value (does not fire the command)."""
+        self.menu.set(self.values.index(value), fCommand=False)
+
+    def destroy(self):
+        """Remove the menu from the scene graph and free its resources."""
+        self.menu.destroy()

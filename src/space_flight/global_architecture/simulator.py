@@ -14,6 +14,7 @@ from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.gameplay_settings import GameplaySettings
 from space_flight.global_architecture.graphics_manager import GraphicsManager
 from space_flight.global_architecture.graphics_settings import GraphicsSettings
+from space_flight.menus.gameplay_settings_menu_state import GameplaySettingsMenuState
 from space_flight.menus.graphics_settings_menu_state import GraphicsSettingsMenuState
 from space_flight.menus.input_settings_menu_state import InputSettingsMenuState
 from space_flight.menus.level_end_state import LevelEndState
@@ -55,6 +56,7 @@ class StateManager:
     LEVEL_SELECTION_MENU_STATE = LevelSelectionMenuState
     PAUSE_MENU_STATE = PauseMenuState
     SETTINGS_STATE = SettingsMenuState
+    GAMEPLAY_SETTINGS_STATE = GameplaySettingsMenuState
     INPUT_SETTINGS_STATE = InputSettingsMenuState
     GRAPHICS_SETTINGS_STATE = GraphicsSettingsMenuState
     RADIAL_MENU_STATE = RadialMenuState
