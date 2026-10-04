@@ -23,7 +23,7 @@ from space_flight.game.time_keeping import (
     IntervalManager,
 )
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.ui.hud import HUD, TargetHUD
+from space_flight.ui.hud import HUD, AimHUD, TargetHUD
 from space_flight.ui.input_context import (
     FlightInputContext,
     HyperspaceInputContext,
@@ -204,9 +204,11 @@ class FlightState(BaseState):
         if self.headless:
             self.hud = None
             self.target_hud = None
+            self.aim_hud = None
         else:
             self.hud = HUD(game=self)
             self.target_hud = TargetHUD(game=self)
+            self.aim_hud = AimHUD(game=self)
 
         # Render the first frame around the player too
         self.recenter_render_origin()
@@ -431,6 +433,9 @@ class FlightState(BaseState):
         if getattr(self, "target_hud", None) is not None:
             self.target_hud.clean()
             self.target_hud = None
+        if getattr(self, "aim_hud", None) is not None:
+            self.aim_hud.clean()
+            self.aim_hud = None
 
         # Stop the tasks that update the world (only present once built)
         if getattr(self, "game_world_task", None) is not None:

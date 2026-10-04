@@ -8,11 +8,14 @@ from direct.gui.DirectGui import DirectLabel
 from direct.showbase.ShowBaseGlobal import aspect2d, render2d
 from panda3d.core import (
     CardMaker,
+    Lens,
     NodePath,
     Point2,
     Point3,
     TextNode,
+    Texture,
     TransparencyAttrib,
+    Vec3,
 )
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
@@ -70,10 +73,18 @@ SHIELD_GAUGE_COLOR = (0.2, 0.55, 1.0)
 GAUGE_BRIGHTNESS = 0.6
 FAVOURED_GAUGE_BRIGHTNESS = 1.0
 
-# Target box tint, by auto-aim state: locked (a missile launched now would be
+# Target box tint, by missile lock: locked (a missile launched now would be
 # guided to the target) or not.
 TARGET_BOX_COLOR = (1.0, 1.0, 1.0, 1.0)
-TARGET_BOX_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
+TARGET_BOX_MISSILE_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
+
+# Crosshair (where the lasers go) and lead indicator (where to aim to hit the
+# target), see AimHUD. Half-sizes keep their textures' (square) proportions.
+CROSSHAIR_HALF_SIZE = 0.03
+LEAD_INDICATOR_HALF_SIZE = 0.027
+# Crosshair tint, by auto-aim state: locked (shots lead the target) or not.
+CROSSHAIR_COLOR = (1.0, 1.0, 1.0, 1.0)
+CROSSHAIR_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
 
 # Transparent fill of the scan bar: while scanning, then by scan result.
 SCAN_BAR_COLORS = {
@@ -81,6 +92,62 @@ SCAN_BAR_COLORS = {
     "clear": (0.0, 1.0, 0.0, 0.35),
     "contraband": (1.0, 0.0, 0.0, 0.35),
 }
+
+
+def project_to_screen(lens: Lens, cam_space_pos: Point3) -> tuple[float, float, bool]:
+    """
+    Project a camera-space point onto the screen.
+
+    :param lens: The camera's lens
+    :param cam_space_pos: The point, in camera space (modified: its depth is
+        clamped away from zero, see MIN_PROJECTION_DEPTH)
+    :return: Its screen coordinates (x, z), in [-1, 1] when on screen, and
+        whether it is behind the camera. Behind the camera, the projection is
+        mirrored through the screen centre (perspective divide by a negative
+        depth).
+    """
+    # Clamp the depth (see MIN_PROJECTION_DEPTH), preserving its sign so
+    # the behind-camera handling still triggers correctly.
+    if abs(cam_space_pos.y) < MIN_PROJECTION_DEPTH:
+        cam_space_pos.y = (
+            MIN_PROJECTION_DEPTH if cam_space_pos.y >= 0 else -MIN_PROJECTION_DEPTH
+        )
+
+    screen_pos = Point2()
+    lens.project(cam_space_pos, screen_pos)
+    return screen_pos.x, screen_pos.y, cam_space_pos.y <= 0
+
+
+def is_on_screen(x: float, z: float, behind: bool) -> bool:
+    """
+    :param x: Projected screen x coordinate
+    :param z: Projected screen z coordinate
+    :param behind: Whether the point is behind the camera
+    :return: Whether the projected point is ahead and inside the screen
+    """
+    return not behind and abs(x) <= 1.0 and abs(z) <= 1.0
+
+
+def make_hud_card(
+    name: str, half_width: float, half_height: float, texture: Texture | None = None
+) -> NodePath:
+    """
+    :param name: The card's node name
+    :param half_width: The card's half-width
+    :param half_height: The card's half-height
+    :param texture: The card's texture, if any (with alpha transparency)
+    :return: A card centred on its origin, drawn over the scene and the other UI
+    """
+    cm = CardMaker(name)
+    cm.setFrame(-half_width, half_width, -half_height, half_height)
+    card = NodePath(cm.generate())
+    if texture is not None:
+        card.setTexture(texture)
+    card.setTransparency(TransparencyAttrib.MAlpha)
+    card.setDepthTest(False)
+    card.setDepthWrite(False)
+    card.setBin("fixed", 10)
+    return card
 
 
 class HUD:
@@ -489,7 +556,6 @@ class EnergyHUD:
 
 class TargetHUD:
     def __init__(self, game: FlightState) -> None:
-        # TODO add lead indicator
         self.game = game
         self.id = uuid.uuid4()
 
@@ -501,21 +567,14 @@ class TargetHUD:
         self.aspect.reparentTo(self.root)
 
         # Define target indicator
-        cm = CardMaker("targetBox")
-        cm.setFrame(
-            -TARGET_BOX_HALF_WIDTH,
+        self.square = make_hud_card(
+            "targetBox",
             TARGET_BOX_HALF_WIDTH,
-            -TARGET_BOX_HALF_HEIGHT,
             TARGET_BOX_HALF_HEIGHT,
-        )
-
-        self.square = NodePath(cm.generate())
-        self.square.setTexture(
             self.game.app.loader.loadTexture(
                 DATAFILES_PATH / "models/UI/target_indicator_white.png"
-            )
+            ),
         )
-        self.square.setTransparency(TransparencyAttrib.MAlpha)
         self.square.reparentTo(self.aspect)
 
         # Define scan progress bar: fills the target box from its left edge,
@@ -553,11 +612,8 @@ class TargetHUD:
         )
         self.game.method_lists[self.id] = [self.target_hud_update_task]
 
-        # Make sure the targeting HUD is rendered above other UI things
-        self.square.setDepthTest(False)
-        self.square.setDepthWrite(False)
-        self.square.setBin("fixed", 10)
-
+        # Make sure the targeting HUD is rendered above other UI things (the
+        # box already is, see make_hud_card)
         self.scan_bar.setDepthTest(False)
         self.scan_bar.setDepthWrite(False)
         self.scan_bar.setBin("fixed", 9)
@@ -626,26 +682,11 @@ class TargetHUD:
             target_pos = target.position
             world_pos = Point3(*target_pos)
 
-            # Convert to camera space
+            # Convert to camera space and project. Default case: target is
+            # ahead, just take the projection
             cam_space_pos = cam.getRelativePoint(self.game.root_node, world_pos)
+            indic_x, indic_z, behind = project_to_screen(lens, cam_space_pos)
 
-            # Clamp the depth (see MIN_PROJECTION_DEPTH), preserving its sign so
-            # the behind-camera handling below still triggers correctly.
-            if abs(cam_space_pos.y) < MIN_PROJECTION_DEPTH:
-                cam_space_pos.y = (
-                    MIN_PROJECTION_DEPTH
-                    if cam_space_pos.y >= 0
-                    else -MIN_PROJECTION_DEPTH
-                )
-
-            screen_pos = Point2()
-            lens.project(cam_space_pos, screen_pos)
-
-            # Default case: target is ahead, just take the projection
-            indic_x = screen_pos.x
-            indic_z = screen_pos.y
-
-            behind = cam_space_pos.y <= 0
             if behind:
                 # Target is behind the camera. The perspective divide in
                 # lens.project() is by a negative depth (cam_space_pos.y < 0),
@@ -701,12 +742,12 @@ class TargetHUD:
 
     def update_lock_tint(self) -> None:
         """
-        Turn the target box red while auto-aim is locked on the target (a
-        missile launched now would be guided to it), white otherwise.
+        Turn the target box red while the armed missile is locked on the target
+        (a missile launched now would be guided to it), white otherwise.
         """
-        locked = self.game.player.pawn.auto_aim.is_target_acquired
+        locked = self.game.player.pawn.is_missile_locked
         self.square.setColorScale(
-            *(TARGET_BOX_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
+            *(TARGET_BOX_MISSILE_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
         )
 
     def clean(self) -> None:
@@ -723,5 +764,127 @@ class TargetHUD:
         self.square.removeNode()
         self.scan_bar.removeNode()
         self.aspect.removeNode()
+        self.root.removeNode()
+        self.game = None  # type: ignore[assignment]  # released on clean
+
+
+class AimHUD:
+    """
+    The player's aiming cues:
+
+    - a crosshair where the lasers go: the ship's nose direction, projected as
+      a point at infinity (the cannons fire parallel to the nose), so it stays
+      true when the pilot's head is jolted or turned. White, red while auto-aim
+      is locked (shots lead the target).
+    - a lead indicator where to aim to hit the target: its position predicted
+      by auto-aim (see AutoAim.predict_target_position). Shown only with a
+      target, its prediction ahead and on screen.
+    """
+
+    def __init__(self, game: FlightState) -> None:
+        self.game = game
+        self.id = uuid.uuid4()
+
+        # The cards are placed in screen coordinates, and scaled for the aspect
+        # ratio (see aim_hud_update_task)
+        self.root = NodePath("aimHudRoot")
+        self.root.reparentTo(render2d)
+
+        loader = self.game.app.loader
+        self.crosshair = make_hud_card(
+            "crosshair",
+            CROSSHAIR_HALF_SIZE,
+            CROSSHAIR_HALF_SIZE,
+            loader.loadTexture(DATAFILES_PATH / "models/UI/crosshair.png"),
+        )
+        self.crosshair.reparentTo(self.root)
+        self.lead_indicator = make_hud_card(
+            "leadIndicator",
+            LEAD_INDICATOR_HALF_SIZE,
+            LEAD_INDICATOR_HALF_SIZE,
+            loader.loadTexture(DATAFILES_PATH / "models/UI/lead_indicator.png"),
+        )
+        self.lead_indicator.reparentTo(self.root)
+
+        # Hide at startup
+        self.crosshair.hide()
+        self.lead_indicator.hide()
+
+        self.game.method_lists[self.id] = [self.aim_hud_update_task]
+
+    def aim_hud_update_task(self) -> None:
+        """
+        Place the crosshair and the lead indicator, and tint the crosshair.
+        """
+        aspect = self.game.app.getAspectRatio()
+        self.crosshair.setScale(1, 1, aspect)
+        self.lead_indicator.setScale(1, 1, aspect)
+        self.update_crosshair()
+        self.update_lead_indicator()
+
+    def update_crosshair(self) -> None:
+        """
+        Place the crosshair where the nose points, tinted by the auto-aim lock;
+        hidden if that is off screen (the pilot looking away).
+        """
+        pawn = self.game.player.pawn
+        nose = self.game.app.cam.getRelativeVector(
+            self.game.root_node, Vec3(*pawn.forward)
+        )
+        x, z, behind = project_to_screen(self.game.app.camLens, Point3(nose))
+        if not is_on_screen(x, z, behind):
+            self.crosshair.hide()
+            return
+        self.crosshair.setPos(x, 0, z)
+        locked = pawn.auto_aim.is_target_acquired
+        self.crosshair.setColorScale(
+            *(CROSSHAIR_LOCKED_COLOR if locked else CROSSHAIR_COLOR)
+        )
+        self.crosshair.show()
+
+    def lead_indicator_position(self) -> tuple[float, float] | None:
+        """
+        :return: The screen position of the target's predicted position, or
+            None if there is no live target, no prediction, or it is behind the
+            camera or off screen
+        """
+        pawn = self.game.player.pawn
+        target = pawn.target
+        if target is None or target.is_dead:
+            return None
+        lead_position = pawn.auto_aim.predict_target_position()
+        if lead_position is None:
+            return None
+        cam_space_pos = self.game.app.cam.getRelativePoint(
+            self.game.root_node, Point3(*lead_position)
+        )
+        x, z, behind = project_to_screen(self.game.app.camLens, cam_space_pos)
+        if not is_on_screen(x, z, behind):
+            return None
+        return x, z
+
+    def update_lead_indicator(self) -> None:
+        """
+        Place the lead indicator, or hide it (see lead_indicator_position).
+        """
+        position = self.lead_indicator_position()
+        if position is None:
+            self.lead_indicator.hide()
+            return
+        x, z = position
+        self.lead_indicator.setPos(x, 0, z)
+        self.lead_indicator.show()
+
+    def clean(self) -> None:
+        """
+        Clean the AimHUD object
+        """
+        if self.game.method_lists:
+            try:
+                self.game.method_lists.pop(self.id)
+            except KeyError:
+                pass
+        self.crosshair.removeNode()
+        self.lead_indicator.removeNode()
         self.root.removeNode()
         self.game = None  # type: ignore[assignment]  # released on clean
