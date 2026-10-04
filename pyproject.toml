@@ -65,7 +65,7 @@ bump = false
 style = "pep440"
 pattern = "(?P<base>\\d+\\.\\d+\\.\\d+)"
 format-jinja = """
-    {%- if distance == 0 and dirty -%}# 
+    {%- if distance == 0 and dirty -%}
       {{ serialize_pep440(base, stage, revision, metadata=["dirty"]) }}
     {%- elif distance == 0 and not dirty -%}
         {{ serialize_pep440(base, stage, revision) }}
