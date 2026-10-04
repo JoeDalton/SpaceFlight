@@ -1,0 +1,101 @@
+# Gameplay (difficulty) presets, in the order the menu lists them. Do not edit
+# in game: gameplay.yaml names the selected preset, or holds "custom" values
+# (see space_flight.global_architecture.gameplay_settings).
+#
+# Every preset sets every field. "normal" reproduces the game's original,
+# untuned behaviour, and is the fallback for anything missing or invalid.
+#
+# Fields, for the player and for the bots (fighters, turrets, capital ships):
+#   auto_aim.enabled           Whether laser shots lead a locked target at all
+#   auto_aim.lock_delay_s      Time the target must stay near the nose to lock
+#   auto_aim.lock_angle_deg    Half-angle of the cone around the nose the
+#                              target must stay in to be locked
+#   auto_aim.assist_angle_deg  Maximum angle a shot may be bent from the nose
+#                              toward the lead
+#   auto_aim.deviation_deg     Half-angle of the random cone around each shot
+#                              (0 = perfectly accurate)
+#   damage_multiplier          Scales the damage dealt by their weapons
+# Player only:
+#   collision_damage_multiplier  Scales the damage the player's ship takes in
+#                                collisions
+#   lead_indicator               Show where to aim to hit the target
+
+easy:
+  player:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 0.5
+      lock_angle_deg: 45.0
+      assist_angle_deg: 10.0
+      deviation_deg: 0.0
+    damage_multiplier: 1.5
+    collision_damage_multiplier: 0.5
+    lead_indicator: true
+  bots:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 1.5
+      lock_angle_deg: 20.0
+      assist_angle_deg: 3.0
+      deviation_deg: 1.5
+    damage_multiplier: 0.5
+
+normal:
+  player:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 1.0
+      lock_angle_deg: 30.0
+      assist_angle_deg: 5.0
+      deviation_deg: 0.0
+    damage_multiplier: 1.0
+    collision_damage_multiplier: 1.0
+    lead_indicator: true
+  bots:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 1.0
+      lock_angle_deg: 30.0
+      assist_angle_deg: 5.0
+      deviation_deg: 0.0
+    damage_multiplier: 1.0
+
+hard:
+  player:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 1.5
+      lock_angle_deg: 20.0
+      assist_angle_deg: 3.0
+      deviation_deg: 0.5
+    damage_multiplier: 1.0
+    collision_damage_multiplier: 1.5
+    lead_indicator: true
+  bots:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 0.75
+      lock_angle_deg: 30.0
+      assist_angle_deg: 6.0
+      deviation_deg: 0.0
+    damage_multiplier: 1.25
+
+ace:
+  player:
+    auto_aim:
+      enabled: false
+      lock_delay_s: 2.0
+      lock_angle_deg: 15.0
+      assist_angle_deg: 2.0
+      deviation_deg: 0.5
+    damage_multiplier: 1.0
+    collision_damage_multiplier: 2.0
+    lead_indicator: false
+  bots:
+    auto_aim:
+      enabled: true
+      lock_delay_s: 0.5
+      lock_angle_deg: 30.0
+      assist_angle_deg: 8.0
+      deviation_deg: 0.0
+    damage_multiplier: 1.5
