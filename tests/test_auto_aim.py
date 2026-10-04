@@ -6,18 +6,17 @@ object.__new__() and set only the attributes consumed by each method under
 test.
 """
 
-import uuid
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
-from space_flight.ai.auto_aim import _ACQUIRING, AutoAim
-from space_flight.utils.state_machine import StateMachine
+from space_flight.ai.auto_aim import AutoAim
+from space_flight.ai.target_lock import TargetLock
 
 
 class _Clock:
-    """A controllable time source for the acquisition state machine."""
+    """A controllable time source for the target lock's state machine."""
 
     def __init__(self, t: float = 0.0):
         self.t = t
@@ -42,196 +41,40 @@ def make_auto_aim(
     auto_aim = object.__new__(AutoAim)
     auto_aim.game = MagicMock()
     auto_aim.parent = MagicMock()
-    auto_aim.previous_target_id = None
     clock = _Clock()
     auto_aim._clock = clock
-    auto_aim.acquisition_sm = StateMachine(initial_state=_ACQUIRING, clock=clock)
     auto_aim.game.game_time.get_current_time.side_effect = clock
-    auto_aim.target_lock_delay_s = target_lock_delay_s
-    auto_aim.min_acquisition_alignment = np.cos(np.deg2rad(acquisition_cone_angle_deg))
+    auto_aim.target_lock = TargetLock(
+        game=auto_aim.game,
+        parent=auto_aim.parent,
+        lock_delay_s=target_lock_delay_s,
+        cone_angle_deg=acquisition_cone_angle_deg,
+    )
     auto_aim.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
     auto_aim.inv_max_assist_tan_angle = 1.0 / np.tan(np.deg2rad(max_assist_angle_deg))
     auto_aim.max_assist_distance_m = 1000.0
     return auto_aim
 
 
-def _set_up_interactions_for_acquisition(
-    auto_aim: AutoAim,
-    target_direction: np.ndarray,
-    self_index: int = 0,
-    target_index: int = 1,
-):
-    """
-    Configure the mocked interactions so that compute_acquisition can look up
-    the direction from self to target.
-
-    :param auto_aim: the AutoAim instance under test
-    :param target_direction: unit direction vector from self to target
-    :param self_index: slot index assigned to the parent actor
-    :param target_index: slot index assigned to the target actor
-    """
-    directions = np.zeros((4, 4, 3))
-    directions[self_index, target_index, :] = target_direction
-
-    def mock_get_index(actor_id):
-        if actor_id == auto_aim.parent.id:
-            return self_index
-        if actor_id == auto_aim.parent.target_id:
-            return target_index
-        raise ValueError(f"Unknown actor_id: {actor_id}")
-
-    auto_aim.game.interactions.get_actor_index_from_id.side_effect = mock_get_index
-    auto_aim.game.interactions.directions = directions
-
-
 # ---------------------------------------------------------------------------
-# compute_acquisition — no target
+# compute_acquisition — delegated to the target lock
 # ---------------------------------------------------------------------------
 
 
-def test_compute_acquisition_no_target_id_stays_unacquired():
+def test_compute_acquisition_locks_through_the_target_lock():
     """
-    When the parent has no target (target_id is falsy), compute_acquisition
-    must set is_target_acquired to False and clear previous_target_id.
+    compute_acquisition() updates the target lock; is_target_acquired and
+    acquisition_elapsed_time_s report its state (see test_target_lock.py for
+    the lock's own behaviour).
     """
     auto_aim = make_auto_aim()
-    auto_aim.parent.target_id = None
+    auto_aim.target_lock = MagicMock(is_locked=True, elapsed_time_s=1.5)
 
     auto_aim.compute_acquisition()
 
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.previous_target_id is None
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
-
-
-def test_compute_acquisition_no_target_resets_elapsed_time():
-    """
-    A previously-accumulating elapsed time is reset when the parent loses its
-    target.
-    """
-    auto_aim = make_auto_aim()
-    auto_aim._clock.t = 0.8  # some acquisition progress
-    auto_aim.parent.target_id = None
-
-    auto_aim.compute_acquisition()
-
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
-
-
-# ---------------------------------------------------------------------------
-# compute_acquisition — target changed
-# ---------------------------------------------------------------------------
-
-
-def test_compute_acquisition_new_target_resets_elapsed_time():
-    """
-    When the parent acquires a new target (different from the previous one),
-    the elapsed acquisition time is reset to zero.
-    """
-    old_id = uuid.uuid4()
-    new_id = uuid.uuid4()
-    auto_aim = make_auto_aim()
-    auto_aim.previous_target_id = old_id
-    auto_aim.parent.target_id = new_id
-    auto_aim._clock.t = 0.9  # some progress on the old target
-
-    auto_aim.compute_acquisition()
-
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
-    assert auto_aim.previous_target_id == new_id
-
-
-def test_compute_acquisition_new_target_updates_previous_target_id():
-    """
-    After a target change, previous_target_id must be updated to the new
-    target id so the next call recognises it as the same target.
-    """
-    old_id = uuid.uuid4()
-    new_id = uuid.uuid4()
-    auto_aim = make_auto_aim()
-    auto_aim.previous_target_id = old_id
-    auto_aim.parent.target_id = new_id
-
-    auto_aim.compute_acquisition()
-
-    assert auto_aim.previous_target_id == new_id
-
-
-# ---------------------------------------------------------------------------
-# compute_acquisition — same target, inside cone
-# ---------------------------------------------------------------------------
-
-
-def test_compute_acquisition_target_in_cone_not_yet_acquired_after_short_time():
-    """
-    When the target is inside the cone but the elapsed time is less than the
-    lock delay, the target must not be acquired.
-    """
-    target_id = uuid.uuid4()
-    auto_aim = make_auto_aim(target_lock_delay_s=2.0)
-    auto_aim.parent.target_id = target_id
-    auto_aim.previous_target_id = target_id
-    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim._clock.t = 0.5  # held for 0.5s, below the 2.0s lock delay
-
-    _set_up_interactions_for_acquisition(
-        auto_aim, target_direction=np.array([0.0, 1.0, 0.0])
-    )
-
-    auto_aim.compute_acquisition()
-
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.5)
-
-
-def test_compute_acquisition_target_in_cone_acquired_after_sufficient_time():
-    """
-    When the target is inside the cone and the elapsed time reaches the lock
-    delay, is_target_acquired becomes True.
-    """
-    target_id = uuid.uuid4()
-    auto_aim = make_auto_aim(target_lock_delay_s=1.0)
-    auto_aim.parent.target_id = target_id
-    auto_aim.previous_target_id = target_id
-    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim._clock.t = 1.3  # held past the 1.0s lock delay
-
-    _set_up_interactions_for_acquisition(
-        auto_aim, target_direction=np.array([0.0, 1.0, 0.0])
-    )
-
-    auto_aim.compute_acquisition()
-
+    auto_aim.target_lock.update.assert_called_once()
     assert auto_aim.is_target_acquired
-
-
-# ---------------------------------------------------------------------------
-# compute_acquisition — same target, outside cone
-# ---------------------------------------------------------------------------
-
-
-def test_compute_acquisition_target_outside_cone_resets_elapsed_time():
-    """
-    When the target is outside the acquisition cone, elapsed time resets to
-    zero and the target is not acquired.
-    """
-    target_id = uuid.uuid4()
-    auto_aim = make_auto_aim(acquisition_cone_angle_deg=5.0)
-    auto_aim.parent.target_id = target_id
-    auto_aim.previous_target_id = target_id
-    auto_aim._clock.t = 0.9  # some progress before it drifts out of the cone
-    # Target is 90° to the side — well outside a 5° cone
-    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-
-    _set_up_interactions_for_acquisition(
-        auto_aim, target_direction=np.array([1.0, 0.0, 0.0])
-    )
-
-    auto_aim.compute_acquisition()
-
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
+    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(1.5)
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +121,9 @@ def test_configure_recomputes_derived_thresholds():
         max_assist_distance_m=1500.0,
     )
 
-    assert auto_aim.target_lock_delay_s == pytest.approx(0.5)
+    assert auto_aim.target_lock.lock_delay_s == pytest.approx(0.5)
     assert auto_aim.max_assist_distance_m == pytest.approx(1500.0)
-    assert auto_aim.min_acquisition_alignment == pytest.approx(np.cos(np.deg2rad(45.0)))
+    assert auto_aim.target_lock.min_alignment == pytest.approx(np.cos(np.deg2rad(45.0)))
     assert auto_aim.min_assist_alignment == pytest.approx(np.cos(np.deg2rad(10.0)))
     assert auto_aim.inv_max_assist_tan_angle == pytest.approx(
         1.0 / np.tan(np.deg2rad(10.0))
@@ -309,13 +152,16 @@ def test_configure_tighter_assist_raises_alignment_threshold():
 
 def test_clean_sets_game_to_none():
     """
-    clean() must release the reference to the game object.
+    clean() must release the reference to the game object, and clean the
+    target lock.
     """
     auto_aim = make_auto_aim()
+    target_lock = auto_aim.target_lock
 
     auto_aim.clean()
 
     assert auto_aim.game is None
+    assert target_lock.game is None
 
 
 def test_clean_sets_ship_to_none():
