@@ -17,10 +17,11 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - [`menu_utils.py`](../../src/space_flight/menus/menu_utils.py) is the shared
   widget toolkit, so styling and scrolling stay consistent and each screen's
   code only expresses layout and behaviour.
-- The two settings screens share one pattern: edit an in-memory **working
+- The three settings screens share one pattern: edit an in-memory **working
   copy** of a YAML config, and only write it to disk (and apply it live where
-  possible) on *Save*. *Cancel* discards the working copy; *Default* reloads
-  factory values into it without touching disk.
+  possible) on *Save*. *Cancel* discards the working copy. On the graphics and
+  input screens, *Default* reloads factory values into it without touching
+  disk; the gameplay screen has presets instead.
 
 ## `menu_utils.py` — shared widgets
 
@@ -36,6 +37,18 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - **`CustomEntry`**, **`CustomSlider`**, **`CustomCheckButton`** apply the same
   treatment to `DirectEntry`/`DirectSlider`/`DirectCheckButton`, with thin
   `get`/`set`, `get_value`/`set_value` and `get_value` accessors respectively.
+- **`CustomDropDown`** is a drop-down list made of `CustomButton`s, over
+  `(label, value)` options. Its head shows the selected label and a down
+  arrow (the scrollbars' `inc_geom`); a click opens the option buttons stacked
+  under it, the selected one pressed. The list stays open until an option is
+  clicked (`select`: close, select, then `command(value)`) or the user clicks
+  anywhere else (closing it, value unchanged). For that, `open()` attaches the
+  list to `aspect2d` last, in the `gui-popup` bin, so it is drawn and clicked
+  above every other widget (Panda3D's GUI gives a click to the last traversed
+  widget), with a transparent full-screen frame first under it to catch the
+  clicks elsewhere. `set_value` selects without calling the command. Unlike
+  `DirectOptionMenu`, it needs no held click and looks like the other
+  buttons.
 - **`ProgressBar`** is a white fill bar with a rotating random hint ("blurb")
   above it, used by `SplashState` while assets load.
 - **`ScrollableList`** pairs a `DirectScrolledFrame` (used only as a
@@ -43,7 +56,7 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   caller parents its rows to, so the canvas never resizes. API:
   `rebuild(n_rows)` → content node, `row_y(i)`, `wheel_scroll(step)`,
   `destroy()`, plus `add_header`/`add_row_label`/`add_checkbox` row helpers.
-  Both settings screens use it.
+  Every settings screen uses it.
 
 ## Startup and top-level navigation
 
@@ -66,7 +79,8 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   current state with `GAME_STATE`.
 - **[`settings_menu_state.py`](../../src/space_flight/menus/settings_menu_state.py)** —
   `SettingsMenuState` is a landing screen (reached from the main and pause
-  menus) routing to `INPUT_SETTINGS_STATE` or `GRAPHICS_SETTINGS_STATE`.
+  menus) routing to `GAMEPLAY_SETTINGS_STATE`, `INPUT_SETTINGS_STATE` or
+  `GRAPHICS_SETTINGS_STATE`.
 
 ## In-session overlays
 
@@ -98,12 +112,35 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 
 ## Settings screens
 
+- **[`gameplay_settings_menu_state.py`](../../src/space_flight/menus/gameplay_settings_menu_state.py)** —
+  `GameplaySettingsMenuState` edits a deep copy of `GameplaySettings.config`
+  (see [docs/global_architecture.md](global_architecture.md#gameplay_settingspy--difficulty)).
+  A *Difficulty* `CustomDropDown` above the scrollable rows lists the presets,
+  in the presets file's order, then *Custom*. Picking a preset loads its
+  values into the working copy and rebuilds the rows; picking *Custom* keeps
+  the current values. `make_row_data()` emits one header per side (Player,
+  Bots), each listing the settings that side has, in `_ROW_ORDER`: sliders
+  (`_SLIDERS`: lock delay, lock angle, assist angle, shot deviation, damage
+  multipliers) and checkboxes (`_CHECKBOXES`: auto-aim, lead indicator).
+  Editing any of them switches the drop-down to *Custom* (`mark_custom`).
+  *Save* calls `GameplaySettings.save()`; every setting applies from the next
+  mission, as an on-screen warning says. There is no *Default*: the `normal`
+  preset is the default.
+
+  The slider ranges are the limits `GameplaySettings.sanitise()` clamps to,
+  imported from it, so a value shown is never clamped on save. Each slider
+  snaps to a step (e.g. 0.05 s, 1 degree). A slider reports its value when it
+  is built, slightly off (single precision): `on_slider` only stores, and
+  switches to *Custom*, when the snapped value actually changes, so building
+  the rows never does. Like the graphics screen's discrete sliders, it never
+  writes the snapped value back to the thumb.
 - **[`graphics_settings_menu_state.py`](../../src/space_flight/menus/graphics_settings_menu_state.py)** —
   `GraphicsSettingsMenuState` edits a deep copy of `GraphicsSettings.config`
   (see [docs/global_architecture.md](global_architecture.md)). `make_row_data()`
   emits one header per top-level section of `default_graphics.yaml` (Display,
   Render, Antialiasing, Compatibility, Clouds, HUD): display mode is a button
-  group, render/reflection/mirror scale are continuous sliders, MSAA and cloud
+  group, render/reflection/mirror scale are continuous sliders (over the limits
+  `GraphicsSettings.sanitise()` clamps to, imported from it), MSAA and cloud
   quality are sliders snapped to discrete stops (`_DISCRETE_SLIDERS`, cheapest
   first so dragging right always costs more), and FXAA, *Alternate Model
   Orientation* (a manual workaround for glTF models loading mis-rotated on

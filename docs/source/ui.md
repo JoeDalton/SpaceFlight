@@ -137,7 +137,9 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   - a **lead indicator** where to aim to hit the target: auto-aim's predicted
     position (`AutoAim.predict_target_position`, see
     [docs/ai.md](ai.md#autoaim)). Shown only with a target and when that point
-    is ahead and on screen.
+    is ahead and on screen, and only if the player's `lead_indicator`
+    [gameplay setting](global_architecture.md#gameplay_settingspy--difficulty)
+    is on (read once, when the HUD is built).
   - a **target box** with distance/name labels. In view, the box encircles the
     target. It turns red while the armed missile is locked on the target
     (`Fighter.is_missile_locked`): a missile launched then is guided to it.

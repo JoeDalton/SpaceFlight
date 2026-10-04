@@ -194,7 +194,7 @@
 ````{py:data} _MIN_MIRROR
 :canonical: space_flight.global_architecture.graphics_settings._MIN_MIRROR
 :value: >
-   0.5
+   0.25
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MIN_MIRROR
 ```
@@ -204,7 +204,7 @@
 ````{py:data} _MAX_MIRROR
 :canonical: space_flight.global_architecture.graphics_settings._MAX_MIRROR
 :value: >
-   2.0
+   1.0
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MAX_MIRROR
 ```
