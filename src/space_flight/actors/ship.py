@@ -314,6 +314,15 @@ class Ship(Pawn):
         """
         return turn_rate_scale(throttle)
 
+    def _thrust_factor(self) -> float:
+        """
+        Multiplier applied to the (positive) thrust command, e.g. for a fighter's
+        engine energy bonus.
+
+        :return: The thrust multiplier
+        """
+        return 1.0
+
     def _compute_mobility(self) -> float:
         """
         Blend the ship's kinematic limits into a manoeuverability score in [0, 1].
@@ -365,8 +374,9 @@ class Ship(Pawn):
         """
         Sets the scalar thrust and rotational rates of the ship.
 
-        The throttle is squared so the velocity is easier to modulate; below
-        ZERO_THRUST_POSITION it brakes (airplane model) or cuts thrust (space).
+        The throttle is squared so the velocity is easier to modulate, and scaled
+        by _thrust_factor(); below ZERO_THRUST_POSITION it brakes (airplane
+        model) or cuts thrust (space).
         The turn rates are scaled by _turn_rate_scale(throttle).
         Both are low-pass filtered to emulate delay in physical systems.
         pqr is stored in Panda3D's pitch-roll-yaw order.
@@ -381,8 +391,10 @@ class Ship(Pawn):
         if throttle >= ZERO_THRUST_POSITION:
             # Thrust is positive
             scalar_thrust_n = (
-                (throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)
-            ) ** 2 * self.max_thrust_n
+                ((throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)) ** 2
+                * self.max_thrust_n
+                * self._thrust_factor()
+            )
         else:
             if FLIGHT_MODEL == "airplane":
                 # Ship is braking, propotionally to its forward speed

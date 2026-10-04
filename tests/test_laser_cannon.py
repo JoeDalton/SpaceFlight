@@ -16,10 +16,12 @@ import numpy as np
 import pytest
 from panda3d.core import Vec3
 
+from space_flight.actors.energy import EnergySystem
 from space_flight.weapons.laser_cannon import LaserCannon
 
 FIRE_DELAY_S = 0.5
 N_CANNONS = 2
+LASER_SHOT_ENERGY_COST = 0.02
 
 
 @pytest.fixture
@@ -39,6 +41,8 @@ def laser_cannon():
     cannon.light_color = (1.0, 0.0, 0.0, 1.0)
     cannon.laser_color_rgb = Vec3(1.0, 0.05, 0.05)
     cannon.sound_pool = MagicMock()
+    # Unlimited power unless a test plugs in an energy system
+    cannon.energy = None
 
     # Parent ship stub: no auto_aim so fire() falls back to speed + forward
     cannon.parent = MagicMock()
@@ -100,6 +104,61 @@ def test_fire_proceeds_after_cooldown_expires(laser_cannon):
         laser_cannon.fire()
 
     mock_laser_shot.assert_called_once()
+
+
+# ---------------------------
+# fire() – laser energy
+# ---------------------------
+
+
+def test_fire_refuses_without_enough_laser_energy(laser_cannon):
+    """
+    An energy-powered gun does not fire on a gauge below one bolt's cost, and
+    the refused shot does not consume the reload gate.
+    """
+    laser_cannon.energy = EnergySystem(
+        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
+    )
+    laser_cannon.energy.lasers = 0.5 * LASER_SHOT_ENERGY_COST
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        laser_cannon.fire()
+
+    mock_laser_shot.assert_not_called()
+    assert laser_cannon.last_fire_time == 0.0
+
+
+def test_fire_spends_laser_energy_and_applies_damage_bonus(laser_cannon):
+    """
+    Each bolt costs its energy, and carries the damage bonus of the gauge level
+    it was fired at.
+    """
+    energy = EnergySystem(
+        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
+    )
+    laser_cannon.energy = energy
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+    expected_power = laser_cannon.shot_power * energy.laser_damage_factor()
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        laser_cannon.fire()
+
+    assert mock_laser_shot.call_args.kwargs["power"] == pytest.approx(expected_power)
+    assert expected_power > laser_cannon.shot_power
+    assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_ENERGY_COST)
+
+
+def test_fire_without_energy_system_uses_base_power(laser_cannon):
+    """
+    A gun with no energy system (a turret's) fires at its base power.
+    """
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        laser_cannon.fire()
+
+    assert mock_laser_shot.call_args.kwargs["power"] == laser_cannon.shot_power
 
 
 # ---------------------------

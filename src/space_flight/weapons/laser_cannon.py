@@ -26,6 +26,7 @@ from space_flight.weapons import Munition, Weapon
 
 if TYPE_CHECKING:
     from space_flight.actors.capital_ship.turret import Turret
+    from space_flight.actors.energy import EnergySystem
     from space_flight.actors.fighter import Fighter
     from space_flight.game.flight_state import FlightState
 
@@ -77,6 +78,9 @@ class LaserCannon(Weapon):
     A rate-limited multi-cannon gun. Cycles through its cannon nodes, aims each
     shot via the parent's auto-aim (falling back to nose-forward), spawns a
     :class:`LaserShot` and plays the fire sound.
+
+    A gun powered by an energy system (a fighter's) spends laser energy on each
+    bolt, cannot fire without enough, and hits harder on a well-charged gauge.
     """
 
     def __init__(
@@ -84,9 +88,19 @@ class LaserCannon(Weapon):
         game: FlightState,
         parent: Fighter | Turret,
         parent_node: NodePath | None = None,
+        energy: EnergySystem | None = None,
     ):
+        """
+        :param game: The game/flight state
+        :param parent: The emitter pawn
+        :param parent_node: Node the cannons are attached to; defaults to the
+            parent's node
+        :param energy: The energy system powering the gun, None for unlimited
+            power
+        """
         fire_delay = 1.0 / parent.conf["laser_fire_rate"]
         super().__init__(game, parent, parent_node, fire_delay=fire_delay)
+        self.energy = energy
 
         # Cannon configuration
         cannon_positions = self.parent.conf["cannon_positions"]
@@ -129,9 +143,19 @@ class LaserCannon(Weapon):
         self.current_next_cannon_idx = 0
 
     def fire(self):
+        # No bolt without enough laser energy (checked first so a refused shot
+        # does not consume the reload gate)
+        if self.energy is not None and not self.energy.can_fire_laser():
+            return
         # Fire at the prescribed rate (reload gate on the Weapon base)
         if not self._ready_to_fire():
             return
+
+        # Damage bonus from the laser gauge, read before the bolt drains it
+        shot_power = self.shot_power
+        if self.energy is not None:
+            shot_power *= self.energy.laser_damage_factor()
+            self.energy.consume_laser_shot()
 
         # Compute start position
         start_position = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
@@ -153,7 +177,7 @@ class LaserCannon(Weapon):
             LaserShot,
             start_position,
             shot_speed,
-            self.shot_power,
+            shot_power,
             self.life_time_s,
             color=self.laser_color_rgb,
             light_color=self.light_color,
@@ -181,6 +205,7 @@ class LaserCannon(Weapon):
         self.cannon_nodes = []
         self.sound_pool = []
         self.laser_color_rgb = None
+        self.energy = None
         super().clean()
 
 

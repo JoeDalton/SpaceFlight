@@ -73,7 +73,10 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   `contexts.flight.<input_type>`. Weapons are `fire` (lasers),
   `fire_secondary` (the selected bomb, rocket or missile launcher, while
   held), `cycle_secondary` (on press) and `drop_flare` (while held); held
-  launches are paced by each launcher's reload. Its `pressed`/`held`/`active`/`released`
+  launches are paced by each launcher's reload. Energy distribution (see
+  [docs/actors.md](actors.md#energy-management)) is set on press by
+  `energy_engines`, `energy_lasers`, `energy_shields` and `energy_balanced`
+  (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick). Its `pressed`/`held`/`active`/`released`
   helpers also check the `global` section (`axis` does not), so a key bound
   once globally (e.g. Escape for pause) works on every input type.
   `keyboard_axes` synthesises continuous axes from key presses: throttle
@@ -110,13 +113,19 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   tolerates levels without them), an FPS counter (graphics setting
   `hud.fps_counter`), and two timed message lines: `set_event_text` /
   `set_chatter_text` store a string plus an expiry time, and
-  `clear_scenario_hud` blanks each once its game-time deadline passes. They
+  `clear_scenario_hud` blanks each once its game-time deadline passes; the
+  chatter line sits at the top of the screen, above the mirror. They
   are driven by the mission's `hud` and `speech` actions (see
   [docs/scenario_scripting.md](scenario_scripting.md#actions)). Bottom right, an
   `OrdnanceHUD` shows the secondary weapons of the cycle
   (`Fighter.secondary_cycle`) with their stock, spent ones at x0, on a
   [`RollingDrum`](#utilspy--generic-ui-items), the selected one facing the
-  player. Under it, a line always shows the flares left.
+  player. Under it, a line always shows the flares left. Bottom left, an
+  `EnergyHUD` shows the player's gauges, left to right: HP (pink half-ring,
+  health at its centre), lasers (red column), engines (green half-ring, speed
+  at its centre) and shields (blue half-ring, shield strength at its centre,
+  hidden on unshielded ships). The gauge of the system power is redirected to
+  is brighter. Its layout, colours and brightness are module constants.
 - **`TargetHUD`** — projects the player's target into screen space each frame
   (`cam.getRelativePoint` + `lens.project`) to place a target box and
   distance/name labels. In view, the box encircles the target. The box turns
@@ -166,6 +175,10 @@ Backs the mission's `player_waypoints` action (see
 
 - **`make_text_line`** — a HUD-style line of text (small caps, drop shadow,
   fadable).
+- **`ArcGauge`** — a half-ring gauge read by the angle filled, sweeping from
+  its left end over the top, with a line of text at its centre. The fill is
+  quantised to the ring's segments and only rebuilt when that step changes.
+- **`ColumnGauge`** — a vertical bar gauge filling up from its base.
 - **`RollingDrum`** — a looping list of text lines written round a cylinder
   seen from the side: the selected item faces the viewer, the previous and
   next ones are above and below, smaller, flattened by the curvature and

@@ -23,6 +23,7 @@ laser_fire_rate: 7.5
 cannon_positions: [[5.2, 5, 0.5], [-5.2, 5, -2.5], [-5.2, 5, 0.5], [5.2, 5, -2.5]]
 laser_sound: sounds/weapons/XWING_BLASTER.wav
 shot_power: 60.0
+laser_shot_energy_cost: 0.02  # laser gauge fraction per bolt
 
 loadout:
   proton_torpedo: 4

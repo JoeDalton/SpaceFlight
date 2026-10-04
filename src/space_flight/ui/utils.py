@@ -7,10 +7,26 @@ from __future__ import annotations
 from typing import Any, Callable, Sequence
 
 import numpy as np
-from panda3d.core import NodePath, TextNode, TransparencyAttrib
+from panda3d.core import (
+    CardMaker,
+    Geom,
+    GeomNode,
+    GeomTristrips,
+    GeomVertexData,
+    GeomVertexFormat,
+    GeomVertexWriter,
+    NodePath,
+    TextNode,
+    TransparencyAttrib,
+)
 
 # Height of a line's glyph centre above its baseline, in text scale units
 TEXT_CENTER_OFFSET = 0.35
+
+# Gauges (see ArcGauge, ColumnGauge): opacity of the empty part's track, and
+# brightness of the track relative to the fill
+GAUGE_TRACK_ALPHA = 0.45
+GAUGE_TRACK_BRIGHTNESS = 0.5
 
 
 def make_text_line(
@@ -212,3 +228,227 @@ class RollingDrum:
         self.slots = {}
         self._shown_items = []
         self.clock = None
+
+
+def gauge_color(
+    color: tuple[float, float, float], brightness: float, alpha: float = 1.0
+) -> tuple[float, float, float, float]:
+    """
+    :param color: A gauge's RGB colour
+    :param brightness: Multiplier applied to the RGB components
+    :param alpha: The opacity
+    :return: The RGBA colour, its components clipped to 1
+    """
+    return (*(min(component * brightness, 1.0) for component in color), alpha)
+
+
+def make_arc_geom(
+    inner_radius: float, outer_radius: float, n_steps: int, n_segments: int
+) -> Geom:
+    """
+    A flat half-ring in the screen's XZ plane, centred on the origin, starting
+    from its left end (-X) and sweeping clockwise over the top.
+
+    :param inner_radius: The ring's inner radius
+    :param outer_radius: The ring's outer radius
+    :param n_steps: How many of the half-ring's segments to build (at least 1)
+    :param n_segments: The number of segments in the full half-ring
+    :return: The geometry, one triangle strip
+    """
+    vertex_data = GeomVertexData("arc", GeomVertexFormat.getV3(), Geom.UHStatic)
+    vertex_data.setNumRows(2 * (n_steps + 1))
+    vertex = GeomVertexWriter(vertex_data, "vertex")
+    strip = GeomTristrips(Geom.UHStatic)
+    for step in range(n_steps + 1):
+        angle_rad = np.pi * (1.0 - step / n_segments)
+        cos, sin = np.cos(angle_rad), np.sin(angle_rad)
+        vertex.addData3(outer_radius * cos, 0.0, outer_radius * sin)
+        vertex.addData3(inner_radius * cos, 0.0, inner_radius * sin)
+        strip.addVertices(2 * step, 2 * step + 1)
+    strip.closePrimitive()
+    geom = Geom(vertex_data)
+    geom.addPrimitive(strip)
+    return geom
+
+
+class ArcGauge:
+    """
+    A half-ring gauge, read by the angular portion filled, sweeping from its
+    left end over the top. A line of text sits at its centre.
+
+    The fill is quantised to the ring's segments, and only rebuilt when that
+    quantised level changes.
+    """
+
+    def __init__(
+        self,
+        parent_node: NodePath,
+        name: str,
+        color: tuple[float, float, float],
+        radius: float,
+        thickness: float,
+        n_segments: int,
+        text_scale: float,
+    ):
+        """
+        :param parent_node: The node to attach the gauge to; the gauge's centre
+            (the middle of the ring's base) is at its origin
+        :param name: The gauge's node name
+        :param color: The fill's RGB colour (the empty track is a dim version)
+        :param radius: The ring's outer radius
+        :param thickness: The ring's thickness
+        :param n_segments: The number of segments in the half-ring (the fill's
+            resolution)
+        :param text_scale: The scale of the text at the centre
+        """
+        self.color = color
+        self.inner_radius = radius - thickness
+        self.outer_radius = radius
+        self.n_segments = n_segments
+        self.root = parent_node.attachNewNode(name)
+        self.root.setTransparency(TransparencyAttrib.MAlpha)
+        self.root.setTwoSided(True)
+
+        track = GeomNode(f"{name}_track")
+        track.addGeom(
+            make_arc_geom(self.inner_radius, self.outer_radius, n_segments, n_segments)
+        )
+        self.track = self.root.attachNewNode(track)
+        self.fill = self.root.attachNewNode(GeomNode(f"{name}_fill"))
+        self.fill_steps = 0
+
+        self.text = make_text_line(self.root, f"{name}_text", align=TextNode.ACenter)
+        self.text.setScale(text_scale)
+        self.text.setZ(TEXT_CENTER_OFFSET * text_scale)
+
+        self.brightness = None
+        self.set_brightness(1.0)
+
+    def set_level(self, level: float):
+        """
+        :param level: The gauge level, in [0, 1] (clipped). Any non-empty level
+            shows at least one segment.
+        """
+        level = min(max(level, 0.0), 1.0)
+        steps = int(round(level * self.n_segments))
+        if level > 0.0:
+            steps = max(steps, 1)
+        if steps == self.fill_steps:
+            return
+        self.fill_steps = steps
+        fill = self.fill.node()
+        fill.removeAllGeoms()
+        if steps > 0:
+            fill.addGeom(
+                make_arc_geom(
+                    self.inner_radius, self.outer_radius, steps, self.n_segments
+                )
+            )
+
+    def set_text(self, text: str):
+        """
+        :param text: The text at the gauge's centre
+        """
+        self.text.node().setText(text)
+
+    def set_brightness(self, brightness: float):
+        """
+        :param brightness: Multiplier applied to the gauge's colour
+        """
+        if brightness == self.brightness:
+            return
+        self.brightness = brightness
+        self.fill.setColor(*gauge_color(self.color, brightness))
+        self.track.setColor(
+            *gauge_color(
+                self.color, brightness * GAUGE_TRACK_BRIGHTNESS, GAUGE_TRACK_ALPHA
+            )
+        )
+
+    def clean(self):
+        """
+        Cleans the ArcGauge object
+        """
+        self.root.removeNode()
+        self.root = None
+        self.track = None
+        self.fill = None
+        self.text = None
+
+
+class ColumnGauge:
+    """
+    A vertical bar gauge, filling up from its base.
+    """
+
+    def __init__(
+        self,
+        parent_node: NodePath,
+        name: str,
+        color: tuple[float, float, float],
+        width: float,
+        height: float,
+    ):
+        """
+        :param parent_node: The node to attach the gauge to; the middle of the
+            column's base is at its origin
+        :param name: The gauge's node name
+        :param color: The fill's RGB colour (the empty track is a dim version)
+        :param width: The column's width
+        :param height: The column's height
+        """
+        self.color = color
+        self.height = height
+        self.root = parent_node.attachNewNode(name)
+        self.root.setTransparency(TransparencyAttrib.MAlpha)
+
+        card_maker = CardMaker(f"{name}_track")
+        card_maker.setFrame(-0.5 * width, 0.5 * width, 0.0, height)
+        self.track = self.root.attachNewNode(card_maker.generate())
+        # Unit-height fill, scaled to the level
+        card_maker.setName(f"{name}_fill")
+        card_maker.setFrame(-0.5 * width, 0.5 * width, 0.0, 1.0)
+        self.fill = self.root.attachNewNode(card_maker.generate())
+        self.level = None
+        self.set_level(1.0)
+
+        self.brightness = None
+        self.set_brightness(1.0)
+
+    def set_level(self, level: float):
+        """
+        :param level: The gauge level, in [0, 1] (clipped)
+        """
+        level = min(max(level, 0.0), 1.0)
+        if level == self.level:
+            return
+        self.level = level
+        if level > 0.0:
+            self.fill.show()
+            self.fill.setSz(level * self.height)
+        else:
+            # A zero scale would make the transform singular
+            self.fill.hide()
+
+    def set_brightness(self, brightness: float):
+        """
+        :param brightness: Multiplier applied to the gauge's colour
+        """
+        if brightness == self.brightness:
+            return
+        self.brightness = brightness
+        self.fill.setColor(*gauge_color(self.color, brightness))
+        self.track.setColor(
+            *gauge_color(
+                self.color, brightness * GAUGE_TRACK_BRIGHTNESS, GAUGE_TRACK_ALPHA
+            )
+        )
+
+    def clean(self):
+        """
+        Cleans the ColumnGauge object
+        """
+        self.root.removeNode()
+        self.root = None
+        self.track = None
+        self.fill = None
