@@ -21,7 +21,12 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH
 from space_flight.game.collisions import attach_collision_segment
-from space_flight.utils import build_axis_billboard_quat, magnitude
+from space_flight.utils import (
+    build_axis_billboard_quat,
+    build_orthogonal_basis,
+    magnitude,
+    sample_direction_in_cone,
+)
 from space_flight.weapons import Munition, Weapon
 
 if TYPE_CHECKING:
@@ -76,8 +81,9 @@ def _laser_shader() -> Shader:
 class LaserCannon(Weapon):
     """
     A rate-limited multi-cannon gun. Cycles through its cannon nodes, aims each
-    shot via the parent's auto-aim (falling back to nose-forward), spawns a
-    :class:`LaserShot` and plays the fire sound.
+    shot via the parent's auto-aim (falling back to nose-forward), deviates it
+    randomly within the deviation cone, spawns a :class:`LaserShot` and plays
+    the fire sound.
 
     A gun powered by an energy system (a fighter's) spends laser energy on each
     bolt, cannot fire without enough, and hits harder on a well-charged gauge.
@@ -89,6 +95,7 @@ class LaserCannon(Weapon):
         parent: Fighter | Turret,
         parent_node: NodePath | None = None,
         energy: EnergySystem | None = None,
+        deviation_cone_deg: float = 0.0,
     ):
         """
         :param game: The game/flight state
@@ -97,10 +104,13 @@ class LaserCannon(Weapon):
             parent's node
         :param energy: The energy system powering the gun, None for unlimited
             power
+        :param deviation_cone_deg: Half-angle of the cone within which each
+            shot deviates randomly from its aimed direction (0 = no deviation)
         """
         fire_delay = 1.0 / parent.conf["laser_fire_rate"]
         super().__init__(game, parent, parent_node, fire_delay=fire_delay)
         self.energy = energy
+        self.deviation_cone_rad = np.deg2rad(deviation_cone_deg)
 
         # Cannon configuration
         cannon_positions = self.parent.conf["cannon_positions"]
@@ -161,16 +171,20 @@ class LaserCannon(Weapon):
         start_position = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
             self.game.root_node
         )
-        # Get shot direction from auto-aim
+        # Get shot direction from auto-aim, if any
         try:
-            shot_speed = self.parent.auto_aim.compute_shot_speed(
+            shot_dir = self.parent.auto_aim.compute_shot_direction(
                 start_position=start_position
             )
         except AttributeError:
-            # Non relativistic projectiles: they are emitted from a possibly moving gun
-            shot_speed = (
-                LASER_SPEED_MPS * np.array(self.parent.forward) + self.parent.speed
+            shot_dir = np.array(self.parent.forward, dtype=float)
+        if self.deviation_cone_rad > 0.0:
+            shot_dir = sample_direction_in_cone(
+                *build_orthogonal_basis(shot_dir),
+                half_angle_rad=self.deviation_cone_rad,
             )
+        # Non relativistic projectiles: they are emitted from a possibly moving gun
+        shot_speed = LASER_SPEED_MPS * shot_dir + self.parent.speed
 
         # Spawn laser shot
         self._spawn_munition(

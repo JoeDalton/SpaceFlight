@@ -41,6 +41,7 @@ class AutoAim:
         acquisition_cone_angle_deg: float = 30.0,
         max_assist_angle_deg: float = 5.0,
         max_assist_distance_m: float = 1000.0,
+        enabled: bool = True,
     ):
         self.game = game
         self.parent = parent
@@ -55,6 +56,7 @@ class AutoAim:
             acquisition_cone_angle_deg=acquisition_cone_angle_deg,
             max_assist_angle_deg=max_assist_angle_deg,
             max_assist_distance_m=max_assist_distance_m,
+            enabled=enabled,
         )
 
     def configure(
@@ -63,6 +65,7 @@ class AutoAim:
         acquisition_cone_angle_deg: float = 30.0,
         max_assist_angle_deg: float = 5.0,
         max_assist_distance_m: float = 1000.0,
+        enabled: bool = True,
     ):
         """
         Sets the auto-aim tuning parameters, recomputing the derived thresholds.
@@ -80,6 +83,8 @@ class AutoAim:
             the barrel toward the predicted intercept (higher = tighter aim)
         :param max_assist_distance_m: Range beyond which the assist is meant not to
             apply (stored but currently unused: no range cut-off is applied)
+        :param enabled: Whether shots lead a locked target at all. When False,
+            the target is never locked and shots go straight ahead
         """
         self.target_lock.configure(
             lock_delay_s=target_lock_delay_s,
@@ -88,6 +93,7 @@ class AutoAim:
         self.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
         self.inv_max_assist_tan_angle = 1 / np.tan(np.deg2rad(max_assist_angle_deg))
         self.max_assist_distance_m = max_assist_distance_m
+        self.enabled = enabled
 
     def _target_kinematics(self) -> tuple[np.ndarray, np.ndarray] | None:
         """
@@ -171,14 +177,12 @@ class AutoAim:
             return target_current_position + self.lead_offset_m
         return target_current_position + raw_offset_m
 
-    def compute_shot_speed(self, start_position: np.ndarray) -> np.ndarray:
+    def compute_shot_direction(self, start_position: np.ndarray) -> np.ndarray:
         """
-        Computes the speed vector at which the next laser shot will be emitted
-
-        TODO : Add random spread ? (Very small, subject to parent health ?)
+        Computes the direction in which the next laser shot will be emitted
 
         :param start_position: The starting point of the laser
-        :return: The shot's world velocity (includes the parent's velocity)
+        :return: The shot's world direction (unit vector)
         """
         if not self.is_target_acquired:
             # No acquisition: fire straight ahead
@@ -231,14 +235,13 @@ class AutoAim:
             else:
                 shot_dir = desired_shot_dir
 
-        # Non relativistic projectiles: they are emitted from a possibly moving gun
-        shot_speed = LASER_SPEED_MPS * np.array(shot_dir) + self.parent.speed
-        return shot_speed
+        # A copy, so callers may modify it without touching the parent's forward
+        return np.array(shot_dir, dtype=float)
 
     @property
     def is_target_acquired(self) -> bool:
         """Whether the target lock is confirmed (shots lead the target)."""
-        return self.target_lock.is_locked
+        return self.enabled and self.target_lock.is_locked
 
     @property
     def acquisition_elapsed_time_s(self) -> float:
@@ -247,9 +250,11 @@ class AutoAim:
 
     def compute_acquisition(self):
         """
-        Updates the target lock and the smoothed lead
+        Updates the target lock (unless auto-aim is disabled) and the smoothed
+        lead, which the lead indicator shows either way
         """
-        self.target_lock.update()
+        if self.enabled:
+            self.target_lock.update()
         self.update_lead()
 
     def clean(self):

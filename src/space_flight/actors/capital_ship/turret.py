@@ -11,6 +11,10 @@ from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.capital_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
+from space_flight.global_architecture.gameplay_settings import (
+    auto_aim_params,
+    gameplay_config,
+)
 from space_flight.weapons.laser_cannon import LaserCannon
 
 if TYPE_CHECKING:
@@ -76,7 +80,10 @@ class Turret(TrackingMount):
         )
 
         self.laser_cannon = LaserCannon(
-            game=self.game, parent=self, parent_node=self.turret_model.cannon_node
+            game=self.game,
+            parent=self,
+            parent_node=self.turret_model.cannon_node,
+            deviation_cone_deg=gameplay_config(self.game)["bots"]["deviation_deg"],
         )
         self.base_fire_delay = self.laser_cannon.fire_delay
         # Auto-aim is held ready but only exposed as self.auto_aim while a
@@ -119,6 +126,20 @@ class Turret(TrackingMount):
                 return sub_system
         return None
 
+    def _auto_aim_params(self, targeting_system: TargetingSystem) -> dict:
+        """
+        :param targeting_system: The targeting system boosting this turret
+        :return: The auto-aim tuning: the bots' gameplay settings, overridden by
+            the targeting system's own tuning, except for whether auto-aim is
+            enabled at all, which only the gameplay settings set
+        """
+        bots_params = auto_aim_params(self.game, "bots")
+        return {
+            **bots_params,
+            **targeting_system.auto_aim_params,
+            "enabled": bots_params["enabled"],
+        }
+
     def _apply_targeting_support(self):
         """
         Applies (or removes) the boosts granted by the ship's targeting system:
@@ -136,7 +157,7 @@ class Turret(TrackingMount):
             # when it just came online or changed), then lead the target and
             # fire faster.
             if targeting_system is not self._targeting_source:
-                self._auto_aim.configure(**targeting_system.auto_aim_params)
+                self._auto_aim.configure(**self._auto_aim_params(targeting_system))
                 self._targeting_source = targeting_system
             self.auto_aim = self._auto_aim
             self.auto_aim.compute_acquisition()

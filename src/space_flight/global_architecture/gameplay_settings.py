@@ -45,8 +45,8 @@ _AUTO_AIM_LIMITS = {
     "lock_angle_deg": (1.0, 90.0, 30.0),
     # Strictly positive: the assist clamp divides by its tangent
     "assist_angle_deg": (0.5, 20.0, 5.0),
-    "deviation_deg": (0.0, 5.0, 0.0),
 }
+_DEVIATION_LIMITS = (0.0, 5.0, 0.0)
 _DAMAGE_MULTIPLIER_LIMITS = (0.1, 5.0, 1.0)
 _COLLISION_DAMAGE_MULTIPLIER_LIMITS = (0.0, 5.0, 1.0)
 
@@ -174,6 +174,9 @@ class GameplaySettings:
             for key, limits in _AUTO_AIM_LIMITS.items():
                 auto_aim[key] = _clamp(auto_aim.get(key, limits[2]), limits)
 
+            section["deviation_deg"] = _clamp(
+                section.get("deviation_deg", 0.0), _DEVIATION_LIMITS
+            )
             section["damage_multiplier"] = _clamp(
                 section.get("damage_multiplier", 1.0), _DAMAGE_MULTIPLIER_LIMITS
             )
@@ -220,3 +223,19 @@ def gameplay_config(game) -> dict:
     if isinstance(config, dict):
         return config
     return _default_config()
+
+
+def auto_aim_params(game, side: str) -> dict:
+    """
+    :param game: The current game object (see :func:`gameplay_config`)
+    :param side: "player" or "bots"
+    :return: The side's auto-aim settings, as keyword arguments of
+        :meth:`~space_flight.ai.auto_aim.AutoAim.configure`
+    """
+    auto_aim = gameplay_config(game)[side]["auto_aim"]
+    return {
+        "enabled": auto_aim["enabled"],
+        "target_lock_delay_s": auto_aim["lock_delay_s"],
+        "acquisition_cone_angle_deg": auto_aim["lock_angle_deg"],
+        "max_assist_angle_deg": auto_aim["assist_angle_deg"],
+    }

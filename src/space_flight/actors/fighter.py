@@ -12,6 +12,10 @@ from space_flight.actors.energy import SHIELD_REGEN_DELAY_S, EnergySystem
 from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.global_architecture.gameplay_settings import (
+    auto_aim_params,
+    gameplay_config,
+)
 from space_flight.utils.state_machine import Cooldown
 from space_flight.weapons.laser_cannon import LaserCannon
 from space_flight.weapons.ordnance_launcher import SECONDARY_TYPES, OrdnanceLauncher
@@ -69,11 +73,18 @@ class Fighter(Ship):
             laser_shot_energy_cost=self.conf["laser_shot_energy_cost"],
         )
 
-        # Initialize cannons
-        # TODO auto-aim parameters from difficulty config file
+        # Initialize cannons, with the player's or the bots' gameplay settings
+        side = "player" if is_cockpit else "bots"
         self.target_id = None
-        self.auto_aim = AutoAim(game=self.game, parent=self)
-        self.laser_cannon = LaserCannon(game=self.game, parent=self, energy=self.energy)
+        self.auto_aim = AutoAim(
+            game=self.game, parent=self, **auto_aim_params(self.game, side)
+        )
+        self.laser_cannon = LaserCannon(
+            game=self.game,
+            parent=self,
+            energy=self.energy,
+            deviation_cone_deg=gameplay_config(self.game)[side]["deviation_deg"],
+        )
 
         # Ordnance: one launcher per loadout entry, in the configuration's order,
         # each with its own limited stock

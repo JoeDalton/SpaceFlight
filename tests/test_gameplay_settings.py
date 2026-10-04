@@ -40,8 +40,8 @@ _VALID = {
             "lock_delay_s": 0.5,
             "lock_angle_deg": 20.0,
             "assist_angle_deg": 8.0,
-            "deviation_deg": 1.0,
         },
+        "deviation_deg": 1.0,
         "damage_multiplier": 2.0,
         "collision_damage_multiplier": 0.5,
         "lead_indicator": False,
@@ -52,8 +52,8 @@ _VALID = {
             "lock_delay_s": 1.5,
             "lock_angle_deg": 45.0,
             "assist_angle_deg": 3.0,
-            "deviation_deg": 0.5,
         },
+        "deviation_deg": 0.5,
         "damage_multiplier": 0.5,
     },
 }
@@ -105,8 +105,8 @@ class TestSanitise:
                 "lock_delay_s": 1.0,
                 "lock_angle_deg": 30.0,
                 "assist_angle_deg": 5.0,
-                "deviation_deg": 0.0,
             }
+            assert out[side]["deviation_deg"] == 0.0
             assert out[side]["damage_multiplier"] == 1.0
         assert out["player"]["collision_damage_multiplier"] == 1.0
         assert out["player"]["lead_indicator"] is True
@@ -124,15 +124,18 @@ class TestSanitise:
             # Never 0: the assist clamp divides by its tangent
             ("assist_angle_deg", 0.0, 0.5),
             ("assist_angle_deg", 99.0, 20.0),
-            ("deviation_deg", -1.0, 0.0),
-            ("deviation_deg", 99.0, 5.0),
-            ("deviation_deg", "2", 2.0),
-            ("deviation_deg", "wide", 0.0),
         ],
     )
     def test_auto_aim_fields_clamped(self, key, raw, expected):
         out = GameplaySettings.sanitise({"bots": {"auto_aim": {key: raw}}})
         assert out["bots"]["auto_aim"][key] == expected
+
+    @pytest.mark.parametrize(
+        "raw, expected", [(-1.0, 0.0), (99.0, 5.0), ("2", 2.0), ("wide", 0.0)]
+    )
+    def test_deviation_clamped(self, raw, expected):
+        out = GameplaySettings.sanitise({"player": {"deviation_deg": raw}})
+        assert out["player"]["deviation_deg"] == expected
 
     @pytest.mark.parametrize("raw, expected", [(1, True), (0, False), ("", False)])
     def test_auto_aim_enabled_coerced_to_bool(self, raw, expected):
@@ -342,7 +345,7 @@ class TestShippedPresets:
             assert (
                 auto_aim["assist_angle_deg"] == params["max_assist_angle_deg"].default
             )
-            assert auto_aim["deviation_deg"] == 0.0
+            assert normal[side]["deviation_deg"] == 0.0
             assert normal[side]["damage_multiplier"] == 1.0
         assert normal["player"]["collision_damage_multiplier"] == 1.0
         assert normal["player"]["lead_indicator"] is True

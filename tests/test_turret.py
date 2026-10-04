@@ -9,6 +9,7 @@ from space_flight.actors.capital_ship.sub_system import SubSystem
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
 from space_flight.actors.capital_ship.turret import Turret
 from space_flight.ai import Personality
+from space_flight.global_architecture.gameplay_settings import auto_aim_params
 
 
 def make_turret_without_init(
@@ -210,6 +211,7 @@ def make_boostable_turret(base_fire_delay: float = 1.0):
     support logic touches.
     """
     turret = make_turret_without_init()
+    turret.game = MagicMock()  # No gameplay settings: the defaults apply
     turret._auto_aim = MagicMock(name="auto_aim")
     turret.auto_aim = None
     turret._targeting_source = None
@@ -260,9 +262,44 @@ def test_apply_targeting_support_grants_autoaim_and_faster_fire():
     turret._apply_targeting_support()
 
     assert turret.auto_aim is turret._auto_aim
-    turret._auto_aim.configure.assert_called_once_with(**params)
+    # The targeting system's tuning overrides the bots' gameplay settings
+    expected = {**auto_aim_params(turret.game, "bots"), **params}
+    turret._auto_aim.configure.assert_called_once_with(**expected)
     turret._auto_aim.compute_acquisition.assert_called_once()
     assert turret.laser_cannon.fire_delay == pytest.approx(0.5)
+
+
+def test_targeting_support_auto_aim_tuning_layers_gameplay_settings():
+    """
+    The bots' gameplay settings tune what the targeting system leaves out, and
+    alone decide whether auto-aim is enabled.
+    """
+    turret = make_boostable_turret()
+    turret.game = MagicMock()
+    turret.game.app.gameplay_settings.config = {
+        "bots": {
+            "auto_aim": {
+                "enabled": False,
+                "lock_delay_s": 1.5,
+                "lock_angle_deg": 20.0,
+                "assist_angle_deg": 3.0,
+            }
+        }
+    }
+    targeting_system = make_targeting_system(
+        auto_aim_params={
+            "max_assist_angle_deg": 8.0,
+            "target_lock_delay_s": 0.5,
+            "enabled": True,
+        }
+    )
+
+    assert turret._auto_aim_params(targeting_system) == {
+        "enabled": False,
+        "target_lock_delay_s": 0.5,
+        "acquisition_cone_angle_deg": 20.0,
+        "max_assist_angle_deg": 8.0,
+    }
 
 
 def test_apply_targeting_support_reconfigures_only_when_source_changes():
