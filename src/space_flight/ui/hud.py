@@ -554,224 +554,14 @@ class EnergyHUD:
         self.game = None
 
 
-class TargetHUD:
-    def __init__(self, game: FlightState) -> None:
-        self.game = game
-        self.id = uuid.uuid4()
-
-        # Prepare target indicator atachment and aspect ratio correction
-        self.root = NodePath("targetHudRoot")
-        self.root.reparentTo(render2d)
-
-        self.aspect = NodePath("aspectFix")
-        self.aspect.reparentTo(self.root)
-
-        # Define target indicator
-        self.square = make_hud_card(
-            "targetBox",
-            TARGET_BOX_HALF_WIDTH,
-            TARGET_BOX_HALF_HEIGHT,
-            self.game.app.loader.loadTexture(
-                DATAFILES_PATH / "models/UI/target_indicator_white.png"
-            ),
-        )
-        self.square.reparentTo(self.aspect)
-
-        # Define scan progress bar: fills the target box from its left edge,
-        # scaled horizontally by the target's scan progress (see
-        # space_flight.actors.scan)
-        scan_cm = CardMaker("scanBar")
-        scan_cm.setFrame(
-            0,
-            2 * TARGET_BOX_HALF_WIDTH,
-            -TARGET_BOX_HALF_HEIGHT,
-            TARGET_BOX_HALF_HEIGHT,
-        )
-        self.scan_bar = NodePath(scan_cm.generate())
-        self.scan_bar.setTransparency(TransparencyAttrib.MAlpha)
-        self.scan_bar.reparentTo(self.aspect)
-        self.scan_bar.setPos(-TARGET_BOX_HALF_WIDTH, 0, 0)
-
-        # Define distance label
-        self.distance_label = DirectLabel(
-            text="",
-            scale=0.04,
-            pos=(0, 0, -0.06),
-            parent=self.aspect,
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1, 1, 1, 1),
-        )
-        # Define name label
-        self.name_label = DirectLabel(
-            text="",
-            scale=0.02,
-            pos=(0, 0, 0.04),
-            parent=self.aspect,
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1, 1, 1, 1),
-        )
-        self.game.method_lists[self.id] = [self.target_hud_update_task]
-
-        # Make sure the targeting HUD is rendered above other UI things (the
-        # box already is, see make_hud_card)
-        self.scan_bar.setDepthTest(False)
-        self.scan_bar.setDepthWrite(False)
-        self.scan_bar.setBin("fixed", 9)
-
-        self.distance_label.setDepthTest(False)
-        self.distance_label.setDepthWrite(False)
-        self.distance_label.setBin("fixed", 10)
-
-        self.name_label.setDepthTest(False)
-        self.name_label.setDepthWrite(False)
-        self.name_label.setBin("fixed", 10)
-
-        # Hide at startup
-        self.distance_label.hide()
-        self.name_label.hide()
-        self.square.hide()
-        self.scan_bar.hide()
-
-    def target_hud_update_task(self) -> None:
-        target = self.game.player.pawn.target
-        if target is None:
-            # Either there is no target selected or it has been purged recently
-            self.distance_label.hide()
-            self.name_label.hide()
-            self.square.hide()
-            self.scan_bar.hide()
-            self.game.player.pawn.target_id = None
-            self.game.player.pawn.target_idx = None
-        elif target.is_dead:
-            # The target died recently but has not yet been purged
-            self.distance_label.hide()
-            self.name_label.hide()
-            self.square.hide()
-            self.scan_bar.hide()
-            self.game.player.pawn.target = None
-            self.game.player.pawn.target_id = None
-            self.game.player.pawn.target_idx = None
-        else:
-            # Most targets show their parent's name (a ship shows its bot's name).
-            # Subsystems have no named parent, so fall back to their own name.
-            display_name = getattr(target.parent, "name", None) or getattr(
-                target, "name", ""
-            )
-            scan = getattr(target, "scan", None)
-            status = scan.status_text if scan is not None else ""
-            if status and scan is not None:
-                self.name_label["text"] = f"{display_name} - {status}"
-                self.scan_bar.setScale(max(scan.progress, 1e-3), 1, 1)
-                self.scan_bar.setColor(*SCAN_BAR_COLORS[scan.result])
-                self.scan_bar.show()
-            else:
-                self.name_label["text"] = display_name
-                self.scan_bar.hide()
-            self.distance_label.show()
-            self.name_label.show()
-            self.square.show()
-            self.update_lock_tint()
-
-            cam = self.game.app.cam
-            lens = self.game.app.camLens
-
-            aspect = self.game.app.getAspectRatio()
-            self.aspect.setScale(1, 1, aspect)
-
-            # World position of target
-            target_pos = target.position
-            world_pos = Point3(*target_pos)
-
-            # Convert to camera space and project. Default case: target is
-            # ahead, just take the projection
-            cam_space_pos = cam.getRelativePoint(self.game.root_node, world_pos)
-            indic_x, indic_z, behind = project_to_screen(lens, cam_space_pos)
-
-            if behind:
-                # Target is behind the camera. The perspective divide in
-                # lens.project() is by a negative depth (cam_space_pos.y < 0),
-                # which mirrors the projection through the screen centre: both
-                # indic_x and indic_z come out with the wrong sign. Negate them
-                # to recover the true on-screen direction (sign(cam_x),
-                # sign(cam_z)), so the indicator sits on the correct edge and
-                # only ever switches sides once, when the target passes directly
-                # behind.
-                indic_x = -indic_x
-                indic_z = -indic_z
-
-            inside = (
-                not behind
-                and abs(indic_x) <= EDGE_HORIZONTAL
-                and abs(indic_z) <= EDGE_VERTICAL
-            )
-            if not inside:
-                # Target is off-screen (out of the FoV or behind): pin the
-                # indicator to the screen border along the direction to the
-                # target. We intersect the (indic_x, indic_z) ray with the edge
-                # rectangle by scaling the whole vector by a single factor, so
-                # the position varies smoothly as the direction rotates.
-                #
-                # Clamping each axis independently instead would drive both
-                # components to their maxima whenever the projection is large on
-                # both axes (which happens as the depth approaches zero, near
-                # the camera's XZ plane), snapping the card to a corner that
-                # flips around as the target wobbles -> jitter. Ray-to-rectangle
-                # scaling avoids that and is continuous with the in-view
-                # projection (the scale is exactly 1 at the border).
-                ax = abs(indic_x)
-                az = abs(indic_z)
-                scale_x = EDGE_HORIZONTAL / ax if ax > EPSILON_TOLERANCE else np.inf
-                scale_z = EDGE_VERTICAL / az if az > EPSILON_TOLERANCE else np.inf
-                scale = min(scale_x, scale_z)
-                if np.isfinite(scale):
-                    indic_x *= scale
-                    indic_z *= scale
-                else:
-                    # Direction undefined (target dead centre while behind):
-                    # park the indicator on one side rather than at the origin.
-                    indic_x = EDGE_HORIZONTAL
-                    indic_z = 0.0
-
-            self.root.setPos(indic_x, 0, indic_z)
-
-            # Find distance and write it below the box
-            distance = (
-                world_pos - self.game.app.camera.getPos(self.game.root_node)
-            ).length()
-            self.distance_label["text"] = f"{distance:.0f} m"
-
-    def update_lock_tint(self) -> None:
-        """
-        Turn the target box red while the armed missile is locked on the target
-        (a missile launched now would be guided to it), white otherwise.
-        """
-        locked = self.game.player.pawn.is_missile_locked
-        self.square.setColorScale(
-            *(TARGET_BOX_MISSILE_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
-        )
-
-    def clean(self) -> None:
-        """
-        Clean the TargetHud object
-        """
-        if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
-        self.name_label.destroy()
-        self.distance_label.destroy()
-        self.square.removeNode()
-        self.scan_bar.removeNode()
-        self.aspect.removeNode()
-        self.root.removeNode()
-        self.game = None  # type: ignore[assignment]  # released on clean
-
-
 class AimHUD:
     """
     The player's aiming cues:
 
+    - a target box on the target, with its name, distance and scan progress.
+      Off screen, it is pinned to the screen border along the target's
+      bearing. White, red while the armed missile is locked (a missile
+      launched now would be guided to the target).
     - a crosshair where the lasers go: the ship's nose direction, projected as
       a point at infinity (the cannons fire parallel to the nose), so it stays
       true when the pilot's head is jolted or turned. White, red while auto-aim
@@ -785,12 +575,74 @@ class AimHUD:
         self.game = game
         self.id = uuid.uuid4()
 
-        # The cards are placed in screen coordinates, and scaled for the aspect
+        # Every cue is placed in screen coordinates, and scaled for the aspect
         # ratio (see aim_hud_update_task)
         self.root = NodePath("aimHudRoot")
         self.root.reparentTo(render2d)
-
         loader = self.game.app.loader
+
+        # Target box: the box, its scan bar and labels move together on an
+        # anchor placed on the target, under an aspect ratio correction
+        self.target_anchor = self.root.attachNewNode("targetAnchor")
+        self.target_aspect = self.target_anchor.attachNewNode("targetAspectFix")
+
+        self.square = make_hud_card(
+            "targetBox",
+            TARGET_BOX_HALF_WIDTH,
+            TARGET_BOX_HALF_HEIGHT,
+            loader.loadTexture(DATAFILES_PATH / "models/UI/target_indicator_white.png"),
+        )
+        self.square.reparentTo(self.target_aspect)
+
+        # Define scan progress bar: fills the target box from its left edge,
+        # scaled horizontally by the target's scan progress (see
+        # space_flight.actors.scan)
+        scan_cm = CardMaker("scanBar")
+        scan_cm.setFrame(
+            0,
+            2 * TARGET_BOX_HALF_WIDTH,
+            -TARGET_BOX_HALF_HEIGHT,
+            TARGET_BOX_HALF_HEIGHT,
+        )
+        self.scan_bar = NodePath(scan_cm.generate())
+        self.scan_bar.setTransparency(TransparencyAttrib.MAlpha)
+        self.scan_bar.reparentTo(self.target_aspect)
+        self.scan_bar.setPos(-TARGET_BOX_HALF_WIDTH, 0, 0)
+
+        # Define distance label
+        self.distance_label = DirectLabel(
+            text="",
+            scale=0.04,
+            pos=(0, 0, -0.06),
+            parent=self.target_aspect,
+            frameColor=(0, 0, 0, 0),
+            text_fg=(1, 1, 1, 1),
+        )
+        # Define name label
+        self.name_label = DirectLabel(
+            text="",
+            scale=0.02,
+            pos=(0, 0, 0.04),
+            parent=self.target_aspect,
+            frameColor=(0, 0, 0, 0),
+            text_fg=(1, 1, 1, 1),
+        )
+
+        # Make sure the target box is rendered above other UI things (the box
+        # itself already is, see make_hud_card), the scan bar under the box
+        self.scan_bar.setDepthTest(False)
+        self.scan_bar.setDepthWrite(False)
+        self.scan_bar.setBin("fixed", 9)
+
+        self.distance_label.setDepthTest(False)
+        self.distance_label.setDepthWrite(False)
+        self.distance_label.setBin("fixed", 10)
+
+        self.name_label.setDepthTest(False)
+        self.name_label.setDepthWrite(False)
+        self.name_label.setBin("fixed", 10)
+
+        # Crosshair and lead indicator
         self.crosshair = make_hud_card(
             "crosshair",
             CROSSHAIR_HALF_SIZE,
@@ -807,6 +659,8 @@ class AimHUD:
         self.lead_indicator.reparentTo(self.root)
 
         # Hide at startup
+        self.target_anchor.hide()
+        self.scan_bar.hide()
         self.crosshair.hide()
         self.lead_indicator.hide()
 
@@ -814,13 +668,126 @@ class AimHUD:
 
     def aim_hud_update_task(self) -> None:
         """
-        Place the crosshair and the lead indicator, and tint the crosshair.
+        Place and tint the target box, the crosshair and the lead indicator.
+        The target box goes first: it drops a target that has just died.
         """
         aspect = self.game.app.getAspectRatio()
+        self.target_aspect.setScale(1, 1, aspect)
         self.crosshair.setScale(1, 1, aspect)
         self.lead_indicator.setScale(1, 1, aspect)
+        self.update_target_box()
         self.update_crosshair()
         self.update_lead_indicator()
+
+    def update_target_box(self) -> None:
+        """
+        Place the target box on the target (pinned to the screen border when
+        off screen), with its labels, scan progress and missile lock tint;
+        hidden without a live target.
+        """
+        pawn = self.game.player.pawn
+        target = pawn.target
+        if target is None or target.is_dead:
+            # Either there is no target selected, it has been purged recently,
+            # or it died recently but has not yet been purged
+            self.target_anchor.hide()
+            pawn.target = None
+            pawn.target_id = None
+            pawn.target_idx = None
+            return
+
+        # Most targets show their parent's name (a ship shows its bot's name).
+        # Subsystems have no named parent, so fall back to their own name.
+        display_name = getattr(target.parent, "name", None) or getattr(
+            target, "name", ""
+        )
+        scan = getattr(target, "scan", None)
+        status = scan.status_text if scan is not None else ""
+        if status and scan is not None:
+            self.name_label["text"] = f"{display_name} - {status}"
+            self.scan_bar.setScale(max(scan.progress, 1e-3), 1, 1)
+            self.scan_bar.setColor(*SCAN_BAR_COLORS[scan.result])
+            self.scan_bar.show()
+        else:
+            self.name_label["text"] = display_name
+            self.scan_bar.hide()
+        self.target_anchor.show()
+        self.update_lock_tint()
+
+        # World position of target
+        world_pos = Point3(*target.position)
+
+        # Convert to camera space and project. Default case: target is ahead,
+        # just take the projection
+        cam_space_pos = self.game.app.cam.getRelativePoint(
+            self.game.root_node, world_pos
+        )
+        indic_x, indic_z, behind = project_to_screen(
+            self.game.app.camLens, cam_space_pos
+        )
+
+        if behind:
+            # Target is behind the camera. The perspective divide in
+            # lens.project() is by a negative depth (cam_space_pos.y < 0),
+            # which mirrors the projection through the screen centre: both
+            # indic_x and indic_z come out with the wrong sign. Negate them
+            # to recover the true on-screen direction (sign(cam_x),
+            # sign(cam_z)), so the indicator sits on the correct edge and
+            # only ever switches sides once, when the target passes directly
+            # behind.
+            indic_x = -indic_x
+            indic_z = -indic_z
+
+        inside = (
+            not behind
+            and abs(indic_x) <= EDGE_HORIZONTAL
+            and abs(indic_z) <= EDGE_VERTICAL
+        )
+        if not inside:
+            # Target is off-screen (out of the FoV or behind): pin the
+            # indicator to the screen border along the direction to the
+            # target. We intersect the (indic_x, indic_z) ray with the edge
+            # rectangle by scaling the whole vector by a single factor, so
+            # the position varies smoothly as the direction rotates.
+            #
+            # Clamping each axis independently instead would drive both
+            # components to their maxima whenever the projection is large on
+            # both axes (which happens as the depth approaches zero, near
+            # the camera's XZ plane), snapping the card to a corner that
+            # flips around as the target wobbles -> jitter. Ray-to-rectangle
+            # scaling avoids that and is continuous with the in-view
+            # projection (the scale is exactly 1 at the border).
+            ax = abs(indic_x)
+            az = abs(indic_z)
+            scale_x = EDGE_HORIZONTAL / ax if ax > EPSILON_TOLERANCE else np.inf
+            scale_z = EDGE_VERTICAL / az if az > EPSILON_TOLERANCE else np.inf
+            scale = min(scale_x, scale_z)
+            if np.isfinite(scale):
+                indic_x *= scale
+                indic_z *= scale
+            else:
+                # Direction undefined (target dead centre while behind):
+                # park the indicator on one side rather than at the origin.
+                indic_x = EDGE_HORIZONTAL
+                indic_z = 0.0
+
+        self.target_anchor.setPos(indic_x, 0, indic_z)
+
+        # Find distance and write it below the box
+        distance = (
+            world_pos - self.game.app.camera.getPos(self.game.root_node)
+        ).length()
+        self.distance_label["text"] = f"{distance:.0f} m"
+
+    def update_lock_tint(self) -> None:
+        """
+        Turn the target box red while the armed missile is locked on the target
+        (a missile launched now would be guided to it), white otherwise.
+        """
+        locked = self.game.player.pawn.is_missile_locked
+        self.square.setColorScale(
+            *(TARGET_BOX_MISSILE_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
+        )
 
     def update_crosshair(self) -> None:
         """
@@ -884,7 +851,7 @@ class AimHUD:
                 self.game.method_lists.pop(self.id)
             except KeyError:
                 pass
-        self.crosshair.removeNode()
-        self.lead_indicator.removeNode()
+        self.name_label.destroy()
+        self.distance_label.destroy()
         self.root.removeNode()
         self.game = None  # type: ignore[assignment]  # released on clean

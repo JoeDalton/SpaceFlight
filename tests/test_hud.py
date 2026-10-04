@@ -24,7 +24,6 @@ from space_flight.ui.hud import (
     AimHUD,
     EnergyHUD,
     OrdnanceHUD,
-    TargetHUD,
     gauge_brightness,
     is_on_screen,
     project_to_screen,
@@ -78,47 +77,13 @@ def test_is_on_screen(x, z, behind, expected):
 
 
 # ---------------------------
-# target box
-# ---------------------------
-
-
-def make_target_hud(missile_locked: bool, auto_aim_locked: bool) -> TargetHUD:
-    """A TargetHUD bypassing __init__, its player's locks as given."""
-    target_hud = object.__new__(TargetHUD)
-    target_hud.game = MagicMock()
-    target_hud.game.player.pawn.is_missile_locked = missile_locked
-    target_hud.game.player.pawn.auto_aim.is_target_acquired = auto_aim_locked
-    target_hud.square = MagicMock()
-    return target_hud
-
-
-@pytest.mark.parametrize("auto_aim_locked", [True, False])
-@pytest.mark.parametrize(
-    "missile_locked, color",
-    [(True, TARGET_BOX_MISSILE_LOCKED_COLOR), (False, TARGET_BOX_COLOR)],
-)
-def test_target_box_is_red_only_while_missile_locked(
-    missile_locked, color, auto_aim_locked
-):
-    """
-    The target box turns red while the armed missile is locked, white
-    otherwise, whatever the laser auto-aim lock.
-    """
-    target_hud = make_target_hud(missile_locked, auto_aim_locked)
-
-    target_hud.update_lock_tint()
-
-    target_hud.square.setColorScale.assert_called_once_with(*color)
-
-
-# ---------------------------
-# aiming cues (crosshair, lead indicator)
+# AimHUD: target box, crosshair, lead indicator
 # ---------------------------
 
 
 def make_aim_hud() -> AimHUD:
     """
-    An AimHUD bypassing __init__, its cards mocked. The camera sits at the
+    An AimHUD bypassing __init__, its cards and labels mocked. The camera sits at the
     world origin looking down +Y (camera space = world space), through a real
     lens. The player has a live target ahead, its predicted position straight
     ahead.
@@ -134,9 +99,74 @@ def make_aim_hud() -> AimHUD:
     pawn.auto_aim.is_target_acquired = False
     pawn.target.is_dead = False
     pawn.auto_aim.predict_target_position.return_value = np.array([0.0, 100.0, 0.0])
-    aim_hud.crosshair = MagicMock()
-    aim_hud.lead_indicator = MagicMock()
+    for node in (
+        "target_anchor",
+        "square",
+        "scan_bar",
+        "name_label",
+        "distance_label",
+        "crosshair",
+        "lead_indicator",
+    ):
+        setattr(aim_hud, node, MagicMock())
     return aim_hud
+
+
+@pytest.mark.parametrize("auto_aim_locked", [True, False])
+@pytest.mark.parametrize(
+    "missile_locked, color",
+    [(True, TARGET_BOX_MISSILE_LOCKED_COLOR), (False, TARGET_BOX_COLOR)],
+)
+def test_target_box_is_red_only_while_missile_locked(
+    missile_locked, color, auto_aim_locked
+):
+    """
+    The target box turns red while the armed missile is locked, white
+    otherwise, whatever the laser auto-aim lock.
+    """
+    aim_hud = make_aim_hud()
+    aim_hud.game.player.pawn.is_missile_locked = missile_locked
+    aim_hud.game.player.pawn.auto_aim.is_target_acquired = auto_aim_locked
+
+    aim_hud.update_lock_tint()
+
+    aim_hud.square.setColorScale.assert_called_once_with(*color)
+
+
+@pytest.mark.parametrize("dead", [False, True])
+def test_target_box_is_hidden_and_target_dropped_without_a_live_target(dead):
+    """
+    Without a target, or with a target that has just died, the target box is
+    hidden and the player's target is dropped.
+    """
+    aim_hud = make_aim_hud()
+    pawn = aim_hud.game.player.pawn
+    if dead:
+        pawn.target.is_dead = True
+    else:
+        pawn.target = None
+
+    aim_hud.update_target_box()
+
+    aim_hud.target_anchor.hide.assert_called_once()
+    aim_hud.target_anchor.show.assert_not_called()
+    assert (pawn.target, pawn.target_id, pawn.target_idx) == (None, None, None)
+
+
+def test_target_box_sits_on_a_target_ahead():
+    """A target ahead is boxed where it projects, labelled with its distance."""
+    aim_hud = make_aim_hud()
+    pawn = aim_hud.game.player.pawn
+    pawn.target.position = np.array([0.0, 250.0, 0.0])
+    pawn.target.scan = None
+    aim_hud.game.app.camera.getPos.return_value = Point3(0, 0, 0)
+
+    aim_hud.update_target_box()
+
+    aim_hud.target_anchor.show.assert_called_once()
+    x, _, z = aim_hud.target_anchor.setPos.call_args.args
+    assert (x, z) == pytest.approx((0.0, 0.0))
+    aim_hud.distance_label.__setitem__.assert_called_once_with("text", "250 m")
 
 
 @pytest.mark.parametrize(
@@ -250,7 +280,8 @@ def test_lead_indicator_is_hidden(setup):
 
 
 def test_aim_hud_clean_unregisters_its_update_task():
-    """clean() removes the update task and the cards, and drops the game."""
+    """clean() removes the update task, the labels and the cards, and drops
+    the game."""
     aim_hud = make_aim_hud()
     aim_hud.id = "aim"
     game = aim_hud.game
@@ -261,6 +292,8 @@ def test_aim_hud_clean_unregisters_its_update_task():
 
     assert "aim" not in game.method_lists
     aim_hud.root.removeNode.assert_called_once()
+    aim_hud.name_label.destroy.assert_called_once()
+    aim_hud.distance_label.destroy.assert_called_once()
     assert aim_hud.game is None
 
 
