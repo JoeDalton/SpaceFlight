@@ -67,7 +67,12 @@ def test_shipped_ordnance_configurations_are_valid(name):
         assert conf[key] >= 0.0, key
     assert len(conf["color"]) == 4
     if conf["type"] == "missile":
-        for key in ("max_pitch_rate_degps", "max_yaw_rate_degps"):
+        for key in (
+            "max_pitch_rate_degps",
+            "max_yaw_rate_degps",
+            "lock_delay_s",
+            "lock_cone_angle_deg",
+        ):
             assert conf[key] > 0.0, key
 
 
@@ -117,6 +122,8 @@ def write_ordnance(directory, name, **overrides):
         ({"type": "torpedo"}, ValueError),
         ({"launch_direction": "sideways"}, ValueError),
         ({"damage_type": "energy"}, NotImplementedError),
+        ({"type": "missile", "lock_delay_s": 1.0}, ValueError),
+        ({"type": "missile", "lock_cone_angle_deg": 20.0}, ValueError),
     ],
 )
 def test_invalid_ordnance_configuration_raises(ordnance_directory, overrides, error):
@@ -158,6 +165,37 @@ def test_launcher_reads_its_configuration():
     assert launcher.speed_mps == pytest.approx(75.0)
     assert launcher.fire_delay == pytest.approx(launcher.conf["reload_s"])
     assert launcher.display_name == "PROTON BOMB"
+
+
+def test_a_missile_launcher_has_a_target_lock_tuned_by_its_configuration():
+    """
+    A missile launcher's target lock takes its delay and cone from the
+    missile's configuration.
+    """
+    launcher = make_launcher("concussion_missile")
+    conf = load_ordnance_configuration("concussion_missile")
+
+    assert launcher.target_lock.lock_delay_s == pytest.approx(conf["lock_delay_s"])
+    assert launcher.target_lock.min_alignment == pytest.approx(
+        np.cos(np.deg2rad(conf["lock_cone_angle_deg"]))
+    )
+
+
+@pytest.mark.parametrize("name", ["rocket", "proton_bomb", "flare"])
+def test_unguided_ordnance_launcher_has_no_target_lock(name):
+    """Only missiles lock on: other launchers have no target lock."""
+    assert make_launcher(name).target_lock is None
+
+
+def test_clean_cleans_the_target_lock():
+    """clean() cleans the missile's target lock and drops it."""
+    launcher = make_launcher("concussion_missile")
+    target_lock = launcher.target_lock
+
+    launcher.clean()
+
+    assert launcher.target_lock is None
+    assert target_lock.game is None
 
 
 @pytest.mark.parametrize(

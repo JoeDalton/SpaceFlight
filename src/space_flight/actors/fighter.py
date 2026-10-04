@@ -115,6 +115,7 @@ class Fighter(Ship):
         """
         Moves the ship (see :meth:`Ship.move`), boost permitting, spends and
         refills the engine and laser gauges, then updates auto-aim acquisition
+        and the missile locks
 
         :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
@@ -138,6 +139,7 @@ class Fighter(Ship):
 
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
+        self._update_missile_locks()
 
     def _turn_rate_scale(self, throttle: float) -> float:
         """
@@ -163,6 +165,40 @@ class Fighter(Ship):
         :return: The current shield strength
         """
         return self.shield
+
+    def _armed_missile(self) -> OrdnanceLauncher | None:
+        """
+        :return: The selected secondary weapon if it is a missile launcher with
+            stock left, else None
+        """
+        launcher = self.selected_secondary
+        if launcher is None or launcher.target_lock is None or launcher.stock <= 0:
+            return None
+        return launcher
+
+    def _update_missile_locks(self):
+        """
+        The armed missile (see _armed_missile) works on its lock on the target;
+        every other missile launcher drops its lock, so switching to it or
+        reloading it starts the lock delay over.
+        """
+        armed_missile = self._armed_missile()
+        for launcher in self.ordnance_launchers:
+            if launcher.target_lock is None:
+                continue
+            if launcher is armed_missile:
+                launcher.target_lock.update()
+            else:
+                launcher.target_lock.reset()
+
+    @property
+    def is_missile_locked(self) -> bool:
+        """
+        Whether the armed missile is locked on the target: a missile launched
+        now would be guided to it.
+        """
+        armed_missile = self._armed_missile()
+        return armed_missile is not None and armed_missile.target_lock.is_locked
 
     def secondary_cycle(self) -> list[OrdnanceLauncher]:
         """
@@ -195,7 +231,8 @@ class Fighter(Ship):
         """
         Launch the selected secondary weapon, then select the next one with stock
         left once its stock runs out. A missile is given the current target only
-        if auto-aim has locked onto it; otherwise it flies blind, like a rocket.
+        if its own lock holds (see is_missile_locked); otherwise it flies blind,
+        like a rocket.
 
         The launcher is rate-limited, so a launch can be refused while reloading
         even with stock to spare; stock is only spent on an actual launch.
@@ -231,15 +268,15 @@ class Fighter(Ship):
     def _launch(self, launcher: OrdnanceLauncher | None) -> bool:
         """
         Launch one unit from one of the ship's launchers, giving it the current
-        target only if auto-aim has locked onto it (only a missile uses it).
+        target only if the launcher's lock holds (only missiles have one).
 
         :param launcher: The launcher (None is a no-op)
         :return: True if launched
         """
         if launcher is None:
             return False
-        target_id = self.target_id if self.auto_aim.is_target_acquired else None
-        return launcher.launch(target_id=target_id)
+        locked = launcher.target_lock is not None and launcher.target_lock.is_locked
+        return launcher.launch(target_id=self.target_id if locked else None)
 
     def apply_damage(self, damage: float, damage_type: str):
         """

@@ -145,10 +145,26 @@ def test_apply_damage_parametrized(
 # ---------------------------
 
 
+class FakeLock:
+    """Stands in for a TargetLock: a settable lock, counting updates and resets."""
+
+    def __init__(self, is_locked: bool = False):
+        self.is_locked = is_locked
+        self.updates = 0
+        self.resets = 0
+
+    def update(self):
+        self.updates += 1
+
+    def reset(self):
+        self.resets += 1
+        self.is_locked = False
+
+
 class FakeLauncher:
     """
     Stands in for an OrdnanceLauncher: spends one unit of stock per launch and
-    records the target it was given.
+    records the target it was given. Only a missile launcher has a target lock.
     """
 
     def __init__(self, category: str, stock: int, name: str = ""):
@@ -156,6 +172,7 @@ class FakeLauncher:
         self.stock = stock
         self.name = name or category
         self.targets = []
+        self.target_lock = FakeLock() if category == "missile" else None
 
     def launch(self, target_id=None) -> bool:
         if self.stock <= 0:
@@ -165,7 +182,7 @@ class FakeLauncher:
         return True
 
 
-def _fighter_with_loadout(*launchers: FakeLauncher, locked: bool = False):
+def _fighter_with_loadout(*launchers: FakeLauncher, auto_aim_locked: bool = False):
     """
     A fighter carrying these launchers, its secondary and flare launcher picked
     as at construction.
@@ -178,7 +195,7 @@ def _fighter_with_loadout(*launchers: FakeLauncher, locked: bool = False):
         (launcher for launcher in launchers if launcher.category == "flare"), None
     )
     fighter.target_id = "target"
-    fighter.auto_aim = MagicMock(is_target_acquired=locked)
+    fighter.auto_aim = MagicMock(is_target_acquired=auto_aim_locked)
     return fighter
 
 
@@ -195,19 +212,95 @@ def test_first_secondary_is_selected_initially():
     assert fighter.selected_secondary is missile
 
 
-def test_fire_secondary_gives_a_missile_the_target_only_when_locked():
+def test_fire_secondary_gives_a_missile_the_target_only_when_missile_locked():
     """
-    A missile carries the current target only while auto-aim is locked on it;
-    otherwise it flies blind.
+    A missile carries the current target only while its own lock holds;
+    otherwise it flies blind. The laser auto-aim lock plays no part.
+    """
+    missile = FakeLauncher("missile", 3)
+    fighter = _fighter_with_loadout(missile, auto_aim_locked=True)
+
+    assert fighter.fire_secondary() is True
+    missile.target_lock.is_locked = True
+    assert fighter.fire_secondary() is True
+    fighter.auto_aim.is_target_acquired = False
+    assert fighter.fire_secondary() is True
+
+    assert missile.targets == [None, "target", "target"]
+
+
+def test_only_the_armed_missile_works_on_its_lock():
+    """
+    Each frame, the selected missile launcher with stock left updates its lock;
+    every other missile launcher drops its own.
+    """
+    selected = FakeLauncher("missile", 2)
+    other = FakeLauncher("missile", 2)
+    fighter = _fighter_with_loadout(selected, other, FakeLauncher("rocket", 3))
+
+    fighter._update_missile_locks()
+
+    assert (selected.target_lock.updates, selected.target_lock.resets) == (1, 0)
+    assert (other.target_lock.updates, other.target_lock.resets) == (0, 1)
+
+
+def test_switching_secondary_drops_the_missile_lock():
+    """
+    Cycling away from a locked missile drops its lock, so coming back to it
+    starts the lock delay over.
     """
     missile = FakeLauncher("missile", 2)
-    fighter = _fighter_with_loadout(missile, locked=False)
+    fighter = _fighter_with_loadout(missile, FakeLauncher("rocket", 3))
+    missile.target_lock.is_locked = True
 
-    assert fighter.fire_secondary() is True
-    fighter.auto_aim.is_target_acquired = True
-    assert fighter.fire_secondary() is True
+    fighter.cycle_secondary()
+    fighter._update_missile_locks()
 
-    assert missile.targets == [None, "target"]
+    assert not missile.target_lock.is_locked
+    assert missile.target_lock.resets == 1
+
+
+def test_a_spent_missile_drops_its_lock():
+    """
+    A selected missile launcher without stock left does not work on its lock.
+    """
+    missile = FakeLauncher("missile", 0)
+    fighter = _fighter_with_loadout(missile)
+    missile.target_lock.is_locked = True
+
+    fighter._update_missile_locks()
+
+    assert missile.target_lock.updates == 0
+    assert not missile.target_lock.is_locked
+
+
+@pytest.mark.parametrize(
+    "category, stock, lock_holds, expected",
+    [
+        ("missile", 2, True, True),
+        ("missile", 2, False, False),
+        ("missile", 0, True, False),  # spent
+        ("rocket", 3, False, False),  # no lock to hold
+    ],
+)
+def test_is_missile_locked(category, stock, lock_holds, expected):
+    """
+    is_missile_locked holds only with a missile selected, stock left, and its
+    lock confirmed; never with other secondary weapons.
+    """
+    launcher = FakeLauncher(category, stock)
+    if launcher.target_lock is not None:
+        launcher.target_lock.is_locked = lock_holds
+    fighter = _fighter_with_loadout(launcher, auto_aim_locked=True)
+
+    assert fighter.is_missile_locked is expected
+
+
+def test_is_missile_locked_without_secondary_weapons():
+    """No secondary weapon selected: no missile lock."""
+    fighter = _fighter_with_loadout(FakeLauncher("flare", 10))
+
+    assert fighter.is_missile_locked is False
 
 
 def test_fire_secondary_launches_the_selected_launcher():

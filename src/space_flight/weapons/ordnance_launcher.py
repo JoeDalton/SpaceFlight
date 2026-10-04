@@ -21,6 +21,7 @@ import yaml
 
 from space_flight import DATAFILES_PATH
 from space_flight.actors.ordnance import OrdnanceController
+from space_flight.ai.target_lock import TargetLock
 from space_flight.weapons import Weapon
 
 if TYPE_CHECKING:
@@ -36,6 +37,8 @@ ORDNANCE_TYPES = ("bomb", "rocket", "missile", "flare")
 SECONDARY_TYPES = ("bomb", "rocket", "missile")
 LAUNCH_DIRECTIONS = ("forward", "down", "backward")
 DAMAGE_TYPES = ("physical",)
+# What a missile's configuration must hold to tune its target lock
+MISSILE_LOCK_KEYS = ("lock_delay_s", "lock_cone_angle_deg")
 
 
 @functools.cache
@@ -59,6 +62,10 @@ def _read_ordnance_configuration(name: str) -> dict:
         raise NotImplementedError(
             f"Ordnance {name}: unsupported damage type {conf.get('damage_type')!r}"
         )
+    if conf["type"] == "missile":
+        missing = [key for key in MISSILE_LOCK_KEYS if key not in conf]
+        if missing:
+            raise ValueError(f"Ordnance {name}: missile without {', '.join(missing)}")
     return conf
 
 
@@ -102,6 +109,16 @@ class OrdnanceLauncher(Weapon):
         # Launch speed relative to the launching ship, along launch_direction
         self.speed_mps = self.conf["speed_mps"]
         self.launch_direction = self.conf["launch_direction"]
+        # A missile is guided to the target only once locked on it, which the
+        # ship updates while the missile is selected (see Fighter.move)
+        self.target_lock = None
+        if self.category == "missile":
+            self.target_lock = TargetLock(
+                game=self.game,
+                parent=self.parent,
+                lock_delay_s=self.conf["lock_delay_s"],
+                cone_angle_deg=self.conf["lock_cone_angle_deg"],
+            )
 
     @property
     def display_name(self) -> str:
@@ -154,3 +171,13 @@ class OrdnanceLauncher(Weapon):
             "%s launched a %s (%d left)", self.parent.parent.name, self.name, self.stock
         )
         return True
+
+    def clean(self):
+        """
+        Cleans the target lock, then drops the upward references (see
+        :meth:`Weapon.clean`).
+        """
+        if self.target_lock is not None:
+            self.target_lock.clean()
+            self.target_lock = None
+        super().clean()
