@@ -4,15 +4,21 @@ settings hub navigation to it.
 
 Only the pure data + callback methods of the menu are exercised (mock app, no
 DirectGui), mirroring tests/test_graphics_settings_menu.py. The drop-down
-(:class:`CustomOptionMenu`) needs no window, so it is built for real.
+(:class:`CustomDropDown`) needs no window, so it is built for real.
 """
 
 import copy
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from direct.gui import DirectGuiGlobals as DGG
+from direct.showbase.MessengerGlobal import messenger
+from direct.showbase.ShowBaseGlobal import aspect2d
+from panda3d.core import Filename, Loader, NodePath
 
+from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.gameplay_settings import (
     CUSTOM_PRESET,
     DEFAULT_PRESET,
@@ -26,7 +32,7 @@ from space_flight.menus.gameplay_settings_menu_state import (
     _snap,
 )
 from space_flight.menus.graphics_settings_menu_state import _get_by_path
-from space_flight.menus.menu_utils import CustomOptionMenu
+from space_flight.menus.menu_utils import CustomDropDown
 from space_flight.menus.settings_menu_state import SettingsMenuState
 
 PRESETS = load_presets()
@@ -282,41 +288,131 @@ class TestSaveCancel:
 
 
 # ---------------------------------------------------------------------------
-# CustomOptionMenu
+# CustomDropDown
 # ---------------------------------------------------------------------------
 
 
+def _load_geom(egg: str, names: tuple[str, ...]) -> tuple[NodePath, ...]:
+    """Load a menu egg without a window and return its named sub-nodes."""
+    path = Filename.fromOsSpecific(str(DATAFILES_PATH / "menus" / egg))
+    model = NodePath(Loader.getGlobalPtr().loadSync(path))
+    return tuple(model.find(f"**/{name}") for name in names)
+
+
+@pytest.fixture(scope="module")
+def menu_models():
+    """The menus' button and arrow geometry, as MenuModels holds it."""
+    return SimpleNamespace(
+        button_geom=_load_geom(
+            "button_map.egg", ("ready", "click", "hover", "disabled")
+        ),
+        inc_geom=_load_geom("inc_map.egg", ("inc_ready",)),
+    )
+
+
 @pytest.fixture
-def option_menu():
+def drop_down(menu_models):
     """A real drop-down over three options, "b" selected, its command a mock."""
-    menu = CustomOptionMenu(
-        app=MagicMock(),
-        pos=(0, 0, 0),
+    widget = CustomDropDown(
+        app=SimpleNamespace(menu_models=menu_models),
+        pos=(0.1, 0, 0.5),
         options=[("A", "a"), ("B", "b"), ("C", "c")],
         value="b",
         command=MagicMock(),
     )
-    yield menu
-    menu.destroy()
+    yield widget
+    widget.destroy()
 
 
-class TestCustomOptionMenu:
-    def test_shows_the_initial_options_label(self, option_menu):
-        assert option_menu.get_value() == "b"
-        assert option_menu.menu.get() == "B"
+class TestCustomDropDown:
+    def test_starts_closed_showing_the_selected_label(self, drop_down):
+        assert not drop_down.is_open
+        assert drop_down.get_value() == "b"
+        assert drop_down.head.button["text"] == "B"
 
-    def test_picking_an_option_calls_the_command_with_its_value(self, option_menu):
-        option_menu.menu.set(2)  # As a click on the third item does
+    def test_clicking_the_head_opens_the_list(self, drop_down):
+        drop_down.head.button.commandFunc(None)  # As a click does
 
-        option_menu.command.assert_called_once_with("c")
-        assert option_menu.get_value() == "c"
+        assert drop_down.is_open
+        assert [button.button["text"] for button in drop_down.item_buttons] == [
+            "A",
+            "B",
+            "C",
+        ]
 
-    def test_set_value_selects_without_calling_the_command(self, option_menu):
-        option_menu.set_value("a")
+    def test_list_stacks_under_the_head_with_the_selection_pressed(
+        self, drop_down, menu_models
+    ):
+        drop_down.open()
 
-        assert option_menu.get_value() == "a"
-        assert option_menu.menu.get() == "A"
-        option_menu.command.assert_not_called()
+        heights = [button.button.getZ(aspect2d) for button in drop_down.item_buttons]
+        assert all(z < 0.5 for z in heights)
+        assert heights == sorted(heights, reverse=True)
+        pressed = [
+            button.button["geom"] == menu_models.button_geom[1]
+            for button in drop_down.item_buttons
+        ]
+        assert pressed == [False, True, False]
+
+    def test_open_list_is_clicked_and_drawn_above_every_other_widget(self, drop_down):
+        other = aspect2d.attachNewNode("otherWidget")
+        try:
+            drop_down.open()
+
+            # Last under aspect2d, in the popup bin
+            assert aspect2d.getChildren()[-1] == drop_down.popup_root
+            assert drop_down.popup_root.getBinName() == "gui-popup"
+            # The catcher comes before the option buttons, which win the clicks
+            children = list(drop_down.popup_root.getChildren())
+            catcher_index = children.index(drop_down.click_catcher)
+            for button in drop_down.item_buttons:
+                assert children.index(button.button) > catcher_index
+        finally:
+            other.removeNode()
+
+    def test_opening_twice_builds_one_list(self, drop_down):
+        drop_down.open()
+        drop_down.open()
+
+        assert len(drop_down.item_buttons) == 3
+        assert aspect2d.findAllMatches("dropDownPopup").getNumPaths() == 1
+
+    def test_clicking_an_option_selects_it_and_closes(self, drop_down):
+        drop_down.open()
+        popup_root = drop_down.popup_root
+
+        drop_down.item_buttons[2].button.commandFunc(None)  # As a click does
+
+        drop_down.command.assert_called_once_with("c")
+        assert drop_down.get_value() == "c"
+        assert drop_down.head.button["text"] == "C"
+        assert not drop_down.is_open
+        assert popup_root.isEmpty()
+
+    def test_clicking_elsewhere_closes_without_changing_the_value(self, drop_down):
+        drop_down.open()
+        catcher = drop_down.click_catcher
+
+        messenger.send(DGG.B1PRESS + catcher.guiId, [None])  # A press on it
+
+        assert not drop_down.is_open
+        assert drop_down.get_value() == "b"
+        drop_down.command.assert_not_called()
+
+    def test_set_value_selects_without_calling_the_command(self, drop_down):
+        drop_down.set_value("a")
+
+        assert drop_down.get_value() == "a"
+        assert drop_down.head.button["text"] == "A"
+        drop_down.command.assert_not_called()
+
+    def test_destroy_closes_the_list(self, drop_down):
+        drop_down.open()
+        popup_root = drop_down.popup_root
+
+        drop_down.destroy()
+
+        assert popup_root.isEmpty()
 
 
 # ---------------------------------------------------------------------------

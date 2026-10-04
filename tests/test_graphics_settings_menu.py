@@ -91,7 +91,7 @@ class TestOnScaleSlider:
     def test_works_for_reflection_and_mirror_paths(self, state):
         for path, value in [
             (("render", "reflection_scale"), 0.3),
-            (("render", "mirror_scale"), 1.8),
+            (("render", "mirror_scale"), 0.8),
         ]:
             state.sliders = {path: _mock_slider(value)}
             state.slider_value_labels = {path: MagicMock()}

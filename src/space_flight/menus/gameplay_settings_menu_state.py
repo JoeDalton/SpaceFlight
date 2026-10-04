@@ -4,8 +4,8 @@ gameplay settings one by one (the "custom" preset).
 
 Like :mod:`space_flight.menus.graphics_settings_menu_state`, a deep-copied
 working config is edited in memory and written back only on *Save*. The preset
-drop-down sits above the scrollable rows (its popup would be clipped inside
-them), which are grouped under one header per side (player, bots).
+drop-down sits above the scrollable rows, which are grouped under one header
+per side (player, bots).
 
 Picking a preset loads its values into the rows; editing any row switches the
 drop-down to "Custom". Every setting is read on the next level load (hence the
@@ -37,7 +37,7 @@ from space_flight.menus.graphics_settings_menu_state import (
 )
 from space_flight.menus.menu_utils import (
     CustomButton,
-    CustomOptionMenu,
+    CustomDropDown,
     CustomSlider,
     ScrollableList,
 )
@@ -107,8 +107,7 @@ _SLIDER_X = 0.0
 _SLIDER_SCALE = 0.35
 _VALUE_LABEL_X = 0.65
 _PRESET_Y = 0.71
-# The drop-down's left end lines up with the sliders' left ends
-_PRESET_MENU_X = _SLIDER_X - _SLIDER_SCALE
+_PRESET_MENU_X = _SLIDER_X
 
 _ROW_HEIGHT = 0.15
 _FRAME_TOP = 0.6
@@ -132,7 +131,7 @@ class GameplaySettingsMenuState(BaseState):
     def __init__(self, app: SpaceFlightSimulator):
         super().__init__(app)
         self.working_config: dict = {}
-        self.preset_menu: CustomOptionMenu | None = None
+        self.preset_menu: CustomDropDown | None = None
         # Sliders keyed by full config path, plus their value labels.
         self.sliders: dict[tuple, CustomSlider] = {}
         self.slider_value_labels: dict[tuple, DirectLabel] = {}
@@ -212,9 +211,9 @@ class GameplaySettingsMenuState(BaseState):
             text_align=TextNode.ALeft,
         )
         self.preset_label.setTransparency(True)
-        self.preset_menu = CustomOptionMenu(
+        self.preset_menu = CustomDropDown(
             app=self.app,
-            pos=(_PRESET_MENU_X, 0, _PRESET_Y - 0.015),
+            pos=(_PRESET_MENU_X, 0, _PRESET_Y),
             options=self.preset_options(),
             value=self.working_config["preset"],
             command=self.select_preset,

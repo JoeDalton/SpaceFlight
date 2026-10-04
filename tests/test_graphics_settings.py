@@ -126,7 +126,7 @@ class TestSanitise:
 
     @pytest.mark.parametrize(
         "raw,expected",
-        [(0.1, 0.5), (9.0, 2.0), (1.5, 1.5)],
+        [(0.1, 0.25), (9.0, 1.0), (0.5, 0.5)],
     )
     def test_mirror_scale_clamped(self, raw, expected):
         out = GraphicsSettings.sanitise({"render": {"mirror_scale": raw}})

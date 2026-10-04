@@ -11,13 +11,12 @@ from direct.gui.DirectGui import (
     DirectEntry,
     DirectFrame,
     DirectLabel,
-    DirectOptionMenu,
     DirectScrollBar,
     DirectScrolledFrame,
     DirectSlider,
 )
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase.ShowBaseGlobal import ClockObject
+from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d
 from panda3d.core import NodePath, TextNode
 
 from space_flight import DATAFILES_PATH
@@ -679,17 +678,30 @@ class CustomCheckButton:
         self.checkbox.destroy()
 
 
-class CustomOptionMenu:
+class CustomDropDown:
     """
-    A styled :class:`DirectOptionMenu` (drop-down list) wrapper, in the
-    settings menus' palette.
+    A drop-down list built from the game's buttons.
 
-    Each option is a (label, value) pair: the list shows the labels, while
+    The head is a :class:`CustomButton` showing the selected option, with a
+    down arrow. Clicking it opens the list: one button per option, stacked
+    under the head, the selected one pressed. The list stays open until an
+    option is clicked (selecting it) or the user clicks anywhere else (closing
+    it without changing the value).
+
+    Each option is a (label, value) pair: the buttons show the labels, while
     :meth:`get_value`, :meth:`set_value` and the command deal in values.
 
-    Its popup list is drawn above every other widget, but is clipped like any
-    child of a :class:`ScrollableList`: place it outside one.
+    While open, the list is drawn and clicked above every other widget, a
+    transparent full-screen frame under it catching the clicks elsewhere.
     """
+
+    # Arrow: scale of the arrow card (0.08 units across) in head button units,
+    # and its center's distance to the head's right end
+    _ARROW_SCALE = 4.0
+    _ARROW_INSET = 0.25
+    # Vertical distance between stacked buttons, in button units (a button is
+    # 0.5 tall)
+    _ITEM_SPACING = 0.52
 
     def __init__(
         self,
@@ -699,54 +711,131 @@ class CustomOptionMenu:
         value: Any,
         command: Callable,
         parent: NodePath | None = None,
-        scale: float = 0.06,
+        scale: float = 0.19,
+        width_scale: float = 1.6,
     ):
         """
-        Create the underlying DirectOptionMenu with game-standard styling.
+        Build the head button; the list is built on first opening.
 
-        :param app: The running ShowBase application (accepted for API
-            consistency with the other custom widgets).
-        :param pos: 3-tuple (x, y, z) of the menu button's left end.
+        :param app: The running ShowBase application; used to retrieve the
+            shared button and arrow geometry from app.menu_models.
+        :param pos: 3-tuple (x, y, z) of the head button's center.
         :param options: The (label, value) pairs listed, in order.
         :param value: The initially selected option's value.
         :param command: Callable invoked as command(value) when the user picks
             an option (even the selected one again), not on :meth:`set_value`.
-        :param parent: Panda3D node to attach to. Defaults to aspect2d.
-        :param scale: Uniform scale applied to the menu node.
+        :param parent: Panda3D node to attach the head to. Defaults to aspect2d.
+            The open list is always attached to aspect2d, to be above all.
+        :param scale: Uniform scale of the head and option buttons.
+        :param width_scale: Horizontal stretch of the head and option buttons
+            (see :class:`CustomButton`).
         """
+        self.app = app
+        self.options = options
         self.values = [option_value for _, option_value in options]
+        self.value = value
         self.command = command
-        self.menu = DirectOptionMenu(
-            parent=parent,
-            pos=pos,
-            scale=scale,
-            items=[label for label, _ in options],
-            initialitem=self.values.index(value),
-            command=self._on_select,
-            relief=DGG.FLAT,
-            frameColor=(0.12, 0.12, 0.18, 0.92),
-            text_fg=(0.898, 0.839, 0.730, 1.0),
-            popupMarker_relief=DGG.FLAT,
-            popupMarker_frameColor=(0.65, 0.82, 1.0, 1.0),
-            highlightColor=(0.1, 0.1, 0.3, 1.0),
-            item_relief=DGG.FLAT,
-            item_frameColor=(0.12, 0.12, 0.18, 1.0),
-            item_text_fg=(0.898, 0.839, 0.730, 1.0),
-        )
-        self.menu.setTransparency(True)
+        self.scale = scale
+        self.width_scale = width_scale
 
-    def _on_select(self, _label: str):
-        """Forward a pick to the command, as the picked option's value."""
-        self.command(self.get_value())
+        self.head = CustomButton(
+            app=app,
+            pos=pos,
+            command=self.open,
+            text=self._label(value),
+            scale=scale,
+            layout="center",
+            width_scale=width_scale,
+            parent=parent,
+        )
+        self.arrow = DirectFrame(
+            parent=self.head.button,
+            geom=app.menu_models.inc_geom[0],
+            geom_scale=self._ARROW_SCALE,
+            pos=(width_scale - self._ARROW_INSET, 0, 0),
+            frameColor=(0, 0, 0, 0),
+        )
+
+        # The open list (see open): a root drawn on top of every widget, the
+        # click catcher, and the option buttons
+        self.popup_root: NodePath | None = None
+        self.click_catcher: DirectFrame | None = None
+        self.item_buttons: list[CustomButton] = []
+
+    def _label(self, value: Any) -> str:
+        """Return the label of the option of the given value."""
+        return self.options[self.values.index(value)][0]
+
+    @property
+    def is_open(self) -> bool:
+        """Whether the list is open."""
+        return self.popup_root is not None
+
+    def open(self):
+        """Show the option list under the head, the selected option pressed."""
+        if self.is_open:
+            return
+        # Attached last under aspect2d, so it is clicked before every other
+        # widget (the GUI picks the last traversed one), and drawn after them
+        self.popup_root = aspect2d.attachNewNode("dropDownPopup")
+        self.popup_root.setBin("gui-popup", 0)
+        self.popup_root.setPos(self.head.button.getPos(aspect2d))
+
+        # Created before the option buttons, so they are clicked before it
+        self.click_catcher = DirectFrame(
+            parent=self.popup_root,
+            state=DGG.NORMAL,
+            frameSize=(-100, 100, -100, 100),
+            frameColor=(0, 0, 0, 0),
+        )
+        self.click_catcher.bind(DGG.B1PRESS, lambda _event: self.close())
+
+        spacing = self._ITEM_SPACING * self.scale
+        for index, (label, value) in enumerate(self.options):
+            button = CustomButton(
+                app=self.app,
+                pos=(0, 0, -(index + 1) * spacing),
+                command=self.select,
+                text=label,
+                scale=self.scale,
+                layout="center",
+                width_scale=self.width_scale,
+                extraArgs=[value],
+                parent=self.popup_root,
+            )
+            if value == self.value:
+                button.set_pressed()
+            self.item_buttons.append(button)
+
+    def close(self):
+        """Close the option list, if open, leaving the value unchanged."""
+        if not self.is_open:
+            return
+        for button in self.item_buttons:
+            button.destroy()
+        self.item_buttons = []
+        self.click_catcher.destroy()
+        self.click_catcher = None
+        self.popup_root.removeNode()
+        self.popup_root = None
+
+    def select(self, value: Any):
+        """Close the list, select an option, and call the command with it."""
+        self.close()
+        self.set_value(value)
+        self.command(value)
 
     def get_value(self) -> Any:
         """Return the selected option's value."""
-        return self.values[self.menu.selectedIndex]
+        return self.value
 
     def set_value(self, value: Any):
         """Select the option of the given value (does not fire the command)."""
-        self.menu.set(self.values.index(value), fCommand=False)
+        self.value = value
+        self.head.button["text"] = self._label(value)
 
     def destroy(self):
-        """Remove the menu from the scene graph and free its resources."""
-        self.menu.destroy()
+        """Close the list, and remove the head from the scene graph."""
+        self.close()
+        self.arrow.destroy()
+        self.head.destroy()
