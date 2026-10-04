@@ -399,6 +399,8 @@ class EnergyHUD:
         self.game = game
         self.root = parent_node.attachNewNode("energyHud")
         self.root.setPos(ENERGY_HUD_LEFT_X, 0, ENERGY_HUD_BOTTOM_Z)
+        # Shown by the first update
+        self.root.hide()
 
         x = ARC_GAUGE_RADIUS
         self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, x)
@@ -444,6 +446,8 @@ class EnergyHUD:
         """
         Refresh the gauges' levels, texts and brightness.
         """
+        if self.root.isHidden():
+            self.root.show()
         pawn = self.game.player.pawn
         energy = pawn.energy
 

@@ -163,6 +163,19 @@ def make_energy_hud(has_shields: bool = True) -> tuple[EnergyHUD, SimpleNamespac
     return EnergyHUD(game=game, parent_node=NodePath("corner")), pawn
 
 
+def test_energy_hud_is_hidden_until_its_first_update():
+    """
+    Like the rest of the HUD, the gauges show nothing before the game runs
+    (e.g. during the hyperspace loading state).
+    """
+    energy_hud, _ = make_energy_hud()
+    assert energy_hud.root.isHidden()
+
+    energy_hud.update()
+
+    assert not energy_hud.root.isHidden()
+
+
 def test_energy_hud_shows_hp_speed_and_shield():
     """
     The half-ring gauges show the health left, the speed and the shield
