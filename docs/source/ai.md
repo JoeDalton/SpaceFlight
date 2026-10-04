@@ -172,8 +172,8 @@ a `tractor_beam` section for grab timing (see
 ## Guided missiles: a navigator and a pilot, no tactician
 
 A missile's intent is always to engage the target its launcher gave it (the
-launching ship's target, only if auto-aim was locked on it), so it has no
-tactician. Its
+launching ship's target, only if the launcher's missile lock held, see
+[`TargetLock`](#targetlock)), so it has no tactician. Its
 [`MissileNavigator`](../../src/space_flight/ai/missile/missile_navigator.py)
 does constant-angle pursuit of that target at the missile's (constant) speed,
 and returns a zero direction once the target is lost (destroyed or gone from
@@ -184,18 +184,36 @@ every frame (an `OrdnanceController` is not scheduled by the
 
 ## Supporting systems
 
+### `TargetLock`
+
+[`target_lock.py`](../../src/space_flight/ai/target_lock.py) locks onto the
+parent's target once it has stayed inside a cone around the nose
+(`interactions.alignments`) for a delay; anything else (no target, target
+changed or gone, out of the cone) restarts the delay. `update()` runs once per
+frame; `reset()` also forgets the target. Auto-aim owns one, and so does each
+missile launcher, tuned by the missile's `lock_delay_s` and
+`lock_cone_angle_deg` (see [ordnance](actors.md#ordnance-bombs-rockets-missiles-flares)).
+
 ### `AutoAim`
 
 [`auto_aim.py`](../../src/space_flight/ai/auto_aim.py) is a per-shot
 targeting assist for fighters and for turrets boosted by a living targeting
 system (`Turret._apply_targeting_support`). It sits outside the pipeline:
 driven from `Fighter.move()` / `Turret._operate()` and `LaserCannon.fire()`,
-not `Bot`. Once the target has stayed inside an acquisition cone for
-`target_lock_delay_s`, `compute_shot_speed` aims each shot at the target's
-predicted impact-time position, clamped to a maximum assist angle around the
+not `Bot`. Once its `TargetLock` holds (`target_lock_delay_s` in an
+acquisition cone), `compute_shot_speed` aims each shot at
+`predict_target_position()`, clamped to a maximum assist angle around the
 barrel (a "nudge", not a snap). `configure()` is separate from `__init__` so a
-targeting system can retune a turret's auto-aim at runtime. The same lock
-(`is_target_acquired`) decides whether a launched missile is guided.
+targeting system can retune a turret's auto-aim at runtime.
+
+The predicted position is the target's current position plus a *lead offset*:
+how far it moves during a bolt's time of flight (distance / `LASER_SPEED_MPS`)
+at its velocity relative to the shooter, since bolts inherit the shooter's
+velocity. `update_lead()` low-pass filters that offset once per frame
+(`LEAD_SMOOTHING_TIME_S`), damping the velocity kicks of hits; filtering the
+offset rather than the position keeps the lead on the target. The filter
+restarts on a new target. The player's HUD shows the same point as its lead
+indicator (see [docs/ui.md](ui.md#hudpy--heads-up-display)).
 
 ### `CollisionSensor` and `Formation`
 

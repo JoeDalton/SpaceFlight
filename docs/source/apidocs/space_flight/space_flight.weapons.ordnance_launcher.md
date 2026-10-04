@@ -192,4 +192,21 @@ Bases: {py:obj}`space_flight.weapons.Weapon`
 
 ````
 
+````{py:property} is_locked
+:canonical: space_flight.weapons.ordnance_launcher.OrdnanceLauncher.is_locked
+:type: bool
+
+```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.OrdnanceLauncher.is_locked
+```
+
+````
+
+````{py:method} clean()
+:canonical: space_flight.weapons.ordnance_launcher.OrdnanceLauncher.clean
+
+```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.OrdnanceLauncher.clean
+```
+
+````
+
 `````

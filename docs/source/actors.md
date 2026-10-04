@@ -91,7 +91,11 @@ Ordnance is used the same way by the player and the AI, through the
 launcher): `cycle_secondary` selects the next one in loadout order, looping
 over `secondary_cycle()` — spent ones included, they just launch nothing — and
 `fire_secondary` launches it, then moves on to the next one with stock left
-once it is spent. A missile gets the current target only while auto-aim is locked on it.
+once it is spent. Selecting another launcher (by cycling or after a spent one)
+restarts its reload (`Weapon.restart_reload`). A missile is guided to the
+current target only while its launcher's lock holds (`is_missile_locked`, see
+[`TargetLock`](ai.md#targetlock)): only the armed missile — selected, with
+stock left — works on its lock, the others drop theirs.
 Flares have their own trigger, `drop_flare`, from the loadout's flare launcher
 (`flare_launcher`).
 
@@ -148,7 +152,8 @@ base classes the concrete weapons share:
 
 - **`Weapon`** — the emitter (`parent`/`parent_node`), a reload gate
   (`fire_delay` + `_ready_to_fire`, an atomic check-and-consume so a weapon
-  cannot fire faster than its rate), and the munition-spawn call. Subclasses
+  cannot fire faster than its rate; `restart_reload` starts a full reload), and
+  the munition-spawn call. Subclasses
   define the trigger itself.
 - **`Munition`** — the whole projectile lifecycle of a laser shot: identity,
   damage, emitter, world velocity, a straight-line coast for its lifetime,
@@ -177,7 +182,7 @@ All four share the same code; they differ only by their configuration,
 (`launch_direction` — `forward`, `down` or `backward` — `speed_mps` relative to
 the launching ship, `launch_offset_m`), the placeholder look and collision
 (`visual_radius_m`, `collision_radius_m`, RGBA `color`) and, for missiles, the
-turn rates.
+turn rates and the target lock (`lock_delay_s`, `lock_cone_angle_deg`).
 
 - **`OrdnanceLauncher`**
   ([`weapons/ordnance_launcher.py`](../../src/space_flight/weapons/ordnance_launcher.py))
@@ -185,7 +190,8 @@ turn rates.
   launch properties: `initial_velocity()` is the ship's velocity plus
   `speed_mps` along the launch direction — read by the bomb-run release solver
   as well. `launch(target_id)` spends one unit only on an actual launch, and
-  only a missile keeps the target.
+  only a missile locked on the target (`is_locked`, its `target_lock`) keeps
+  it.
 - **`Ordnance`** ([`actors/ordnance.py`](../../src/space_flight/actors/ordnance.py))
   is a `Ship` flying at a constant speed: its velocity is frozen in its body
   axes (no engine, no aerodynamics), so it flies straight unless it turns —

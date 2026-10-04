@@ -28,6 +28,7 @@ space_flight.ai.collision_sensor
 space_flight.ai.formation
 space_flight.ai.think_scheduler
 space_flight.ai.auto_aim
+space_flight.ai.target_lock
 ```
 
 ## Package Contents
