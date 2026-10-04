@@ -134,7 +134,7 @@ TIE_FLIGHT = WaveSpec(
 
 CLEAR_LINES = [
     "Clean. Ration packs and hydrospanners.",
-    "Second one's clean too.",
+    "Second one's clean too. Medical supplies",
     "Third one's clean. Guess the intel was bad.",
 ]
 
@@ -259,7 +259,6 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     cleared = []
 
     def on_clear():
-        m.hud("Scan complete: CLEAR")
         m.speech(CLEAR_LINES[len(cleared)], speaker="Blue Two")
         cleared.append(True)
 
@@ -385,7 +384,6 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     revealed.append(True)
     smuggler_unscanned_exit.cancel()
-    m.hud("Scan complete: CONTRABAND - WEAPONS")
     m.speech("Weapons crates! It's a gun-runner!", speaker="Blue Leader")
     smuggler.set_team(2)
 

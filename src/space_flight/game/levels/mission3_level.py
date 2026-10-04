@@ -164,7 +164,6 @@ def mission3_mission(m: Mission) -> Iterator[None]:
     )
 
     def on_blockade_past():
-        m.hud("Convoy past the blockade — well done.")
         m.speech(
             "We're through! Thank you, Red squadron. We owe you one.",
             speaker="Convoy Lead",

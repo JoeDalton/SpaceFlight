@@ -69,7 +69,7 @@ BLUE_SQUADRON = WaveSpec(
 # The race route, given to the player AND every formation member once the
 # circuit is done. The last waypoint is the finish.
 RACE_WAYPOINTS = [
-    [-3000, 6000, 1500],
+    [-3000, 8000, 1500],
     [-1000, 8000, 700],
     [1500, 8500, 500],
     [3000, 6500, 600],
