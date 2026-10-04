@@ -7,6 +7,8 @@ from space_flight.actors.destructibles import Destructible, Destructibles
 
 # Minimal subclass to implement abstract methods
 class DummyDestructible(Destructible):
+    name = "dummy"
+
     def clean(self):
         self.cleaned = True
 
