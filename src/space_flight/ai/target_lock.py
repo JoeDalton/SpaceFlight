@@ -112,10 +112,9 @@ class TargetLock:
             return
 
         # Is the target inside the cone ?
-        target_direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
+        alignment = self.game.interactions.alignments[
+            my_actor_index, target_actor_index
         ]
-        alignment = np.dot(target_direction, self.parent.forward)
         if alignment < self.min_alignment:
             # Not aligned enough => restart the delay
             self._restart()

@@ -48,21 +48,22 @@ def make_target_lock(
 
 def _set_up_interactions(
     target_lock: TargetLock,
-    target_direction: np.ndarray,
+    alignment: float,
     self_index: int = 0,
     target_index: int = 1,
 ):
     """
-    Configure the mocked interactions so that update can look up
-    the direction from self to target.
+    Configure the mocked interactions so that update can look up the
+    alignment of the target with the parent's nose.
 
     :param target_lock: the TargetLock instance under test
-    :param target_direction: unit direction vector from self to target
+    :param alignment: cosine of the angle between the parent's nose and the
+        direction to the target
     :param self_index: slot index assigned to the parent actor
     :param target_index: slot index assigned to the target actor
     """
-    directions = np.zeros((4, 4, 3))
-    directions[self_index, target_index, :] = target_direction
+    alignments = np.zeros((4, 4))
+    alignments[self_index, target_index] = alignment
 
     def mock_get_index(actor_id):
         if actor_id == target_lock.parent.id:
@@ -72,7 +73,7 @@ def _set_up_interactions(
         raise ValueError(f"Unknown actor_id: {actor_id}")
 
     target_lock.game.interactions.get_actor_index_from_id.side_effect = mock_get_index
-    target_lock.game.interactions.directions = directions
+    target_lock.game.interactions.alignments = alignments
 
 
 # ---------------------------------------------------------------------------
@@ -163,10 +164,9 @@ def test_update_target_in_cone_not_yet_locked_after_short_time():
     target_lock = make_target_lock(lock_delay_s=2.0)
     target_lock.parent.target_id = target_id
     target_lock.previous_target_id = target_id
-    target_lock.parent.forward = np.array([0.0, 1.0, 0.0])
     target_lock._clock.t = 0.5  # held for 0.5s, below the 2.0s lock delay
 
-    _set_up_interactions(target_lock, target_direction=np.array([0.0, 1.0, 0.0]))
+    _set_up_interactions(target_lock, alignment=1.0)
 
     target_lock.update()
 
@@ -183,10 +183,9 @@ def test_update_target_in_cone_locked_after_sufficient_time():
     target_lock = make_target_lock(lock_delay_s=1.0)
     target_lock.parent.target_id = target_id
     target_lock.previous_target_id = target_id
-    target_lock.parent.forward = np.array([0.0, 1.0, 0.0])
     target_lock._clock.t = 1.3  # held past the 1.0s lock delay
 
-    _set_up_interactions(target_lock, target_direction=np.array([0.0, 1.0, 0.0]))
+    _set_up_interactions(target_lock, alignment=1.0)
 
     target_lock.update()
 
@@ -208,10 +207,11 @@ def test_update_target_outside_cone_resets_elapsed_time():
     target_lock.parent.target_id = target_id
     target_lock.previous_target_id = target_id
     target_lock._clock.t = 0.9  # some progress before it drifts out of the cone
-    # Target is 90° to the side — well outside a 5° cone
-    target_lock.parent.forward = np.array([0.0, 1.0, 0.0])
 
-    _set_up_interactions(target_lock, target_direction=np.array([1.0, 0.0, 0.0]))
+    _set_up_interactions(
+        target_lock,
+        alignment=0.0,  # 90° to the side, well outside a 5° cone
+    )
 
     target_lock.update()
 
@@ -233,8 +233,7 @@ def test_reset_drops_the_lock_and_forgets_the_target():
     target_lock = make_target_lock(lock_delay_s=1.0)
     target_lock.parent.target_id = target_id
     target_lock.previous_target_id = target_id
-    target_lock.parent.forward = np.array([0.0, 1.0, 0.0])
-    _set_up_interactions(target_lock, target_direction=np.array([0.0, 1.0, 0.0]))
+    _set_up_interactions(target_lock, alignment=1.0)
     target_lock._clock.t = 1.3
     target_lock.update()
     assert target_lock.is_locked
