@@ -125,6 +125,21 @@ class SoundPool:
         sound.stop()
         self.in_use.discard(id(sound))
 
+    def in_use_sounds(self) -> list[AudioSound]:
+        """
+        :return: The sounds currently handed out by :meth:`get_sound`
+        """
+        return [sound for sound in self.pool if id(sound) in self.in_use]
+
+    def release_all(self):
+        """
+        Stops every sound in use and returns them all to the pool (level
+        teardown: their scheduled releases are dropped with the level)
+        """
+        for sound in self.in_use_sounds():
+            sound.stop()
+        self.in_use.clear()
+
 
 def build_sound_pool(
     app: SpaceFlightSimulator, directory: Path, pattern: str, is_3d: bool

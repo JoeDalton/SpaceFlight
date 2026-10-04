@@ -396,18 +396,20 @@ class FlightState(BaseState):
             )
 
     def pause(self):
-        """Freeze game time and intervals while a menu is open."""
+        """Freeze game time, intervals and sounds while a menu is open."""
         if not self.is_paused:
             self.is_paused = True
             self.interval_manager.pause()
             self.game_time.pause()
+            self.app.sfx.pause()
 
     def resume(self):
-        """Resume game time and intervals after a pause."""
+        """Resume game time, intervals and sounds after a pause."""
         if self.is_paused:
             self.is_paused = False
             self.interval_manager.resume()
             self.game_time.resume()
+            self.app.sfx.resume()
 
     def exit(self):
         """
@@ -485,6 +487,11 @@ class FlightState(BaseState):
         self.spark_fx_pool = None
         self.delayed_methods.clean()
         self.delayed_methods = None
+        # The dropped delayed methods included the scheduled sound releases:
+        # release what is left. Then re-enable the sounds, as exiting from a
+        # menu skips resume() (stopped sounds are not resumed).
+        self.app.sfx.stop_level_sounds()
+        self.app.sfx.resume()
         self.interval_manager.clean()
         self.interval_manager = None
         self.game_time.clean()

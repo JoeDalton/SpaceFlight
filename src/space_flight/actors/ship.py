@@ -257,8 +257,16 @@ class Ship(Pawn):
             self.game.delayed_methods.do_method_later(
                 delay_s=0.5,
                 name="Play_engine_sound",
-                method=self.sound.play,
+                method=self._play_engine_sound,
             )
+
+    def _play_engine_sound(self):
+        """
+        Start the engine loop, unless the ship was cleaned before the delay
+        ran out (its sound is then back in the pool and must stay silent)
+        """
+        if self.sound is not None:
+            self.sound.play()
 
     def _load_configuration(self, ship_type: str) -> dict:
         """

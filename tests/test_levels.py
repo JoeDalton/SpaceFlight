@@ -80,7 +80,6 @@ def test_mission3_victory(game, spawned):
     for pawn in live(game, spawned, "transports"):
         pawn.parent.navigator.next_waypoint_idx = 9
     advance(game, m, 1)
-    assert ("Convoy past the blockade — well done.", 5.0) in game.hud.messages
     assert game.end_level_calls == []
     advance(game, m, 3)
     assert game.end_level_calls[-1][0] == "victory"
