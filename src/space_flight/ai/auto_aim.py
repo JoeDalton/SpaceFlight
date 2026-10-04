@@ -77,6 +77,47 @@ class AutoAim:
         self.inv_max_assist_tan_angle = 1 / np.tan(np.deg2rad(max_assist_angle_deg))
         self.max_assist_distance_m = max_assist_distance_m
 
+    def predict_target_position(self) -> np.ndarray | None:
+        """
+        Predicts where to aim at the parent's target: its position after a laser
+        bolt's time of flight (distance / laser speed), moved by its velocity
+        *relative* to the parent. Bolts inherit the parent's velocity, so this is
+        the point a bolt fired at now meets the target.
+
+        :return: The predicted position (world frame), or None if the parent or
+            its target is not (or no longer) in the interactions
+        """
+        try:
+            my_actor_index = self.game.interactions.get_actor_index_from_id(
+                self.parent.id
+            )
+            target_actor_index = self.game.interactions.get_actor_index_from_id(
+                self.parent.target_id
+            )
+        except ValueError:
+            # Parent has died during this frame, or has no target
+            return None
+
+        # TODO Same pair lookup and target reconstruction as in
+        #  FighterNavigator and TrackingMountNavigator: share one interactions helper
+        #  returning the target's position and absolute velocity for an
+        #  (actor, target) pair.
+        distance_m = self.game.interactions.distances[
+            my_actor_index, target_actor_index
+        ]
+        direction = self.game.interactions.directions[
+            my_actor_index, target_actor_index, :
+        ]
+        relative_speed_vector = self.game.interactions.rel_velocities[
+            my_actor_index, target_actor_index, :
+        ]
+
+        # Impact time is assumed to be the distance between target and self
+        # divided by laser speed
+        impact_time_s = distance_m / LASER_SPEED_MPS
+        target_current_position = self.parent.position + distance_m * direction
+        return target_current_position + relative_speed_vector * impact_time_s
+
     def compute_shot_speed(self, start_position: np.ndarray) -> np.ndarray:
         """
         Computes the speed vector at which the next laser shot will be emitted
@@ -90,51 +131,11 @@ class AutoAim:
             # No acquisition: fire straight ahead
             shot_dir = self.parent.forward
         else:
-            # Identify self and target in interactions
-            try:
-                my_actor_index = self.game.interactions.get_actor_index_from_id(
-                    self.parent.id
-                )
-                parent_found = True
-            except ValueError:
-                # Parent has died during this frame, do nothing
-                parent_found = False
-            try:
-                target_actor_index = self.game.interactions.get_actor_index_from_id(
-                    self.parent.target_id
-                )
-                target_found = True
-            except ValueError:
-                # Parent has no target => Nothing to assist to
+            # Target acquired: fire at its predicted position, if it still exists
+            target_predicted_position = self.predict_target_position()
+            if target_predicted_position is None:
                 desired_shot_dir = self.parent.forward
-                target_found = False
-
-            if target_found and parent_found:
-                # Target acquired and exists: fire at its predicted position
-                distance_m = self.game.interactions.distances[
-                    my_actor_index, target_actor_index
-                ]
-                direction = self.game.interactions.directions[
-                    my_actor_index, target_actor_index, :
-                ]
-                relative_speed_vector = self.game.interactions.rel_velocities[
-                    my_actor_index, target_actor_index, :
-                ]
-
-                # Compute lead pursuit direction necessary for firing solution
-                target_current_position = self.parent.position + distance_m * direction
-                target_current_speed = self.parent.speed + relative_speed_vector
-
-                # Impact time is assumed to be the distance between target and self
-                # divided by laser speed
-                impact_time_s = distance_m / LASER_SPEED_MPS
-
-                # Predict target position at impact time
-                target_predicted_position = (
-                    target_current_position + target_current_speed * impact_time_s
-                )
-
-                # Find predicted target direction
+            else:
                 predicted_direction = target_predicted_position - start_position
                 norm = magnitude(predicted_direction)
                 if norm < 1e-4:
@@ -173,7 +174,7 @@ class AutoAim:
                     shot_dir = self.parent.forward
                 else:
                     clipped_dir_body /= norm
-                shot_dir = rotate_single_vector(quat, clipped_dir_body)
+                    shot_dir = rotate_single_vector(quat, clipped_dir_body)
             else:
                 shot_dir = desired_shot_dir
 
