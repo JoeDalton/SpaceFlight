@@ -100,7 +100,7 @@ The settings own *what the sanitised configuration says*; the manager owns
 `GraphicsSettings` loads `configuration/graphics.yaml` layered over the
 read-only `configuration/default_graphics.yaml` (`_deep_merge`). The
 [input bindings](ui.md) are not layered: `load_bindings` reads
-`configuration/configuration.yaml` alone, and `default_configuration.yaml` is
+`configuration/bindings.yaml` alone, and `default_bindings.yaml` is
 only read by the input settings menu's reset-to-defaults. `sanitise()` then
 clamps every field to something the renderer can act on (valid display mode,
 minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample count,

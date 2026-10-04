@@ -7,11 +7,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from space_flight import CONFIGURATION_PATH
 from space_flight.menus.input_settings_menu_state import (
+    _BINDINGS_FILE,
+    _DEFAULT_BINDINGS_FILE,
     InputSettingsMenuState,
     format_binding,
 )
-from space_flight.ui.input_reader import GAMEPAD_AXIS_NAMES, JOYSTICK_AXIS_NAMES
+from space_flight.ui.input_reader import (
+    GAMEPAD_AXIS_NAMES,
+    JOYSTICK_AXIS_NAMES,
+    load_bindings,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -123,6 +130,28 @@ class TestLoadFile:
         f.write_text("dead_zones:\n  stick: 0.15\n")
         result = InputSettingsMenuState.load_file(f)
         assert isinstance(result["dead_zones"]["stick"], float)
+
+
+# ---------------------------------------------------------------------------
+# Shipped bindings files
+# ---------------------------------------------------------------------------
+
+
+class TestBindingsFiles:
+    def test_menu_paths_point_to_bindings_files(self):
+        assert _BINDINGS_FILE == CONFIGURATION_PATH / "bindings.yaml"
+        assert _DEFAULT_BINDINGS_FILE == CONFIGURATION_PATH / "default_bindings.yaml"
+
+    @pytest.mark.parametrize("path", [_BINDINGS_FILE, _DEFAULT_BINDINGS_FILE])
+    def test_shipped_file_loads(self, path):
+        assert InputSettingsMenuState.load_file(path)["input_type"] in (
+            "keyboard",
+            "gamepad",
+            "joystick",
+        )
+
+    def test_load_bindings_reads_bindings_file(self):
+        assert load_bindings() == InputSettingsMenuState.load_file(_BINDINGS_FILE)
 
 
 # ---------------------------------------------------------------------------

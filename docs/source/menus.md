@@ -156,7 +156,7 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   the value from inside the handler re-enqueues ADJUST forever and freezes the
   game.
 - **[`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py)**:
-  - **`InputSettingsMenuState`** loads `configuration.yaml` and lists the dead
+  - **`InputSettingsMenuState`** loads `bindings.yaml` and lists the dead
     zones, the global bindings, and each context's bindings for the selected
     input type (keyboard/gamepad/joystick), with checkboxes for boolean
     options such as `invert_*` (`make_row_data`/`rebuild_scroll`). Switching

@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
-_CONFIG_FILE = CONFIGURATION_PATH / "configuration.yaml"
-_DEFAULT_CONFIG_FILE = CONFIGURATION_PATH / "default_configuration.yaml"
+_BINDINGS_FILE = CONFIGURATION_PATH / "bindings.yaml"
+_DEFAULT_BINDINGS_FILE = CONFIGURATION_PATH / "default_bindings.yaml"
 
 _CONTEXT_LABELS = {"flight": "Flight", "radial_menu": "Radial Menu"}
 _ROW_HEIGHT = 0.09
@@ -310,11 +310,11 @@ class InputSettingsMenuState(BaseState):
     """
     Full-screen overlay for viewing and editing all input bindings.
 
-    Loads configuration/configuration.yaml on entry into an in-memory working
+    Loads configuration/bindings.yaml on entry into an in-memory working
     copy. *Save* writes it back and rebuilds the
     :class:`~space_flight.ui.input_reader.InputReader` so new bindings apply
     without a restart; *Cancel* discards it; *Default* reloads
-    configuration/default_configuration.yaml into it without writing to disk.
+    configuration/default_bindings.yaml into it without writing to disk.
     Each binding row's *Change* button opens a :class:`ChangeBindingDialog`.
     """
 
@@ -344,7 +344,7 @@ class InputSettingsMenuState(BaseState):
         The YAML is read from disk each time the state is entered, so any
         changes written by a previous session are picked up automatically.
         """
-        self.working_config = self.load_file(_CONFIG_FILE)
+        self.working_config = self.load_file(_BINDINGS_FILE)
         self.saved_config = copy.deepcopy(self.working_config)
         self.build_static_ui()
         self.rebuild_scroll()
@@ -822,7 +822,7 @@ class InputSettingsMenuState(BaseState):
         """
         Flush edits, write the configuration to disk, and rebuild the reader.
 
-        Writes :attr:`working_config` to configuration/configuration.yaml,
+        Writes :attr:`working_config` to configuration/bindings.yaml,
         rebuilds the :class:`~space_flight.ui.input_reader.InputReader` and
         refreshes every input context's bindings so the new bindings apply
         without a restart, then pops back to the settings screen.  Silently
@@ -831,7 +831,7 @@ class InputSettingsMenuState(BaseState):
         if self.active_dialog is not None:
             return
         self.flush_dead_zones()
-        with open(_CONFIG_FILE, "w") as f:
+        with open(_BINDINGS_FILE, "w") as f:
             yaml.dump(self.working_config, f, default_flow_style=False, sort_keys=False)
         self.saved_config = copy.deepcopy(self.working_config)
         # Rebuild the InputReader so the new bindings take effect immediately.
@@ -857,12 +857,12 @@ class InputSettingsMenuState(BaseState):
         """
         Replace the working configuration with the factory defaults.
 
-        Reads from configuration/default_configuration.yaml and rebuilds the
+        Reads from configuration/default_bindings.yaml and rebuilds the
         binding list.  Changes are not written to disk until the user clicks
         *Save*.  Silently ignored if a dialog is open.
         """
         if self.active_dialog is not None:
             return
-        self.working_config = self.load_file(_DEFAULT_CONFIG_FILE)
+        self.working_config = self.load_file(_DEFAULT_BINDINGS_FILE)
         self.refresh_input_type_buttons()
         self.rebuild_scroll()

@@ -824,11 +824,11 @@ class JoystickReader(InputReader):
 
 def load_bindings() -> dict:
     """
-    Reads and parses configuration/configuration.yaml.
+    Reads and parses configuration/bindings.yaml.
 
     :return: Parsed configuration dict.
     """
-    filepath = CONFIGURATION_PATH / "configuration.yaml"
+    filepath = CONFIGURATION_PATH / "bindings.yaml"
     with open(filepath, "r") as f:
         return yaml.safe_load(f)
 

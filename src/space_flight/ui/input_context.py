@@ -172,7 +172,7 @@ class FlightInputContext(InputContext):
     fire, boost, targeting, and camera look.
 
     Bindings are loaded from the contexts.flight.<input_type> section of
-    configuration.yaml so that every action can be remapped without
+    bindings.yaml so that every action can be remapped without
     touching code.
 
     Keyboard throttle is accumulated (+=) each frame the key is held.
