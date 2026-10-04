@@ -12,13 +12,13 @@ from direct.task.Task import Task
 from panda3d.core import AudioSound, NodePath, VBase3
 
 from space_flight import DATAFILES_PATH
+from space_flight.global_architecture.asset_pools import SoundPool
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.actors.capital_ship.sub_system import SubSystem
     from space_flight.actors.pawn import Pawn
     from space_flight.game.flight_state import FlightState
-    from space_flight.global_architecture.asset_pools import SoundPool
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 LOGGER = logging.getLogger()
@@ -162,6 +162,35 @@ class SFX:
             (camera's) velocity, i.e. the player's pawn, or None
         """
         self.audio3d.set_listener_velocity_source(source)
+
+    def pause(self):
+        """
+        Silence the sound effects while the game is frozen behind a menu:
+        looping sounds are suspended until :meth:`resume`, one-shots stop.
+        Menus play no sound of their own (they would need their own manager).
+        """
+        self.app.sfxManagerList[0].setActive(False)
+
+    def resume(self):
+        """Restart the looping sounds suspended by :meth:`pause`."""
+        self.app.sfxManagerList[0].setActive(True)
+
+    def stop_level_sounds(self):
+        """
+        Stop and release every pooled sound still in use, and remove the
+        ad-hoc sound nodes left under the camera. Run on level exit: the
+        scheduled releases (delayed methods) are dropped with the level, and
+        the pools and the camera outlive it.
+        """
+        for asset in self.app.asset_manager.assets.values():
+            if isinstance(asset, SoundPool):
+                for sound in asset.in_use_sounds():
+                    self.audio3d.detachSound(sound)
+                asset.release_all()
+        # No camera headless (nor any sound node under it)
+        if self.app.camera is not None:
+            for node in self.app.camera.findAllMatches("player_hit_sound_node"):
+                node.removeNode()
 
     def build_sound_pool(
         self, directory: Path, pattern: str, is_3d: bool

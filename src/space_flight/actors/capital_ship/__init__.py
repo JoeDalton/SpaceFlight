@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from space_flight import DATAFILES_PATH, DEBUG_DELETION
+from space_flight import DEBUG_DELETION
 from space_flight.actors.capital_ship.shield import Shield
 from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
 from space_flight.actors.capital_ship.targeting_system import TargetingSystem
@@ -111,25 +111,6 @@ class CapitalShip(Ship):
 
         # Set explosion size for death animation
         self.explosion_scale = self.conf["explosion_scale"]
-
-        # Initialize engine sound for bot ships
-        # TODO better
-        if self.parent.name != "player":
-            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
-            self.sound_pool = self.game.app.asset_manager.get_asset(
-                asset_type="3d_sound",
-                path=sound_file,
-            )
-            self.sound = self.sound_pool.get_sound()
-            self.sound.setLoop(True)
-            self.sound.setVolume(10.0)
-            # Follows the ship node, Doppler-shifted by the ship's velocity
-            self.game.app.sfx.attach_sound(self.sound, self.node, velocity_source=self)
-            self.game.delayed_methods.do_method_later(
-                delay_s=0.5,
-                name="Play_engine_sound",
-                method=self.sound.play,
-            )
 
     def _spawn_mounted_bots(
         self, config_key: str, bot_type: str, model_key: str
