@@ -78,7 +78,7 @@ space_flight.weapons.laser_cannon
 ```
 ````
 
-`````{py:class} Weapon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, fire_delay: float = 0.0)
+`````{py:class} Weapon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, fire_delay: float = 0.0, damage_multiplier: float = 1.0)
 :canonical: space_flight.weapons.Weapon
 
 ```{autodoc2-docstring} space_flight.weapons.Weapon

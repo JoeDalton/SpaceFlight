@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock
+import copy
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -8,6 +9,12 @@ from space_flight.actors.energy import (
     EnergySystem,
 )
 from space_flight.actors.fighter import Fighter
+from space_flight.actors.ship import Ship
+from space_flight.global_architecture.gameplay_settings import (
+    DEFAULT_PRESET,
+    auto_aim_params,
+    load_presets,
+)
 from space_flight.utils.state_machine import Cooldown
 
 LASER_SHOT_ENERGY_COST = 0.02
@@ -612,3 +619,63 @@ def test_fighter_turn_rate_and_thrust_follow_engine_gauge():
 
     assert full[0] > half[0]
     assert full[1] > half[1] == pytest.approx(1.0)
+
+
+# ---------------------------
+# __init__ — auto-aim settings
+# ---------------------------
+
+
+def _fake_ship_init(self, game, **kwargs):
+    """Stands in for Ship.__init__: just what Fighter.__init__ reads."""
+    self.game = game
+    self.node = MagicMock()
+    self.conf = {
+        "shield": 100.0,
+        "shield_regen_rate": 10.0,
+        "laser_shot_energy_cost": LASER_SHOT_ENERGY_COST,
+        "hit_box_radius_m": 5.0,
+        "explosion_scale": 1.0,
+        "loadout": {"rocket": 2},
+    }
+
+
+@pytest.mark.parametrize("is_cockpit, side", [(True, "player"), (False, "bots")])
+def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
+    """
+    The player's fighter (the one with the cockpit) gets the player's auto-aim
+    and deviation settings, every other fighter the bots'.
+    """
+    game = MagicMock()
+    config = copy.deepcopy(load_presets()[DEFAULT_PRESET])
+    config["player"]["auto_aim"]["lock_delay_s"] = 0.25
+    config["bots"]["auto_aim"]["lock_delay_s"] = 2.5
+    config["player"]["deviation_deg"] = 0.5
+    config["bots"]["deviation_deg"] = 1.5
+    config["player"]["damage_multiplier"] = 2.0
+    config["bots"]["damage_multiplier"] = 0.5
+    game.app.gameplay_settings.config = config
+
+    with (
+        patch.object(Ship, "__init__", _fake_ship_init),
+        patch("space_flight.actors.fighter.AutoAim") as auto_aim_cls,
+        patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
+        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
+    ):
+        fighter = Fighter(
+            game=game, parent=MagicMock(), ship_type="test", is_cockpit=is_cockpit
+        )
+
+    auto_aim_cls.assert_called_once_with(
+        game=game, parent=fighter, **auto_aim_params(game, side)
+    )
+    assert auto_aim_params(game, side)["target_lock_delay_s"] == (
+        0.25 if side == "player" else 2.5
+    )
+    assert laser_cannon_cls.call_args.kwargs["deviation_cone_deg"] == (
+        0.5 if side == "player" else 1.5
+    )
+    damage_multiplier = 2.0 if side == "player" else 0.5
+    assert laser_cannon_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
+    assert launcher_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier

@@ -145,7 +145,7 @@
 ```
 ````
 
-`````{py:class} OrdnanceLauncher(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter, name: str, stock: int)
+`````{py:class} OrdnanceLauncher(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter, name: str, stock: int, damage_multiplier: float = 1.0)
 :canonical: space_flight.weapons.ordnance_launcher.OrdnanceLauncher
 
 Bases: {py:obj}`space_flight.weapons.Weapon`

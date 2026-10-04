@@ -201,10 +201,21 @@ targeting assist for fighters and for turrets boosted by a living targeting
 system (`Turret._apply_targeting_support`). It sits outside the pipeline:
 driven from `Fighter.move()` / `Turret._operate()` and `LaserCannon.fire()`,
 not `Bot`. Once its `TargetLock` holds (`target_lock_delay_s` in an
-acquisition cone), `compute_shot_speed` aims each shot at
+acquisition cone), `compute_shot_direction` aims each shot at
 `predict_target_position()`, clamped to a maximum assist angle around the
-barrel (a "nudge", not a snap). `configure()` is separate from `__init__` so a
-targeting system can retune a turret's auto-aim at runtime.
+barrel (a "nudge", not a snap); the cannon then adds its random shot deviation
+(see [weapons](actors.md#weapons-and-munitions)). With `enabled` off, the
+target is never locked (the crosshair never shows a lock) and shots go
+straight ahead, but the lead is still computed for the lead indicator.
+`configure()` is separate from `__init__` so a targeting system can retune a
+turret's auto-aim at runtime.
+
+Its tuning comes from the [gameplay settings](global_architecture.md#gameplay_settingspy--difficulty)
+(`auto_aim_params`): the player's side for the player's fighter, the bots'
+side for every other fighter and turret. A turret's targeting system
+overrides whatever its own `auto_aim` config sets (the CR-90's lock delay and
+assist angle), whatever the difficulty (a TODO in `Turret._auto_aim_params`);
+only `enabled` always comes from the gameplay settings.
 
 The predicted position is the target's current position plus a *lead offset*:
 how far it moves during a bolt's time of flight (distance / `LASER_SPEED_MPS`)

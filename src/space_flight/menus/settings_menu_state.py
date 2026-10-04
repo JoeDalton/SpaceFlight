@@ -1,6 +1,6 @@
 """
 Settings hub menu — a small landing screen that routes to the individual
-settings screens (input bindings, graphics).
+settings screens (gameplay, input bindings, graphics).
 
 Reached from the main menu and the pause menu via their *Settings* button.
 """
@@ -18,13 +18,22 @@ class SettingsMenuState(BaseState):
         """Create and display the settings-category buttons."""
         button_scale = 0.5
         text_scale = 0.15
+        self.gameplay_button = CustomButton(
+            app=self.app,
+            text="Gameplay Settings",
+            scale=button_scale,
+            text_scale=text_scale,
+            command=self.enter_gameplay_settings,
+            pos=(0.0, 0.0, 0.45),
+            layout="center",
+        )
         self.input_button = CustomButton(
             app=self.app,
             text="Input Settings",
             scale=button_scale,
             text_scale=text_scale,
             command=self.enter_input_settings,
-            pos=(0.0, 0.0, 0.3),
+            pos=(0.0, 0.0, 0.15),
             layout="center",
         )
         self.graphics_button = CustomButton(
@@ -33,7 +42,7 @@ class SettingsMenuState(BaseState):
             scale=button_scale,
             text_scale=text_scale,
             command=self.enter_graphics_settings,
-            pos=(0.0, 0.0, 0.0),
+            pos=(0.0, 0.0, -0.15),
             layout="center",
         )
         self.back_button = CustomButton(
@@ -42,9 +51,13 @@ class SettingsMenuState(BaseState):
             scale=button_scale,
             text_scale=text_scale,
             command=self.back,
-            pos=(0.0, 0.0, -0.3),
+            pos=(0.0, 0.0, -0.45),
             layout="center",
         )
+
+    def enter_gameplay_settings(self):
+        """Navigate to the gameplay settings screen."""
+        self.app.state_manager.push(self.app.state_manager.GAMEPLAY_SETTINGS_STATE)
 
     def enter_input_settings(self):
         """Navigate to the input settings screen."""
@@ -60,18 +73,21 @@ class SettingsMenuState(BaseState):
 
     def pause(self):
         """Hide the buttons while a settings screen is open on top."""
+        self.gameplay_button.hide()
         self.input_button.hide()
         self.graphics_button.hide()
         self.back_button.hide()
 
     def resume(self):
         """Re-show the buttons when a settings screen above is popped."""
+        self.gameplay_button.show()
         self.input_button.show()
         self.graphics_button.show()
         self.back_button.show()
 
     def exit(self):
         """Destroy all buttons and force a frame render."""
+        self.gameplay_button.destroy()
         self.input_button.destroy()
         self.graphics_button.destroy()
         self.back_button.destroy()

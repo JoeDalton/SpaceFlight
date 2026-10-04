@@ -194,6 +194,12 @@ entry into game effects.
     subsystem is rigid and never itself pushed: momentum is exchanged between
     the incoming ship and the subsystem's **parent ship** (split by mass),
     while the collision *damage* goes to the subsystem alone.
+    Collision damage is `COLLISION_DAMAGE_FACTOR` times the squared impact
+    speed along the contact normal (`collision_damage`). The player's ship
+    alone has it scaled by its `collision_damage_multiplier`
+    [gameplay setting](global_architecture.md#gameplay_settingspy--difficulty),
+    read once when the collision system is built: what the player rams takes
+    the unscaled damage.
   - **`sensor_into_obstacle`** records the hit (normal + point) onto the
     sensor for `CollisionSensor.compute_repulsion` (see [docs/ai.md](ai.md))
     to consume later in the same frame.

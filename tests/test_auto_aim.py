@@ -30,6 +30,7 @@ def make_auto_aim(
     target_lock_delay_s: float = 1.0,
     acquisition_cone_angle_deg: float = 30.0,
     max_assist_angle_deg: float = 5.0,
+    enabled: bool = True,
 ) -> AutoAim:
     """
     Build an AutoAim that bypasses __init__ with sensible defaults.
@@ -37,6 +38,7 @@ def make_auto_aim(
     :param target_lock_delay_s: seconds before target lock is confirmed
     :param acquisition_cone_angle_deg: half-angle of the acquisition cone
     :param max_assist_angle_deg: half-angle of the assist cone
+    :param enabled: whether shots lead a locked target
     :return: an AutoAim whose methods can be tested in isolation
     """
     auto_aim = object.__new__(AutoAim)
@@ -54,6 +56,7 @@ def make_auto_aim(
     auto_aim.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
     auto_aim.inv_max_assist_tan_angle = 1.0 / np.tan(np.deg2rad(max_assist_angle_deg))
     auto_aim.max_assist_distance_m = 1000.0
+    auto_aim.enabled = enabled
     auto_aim.lead_offset_m = None
     auto_aim.lead_target_id = None
     auto_aim.lead_update_time_s = None
@@ -84,26 +87,36 @@ def test_compute_acquisition_locks_through_the_target_lock():
 
 
 # ---------------------------------------------------------------------------
-# compute_shot_speed — no acquisition
+# compute_shot_direction — no acquisition
 # ---------------------------------------------------------------------------
 
 
-def test_compute_shot_speed_without_acquisition_fires_forward():
+def test_compute_shot_direction_without_acquisition_fires_forward():
     """
-    When no target is acquired, the shot must travel in the parent's forward
-    direction plus the parent's speed.
+    When no target is acquired, the shot goes in the parent's forward direction.
     """
     auto_aim = make_auto_aim()  # starts unlocked (acquiring)
     forward = np.array([0.0, 1.0, 0.0])
-    parent_speed = np.array([10.0, 0.0, 0.0])
     auto_aim.parent.forward = forward
-    auto_aim.parent.speed = parent_speed
 
-    start_position = np.zeros(3)
-    shot_speed = auto_aim.compute_shot_speed(start_position)
+    shot_dir = auto_aim.compute_shot_direction(np.zeros(3))
 
-    expected = LASER_SPEED_MPS * forward + parent_speed
-    np.testing.assert_allclose(shot_speed, expected, atol=1e-6)
+    np.testing.assert_allclose(shot_dir, forward, atol=1e-6)
+
+
+def test_compute_shot_direction_returns_a_copy_of_forward():
+    """
+    The direction can be modified (e.g. deviated in place) without touching the
+    parent's forward vector.
+    """
+    auto_aim = make_auto_aim()
+    forward = np.array([0.0, 1.0, 0.0])
+    auto_aim.parent.forward = forward
+
+    shot_dir = auto_aim.compute_shot_direction(np.zeros(3))
+    shot_dir *= 2.0
+
+    np.testing.assert_array_equal(forward, [0.0, 1.0, 0.0])
 
 
 def _set_up_interactions_for_prediction(
@@ -316,21 +329,19 @@ def test_update_lead_forgets_a_vanished_target():
 
 
 # ---------------------------------------------------------------------------
-# compute_shot_speed — locked
+# compute_shot_direction — locked
 # ---------------------------------------------------------------------------
 
 
-def test_compute_shot_speed_locked_fires_at_the_predicted_position():
+def test_compute_shot_direction_locked_fires_at_the_predicted_position():
     """
     Once locked, a shot inside the assist cone goes straight at the predicted
-    position, plus the parent's velocity.
+    position.
     """
     auto_aim = make_auto_aim(max_assist_angle_deg=45.0)
     auto_aim.target_lock = MagicMock(is_locked=True)
     parent_position = np.array([100.0, 0.0, 0.0])
-    parent_speed = np.array([0.0, 200.0, 0.0])
     auto_aim.parent.position = parent_position
-    auto_aim.parent.speed = parent_speed
     auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
     _set_up_interactions_for_prediction(
         auto_aim,
@@ -339,23 +350,20 @@ def test_compute_shot_speed_locked_fires_at_the_predicted_position():
         rel_velocity=np.array([50.0, 0.0, 0.0]),
     )
 
-    shot_speed = auto_aim.compute_shot_speed(parent_position)
+    shot_dir = auto_aim.compute_shot_direction(parent_position)
 
     aim = auto_aim.predict_target_position() - parent_position
-    expected = LASER_SPEED_MPS * aim / np.linalg.norm(aim) + parent_speed
-    np.testing.assert_allclose(shot_speed, expected, atol=1e-6)
+    np.testing.assert_allclose(shot_dir, aim / np.linalg.norm(aim), atol=1e-6)
 
 
-def test_compute_shot_speed_locked_on_a_vanished_target_fires_forward():
+def test_compute_shot_direction_locked_on_a_vanished_target_fires_forward():
     """
     A lock whose target has just left the interactions fires straight ahead.
     """
     auto_aim = make_auto_aim()
     auto_aim.target_lock = MagicMock(is_locked=True)
     forward = np.array([0.0, 1.0, 0.0])
-    parent_speed = np.array([10.0, 0.0, 0.0])
     auto_aim.parent.forward = forward
-    auto_aim.parent.speed = parent_speed
     _set_up_interactions_for_prediction(
         auto_aim,
         distance_m=1000.0,
@@ -364,11 +372,9 @@ def test_compute_shot_speed_locked_on_a_vanished_target_fires_forward():
         known_ids=("parent",),
     )
 
-    shot_speed = auto_aim.compute_shot_speed(np.zeros(3))
+    shot_dir = auto_aim.compute_shot_direction(np.zeros(3))
 
-    np.testing.assert_allclose(
-        shot_speed, LASER_SPEED_MPS * forward + parent_speed, atol=1e-6
-    )
+    np.testing.assert_allclose(shot_dir, forward, atol=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +418,64 @@ def test_configure_tighter_assist_raises_alignment_threshold():
     loose = auto_aim.min_assist_alignment
 
     assert tight > loose
+
+
+def test_configure_sets_enabled():
+    """configure() stores the enabled flag, on unless told otherwise."""
+    auto_aim = make_auto_aim()
+
+    auto_aim.configure(enabled=False)
+    assert auto_aim.enabled is False
+
+    auto_aim.configure()
+    assert auto_aim.enabled is True
+
+
+# ---------------------------------------------------------------------------
+# enabled — auto-aim switched off
+# ---------------------------------------------------------------------------
+
+
+def test_disabled_auto_aim_never_reports_a_lock():
+    """
+    Even if the target lock were confirmed, a disabled auto-aim reports no lock
+    (so the crosshair never shows one).
+    """
+    auto_aim = make_auto_aim(enabled=False)
+    auto_aim.target_lock = MagicMock(is_locked=True)
+
+    assert not auto_aim.is_target_acquired
+
+
+def test_disabled_auto_aim_skips_the_lock_but_updates_the_lead():
+    """
+    A disabled auto-aim does not run the target lock, but still smooths the lead
+    the lead indicator shows.
+    """
+    auto_aim = make_auto_aim(enabled=False)
+    auto_aim.target_lock = MagicMock(is_locked=False)
+    auto_aim.update_lead = MagicMock()
+
+    auto_aim.compute_acquisition()
+
+    auto_aim.target_lock.update.assert_not_called()
+    auto_aim.update_lead.assert_called_once()
+
+
+def test_disabled_auto_aim_fires_forward_even_when_locked():
+    """A disabled auto-aim never bends shots toward the target."""
+    auto_aim = make_auto_aim(enabled=False)
+    auto_aim.target_lock = MagicMock(is_locked=True)
+    auto_aim.predict_target_position = MagicMock(
+        return_value=np.array([10.0, 1000.0, 0.0])
+    )
+    forward = np.array([0.0, 1.0, 0.0])
+    auto_aim.parent.forward = forward
+
+    shot_dir = auto_aim.compute_shot_direction(np.zeros(3))
+
+    np.testing.assert_allclose(shot_dir, forward, atol=1e-6)
+    auto_aim.predict_target_position.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

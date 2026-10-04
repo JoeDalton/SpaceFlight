@@ -135,8 +135,10 @@ to the world root so it can play out.
 
 The [`TargetingSystem`](../../src/space_flight/actors/capital_ship/targeting_system.py)
 is fire control: while alive it grants **every turret on the same ship**
-auto-aim (shots lead the target, tuned by its `auto_aim` config) and a faster
-rate of fire (`fire_rate_multiplier`). It only exposes those and its alive/dead
+auto-aim (shots lead the target, tuned by its `auto_aim` config over the bots'
+[gameplay settings](global_architecture.md#gameplay_settingspy--difficulty),
+see [`AutoAim`](ai.md#autoaim)) and a faster rate of fire
+(`fire_rate_multiplier`). It only exposes those and its alive/dead
 state; the turrets *pull* them each frame. Destroy it and on the next frame the
 turrets revert to unassisted fire at their base rate.
 

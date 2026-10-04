@@ -111,6 +111,16 @@
 
 ````
 
+````{py:attribute} GAMEPLAY_SETTINGS_STATE
+:canonical: space_flight.global_architecture.simulator.StateManager.GAMEPLAY_SETTINGS_STATE
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.global_architecture.simulator.StateManager.GAMEPLAY_SETTINGS_STATE
+```
+
+````
+
 ````{py:attribute} INPUT_SETTINGS_STATE
 :canonical: space_flight.global_architecture.simulator.StateManager.INPUT_SETTINGS_STATE
 :value: >

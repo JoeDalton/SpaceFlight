@@ -29,8 +29,8 @@ _MIN_SCALE = 0.25
 _MAX_SCALE = 1.0
 _MIN_REFLECTION = 0.1
 _MAX_REFLECTION = 1.0
-_MIN_MIRROR = 0.5
-_MAX_MIRROR = 2.0
+_MIN_MIRROR = 0.25
+_MAX_MIRROR = 1.0
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

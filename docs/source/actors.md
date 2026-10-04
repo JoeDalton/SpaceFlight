@@ -86,6 +86,11 @@ health), a `LaserCannon`, `AutoAim` for target leading, and one
 (`{ordnance_name: count}`, see [ordnance](#ordnance-bombs-rockets-missiles-flares)).
 Its collision sphere is sized from `hit_box_radius_m` in its config.
 
+Its guns are tuned by the [gameplay settings](global_architecture.md#gameplay_settingspy--difficulty)
+of its side — the player's for the fighter with the cockpit (`is_cockpit`),
+the bots' otherwise: the auto-aim, the cannon's shot deviation, and the
+damage multiplier of the cannon and every launcher.
+
 Ordnance is used the same way by the player and the AI, through the
 *selected secondary* weapon (`selected_secondary`, a bomb, rocket or missile
 launcher): `cycle_secondary` selects the next one in loadout order, looping
@@ -153,8 +158,9 @@ base classes the concrete weapons share:
 - **`Weapon`** — the emitter (`parent`/`parent_node`), a reload gate
   (`fire_delay` + `_ready_to_fire`, an atomic check-and-consume so a weapon
   cannot fire faster than its rate; `restart_reload` starts a full reload), and
-  the munition-spawn call. Subclasses
-  define the trigger itself.
+  the munition-spawn call, which scales each munition's damage by the weapon's
+  `damage_multiplier` (a gameplay setting, fixed when the weapon is built).
+  Subclasses define the trigger itself.
 - **`Munition`** — the whole projectile lifecycle of a laser shot: identity,
   damage, emitter, world velocity, a straight-line coast for its lifetime,
   registration in `game.game_objects`, and a timed self-clean. It exposes the
@@ -166,9 +172,12 @@ base classes the concrete weapons share:
 **`LaserCannon` / `LaserShot`**
 ([`weapons/laser_cannon.py`](../../src/space_flight/weapons/laser_cannon.py))
 fires a ship's configured cannon positions in round-robin, rate-limited by
-`laser_fire_rate`. It uses the parent's `AutoAim` for shot leading if
-present, otherwise fires along the parent's forward vector plus its own
-velocity. Each `LaserShot` renders as an analytic capsule impostor (see
+`laser_fire_rate`. Each shot goes along the parent's `AutoAim` direction
+(`compute_shot_direction`) if it has one, otherwise along its forward vector.
+That direction is then deviated at random within the cannon's
+`deviation_cone_deg` (a gameplay setting, 0 for exact shots), and the parent's
+velocity is added last, so the deviation turns only the bolt's own velocity.
+Every laser shot deviates, auto-aimed or not, fighter or turret. Each `LaserShot` renders as an analytic capsule impostor (see
 [shaders.md](shaders.md)), with a collision segment long enough to bridge
 one frame's travel and an optional point light behind the global
 `EMIT_LASER_LIGHT` toggle.
@@ -186,7 +195,9 @@ turn rates and the target lock (`lock_delay_s`, `lock_cone_angle_deg`).
 
 - **`OrdnanceLauncher`**
   ([`weapons/ordnance_launcher.py`](../../src/space_flight/weapons/ordnance_launcher.py))
-  holds a limited `stock` and a reload gate, and is the single source of the
+  holds a private copy of its ordnance's configuration — its `damage` scaled by
+  the launcher's damage multiplier, which the launched ordnance reads — a
+  limited `stock` and a reload gate, and is the single source of the
   launch properties: `initial_velocity()` is the ship's velocity plus
   `speed_mps` along the launch direction — read by the bomb-run release solver
   as well. `launch(target_id)` spends one unit only on an actual launch, and

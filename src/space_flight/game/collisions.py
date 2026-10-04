@@ -24,6 +24,7 @@ from panda3d.core import (
 
 from space_flight import DEBUG_COLLISION
 from space_flight.fx import spark_fx
+from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
@@ -47,7 +48,9 @@ if TYPE_CHECKING:
 SOLID_COLLISION_ELASTICITY = 0.3  # 0 = inelastic, 1 = elastic
 POSITION_CORRECTION_RATIO = 0.1
 PENETRATION_TOLERANCE_M = 0.1
-COLLISION_DAMAGE_FACTOR = 0.05  # TODO configurable with difficulty
+# Collision damage per squared normal relative velocity. The player's is scaled
+# by a gameplay setting (see CollisionSystem.collision_damage)
+COLLISION_DAMAGE_FACTOR = 0.05
 
 #: Fraction of destructible (hull) hits that also spawn a small secondary
 #: explosion on top of the sparks. Knob — set to 0 to disable, 1 for every hit.
@@ -221,6 +224,10 @@ class CollisionSystem:
         :param game: The game whose render tree is traversed for collisions.
         """
         self.game = game
+        # Read once per level, like every gameplay setting
+        self.player_collision_damage_multiplier = gameplay_config(game)["player"][
+            "collision_damage_multiplier"
+        ]
         self.traverser = CollisionTraverser()
         if DEBUG_COLLISION:
             self.traverser.showCollisions(self.game.app.render)
@@ -255,6 +262,19 @@ class CollisionSystem:
         self.game.app.accept("ship-again-turret", self.ship_again_massive_actor)
         self.game.app.accept("ship-into-subsystem", self.ship_into_subsystem)
         self.game.app.accept("ship-again-subsystem", self.ship_again_subsystem)
+
+    def collision_damage(self, ship: Ship, normal_relative_velocity: float) -> float:
+        """
+        :param ship: The ship taking the damage
+        :param normal_relative_velocity: The impact's relative velocity along the
+            contact normal
+        :return: The collision damage the ship takes: scaled by the player's
+            collision damage multiplier if it is the player's ship
+        """
+        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
+        if self.game.player is not None and ship is self.game.player.pawn:
+            damage *= self.player_collision_damage_multiplier
+        return damage
 
     def update_collisions(self):
         """
@@ -602,9 +622,8 @@ class CollisionSystem:
         # => Rely only on elastic impact to push back
 
         # Apply damage to the ship
-        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
         ship_from.push(
-            damage=damage,
+            damage=self.collision_damage(ship_from, normal_relative_velocity),
             velocity_correction=velocity_correction,
             position_correction=np.zeros(3),
         )
@@ -719,10 +738,8 @@ class CollisionSystem:
         )
 
         # Apply damage to the destructible objects
-        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
-
         ship_into.push(
-            damage=damage,
+            damage=self.collision_damage(ship_into, normal_relative_velocity),
             velocity_correction=velocity_correction,
             position_correction=position_correction,
         )
@@ -808,14 +825,16 @@ class CollisionSystem:
         # => Rely only on elastic impact to push back
 
         # Apply damage to the ship
-        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
         ship_from.push(
-            damage=damage,
+            damage=self.collision_damage(ship_from, normal_relative_velocity),
             velocity_correction=velocity_correction,
             position_correction=np.zeros(3),
         )
-        # Apply damage to the massive actor
-        massive_actor_into.apply_damage(damage=damage, damage_type="physical")
+        # Apply damage to the massive actor (never the player's, so unscaled)
+        massive_actor_into.apply_damage(
+            damage=COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2,
+            damage_type="physical",
+        )
 
     def ship_into_subsystem(self, entry: CollisionEntry):
         """
@@ -914,11 +933,9 @@ class CollisionSystem:
             ship_velocity_correction = np.zeros(3)
             host_velocity_correction = np.zeros(3)
 
-        damage = COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2
-
         # Push the incoming ship back (and damage it)...
         ship_from.push(
-            damage=damage,
+            damage=self.collision_damage(ship_from, normal_relative_velocity),
             velocity_correction=ship_velocity_correction,
             position_correction=np.zeros(3),
         )
@@ -929,8 +946,12 @@ class CollisionSystem:
             velocity_correction=host_velocity_correction,
             position_correction=np.zeros(3),
         )
-        # The subsystem itself takes the collision damage
-        subsystem_into.apply_damage(damage=damage, damage_type="physical")
+        # The subsystem itself takes the collision damage (never the player's,
+        # so unscaled)
+        subsystem_into.apply_damage(
+            damage=COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2,
+            damage_type="physical",
+        )
 
     def sensor_into_obstacle(self, entry: CollisionEntry):
         """

@@ -14,6 +14,7 @@
 :maxdepth: 1
 
 space_flight.global_architecture.graphics_manager
+space_flight.global_architecture.gameplay_settings
 space_flight.global_architecture.graphics_settings
 space_flight.global_architecture.asset_pools
 space_flight.global_architecture.asset_manager

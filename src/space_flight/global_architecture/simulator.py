@@ -11,8 +11,10 @@ from space_flight.game.flight_state import FlightState
 from space_flight.game.hyperspace_loading_state import HyperspaceLoadingState
 from space_flight.global_architecture.asset_manager import AssetManager
 from space_flight.global_architecture.base_state import BaseState
+from space_flight.global_architecture.gameplay_settings import GameplaySettings
 from space_flight.global_architecture.graphics_manager import GraphicsManager
 from space_flight.global_architecture.graphics_settings import GraphicsSettings
+from space_flight.menus.gameplay_settings_menu_state import GameplaySettingsMenuState
 from space_flight.menus.graphics_settings_menu_state import GraphicsSettingsMenuState
 from space_flight.menus.input_settings_menu_state import InputSettingsMenuState
 from space_flight.menus.level_end_state import LevelEndState
@@ -54,6 +56,7 @@ class StateManager:
     LEVEL_SELECTION_MENU_STATE = LevelSelectionMenuState
     PAUSE_MENU_STATE = PauseMenuState
     SETTINGS_STATE = SettingsMenuState
+    GAMEPLAY_SETTINGS_STATE = GameplaySettingsMenuState
     INPUT_SETTINGS_STATE = InputSettingsMenuState
     GRAPHICS_SETTINGS_STATE = GraphicsSettingsMenuState
     RADIAL_MENU_STATE = RadialMenuState
@@ -129,11 +132,12 @@ class StateManager:
 class SpaceFlightSimulator(ShowBase):
     """
     Root ShowBase subclass that builds and owns every app-lifetime subsystem:
-    graphics (:class:`GraphicsSettings`, :class:`GraphicsManager`), the state
-    machine (:class:`StateManager`), input (:class:`InputContextStack` and the
-    reader from :func:`reader_factory`), assets (:class:`AssetManager`), shared
-    menu geometry (:class:`MenuModels`) and sound effects (:class:`SFX`), then
-    pushes :class:`SplashState`.
+    graphics (:class:`GraphicsSettings`, :class:`GraphicsManager`), gameplay
+    settings (:class:`GameplaySettings`), the state machine
+    (:class:`StateManager`), input (:class:`InputContextStack` and the reader
+    from :func:`reader_factory`), assets (:class:`AssetManager`), shared menu
+    geometry (:class:`MenuModels`) and sound effects (:class:`SFX`), then pushes
+    :class:`SplashState`.
     """
 
     def __init__(self, headless: bool = False):
@@ -151,6 +155,7 @@ class SpaceFlightSimulator(ShowBase):
         # simplepbr.init()
 
         self.graphics_settings = GraphicsSettings()
+        self.gameplay_settings = GameplaySettings()
         self.graphics_manager = GraphicsManager(app=self)
         self.state_manager = StateManager(app=self)
         self.input_context_stack = InputContextStack()

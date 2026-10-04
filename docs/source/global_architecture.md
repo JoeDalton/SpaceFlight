@@ -2,7 +2,7 @@
 
 `global_architecture` is the application shell: the root Panda3D app, its
 stack-based state machine, and the app-lifetime services (assets, graphics
-settings) that outlive any single game session — as opposed to
+and gameplay settings) that outlive any single game session — as opposed to
 [`game/`](game.md), which is scoped to one `FlightState` session. Everything
 here lives in
 [`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/);
@@ -20,6 +20,8 @@ the per-class API is in the [code reference](apidocs/index.rst).
 - **`GraphicsSettings`** / **`GraphicsManager`** own *how* the scene is
   rendered (window mode, render scale, anti-aliasing); `game/` owns *what* is
   rendered.
+- **`GameplaySettings`** owns the difficulty: a preset, or custom values for
+  auto-aim, shot deviation and damage, read when a level is built.
 
 ## `simulator.py` — the app root and its state machine
 
@@ -35,7 +37,7 @@ two classes:
   states...), so modules reference `StateManager.GAME_STATE` instead of
   importing state modules that push each other — avoiding import cycles.
 - **`SpaceFlightSimulator`** builds, in order, `GraphicsSettings` →
-  `GraphicsManager` → `StateManager` → `InputContextStack` and input reader
+  `GameplaySettings` → `GraphicsManager` → `StateManager` → `InputContextStack` and input reader
   (see [`ui/input_context.py`](../../src/space_flight/ui/input_context.py)) →
   `AssetManager` → `MenuModels` → `SFX` (see [docs/fx.md](fx.md)), then pushes
   `SplashState`. `input_task` (task sort `-100`, before other tasks) polls the
@@ -136,3 +138,50 @@ build time. A test asserts the two lists agree.
   the internal render resolution rather than the window. `end_scene_render()`
   tears the pipeline down; `begin_scene_render()` calls it first, so
   rebuilding is idempotent.
+
+## `gameplay_settings.py` — difficulty
+
+[`gameplay_settings.py`](../../src/space_flight/global_architecture/gameplay_settings.py)'s
+`GameplaySettings` holds the difficulty, as `app.gameplay_settings`. Two files
+make it up:
+
+- **`configuration/gameplay_presets.yaml`** (read-only) holds the presets —
+  easy, normal, hard, ace, in the order the menu lists them — each setting
+  every value. `normal` reproduces the untuned game, and is the only source
+  of defaults: the fallback for anything missing or invalid. `load_presets()`
+  reads them (exposed as `GameplaySettings.presets`) and raises if one lacks
+  a value or has an invalid one: the file is read-only, so there is nothing
+  to fall back on.
+- **`configuration/gameplay.yaml`** (the user file) holds `preset: <name>`
+  only, or `preset: custom` followed by its own values. A named preset always
+  takes its values from the presets file, so re-tuning a preset reaches every
+  player who picked it; custom values missing from the file come from
+  `normal`.
+
+`resolve()` turns either form into the full settings, `config`: the preset's
+name under `preset`, and its values. `save()` writes only the name, unless
+custom. `sanitise(config, fallback)` clamps each numeric value to its
+`(minimum, maximum)` in the `LIMITS` table (e.g. the assist angle stays above
+0, as auto-aim divides by its tangent), coerces the `FLAGS` to booleans, and
+takes the fallback's value for any missing or wrong-typed one; `resolve()`
+passes the `normal` preset. The gameplay settings menu's sliders span the same
+`LIMITS` (see [docs/menus.md](menus.md#settings-screens)).
+
+Each side — the player, and the bots (fighters, turrets, capital ships) — has:
+
+| Setting | Read by | Effect |
+|---------|---------|--------|
+| `auto_aim.enabled`, `lock_delay_s`, `lock_angle_deg`, `assist_angle_deg` | `Fighter`, `Turret` → `AutoAim` (see [docs/ai.md](ai.md#autoaim)) | whether and how shots lead a locked target |
+| `deviation_deg` | `Fighter`, `Turret` → `LaserCannon` (see [docs/actors.md](actors.md#weapons-and-munitions)) | half-angle of the random cone around each laser shot |
+| `damage_multiplier` | `Fighter`, `Turret` → their weapons | scales the damage of their bolts and ordnance |
+
+plus, for the player only, `collision_damage_multiplier` (read by
+`CollisionSystem`, see [docs/game.md](game.md)) and `lead_indicator` (read by
+`AimHUD`, see [docs/ui.md](ui.md)).
+
+Game code reads the settings through `gameplay_config(game)` (or
+`auto_aim_params(game, side)`, the auto-aim ones as `AutoAim.configure`
+arguments), which falls back to the `normal` preset when the app has no
+settings (test doubles, light headless stubs). They are read once, when the
+level's ships, HUD and collision system are built: changes made in the menus —
+even from the pause menu — apply from the next mission.

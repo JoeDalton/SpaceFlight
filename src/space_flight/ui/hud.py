@@ -20,6 +20,7 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
+from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.ui.utils import (
     ArcGauge,
     ColumnGauge,
@@ -552,12 +553,15 @@ class AimHUD:
     - a crosshair where the lasers go (where the nose points). Red while
       auto-aim is locked.
     - a lead indicator where to aim to hit the target (see
-      AutoAim.predict_target_position), shown only when on screen.
+      AutoAim.predict_target_position), shown only when on screen, and only if
+      the gameplay settings enable it.
     """
 
     def __init__(self, game: FlightState) -> None:
         self.game = game
         self.id = uuid.uuid4()
+        # Read once per level, like every gameplay setting
+        self.show_lead_indicator = gameplay_config(game)["player"]["lead_indicator"]
 
         # Cues are placed in screen coordinates, scaled for the aspect ratio
         self.root = NodePath("aimHudRoot")
@@ -785,8 +789,12 @@ class AimHUD:
 
     def update_lead_indicator(self) -> None:
         """
-        Place the lead indicator on the target's predicted position, if any.
+        Place the lead indicator on the target's predicted position, if any and
+        if enabled.
         """
+        if not self.show_lead_indicator:
+            # Hidden since startup
+            return
         pawn = self.game.player.pawn
         lead_position = None
         if pawn.target is not None:

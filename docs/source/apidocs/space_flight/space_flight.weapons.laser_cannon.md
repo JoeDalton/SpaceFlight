@@ -180,7 +180,7 @@
 ```
 ````
 
-`````{py:class} LaserCannon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, energy: space_flight.actors.energy.EnergySystem | None = None)
+`````{py:class} LaserCannon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, energy: space_flight.actors.energy.EnergySystem | None = None, deviation_cone_deg: float = 0.0, damage_multiplier: float = 1.0)
 :canonical: space_flight.weapons.laser_cannon.LaserCannon
 
 Bases: {py:obj}`space_flight.weapons.Weapon`

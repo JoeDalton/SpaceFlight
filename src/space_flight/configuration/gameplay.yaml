@@ -1,0 +1,6 @@
+# User gameplay (difficulty) settings (see
+# space_flight.global_architecture.gameplay_settings): the name of a preset from
+# gameplay_presets.yaml, or "custom" followed by player/bots values. Saving from
+# the in-game gameplay menu rewrites this file without comments.
+
+preset: normal

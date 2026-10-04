@@ -17,7 +17,7 @@ import pytest
 from panda3d.core import Vec3
 
 from space_flight.actors.energy import EnergySystem
-from space_flight.weapons.laser_cannon import LaserCannon
+from space_flight.weapons.laser_cannon import LASER_SPEED_MPS, LaserCannon
 
 FIRE_DELAY_S = 0.5
 N_CANNONS = 2
@@ -43,6 +43,9 @@ def laser_cannon():
     cannon.sound_pool = MagicMock()
     # Unlimited power unless a test plugs in an energy system
     cannon.energy = None
+    # Exact shots unless a test sets a deviation cone
+    cannon.deviation_cone_rad = 0.0
+    cannon.damage_multiplier = 1.0
 
     # Parent ship stub: no auto_aim so fire() falls back to speed + forward
     cannon.parent = MagicMock()
@@ -147,6 +150,25 @@ def test_fire_spends_laser_energy_and_applies_damage_bonus(laser_cannon):
     assert mock_laser_shot.call_args.kwargs["power"] == pytest.approx(expected_power)
     assert expected_power > laser_cannon.shot_power
     assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_ENERGY_COST)
+
+
+def test_fire_scales_the_bolt_power_by_the_damage_multiplier(laser_cannon):
+    """
+    The damage multiplier scales the bolt's power, on top of the laser gauge's
+    damage bonus.
+    """
+    energy = EnergySystem(
+        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
+    )
+    laser_cannon.energy = energy
+    laser_cannon.damage_multiplier = 2.0
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+    expected_power = 2.0 * laser_cannon.shot_power * energy.laser_damage_factor()
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        laser_cannon.fire()
+
+    assert mock_laser_shot.call_args.kwargs["power"] == pytest.approx(expected_power)
 
 
 def test_fire_without_energy_system_uses_base_power(laser_cannon):
@@ -305,6 +327,123 @@ def test_fire_cycles_through_all_cannon_indices(laser_cannon):
             expected_index_before = shot_number % N_CANNONS
             assert laser_cannon.current_next_cannon_idx == expected_index_before
             laser_cannon.fire()
+
+
+# ---------------------------
+# fire() – shot direction and deviation
+# ---------------------------
+
+
+def _fire_shot_speeds(cannon: LaserCannon, n: int) -> list[np.ndarray]:
+    """
+    :return: The world velocities of n shots fired by cannon, the reload gate
+        being open for each
+    """
+    speeds = []
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        for i in range(n):
+            cannon.game.game_time.get_current_time.return_value = (i + 1) * 10.0
+            cannon.fire()
+            speeds.append(mock_laser_shot.call_args.kwargs["speed"])
+    return speeds
+
+
+def _angles_deg(directions: list[np.ndarray], axis: np.ndarray) -> np.ndarray:
+    """:return: The angles between each unit direction and the unit axis."""
+    return np.degrees(
+        np.arccos(np.clip([np.dot(d, axis) for d in directions], -1.0, 1.0))
+    )
+
+
+def test_fire_without_auto_aim_shoots_forward_plus_parent_speed(laser_cannon):
+    """
+    Without auto-aim or deviation, the bolt flies along the nose, plus the
+    parent's velocity.
+    """
+    laser_cannon.parent.speed = np.array([10.0, 0.0, 0.0])
+
+    (speed,) = _fire_shot_speeds(laser_cannon, n=1)
+
+    np.testing.assert_allclose(speed, [10.0, LASER_SPEED_MPS, 0.0], atol=1e-9)
+
+
+def test_fire_shoots_along_the_auto_aim_direction(laser_cannon):
+    """With auto-aim, the bolt flies along the direction it computes."""
+    aimed = np.array([0.6, 0.8, 0.0])
+    laser_cannon.parent.auto_aim = MagicMock()
+    laser_cannon.parent.auto_aim.compute_shot_direction.return_value = aimed.copy()
+
+    (speed,) = _fire_shot_speeds(laser_cannon, n=1)
+
+    np.testing.assert_allclose(speed, LASER_SPEED_MPS * aimed, atol=1e-9)
+
+
+def test_fire_deviates_shots_within_the_cone(laser_cannon):
+    """
+    Shots deviate randomly from the nose (no auto-aim, e.g. a turret without a
+    targeting system), never beyond the cone, and spread over it rather than
+    bunching on the axis.
+    """
+    np.random.seed(0)
+    laser_cannon.deviation_cone_rad = np.deg2rad(2.0)
+
+    speeds = _fire_shot_speeds(laser_cannon, n=500)
+
+    angles = _angles_deg([v / LASER_SPEED_MPS for v in speeds], np.array([0, 1, 0]))
+    assert angles.max() <= 2.0 + 1e-9
+    # Uniform over the cone's solid angle: half the shots beyond ~1.41 degrees
+    assert np.median(angles) == pytest.approx(2.0 / np.sqrt(2.0), abs=0.15)
+
+
+def test_fire_deviates_shots_around_the_auto_aim_direction(laser_cannon):
+    """Deviation is applied around the auto-aimed direction, not the nose."""
+    np.random.seed(0)
+    aimed = np.array([0.6, 0.8, 0.0])
+    laser_cannon.parent.auto_aim = MagicMock()
+    laser_cannon.parent.auto_aim.compute_shot_direction.side_effect = (
+        lambda start_position: aimed.copy()
+    )
+    laser_cannon.deviation_cone_rad = np.deg2rad(0.5)
+
+    speeds = _fire_shot_speeds(laser_cannon, n=200)
+
+    angles = _angles_deg([v / LASER_SPEED_MPS for v in speeds], aimed)
+    assert angles.max() <= 0.5 + 1e-9
+
+
+def test_fire_adds_the_parent_speed_after_deviating(laser_cannon):
+    """
+    The deviation turns the bolt's own velocity only: the parent's velocity is
+    added afterwards, unchanged.
+    """
+    np.random.seed(0)
+    parent_speed = np.array([0.0, 0.0, 300.0])
+    laser_cannon.parent.speed = parent_speed
+    laser_cannon.deviation_cone_rad = np.deg2rad(2.0)
+
+    speeds = _fire_shot_speeds(laser_cannon, n=20)
+
+    for speed in speeds:
+        assert np.linalg.norm(speed - parent_speed) == pytest.approx(LASER_SPEED_MPS)
+
+
+def test_fire_deviation_does_not_modify_the_parents_forward(laser_cannon):
+    """The parent's forward vector is neither normalised nor otherwise touched."""
+    forward = laser_cannon.parent.forward
+    laser_cannon.deviation_cone_rad = np.deg2rad(2.0)
+
+    _fire_shot_speeds(laser_cannon, n=5)
+
+    assert laser_cannon.parent.forward is forward
+    np.testing.assert_array_equal(forward, [0.0, 1.0, 0.0])
+
+
+def test_fire_without_deviation_draws_nothing_random(laser_cannon):
+    """A zero cone leaves the aimed direction exact."""
+    with patch("space_flight.weapons.laser_cannon.sample_direction_in_cone") as sample:
+        _fire_shot_speeds(laser_cannon, n=3)
+
+    sample.assert_not_called()
 
 
 # ---------------------------
