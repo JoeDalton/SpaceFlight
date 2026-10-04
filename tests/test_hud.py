@@ -6,7 +6,7 @@ energy gauges.
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -90,6 +90,7 @@ def make_aim_hud() -> AimHUD:
     """
     aim_hud = object.__new__(AimHUD)
     aim_hud.game = MagicMock()
+    aim_hud.show_lead_indicator = True
     app = aim_hud.game.app
     app.camLens = PerspectiveLens()
     app.cam.getRelativeVector.side_effect = lambda _, vector: Vec3(vector)
@@ -233,6 +234,37 @@ def test_lead_indicator_shows_the_projected_prediction():
     x, _, z = aim_hud.lead_indicator.setPos.call_args.args
     assert x > 0.0 and z < 0.0
     aim_hud.lead_indicator.show.assert_called_once()
+
+
+def test_disabled_lead_indicator_is_never_shown():
+    """
+    With the lead indicator disabled in the gameplay settings, it is never
+    shown, even with a live target on screen.
+    """
+    aim_hud = make_aim_hud()
+    aim_hud.show_lead_indicator = False
+
+    aim_hud.update_lead_indicator()
+
+    aim_hud.lead_indicator.show.assert_not_called()
+    aim_hud.game.player.pawn.auto_aim.predict_target_position.assert_not_called()
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_aim_hud_reads_the_lead_indicator_setting(enabled):
+    """The AimHUD reads whether to show the lead indicator once, when built."""
+    game = MagicMock()
+    game.app.gameplay_settings.config = {"player": {"lead_indicator": enabled}}
+
+    with (
+        # A distinct card each, to tell which one is hidden
+        patch("space_flight.ui.hud.make_hud_card", side_effect=lambda *_: MagicMock()),
+        patch("space_flight.ui.hud.DirectLabel"),
+    ):
+        aim_hud = AimHUD(game=game)
+
+    assert aim_hud.show_lead_indicator is enabled
+    aim_hud.lead_indicator.hide.assert_called_once()  # Hidden at startup
 
 
 def _no_target(pawn):
