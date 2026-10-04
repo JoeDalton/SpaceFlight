@@ -21,6 +21,12 @@ from panda3d.core import TextNode
 
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.graphics_settings import (
+    _MAX_MIRROR,
+    _MAX_REFLECTION,
+    _MAX_SCALE,
+    _MIN_MIRROR,
+    _MIN_REFLECTION,
+    _MIN_SCALE,
     _VALID_CLOUD_QUALITY,
     _VALID_MSAA,
     DEFAULT_GRAPHICS_FILE,
@@ -34,11 +40,15 @@ if TYPE_CHECKING:
 # Display mode is a small fixed button group.
 _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
 
-# Continuous quality sliders: path -> (label, (min, max)).
+# Continuous quality sliders: path -> (label, (min, max)). The ranges are the
+# ones sanitise() clamps to.
 _SCALE_SLIDERS = {
-    ("render", "scale"): ("Render Scale", (0.5, 2.0)),
-    ("render", "reflection_scale"): ("Reflection Quality", (0.25, 1.0)),
-    ("render", "mirror_scale"): ("Mirror Quality", (0.25, 1.0)),
+    ("render", "scale"): ("Render Scale", (_MIN_SCALE, _MAX_SCALE)),
+    ("render", "reflection_scale"): (
+        "Reflection Quality",
+        (_MIN_REFLECTION, _MAX_REFLECTION),
+    ),
+    ("render", "mirror_scale"): ("Mirror Quality", (_MIN_MIRROR, _MAX_MIRROR)),
 }
 
 # Sliders over discrete stops: path -> (label, values, value labels). Cheapest

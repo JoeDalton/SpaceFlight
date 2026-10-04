@@ -10,7 +10,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from space_flight.global_architecture.graphics_settings import GraphicsSettings
 from space_flight.menus.graphics_settings_menu_state import (
+    _SCALE_SLIDERS,
     GraphicsSettingsMenuState,
     _get_by_path,
     _pct,
@@ -95,6 +97,20 @@ class TestOnScaleSlider:
             state.slider_value_labels = {path: MagicMock()}
             state.on_scale_slider(path)
             assert _get_by_path(state.working_config, path) == pytest.approx(value)
+
+
+class TestScaleSliderRanges:
+    @pytest.mark.parametrize("path", list(_SCALE_SLIDERS))
+    def test_slider_range_is_the_sanitised_limits(self, path):
+        """
+        A slider can reach any value sanitise() keeps, and no other: saving
+        never clamps a value the slider showed.
+        """
+        _label, (low, high) = _SCALE_SLIDERS[path]
+        config = {path[0]: {path[1]: -1e9}}
+        assert _get_by_path(GraphicsSettings.sanitise(config), path) == low
+        config = {path[0]: {path[1]: 1e9}}
+        assert _get_by_path(GraphicsSettings.sanitise(config), path) == high
 
 
 # ---------------------------------------------------------------------------
