@@ -20,7 +20,7 @@ hit_box_radius_m: 6.7
 laser_base_range_m: 1500
 laser_color: green
 laser_fire_rate: 6.7
-cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
+cannon_positions: [[-0.5, 5, -1], [0.5, 5, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 70.0
 laser_shot_energy_cost: 0.02  # laser gauge fraction per bolt
