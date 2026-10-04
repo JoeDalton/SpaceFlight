@@ -1,7 +1,8 @@
 """
 Gameplay (difficulty) settings persistence.
 
-configuration/gameplay_presets.yaml holds the difficulty presets (read-only).
+datafiles/default_configuration/gameplay_presets.yaml holds the difficulty
+presets (read-only).
 The user-editable configuration/gameplay.yaml names the selected preset, or is
 "custom" and holds its own values. Values come from the preset file whenever a
 preset is selected, so re-tuning a preset reaches every player who picked it.
@@ -24,12 +25,12 @@ from pathlib import Path
 
 import yaml
 
-from space_flight import CONFIGURATION_PATH
+from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 
 LOGGER = logging.getLogger()
 
 GAMEPLAY_FILE = CONFIGURATION_PATH / "gameplay.yaml"
-PRESETS_FILE = CONFIGURATION_PATH / "gameplay_presets.yaml"
+PRESETS_FILE = DEFAULT_CONFIGURATION_PATH / "gameplay_presets.yaml"
 
 # Preset used as a fallback, and the name of user-defined values
 DEFAULT_PRESET = "normal"

@@ -20,7 +20,7 @@ All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
   pushing a context (e.g. the radial menu over flight) blocks whatever is
   beneath it without either context knowing about the other.
 - Every action name (`"fire"`, `"pause"`, `"throttle_up"`, ...) is resolved
-  through the YAML bindings (`configuration/configuration.yaml`), never
+  through the YAML bindings (`configuration/bindings.yaml`), never
   hardcoded to a key. Since every reader exposes the same `InputState` shape,
   the same context code drives keyboard, gamepad and joystick.
 - `HUD`, `AimHUD` and `PlayerWaypoints` follow the scene-piece lifecycle
@@ -56,7 +56,7 @@ plain `InputState` snapshot (`buttons`/`repeats`/`releases`/`axes`):
   controllers. `safe_device_name()` provides a printable name instead, with a
   three-tier fallback (direct read → re-encode → synthesised
   `VID_xxxx&PID_xxxx`).
-- **`reader_factory(app)`** loads `configuration.yaml` onto `app.bindings` and
+- **`reader_factory(app)`** loads `bindings.yaml` onto `app.bindings` and
   instantiates the matching reader. It runs at startup and again when input
   settings are saved (see [docs/menus.md](menus.md#settings-screens)), so
   remapped bindings apply without a restart.

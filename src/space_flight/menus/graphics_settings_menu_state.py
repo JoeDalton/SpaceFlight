@@ -3,7 +3,8 @@ Graphics settings menu — lets the player view and change display/render option
 
 Like :mod:`space_flight.menus.input_settings_menu_state`, a deep-copied working
 config is edited in memory and written back only on *Save*. Rows are grouped
-under one header per top-level section of configuration/default_graphics.yaml.
+under one header per top-level section of
+datafiles/default_configuration/default_graphics.yaml.
 
 On save the display mode is applied to the live window immediately; every
 other setting is read on the next level load (hence the warning shown above
@@ -359,7 +360,7 @@ class GraphicsSettingsMenuState(BaseState):
         - "checkbox" — boolean toggle with "path" and "label" keys.
 
         One header precedes each top-level section of
-        configuration/default_graphics.yaml, in file order.
+        datafiles/default_configuration/default_graphics.yaml, in file order.
 
         :return: Ordered list of row descriptor dicts.
         """

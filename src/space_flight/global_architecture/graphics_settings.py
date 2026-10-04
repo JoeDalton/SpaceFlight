@@ -2,8 +2,8 @@
 Graphics settings persistence.
 
 A user-editable configuration/graphics.yaml is layered over a read-only
-configuration/default_graphics.yaml, and the result sanitised, so that any
-missing or invalid key falls back to a sane default.
+datafiles/default_configuration/default_graphics.yaml, and the result
+sanitised, so that any missing or invalid key falls back to a sane default.
 """
 
 import copy
@@ -12,12 +12,12 @@ from pathlib import Path
 
 import yaml
 
-from space_flight import CONFIGURATION_PATH
+from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 
 LOGGER = logging.getLogger()
 
 GRAPHICS_FILE = CONFIGURATION_PATH / "graphics.yaml"
-DEFAULT_GRAPHICS_FILE = CONFIGURATION_PATH / "default_graphics.yaml"
+DEFAULT_GRAPHICS_FILE = DEFAULT_CONFIGURATION_PATH / "default_graphics.yaml"
 
 _VALID_MODES = ("fullscreen", "windowed")
 _VALID_MSAA = (0, 2, 4, 8)

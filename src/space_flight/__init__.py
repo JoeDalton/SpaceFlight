@@ -10,6 +10,7 @@ __version__ = _version.__version__
 
 DATAFILES_PATH = Path(__file__).parent / "datafiles"
 CONFIGURATION_PATH = Path(__file__).parent / "configuration"
+DEFAULT_CONFIGURATION_PATH = DATAFILES_PATH / "default_configuration"
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "tests/fixtures"
 CACHE_PATH = Path(__file__).parent.parent.parent / ".cache"
 
