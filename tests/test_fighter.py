@@ -634,6 +634,7 @@ def _fake_ship_init(self, game, **kwargs):
         "laser_shot_energy_cost": LASER_SHOT_ENERGY_COST,
         "hit_box_radius_m": 5.0,
         "explosion_scale": 1.0,
+        "loadout": {"rocket": 2},
     }
 
 
@@ -649,6 +650,8 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     config["bots"]["auto_aim"]["lock_delay_s"] = 2.5
     config["player"]["deviation_deg"] = 0.5
     config["bots"]["deviation_deg"] = 1.5
+    config["player"]["damage_multiplier"] = 2.0
+    config["bots"]["damage_multiplier"] = 0.5
     game.app.gameplay_settings.config = config
 
     with (
@@ -656,6 +659,7 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
         patch("space_flight.actors.fighter.AutoAim") as auto_aim_cls,
         patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
         patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
     ):
         fighter = Fighter(
             game=game, parent=MagicMock(), ship_type="test", is_cockpit=is_cockpit
@@ -670,3 +674,6 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     assert laser_cannon_cls.call_args.kwargs["deviation_cone_deg"] == (
         0.5 if side == "player" else 1.5
     )
+    damage_multiplier = 2.0 if side == "player" else 0.5
+    assert laser_cannon_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
+    assert launcher_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier

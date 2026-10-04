@@ -17,6 +17,7 @@ from panda3d.core import BitMask32, Vec3
 
 from space_flight.fx import spark_fx
 from space_flight.game.collisions import (
+    COLLISION_DAMAGE_FACTOR,
     CollisionLayers,
     CollisionSystem,
     owners_share_vehicle,
@@ -152,6 +153,7 @@ def make_collision_system_without_init() -> CollisionSystem:
     """
     system = object.__new__(CollisionSystem)
     system.game = MagicMock()
+    system.player_collision_damage_multiplier = 1.0
     return system
 
 
@@ -270,6 +272,76 @@ def test_ship_into_subsystem_no_pushback_when_separating():
     # Separating: velocity corrections are zero for both bodies
     np.testing.assert_allclose(ship.push.call_args.kwargs["velocity_correction"], 0.0)
     np.testing.assert_allclose(host.push.call_args.kwargs["velocity_correction"], 0.0)
+
+
+# ---------------------------
+# collision damage — player multiplier
+# ---------------------------
+
+
+def test_init_reads_the_players_collision_damage_multiplier():
+    """The player's collision damage multiplier is read once, at level load."""
+    game = MagicMock()
+    game.app.gameplay_settings.config = {
+        "player": {"collision_damage_multiplier": 0.25}
+    }
+
+    system = CollisionSystem(game=game)
+
+    assert system.player_collision_damage_multiplier == 0.25
+
+
+def test_collision_damage_scales_only_the_players_ship():
+    """
+    The player's ship takes the scaled collision damage, any other ship the
+    base damage.
+    """
+    system = make_collision_system_without_init()
+    system.player_collision_damage_multiplier = 0.5
+    player_ship, bot_ship = MagicMock(), MagicMock()
+    system.game.player.pawn = player_ship
+
+    assert system.collision_damage(player_ship, 10.0) == pytest.approx(
+        0.5 * COLLISION_DAMAGE_FACTOR * 10.0**2
+    )
+    assert system.collision_damage(bot_ship, 10.0) == pytest.approx(
+        COLLISION_DAMAGE_FACTOR * 10.0**2
+    )
+
+
+def test_collision_damage_without_a_player_is_unscaled():
+    """With no player (e.g. a bots-only run), no ship is scaled."""
+    system = make_collision_system_without_init()
+    system.player_collision_damage_multiplier = 0.5
+    system.game.player = None
+
+    assert system.collision_damage(MagicMock(), 10.0) == pytest.approx(
+        COLLISION_DAMAGE_FACTOR * 10.0**2
+    )
+
+
+def test_player_ramming_a_subsystem_scales_only_the_players_damage():
+    """
+    When the player rams a subsystem, the player's ship takes the scaled damage
+    and the subsystem the base damage.
+    """
+    system = make_collision_system_without_init()
+    system.player_collision_damage_multiplier = 2.0
+
+    host = MagicMock(speed=np.zeros(3), mass_kg=800.0, mounted_on=None)
+    subsystem = MagicMock(mounted_on=host)
+    ship = MagicMock(speed=np.array([-10.0, 0.0, 0.0]), mass_kg=100.0)
+    ship.mounted_on = None
+    system.game.player.pawn = ship
+    entry = make_pushback_entry(ship, subsystem, Vec3(1.0, 0.0, 0.0))
+
+    system.ship_into_subsystem_pushback(entry)
+
+    base_damage = COLLISION_DAMAGE_FACTOR * 10.0**2
+    assert ship.push.call_args.kwargs["damage"] == pytest.approx(2.0 * base_damage)
+    subsystem.apply_damage.assert_called_once_with(
+        damage=pytest.approx(base_damage), damage_type="physical"
+    )
 
 
 # ---------------------------

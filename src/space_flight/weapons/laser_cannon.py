@@ -96,6 +96,7 @@ class LaserCannon(Weapon):
         parent_node: NodePath | None = None,
         energy: EnergySystem | None = None,
         deviation_cone_deg: float = 0.0,
+        damage_multiplier: float = 1.0,
     ):
         """
         :param game: The game/flight state
@@ -106,9 +107,16 @@ class LaserCannon(Weapon):
             power
         :param deviation_cone_deg: Half-angle of the cone within which each
             shot deviates randomly from its aimed direction (0 = no deviation)
+        :param damage_multiplier: Scales the damage of every bolt
         """
         fire_delay = 1.0 / parent.conf["laser_fire_rate"]
-        super().__init__(game, parent, parent_node, fire_delay=fire_delay)
+        super().__init__(
+            game,
+            parent,
+            parent_node,
+            fire_delay=fire_delay,
+            damage_multiplier=damage_multiplier,
+        )
         self.energy = energy
         self.deviation_cone_rad = np.deg2rad(deviation_cone_deg)
 

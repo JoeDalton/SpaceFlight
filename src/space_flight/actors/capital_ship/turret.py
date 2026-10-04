@@ -79,11 +79,13 @@ class Turret(TrackingMount):
             name="turret",
         )
 
+        bots_settings = gameplay_config(self.game)["bots"]
         self.laser_cannon = LaserCannon(
             game=self.game,
             parent=self,
             parent_node=self.turret_model.cannon_node,
-            deviation_cone_deg=gameplay_config(self.game)["bots"]["deviation_deg"],
+            deviation_cone_deg=bots_settings["deviation_deg"],
+            damage_multiplier=bots_settings["damage_multiplier"],
         )
         self.base_fire_delay = self.laser_cannon.fire_delay
         # Auto-aim is held ready but only exposed as self.auto_aim while a
@@ -134,6 +136,9 @@ class Turret(TrackingMount):
             enabled at all, which only the gameplay settings set
         """
         bots_params = auto_aim_params(self.game, "bots")
+        # TODO The targeting system's tuning ignores the difficulty: e.g. a CR-90
+        #  keeps its 0.5 s lock and 8 degree assist on easy. Scale it with the
+        #  bots' settings instead of overriding them?
         return {
             **bots_params,
             **targeting_system.auto_aim_params,

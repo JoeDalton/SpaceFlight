@@ -88,15 +88,24 @@ class OrdnanceLauncher(Weapon):
         parent: Fighter,
         name: str,
         stock: int,
+        damage_multiplier: float = 1.0,
     ):
         """
         :param game: The game/flight state
         :param parent: The ship carrying the ordnance
         :param name: The ordnance name, i.e. its configuration directory name
         :param stock: How many it carries
+        :param damage_multiplier: Scales the damage of every ordnance it launches
         """
         self.conf = load_ordnance_configuration(name)
-        super().__init__(game, parent, fire_delay=self.conf["reload_s"])
+        super().__init__(
+            game,
+            parent,
+            fire_delay=self.conf["reload_s"],
+            damage_multiplier=damage_multiplier,
+        )
+        # The ordnance takes its damage from this (private) configuration copy
+        self.conf["damage"] *= damage_multiplier
         self.name = name
         self.category = self.conf["type"]
         self.stock = stock

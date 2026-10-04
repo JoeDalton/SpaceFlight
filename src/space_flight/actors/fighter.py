@@ -75,6 +75,7 @@ class Fighter(Ship):
 
         # Initialize cannons, with the player's or the bots' gameplay settings
         side = "player" if is_cockpit else "bots"
+        settings = gameplay_config(self.game)[side]
         self.target_id = None
         self.auto_aim = AutoAim(
             game=self.game, parent=self, **auto_aim_params(self.game, side)
@@ -83,13 +84,20 @@ class Fighter(Ship):
             game=self.game,
             parent=self,
             energy=self.energy,
-            deviation_cone_deg=gameplay_config(self.game)[side]["deviation_deg"],
+            deviation_cone_deg=settings["deviation_deg"],
+            damage_multiplier=settings["damage_multiplier"],
         )
 
         # Ordnance: one launcher per loadout entry, in the configuration's order,
         # each with its own limited stock
         self.ordnance_launchers = [
-            OrdnanceLauncher(game=self.game, parent=self, name=name, stock=stock)
+            OrdnanceLauncher(
+                game=self.game,
+                parent=self,
+                name=name,
+                stock=stock,
+                damage_multiplier=settings["damage_multiplier"],
+            )
             for name, stock in self.conf.get("loadout", {}).items()
         ]
         # The selected secondary weapon (a bomb, rocket or missile launcher),

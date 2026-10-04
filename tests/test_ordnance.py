@@ -19,7 +19,10 @@ from panda3d.core import NodePath
 from space_flight.actors.destructibles import Destructibles
 from space_flight.actors.ordnance import Ordnance
 from space_flight.game.integrator import Integrator
-from space_flight.weapons.ordnance_launcher import OrdnanceLauncher
+from space_flight.weapons.ordnance_launcher import (
+    OrdnanceLauncher,
+    load_ordnance_configuration,
+)
 
 DT_S = 1 / 60
 # The smallest fighter hit box: closer than this to its centre is a hit
@@ -114,12 +117,18 @@ def make_target(position, speed):
     )
 
 
-def launch(game, name, ship=None, target_id=None):
+def launch(game, name, ship=None, target_id=None, damage_multiplier=1.0):
     """
     Launch one ordnance from a fresh launcher, and return its controller.
     """
     ship = make_ship() if ship is None else ship
-    launcher = OrdnanceLauncher(game=game, parent=ship, name=name, stock=1)
+    launcher = OrdnanceLauncher(
+        game=game,
+        parent=ship,
+        name=name,
+        stock=1,
+        damage_multiplier=damage_multiplier,
+    )
     launcher.last_fire_time = -np.inf  # no initial reload
     if target_id is not None:
         launcher.target_lock = MagicMock(is_locked=True)
@@ -164,6 +173,15 @@ def test_launch_position_and_velocity(game, name, expected_offset, expected_velo
     assert pawn.max_speed_mps == pytest.approx(np.linalg.norm(expected_velocity))
     assert pawn.team == ship.team
     assert pawn.origin_ship_id == ship.id
+
+
+def test_ordnance_power_is_scaled_by_the_launchers_damage_multiplier(game):
+    """An ordnance hits with its configured damage times the launcher's multiplier."""
+    base_damage = load_ordnance_configuration("rocket")["damage"]
+
+    pawn = launch(game, "rocket", damage_multiplier=0.5).pawn
+
+    assert pawn.power == pytest.approx(0.5 * base_damage)
 
 
 def test_flare_has_a_flare_collider_and_others_an_ordnance_collider(game):

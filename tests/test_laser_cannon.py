@@ -45,6 +45,7 @@ def laser_cannon():
     cannon.energy = None
     # Exact shots unless a test sets a deviation cone
     cannon.deviation_cone_rad = 0.0
+    cannon.damage_multiplier = 1.0
 
     # Parent ship stub: no auto_aim so fire() falls back to speed + forward
     cannon.parent = MagicMock()
@@ -149,6 +150,25 @@ def test_fire_spends_laser_energy_and_applies_damage_bonus(laser_cannon):
     assert mock_laser_shot.call_args.kwargs["power"] == pytest.approx(expected_power)
     assert expected_power > laser_cannon.shot_power
     assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_ENERGY_COST)
+
+
+def test_fire_scales_the_bolt_power_by_the_damage_multiplier(laser_cannon):
+    """
+    The damage multiplier scales the bolt's power, on top of the laser gauge's
+    damage bonus.
+    """
+    energy = EnergySystem(
+        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
+    )
+    laser_cannon.energy = energy
+    laser_cannon.damage_multiplier = 2.0
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+    expected_power = 2.0 * laser_cannon.shot_power * energy.laser_damage_factor()
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        laser_cannon.fire()
+
+    assert mock_laser_shot.call_args.kwargs["power"] == pytest.approx(expected_power)
 
 
 def test_fire_without_energy_system_uses_base_power(laser_cannon):

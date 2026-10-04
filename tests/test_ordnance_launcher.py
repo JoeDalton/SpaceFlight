@@ -26,7 +26,9 @@ SHIP_CONFIGURATIONS = sorted(
 )
 
 
-def make_launcher(name: str = "concussion_missile", stock: int = 3):
+def make_launcher(
+    name: str = "concussion_missile", stock: int = 3, damage_multiplier: float = 1.0
+):
     """
     A launcher on a mocked, level ship facing +Y, its clock frozen at 0.
     """
@@ -39,7 +41,13 @@ def make_launcher(name: str = "concussion_missile", stock: int = 3):
         up=np.array([0.0, 0.0, 1.0]),
         parent=SimpleNamespace(name="ship"),
     )
-    return OrdnanceLauncher(game=game, parent=ship, name=name, stock=stock)
+    return OrdnanceLauncher(
+        game=game,
+        parent=ship,
+        name=name,
+        stock=stock,
+        damage_multiplier=damage_multiplier,
+    )
 
 
 # ---------------------------
@@ -163,6 +171,21 @@ def test_launcher_reads_its_configuration():
     assert launcher.speed_mps == pytest.approx(75.0)
     assert launcher.fire_delay == pytest.approx(launcher.conf["reload_s"])
     assert launcher.display_name == "PROTON BOMB"
+
+
+def test_damage_multiplier_scales_the_ordnance_damage():
+    """
+    A launcher's damage multiplier scales the damage of the ordnance it launches
+    (read from its configuration), without affecting other launchers.
+    """
+    base_damage = load_ordnance_configuration("rocket")["damage"]
+
+    scaled = make_launcher("rocket", damage_multiplier=2.0)
+    unscaled = make_launcher("rocket")
+
+    assert scaled.damage_multiplier == 2.0
+    assert scaled.conf["damage"] == pytest.approx(2.0 * base_damage)
+    assert unscaled.conf["damage"] == pytest.approx(base_damage)
 
 
 def test_a_missile_launcher_has_a_target_lock_tuned_by_its_configuration():

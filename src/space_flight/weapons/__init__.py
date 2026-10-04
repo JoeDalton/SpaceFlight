@@ -80,6 +80,7 @@ class Weapon:
         parent: Fighter | Turret,
         parent_node: NodePath | None = None,
         fire_delay: float = 0.0,
+        damage_multiplier: float = 1.0,
     ):
         """
         :param game: The game/flight state
@@ -87,6 +88,8 @@ class Weapon:
         :param parent_node: Node the munitions are emitted from; defaults to the
             parent's node
         :param fire_delay: Minimum time between shots, in seconds (0 = unlimited)
+        :param damage_multiplier: Scales the damage of every munition it emits
+            (a gameplay setting)
         """
         self.parent = parent
         self.game = game
@@ -96,6 +99,7 @@ class Weapon:
         # observes one full reload before its first shot.
         self.fire_delay = fire_delay
         self.last_fire_time = self.game.game_time.get_current_time()
+        self.damage_multiplier = damage_multiplier
 
     def _ready_to_fire(self) -> bool:
         """
@@ -134,7 +138,7 @@ class Weapon:
             the caller so test doubles can patch it in the caller's module)
         :param start_position: World-space emission point
         :param speed: World-space velocity
-        :param power: Damage dealt on impact
+        :param power: Damage dealt on impact, before the damage multiplier
         :param life_time_s: How long the munition lives
         :param munition_kwargs: Extra per-weapon visual parameters (e.g. the laser
             texture / light colour)
@@ -143,7 +147,7 @@ class Weapon:
             game=self.game,
             origin_ship_id=self.parent.id,
             origin_ship=self.parent,
-            power=power,
+            power=power * self.damage_multiplier,
             life_time_s=life_time_s,
             speed=speed,
             start_position=start_position,
