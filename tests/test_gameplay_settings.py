@@ -3,8 +3,9 @@ Unit tests for the gameplay-settings persistence layer
 (:mod:`space_flight.global_architecture.gameplay_settings`).
 
 Covers:
-- :meth:`GameplaySettings.sanitise` — clamping / coercion of every field
-- :func:`load_presets` — the presets file, sanitised, in order
+- :meth:`GameplaySettings.sanitise` — clamping / coercion of every value,
+  with the fallback's for missing or wrong-typed ones
+- :func:`load_presets` — the presets file, in order, complete and valid
 - :meth:`GameplaySettings.load` — the preset (or custom values) the user file
   selects, with fallbacks to the default preset
 - :meth:`GameplaySettings.save` — round-trip to disk
@@ -13,6 +14,7 @@ Covers:
   the untuned game
 """
 
+import copy
 import inspect
 import types
 from unittest.mock import MagicMock
@@ -25,6 +27,7 @@ from space_flight.global_architecture import gameplay_settings as gps
 from space_flight.global_architecture.gameplay_settings import (
     CUSTOM_PRESET,
     DEFAULT_PRESET,
+    LIMITS,
     GameplaySettings,
     gameplay_config,
     load_presets,
@@ -58,9 +61,48 @@ _VALID = {
     },
 }
 
-# Test presets: the default one is all-defaults, "hard" is _VALID
-_NORMAL = GameplaySettings.sanitise({})
+# The untuned game's values (as the shipped "normal" preset)
+_NORMAL = {
+    "player": {
+        "auto_aim": {
+            "enabled": True,
+            "lock_delay_s": 1.0,
+            "lock_angle_deg": 30.0,
+            "assist_angle_deg": 5.0,
+        },
+        "deviation_deg": 0.0,
+        "damage_multiplier": 1.0,
+        "collision_damage_multiplier": 1.0,
+        "lead_indicator": True,
+    },
+    "bots": {
+        "auto_aim": {
+            "enabled": True,
+            "lock_delay_s": 1.0,
+            "lock_angle_deg": 30.0,
+            "assist_angle_deg": 5.0,
+        },
+        "deviation_deg": 0.0,
+        "damage_multiplier": 1.0,
+    },
+}
+
+# Test presets: "hard" is _VALID
 _PRESETS = {"easy": _NORMAL, DEFAULT_PRESET: _NORMAL, "hard": _VALID}
+
+
+def _get(section: dict, path: tuple):
+    """Return the value at *path* in nested dict *section*."""
+    for key in path:
+        section = section[key]
+    return section
+
+
+def _set(section: dict, path: tuple, value):
+    """Set the value at *path* in nested dict *section*, creating dicts."""
+    for key in path[:-1]:
+        section = section.setdefault(key, {})
+    section[path[-1]] = value
 
 
 def _write_yaml(path, data):
@@ -90,84 +132,67 @@ def files(tmp_path, monkeypatch):
 
 class TestSanitise:
     def test_valid_config_passes_through(self):
-        assert GameplaySettings.sanitise(_VALID) == _VALID
+        assert GameplaySettings.sanitise(_VALID, fallback=_NORMAL) == _VALID
 
     def test_input_is_not_modified(self):
         config = {"player": {"damage_multiplier": 99.0}}
-        GameplaySettings.sanitise(config)
+        GameplaySettings.sanitise(config, fallback=_NORMAL)
         assert config == {"player": {"damage_multiplier": 99.0}}
 
-    def test_empty_config_produces_full_defaults(self):
-        out = GameplaySettings.sanitise({})
-        for side in ("player", "bots"):
-            assert out[side]["auto_aim"] == {
-                "enabled": True,
-                "lock_delay_s": 1.0,
-                "lock_angle_deg": 30.0,
-                "assist_angle_deg": 5.0,
-            }
-            assert out[side]["deviation_deg"] == 0.0
-            assert out[side]["damage_multiplier"] == 1.0
-        assert out["player"]["collision_damage_multiplier"] == 1.0
-        assert out["player"]["lead_indicator"] is True
-        # Player-only fields are not added to the bots
+    def test_empty_config_takes_every_value_from_the_fallback(self):
+        assert GameplaySettings.sanitise({}, fallback=_VALID) == _VALID
+
+    def test_player_only_values_are_not_added_to_the_bots(self):
+        out = GameplaySettings.sanitise({}, fallback=_NORMAL)
         assert "lead_indicator" not in out["bots"]
         assert "collision_damage_multiplier" not in out["bots"]
 
-    @pytest.mark.parametrize(
-        "key, raw, expected",
-        [
-            ("lock_delay_s", -1.0, 0.0),
-            ("lock_delay_s", 99.0, 5.0),
-            ("lock_angle_deg", 0.0, 1.0),
-            ("lock_angle_deg", 180.0, 90.0),
-            # Never 0: the assist clamp divides by its tangent
-            ("assist_angle_deg", 0.0, 0.5),
-            ("assist_angle_deg", 99.0, 20.0),
-        ],
-    )
-    def test_auto_aim_fields_clamped(self, key, raw, expected):
-        out = GameplaySettings.sanitise({"bots": {"auto_aim": {key: raw}}})
-        assert out["bots"]["auto_aim"][key] == expected
+    @pytest.mark.parametrize("path", list(LIMITS))
+    def test_numbers_clamped_to_their_limits(self, path):
+        """Below its minimum, a value is raised to it; above its maximum, cut."""
+        minimum, maximum = LIMITS[path]
+        for raw, expected in [(minimum - 1.0, minimum), (maximum + 1.0, maximum)]:
+            config = {"player": {}}
+            _set(config["player"], path, raw)
+            out = GameplaySettings.sanitise(config, fallback=_NORMAL)
+            assert _get(out["player"], path) == expected
 
-    @pytest.mark.parametrize(
-        "raw, expected", [(-1.0, 0.0), (99.0, 5.0), ("2", 2.0), ("wide", 0.0)]
-    )
-    def test_deviation_clamped(self, raw, expected):
-        out = GameplaySettings.sanitise({"player": {"deviation_deg": raw}})
-        assert out["player"]["deviation_deg"] == expected
+    def test_numeric_strings_are_numbers(self):
+        out = GameplaySettings.sanitise(
+            {"player": {"deviation_deg": "1"}}, fallback=_NORMAL
+        )
+        assert out["player"]["deviation_deg"] == 1.0
+
+    @pytest.mark.parametrize("raw", [None, "x", [1]])
+    def test_wrong_typed_number_takes_the_fallbacks_value(self, raw):
+        out = GameplaySettings.sanitise(
+            {"bots": {"damage_multiplier": raw, "auto_aim": {"lock_delay_s": raw}}},
+            fallback=_VALID,
+        )
+        assert out["bots"]["damage_multiplier"] == _VALID["bots"]["damage_multiplier"]
+        assert (
+            out["bots"]["auto_aim"]["lock_delay_s"]
+            == (_VALID["bots"]["auto_aim"]["lock_delay_s"])
+        )
 
     @pytest.mark.parametrize("raw, expected", [(1, True), (0, False), ("", False)])
-    def test_auto_aim_enabled_coerced_to_bool(self, raw, expected):
-        out = GameplaySettings.sanitise({"player": {"auto_aim": {"enabled": raw}}})
-        assert out["player"]["auto_aim"]["enabled"] is expected
-
-    @pytest.mark.parametrize(
-        "raw, expected", [(0.0, 0.1), (99.0, 5.0), (None, 1.0), ("x", 1.0)]
-    )
-    def test_damage_multiplier_clamped(self, raw, expected):
-        out = GameplaySettings.sanitise({"bots": {"damage_multiplier": raw}})
-        assert out["bots"]["damage_multiplier"] == expected
-
-    @pytest.mark.parametrize("raw, expected", [(-1.0, 0.0), (0.0, 0.0), (99.0, 5.0)])
-    def test_collision_damage_multiplier_clamped(self, raw, expected):
+    def test_flags_coerced_to_bool(self, raw, expected):
         out = GameplaySettings.sanitise(
-            {"player": {"collision_damage_multiplier": raw}}
+            {"player": {"auto_aim": {"enabled": raw}, "lead_indicator": raw}},
+            fallback=_NORMAL,
         )
-        assert out["player"]["collision_damage_multiplier"] == expected
-
-    @pytest.mark.parametrize("raw, expected", [(1, True), (0, False)])
-    def test_lead_indicator_coerced_to_bool(self, raw, expected):
-        out = GameplaySettings.sanitise({"player": {"lead_indicator": raw}})
+        assert out["player"]["auto_aim"]["enabled"] is expected
         assert out["player"]["lead_indicator"] is expected
 
     @pytest.mark.parametrize("raw", [None, 3, "hard", [1, 2]])
-    def test_malformed_sections_replaced_by_defaults(self, raw):
-        out = GameplaySettings.sanitise({"player": raw, "bots": {"auto_aim": raw}})
-        assert out == GameplaySettings.sanitise({})
+    def test_malformed_sections_take_the_fallbacks_values(self, raw):
+        out = GameplaySettings.sanitise(
+            {"player": raw, "bots": {"auto_aim": raw}}, fallback=_VALID
+        )
+        assert out == _VALID
 
     def test_other_keys_pass_through(self):
-        out = GameplaySettings.sanitise({"preset": "hard"})
+        out = GameplaySettings.sanitise({"preset": "hard"}, fallback=_NORMAL)
         assert out["preset"] == "hard"
 
 
@@ -180,15 +205,41 @@ class TestLoadPresets:
     def test_presets_in_file_order(self, files):
         assert list(load_presets()) == ["easy", DEFAULT_PRESET, "hard"]
 
-    def test_presets_are_sanitised(self, tmp_path, monkeypatch):
-        path = _write_yaml(
-            tmp_path / "presets.yaml",
-            {DEFAULT_PRESET: {"bots": {"damage_multiplier": 99}}},
+    def test_presets_are_read_as_is(self, files):
+        assert load_presets() == _PRESETS
+
+    @pytest.mark.parametrize(
+        "side, path, raw",
+        [
+            # Missing
+            ("bots", ("damage_multiplier",), None),
+            ("player", ("lead_indicator",), None),
+            ("bots", ("auto_aim", "lock_delay_s"), None),
+            # Out of range
+            ("bots", ("damage_multiplier",), 99.0),
+            # Not a number
+            ("player", ("deviation_deg",), "wide"),
+            ("player", ("deviation_deg",), "2"),
+        ],
+    )
+    def test_incomplete_or_invalid_preset_raises(
+        self, tmp_path, monkeypatch, side, path, raw
+    ):
+        """The presets file is read-only: there is nothing to fall back on."""
+        hard = copy.deepcopy(_VALID)
+        section = hard[side]
+        for key in path[:-1]:
+            section = section[key]
+        if raw is None:
+            del section[path[-1]]
+        else:
+            section[path[-1]] = raw
+        path_file = _write_yaml(
+            tmp_path / "presets.yaml", {DEFAULT_PRESET: _NORMAL, "hard": hard}
         )
-        monkeypatch.setattr(gps, "PRESETS_FILE", path)
-        presets = load_presets()
-        assert presets[DEFAULT_PRESET]["bots"]["damage_multiplier"] == 5.0
-        assert presets[DEFAULT_PRESET]["player"] == _NORMAL["player"]
+        monkeypatch.setattr(gps, "PRESETS_FILE", path_file)
+        with pytest.raises(ValueError, match="hard"):
+            load_presets()
 
     def test_missing_default_preset_raises(self, tmp_path, monkeypatch):
         path = _write_yaml(tmp_path / "presets.yaml", {"hard": _VALID})
@@ -238,7 +289,10 @@ class TestLoad:
 
     def test_custom_values_are_sanitised(self, files):
         _write_yaml(files, {"preset": CUSTOM_PRESET, "bots": {"damage_multiplier": 99}})
-        assert GameplaySettings().config["bots"]["damage_multiplier"] == 5.0
+        assert (
+            GameplaySettings().config["bots"]["damage_multiplier"]
+            == (LIMITS[("damage_multiplier",)][1])
+        )
 
     @pytest.mark.parametrize("content", [{"preset": "nightmare"}, {}, [1, 2], "hard"])
     def test_invalid_user_file_selects_default_preset(self, files, content):
@@ -278,7 +332,10 @@ class TestSave:
 
         on_disk = yaml.safe_load(files.read_text())
         assert on_disk["preset"] == CUSTOM_PRESET
-        assert on_disk["player"]["damage_multiplier"] == 5.0
+        assert (
+            on_disk["player"]["damage_multiplier"]
+            == (LIMITS[("damage_multiplier",)][1])
+        )
         assert on_disk["bots"] == _NORMAL["bots"]
         assert settings.config == on_disk
 
@@ -323,9 +380,8 @@ class TestShippedPresets:
         assert list(load_presets()) == ["easy", "normal", "hard", "ace"]
 
     def test_every_preset_is_complete_and_valid(self):
-        """Every preset sets every field, and none needs clamping."""
-        for name, values in gps._load_file(gps.PRESETS_FILE).items():
-            assert GameplaySettings.sanitise(values) == values, name
+        """Every preset sets every value, in its limits (or loading raises)."""
+        load_presets()
 
     def test_default_preset_matches_the_untuned_game(self):
         """
@@ -333,6 +389,7 @@ class TestShippedPresets:
         spread, unscaled damage, lead indicator on.
         """
         normal = load_presets()[DEFAULT_PRESET]
+        assert normal == _NORMAL
         params = inspect.signature(AutoAim.__init__).parameters
         for side in ("player", "bots"):
             auto_aim = normal[side]["auto_aim"]

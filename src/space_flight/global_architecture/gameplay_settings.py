@@ -7,8 +7,10 @@ The user-editable configuration/gameplay.yaml names the selected preset, or is
 preset is selected, so re-tuning a preset reaches every player who picked it.
 
 The "normal" preset reproduces the game's original, untuned behaviour, and is
-the fallback for a missing or unknown preset and for missing custom values.
-Every value is sanitised, so a hand-edited file never crashes the game.
+the only source of defaults: the fallback for a missing or unknown preset, and
+for missing or invalid custom values. The user file is sanitised, so a
+hand-edited one never crashes the game; the read-only presets file must be
+complete and valid.
 
 Game code reads these settings once, when a level is built (see
 :func:`gameplay_config`): changes made from the menus apply from the next
@@ -23,7 +25,6 @@ from pathlib import Path
 import yaml
 
 from space_flight import CONFIGURATION_PATH
-from space_flight.global_architecture.graphics_settings import _deep_merge
 
 LOGGER = logging.getLogger()
 
@@ -38,30 +39,72 @@ CUSTOM_PRESET = "custom"
 # turrets, capital ships)
 SIDES = ("player", "bots")
 
-# (minimum, maximum, fallback) of each numeric field
-_AUTO_AIM_LIMITS = {
-    "lock_delay_s": (0.0, 5.0, 1.0),
-    # Beyond 90 degrees, targets behind the ship could be locked
-    "lock_angle_deg": (1.0, 90.0, 30.0),
+# The values of a side, by path within its settings: (minimum, maximum) of each
+# numeric value, and the boolean ones
+LIMITS = {
+    ("auto_aim", "lock_delay_s"): (0.0, 5.0),
+    ("auto_aim", "lock_angle_deg"): (1.0, 45.0),
     # Strictly positive: the assist clamp divides by its tangent
-    "assist_angle_deg": (0.5, 20.0, 5.0),
+    ("auto_aim", "assist_angle_deg"): (0.5, 20.0),
+    ("deviation_deg",): (0.0, 2.0),
+    ("damage_multiplier",): (0.1, 3.0),
+    ("collision_damage_multiplier",): (0.0, 2.0),
 }
-_DEVIATION_LIMITS = (0.0, 5.0, 0.0)
-_DAMAGE_MULTIPLIER_LIMITS = (0.1, 5.0, 1.0)
-_COLLISION_DAMAGE_MULTIPLIER_LIMITS = (0.0, 5.0, 1.0)
+FLAGS = (("auto_aim", "enabled"), ("lead_indicator",))
+# Values only the player has
+PLAYER_ONLY = (("collision_damage_multiplier",), ("lead_indicator",))
+
+# Marks a value missing from its settings
+_MISSING = object()
 
 
-def _clamp(value, limits: tuple[float, float, float]) -> float:
+def side_paths(side: str) -> list[tuple]:
     """
-    :param value: The value to coerce to a float within limits
-    :param limits: (minimum, maximum, fallback if value is not a number)
-    :return: The clamped value
+    :param side: "player" or "bots"
+    :return: The paths of the side's values, within its settings
     """
-    minimum, maximum, fallback = limits
+    return [
+        path
+        for path in (*FLAGS, *LIMITS)
+        if side == "player" or path not in PLAYER_ONLY
+    ]
+
+
+def _get_path(section, path: tuple):
+    """:return: The value at *path* in nested dict *section*, or _MISSING."""
+    for key in path:
+        if not isinstance(section, dict) or key not in section:
+            return _MISSING
+        section = section[key]
+    return section
+
+
+def _set_path(section: dict, path: tuple, value):
+    """Set the value at *path* in nested dict *section*, replacing non-dicts."""
+    for key in path[:-1]:
+        if not isinstance(section.get(key), dict):
+            section[key] = {}
+        section = section[key]
+    section[path[-1]] = value
+
+
+def _clean(path: tuple, value, fallback):
+    """
+    :param path: The value's path within its side's settings
+    :param value: The value, possibly _MISSING or wrong-typed
+    :param fallback: What to return if value is missing or not a number
+    :return: The value coerced to a bool, or to a number within its limits
+    """
+    if value is _MISSING:
+        return fallback
+    if path in FLAGS:
+        return bool(value)
     try:
-        return min(maximum, max(minimum, float(value)))
+        number = float(value)
     except (TypeError, ValueError):
         return fallback
+    minimum, maximum = LIMITS[path]
+    return min(maximum, max(minimum, number))
 
 
 def _load_file(path: Path) -> dict:
@@ -72,19 +115,26 @@ def _load_file(path: Path) -> dict:
 
 def load_presets() -> dict[str, dict]:
     """
-    :return: The sanitised values of each preset of gameplay_presets.yaml, by
-        name, in file order
-    :raises ValueError: If the file lacks the default preset, or uses the
-        custom preset's name
+    :return: The values of each preset of gameplay_presets.yaml, by name, in
+        file order
+    :raises ValueError: If the file lacks the default preset, uses the custom
+        preset's name, or has a preset missing a value or with an invalid one
+        (it is read-only: there is nothing to fall back on)
     """
-    presets = {
-        str(name): GameplaySettings.sanitise(values)
-        for name, values in _load_file(PRESETS_FILE).items()
-    }
+    presets = {str(name): values for name, values in _load_file(PRESETS_FILE).items()}
     if DEFAULT_PRESET not in presets:
         raise ValueError(f"{PRESETS_FILE} has no '{DEFAULT_PRESET}' preset")
     if CUSTOM_PRESET in presets:
         raise ValueError(f"'{CUSTOM_PRESET}' is not a valid name in {PRESETS_FILE}")
+    for name, values in presets.items():
+        for side in SIDES:
+            for path in side_paths(side):
+                value = _get_path(_get_path(values, (side,)), path)
+                if value is _MISSING or _clean(path, value, _MISSING) != value:
+                    raise ValueError(
+                        f"{PRESETS_FILE}: preset '{name}' has no valid "
+                        f"{'.'.join((side, *path))} ({value!r})"
+                    )
     return presets
 
 
@@ -119,22 +169,23 @@ class GameplaySettings:
         """
         :param config: The selected preset's name under "preset" and, for the
             custom preset, its values (possibly partial or invalid)
-        :return: The preset's name, and the sanitised, fully populated values it
-            stands for: the preset's own values, or the custom values over the
-            default preset's. An unknown preset falls back to the default one.
+        :return: The preset's name, and the fully populated values it stands
+            for: the preset's own values, or the custom values, sanitised over
+            the default preset's. An unknown preset falls back to the default
+            one.
         """
         if not isinstance(config, dict):
             config = {}
         preset = config.get("preset", DEFAULT_PRESET)
         if preset == CUSTOM_PRESET:
-            values = _deep_merge(self.presets[DEFAULT_PRESET], config)
+            values = self.sanitise(config, fallback=self.presets[DEFAULT_PRESET])
         elif preset in self.presets:
             values = self.presets[preset]
         else:
             LOGGER.warning(f"Unknown gameplay preset {preset!r}; using defaults")
             preset = DEFAULT_PRESET
             values = self.presets[preset]
-        return _with_preset(preset, self.sanitise(values))
+        return _with_preset(preset, values)
 
     def save(self, config: dict):
         """
@@ -151,43 +202,31 @@ class GameplaySettings:
         self.config = config
 
     @staticmethod
-    def sanitise(config: dict) -> dict:
+    def sanitise(config: dict, fallback: dict) -> dict:
         """
         Clamp every value to one the game can act on, leaving the input dict
         untouched (works on a deep copy). Keys other than the values (e.g.
         "preset") are passed through.
 
-        Out-of-range or wrong-typed values are coerced to the nearest valid
-        option rather than rejected, so a hand-edited file never crashes the
-        game.
+        Out-of-range values are clamped, and missing or wrong-typed values (or
+        sections) replaced by the fallback's, so a hand-edited file never
+        crashes the game.
+
+        :param config: The values to sanitise
+        :param fallback: Complete and valid values (e.g. the default preset's)
+        :return: The sanitised, fully populated values
         """
         config = copy.deepcopy(config)
         for side in SIDES:
-            section = config.setdefault(side, {})
-            if not isinstance(section, dict):
-                section = config[side] = {}
-            auto_aim = section.setdefault("auto_aim", {})
-            if not isinstance(auto_aim, dict):
-                auto_aim = section["auto_aim"] = {}
-
-            auto_aim["enabled"] = bool(auto_aim.get("enabled", True))
-            for key, limits in _AUTO_AIM_LIMITS.items():
-                auto_aim[key] = _clamp(auto_aim.get(key, limits[2]), limits)
-
-            section["deviation_deg"] = _clamp(
-                section.get("deviation_deg", 0.0), _DEVIATION_LIMITS
-            )
-            section["damage_multiplier"] = _clamp(
-                section.get("damage_multiplier", 1.0), _DAMAGE_MULTIPLIER_LIMITS
-            )
-
-        player = config["player"]
-        player["collision_damage_multiplier"] = _clamp(
-            player.get("collision_damage_multiplier", 1.0),
-            _COLLISION_DAMAGE_MULTIPLIER_LIMITS,
-        )
-        player["lead_indicator"] = bool(player.get("lead_indicator", True))
-
+            if not isinstance(config.get(side), dict):
+                config[side] = {}
+            for path in side_paths(side):
+                value = _clean(
+                    path,
+                    _get_path(config[side], path),
+                    _get_path(fallback[side], path),
+                )
+                _set_path(config[side], path, value)
         return config
 
 

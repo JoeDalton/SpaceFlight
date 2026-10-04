@@ -1,3 +1,4 @@
+import copy
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,8 +11,9 @@ from space_flight.actors.energy import (
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.ship import Ship
 from space_flight.global_architecture.gameplay_settings import (
-    GameplaySettings,
+    DEFAULT_PRESET,
     auto_aim_params,
+    load_presets,
 )
 from space_flight.utils.state_machine import Cooldown
 
@@ -645,7 +647,7 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     and deviation settings, every other fighter the bots'.
     """
     game = MagicMock()
-    config = GameplaySettings.sanitise({})
+    config = copy.deepcopy(load_presets()[DEFAULT_PRESET])
     config["player"]["auto_aim"]["lock_delay_s"] = 0.25
     config["bots"]["auto_aim"]["lock_delay_s"] = 2.5
     config["player"]["deviation_deg"] = 0.5

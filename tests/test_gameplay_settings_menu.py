@@ -22,7 +22,8 @@ from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.gameplay_settings import (
     CUSTOM_PRESET,
     DEFAULT_PRESET,
-    GameplaySettings,
+    FLAGS,
+    LIMITS,
     load_presets,
 )
 from space_flight.menus.gameplay_settings_menu_state import (
@@ -79,34 +80,23 @@ def _leaf_paths(config: dict, prefix: tuple = ()) -> set[tuple]:
 class TestTables:
     def test_every_setting_has_a_row(self, state):
         """Every value the settings hold is shown, as a slider or a checkbox."""
-        values = GameplaySettings.sanitise({})
+        values = PRESETS[DEFAULT_PRESET]
         row_paths = {row["path"] for row in state.make_row_data() if "path" in row}
         assert row_paths == _leaf_paths(values)
 
-    def test_slider_ranges_are_the_sanitised_limits(self):
-        """A slider can reach any value sanitise() keeps, and no other."""
-        defaults = GameplaySettings.sanitise({})
-        for key, (_label, (low, high), _step, _fmt) in _SLIDERS.items():
-            for side in ("player", "bots"):
-                try:
-                    _get_by_path(defaults[side], key)
-                except KeyError:
-                    continue  # A player-only setting
-                config = {side: {}}
-                section = config[side]
-                for part in key[:-1]:
-                    section = section.setdefault(part, {})
-                section[key[-1]] = -1e9
-                low_out = _get_by_path(GameplaySettings.sanitise(config)[side], key)
-                section[key[-1]] = 1e9
-                high_out = _get_by_path(GameplaySettings.sanitise(config)[side], key)
-                assert (low_out, high_out) == (low, high), key
+    def test_sliders_and_checkboxes_cover_the_settings_values(self):
+        """
+        Sliders are the numeric values (over their limits), checkboxes the
+        boolean ones.
+        """
+        assert set(_SLIDERS) == set(LIMITS)
+        assert set(_CHECKBOXES) == set(FLAGS)
 
     def test_every_preset_value_sits_on_its_slider_step(self):
         """Preset values read exactly on their sliders' readouts."""
         for name, values in PRESETS.items():
             for side in ("player", "bots"):
-                for key, (_label, _range, step, _fmt) in _SLIDERS.items():
+                for key, (_label, step, _fmt) in _SLIDERS.items():
                     try:
                         value = _get_by_path(values[side], key)
                     except KeyError:

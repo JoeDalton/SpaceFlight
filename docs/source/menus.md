@@ -127,8 +127,9 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   mission, as an on-screen warning says. There is no *Default*: the `normal`
   preset is the default.
 
-  The slider ranges are the limits `GameplaySettings.sanitise()` clamps to,
-  imported from it, so a value shown is never clamped on save. Each slider
+  The slider ranges are the `LIMITS` `GameplaySettings.sanitise()` clamps to,
+  imported from `gameplay_settings.py`, so a value shown is never clamped on
+  save. Each slider
   snaps to a step (e.g. 0.05 s, 1 degree). A slider reports its value when it
   is built, slightly off (single precision): `on_slider` only stores, and
   switches to *Custom*, when the snapped value actually changes, so building

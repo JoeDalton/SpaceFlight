@@ -147,9 +147,11 @@ make it up:
 
 - **`configuration/gameplay_presets.yaml`** (read-only) holds the presets —
   easy, normal, hard, ace, in the order the menu lists them — each setting
-  every value. `normal` reproduces the untuned game, and is the fallback for
-  anything missing or invalid. `load_presets()` reads and sanitises them
-  (exposed as `GameplaySettings.presets`).
+  every value. `normal` reproduces the untuned game, and is the only source
+  of defaults: the fallback for anything missing or invalid. `load_presets()`
+  reads them (exposed as `GameplaySettings.presets`) and raises if one lacks
+  a value or has an invalid one: the file is read-only, so there is nothing
+  to fall back on.
 - **`configuration/gameplay.yaml`** (the user file) holds `preset: <name>`
   only, or `preset: custom` followed by its own values. A named preset always
   takes its values from the presets file, so re-tuning a preset reaches every
@@ -158,9 +160,12 @@ make it up:
 
 `resolve()` turns either form into the full settings, `config`: the preset's
 name under `preset`, and its values. `save()` writes only the name, unless
-custom. `sanitise()` clamps every value (e.g. the assist angle stays above 0,
-as auto-aim divides by its tangent); the gameplay settings menu's sliders use
-the same limits (see [docs/menus.md](menus.md#settings-screens)).
+custom. `sanitise(config, fallback)` clamps each numeric value to its
+`(minimum, maximum)` in the `LIMITS` table (e.g. the assist angle stays above
+0, as auto-aim divides by its tangent), coerces the `FLAGS` to booleans, and
+takes the fallback's value for any missing or wrong-typed one; `resolve()`
+passes the `normal` preset. The gameplay settings menu's sliders span the same
+`LIMITS` (see [docs/menus.md](menus.md#settings-screens)).
 
 Each side — the player, and the bots (fighters, turrets, capital ships) — has:
 

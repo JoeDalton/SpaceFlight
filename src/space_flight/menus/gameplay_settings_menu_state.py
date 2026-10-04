@@ -24,11 +24,8 @@ from panda3d.core import TextNode
 
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.gameplay_settings import (
-    _AUTO_AIM_LIMITS,
-    _COLLISION_DAMAGE_MULTIPLIER_LIMITS,
-    _DAMAGE_MULTIPLIER_LIMITS,
-    _DEVIATION_LIMITS,
     CUSTOM_PRESET,
+    LIMITS,
     SIDES,
 )
 from space_flight.menus.graphics_settings_menu_state import (
@@ -45,40 +42,15 @@ from space_flight.menus.menu_utils import (
 if TYPE_CHECKING:
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
-# Sliders: path within a side's settings -> (label, (min, max), step, value
-# format). The ranges are the ones sanitise() clamps to.
+# Sliders: path within a side's settings -> (label, step, value format). Their
+# ranges are the limits sanitise() clamps to.
 _SLIDERS = {
-    ("auto_aim", "lock_delay_s"): (
-        "Lock Delay",
-        _AUTO_AIM_LIMITS["lock_delay_s"][:2],
-        0.05,
-        "{:.2f} s",
-    ),
-    ("auto_aim", "lock_angle_deg"): (
-        "Lock Angle",
-        _AUTO_AIM_LIMITS["lock_angle_deg"][:2],
-        1.0,
-        "{:.0f} deg",
-    ),
-    ("auto_aim", "assist_angle_deg"): (
-        "Assist Angle",
-        _AUTO_AIM_LIMITS["assist_angle_deg"][:2],
-        0.5,
-        "{:.1f} deg",
-    ),
-    ("deviation_deg",): ("Shot Deviation", _DEVIATION_LIMITS[:2], 0.1, "{:.1f} deg"),
-    ("damage_multiplier",): (
-        "Damage Dealt",
-        _DAMAGE_MULTIPLIER_LIMITS[:2],
-        0.05,
-        "x{:.2f}",
-    ),
-    ("collision_damage_multiplier",): (
-        "Collision Damage Taken",
-        _COLLISION_DAMAGE_MULTIPLIER_LIMITS[:2],
-        0.05,
-        "x{:.2f}",
-    ),
+    ("auto_aim", "lock_delay_s"): ("Lock Delay", 0.05, "{:.2f} s"),
+    ("auto_aim", "lock_angle_deg"): ("Lock Angle", 1.0, "{:.0f} deg"),
+    ("auto_aim", "assist_angle_deg"): ("Assist Angle", 0.5, "{:.1f} deg"),
+    ("deviation_deg",): ("Shot Deviation", 0.1, "{:.1f} deg"),
+    ("damage_multiplier",): ("Damage Dealt", 0.05, "x{:.2f}"),
+    ("collision_damage_multiplier",): ("Collision Damage Taken", 0.05, "x{:.2f}"),
 }
 
 # Checkbox toggles: path within a side's settings -> label.
@@ -274,14 +246,14 @@ class GameplaySettingsMenuState(BaseState):
 
     def add_slider_row(self, path: tuple, y: float):
         """Add a slider row (label, slider, value readout) for a full path."""
-        label, value_range, _step, value_format = _SLIDERS[path[1:]]
+        label, _step, value_format = _SLIDERS[path[1:]]
         self.scroll_list.add_row_label(label, y)
         value = _get_by_path(self.working_config, path)
         self.sliders[path] = CustomSlider(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
             value=value,
-            value_range=value_range,
+            value_range=LIMITS[path[1:]],
             command=self.on_slider,
             extraArgs=[path],
             scale=_SLIDER_SCALE,
@@ -374,7 +346,7 @@ class GameplaySettingsMenuState(BaseState):
         does not switch to Custom. The thumb is *not* written back to the
         snapped value (see GraphicsSettingsMenuState.on_discrete_slider).
         """
-        _label, _range, step, value_format = _SLIDERS[path[1:]]
+        _label, step, value_format = _SLIDERS[path[1:]]
         value = _snap(self.sliders[path].get_value(), step)
         if math.isclose(value, _get_by_path(self.working_config, path), abs_tol=1e-6):
             return

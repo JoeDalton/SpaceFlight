@@ -2,8 +2,10 @@
 # in game: gameplay.yaml names the selected preset, or holds "custom" values
 # (see space_flight.global_architecture.gameplay_settings).
 #
-# Every preset sets every field. "normal" reproduces the game's original,
-# untuned behaviour, and is the fallback for anything missing or invalid.
+# Every preset must set every field within its limits (LIMITS in
+# gameplay_settings.py), or the game refuses to start. "normal" reproduces the
+# game's original, untuned behaviour, and is the fallback for anything missing
+# or invalid in gameplay.yaml.
 #
 # Fields, for the player and for the bots (fighters, turrets, capital ships):
 #   auto_aim.enabled           Whether laser shots lead a locked target at all
