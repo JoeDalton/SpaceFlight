@@ -215,7 +215,8 @@ class Fighter(Ship):
         """
         Select the next secondary weapon (bomb, rocket or missile launcher), in
         loadout order, looping back to the first. A spent one can be selected
-        too: it just launches nothing.
+        too: it just launches nothing. The newly selected one must reload
+        before it can fire.
         """
         candidates = self.secondary_cycle()
         if not candidates:
@@ -223,9 +224,20 @@ class Fighter(Ship):
             return
         if self.selected_secondary in candidates:
             index = candidates.index(self.selected_secondary)
-            self.selected_secondary = candidates[(index + 1) % len(candidates)]
+            self._select_secondary(candidates[(index + 1) % len(candidates)])
         else:
-            self.selected_secondary = candidates[0]
+            self._select_secondary(candidates[0])
+
+    def _select_secondary(self, launcher: OrdnanceLauncher):
+        """
+        Select a secondary weapon. Switching to another launcher costs a full
+        reload of it before it can fire.
+
+        :param launcher: The launcher to select
+        """
+        if launcher is not self.selected_secondary:
+            launcher.restart_reload()
+        self.selected_secondary = launcher
 
     def fire_secondary(self) -> bool:
         """
@@ -247,14 +259,15 @@ class Fighter(Ship):
     def _select_next_secondary_with_stock(self):
         """
         Move the selection on to the next secondary weapon with stock left, if
-        any (the selection stays put otherwise).
+        any (the selection stays put otherwise). It must reload before it can
+        fire.
         """
         cycle = self.secondary_cycle()
         index = cycle.index(self.selected_secondary)
         for step in range(1, len(cycle)):
             launcher = cycle[(index + step) % len(cycle)]
             if launcher.stock > 0:
-                self.selected_secondary = launcher
+                self._select_secondary(launcher)
                 return
 
     def drop_flare(self) -> bool:

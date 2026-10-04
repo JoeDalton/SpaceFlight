@@ -277,3 +277,22 @@ def test_launch_is_rate_limited_and_reloading_spends_nothing():
         assert launcher.launch() is True
 
     assert launcher.stock == 1
+
+
+def test_restart_reload_holds_the_launcher_for_a_full_reload():
+    """
+    restart_reload() starts a full reload now: a launcher that was ready must
+    wait its reload delay again before launching.
+    """
+    launcher = make_launcher("concussion_missile", stock=3)
+    launcher.fire_delay = 2.0
+    launcher.last_fire_time = 0.0
+    clock = launcher.game.game_time.get_current_time
+
+    with patch.object(ordnance_launcher, "OrdnanceController"):
+        clock.return_value = 10.0
+        launcher.restart_reload()
+        clock.return_value = 11.0
+        assert launcher.launch() is False
+        clock.return_value = 12.0
+        assert launcher.launch() is True

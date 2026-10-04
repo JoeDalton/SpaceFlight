@@ -4,7 +4,7 @@ type: flare
 life_time_s: 5.0
 damage: 0.0
 damage_type: physical
-reload_s: 0.5
+reload_s: 1.0
 # Launch: speed relative to the launching ship, kept for its whole life
 launch_direction: backward
 speed_mps: 0.0

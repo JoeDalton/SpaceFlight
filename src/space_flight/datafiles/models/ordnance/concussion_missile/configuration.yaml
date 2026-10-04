@@ -3,7 +3,7 @@ type: missile
 life_time_s: 10.0
 damage: 600.0
 damage_type: physical
-reload_s: 0.5
+reload_s: 2.0
 # Launch: speed relative to the launching ship, kept for its whole life
 launch_direction: forward
 speed_mps: 300.0

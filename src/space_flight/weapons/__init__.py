@@ -111,6 +111,13 @@ class Weapon:
         self.last_fire_time = current_time
         return True
 
+    def restart_reload(self):
+        """
+        Start a full reload now, as if the weapon had just fired (e.g. when the
+        pilot switches to it).
+        """
+        self.last_fire_time = self.game.game_time.get_current_time()
+
     def _spawn_munition(
         self,
         munition_class: type[Munition],

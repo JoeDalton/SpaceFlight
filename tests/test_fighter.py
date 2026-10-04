@@ -173,6 +173,10 @@ class FakeLauncher:
         self.name = name or category
         self.targets = []
         self.target_lock = FakeLock() if category == "missile" else None
+        self.reloads = 0
+
+    def restart_reload(self):
+        self.reloads += 1
 
     def launch(self, target_id=None) -> bool:
         if self.stock <= 0:
@@ -227,6 +231,49 @@ def test_fire_secondary_gives_a_missile_the_target_only_when_missile_locked():
     assert fighter.fire_secondary() is True
 
     assert missile.targets == [None, "target", "target"]
+
+
+def test_cycling_to_another_secondary_restarts_its_reload():
+    """
+    Switching to another secondary weapon costs a full reload of it; the one
+    switched away from is left alone.
+    """
+    missile = FakeLauncher("missile", 2)
+    rocket = FakeLauncher("rocket", 3)
+    fighter = _fighter_with_loadout(missile, rocket)
+    missile.reloads = rocket.reloads = 0
+
+    fighter.cycle_secondary()
+
+    assert fighter.selected_secondary is rocket
+    assert (missile.reloads, rocket.reloads) == (0, 1)
+
+
+def test_cycling_a_single_secondary_does_not_restart_its_reload():
+    """With a single secondary weapon, cycling keeps it and costs no reload."""
+    rocket = FakeLauncher("rocket", 3)
+    fighter = _fighter_with_loadout(rocket)
+    rocket.reloads = 0
+
+    fighter.cycle_secondary()
+
+    assert rocket.reloads == 0
+
+
+def test_moving_on_from_a_spent_secondary_restarts_the_next_ones_reload():
+    """
+    The automatic switch once the selection is spent is a switch too: the next
+    weapon must reload before it can fire.
+    """
+    missile = FakeLauncher("missile", 1)
+    rocket = FakeLauncher("rocket", 3)
+    fighter = _fighter_with_loadout(missile, rocket)
+    rocket.reloads = 0
+
+    fighter.fire_secondary()
+
+    assert fighter.selected_secondary is rocket
+    assert rocket.reloads == 1
 
 
 def test_only_the_armed_missile_works_on_its_lock():
