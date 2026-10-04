@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.ai.auto_aim import AutoAim
+from space_flight.ai.auto_aim import LEAD_SMOOTHING_TIME_S, AutoAim
 from space_flight.ai.target_lock import TargetLock
 from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
 
@@ -54,6 +54,9 @@ def make_auto_aim(
     auto_aim.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
     auto_aim.inv_max_assist_tan_angle = 1.0 / np.tan(np.deg2rad(max_assist_angle_deg))
     auto_aim.max_assist_distance_m = 1000.0
+    auto_aim.lead_offset_m = None
+    auto_aim.lead_target_id = None
+    auto_aim.lead_update_time_s = None
     return auto_aim
 
 
@@ -64,16 +67,18 @@ def make_auto_aim(
 
 def test_compute_acquisition_locks_through_the_target_lock():
     """
-    compute_acquisition() updates the target lock; is_target_acquired and
-    acquisition_elapsed_time_s report its state (see test_target_lock.py for
-    the lock's own behaviour).
+    compute_acquisition() updates the target lock and the smoothed lead;
+    is_target_acquired and acquisition_elapsed_time_s report the lock's state
+    (see test_target_lock.py for the lock's own behaviour).
     """
     auto_aim = make_auto_aim()
     auto_aim.target_lock = MagicMock(is_locked=True, elapsed_time_s=1.5)
+    auto_aim.update_lead = MagicMock()
 
     auto_aim.compute_acquisition()
 
     auto_aim.target_lock.update.assert_called_once()
+    auto_aim.update_lead.assert_called_once()
     assert auto_aim.is_target_acquired
     assert auto_aim.acquisition_elapsed_time_s == pytest.approx(1.5)
 
@@ -181,6 +186,133 @@ def test_predict_target_position_is_none_when_an_actor_is_missing(known_ids):
     )
 
     assert auto_aim.predict_target_position() is None
+
+
+# ---------------------------------------------------------------------------
+# update_lead — smoothed lead offset
+# ---------------------------------------------------------------------------
+
+
+def _set_rel_velocity(auto_aim: AutoAim, rel_velocity: np.ndarray):
+    auto_aim.game.interactions.rel_velocities[0, 1, :] = rel_velocity
+
+
+def make_leading_auto_aim(rel_velocity: np.ndarray) -> AutoAim:
+    """
+    An AutoAim whose parent sits at the origin, its target 1 km straight ahead
+    with the given relative velocity, the clock at 0.
+    """
+    auto_aim = make_auto_aim()
+    auto_aim.parent.position = np.zeros(3)
+    auto_aim.parent.target_id = "target"
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=rel_velocity,
+    )
+    return auto_aim
+
+
+# Time of flight to the target 1 km ahead
+_TOF_S = 1000.0 / LASER_SPEED_MPS
+
+
+def test_update_lead_starts_from_the_raw_offset():
+    """The first update on a target takes its raw lead offset as is."""
+    auto_aim = make_leading_auto_aim(np.array([50.0, 0.0, 0.0]))
+
+    auto_aim.update_lead()
+
+    np.testing.assert_allclose(auto_aim.lead_offset_m, [50.0 * _TOF_S, 0.0, 0.0])
+    assert auto_aim.lead_target_id == "target"
+
+
+def test_update_lead_damps_a_velocity_kick():
+    """
+    A sudden velocity change (e.g. a hit) moves the lead offset only part of
+    the way (first-order low-pass with LEAD_SMOOTHING_TIME_S), the predicted
+    position following the smoothed offset.
+    """
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+
+    _set_rel_velocity(auto_aim, np.array([100.0, 0.0, 0.0]))
+    dt = 0.02
+    auto_aim._clock.t = dt
+    auto_aim.update_lead()
+
+    alpha = dt / (LEAD_SMOOTHING_TIME_S + dt)
+    expected_offset = alpha * 100.0 * _TOF_S
+    assert auto_aim.lead_offset_m[0] == pytest.approx(expected_offset)
+    np.testing.assert_allclose(
+        auto_aim.predict_target_position(), [expected_offset, 1000.0, 0.0]
+    )
+
+
+def test_update_lead_converges_to_a_steady_velocity():
+    """Held long enough, the smoothed lead reaches the raw one."""
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+    _set_rel_velocity(auto_aim, np.array([100.0, 0.0, 0.0]))
+
+    for frame in range(1, 121):  # 2 s at 60 fps, 10 time constants
+        auto_aim._clock.t = frame / 60.0
+        auto_aim.update_lead()
+
+    assert auto_aim.lead_offset_m[0] == pytest.approx(100.0 * _TOF_S, rel=1e-3)
+
+
+def test_update_lead_restarts_on_a_new_target():
+    """A new target's lead starts from its own raw offset, not the old one's."""
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+
+    auto_aim.parent.target_id = "other target"
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.array([0.0, 0.0, 80.0]),
+    )
+    auto_aim._clock.t = 0.02
+    auto_aim.update_lead()
+
+    np.testing.assert_allclose(auto_aim.lead_offset_m, [0.0, 0.0, 80.0 * _TOF_S])
+    assert auto_aim.lead_target_id == "other target"
+
+
+def test_update_lead_catches_up_after_a_gap_in_updates():
+    """
+    After a long gap in updates (e.g. a turret's fire control offline), the
+    lead nearly catches up at once instead of sliding from a stale offset.
+    """
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+
+    _set_rel_velocity(auto_aim, np.array([100.0, 0.0, 0.0]))
+    auto_aim._clock.t = 20.0
+    auto_aim.update_lead()
+
+    assert auto_aim.lead_offset_m[0] == pytest.approx(100.0 * _TOF_S, rel=0.02)
+
+
+def test_update_lead_forgets_a_vanished_target():
+    """Without a target in the interactions, the filter is cleared."""
+    auto_aim = make_leading_auto_aim(np.array([50.0, 0.0, 0.0]))
+    auto_aim.update_lead()
+
+    _set_up_interactions_for_prediction(  # the target has left the interactions
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.zeros(3),
+        known_ids=("parent",),
+    )
+    auto_aim.update_lead()
+
+    assert auto_aim.lead_offset_m is None
+    assert auto_aim.lead_target_id is None
 
 
 # ---------------------------------------------------------------------------
