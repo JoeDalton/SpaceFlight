@@ -3,15 +3,19 @@ type: missile
 life_time_s: 10.0
 damage: 600.0
 damage_type: physical
-reload_s: 0.5
+reload_s: 2.0
 # Launch: speed relative to the launching ship, kept for its whole life
 launch_direction: forward
 speed_mps: 300.0
 launch_offset_m: 0.0
 # Guidance turn rates
-max_pitch_rate_degps: 120.0
-max_yaw_rate_degps: 120.0
+max_pitch_rate_degps: 60.0
+max_yaw_rate_degps: 60.0
 max_roll_rate_degps: 360.0
+# Target lock: the target must stay within lock_cone_angle_deg of the nose for
+# lock_delay_s before a missile launched at it is guided to it
+lock_delay_s: 2.0
+lock_cone_angle_deg: 20.0
 # Placeholder look and collision
 visual_radius_m: 0.5
 collision_radius_m: 1.0

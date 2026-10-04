@@ -20,10 +20,10 @@ hit_box_radius_m: 4.0
 laser_base_range_m: 1500
 laser_color: green
 laser_fire_rate: 9.1
-cannon_positions: [[-0.5, 1, -1], [0.5, 1, -1]]
+cannon_positions: [[-0.5, 5, -1], [0.5, 5, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 75.0
-laser_shot_energy_cost: 0.02  # laser gauge fraction per bolt
+laser_shot_energy_cost: 0.015  # laser gauge fraction per bolt
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
 death_max_tumble_rate_degps: 450.0

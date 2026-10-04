@@ -132,6 +132,10 @@ class FighterNavigator(GenericShipNavigator):
                 )
             return False
 
+        # TODO Same pair lookup and target reconstruction as in
+        #  TrackingMountNavigator and AutoAim: share one interactions helper
+        #  returning the target's position and absolute velocity for an
+        #  (actor, target) pair.
         distance_m = self.game.interactions.distances[
             my_actor_index, target_actor_index
         ]

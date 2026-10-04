@@ -6,18 +6,18 @@ object.__new__() and set only the attributes consumed by each method under
 test.
 """
 
-import uuid
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
-from space_flight.ai.auto_aim import _ACQUIRING, AutoAim
-from space_flight.utils.state_machine import StateMachine
+from space_flight.ai.auto_aim import LEAD_SMOOTHING_TIME_S, AutoAim
+from space_flight.ai.target_lock import TargetLock
+from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
 
 
 class _Clock:
-    """A controllable time source for the acquisition state machine."""
+    """A controllable time source for the target lock's state machine."""
 
     def __init__(self, t: float = 0.0):
         self.t = t
@@ -42,196 +42,45 @@ def make_auto_aim(
     auto_aim = object.__new__(AutoAim)
     auto_aim.game = MagicMock()
     auto_aim.parent = MagicMock()
-    auto_aim.previous_target_id = None
     clock = _Clock()
     auto_aim._clock = clock
-    auto_aim.acquisition_sm = StateMachine(initial_state=_ACQUIRING, clock=clock)
     auto_aim.game.game_time.get_current_time.side_effect = clock
-    auto_aim.target_lock_delay_s = target_lock_delay_s
-    auto_aim.min_acquisition_alignment = np.cos(np.deg2rad(acquisition_cone_angle_deg))
+    auto_aim.target_lock = TargetLock(
+        game=auto_aim.game,
+        parent=auto_aim.parent,
+        lock_delay_s=target_lock_delay_s,
+        cone_angle_deg=acquisition_cone_angle_deg,
+    )
     auto_aim.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
     auto_aim.inv_max_assist_tan_angle = 1.0 / np.tan(np.deg2rad(max_assist_angle_deg))
     auto_aim.max_assist_distance_m = 1000.0
+    auto_aim.lead_offset_m = None
+    auto_aim.lead_target_id = None
+    auto_aim.lead_update_time_s = None
     return auto_aim
 
 
-def _set_up_interactions_for_acquisition(
-    auto_aim: AutoAim,
-    target_direction: np.ndarray,
-    self_index: int = 0,
-    target_index: int = 1,
-):
-    """
-    Configure the mocked interactions so that compute_acquisition can look up
-    the direction from self to target.
-
-    :param auto_aim: the AutoAim instance under test
-    :param target_direction: unit direction vector from self to target
-    :param self_index: slot index assigned to the parent actor
-    :param target_index: slot index assigned to the target actor
-    """
-    directions = np.zeros((4, 4, 3))
-    directions[self_index, target_index, :] = target_direction
-
-    def mock_get_index(actor_id):
-        if actor_id == auto_aim.parent.id:
-            return self_index
-        if actor_id == auto_aim.parent.target_id:
-            return target_index
-        raise ValueError(f"Unknown actor_id: {actor_id}")
-
-    auto_aim.game.interactions.get_actor_index_from_id.side_effect = mock_get_index
-    auto_aim.game.interactions.directions = directions
-
-
 # ---------------------------------------------------------------------------
-# compute_acquisition — no target
+# compute_acquisition — delegated to the target lock
 # ---------------------------------------------------------------------------
 
 
-def test_compute_acquisition_no_target_id_stays_unacquired():
+def test_compute_acquisition_locks_through_the_target_lock():
     """
-    When the parent has no target (target_id is falsy), compute_acquisition
-    must set is_target_acquired to False and clear previous_target_id.
+    compute_acquisition() updates the target lock and the smoothed lead;
+    is_target_acquired and acquisition_elapsed_time_s report the lock's state
+    (see test_target_lock.py for the lock's own behaviour).
     """
     auto_aim = make_auto_aim()
-    auto_aim.parent.target_id = None
+    auto_aim.target_lock = MagicMock(is_locked=True, elapsed_time_s=1.5)
+    auto_aim.update_lead = MagicMock()
 
     auto_aim.compute_acquisition()
 
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.previous_target_id is None
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
-
-
-def test_compute_acquisition_no_target_resets_elapsed_time():
-    """
-    A previously-accumulating elapsed time is reset when the parent loses its
-    target.
-    """
-    auto_aim = make_auto_aim()
-    auto_aim._clock.t = 0.8  # some acquisition progress
-    auto_aim.parent.target_id = None
-
-    auto_aim.compute_acquisition()
-
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
-
-
-# ---------------------------------------------------------------------------
-# compute_acquisition — target changed
-# ---------------------------------------------------------------------------
-
-
-def test_compute_acquisition_new_target_resets_elapsed_time():
-    """
-    When the parent acquires a new target (different from the previous one),
-    the elapsed acquisition time is reset to zero.
-    """
-    old_id = uuid.uuid4()
-    new_id = uuid.uuid4()
-    auto_aim = make_auto_aim()
-    auto_aim.previous_target_id = old_id
-    auto_aim.parent.target_id = new_id
-    auto_aim._clock.t = 0.9  # some progress on the old target
-
-    auto_aim.compute_acquisition()
-
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
-    assert auto_aim.previous_target_id == new_id
-
-
-def test_compute_acquisition_new_target_updates_previous_target_id():
-    """
-    After a target change, previous_target_id must be updated to the new
-    target id so the next call recognises it as the same target.
-    """
-    old_id = uuid.uuid4()
-    new_id = uuid.uuid4()
-    auto_aim = make_auto_aim()
-    auto_aim.previous_target_id = old_id
-    auto_aim.parent.target_id = new_id
-
-    auto_aim.compute_acquisition()
-
-    assert auto_aim.previous_target_id == new_id
-
-
-# ---------------------------------------------------------------------------
-# compute_acquisition — same target, inside cone
-# ---------------------------------------------------------------------------
-
-
-def test_compute_acquisition_target_in_cone_not_yet_acquired_after_short_time():
-    """
-    When the target is inside the cone but the elapsed time is less than the
-    lock delay, the target must not be acquired.
-    """
-    target_id = uuid.uuid4()
-    auto_aim = make_auto_aim(target_lock_delay_s=2.0)
-    auto_aim.parent.target_id = target_id
-    auto_aim.previous_target_id = target_id
-    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim._clock.t = 0.5  # held for 0.5s, below the 2.0s lock delay
-
-    _set_up_interactions_for_acquisition(
-        auto_aim, target_direction=np.array([0.0, 1.0, 0.0])
-    )
-
-    auto_aim.compute_acquisition()
-
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.5)
-
-
-def test_compute_acquisition_target_in_cone_acquired_after_sufficient_time():
-    """
-    When the target is inside the cone and the elapsed time reaches the lock
-    delay, is_target_acquired becomes True.
-    """
-    target_id = uuid.uuid4()
-    auto_aim = make_auto_aim(target_lock_delay_s=1.0)
-    auto_aim.parent.target_id = target_id
-    auto_aim.previous_target_id = target_id
-    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-    auto_aim._clock.t = 1.3  # held past the 1.0s lock delay
-
-    _set_up_interactions_for_acquisition(
-        auto_aim, target_direction=np.array([0.0, 1.0, 0.0])
-    )
-
-    auto_aim.compute_acquisition()
-
+    auto_aim.target_lock.update.assert_called_once()
+    auto_aim.update_lead.assert_called_once()
     assert auto_aim.is_target_acquired
-
-
-# ---------------------------------------------------------------------------
-# compute_acquisition — same target, outside cone
-# ---------------------------------------------------------------------------
-
-
-def test_compute_acquisition_target_outside_cone_resets_elapsed_time():
-    """
-    When the target is outside the acquisition cone, elapsed time resets to
-    zero and the target is not acquired.
-    """
-    target_id = uuid.uuid4()
-    auto_aim = make_auto_aim(acquisition_cone_angle_deg=5.0)
-    auto_aim.parent.target_id = target_id
-    auto_aim.previous_target_id = target_id
-    auto_aim._clock.t = 0.9  # some progress before it drifts out of the cone
-    # Target is 90° to the side — well outside a 5° cone
-    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
-
-    _set_up_interactions_for_acquisition(
-        auto_aim, target_direction=np.array([1.0, 0.0, 0.0])
-    )
-
-    auto_aim.compute_acquisition()
-
-    assert not auto_aim.is_target_acquired
-    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(0.0)
+    assert auto_aim.acquisition_elapsed_time_s == pytest.approx(1.5)
 
 
 # ---------------------------------------------------------------------------
@@ -244,8 +93,6 @@ def test_compute_shot_speed_without_acquisition_fires_forward():
     When no target is acquired, the shot must travel in the parent's forward
     direction plus the parent's speed.
     """
-    from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
-
     auto_aim = make_auto_aim()  # starts unlocked (acquiring)
     forward = np.array([0.0, 1.0, 0.0])
     parent_speed = np.array([10.0, 0.0, 0.0])
@@ -257,6 +104,271 @@ def test_compute_shot_speed_without_acquisition_fires_forward():
 
     expected = LASER_SPEED_MPS * forward + parent_speed
     np.testing.assert_allclose(shot_speed, expected, atol=1e-6)
+
+
+def _set_up_interactions_for_prediction(
+    auto_aim: AutoAim,
+    distance_m: float,
+    direction: np.ndarray,
+    rel_velocity: np.ndarray,
+    known_ids: tuple = ("parent", "target"),
+):
+    """
+    Configure the mocked interactions so that predict_target_position can look
+    up the parent-to-target distance, direction and relative velocity.
+
+    :param auto_aim: the AutoAim instance under test
+    :param distance_m: distance from the parent to its target
+    :param direction: unit direction from the parent to its target
+    :param rel_velocity: the target's velocity relative to the parent
+    :param known_ids: which of "parent" / "target" the interactions know of
+    """
+    interactions = auto_aim.game.interactions
+    interactions.distances = np.zeros((2, 2))
+    interactions.directions = np.zeros((2, 2, 3))
+    interactions.rel_velocities = np.zeros((2, 2, 3))
+    interactions.distances[0, 1] = distance_m
+    interactions.directions[0, 1, :] = direction
+    interactions.rel_velocities[0, 1, :] = rel_velocity
+
+    def mock_get_index(actor_id):
+        if "parent" in known_ids and actor_id == auto_aim.parent.id:
+            return 0
+        if "target" in known_ids and actor_id == auto_aim.parent.target_id:
+            return 1
+        raise ValueError(f"Unknown actor_id: {actor_id}")
+
+    interactions.get_actor_index_from_id.side_effect = mock_get_index
+
+
+# ---------------------------------------------------------------------------
+# predict_target_position
+# ---------------------------------------------------------------------------
+
+
+def test_predict_target_position_leads_by_relative_velocity_over_time_of_flight():
+    """
+    The target is moved by its velocity relative to the parent (bolts inherit
+    the parent's velocity) over the laser's time of flight. The parent's own
+    velocity must not leak into the prediction.
+    """
+    auto_aim = make_auto_aim()
+    auto_aim.parent.position = np.array([100.0, 0.0, 0.0])
+    auto_aim.parent.speed = np.array([0.0, 200.0, 0.0])
+    distance_m = 1000.0
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=distance_m,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.array([50.0, 0.0, 0.0]),
+    )
+
+    predicted = auto_aim.predict_target_position()
+
+    time_of_flight_s = distance_m / LASER_SPEED_MPS
+    expected = np.array([100.0 + 50.0 * time_of_flight_s, 1000.0, 0.0])
+    np.testing.assert_allclose(predicted, expected, atol=1e-9)
+
+
+@pytest.mark.parametrize("known_ids", [("parent",), ("target",)])
+def test_predict_target_position_is_none_when_an_actor_is_missing(known_ids):
+    """
+    No prediction when the parent (died this frame) or its target (none, or
+    gone) is not in the interactions.
+    """
+    auto_aim = make_auto_aim()
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.zeros(3),
+        known_ids=known_ids,
+    )
+
+    assert auto_aim.predict_target_position() is None
+
+
+# ---------------------------------------------------------------------------
+# update_lead — smoothed lead offset
+# ---------------------------------------------------------------------------
+
+
+def _set_rel_velocity(auto_aim: AutoAim, rel_velocity: np.ndarray):
+    auto_aim.game.interactions.rel_velocities[0, 1, :] = rel_velocity
+
+
+def make_leading_auto_aim(rel_velocity: np.ndarray) -> AutoAim:
+    """
+    An AutoAim whose parent sits at the origin, its target 1 km straight ahead
+    with the given relative velocity, the clock at 0.
+    """
+    auto_aim = make_auto_aim()
+    auto_aim.parent.position = np.zeros(3)
+    auto_aim.parent.target_id = "target"
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=rel_velocity,
+    )
+    return auto_aim
+
+
+# Time of flight to the target 1 km ahead
+_TOF_S = 1000.0 / LASER_SPEED_MPS
+
+
+def test_update_lead_starts_from_the_raw_offset():
+    """The first update on a target takes its raw lead offset as is."""
+    auto_aim = make_leading_auto_aim(np.array([50.0, 0.0, 0.0]))
+
+    auto_aim.update_lead()
+
+    np.testing.assert_allclose(auto_aim.lead_offset_m, [50.0 * _TOF_S, 0.0, 0.0])
+    assert auto_aim.lead_target_id == "target"
+
+
+def test_update_lead_damps_a_velocity_kick():
+    """
+    A sudden velocity change (e.g. a hit) moves the lead offset only part of
+    the way (first-order low-pass with LEAD_SMOOTHING_TIME_S), the predicted
+    position following the smoothed offset.
+    """
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+
+    _set_rel_velocity(auto_aim, np.array([100.0, 0.0, 0.0]))
+    dt = 0.02
+    auto_aim._clock.t = dt
+    auto_aim.update_lead()
+
+    alpha = dt / (LEAD_SMOOTHING_TIME_S + dt)
+    expected_offset = alpha * 100.0 * _TOF_S
+    assert auto_aim.lead_offset_m[0] == pytest.approx(expected_offset)
+    np.testing.assert_allclose(
+        auto_aim.predict_target_position(), [expected_offset, 1000.0, 0.0]
+    )
+
+
+def test_update_lead_converges_to_a_steady_velocity():
+    """Held long enough, the smoothed lead reaches the raw one."""
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+    _set_rel_velocity(auto_aim, np.array([100.0, 0.0, 0.0]))
+
+    for frame in range(1, 121):  # 2 s at 60 fps, 10 time constants
+        auto_aim._clock.t = frame / 60.0
+        auto_aim.update_lead()
+
+    assert auto_aim.lead_offset_m[0] == pytest.approx(100.0 * _TOF_S, rel=1e-3)
+
+
+def test_update_lead_restarts_on_a_new_target():
+    """A new target's lead starts from its own raw offset, not the old one's."""
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+
+    auto_aim.parent.target_id = "other target"
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.array([0.0, 0.0, 80.0]),
+    )
+    auto_aim._clock.t = 0.02
+    auto_aim.update_lead()
+
+    np.testing.assert_allclose(auto_aim.lead_offset_m, [0.0, 0.0, 80.0 * _TOF_S])
+    assert auto_aim.lead_target_id == "other target"
+
+
+def test_update_lead_catches_up_after_a_gap_in_updates():
+    """
+    After a long gap in updates (e.g. a turret's fire control offline), the
+    lead nearly catches up at once instead of sliding from a stale offset.
+    """
+    auto_aim = make_leading_auto_aim(np.zeros(3))
+    auto_aim.update_lead()
+
+    _set_rel_velocity(auto_aim, np.array([100.0, 0.0, 0.0]))
+    auto_aim._clock.t = 20.0
+    auto_aim.update_lead()
+
+    assert auto_aim.lead_offset_m[0] == pytest.approx(100.0 * _TOF_S, rel=0.02)
+
+
+def test_update_lead_forgets_a_vanished_target():
+    """Without a target in the interactions, the filter is cleared."""
+    auto_aim = make_leading_auto_aim(np.array([50.0, 0.0, 0.0]))
+    auto_aim.update_lead()
+
+    _set_up_interactions_for_prediction(  # the target has left the interactions
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.zeros(3),
+        known_ids=("parent",),
+    )
+    auto_aim.update_lead()
+
+    assert auto_aim.lead_offset_m is None
+    assert auto_aim.lead_target_id is None
+
+
+# ---------------------------------------------------------------------------
+# compute_shot_speed — locked
+# ---------------------------------------------------------------------------
+
+
+def test_compute_shot_speed_locked_fires_at_the_predicted_position():
+    """
+    Once locked, a shot inside the assist cone goes straight at the predicted
+    position, plus the parent's velocity.
+    """
+    auto_aim = make_auto_aim(max_assist_angle_deg=45.0)
+    auto_aim.target_lock = MagicMock(is_locked=True)
+    parent_position = np.array([100.0, 0.0, 0.0])
+    parent_speed = np.array([0.0, 200.0, 0.0])
+    auto_aim.parent.position = parent_position
+    auto_aim.parent.speed = parent_speed
+    auto_aim.parent.forward = np.array([0.0, 1.0, 0.0])
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=np.array([0.0, 1.0, 0.0]),
+        rel_velocity=np.array([50.0, 0.0, 0.0]),
+    )
+
+    shot_speed = auto_aim.compute_shot_speed(parent_position)
+
+    aim = auto_aim.predict_target_position() - parent_position
+    expected = LASER_SPEED_MPS * aim / np.linalg.norm(aim) + parent_speed
+    np.testing.assert_allclose(shot_speed, expected, atol=1e-6)
+
+
+def test_compute_shot_speed_locked_on_a_vanished_target_fires_forward():
+    """
+    A lock whose target has just left the interactions fires straight ahead.
+    """
+    auto_aim = make_auto_aim()
+    auto_aim.target_lock = MagicMock(is_locked=True)
+    forward = np.array([0.0, 1.0, 0.0])
+    parent_speed = np.array([10.0, 0.0, 0.0])
+    auto_aim.parent.forward = forward
+    auto_aim.parent.speed = parent_speed
+    _set_up_interactions_for_prediction(
+        auto_aim,
+        distance_m=1000.0,
+        direction=forward,
+        rel_velocity=np.zeros(3),
+        known_ids=("parent",),
+    )
+
+    shot_speed = auto_aim.compute_shot_speed(np.zeros(3))
+
+    np.testing.assert_allclose(
+        shot_speed, LASER_SPEED_MPS * forward + parent_speed, atol=1e-6
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +390,9 @@ def test_configure_recomputes_derived_thresholds():
         max_assist_distance_m=1500.0,
     )
 
-    assert auto_aim.target_lock_delay_s == pytest.approx(0.5)
+    assert auto_aim.target_lock.lock_delay_s == pytest.approx(0.5)
     assert auto_aim.max_assist_distance_m == pytest.approx(1500.0)
-    assert auto_aim.min_acquisition_alignment == pytest.approx(np.cos(np.deg2rad(45.0)))
+    assert auto_aim.target_lock.min_alignment == pytest.approx(np.cos(np.deg2rad(45.0)))
     assert auto_aim.min_assist_alignment == pytest.approx(np.cos(np.deg2rad(10.0)))
     assert auto_aim.inv_max_assist_tan_angle == pytest.approx(
         1.0 / np.tan(np.deg2rad(10.0))
@@ -309,13 +421,16 @@ def test_configure_tighter_assist_raises_alignment_threshold():
 
 def test_clean_sets_game_to_none():
     """
-    clean() must release the reference to the game object.
+    clean() must release the reference to the game object, and clean the
+    target lock.
     """
     auto_aim = make_auto_aim()
+    target_lock = auto_aim.target_lock
 
     auto_aim.clean()
 
     assert auto_aim.game is None
+    assert target_lock.game is None
 
 
 def test_clean_sets_ship_to_none():

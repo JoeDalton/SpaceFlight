@@ -67,7 +67,12 @@ def test_shipped_ordnance_configurations_are_valid(name):
         assert conf[key] >= 0.0, key
     assert len(conf["color"]) == 4
     if conf["type"] == "missile":
-        for key in ("max_pitch_rate_degps", "max_yaw_rate_degps"):
+        for key in (
+            "max_pitch_rate_degps",
+            "max_yaw_rate_degps",
+            "lock_delay_s",
+            "lock_cone_angle_deg",
+        ):
             assert conf[key] > 0.0, key
 
 
@@ -160,6 +165,37 @@ def test_launcher_reads_its_configuration():
     assert launcher.display_name == "PROTON BOMB"
 
 
+def test_a_missile_launcher_has_a_target_lock_tuned_by_its_configuration():
+    """
+    A missile launcher's target lock takes its delay and cone from the
+    missile's configuration.
+    """
+    launcher = make_launcher("concussion_missile")
+    conf = load_ordnance_configuration("concussion_missile")
+
+    assert launcher.target_lock.lock_delay_s == pytest.approx(conf["lock_delay_s"])
+    assert launcher.target_lock.min_alignment == pytest.approx(
+        np.cos(np.deg2rad(conf["lock_cone_angle_deg"]))
+    )
+
+
+@pytest.mark.parametrize("name", ["rocket", "proton_bomb", "flare"])
+def test_unguided_ordnance_launcher_has_no_target_lock(name):
+    """Only missiles lock on: other launchers have no target lock."""
+    assert make_launcher(name).target_lock is None
+
+
+def test_clean_cleans_the_target_lock():
+    """clean() cleans the missile's target lock and drops it."""
+    launcher = make_launcher("concussion_missile")
+    target_lock = launcher.target_lock
+
+    launcher.clean()
+
+    assert launcher.target_lock is None
+    assert target_lock.game is None
+
+
 @pytest.mark.parametrize(
     "name, expected_velocity",
     [
@@ -186,6 +222,7 @@ def test_launch_spends_one_and_passes_the_target_to_a_missile():
     """
     launcher = make_launcher("concussion_missile", stock=2)
     launcher.last_fire_time = -np.inf
+    launcher.target_lock = MagicMock(is_locked=True)
 
     with patch.object(ordnance_launcher, "OrdnanceController") as controller:
         assert launcher.launch(target_id="target") is True
@@ -193,6 +230,19 @@ def test_launch_spends_one_and_passes_the_target_to_a_missile():
     assert launcher.stock == 1
     assert controller.call_args.kwargs["target_id"] == "target"
     assert controller.call_args.kwargs["launcher"] is launcher
+
+
+def test_launch_fires_an_unlocked_missile_blind():
+    """
+    A missile not locked on the target ignores it, flying blind like a rocket.
+    """
+    launcher = make_launcher("concussion_missile")
+    launcher.last_fire_time = -np.inf
+
+    with patch.object(ordnance_launcher, "OrdnanceController") as controller:
+        launcher.launch(target_id="target")
+
+    assert controller.call_args.kwargs["target_id"] is None
 
 
 def test_launch_does_not_give_a_target_to_unguided_ordnance():
@@ -239,3 +289,22 @@ def test_launch_is_rate_limited_and_reloading_spends_nothing():
         assert launcher.launch() is True
 
     assert launcher.stock == 1
+
+
+def test_restart_reload_holds_the_launcher_for_a_full_reload():
+    """
+    restart_reload() starts a full reload now: a launcher that was ready must
+    wait its reload delay again before launching.
+    """
+    launcher = make_launcher("concussion_missile", stock=3)
+    launcher.fire_delay = 2.0
+    launcher.last_fire_time = 0.0
+    clock = launcher.game.game_time.get_current_time
+
+    with patch.object(ordnance_launcher, "OrdnanceController"):
+        clock.return_value = 10.0
+        launcher.restart_reload()
+        clock.return_value = 11.0
+        assert launcher.launch() is False
+        clock.return_value = 12.0
+        assert launcher.launch() is True

@@ -91,6 +91,10 @@ class TrackingMountNavigator(GenericNavigator):
             self._publish_no_engagement()
             return NO_DIRECTION
 
+        # TODO Same pair lookup and target reconstruction as in
+        #  FighterNavigator and AutoAim: share one interactions helper
+        #  returning the target's position and absolute velocity for an
+        #  (actor, target) pair.
         # Get necessary info from interactions and pre compute target properties
         distance_m = self.game.interactions.distances[
             my_actor_index, target_actor_index
@@ -103,6 +107,10 @@ class TrackingMountNavigator(GenericNavigator):
         ]
 
         # Compute lead pursuit direction necessary for a firing/grab solution
+        # TODO Without auto-aim, bolts go down the barrel and inherit the ship's
+        #  velocity, so a firing solution should lead by the *relative* velocity
+        #  over the laser's time of flight (see AutoAim.predict_target_position),
+        #  not by the absolute velocity over a fixed lead time.
         target_current_position = self.pawn.position + distance_m * direction
         target_current_speed = self.pawn.speed + relative_speed_vector
         aim_vector = self.compute_lead_pursuit(

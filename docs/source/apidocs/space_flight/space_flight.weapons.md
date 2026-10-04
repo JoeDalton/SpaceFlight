@@ -98,6 +98,14 @@ space_flight.weapons.laser_cannon
 
 ````
 
+````{py:method} restart_reload()
+:canonical: space_flight.weapons.Weapon.restart_reload
+
+```{autodoc2-docstring} space_flight.weapons.Weapon.restart_reload
+```
+
+````
+
 ````{py:method} _spawn_munition(munition_class: type[space_flight.weapons.Munition], start_position: panda3d.core.Point3, speed: numpy.ndarray, power: float, life_time_s: float, **munition_kwargs: typing.Any)
 :canonical: space_flight.weapons.Weapon._spawn_munition
 

@@ -121,6 +121,8 @@ def launch(game, name, ship=None, target_id=None):
     ship = make_ship() if ship is None else ship
     launcher = OrdnanceLauncher(game=game, parent=ship, name=name, stock=1)
     launcher.last_fire_time = -np.inf  # no initial reload
+    if target_id is not None:
+        launcher.target_lock = MagicMock(is_locked=True)
     assert launcher.launch(target_id=target_id) is True
     (controller,) = [
         destructible

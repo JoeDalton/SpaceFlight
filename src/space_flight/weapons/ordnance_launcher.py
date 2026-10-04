@@ -21,6 +21,7 @@ import yaml
 
 from space_flight import DATAFILES_PATH
 from space_flight.actors.ordnance import OrdnanceController
+from space_flight.ai.target_lock import TargetLock
 from space_flight.weapons import Weapon
 
 if TYPE_CHECKING:
@@ -102,6 +103,16 @@ class OrdnanceLauncher(Weapon):
         # Launch speed relative to the launching ship, along launch_direction
         self.speed_mps = self.conf["speed_mps"]
         self.launch_direction = self.conf["launch_direction"]
+        # Missiles only: guided to the target once locked on it (the ship
+        # updates the lock while the launcher is selected, see Fighter.move)
+        self.target_lock = None
+        if self.category == "missile":
+            self.target_lock = TargetLock(
+                game=self.game,
+                parent=self.parent,
+                lock_delay_s=self.conf["lock_delay_s"],
+                cone_angle_deg=self.conf["lock_cone_angle_deg"],
+            )
 
     @property
     def display_name(self) -> str:
@@ -135,8 +146,8 @@ class OrdnanceLauncher(Weapon):
         """
         Launch one unit of ordnance, if any is left and the launcher is ready.
 
-        :param target_id: The target a missile pursues (ignored by the other
-            types). None fires it blind, like a rocket.
+        :param target_id: The target a missile pursues if locked on it (ignored
+            by the other types). Otherwise it flies blind, like a rocket.
         :return: True if launched, False if out of stock or reloading
         """
         if self.stock <= 0:
@@ -147,10 +158,24 @@ class OrdnanceLauncher(Weapon):
         OrdnanceController(
             game=self.game,
             launcher=self,
-            target_id=target_id if self.category == "missile" else None,
+            target_id=target_id if self.is_locked else None,
         )
         self.stock -= 1
         LOGGER.info(
             "%s launched a %s (%d left)", self.parent.parent.name, self.name, self.stock
         )
         return True
+
+    @property
+    def is_locked(self) -> bool:
+        """Whether this is a missile launcher locked on the target."""
+        return self.target_lock is not None and self.target_lock.is_locked
+
+    def clean(self):
+        """
+        Cleans the target lock, then the weapon
+        """
+        if self.target_lock is not None:
+            self.target_lock.clean()
+            self.target_lock = None
+        super().clean()

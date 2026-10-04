@@ -3,7 +3,7 @@ type: rocket
 life_time_s: 10.0
 damage: 300.0
 damage_type: physical
-reload_s: 0.25
+reload_s: 0.5
 # Launch: speed relative to the launching ship, kept for its whole life
 launch_direction: forward
 speed_mps: 400.0

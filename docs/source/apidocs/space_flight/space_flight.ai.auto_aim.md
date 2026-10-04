@@ -31,12 +31,8 @@
   - ```{autodoc2-docstring} space_flight.ai.auto_aim.LOGGER
     :summary:
     ```
-* - {py:obj}`_ACQUIRING <space_flight.ai.auto_aim._ACQUIRING>`
-  - ```{autodoc2-docstring} space_flight.ai.auto_aim._ACQUIRING
-    :summary:
-    ```
-* - {py:obj}`_LOCKED <space_flight.ai.auto_aim._LOCKED>`
-  - ```{autodoc2-docstring} space_flight.ai.auto_aim._LOCKED
+* - {py:obj}`LEAD_SMOOTHING_TIME_S <space_flight.ai.auto_aim.LEAD_SMOOTHING_TIME_S>`
+  - ```{autodoc2-docstring} space_flight.ai.auto_aim.LEAD_SMOOTHING_TIME_S
     :summary:
     ```
 ````
@@ -53,22 +49,12 @@
 
 ````
 
-````{py:data} _ACQUIRING
-:canonical: space_flight.ai.auto_aim._ACQUIRING
+````{py:data} LEAD_SMOOTHING_TIME_S
+:canonical: space_flight.ai.auto_aim.LEAD_SMOOTHING_TIME_S
 :value: >
-   'acquiring'
+   0.2
 
-```{autodoc2-docstring} space_flight.ai.auto_aim._ACQUIRING
-```
-
-````
-
-````{py:data} _LOCKED
-:canonical: space_flight.ai.auto_aim._LOCKED
-:value: >
-   'locked'
-
-```{autodoc2-docstring} space_flight.ai.auto_aim._LOCKED
+```{autodoc2-docstring} space_flight.ai.auto_aim.LEAD_SMOOTHING_TIME_S
 ```
 
 ````
@@ -89,6 +75,30 @@
 :canonical: space_flight.ai.auto_aim.AutoAim.configure
 
 ```{autodoc2-docstring} space_flight.ai.auto_aim.AutoAim.configure
+```
+
+````
+
+````{py:method} _target_kinematics() -> tuple[numpy.ndarray, numpy.ndarray] | None
+:canonical: space_flight.ai.auto_aim.AutoAim._target_kinematics
+
+```{autodoc2-docstring} space_flight.ai.auto_aim.AutoAim._target_kinematics
+```
+
+````
+
+````{py:method} update_lead()
+:canonical: space_flight.ai.auto_aim.AutoAim.update_lead
+
+```{autodoc2-docstring} space_flight.ai.auto_aim.AutoAim.update_lead
+```
+
+````
+
+````{py:method} predict_target_position() -> numpy.ndarray | None
+:canonical: space_flight.ai.auto_aim.AutoAim.predict_target_position
+
+```{autodoc2-docstring} space_flight.ai.auto_aim.AutoAim.predict_target_position
 ```
 
 ````
@@ -115,14 +125,6 @@
 :type: float
 
 ```{autodoc2-docstring} space_flight.ai.auto_aim.AutoAim.acquisition_elapsed_time_s
-```
-
-````
-
-````{py:method} _reset_acquisition()
-:canonical: space_flight.ai.auto_aim.AutoAim._reset_acquisition
-
-```{autodoc2-docstring} space_flight.ai.auto_aim.AutoAim._reset_acquisition
 ```
 
 ````

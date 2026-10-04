@@ -23,7 +23,7 @@ All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
   through the YAML bindings (`configuration/configuration.yaml`), never
   hardcoded to a key. Since every reader exposes the same `InputState` shape,
   the same context code drives keyboard, gamepad and joystick.
-- `HUD`, `TargetHUD` and `PlayerWaypoints` follow the scene-piece lifecycle
+- `HUD`, `AimHUD` and `PlayerWaypoints` follow the scene-piece lifecycle
   (see [docs/scenes.md](scenes.md)): construct with `game`, register a
   per-frame update in `game.method_lists`, `clean()`. `RearViewMirror` (owned
   by `Player`) and `WaypointMarker` (driven by `PlayerWaypoints`) have no
@@ -73,7 +73,8 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   `contexts.flight.<input_type>`. Weapons are `fire` (lasers),
   `fire_secondary` (the selected bomb, rocket or missile launcher, while
   held), `cycle_secondary` (on press) and `drop_flare` (while held); held
-  launches are paced by each launcher's reload. Energy distribution (see
+  launches are paced by each launcher's reload, and a newly selected launcher
+  reloads before it can fire. Energy distribution (see
   [docs/actors.md](actors.md#energy-management)) is set on press by
   `energy_engines`, `energy_lasers`, `energy_shields` and `energy_balanced`
   (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick). Its `pressed`/`held`/`active`/`released`
@@ -126,24 +127,35 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
   at its centre) and shields (blue half-ring, shield strength at its centre,
   hidden on unshielded ships). The gauge of the system power is redirected to
   is brighter. Its layout, colours and brightness are module constants.
-- **`TargetHUD`** — projects the player's target into screen space each frame
-  (`cam.getRelativePoint` + `lens.project`) to place a target box and
-  distance/name labels. In view, the box encircles the target. The box turns
-  red while auto-aim is locked on the target (`update_lock_tint`): a missile
-  launched then is guided to it. Off-screen
-  (outside the FoV *or* behind the camera) it is pinned to the screen border
-  along the true bearing, by scaling the projected vector to meet the edge
-  rectangle — clamping each axis separately would snap it to jittering
-  corners. Behind the camera the projection is mirrored, so its sign is
-  flipped; the depth is clamped away from zero so the projection stays finite
-  near the camera's XZ plane (details in the code comments). The label shows
-  the target's parent name, falling back to the target's own name
-  (subsystems). If the target has a scan (`pawn.scan`, a `ScanState` from
-  [`actors/scan.py`](../../src/space_flight/actors/scan.py)), a transparent bar
-  fills the box in proportion to its progress — yellow while scanning, then
-  green (clear) or red (contraband) — and its status ("SCANNING 42%",
-  "CLEAR", "CONTRABAND") is appended to the name. Only that attribute is
-  read, so any pawn a mission makes scannable gets the bar.
+- **`AimHUD`** — the aiming cues, placed each frame by projecting world
+  points into screen space (`project_to_screen`: `cam.getRelativePoint` +
+  `lens.project`):
+  - a **crosshair** where the lasers go: the ship's nose direction, projected
+    as a point at infinity (the cannons fire parallel to it), so it stays true
+    when the head is jolted or turned. It turns red while auto-aim is locked
+    (shots lead the target).
+  - a **lead indicator** where to aim to hit the target: auto-aim's predicted
+    position (`AutoAim.predict_target_position`, see
+    [docs/ai.md](ai.md#autoaim)). Shown only with a target and when that point
+    is ahead and on screen.
+  - a **target box** with distance/name labels. In view, the box encircles the
+    target. It turns red while the armed missile is locked on the target
+    (`Fighter.is_missile_locked`): a missile launched then is guided to it.
+    It is updated first, as it drops a target that has just died. Off-screen
+    (outside the FoV *or* behind the camera) it is pinned to the screen border
+    along the true bearing, by scaling the projected vector to meet the edge
+    rectangle — clamping each axis separately would snap it to jittering
+    corners. Behind the camera the projection is mirrored, so its sign is
+    flipped; the depth is clamped away from zero so the projection stays
+    finite near the camera's XZ plane (details in the code comments). The
+    label shows the target's parent name, falling back to the target's own
+    name (subsystems). If the target has a scan (`pawn.scan`, a `ScanState`
+    from [`actors/scan.py`](../../src/space_flight/actors/scan.py)), a
+    transparent bar fills the box in proportion to its progress — yellow
+    while scanning, then green (clear) or red (contraband) — and its status
+    ("SCANNING 42%", "CLEAR", "CONTRABAND") is appended to the name. Only
+    that attribute is read, so any pawn a mission makes scannable gets the
+    bar.
 
 ## `rear_view_mirror.py`
 

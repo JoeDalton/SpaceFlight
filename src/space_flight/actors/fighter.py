@@ -115,6 +115,7 @@ class Fighter(Ship):
         """
         Moves the ship (see :meth:`Ship.move`), boost permitting, spends and
         refills the engine and laser gauges, then updates auto-aim acquisition
+        and the missile locks
 
         :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
@@ -138,6 +139,7 @@ class Fighter(Ship):
 
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
+        self._update_missile_locks()
 
     def _turn_rate_scale(self, throttle: float) -> float:
         """
@@ -164,6 +166,36 @@ class Fighter(Ship):
         """
         return self.shield
 
+    def _armed_missile(self) -> OrdnanceLauncher | None:
+        """
+        :return: The selected secondary weapon if it is a missile launcher with
+            stock left, else None
+        """
+        launcher = self.selected_secondary
+        if launcher is None or launcher.target_lock is None or launcher.stock <= 0:
+            return None
+        return launcher
+
+    def _update_missile_locks(self):
+        """
+        Only the armed missile works on its lock: the others drop theirs, so
+        switching back to one starts its lock delay over.
+        """
+        armed_missile = self._armed_missile()
+        for launcher in self.ordnance_launchers:
+            if launcher.target_lock is None:
+                continue
+            if launcher is armed_missile:
+                launcher.target_lock.update()
+            else:
+                launcher.target_lock.reset()
+
+    @property
+    def is_missile_locked(self) -> bool:
+        """Whether a missile launched now would be guided to the target."""
+        armed_missile = self._armed_missile()
+        return armed_missile is not None and armed_missile.is_locked
+
     def secondary_cycle(self) -> list[OrdnanceLauncher]:
         """
         :return: The secondary weapons cycle_secondary loops over: the bomb,
@@ -179,7 +211,7 @@ class Fighter(Ship):
         """
         Select the next secondary weapon (bomb, rocket or missile launcher), in
         loadout order, looping back to the first. A spent one can be selected
-        too: it just launches nothing.
+        too: it just launches nothing. The new selection reloads first.
         """
         candidates = self.secondary_cycle()
         if not candidates:
@@ -187,15 +219,25 @@ class Fighter(Ship):
             return
         if self.selected_secondary in candidates:
             index = candidates.index(self.selected_secondary)
-            self.selected_secondary = candidates[(index + 1) % len(candidates)]
+            self._select_secondary(candidates[(index + 1) % len(candidates)])
         else:
-            self.selected_secondary = candidates[0]
+            self._select_secondary(candidates[0])
+
+    def _select_secondary(self, launcher: OrdnanceLauncher):
+        """
+        Select a secondary weapon, which reloads if it was not selected already.
+
+        :param launcher: The launcher to select
+        """
+        if launcher is not self.selected_secondary:
+            launcher.restart_reload()
+        self.selected_secondary = launcher
 
     def fire_secondary(self) -> bool:
         """
         Launch the selected secondary weapon, then select the next one with stock
-        left once its stock runs out. A missile is given the current target only
-        if auto-aim has locked onto it; otherwise it flies blind, like a rocket.
+        left once its stock runs out. A missile is guided to the target only if
+        locked on it (see is_missile_locked); otherwise it flies blind.
 
         The launcher is rate-limited, so a launch can be refused while reloading
         even with stock to spare; stock is only spent on an actual launch.
@@ -210,14 +252,15 @@ class Fighter(Ship):
     def _select_next_secondary_with_stock(self):
         """
         Move the selection on to the next secondary weapon with stock left, if
-        any (the selection stays put otherwise).
+        any (the selection stays put otherwise). The new selection reloads
+        first.
         """
         cycle = self.secondary_cycle()
         index = cycle.index(self.selected_secondary)
         for step in range(1, len(cycle)):
             launcher = cycle[(index + step) % len(cycle)]
             if launcher.stock > 0:
-                self.selected_secondary = launcher
+                self._select_secondary(launcher)
                 return
 
     def drop_flare(self) -> bool:
@@ -230,16 +273,15 @@ class Fighter(Ship):
 
     def _launch(self, launcher: OrdnanceLauncher | None) -> bool:
         """
-        Launch one unit from one of the ship's launchers, giving it the current
-        target only if auto-aim has locked onto it (only a missile uses it).
+        Launch one unit from one of the ship's launchers, at the current target
+        (only a locked missile uses it).
 
         :param launcher: The launcher (None is a no-op)
         :return: True if launched
         """
         if launcher is None:
             return False
-        target_id = self.target_id if self.auto_aim.is_target_acquired else None
-        return launcher.launch(target_id=target_id)
+        return launcher.launch(target_id=self.target_id)
 
     def apply_damage(self, damage: float, damage_type: str):
         """
