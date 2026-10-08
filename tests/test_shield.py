@@ -398,6 +398,23 @@ def test_get_shield_level_never_negative():
     assert shield.get_shield_level() == pytest.approx(0.0)
 
 
+def test_get_shield_level_zero_after_all_generators_destroyed():
+    """
+    Once every generator is gone the stale strength pool no longer defends, so
+    the level reads zero (hull hits must not spark as shield hits).
+    """
+    generators = [make_generator(is_dead=True, health=0.0) for _ in range(2)]
+    shield = make_shield_without_init(
+        generators=generators, current_health=500.0, time_step=0.1
+    )
+
+    shield.update()
+
+    assert shield._final_death is True
+    assert shield.health > 0.0
+    assert shield.get_shield_level() == pytest.approx(0.0)
+
+
 def test_doomed_ship_reparents_shield_to_survive_node_removal():
     """
     When the ship (our mount) is destroyed, the shield reparents its node to the

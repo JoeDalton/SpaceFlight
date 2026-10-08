@@ -403,10 +403,14 @@ class Shield(Destructible):
         estimate.
 
         This is the current strength pool: already pro-rata scaled, and zero
-        while the shield is down.
+        while the shield is down. Once the terminal death has begun (all
+        generators or the ship destroyed) the pool is frozen but no longer
+        defends anything, so it reads as zero.
 
         :return: The shield's current strength (never negative)
         """
+        if self._final_death:
+            return 0.0
         return max(0.0, self.health)
 
     def play_death(self):
