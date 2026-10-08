@@ -17,21 +17,28 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Callable
 
-from direct.gui.DirectGui import DirectFrame, DirectLabel
+from direct.gui.DirectGui import DirectLabel
+from panda3d.core import Geom, GeomNode, NodePath, TransparencyAttrib
 
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.ui.input_context import RadialMenuInputContext
+from space_flight.ui.utils import make_ring_sector_geom
 
 if TYPE_CHECKING:
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
 # Visual constants
-_RADIUS = 0.4
-_UNSELECTED_SCALE = 0.1
-_SELECTED_SCALE = 0.11
+_INNER_RADIUS = 0.3
+_OUTER_RADIUS = 0.75
+_LABEL_RADIUS = 0.5 * (_INNER_RADIUS + _OUTER_RADIUS)
+_SLICE_GAP_RAD = 0.06
+_ARC_STEP_RAD = 0.1
+_UNSELECTED_SCALE = 0.07
+_SELECTED_SLICE_SCALE = 1.08
 _UNSELECTED_FG = (0.7, 0.7, 0.7, 0.85)
-_SELECTED_FG = (1.0, 0.82, 0.0, 1.0)
-_BG_COLOR = (0.0, 0.0, 0.0, 0.45)
+_SELECTED_FG = (1.0, 0.95, 0.7, 1.0)
+_SLICE_COLOR = (0.0, 0.0, 0.0, 0.45)
+_SELECTED_SLICE_COLOR = (0.75, 0.55, 0.0, 0.8)
 
 
 # ---------------------------------------------------------------------------
@@ -41,51 +48,89 @@ _BG_COLOR = (0.0, 0.0, 0.0, 0.45)
 
 class RadialMenuVisual:
     """
-    Panda3D 2-D overlay that draws the radial menu slice labels.
+    Panda3D 2-D overlay that draws the radial menu as a ring of separate slices
+    around an empty centre, built from procedural geometry (no assets).
 
-    Slice 0 is rendered at the top; subsequent slices are placed clockwise.
+    Slice 0 is centred at the top; subsequent slices are placed clockwise.
     Call :meth:`update` every frame to highlight the currently pointed-at
-    slice.
+    slice: it lights up, grows slightly and is drawn over its neighbours.
     """
 
     def __init__(self, app: SpaceFlightSimulator, slice_labels: list[str]):
         """
-        :param app: The simulator app (unused; widgets parent to aspect2d).
+        :param app: The simulator app, whose aspect2d parents the overlay.
         :param slice_labels: Display text for each slice
         """
-        self.frame = DirectFrame(
-            frameSize=(-0.7, 0.7, -0.7, 0.7),
-            frameColor=_BG_COLOR,
-            pos=(0, 0, 0),
-        )
-        self.frame.setTransparency(True)
+        self.root = app.aspect2d.attachNewNode("radial_menu")
         n_slices = len(slice_labels)
+        slice_width = 2 * math.pi / n_slices
 
+        self.slices: list[NodePath] = []
+        self.slice_geoms: list[tuple[Geom, Geom]] = []
         self.labels: list[DirectLabel] = []
         for i, text in enumerate(slice_labels):
-            angle = math.pi / 2 - i * 2 * math.pi / n_slices
-            x = _RADIUS * math.cos(angle)
-            z = _RADIUS * math.sin(angle)
+            # Slice 0 is centred on the top (pi/2); angles grow clockwise
+            centre = math.pi / 2 - i * slice_width
+            half_width = 0.5 * slice_width - 0.5 * _SLICE_GAP_RAD
+            # The selected slice is the normal one scaled up about the menu
+            # centre, except for its inner edge which is pulled inwards.
+            variants = (
+                (_INNER_RADIUS, _OUTER_RADIUS, half_width),
+                (
+                    _INNER_RADIUS / _SELECTED_SLICE_SCALE,
+                    _OUTER_RADIUS * _SELECTED_SLICE_SCALE,
+                    half_width * _SELECTED_SLICE_SCALE,
+                ),
+            )
+            geoms = tuple(
+                make_ring_sector_geom(
+                    inner_radius,
+                    outer_radius,
+                    centre + half_span,
+                    centre - half_span,
+                    max(1, math.ceil(2 * half_span / _ARC_STEP_RAD)),
+                )
+                for inner_radius, outer_radius, half_span in variants
+            )
+            self.slice_geoms.append(geoms)
+            node = GeomNode(f"radial_slice_{i}")
+            node.addGeom(geoms[0])
+            slice_np = self.root.attachNewNode(node)
+            slice_np.setTransparency(TransparencyAttrib.MAlpha)
+            slice_np.setDepthTest(False)
+            slice_np.setDepthWrite(False)
+            self.slices.append(slice_np)
+
             lbl = DirectLabel(
                 text=text,
                 text_scale=_UNSELECTED_SCALE,
                 text_fg=_UNSELECTED_FG,
                 frameColor=(0, 0, 0, 0),
-                pos=(x, 0, z),
-                parent=self.frame,
+                pos=(
+                    _LABEL_RADIUS * math.cos(centre),
+                    0,
+                    _LABEL_RADIUS * math.sin(centre),
+                ),
+                parent=self.root,
             )
             self.labels.append(lbl)
+        self.update(None)
 
     def update(self, selected: int | None):
         """
         Highlight *selected* and dim all other slices.
 
         :param selected: Index of the slice the player is pointing at, or
-            None when the direction vector is within the dead zone.
+            None when nothing is selected.
         """
-        for i, lbl in enumerate(self.labels):
+        for i, (slice_np, lbl) in enumerate(zip(self.slices, self.labels)):
             active = i == selected
-            lbl["text_scale"] = _SELECTED_SCALE if active else _UNSELECTED_SCALE
+            slice_np.setColor(*(_SELECTED_SLICE_COLOR if active else _SLICE_COLOR))
+            slice_np.node().setGeom(0, self.slice_geoms[i][1 if active else 0])
+            slice_np.setBin("fixed", 1 if active else 0)
+            lbl["text_scale"] = _UNSELECTED_SCALE * (
+                _SELECTED_SLICE_SCALE if active else 1.0
+            )
             lbl["text_fg"] = _SELECTED_FG if active else _UNSELECTED_FG
 
     def destroy(self):
@@ -93,8 +138,10 @@ class RadialMenuVisual:
         for lbl in self.labels:
             lbl.destroy()
         self.labels = []
-        self.frame.destroy()
-        self.frame = None
+        self.slices = []
+        self.slice_geoms = []
+        self.root.removeNode()
+        self.root = None
 
 
 # ---------------------------------------------------------------------------
