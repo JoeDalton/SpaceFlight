@@ -212,6 +212,7 @@ class Bot(Destructible):
                     target_direction=target_direction,
                     desired_speed_mps=desired_speed_mps,
                     up_reference=self.navigator.up_reference,
+                    minimum_speed_mps=self.navigator.minimum_speed_mps,
                 )
             else:
                 self.navigator.update_triggers(intent=intent, target_dict=target_dict)

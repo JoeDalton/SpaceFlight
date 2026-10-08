@@ -123,7 +123,11 @@ class Personality:
                 "cap_lead_cutoff_slope": 0.04,
                 "ideal_distance_m": 200.0,
                 "speed_distance_slope": 0.01,
-                "minimum_speed_mps": 80.0,  # never slow below this when attacking
+                # Never slow below this fraction of the ship's max_speed_mps when
+                # pursuing; the floor also caps collision avoidance's slowdown
+                # (avoidance still steers) when minimum_speed_overrides_avoidance
+                "minimum_speed_factor": 0.75,
+                "minimum_speed_overrides_avoidance": True,
             },
             "extend": {
                 "minimum_duration_s": 3.0,
@@ -202,6 +206,11 @@ class Personality:
         "pilot": {
             "sample_time_s": 0.1,
             "minimum_throttle": 0.2,
+            # Energy protection below the navigator's speed floor: the yaw/pitch
+            # rates ramp down to min_turn_authority over a range of
+            # energy_protection_range_factor * max_speed_mps (see GenericShipPilot)
+            "min_turn_authority": 0.8,
+            "energy_protection_range_factor": 0.15,
             "yaw_kp": 1.0,
             "yaw_ki": 0.0,
             "yaw_kd": 0.0,

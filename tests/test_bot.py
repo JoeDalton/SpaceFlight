@@ -318,6 +318,22 @@ def test_move_bot_task_calls_pawn_move_for_fighter():
     )
 
 
+def test_move_bot_task_passes_the_navigator_speed_floor_to_the_pilot():
+    """
+    The navigator's speed floor of the think reaches the pilot, for its energy
+    protection.
+    """
+    bot = make_bot_without_init(bot_type="fighter")
+    bot.tactician.think.return_value = ("attack", {})
+    bot.navigator.navigate.return_value = (np.array([1.0, 0.0, 0.0]), 100.0)
+    bot.navigator.minimum_speed_mps = 112.5
+    bot.pilot.pilot.return_value = (0.8, 0.1, -0.1, 0.0)
+
+    bot.move_bot_task()
+
+    assert bot.pilot.pilot.call_args.kwargs["minimum_speed_mps"] == 112.5
+
+
 def test_move_bot_task_calls_pawn_move_for_turret():
     """
     move_bot_task() calls pawn.move() for a turret bot with only yaw/pitch

@@ -322,7 +322,7 @@ class Ship(Pawn):
         """
         return turn_rate_scale(throttle)
 
-    def _thrust_factor(self) -> float:
+    def thrust_factor(self) -> float:
         """
         Multiplier applied to the (positive) thrust command, e.g. for a fighter's
         engine energy bonus.
@@ -383,7 +383,7 @@ class Ship(Pawn):
         Sets the scalar thrust and rotational rates of the ship.
 
         The throttle is squared so the velocity is easier to modulate, and scaled
-        by _thrust_factor(); below ZERO_THRUST_POSITION it brakes (airplane
+        by thrust_factor(); below ZERO_THRUST_POSITION it brakes (airplane
         model) or cuts thrust (space).
         The turn rates are scaled by _turn_rate_scale(throttle).
         Both are low-pass filtered to emulate delay in physical systems.
@@ -401,7 +401,7 @@ class Ship(Pawn):
             scalar_thrust_n = (
                 ((throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)) ** 2
                 * self.max_thrust_n
-                * self._thrust_factor()
+                * self.thrust_factor()
             )
         else:
             if FLIGHT_MODEL == "airplane":

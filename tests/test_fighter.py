@@ -613,9 +613,9 @@ def test_fighter_turn_rate_and_thrust_follow_engine_gauge():
     bonus or penalty.
     """
     fighter = make_fighter_without_init()
-    full = (fighter._turn_rate_scale(0.6), fighter._thrust_factor())
+    full = (fighter._turn_rate_scale(0.6), fighter.thrust_factor())
     fighter.energy.engines = 0.5
-    half = (fighter._turn_rate_scale(0.6), fighter._thrust_factor())
+    half = (fighter._turn_rate_scale(0.6), fighter.thrust_factor())
 
     assert full[0] > half[0]
     assert full[1] > half[1] == pytest.approx(1.0)
