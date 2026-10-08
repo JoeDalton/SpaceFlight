@@ -41,6 +41,7 @@ def pilot(mock_game):
     pawn.max_thrust_n = 10512.5
     pawn.lift_n = np.zeros(3)
     pawn.thrust_factor.return_value = 1.0
+    pawn.max_speed_mps = 145.0
     return FighterPilot(
         game=mock_game, pawn=pawn, personality=Personality.FIGHTER_DEFAULT
     )
@@ -222,3 +223,76 @@ def test_throttle_pid_can_pull_below_feedforward(pilot):
     The throttle PID is a signed correction of the feedforward throttle.
     """
     assert pilot.pid_throttle.output_limits == (-1.0, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# compute_turn_authority — energy protection below the speed floor
+# ---------------------------------------------------------------------------
+
+FLOOR_MPS = 100.0
+
+
+def _range_mps(pilot) -> float:
+    return (
+        Personality.FIGHTER_DEFAULT["pilot"]["energy_protection_range_factor"]
+        * pilot.pawn.max_speed_mps
+    )
+
+
+def test_turn_authority_full_without_a_speed_floor(pilot):
+    """No floor (0), no limit, however slow the ship."""
+    pilot.pawn.speed = np.zeros(3)
+
+    assert pilot.compute_turn_authority(0.0) == 1.0
+
+
+def test_turn_authority_full_at_or_above_the_floor(pilot):
+    """At or above the floor, the turn rates are untouched."""
+    pilot.pawn.speed = np.array([0.0, FLOOR_MPS, 0.0])
+
+    assert pilot.compute_turn_authority(FLOOR_MPS) == 1.0
+
+
+def test_turn_authority_ramps_down_below_the_floor(pilot):
+    """Halfway down the protection range, half the authority reduction applies."""
+    min_authority = Personality.FIGHTER_DEFAULT["pilot"]["min_turn_authority"]
+    pilot.pawn.speed = np.array([0.0, FLOOR_MPS - 0.5 * _range_mps(pilot), 0.0])
+
+    authority = pilot.compute_turn_authority(FLOOR_MPS)
+
+    assert authority == pytest.approx(1.0 - 0.5 * (1.0 - min_authority))
+
+
+def test_turn_authority_bottoms_out_at_the_minimum(pilot):
+    """Far below the floor, the authority stays at min_turn_authority."""
+    pilot.pawn.speed = np.array([0.0, FLOOR_MPS - 3.0 * _range_mps(pilot), 0.0])
+
+    assert pilot.compute_turn_authority(FLOOR_MPS) == pytest.approx(
+        Personality.FIGHTER_DEFAULT["pilot"]["min_turn_authority"]
+    )
+
+
+def test_energy_protection_limits_yaw_and_pitch_but_not_roll(pilot, mock_game):
+    """
+    Below the floor, pilot() scales the yaw and pitch rates by the turn
+    authority, and leaves the roll rate alone.
+    """
+    mock_game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    pilot.pawn.right = np.array([1.0, 0.0, 0.0])
+    pilot.pawn.forward = np.array([0.0, 1.0, 0.0])
+    pilot.pawn.up = np.array([0.0, 0.0, 1.0])
+    pilot.pawn.speed = np.array([0.0, FLOOR_MPS - 3.0 * _range_mps(pilot), 0.0])
+    # Up, right and a bit ahead: yaw, pitch and roll errors all non-zero
+    target_direction = np.array([0.3, 0.2, 0.3])
+    min_authority = Personality.FIGHTER_DEFAULT["pilot"]["min_turn_authority"]
+
+    _, yaw, pitch, roll = pilot.pilot(
+        target_direction=target_direction, minimum_speed_mps=FLOOR_MPS
+    )
+
+    yaw_error, pitch_error, roll_error, _ = pilot.compute_angular_error(
+        target_direction=target_direction
+    )
+    assert yaw == pytest.approx(min_authority * pilot.pid_yaw.Kp * -yaw_error)
+    assert pitch == pytest.approx(min_authority * pilot.pid_pitch.Kp * -pitch_error)
+    assert roll == pytest.approx(pilot.pid_roll.Kp * -roll_error)
