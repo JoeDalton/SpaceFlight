@@ -109,6 +109,8 @@ class Shield(Destructible):
         self.max_health = health
         self.health = self.max_health
         self.regen_rate = regen_rate
+        # Generator fraction the current strength was last scaled for.
+        self._last_fraction = 1.0
         self.is_enabled = True
 
         # --- Animation / lifecycle state ---
@@ -329,13 +331,17 @@ class Shield(Destructible):
 
         if not self._final_death:
             # Pro-rata perks: scale the maximum strength and regeneration by the
-            # fraction of generators still alive, and clamp the current strength
-            # down to the (possibly reduced) maximum.
+            # fraction of generators still alive. When that fraction changes, the
+            # current strength is scaled by the same ratio as the maximum, so a
+            # partially depleted shield loses the same proportion.
             fraction = self._alive_generator_count() / self.initial_generator_count
+            if fraction != self._last_fraction:
+                if self._last_fraction > 0.0:
+                    self.health *= fraction / self._last_fraction
+                self._last_fraction = fraction
             self.max_health = self.base_max_health * fraction
             self.regen_rate = self.base_regen_rate * fraction
-            if self.health > self.max_health:
-                self.health = self.max_health
+            self.health = min(self.health, self.max_health)
 
             # Depleted while up -> collapse, then stay down until it regenerates.
             if self.state == _UP and self.health <= 0.0:
@@ -403,10 +409,14 @@ class Shield(Destructible):
         estimate.
 
         This is the current strength pool: already pro-rata scaled, and zero
-        while the shield is down.
+        while the shield is down. Once the terminal death has begun (all
+        generators or the ship destroyed) the pool is frozen but no longer
+        defends anything, so it reads as zero.
 
         :return: The shield's current strength (never negative)
         """
+        if self._final_death:
+            return 0.0
         return max(0.0, self.health)
 
     def play_death(self):

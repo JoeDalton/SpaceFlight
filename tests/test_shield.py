@@ -85,6 +85,7 @@ def make_shield_without_init(
     shield.state_sm = StateMachine(initial_state=state, clock=clock)
     shield._u = 1.0 if state in (_DOWN, _APPEARING) else 0.0
     shield._final_death = False
+    shield._last_fraction = 1.0
     shield.regen_cooldown = Cooldown(_REGEN_COOLDOWN_S, clock=clock)
     # Place the last hit at last_hit_time (unless the sentinel "never hit").
     if last_hit_time > -1.0e8:
@@ -376,7 +377,40 @@ def test_perks_scale_with_surviving_generators():
 
     assert shield.max_health == pytest.approx(750.0)  # 1000 * 3/4
     assert shield.regen_rate == pytest.approx(30.0)  # 40 * 3/4
-    assert shield.health == pytest.approx(750.0)  # clamped down to the new max
+    assert shield.health == pytest.approx(750.0)  # scaled down with the max
+
+
+def test_partially_depleted_strength_scales_with_lost_generator():
+    """A depleted shield loses the same proportion as the max when a generator dies."""
+    generators = [make_generator(), make_generator(is_dead=True, health=0.0)]
+    shield = make_shield_without_init(
+        generators=generators, max_health=1000.0, current_health=300.0
+    )
+
+    shield.update()
+
+    assert shield.max_health == pytest.approx(500.0)
+    assert shield.health == pytest.approx(150.0)  # 300 * 1/2
+
+
+def test_strength_scaling_compounds_over_successive_losses():
+    """Generators dying in separate frames compound: 4 -> 3 -> 2 alive halves it."""
+    generators = [make_generator() for _ in range(4)]
+    shield = make_shield_without_init(
+        generators=generators, max_health=1000.0, current_health=400.0
+    )
+
+    generators[0].is_dead = True
+    shield.update()
+    assert shield.health == pytest.approx(300.0)  # 400 * 3/4
+
+    generators[1].is_dead = True
+    shield.update()
+    assert shield.health == pytest.approx(200.0)  # 400 * 2/4
+    assert shield.max_health == pytest.approx(500.0)
+
+    shield.update()  # no further change
+    assert shield.health == pytest.approx(200.0)
 
 
 # ---------------------------
@@ -395,6 +429,23 @@ def test_get_shield_level_never_negative():
     """An over-depleted pool still reports a non-negative level."""
     shield = make_shield_without_init(current_health=-5.0)
 
+    assert shield.get_shield_level() == pytest.approx(0.0)
+
+
+def test_get_shield_level_zero_after_all_generators_destroyed():
+    """
+    Once every generator is gone the stale strength pool no longer defends, so
+    the level reads zero (hull hits must not spark as shield hits).
+    """
+    generators = [make_generator(is_dead=True, health=0.0) for _ in range(2)]
+    shield = make_shield_without_init(
+        generators=generators, current_health=500.0, time_step=0.1
+    )
+
+    shield.update()
+
+    assert shield._final_death is True
+    assert shield.health > 0.0
     assert shield.get_shield_level() == pytest.approx(0.0)
 
 

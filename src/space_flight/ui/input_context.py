@@ -549,9 +549,11 @@ class RadialMenuInputContext(InputContext):
 
     Reads a 2-D direction vector each frame (from analog axes or keyboard
     directional keys, as configured in the radial_menu YAML context) and
-    determines which slice the player is pointing at.  When the trigger button
-    is released the on_select callback receives the chosen slice index (or
-    None if the vector magnitude was below min_magnitude).
+    determines which slice the player is pointing at.  The last slice pointed
+    at stays selected when the direction returns to the dead zone, until
+    another slice is pointed at.  When the trigger button is released the
+    on_select callback receives the chosen slice index (or None if no slice was
+    ever pointed at, i.e. the vector magnitude never reached min_magnitude).
 
     On release it calls state_manager.pop(); the exit() of
     :class:`~space_flight.menus.radial_menu_state.RadialMenuState` then pops
@@ -606,10 +608,11 @@ class RadialMenuInputContext(InputContext):
         """
         x, y = self.read_direction(state)
         mag = (x**2 + y**2) ** 0.5
+        # The selection is latched: returning the stick to centre (or letting
+        # go of the direction key) before releasing the trigger keeps the last
+        # slice, so the player doesn't have to release both at the same instant.
         if mag >= self.min_magnitude:
             self.selected_slice = angle_to_slice(x, y, self.n_slices)
-        else:
-            self.selected_slice = None
 
         if self.on_hover is not None:
             self.on_hover(self.selected_slice)

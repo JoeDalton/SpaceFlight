@@ -865,6 +865,38 @@ def test_radial_ctx_trigger_release_calls_on_select_with_none_in_dead_zone():
     on_select.assert_called_once_with(None)
 
 
+def test_radial_ctx_selection_survives_direction_release_before_trigger():
+    """
+    Letting go of the direction before the trigger must keep the last slice:
+    the dead-zone frame in between must not clear the selection.
+    """
+    ctx, game, on_select = make_radial_ctx(
+        radial_bindings={"dir_up": "i", "dir_right": "l"},
+        trigger_hw="r",
+    )
+    hover = MagicMock()
+    ctx.on_hover = hover
+    ctx.consume(make_state(buttons={"r": True}, repeats={"i": True}))
+    ctx.consume(make_state(buttons={"r": True}))
+    hover.assert_called_with(0)
+    ctx.consume(make_state(releases={"r": True}))
+    on_select.assert_called_once_with(0)
+
+
+def test_radial_ctx_new_direction_replaces_latched_selection():
+    """
+    Pointing at another slice after a latched one must switch the selection.
+    """
+    ctx, _, on_select = make_radial_ctx(
+        radial_bindings={"dir_up": "i", "dir_right": "l"},
+        trigger_hw="r",
+    )
+    ctx.consume(make_state(repeats={"i": True}))
+    ctx.consume(make_state(repeats={"l": True}))
+    ctx.consume(make_state(releases={"r": True}))
+    on_select.assert_called_once_with(1)
+
+
 def test_radial_ctx_no_pop_while_trigger_held():
     """
     While the trigger is held (button or repeat but not release), on_select

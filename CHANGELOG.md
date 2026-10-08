@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Better radial menu #93
+- Parallelized pytest config #118
+
 ### Fixed
+
+- Fixed level 1 waypoints in asteroid #138
 
 ### Removed
 

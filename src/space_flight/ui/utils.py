@@ -271,6 +271,42 @@ def make_arc_geom(
     return geom
 
 
+def make_ring_sector_geom(
+    inner_radius: float,
+    outer_radius: float,
+    start_angle_rad: float,
+    end_angle_rad: float,
+    n_steps: int,
+) -> Geom:
+    """
+    A flat annular sector in the screen's XZ plane, centred on the origin.
+
+    :param inner_radius: The sector's inner radius
+    :param outer_radius: The sector's outer radius
+    :param start_angle_rad: The angle of the first edge, counter-clockwise from
+        +X
+    :param end_angle_rad: The angle of the last edge, counter-clockwise from +X
+    :param n_steps: The number of segments along the arc (at least 1)
+    :return: The geometry, one triangle strip
+    """
+    vertex_data = GeomVertexData("ring_sector", GeomVertexFormat.getV3(), Geom.UHStatic)
+    vertex_data.setNumRows(2 * (n_steps + 1))
+    vertex = GeomVertexWriter(vertex_data, "vertex")
+    strip = GeomTristrips(Geom.UHStatic)
+    for step in range(n_steps + 1):
+        angle_rad = start_angle_rad + (end_angle_rad - start_angle_rad) * (
+            step / n_steps
+        )
+        cos, sin = np.cos(angle_rad), np.sin(angle_rad)
+        vertex.addData3(outer_radius * cos, 0.0, outer_radius * sin)
+        vertex.addData3(inner_radius * cos, 0.0, inner_radius * sin)
+        strip.addVertices(2 * step, 2 * step + 1)
+    strip.closePrimitive()
+    geom = Geom(vertex_data)
+    geom.addPrimitive(strip)
+    return geom
+
+
 class ArcGauge:
     """
     A half-ring gauge, read by the angular portion filled, sweeping from its

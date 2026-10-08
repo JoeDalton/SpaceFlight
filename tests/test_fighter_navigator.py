@@ -1061,7 +1061,7 @@ def test_time_in_spiral_accrues_the_time_between_thinks():
     extend = Personality.FIGHTER_DEFAULT["navigator"]["extend"]
     in_spiral = dict(
         longitudinal_speed_scalar_mps=0.0,
-        lateral_speed_scalar_mps=2.0 * extend["maximal_lateral_speed_mps"] + 1.0,
+        lateral_speed_scalar_mps=2.0 * extend["maximum_lateral_speed_mps"] + 1.0,
     )
     per_frame, per_think = make_fighter_navigator(), make_fighter_navigator()
     per_frame.think_dt_s = 1.0 / 60.0
