@@ -24,7 +24,7 @@ def develop(c):
 
 @task
 def test(c):
-    c.run("poetry run pytest tests/")
+    c.run("poetry run pytest tests/ -n auto")
 
 
 @task()
@@ -50,7 +50,7 @@ def deploy(c):
 @task
 def coverage(c):
     c.run(
-        "poetry run pytest tests -v --cov-report term --cov-report html:htmlcov --cov-report xml --cov=./src/"
+        "poetry run pytest tests -v -n auto --cov-report term --cov-report html:htmlcov --cov-report xml --cov=./src/"
     )
     c.run("poetry run coverage report")
     c.run("poetry run coverage xml")
