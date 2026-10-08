@@ -77,8 +77,8 @@ ENEMY_FIGHTER_SQUADRON = WaveSpec(
     waypoints=PATROL_ROUTE,
 )
 
-# An allied Y-wing patrol (e.g. m.spawn(ALLIED_PATROL, target=frigate) to have
-# it bomb the frigate).
+# An allied Y-wing patrol, given the enemy frigates as primary targets (see
+# dev_mission) to have it bomb and torpedo them.
 ALLIED_PATROL = WaveSpec(
     name="allied_patrol",
     ship_model="y-wing",
@@ -121,14 +121,16 @@ def build_dev_upfront(game: FlightState):
 def dev_mission(m: Mission) -> Iterator[None]:
     """
     The dev sandbox's mission body: after 2s, 3 enemy capital ships, 17
-    enemy fighters and 10 allied Y-wings (30 ships, for CPU load testing).
-    No win/lose condition.
+    enemy fighters and 10 allied Y-wings (30 ships, for CPU load testing),
+    the frigates being the Y-wings' primary targets. No win/lose condition.
 
     :param m: The level's :class:`Mission`
     """
     yield from m.wait(2)
     m.hud("Enemy forces inbound")
-    m.spawn(ENEMY_FRIGATE)
-    m.spawn(ENEMY_FRIGATE_WING)
+    frigate = m.spawn(ENEMY_FRIGATE)
+    frigate_wing = m.spawn(ENEMY_FRIGATE_WING)
     m.spawn(ENEMY_FIGHTER_SQUADRON)
-    m.spawn(ALLIED_PATROL)
+    # Targets are resolved as each Y-wing spawns: let the frigates spawn first
+    yield from m.wait(1)
+    m.spawn(ALLIED_PATROL, target=[frigate, frigate_wing])

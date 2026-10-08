@@ -41,6 +41,9 @@ DAMAGE_TYPES = ("physical",)
 # dropped within decoy_range_m of it and lie within decoy_cone_angle_deg of its
 # nose, and then lures it with probability decoy_chance
 MISSILE_DECOY_KEYS = ("decoy_range_m", "decoy_cone_angle_deg", "decoy_chance")
+# The targets a missile or rocket is fired at, by mobility (see
+# FighterTactician._choose_weapon)
+TARGET_MOBILITIES = ("agile", "slow")
 
 
 @functools.cache
@@ -63,6 +66,12 @@ def _read_ordnance_configuration(name: str) -> dict:
     if conf.get("damage_type") not in DAMAGE_TYPES:
         raise NotImplementedError(
             f"Ordnance {name}: unsupported damage type {conf.get('damage_type')!r}"
+        )
+    if conf["type"] in ("missile", "rocket") and (
+        conf.get("target_mobility") not in TARGET_MOBILITIES
+    ):
+        raise ValueError(
+            f"Ordnance {name}: unknown target mobility {conf.get('target_mobility')!r}"
         )
     if conf["type"] == "missile":
         missing_keys = [key for key in MISSILE_DECOY_KEYS if key not in conf]

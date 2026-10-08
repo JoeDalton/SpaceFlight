@@ -8,6 +8,10 @@ reload_s: 0.5
 launch_direction: forward
 speed_mps: 400.0
 launch_offset_m: 0.0
+# The targets it is fired at, by mobility (see the tactician's
+# strafe_mobility_threshold): "agile" ones (fighters) or "slow" ones (capital
+# ships, structures)
+target_mobility: slow
 # Placeholder look and collision
 visual_radius_m: 0.5
 collision_radius_m: 1.0

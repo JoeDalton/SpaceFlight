@@ -62,20 +62,25 @@ class Personality:
             # Below this target mobility, engage with a STRAFE run rather than a
             # PURSUIT chase (a slow/immobile prey can't be chased sensibly).
             "strafe_mobility_threshold": 0.35,
-            # Weapon-suitability scoring: spend a limited bomb only on a target
-            # that is BOTH tough and valuable (worth = hardness * value), when
-            # stationary enough and supply allows. S_bomb > S_gun -> BOMB.
-            # (Ramps use smooth_step_up.)
-            "bomb_scoring": {
+            # Against a slow primary target worth heavy ordnance, try a torpedo
+            # (a stand-off shot) before a bomb (a long, exposed run), or the
+            # other way round
+            "prefer_torpedoes_to_bombs": True,
+            # Weapon-suitability scoring of the heavy ordnance (bombs, and the
+            # missiles meant for slow targets: torpedoes): spend it only on a
+            # target that is BOTH tough and valuable (worth = hardness * value),
+            # when stationary enough and supply allows. S_ordnance > S_gun -> the
+            # ordnance. (Ramps use smooth_step_up.)
+            "heavy_ordnance_scoring": {
                 "hardness_step": 5000.0,  # health+shield read as "hard" beyond this
                 "hardness_slope": 0.005,
                 "value_step": 3.0,  # on the primary-target multiplier (1 vs 5)
                 "value_slope": 1.0,
-                "supply_step": 2.0,  # bombs remaining for a strong supply factor
+                "supply_step": 2.0,  # stock left for a strong supply factor
                 "supply_slope": 1.0,
                 "gun_base": 0.3,  # guns are always somewhat suitable
                 "gun_soft": 0.7,  # ...and great against soft targets
-                "bomb_scale": 1.5,  # overall bomb eagerness
+                "ordnance_scale": 1.5,  # overall heavy ordnance eagerness
             },
             "intent_update_delay": 0.5,
             "commitment_times": {
@@ -108,6 +113,19 @@ class Personality:
             "fire": {
                 "maximum_distance_m": 1000,
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
+            },
+            # Missiles and rockets (see FighterNavigator._fire_missile and
+            # _fire_rocket), on top of the guns, at primary targets only (see
+            # FighterTactician._choose_weapon)
+            "ordnance": {
+                # Launch a locked missile only within this fraction of its reach
+                # (its launch speed times its life time)
+                "missile_max_range_fraction": 0.5,
+                # Hold fire while this many of our missiles home on the target
+                "max_missiles_in_flight": 1,
+                # Rockets are unguided: a tighter cone than the guns, around the
+                # lead solution for the rocket's flight time, within gun range
+                "rocket_fire_min_cos_angle": np.cos(np.deg2rad(3)),
             },
             "attack": {
                 "lead_time_s": 1.0,

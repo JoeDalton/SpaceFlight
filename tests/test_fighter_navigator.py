@@ -6,6 +6,7 @@ All tests bypass __init__ via object.__new__() and populate the instance with
 the minimal attributes consumed by each method.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -1054,6 +1055,146 @@ def test_bomb_released_between_thinks_once_the_solution_is_met():
 
     nav.pawn.fire_secondary.assert_called_once()
     assert nav.behaviour == "bomb_break"
+
+
+def _secondary(category: str, stock: int = 4) -> SimpleNamespace:
+    """A stand-in missile or rocket launcher: 300 m/s for 10 s."""
+    return SimpleNamespace(
+        category=category, stock=stock, speed_mps=300.0, conf={"life_time_s": 10.0}
+    )
+
+
+def _held_with(nav, weapon: str, launcher, locked: bool = True, in_flight: int = 0):
+    """
+    A primary target dead ahead at 300 m (see _held_on_target), to attack with
+    this weapon and launcher, already selected. in_flight of our missiles
+    already home on it.
+    """
+    target_dict = _held_on_target(nav)
+    target_dict.update(weapon=weapon, launcher=launcher)
+    nav.pawn.selected_secondary = launcher
+    nav.pawn.is_missile_locked = locked
+    missile = SimpleNamespace(pawn=SimpleNamespace(origin_ship=nav.pawn))
+    ours = SimpleNamespace(controller=missile)
+    target = SimpleNamespace(incoming_missiles=dict(enumerate([ours] * in_flight)))
+    nav.game.interactions.get_actor_index_from_id.return_value = 0
+    nav.game.interactions.actors = [target]
+    return target_dict
+
+
+@pytest.mark.parametrize("stock, selected", [(4, True), (0, False)])
+def test_arming_selects_the_tacticians_secondary_weapon(stock, selected):
+    """
+    Arming a trigger selects the secondary weapon the tactician chose, while it
+    has stock left.
+    """
+    nav = make_fighter_navigator()
+    launcher = _secondary("missile", stock=stock)
+    target_dict = _held_with(nav, "missile", launcher)
+
+    nav._arm_trigger(target_dict, weapon="missile", min_cos_angle=0.99)
+
+    if selected:
+        nav.pawn.select_secondary.assert_called_once_with(launcher)
+    else:
+        nav.pawn.select_secondary.assert_not_called()
+
+
+def test_locked_missile_is_launched_along_the_guns():
+    """
+    A missile locked on a target within reach is launched, the guns firing as
+    well.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "missile", _secondary("missile"))
+
+    nav._arm_trigger(target_dict, weapon="missile", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_called_once()
+    nav.pawn.laser_cannon.fire.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "change", ["not_locked", "out_of_reach", "one_in_flight", "spent", "not_selected"]
+)
+def test_missile_held_until_its_solution_is_met(change):
+    """
+    No missile without a lock, beyond the missile's reach, while one of ours
+    already homes on the target, or without a missile with stock selected.
+    """
+    nav = make_fighter_navigator()
+    launcher = _secondary("missile")
+    target_dict = _held_with(
+        nav,
+        "missile",
+        launcher,
+        locked=change != "not_locked",
+        in_flight=int(change == "one_in_flight"),
+    )
+    reach_m = launcher.speed_mps * launcher.conf["life_time_s"]
+    fraction = nav.personality["navigator"]["ordnance"]["missile_max_range_fraction"]
+    if change == "out_of_reach":
+        target_dict["distance_m"] = 1.1 * fraction * reach_m
+    elif change == "spent":
+        launcher.stock = 0
+    elif change == "not_selected":
+        nav.pawn.selected_secondary = _secondary("rocket")
+
+    nav._arm_trigger(target_dict, weapon="missile", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_not_called()
+
+
+def test_aligned_rocket_is_fired_along_the_guns():
+    """
+    A rocket is fired when its lead solution is dead ahead, the guns firing as
+    well.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "rocket", _secondary("rocket"))
+
+    nav._arm_trigger(target_dict, weapon="rocket", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_called_once()
+    nav.pawn.laser_cannon.fire.assert_called_once()
+
+
+@pytest.mark.parametrize("change", ["off_cone", "out_of_range"])
+def test_rocket_held_off_its_solution(change):
+    """
+    No rocket outside its (tight) cone or beyond gun range.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "rocket", _secondary("rocket"))
+    if change == "off_cone":
+        angle = np.deg2rad(4.0)  # the rocket cone is 3 deg
+        nav.pawn.forward = np.array([np.sin(angle), np.cos(angle), 0.0])
+    else:
+        fire = nav.personality["navigator"]["fire"]
+        distance_m = 1.1 * fire["maximum_distance_m"]
+        target_dict.update(
+            distance_m=distance_m,
+            target_current_position=np.array([0.0, distance_m, 0.0]),
+        )
+
+    nav._arm_trigger(target_dict, weapon="rocket", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_not_called()
+
+
+@pytest.mark.parametrize("attack", ["pursue_target", "strafe_target"])
+def test_pursuit_and_strafe_arm_the_tacticians_weapon(attack):
+    """
+    The pursuit and strafe runs arm the weapon the tactician chose.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "rocket", _secondary("rocket"))
+    nav.check_overshoot_risk = MagicMock(return_value=False)
+    nav.check_extend_conditions = MagicMock(return_value=False)
+
+    getattr(nav, attack)(target_dict)
+
+    assert nav._armed_trigger[0] == "rocket"
 
 
 def test_time_in_spiral_accrues_the_time_between_thinks():
