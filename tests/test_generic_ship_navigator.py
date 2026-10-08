@@ -301,11 +301,12 @@ def test_compute_follow_speed_clamped_above_zero():
 
 def test_compute_follow_speed_respects_minimum_speed():
     """
-    With a minimum_speed_mps in the intent's personality section, the follow
-    speed never drops below it, even when the target is slow and close.
+    With a minimum_speed_factor in the intent's personality section, the follow
+    speed never drops below that fraction of max_speed_mps, even when the
+    target is slow and close.
     """
     personality = copy.deepcopy(Personality.FIGHTER_DEFAULT)
-    personality["navigator"]["attack"]["minimum_speed_mps"] = 80.0
+    personality["navigator"]["attack"]["minimum_speed_factor"] = 0.5
     nav = make_ship_navigator(max_speed_mps=300.0, personality=personality)
 
     speed = nav.compute_follow_speed(
@@ -315,7 +316,14 @@ def test_compute_follow_speed_respects_minimum_speed():
         intent="attack",
     )
 
-    assert speed == 80.0
+    assert speed == pytest.approx(150.0)
+
+
+def test_compute_minimum_speed_defaults_to_zero():
+    """An intent section without minimum_speed_factor has no speed floor."""
+    nav = make_ship_navigator(max_speed_mps=300.0)
+
+    assert nav.compute_minimum_speed("formation") == 0.0
 
 
 def test_compute_follow_speed_clamped_below_max_speed():
@@ -359,6 +367,71 @@ def test_navigate_with_zero_avoidance_equals_intent_output():
 
     np.testing.assert_allclose(result_direction, intent_direction, atol=1e-6)
     assert result_speed == pytest.approx(intent_speed)
+
+
+def _navigate_with_avoidance(nav, minimum_speed_mps: float) -> float:
+    """
+    Run navigate() with a strong collision-avoidance contribution (weight 3)
+    and an intent at 200 m/s that sets the given speed floor.
+
+    :return: The blended speed
+    """
+    nav.collision_sensor.compute_repulsion.return_value = (
+        np.array([1.0, 0.0, 0.0]),
+        3.0,
+    )
+
+    def navigate_intent(intent, target_dict):
+        nav.minimum_speed_mps = minimum_speed_mps
+        return np.array([0.0, 1.0, 0.0]), 200.0
+
+    nav.navigate_intent = navigate_intent
+    _, speed = nav.navigate(intent=Intent.ENGAGE, target_dict={})
+    return speed
+
+
+# Blend of a 200 m/s intent with avoidance at weight 3: (200 + 50) / (1 + 3)
+BLENDED_SPEED_MPS = 62.5
+
+
+def test_navigate_speed_floor_caps_the_avoidance_slowdown():
+    """
+    With minimum_speed_overrides_avoidance, collision avoidance can't slow the
+    ship below the intent's speed floor.
+    """
+    nav = make_ship_navigator()
+
+    speed = _navigate_with_avoidance(nav, minimum_speed_mps=150.0)
+
+    assert speed == pytest.approx(150.0)
+
+
+def test_navigate_speed_floor_ignored_without_the_override():
+    """
+    Without minimum_speed_overrides_avoidance, avoidance slows the ship as
+    before, floor or not.
+    """
+    personality = copy.deepcopy(Personality.FIGHTER_DEFAULT)
+    personality["navigator"]["attack"]["minimum_speed_overrides_avoidance"] = False
+    nav = make_ship_navigator(personality=personality)
+
+    speed = _navigate_with_avoidance(nav, minimum_speed_mps=150.0)
+
+    assert speed == pytest.approx(BLENDED_SPEED_MPS)
+
+
+def test_navigate_resets_the_speed_floor():
+    """
+    The floor only lasts one navigate(): an intent that doesn't raise it
+    (anything but a pursuit) flies without one.
+    """
+    nav = make_ship_navigator()
+    nav.minimum_speed_mps = 150.0  # left by a previous pursuit
+
+    speed = _navigate_with_avoidance(nav, minimum_speed_mps=0.0)
+
+    assert nav.minimum_speed_mps == 0.0
+    assert speed == pytest.approx(BLENDED_SPEED_MPS)
 
 
 # ---------------------------------------------------------------------------

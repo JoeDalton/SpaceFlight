@@ -191,6 +191,9 @@ class FighterNavigator(GenericShipNavigator):
         target_current_position = target_dict["target_current_position"]
         target_current_speed = target_dict["target_current_speed"]
 
+        # Keep the speed up in every pursuit behaviour (reposition included)
+        self.minimum_speed_mps = self.compute_minimum_speed("attack")
+
         # Compute lead pursuit direction necessary for firing solution
         lead_direction = self.compute_lead_pursuit(
             target_current_position=target_current_position,

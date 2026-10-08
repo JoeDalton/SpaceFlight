@@ -56,6 +56,9 @@ class GenericShipNavigator(GenericNavigator):
         # lumps all obstacles into one repulsion, so this scalar can't keep the
         # floor while dropping lateral avoidance.
         self.avoidance_weight_factor = 1.0
+        # Speed floor of the current intent, reset by each navigate() and raised
+        # by the intents that must keep their speed up (pursuit)
+        self.minimum_speed_mps = 0.0
         self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
 
     def navigate(self, intent: Intent, target_dict: dict) -> tuple[np.ndarray, float]:
@@ -80,6 +83,8 @@ class GenericShipNavigator(GenericNavigator):
         self.collision_sensor.active_range = self.collision_sensor.n_spheres
         # Reset the pilot up-reference; a bomb run sets it to aim the belly.
         self.up_reference = None
+        # Reset the speed floor; a pursuit raises it.
+        self.minimum_speed_mps = 0.0
         # Compute intentional component
         intent_direction, intent_speed = self.navigate_intent(
             intent=intent, target_dict=target_dict
@@ -100,6 +105,13 @@ class GenericShipNavigator(GenericNavigator):
         speed = (intent_speed + avoidance_weight * avoidance_speed) / (
             1 + avoidance_weight
         )
+        # Optionally keep avoidance from slowing below the intent's speed floor
+        if (
+            self.personality["navigator"]
+            .get("attack", {})
+            .get("minimum_speed_overrides_avoidance", False)
+        ):
+            speed = max(speed, self.minimum_speed_mps)
 
         # Step-by-step recording of how much collision avoidance is bending the
         # steering away from the tactician's intent (for forensic analysis).
@@ -414,8 +426,7 @@ class GenericShipNavigator(GenericNavigator):
         """
         Computes the desired speed to follow a target: the target's speed at the
         ideal follow distance, faster when too far and slower when too close,
-        clamped to [minimum_speed_mps, max_speed_mps] (the personality's optional
-        minimum_speed_mps for that intent, 0 by default).
+        clamped to [compute_minimum_speed(intent), max_speed_mps].
         TODO : effect of closing speed ? (longitudinal_speed_scalar_mps is unused)
 
         :param distance_m: Distance to target
@@ -431,13 +442,25 @@ class GenericShipNavigator(GenericNavigator):
                 distance_m=distance_m, intent=intent
             )
         )
-        minimum_speed_mps = self.personality["navigator"][intent].get(
-            "minimum_speed_mps", 0.0
-        )
         desired_speed_mps = min(
-            max(desired_speed_mps, minimum_speed_mps), self.pawn.max_speed_mps
+            max(desired_speed_mps, self.compute_minimum_speed(intent)),
+            self.pawn.max_speed_mps,
         )
         return desired_speed_mps
+
+    def compute_minimum_speed(self, intent: str) -> float:
+        """
+        The speed floor of an intent: the personality's optional
+        minimum_speed_factor for that intent (0 by default) times the ship's
+        max_speed_mps.
+
+        :param intent: The navigator personality section ("attack", "formation")
+        :return: The minimum speed, in m/s
+        """
+        return (
+            self.personality["navigator"][intent].get("minimum_speed_factor", 0.0)
+            * self.pawn.max_speed_mps
+        )
 
     def compute_speed_target_distance_contribution(
         self,

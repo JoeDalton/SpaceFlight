@@ -1072,3 +1072,29 @@ def test_time_in_spiral_accrues_the_time_between_thinks():
         per_think.check_extend_conditions(**in_spiral)
     assert per_think.time_in_spiral_s == pytest.approx(per_frame.time_in_spiral_s)
     assert per_think.time_in_spiral_s == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# Pursuit speed floor
+# ---------------------------------------------------------------------------
+
+
+def test_pursuit_repositions_no_slower_than_the_speed_floor():
+    """
+    About to overshoot, a pursuit repositions; the pursuit's speed floor (a
+    fraction of max_speed_mps) still applies over the slow turning speed.
+    """
+    nav = make_fighter_navigator()
+    _augment_pawn_for_strafe(nav)
+    nav._resolve_engagement = lambda target_dict: True
+    target_dict = _strafe_target_dict(100.0)
+    target_dict.update(target_id="prey", longitudinal_speed_scalar_mps=-1000.0)
+    attack = nav.personality["navigator"]["attack"]
+
+    _, speed = nav.navigate(intent=Intent.ENGAGE, target_dict=target_dict)
+
+    assert nav.behaviour == "reposition"
+    floor_mps = attack["minimum_speed_factor"] * nav.pawn.max_speed_mps
+    assert nav.minimum_speed_mps == pytest.approx(floor_mps)
+    assert speed == pytest.approx(floor_mps)
+    assert speed > nav.personality["navigator"]["turning"]["speed_mps"]
