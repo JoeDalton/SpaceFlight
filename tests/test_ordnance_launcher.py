@@ -130,12 +130,23 @@ def write_ordnance(directory, name, **overrides):
         ({"type": "torpedo"}, ValueError),
         ({"launch_direction": "sideways"}, ValueError),
         ({"damage_type": "energy"}, NotImplementedError),
+        # A missile must say how flares decoy it
+        ({"type": "missile"}, ValueError),
+        (
+            {
+                "type": "missile",
+                "decoy_range_m": 400.0,
+                "decoy_cone_angle_deg": 30.0,
+                "decoy_chance": 1.5,
+            },
+            ValueError,
+        ),
     ],
 )
 def test_invalid_ordnance_configuration_raises(ordnance_directory, overrides, error):
     """
-    An unknown type or launch direction, or a damage type other than physical,
-    is refused.
+    An unknown type or launch direction, a damage type other than physical, or
+    a missile without valid decoy keys, is refused.
     """
     write_ordnance(ordnance_directory, "bad", **overrides)
 
@@ -248,7 +259,7 @@ def test_launch_spends_one_and_passes_the_target_to_a_missile():
     launcher.target_lock = MagicMock(is_locked=True)
 
     with patch.object(ordnance_launcher, "OrdnanceController") as controller:
-        assert launcher.launch(target_id="target") is True
+        assert launcher.launch(target_id="target") is controller.return_value
 
     assert launcher.stock == 1
     assert controller.call_args.kwargs["target_id"] == "target"
@@ -289,7 +300,7 @@ def test_launch_refuses_when_out_of_stock():
     launcher.last_fire_time = -np.inf
 
     with patch.object(ordnance_launcher, "OrdnanceController") as controller:
-        assert launcher.launch() is False
+        assert launcher.launch() is None
 
     controller.assert_not_called()
 
@@ -305,11 +316,11 @@ def test_launch_is_rate_limited_and_reloading_spends_nothing():
 
     with patch.object(ordnance_launcher, "OrdnanceController"):
         clock.return_value = 2.0
-        assert launcher.launch() is True
+        assert launcher.launch() is not None
         clock.return_value = 3.0
-        assert launcher.launch() is False
+        assert launcher.launch() is None
         clock.return_value = 4.0
-        assert launcher.launch() is True
+        assert launcher.launch() is not None
 
     assert launcher.stock == 1
 
@@ -328,6 +339,6 @@ def test_restart_reload_holds_the_launcher_for_a_full_reload():
         clock.return_value = 10.0
         launcher.restart_reload()
         clock.return_value = 11.0
-        assert launcher.launch() is False
+        assert launcher.launch() is None
         clock.return_value = 12.0
-        assert launcher.launch() is True
+        assert launcher.launch() is not None

@@ -16,6 +16,11 @@ max_roll_rate_degps: 360.0
 # lock_delay_s before a missile launched at it is guided to it
 lock_delay_s: 2.0
 lock_cone_angle_deg: 20.0
+# Flares: one dropped by its target within decoy_range_m of the missile and
+# within decoy_cone_angle_deg of its nose lures it with probability decoy_chance
+decoy_range_m: 400.0
+decoy_cone_angle_deg: 30.0
+decoy_chance: 0.7
 # Placeholder look and collision
 visual_radius_m: 0.5
 collision_radius_m: 1.0

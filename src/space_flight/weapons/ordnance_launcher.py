@@ -37,6 +37,10 @@ ORDNANCE_TYPES = ("bomb", "rocket", "missile", "flare")
 SECONDARY_TYPES = ("bomb", "rocket", "missile")
 LAUNCH_DIRECTIONS = ("forward", "down", "backward")
 DAMAGE_TYPES = ("physical",)
+# How a missile falls for a flare (see Fighter.drop_flare): the flare must be
+# dropped within decoy_range_m of it and lie within decoy_cone_angle_deg of its
+# nose, and then lures it with probability decoy_chance
+MISSILE_DECOY_KEYS = ("decoy_range_m", "decoy_cone_angle_deg", "decoy_chance")
 
 
 @functools.cache
@@ -60,6 +64,14 @@ def _read_ordnance_configuration(name: str) -> dict:
         raise NotImplementedError(
             f"Ordnance {name}: unsupported damage type {conf.get('damage_type')!r}"
         )
+    if conf["type"] == "missile":
+        missing_keys = [key for key in MISSILE_DECOY_KEYS if key not in conf]
+        if missing_keys:
+            raise ValueError(f"Ordnance {name}: missing decoy keys {missing_keys}")
+        if not 0.0 <= conf["decoy_chance"] <= 1.0:
+            raise ValueError(
+                f"Ordnance {name}: decoy_chance {conf['decoy_chance']} not in [0, 1]"
+            )
     return conf
 
 
@@ -151,20 +163,21 @@ class OrdnanceLauncher(Weapon):
             + self.speed_mps * self.launch_direction_vector()
         )
 
-    def launch(self, target_id: uuid.UUID | None = None) -> bool:
+    def launch(self, target_id: uuid.UUID | None = None) -> OrdnanceController | None:
         """
         Launch one unit of ordnance, if any is left and the launcher is ready.
 
         :param target_id: The target a missile pursues if locked on it (ignored
             by the other types). Otherwise it flies blind, like a rocket.
-        :return: True if launched, False if out of stock or reloading
+        :return: The launched ordnance's controller, None if out of stock or
+            reloading
         """
         if self.stock <= 0:
-            return False
+            return None
         if not self._ready_to_fire():
             # Still reloading -- do not spend a unit of ordnance.
-            return False
-        OrdnanceController(
+            return None
+        controller = OrdnanceController(
             game=self.game,
             launcher=self,
             target_id=target_id if self.is_locked else None,
@@ -173,7 +186,7 @@ class OrdnanceLauncher(Weapon):
         LOGGER.info(
             "%s launched a %s (%d left)", self.parent.parent.name, self.name, self.stock
         )
-        return True
+        return controller
 
     @property
     def is_locked(self) -> bool:

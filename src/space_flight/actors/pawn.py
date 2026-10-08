@@ -46,6 +46,10 @@ class Pawn:
         self.target_id = None
         self.target_idx = None
 
+        # The guided missiles homing on this actor, by missile controller id: each
+        # keeps its IncomingMissile message up to date while it flies
+        self.incoming_missiles = {}
+
     @property
     def shield_level(self) -> float:
         """
@@ -62,3 +66,4 @@ class Pawn:
             self.target = None
             self.target_id = None
             self.target_idx = None
+            self.incoming_missiles = {}

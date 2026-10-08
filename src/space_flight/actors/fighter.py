@@ -284,11 +284,21 @@ class Fighter(Ship):
 
     def drop_flare(self) -> bool:
         """
-        Drop a flare behind the ship, if any is left.
+        Drop a flare behind the ship, if any is left. It is offered to the
+        missiles homing on the ship, which it may decoy (see
+        OrdnanceController.offer_decoy).
 
         :return: True if dropped, False if out of flares or reloading
         """
-        return self._launch(self.flare_launcher)
+        if self.flare_launcher is None:
+            return False
+        flare_controller = self.flare_launcher.launch()
+        if flare_controller is None:
+            return False
+        # Decoying a missile withdraws its message: iterate over a copy
+        for incoming in list(self.incoming_missiles.values()):
+            incoming.controller.offer_decoy(flare_controller.pawn)
+        return True
 
     def _launch(self, launcher: OrdnanceLauncher | None) -> bool:
         """
@@ -300,7 +310,7 @@ class Fighter(Ship):
         """
         if launcher is None:
             return False
-        return launcher.launch(target_id=self.target_id)
+        return launcher.launch(target_id=self.target_id) is not None
 
     def apply_damage(self, damage: float, damage_type: str):
         """
