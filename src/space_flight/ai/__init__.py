@@ -97,7 +97,6 @@ class Personality:
                 "min_speed_factor": 0.1,
                 "progress_epsilon_m": 5.0,
             },
-            "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 100.0},
             "turning": {"speed_mps": 50.0},
             "speeding": {"speed_mps": 2000.0},
@@ -107,17 +106,12 @@ class Personality:
                 "collision_avoidance_contribution_factor": 0.015,
             },
             "fire": {
-                "minimimum_window_duration_s": 0.5,
                 "maximum_distance_m": 1000,
-                "maximum_angle_rad": np.deg2rad(5),
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
             },
             "attack": {
                 "lead_time_s": 1.0,
                 "lag_time_s": 0.5,
-                "maximum_duration_s": 5.0,
-                "minimum_cos_angle": np.cos(np.deg2rad(20)),
-                "maximum_distance_m": 800,
                 "cap_bias": 1.0,
                 "lead_bias": 1.0,
                 "lag_bias": 1.0,
@@ -130,11 +124,6 @@ class Personality:
                 "ideal_distance_m": 200.0,
                 "speed_distance_slope": 0.01,
                 "minimum_speed_mps": 80.0,  # never slow below this when attacking
-            },
-            "intercept": {
-                "lead_time_s": 1.5,
-                "maximum_duration_s": 10.0,
-                "minimum_cos_angle": np.cos(np.deg2rad(30)),
             },
             "extend": {
                 "minimum_duration_s": 3.0,
@@ -243,7 +232,6 @@ class Personality:
         "navigator": {
             "fire": {
                 "maximum_distance_m": 1000,
-                "maximum_angle_rad": np.deg2rad(5),
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
             },
             "attack": {
@@ -278,7 +266,6 @@ class Personality:
         "navigator": {
             "fire": {
                 "maximum_distance_m": 1000,
-                "maximum_angle_rad": np.deg2rad(5),
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
             },
             "attack": {
@@ -327,19 +314,12 @@ class Personality:
                 "min_speed_factor": 0.1,
                 "progress_epsilon_m": 5.0,
             },
-            "idle": {"speed_mps": 0.0},
             "regroup": {"speed_mps": 80.0},
-            "turning": {"speed_mps": 30.0},
             "speeding": {"speed_mps": 2000.0},
             "formation": {
                 "ideal_distance_m": 300.0,
                 "speed_distance_slope": 0.01,
                 "collision_avoidance_contribution_factor": 0.015,
-            },
-            "attack": {
-                "relative_direction": np.array([0, 1, 0]),
-                "distance_m": 500,
-                "speed_mps": 50,
             },
             # Orbit (see CapitalShipNavigator.orbit_target)
             "orbit": {
