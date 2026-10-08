@@ -7,6 +7,7 @@ import numpy as np
 from simple_pid import PID
 
 from space_flight.actors.pawn import Pawn
+from space_flight.actors.ship import ZERO_THRUST_POSITION
 from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS
 from space_flight.ai.generic.generic_pilot import GenericPilot
 from space_flight.utils import magnitude, safe_angle_rad
@@ -64,7 +65,9 @@ class GenericShipPilot(GenericPilot):
             starting_output=0.0,
             sample_time=self.personality["pilot"]["sample_time_s"],
             time_fn=self.game.game_time.get_current_time,
-            output_limits=(0.0, 1.0),
+            # Signed: it only corrects the feedforward throttle, so it may also
+            # pull the throttle down
+            output_limits=(-1.0, 1.0),
         )
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
@@ -148,7 +151,9 @@ class GenericShipPilot(GenericPilot):
         ) / REFERENCE_ERROR_VELOCITY_MPS
 
         # Update PID commands
-        self.throttle = self.pid_throttle(velocity_error)
+        self.throttle = self.compute_feedforward_throttle(
+            desired_speed_mps
+        ) + self.pid_throttle(velocity_error)
         self.yaw_rate = self.pid_yaw(yaw_error)
         self.pitch_rate = self.pid_pitch(pitch_error)
         self.roll_rate = self.pid_roll(roll_error)
@@ -162,6 +167,29 @@ class GenericShipPilot(GenericPilot):
         # self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate = 0, 0, 0, 0
 
         return self.throttle, self.yaw_rate, self.pitch_rate, self.roll_rate
+
+    def compute_feedforward_throttle(self, desired_speed_mps: float) -> float:
+        """
+        Estimates the throttle that holds desired_speed_mps: the thrust balancing
+        the drag at that speed plus the current lift-induced drag (high in hard
+        turns), through the inverse of Ship.set_inputs' quadratic throttle law.
+
+        :param desired_speed_mps: The speed to hold
+        :return: The feedforward throttle, in [ZERO_THRUST_POSITION, 1]
+        """
+        available_thrust_n = self.pawn.max_thrust_n * self.pawn.thrust_factor()
+        if available_thrust_n <= 0.0:
+            # Engine-less body (e.g. an ordnance, which has no flight forces)
+            return 1.0
+        lift_norm_n = magnitude(self.pawn.lift_n)
+        required_thrust_n = (
+            self.pawn.drag_factor * desired_speed_mps**2
+            + self.pawn.lift_inefficiency * lift_norm_n**2
+        )
+        thrust_fraction = min(max(required_thrust_n / available_thrust_n, 0.0), 1.0)
+        return ZERO_THRUST_POSITION + (1.0 - ZERO_THRUST_POSITION) * math.sqrt(
+            thrust_fraction
+        )
 
     def compute_angular_error(
         self, target_direction: np.ndarray, up_reference: np.ndarray | None = None

@@ -170,7 +170,7 @@ class Fighter(Ship):
         """
         return turn_rate_scale(throttle) * self.energy.turn_rate_factor()
 
-    def _thrust_factor(self) -> float:
+    def thrust_factor(self) -> float:
         """
         :return: The engine gauge's bonus or penalty on thrust
         """
