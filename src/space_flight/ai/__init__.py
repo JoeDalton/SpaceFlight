@@ -127,9 +127,9 @@ class Personality:
             },
             "extend": {
                 "minimum_duration_s": 3.0,
-                "maximal_time_in_spiral_s": 5.0,
+                "maximum_time_in_spiral_s": 5.0,
                 "minimum_closing_speed_mps": 100.0,
-                "maximal_lateral_speed_mps": 50.0,
+                "maximum_lateral_speed_mps": 50.0,
             },
             "reposition": {"minimum_time_to_overshoot_s": 0.5},
             # Strafing run (see FighterNavigator.strafe_target). The corridor and

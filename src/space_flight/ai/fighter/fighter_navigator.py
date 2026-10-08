@@ -1028,14 +1028,14 @@ class FighterNavigator(GenericShipNavigator):
             < self.personality["navigator"]["extend"]["minimum_closing_speed_mps"]
         ) and (
             lateral_speed_scalar_mps
-            > self.personality["navigator"]["extend"]["maximal_lateral_speed_mps"]
+            > self.personality["navigator"]["extend"]["maximum_lateral_speed_mps"]
         ):
             # Velocity condition met: accrue the time since the last think.
             self.time_in_spiral_s += self.think_dt_s
             # Result depends on time condition
             return (
                 self.time_in_spiral_s
-                > self.personality["navigator"]["extend"]["maximal_time_in_spiral_s"]
+                > self.personality["navigator"]["extend"]["maximum_time_in_spiral_s"]
             )
         elif (
             self.behaviour == "extend"
