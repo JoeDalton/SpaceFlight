@@ -65,7 +65,7 @@ def test_roll_tolerance_is_small_and_positive():
 
 def test_intent_contains_all_expected_members():
     """
-    The Intent enum must expose exactly the seven expected combat-state labels.
+    The Intent enum must expose exactly the eight expected combat-state labels.
     """
     expected_names = {
         "ENGAGE",
@@ -75,6 +75,7 @@ def test_intent_contains_all_expected_members():
         "PATROL",
         "FORMATION",
         "IDLE",
+        "DEFEND_MISSILE",
     }
 
     assert {member.name for member in Intent} == expected_names

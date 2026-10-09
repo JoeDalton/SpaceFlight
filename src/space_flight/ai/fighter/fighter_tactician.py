@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
+from space_flight.ai.missile.incoming_missile import nearest_incoming
 from space_flight.utils import smooth_step_up
 
 if TYPE_CHECKING:
@@ -38,18 +39,23 @@ class FighterTactician(GenericTactician):
 
     def update_intent(self) -> tuple[Intent, dict]:
         """
-        Picks the intent by priority: evade an overwhelming threat, disengage if
-        in poor fighting shape, engage the best prey, hold formation (wingmen),
-        patrol (leader), else regroup.
+        Picks the intent by priority: defend against a missile close to impact,
+        evade an overwhelming threat, disengage if in poor fighting shape, engage
+        the best prey, hold formation (wingmen), patrol (leader), else regroup.
 
         TODO: include role/squad strategy biases
 
         :return: The intent and its target dict
         """
+        # Check if a missile is about to hit (highest priority action)
+        missile_defense = self.evaluate_missile_defense()
+        if missile_defense is not None:
+            return missile_defense
+
         # Find current actor index of self
         my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
 
-        # Check if bot is directly threatened (highest priority action)
+        # Check if bot is directly threatened
         highest_threat_dict = self.evaluate_threats(my_actor_index)
         if (
             highest_threat_dict["score"]
@@ -82,6 +88,23 @@ class FighterTactician(GenericTactician):
         friends_center_dict = self.evaluate_team_center(team="friends")
         friends_center_dict["target_id"] = Intent.REGROUP
         return Intent.REGROUP, friends_center_dict
+
+    def evaluate_missile_defense(self) -> tuple[Intent, dict] | None:
+        """
+        Defend against the nearest missile homing on the pawn once it gets
+        close to impact (see missile_defense_time_s).
+
+        :return: Intent.DEFEND_MISSILE and the missile's controller id as target,
+            None if no missile is that close
+        """
+        incoming = nearest_incoming(self.pawn)
+        if (
+            incoming is None
+            or incoming.time_to_impact_s
+            > self.personality["tactician"]["missile_defense_time_s"]
+        ):
+            return None
+        return Intent.DEFEND_MISSILE, {"target_id": incoming.controller.id}
 
     def _plan_attack(self, target_id: UUID) -> dict:
         """

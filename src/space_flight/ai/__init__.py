@@ -24,6 +24,7 @@ class Intent(Enum):
     PATROL = auto()
     FORMATION = auto()
     IDLE = auto()
+    DEFEND_MISSILE = auto()
 
 
 class AttackMode(Enum):
@@ -82,10 +83,13 @@ class Personality:
                 "gun_soft": 0.7,  # ...and great against soft targets
                 "ordnance_scale": 1.5,  # overall heavy ordnance eagerness
             },
+            # Defend against an incoming missile once it is this close to impact
+            "missile_defense_time_s": 3.0,
             "intent_update_delay": 0.5,
             "commitment_times": {
                 Intent.ENGAGE: 10.0,
                 Intent.EVADE: 1.5,
+                Intent.DEFEND_MISSILE: 0.5,
                 Intent.DISENGAGE: 5.0,
                 Intent.REGROUP: 3.0,
                 Intent.PATROL: 3.0,
@@ -103,6 +107,7 @@ class Personality:
                 "progress_epsilon_m": 5.0,
             },
             "regroup": {"speed_mps": 100.0},
+            "countermeasures": {"flare_range_fraction": 0.8},
             "turning": {"speed_mps": 50.0},
             "speeding": {"speed_mps": 2000.0},
             "formation": {

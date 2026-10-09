@@ -12,6 +12,10 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.ai.missile.incoming_missile import (
+    IncomingMissile,
+    nearest_incoming,
+)
 from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
 
 if TYPE_CHECKING:
@@ -41,6 +45,9 @@ class FighterNavigator(GenericShipNavigator):
         # angle), weapon being "guns", "bomb", "missile" or "rocket" (the last
         # two along with the guns); None when nothing is armed
         self._armed_trigger = None
+        # The incoming missiles a flare was already dropped against (see
+        # defend_missile), by missile controller id
+        self._flared_missile_ids = set()
 
     def navigate_intent(
         self, intent: Intent, target_dict: dict
@@ -64,6 +71,9 @@ class FighterNavigator(GenericShipNavigator):
         elif intent == Intent.EVADE:
             self.engage_phase = ""
             return self.evade_target(target_dict)
+        elif intent == Intent.DEFEND_MISSILE:
+            self.engage_phase = ""
+            return self.defend_missile(target_dict)
         elif intent == Intent.REGROUP:
             self.engage_phase = ""
             return self.regroup(target_dict)
@@ -1198,6 +1208,64 @@ class FighterNavigator(GenericShipNavigator):
         return np.zeros(3), self.personality["navigator"]["speeding"]["speed_mps"]
 
     # %% ==== EVADE ====
+
+    def defend_missile(self, target_dict: dict) -> Tuple[np.ndarray, float]:
+        """
+        Beam turn against an incoming missile: fly at full speed perpendicular
+        to the missile's line of sight, on the side closest to the current
+        heading, so the missile must turn hardest to follow; and drop a flare
+        against it once in reach of the flare's lure (see _drop_flare).
+
+        :param target_dict: A dictionary with the missile's controller id
+        :return: The direction to point to and the desired speed
+        """
+        incoming = self.pawn.incoming_missiles.get(target_dict.get("target_id"))
+        if incoming is None:
+            # Gone since the tactician's decision: defend against the next one
+            incoming = nearest_incoming(self.pawn)
+        if incoming is None:
+            return NO_DIRECTION
+        self._drop_flare(incoming)
+
+        line_of_sight = self.pawn.position - incoming.position
+        distance_m = magnitude(line_of_sight)
+        if distance_m < TARGET_DISTANCE_TOLERANCE_M:
+            return NO_DIRECTION
+        line_of_sight /= distance_m
+
+        beam = self.pawn.forward - np.dot(self.pawn.forward, line_of_sight) * (
+            line_of_sight
+        )
+        if magnitude(beam) < 1e-3:
+            # Flying straight along the line of sight: break to the right
+            beam = self.pawn.right - np.dot(self.pawn.right, line_of_sight) * (
+                line_of_sight
+            )
+        return beam / magnitude(beam), self.pawn.max_speed_mps
+
+    def _drop_flare(self, incoming: IncomingMissile):
+        """
+        Drop a flare against an incoming missile once it is within reach of a
+        flare's lure (see the countermeasures personality and
+        OrdnanceController.offer_decoy), once per missile.
+
+        :param incoming: The missile defended against
+        """
+        launcher = self.pawn.flare_launcher
+        if launcher is None or launcher.stock <= 0:
+            return
+        # Forget the missiles no longer homing on us
+        self._flared_missile_ids.intersection_update(self.pawn.incoming_missiles)
+        if incoming.controller.id in self._flared_missile_ids:
+            return
+        decoy_range_m = incoming.controller.pawn.conf["decoy_range_m"]
+        fraction = self.personality["navigator"]["countermeasures"][
+            "flare_range_fraction"
+        ]
+        if incoming.distance_m > fraction * decoy_range_m:
+            return
+        if self.pawn.drop_flare():
+            self._flared_missile_ids.add(incoming.controller.id)
 
     def evade_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """

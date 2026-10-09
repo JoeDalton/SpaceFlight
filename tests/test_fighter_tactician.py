@@ -16,6 +16,7 @@ import pytest
 from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.ai.formation import Formation
+from space_flight.ai.missile.incoming_missile import IncomingMissile
 
 
 @pytest.fixture
@@ -42,6 +43,7 @@ def make_fighter_tactician(
     pawn.shield_level = shield
     pawn.team = 1
     pawn.formation = None
+    pawn.incoming_missiles = {}
     return FighterTactician(
         game=mock_game, pawn=pawn, personality=Personality.FIGHTER_DEFAULT
     )
@@ -442,6 +444,88 @@ def test_plan_attack_with_a_missile_keeps_the_geometry(mock_game):
         "weapon": "missile",
         "launcher": missile,
     }
+
+
+# ---------------------------------------------------------------------------
+# evaluate_missile_defense — missile defense
+# ---------------------------------------------------------------------------
+
+
+def _incoming(tactician, *times_to_impact_s):
+    """Missiles homing on the tactician's pawn, closing in at 400 m/s."""
+    tactician.pawn.incoming_missiles = {
+        index: IncomingMissile(
+            controller=SimpleNamespace(id=f"missile_{index}"),
+            position=np.zeros(3),
+            distance_m=400.0 * time_s,
+            closing_speed_mps=400.0,
+        )
+        for index, time_s in enumerate(times_to_impact_s)
+    }
+
+
+def test_missile_defense_against_the_nearest_missile_close_to_impact(mock_game):
+    """
+    Once the nearest missile is close enough to impact, defend against it.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    threshold_s = Personality.FIGHTER_DEFAULT["tactician"]["missile_defense_time_s"]
+    _incoming(tactician, 2.0 * threshold_s, 0.5 * threshold_s)
+
+    assert tactician.evaluate_missile_defense() == (
+        Intent.DEFEND_MISSILE,
+        {"target_id": "missile_1"},
+    )
+
+
+@pytest.mark.parametrize("times_to_impact_s", [(), (10.0,)], ids=["none", "far"])
+def test_no_missile_defense_without_a_missile_close_to_impact(
+    mock_game, times_to_impact_s
+):
+    """No incoming missile, or none close to impact yet: no defense."""
+    tactician = make_fighter_tactician(mock_game)
+    _incoming(tactician, *times_to_impact_s)
+
+    assert tactician.evaluate_missile_defense() is None
+
+
+def test_missile_defense_comes_first(mock_game):
+    """
+    Defending against a missile close to impact is the highest priority, before
+    even evaluating threats.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    tactician.evaluate_threats = MagicMock()
+    _incoming(tactician, 1.0)
+
+    assert tactician.update_intent() == (
+        Intent.DEFEND_MISSILE,
+        {"target_id": "missile_0"},
+    )
+    tactician.evaluate_threats.assert_not_called()
+
+
+def test_missile_defense_waits_for_the_engagement_commitment(mock_game):
+    """
+    Like any intent change, missile defense waits for the current intent's
+    commitment to elapse: an attack is not broken off before.
+    """
+    clock = {"now_s": 0.0}
+    mock_game.game_time.get_current_time.side_effect = lambda: clock["now_s"]
+    mock_game.game_time.get_time_step.return_value = 1.0
+    tactician = make_fighter_tactician(mock_game)
+    tactician.intent_sm.request(Intent.ENGAGE, force=True)
+    tactician.target_dict = {"target_id": "prey"}
+    _incoming(tactician, 1.0)
+    commitment_s = Personality.FIGHTER_DEFAULT["tactician"]["commitment_times"][
+        Intent.ENGAGE
+    ]
+
+    clock["now_s"] = 0.5 * commitment_s
+    assert tactician.think() == (Intent.ENGAGE, {"target_id": "prey"})
+
+    clock["now_s"] = commitment_s
+    assert tactician.think() == (Intent.DEFEND_MISSILE, {"target_id": "missile_0"})
 
 
 # ---------------------------------------------------------------------------
