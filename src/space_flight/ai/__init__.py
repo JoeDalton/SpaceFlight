@@ -87,7 +87,7 @@ class Personality:
             "missile_defense_time_s": 3.0,
             "intent_update_delay": 0.5,
             "commitment_times": {
-                Intent.ENGAGE: 10.0,
+                Intent.ENGAGE: 4.0,
                 Intent.EVADE: 1.5,
                 Intent.DEFEND_MISSILE: 0.5,
                 Intent.DISENGAGE: 5.0,
