@@ -358,39 +358,39 @@ def test_poll_returns_same_state_object_each_call(reader):
 
 
 # ---------------------------------------------------------------------------
-# InputReader.dz — pure static dead-zone method
+# InputReader.apply_dead_zone — pure static dead-zone method
 # ---------------------------------------------------------------------------
 
-dz = InputReader.dz
+apply_dead_zone = InputReader.apply_dead_zone
 
 
-def test_dz_zero_input_returns_zero():
-    assert dz(0.0, 0.1) == pytest.approx(0.0)
+def test_apply_dead_zone_zero_input_returns_zero():
+    assert apply_dead_zone(0.0, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_value_inside_dead_zone_returns_zero():
-    assert dz(0.05, 0.1) == pytest.approx(0.0)
+def test_apply_dead_zone_value_inside_dead_zone_returns_zero():
+    assert apply_dead_zone(0.05, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_value_at_dead_zone_boundary_returns_zero():
+def test_apply_dead_zone_value_at_dead_zone_boundary_returns_zero():
     # At exactly the boundary: value - sign*dead_zone = 0.
-    assert dz(0.1, 0.1) == pytest.approx(0.0)
+    assert apply_dead_zone(0.1, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_positive_value_beyond_dead_zone():
-    assert dz(0.5, 0.1) == pytest.approx(0.4)
+def test_apply_dead_zone_positive_value_beyond_dead_zone():
+    assert apply_dead_zone(0.5, 0.1) == pytest.approx(0.4)
 
 
-def test_dz_negative_value_beyond_dead_zone():
-    assert dz(-0.5, 0.1) == pytest.approx(-0.4)
+def test_apply_dead_zone_negative_value_beyond_dead_zone():
+    assert apply_dead_zone(-0.5, 0.1) == pytest.approx(-0.4)
 
 
-def test_dz_negative_inside_dead_zone_returns_zero():
-    assert dz(-0.05, 0.1) == pytest.approx(0.0)
+def test_apply_dead_zone_negative_inside_dead_zone_returns_zero():
+    assert apply_dead_zone(-0.05, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_full_deflection():
-    assert dz(1.0, 0.15) == pytest.approx(0.85)
+def test_apply_dead_zone_full_deflection():
+    assert apply_dead_zone(1.0, 0.15) == pytest.approx(0.85)
 
 
 # ---------------------------------------------------------------------------

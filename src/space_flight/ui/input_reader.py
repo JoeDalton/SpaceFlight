@@ -388,7 +388,7 @@ class InputReader(DirectObject):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def dz(value: float, dead_zone: float) -> float:
+    def apply_dead_zone(value: float, dead_zone: float) -> float:
         """
         Applies a symmetric dead zone to a raw axis value.
 
@@ -593,22 +593,22 @@ class GamepadReader(InputReader):
         sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
         tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
 
-        state.axes["right_trigger"] = self.dz(
+        state.axes["right_trigger"] = self.apply_dead_zone(
             self.gamepad.findAxis(InputDevice.Axis.right_trigger).value, tdz
         )
-        state.axes["left_trigger"] = self.dz(
+        state.axes["left_trigger"] = self.apply_dead_zone(
             self.gamepad.findAxis(InputDevice.Axis.left_trigger).value, tdz
         )
-        state.axes["left_x"] = self.dz(
+        state.axes["left_x"] = self.apply_dead_zone(
             self.gamepad.findAxis(InputDevice.Axis.left_x).value, sdz
         )
-        state.axes["left_y"] = self.dz(
+        state.axes["left_y"] = self.apply_dead_zone(
             self.gamepad.findAxis(InputDevice.Axis.left_y).value, sdz
         )
-        state.axes["right_x"] = self.dz(
+        state.axes["right_x"] = self.apply_dead_zone(
             self.gamepad.findAxis(InputDevice.Axis.right_x).value, sdz
         )
-        state.axes["right_y"] = self.dz(
+        state.axes["right_y"] = self.apply_dead_zone(
             self.gamepad.findAxis(InputDevice.Axis.right_y).value, sdz
         )
 
@@ -747,16 +747,16 @@ class JoystickReader(InputReader):
         sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
         tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
 
-        state.axes["throttle"] = self.dz(
+        state.axes["throttle"] = self.apply_dead_zone(
             1 - self.flightStick.findAxis(InputDevice.Axis.throttle).value, tdz
         )
-        state.axes["yaw"] = self.dz(
+        state.axes["yaw"] = self.apply_dead_zone(
             self.flightStick.findAxis(InputDevice.Axis.yaw).value, sdz
         )
-        state.axes["pitch"] = self.dz(
+        state.axes["pitch"] = self.apply_dead_zone(
             self.flightStick.findAxis(InputDevice.Axis.pitch).value, sdz
         )
-        state.axes["roll"] = self.dz(
+        state.axes["roll"] = self.apply_dead_zone(
             self.flightStick.findAxis(InputDevice.Axis.roll).value, sdz
         )
 
