@@ -9,6 +9,8 @@ Responsibilities:
   previous frame.
 - Apply dead zones to axis values.
 - Store everything in a plain InputState that contexts read.
+- Run every device reader at once and merge their states, so the keyboard,
+  a gamepad and a flight stick can all be used at the same time.
 
 No game logic lives here.  Contexts (see input_context.py) decide what a
 button press *means* in a given game mode.
@@ -20,7 +22,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import yaml
-from direct.gui.OnscreenText import OnscreenText
+from direct.showbase.DirectObject import DirectObject
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     ButtonRegistry,
@@ -183,6 +185,10 @@ GAMEPAD_AXIS_NAMES: frozenset[str] = frozenset(
 )
 JOYSTICK_AXIS_NAMES: frozenset[str] = frozenset({"pitch", "roll", "yaw", "throttle"})
 
+# An axis pushed past this makes its device the last used one (see
+# CompositeInputReader.last_device)
+LAST_DEVICE_AXIS_THRESHOLD = 0.5
+
 
 # ---------------------------------------------------------------------------
 # InputState  — plain data container, written by the reader, read by contexts
@@ -216,9 +222,12 @@ class InputState:
 # ---------------------------------------------------------------------------
 
 
-class InputReader:
+class InputReader(DirectObject):
     """
     Base class for all device readers.
+
+    Each reader is its own DirectObject so that its accept() callbacks
+    (e.g. connect-device) never replace another reader's.
 
     Hybrid detection strategy
     -------------------------
@@ -238,14 +247,13 @@ class InputReader:
       state is derived from polling alone.
     """
 
+    # Device key of this reader's bindings under each context
+    # ("keyboard", "gamepad" or "joystick")
+    device_type: str = ""
+
     def __init__(self, app: SpaceFlightSimulator):
         """
-        Initialises shared polling buffers and registers global key callbacks.
-
-        Sets up the per-frame comparison state and event-safety-net sets, then
-        registers accept() callbacks for every key listed under
-        app.bindings["global"] so that short presses that polling might
-        miss between frames are still captured.
+        Initialises shared polling buffers.
 
         :param app: The Panda3D application instance; app.bindings must
             already be populated (see :func:`reader_factory`).
@@ -260,13 +268,6 @@ class InputReader:
         self.ev_pressed: set[str] = set()
         self.ev_released: set[str] = set()
         self.app.disableMouse()
-
-        # Universal keyboard bindings
-        # Registered on every reader regardless of device type
-        self.global_keys: list[str] = list(app.bindings.get("global", {}).values())
-        for hw_name in self.global_keys:
-            app.accept(hw_name, lambda n=hw_name: self.ev_pressed.add(n))
-            app.accept(hw_name + "-up", lambda n=hw_name: self.ev_released.add(n))
 
     # ------------------------------------------------------------------
     # Public API
@@ -341,13 +342,10 @@ class InputReader:
 
         Must be called before the reader is discarded — for example when the
         user saves new settings and the reader is rebuilt from the updated
-        configuration.  Subclasses that register additional handlers must call
-        super().clean() after their own cleanup.
+        configuration.  Subclasses that hold devices must call super().clean()
+        after releasing them.
         """
-        for hw_name in self.global_keys:
-            self.app.ignore(hw_name)
-            self.app.ignore(hw_name + "-up")
-        self.global_keys = None
+        self.ignoreAll()
         self.app = None
         self.state = None
         self.previous = None
@@ -386,25 +384,42 @@ class InputReader:
         raise NotImplementedError
 
     # ------------------------------------------------------------------
-    # Helper
+    # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def dz(value: float, dead_zone: float) -> float:
+        """
+        Applies a symmetric dead zone to a raw axis value.
+
+        Values within ±*dead_zone* of centre are zeroed; values outside are
+        shifted towards zero by *dead_zone* so that the output starts at zero
+        at the dead-zone boundary (not renormalised: full deflection gives
+        1 - dead_zone).
+
+        :param value: Raw axis value in the range [-1, 1].
+        :param dead_zone: Half-width of the dead-zone band.
+        :return: Dead-zoned axis value.
+        """
+        if abs(value) < dead_zone:
+            return 0.0
+        return value - np.sign(value) * dead_zone
 
     def collect_button_names(self, axis_names: frozenset[str]) -> frozenset[str]:
         """
         Scans all context bindings and returns the hardware names that are
         buttons (i.e. not continuous axes).
 
-        Reads every binding value for the current input type across all
-        contexts and excludes any name present in *axis_names*.
+        Reads every binding value of this reader's :attr:`device_type` across
+        all contexts and excludes any name present in *axis_names*.
 
         :param axis_names: Frozenset of hardware names that represent
             continuous axes and must not be polled as buttons.
         :return: Frozenset of button hardware names from the configuration.
         """
-        input_type = self.app.bindings["input_type"]
         names: set[str] = set()
         for ctx_data in self.app.bindings.get("contexts", {}).values():
-            for hw_name in ctx_data.get(input_type, {}).values():
+            for hw_name in ctx_data.get(self.device_type, {}).values():
                 if isinstance(hw_name, str) and hw_name not in axis_names:
                     names.add(hw_name)
         return frozenset(names)
@@ -420,6 +435,8 @@ class KeyboardReader(InputReader):
     Reads keyboard state via Panda3D's MouseWatcher (polling) plus
     accept() events as a safety net.
     """
+
+    device_type = "keyboard"
 
     def __init__(self, app: SpaceFlightSimulator):
         """
@@ -437,8 +454,8 @@ class KeyboardReader(InputReader):
         self.registry = ButtonRegistry.ptr()
 
         for key in self.button_names:
-            app.accept(key, lambda k=key: self.ev_pressed.add(k))
-            app.accept(key + "-up", lambda k=key: self.ev_released.add(k))
+            self.accept(key, lambda k=key: self.ev_pressed.add(k))
+            self.accept(key + "-up", lambda k=key: self.ev_released.add(k))
 
     def read_all_buttons(self) -> dict[str, bool]:
         """
@@ -464,15 +481,6 @@ class KeyboardReader(InputReader):
         """
         pass  # Keyboard has no physical axes; FlightInputContext synthesises them
 
-    def clean(self):
-        """
-        Unregisters key event callbacks, then delegates to the base class.
-        """
-        for key in self.button_names:
-            self.app.ignore(key)
-            self.app.ignore(key + "-up")
-        super().clean()
-
 
 # ---------------------------------------------------------------------------
 # GamepadReader
@@ -486,13 +494,15 @@ class GamepadReader(InputReader):
     applied by :class:`~space_flight.ui.input_context.FlightInputContext`.
     """
 
+    device_type = "gamepad"
+
     def __init__(self, app: SpaceFlightSimulator):
         """
         Detects a connected gamepad and registers hot-plug and button events.
 
         If a gamepad is already connected it is attached immediately via
-        :meth:`connect`.  If none is found, an on-screen warning label is
-        shown.  Hot-plug events are accepted so the reader adapts at runtime.
+        :meth:`connect`.  Hot-plug events are accepted so the reader adapts at
+        runtime; with no gamepad, the reader simply reports nothing.
 
         Safety-net accept() callbacks are registered for every bound
         button, mapping Panda3D's "gamepad-lshoulder" event names to the
@@ -508,18 +518,16 @@ class GamepadReader(InputReader):
         devices = app.devices.getDevices(InputDevice.DeviceClass.gamepad)
         if devices:
             self.connect(devices[0])
-        else:
-            self.lbl = OnscreenText(text="No gamepad found", fg=(1, 0, 0, 1), scale=0.2)
 
-        app.accept("connect-device", self.connect)
-        app.accept("disconnect-device", self.disconnect)
+        self.accept("connect-device", self.connect)
+        self.accept("disconnect-device", self.disconnect)
 
         # Safety-net events for named gamepad buttons
         # Hardware name "gamepad_lshoulder" → Panda3D event "gamepad-lshoulder"
         for hw in self.button_names:
             evt = "gamepad-" + hw[len("gamepad_") :]
-            app.accept(evt, lambda n=hw: self.ev_pressed.add(n))
-            app.accept(evt + "-up", lambda n=hw: self.ev_released.add(n))
+            self.accept(evt, lambda n=hw: self.ev_pressed.add(n))
+            self.accept(evt + "-up", lambda n=hw: self.ev_released.add(n))
 
     # ------------------------------------------------------------------
 
@@ -533,8 +541,6 @@ class GamepadReader(InputReader):
             print(f"Gamepad connected: {safe_device_name(device)}")
             self.gamepad = device
             self.app.attachInputDevice(device, prefix="gamepad")
-            if hasattr(self, "lbl"):
-                self.lbl.hide()
 
     def disconnect(self, device: InputDevice):
         """
@@ -550,8 +556,6 @@ class GamepadReader(InputReader):
         devices = self.app.devices.getDevices(InputDevice.DeviceClass.gamepad)
         if devices:
             self.connect(devices[0])
-        elif hasattr(self, "lbl"):
-            self.lbl.show()
 
     # ------------------------------------------------------------------
 
@@ -576,24 +580,6 @@ class GamepadReader(InputReader):
             else:
                 result[hw] = False
         return result
-
-    @staticmethod
-    def dz(value: float, dead_zone: float) -> float:
-        """
-        Applies a symmetric dead zone to a raw axis value.
-
-        Values within ±*dead_zone* of centre are zeroed; values outside are
-        shifted towards zero by *dead_zone* so that the output starts at zero
-        at the dead-zone boundary (not renormalised: full deflection gives
-        1 - dead_zone).
-
-        :param value: Raw axis value in the range [-1, 1].
-        :param dead_zone: Half-width of the dead-zone band.
-        :return: Dead-zoned axis value.
-        """
-        if abs(value) < dead_zone:
-            return 0.0
-        return value - np.sign(value) * dead_zone
 
     def read_axes(self, state: InputState):
         """
@@ -628,8 +614,7 @@ class GamepadReader(InputReader):
 
     def clean(self):
         """
-        Detaches the gamepad, destroys the warning label, unregisters all event
-        callbacks, then delegates to the base class.
+        Detaches the gamepad, then delegates to the base class.
         """
         if self.gamepad:
             try:
@@ -637,14 +622,6 @@ class GamepadReader(InputReader):
             except AssertionError:
                 pass
             self.gamepad = None
-        if hasattr(self, "lbl"):
-            self.lbl.destroy()
-        for hw in self.button_names:
-            evt = "gamepad-" + hw[len("gamepad_") :]
-            self.app.ignore(evt)
-            self.app.ignore(evt + "-up")
-        self.app.ignore("connect-device")
-        self.app.ignore("disconnect-device")
         super().clean()
 
 
@@ -659,6 +636,8 @@ class JoystickReader(InputReader):
     buttons on most sticks do not generate Panda3D events reliably; no
     safety-net accept() is registered for them.
     """
+
+    device_type = "joystick"
 
     def __init__(self, app: SpaceFlightSimulator):
         """
@@ -678,13 +657,9 @@ class JoystickReader(InputReader):
         devices = app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
         if devices:
             self.connect(devices[0])
-        else:
-            self.lbl = OnscreenText(
-                text="No joystick found", fg=(1, 0, 0, 1), scale=0.2
-            )
 
-        app.accept("connect-device", self.connect)
-        app.accept("disconnect-device", self.disconnect)
+        self.accept("connect-device", self.connect)
+        self.accept("disconnect-device", self.disconnect)
         # No button events — polling-only for joystick buttons
 
     # ------------------------------------------------------------------
@@ -702,8 +677,6 @@ class JoystickReader(InputReader):
             print(f"Joystick connected: {device}")
             self.flightStick = device
             self.app.attachInputDevice(device, prefix="stick")
-            if hasattr(self, "lbl"):
-                self.lbl.hide()
 
     def disconnect(self, device: InputDevice):
         """
@@ -719,8 +692,6 @@ class JoystickReader(InputReader):
         devices = self.app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
         if devices:
             self.connect(devices[0])
-        elif hasattr(self, "lbl"):
-            self.lbl.show()
 
     # ------------------------------------------------------------------
 
@@ -761,19 +732,6 @@ class JoystickReader(InputReader):
             )
         return result
 
-    @staticmethod
-    def dz(value: float, dead_zone: float) -> float:
-        """
-        Applies a symmetric dead zone to a raw axis value.
-
-        :param value: Raw axis value in the range [-1, 1].
-        :param dead_zone: Half-width of the dead-zone band.
-        :return: Dead-zoned axis value.
-        """
-        if abs(value) < dead_zone:
-            return 0.0
-        return value - np.sign(value) * dead_zone
-
     def read_axes(self, state: InputState):
         """
         Reads and dead-zones the four flight-stick axes into state.axes.
@@ -804,17 +762,87 @@ class JoystickReader(InputReader):
 
     def clean(self):
         """
-        Detaches the flight stick, destroys the warning label, unregisters hot-plug
-        events, then delegates to the base class.
+        Detaches the flight stick, then delegates to the base class.
         """
         if self.flightStick:
             self.app.detachInputDevice(self.flightStick)
             self.flightStick = None
-        if hasattr(self, "lbl"):
-            self.lbl.destroy()
-        self.app.ignore("connect-device")
-        self.app.ignore("disconnect-device")
         super().clean()
+
+
+# ---------------------------------------------------------------------------
+# CompositeInputReader
+# ---------------------------------------------------------------------------
+
+
+class CompositeInputReader:
+    """
+    Polls every device reader each frame and merges their states, so the
+    keyboard, a gamepad and a flight stick can all be used at the same time.
+
+    Hardware names never collide across devices (keyboard keys,
+    gamepad_* / left_x…, stick_button_N / pitch…), so merging is a plain
+    dict union.  Each reader keeps its own transition state.
+    """
+
+    def __init__(self, readers: list[InputReader]):
+        """
+        :param readers: The device readers to poll, one per device type.
+        """
+        self.readers = readers
+        self.state = InputState()
+        # Device type of the last reader that saw a button press or an axis
+        # pushed past LAST_DEVICE_AXIS_THRESHOLD; picks which binding the
+        # on-screen prompts show (see InputContext.key_label)
+        self.last_device = "keyboard"
+        # Axes currently past the threshold: only crossing it counts, so a
+        # throttle lever resting forward does not keep claiming last_device
+        self.pushed_axes: set[str] = set()
+
+    def poll(self) -> InputState:
+        """
+        Polls every reader and merges their states.  Call exactly once per
+        game frame.
+
+        :return: The merged :class:`InputState` for this frame.
+        """
+        self.state.buttons.clear()
+        self.state.repeats.clear()
+        self.state.releases.clear()
+        self.state.axes.clear()
+        for reader in self.readers:
+            state = reader.poll()
+            if state.buttons or self.update_pushed_axes(state.axes):
+                self.last_device = reader.device_type
+            self.state.buttons.update(state.buttons)
+            self.state.repeats.update(state.repeats)
+            self.state.releases.update(state.releases)
+            self.state.axes.update(state.axes)
+        return self.state
+
+    def update_pushed_axes(self, axes: dict[str, float]) -> bool:
+        """
+        Tracks which axes are pushed past LAST_DEVICE_AXIS_THRESHOLD.
+
+        :param axes: One reader's axis values this frame.
+        :return: True if any axis crossed the threshold this frame.
+        """
+        crossed = False
+        for name, value in axes.items():
+            if abs(value) > LAST_DEVICE_AXIS_THRESHOLD:
+                crossed |= name not in self.pushed_axes
+                self.pushed_axes.add(name)
+            else:
+                self.pushed_axes.discard(name)
+        return crossed
+
+    def clean(self):
+        """
+        Cleans every reader.  Must be called before the reader is discarded.
+        """
+        for reader in self.readers:
+            reader.clean()
+        self.readers = []
 
 
 # ---------------------------------------------------------------------------
@@ -833,28 +861,19 @@ def load_bindings() -> dict:
         return yaml.safe_load(f)
 
 
-def reader_factory(app: SpaceFlightSimulator) -> InputReader:
+def reader_factory(app: SpaceFlightSimulator) -> CompositeInputReader:
     """
-    Loads the configuration, stores it on app.bindings, and instantiates the
-    appropriate :class:`InputReader` subclass for the configured input type.
+    Loads the configuration, stores it on app.bindings, and builds a reader
+    for every device type, merged into one :class:`CompositeInputReader`.
 
     Called at application startup and again when the user saves new settings
     so the reader reflects updated hardware names and dead zones without a
     restart.
 
     :param app: The Panda3D application instance.
-    :return: A :class:`KeyboardReader`, :class:`GamepadReader`, or
-        :class:`JoystickReader` ready to be polled each frame.
-    :raises NotImplementedError: If input_type is not one of
-        "keyboard", "gamepad", or "joystick".
+    :return: A :class:`CompositeInputReader` ready to be polled each frame.
     """
     app.bindings = load_bindings()
-    input_type = app.bindings["input_type"]
-    if input_type == "keyboard":
-        return KeyboardReader(app=app)
-    elif input_type == "gamepad":
-        return GamepadReader(app=app)
-    elif input_type == "joystick":
-        return JoystickReader(app=app)
-    else:
-        raise NotImplementedError(f"Unknown input_type: {input_type!r}")
+    return CompositeInputReader(
+        [KeyboardReader(app=app), GamepadReader(app=app), JoystickReader(app=app)]
+    )

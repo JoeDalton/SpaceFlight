@@ -1,9 +1,10 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from panda3d.core import InputDevice
 
 from space_flight.ui.input_reader import (
+    CompositeInputReader,
     GamepadReader,
     InputReader,
     InputState,
@@ -24,16 +25,18 @@ class _StubReader(InputReader):
     Safety-net events can be injected directly into ev_pressed / ev_released.
     """
 
-    def __init__(self):
+    def __init__(self, device_type="keyboard"):
         """
         Initialise without calling InputReader.__init__ to avoid Panda3D.
+
+        :param device_type: The device type this stub reports as.
         """
+        self.device_type = device_type
         self.state = InputState()
         self.previous = {}
         self.logical_down = {}
         self.ev_pressed = set()
         self.ev_released = set()
-        self.global_keys = []
         self.hw_state = {}
         self.hw_axes = {}
 
@@ -355,44 +358,38 @@ def test_poll_returns_same_state_object_each_call(reader):
 
 
 # ---------------------------------------------------------------------------
-# GamepadReader.dz / JoystickReader.dz — pure static dead-zone methods
+# InputReader.dz — pure static dead-zone method
 # ---------------------------------------------------------------------------
 
-
-@pytest.fixture(
-    params=[GamepadReader.dz, JoystickReader.dz], ids=["gamepad", "joystick"]
-)
-def dz(request):
-    """Parametrize over both reader dead-zone implementations."""
-    return request.param
+dz = InputReader.dz
 
 
-def test_dz_zero_input_returns_zero(dz):
+def test_dz_zero_input_returns_zero():
     assert dz(0.0, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_value_inside_dead_zone_returns_zero(dz):
+def test_dz_value_inside_dead_zone_returns_zero():
     assert dz(0.05, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_value_at_dead_zone_boundary_returns_zero(dz):
+def test_dz_value_at_dead_zone_boundary_returns_zero():
     # At exactly the boundary: value - sign*dead_zone = 0.
     assert dz(0.1, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_positive_value_beyond_dead_zone(dz):
+def test_dz_positive_value_beyond_dead_zone():
     assert dz(0.5, 0.1) == pytest.approx(0.4)
 
 
-def test_dz_negative_value_beyond_dead_zone(dz):
+def test_dz_negative_value_beyond_dead_zone():
     assert dz(-0.5, 0.1) == pytest.approx(-0.4)
 
 
-def test_dz_negative_inside_dead_zone_returns_zero(dz):
+def test_dz_negative_inside_dead_zone_returns_zero():
     assert dz(-0.05, 0.1) == pytest.approx(0.0)
 
 
-def test_dz_full_deflection(dz):
+def test_dz_full_deflection():
     assert dz(1.0, 0.15) == pytest.approx(0.85)
 
 
@@ -422,13 +419,38 @@ def test_button_index_arbitrary_name_returns_none():
 
 
 # ---------------------------------------------------------------------------
-# GamepadReader — "no gamepad found" label lifecycle
+# InputReader.collect_button_names — per device type
+# ---------------------------------------------------------------------------
+
+
+def test_collect_button_names_reads_only_own_device_type():
+    """
+    Each reader polls only the buttons bound for its own device type, minus
+    the axis names.
+    """
+    reader = _StubReader(device_type="gamepad")
+    reader.app = MagicMock()
+    reader.app.bindings = {
+        "contexts": {
+            "flight": {
+                "keyboard": {"fire": "space"},
+                "gamepad": {"fire": "gamepad_lshoulder", "yaw": "right_x"},
+            },
+            "hyperspace": {"gamepad": {"drop_hyperspace": "gamepad_face_a"}},
+        }
+    }
+    names = reader.collect_button_names(frozenset({"right_x"}))
+    assert names == {"gamepad_lshoulder", "gamepad_face_a"}
+
+
+# ---------------------------------------------------------------------------
+# GamepadReader — hot-plug
 # ---------------------------------------------------------------------------
 
 
 def make_app_with_no_gamepad():
     app = MagicMock()
-    app.bindings = {"input_type": "gamepad", "contexts": {}, "dead_zones": {}}
+    app.bindings = {"contexts": {}, "dead_zones": {}}
     app.devices.getDevices.return_value = []
     return app
 
@@ -439,37 +461,160 @@ def make_gamepad_device():
     return device
 
 
-def test_gamepad_reader_shows_label_when_no_device_at_startup():
+def test_gamepad_reader_starts_without_device():
+    """
+    No gamepad at startup is a normal case: nothing is attached and polling
+    reports nothing.
+    """
     app = make_app_with_no_gamepad()
-    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
-        reader = GamepadReader(app)
-    mock_text.assert_called_once()
-    assert reader.lbl is mock_text.return_value
+    reader = GamepadReader(app)
+    assert reader.gamepad is None
+    app.attachInputDevice.assert_not_called()
+    state = reader.poll()
+    assert state.buttons == {} and state.axes == {}
+    reader.clean()
 
 
-def test_gamepad_reader_hides_label_once_a_gamepad_connects():
+def test_gamepad_reader_attaches_gamepad_on_connect():
     app = make_app_with_no_gamepad()
-    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
-        reader = GamepadReader(app)
-        reader.connect(make_gamepad_device())
-    mock_text.return_value.hide.assert_called_once()
+    reader = GamepadReader(app)
+    device = make_gamepad_device()
+    reader.connect(device)
+    assert reader.gamepad is device
+    app.attachInputDevice.assert_called_once_with(device, prefix="gamepad")
+    reader.clean()
 
 
-def test_gamepad_reader_shows_label_again_after_disconnect_with_no_fallback():
+def test_gamepad_reader_detaches_on_disconnect_with_no_fallback():
     app = make_app_with_no_gamepad()
-    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
-        reader = GamepadReader(app)
-        device = make_gamepad_device()
-        reader.connect(device)
-        mock_text.return_value.reset_mock()
-        app.devices.getDevices.return_value = []
-        reader.disconnect(device)
-    mock_text.return_value.show.assert_called_once()
+    reader = GamepadReader(app)
+    device = make_gamepad_device()
+    reader.connect(device)
+    reader.disconnect(device)
+    assert reader.gamepad is None
+    app.detachInputDevice.assert_called_once_with(device)
+    reader.clean()
 
 
-def test_gamepad_reader_clean_destroys_label():
+def test_readers_do_not_replace_each_other_hotplug_handlers():
+    """
+    Gamepad and joystick readers both listen for connect-device: as separate
+    DirectObjects, neither replaces the other's handler, and cleaning one
+    leaves the other's in place.
+    """
     app = make_app_with_no_gamepad()
-    with patch("space_flight.ui.input_reader.OnscreenText") as mock_text:
-        reader = GamepadReader(app)
-        reader.clean()
-    mock_text.return_value.destroy.assert_called_once()
+    gamepad_reader = GamepadReader(app)
+    joystick_reader = JoystickReader(app)
+    assert gamepad_reader.isAccepting("connect-device")
+    assert joystick_reader.isAccepting("connect-device")
+    gamepad_reader.clean()
+    assert joystick_reader.isAccepting("connect-device")
+    joystick_reader.clean()
+
+
+# ---------------------------------------------------------------------------
+# CompositeInputReader
+# ---------------------------------------------------------------------------
+
+
+def make_composite():
+    """
+    :return: (composite, keyboard stub, gamepad stub)
+    """
+    keyboard = _StubReader(device_type="keyboard")
+    gamepad = _StubReader(device_type="gamepad")
+    return CompositeInputReader([keyboard, gamepad]), keyboard, gamepad
+
+
+def test_composite_merges_every_reader_state():
+    composite, keyboard, gamepad = make_composite()
+    keyboard.hw_state = {"space": True}
+    gamepad.hw_state = {"gamepad_lshoulder": True}
+    gamepad.hw_axes = {"right_x": 0.3}
+    state = composite.poll()
+    assert state.buttons == {"space": True, "gamepad_lshoulder": True}
+    assert state.axes == {"right_x": 0.3}
+
+
+def test_composite_keeps_each_reader_transitions():
+    """
+    A key held on one device and a button pressed on another are reported
+    as a repeat and a press respectively.
+    """
+    composite, keyboard, gamepad = make_composite()
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    gamepad.hw_state = {"gamepad_lshoulder": True}
+    state = composite.poll()
+    assert state.repeats == {"space": True}
+    assert state.buttons == {"gamepad_lshoulder": True}
+
+
+def test_composite_clears_previous_frame():
+    composite, keyboard, gamepad = make_composite()
+    gamepad.hw_axes = {"right_x": 0.3}
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    gamepad.hw_axes = {}
+    keyboard.hw_state = {"space": False}
+    state = composite.poll()
+    assert state.axes == {}
+    assert state.buttons == {} and state.releases == {"space": True}
+
+
+def test_composite_last_device_defaults_to_keyboard():
+    composite, _, _ = make_composite()
+    composite.poll()
+    assert composite.last_device == "keyboard"
+
+
+def test_composite_last_device_follows_button_press():
+    composite, keyboard, gamepad = make_composite()
+    gamepad.hw_state = {"gamepad_lshoulder": True}
+    composite.poll()
+    assert composite.last_device == "gamepad"
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    assert composite.last_device == "keyboard"
+
+
+def test_composite_last_device_ignores_held_button():
+    composite, keyboard, gamepad = make_composite()
+    gamepad.hw_state = {"gamepad_lshoulder": True}
+    composite.poll()
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    # The gamepad button is still held, but only new presses count
+    composite.poll()
+    assert composite.last_device == "keyboard"
+
+
+def test_composite_last_device_follows_axis_crossing_threshold():
+    composite, _, gamepad = make_composite()
+    gamepad.hw_axes = {"right_x": 0.3}
+    composite.poll()
+    assert composite.last_device == "keyboard"
+    gamepad.hw_axes = {"right_x": -0.8}
+    composite.poll()
+    assert composite.last_device == "gamepad"
+
+
+def test_composite_last_device_ignores_axis_resting_past_threshold():
+    """
+    A throttle lever left forward does not keep claiming last_device.
+    """
+    composite, keyboard, gamepad = make_composite()
+    gamepad.hw_axes = {"right_trigger": 0.9}
+    composite.poll()
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    composite.poll()
+    assert composite.last_device == "keyboard"
+
+
+def test_composite_clean_cleans_every_reader():
+    first, second = MagicMock(), MagicMock()
+    composite = CompositeInputReader([first, second])
+    composite.clean()
+    first.clean.assert_called_once()
+    second.clean.assert_called_once()
