@@ -27,8 +27,20 @@
 :class: autosummary longtable
 :align: left
 
-* - {py:obj}`_clamp <space_flight.global_architecture.gameplay_settings._clamp>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._clamp
+* - {py:obj}`side_paths <space_flight.global_architecture.gameplay_settings.side_paths>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.side_paths
+    :summary:
+    ```
+* - {py:obj}`_get_path <space_flight.global_architecture.gameplay_settings._get_path>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._get_path
+    :summary:
+    ```
+* - {py:obj}`_set_path <space_flight.global_architecture.gameplay_settings._set_path>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._set_path
+    :summary:
+    ```
+* - {py:obj}`_clean <space_flight.global_architecture.gameplay_settings._clean>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._clean
     :summary:
     ```
 * - {py:obj}`_load_file <space_flight.global_architecture.gameplay_settings._load_file>`
@@ -87,20 +99,20 @@
   - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.SIDES
     :summary:
     ```
-* - {py:obj}`_AUTO_AIM_LIMITS <space_flight.global_architecture.gameplay_settings._AUTO_AIM_LIMITS>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._AUTO_AIM_LIMITS
+* - {py:obj}`LIMITS <space_flight.global_architecture.gameplay_settings.LIMITS>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.LIMITS
     :summary:
     ```
-* - {py:obj}`_DEVIATION_LIMITS <space_flight.global_architecture.gameplay_settings._DEVIATION_LIMITS>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._DEVIATION_LIMITS
+* - {py:obj}`FLAGS <space_flight.global_architecture.gameplay_settings.FLAGS>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.FLAGS
     :summary:
     ```
-* - {py:obj}`_DAMAGE_MULTIPLIER_LIMITS <space_flight.global_architecture.gameplay_settings._DAMAGE_MULTIPLIER_LIMITS>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._DAMAGE_MULTIPLIER_LIMITS
+* - {py:obj}`PLAYER_ONLY <space_flight.global_architecture.gameplay_settings.PLAYER_ONLY>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.PLAYER_ONLY
     :summary:
     ```
-* - {py:obj}`_COLLISION_DAMAGE_MULTIPLIER_LIMITS <space_flight.global_architecture.gameplay_settings._COLLISION_DAMAGE_MULTIPLIER_LIMITS>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._COLLISION_DAMAGE_MULTIPLIER_LIMITS
+* - {py:obj}`_MISSING <space_flight.global_architecture.gameplay_settings._MISSING>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._MISSING
     :summary:
     ```
 ````
@@ -167,50 +179,71 @@
 
 ````
 
-````{py:data} _AUTO_AIM_LIMITS
-:canonical: space_flight.global_architecture.gameplay_settings._AUTO_AIM_LIMITS
+````{py:data} LIMITS
+:canonical: space_flight.global_architecture.gameplay_settings.LIMITS
 :value: >
    None
 
-```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._AUTO_AIM_LIMITS
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.LIMITS
 ```
 
 ````
 
-````{py:data} _DEVIATION_LIMITS
-:canonical: space_flight.global_architecture.gameplay_settings._DEVIATION_LIMITS
+````{py:data} FLAGS
+:canonical: space_flight.global_architecture.gameplay_settings.FLAGS
 :value: >
-   (0.0, 5.0, 0.0)
+   (('auto_aim', 'enabled'), ('lead_indicator',))
 
-```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._DEVIATION_LIMITS
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.FLAGS
 ```
 
 ````
 
-````{py:data} _DAMAGE_MULTIPLIER_LIMITS
-:canonical: space_flight.global_architecture.gameplay_settings._DAMAGE_MULTIPLIER_LIMITS
+````{py:data} PLAYER_ONLY
+:canonical: space_flight.global_architecture.gameplay_settings.PLAYER_ONLY
 :value: >
-   (0.1, 5.0, 1.0)
+   (('collision_damage_multiplier',), ('lead_indicator',))
 
-```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._DAMAGE_MULTIPLIER_LIMITS
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.PLAYER_ONLY
 ```
 
 ````
 
-````{py:data} _COLLISION_DAMAGE_MULTIPLIER_LIMITS
-:canonical: space_flight.global_architecture.gameplay_settings._COLLISION_DAMAGE_MULTIPLIER_LIMITS
+````{py:data} _MISSING
+:canonical: space_flight.global_architecture.gameplay_settings._MISSING
 :value: >
-   (0.0, 5.0, 1.0)
+   'object(...)'
 
-```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._COLLISION_DAMAGE_MULTIPLIER_LIMITS
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._MISSING
 ```
 
 ````
 
-````{py:function} _clamp(value, limits: tuple[float, float, float]) -> float
-:canonical: space_flight.global_architecture.gameplay_settings._clamp
+````{py:function} side_paths(side: str) -> list[tuple]
+:canonical: space_flight.global_architecture.gameplay_settings.side_paths
 
-```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._clamp
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.side_paths
+```
+````
+
+````{py:function} _get_path(section, path: tuple)
+:canonical: space_flight.global_architecture.gameplay_settings._get_path
+
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._get_path
+```
+````
+
+````{py:function} _set_path(section: dict, path: tuple, value)
+:canonical: space_flight.global_architecture.gameplay_settings._set_path
+
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._set_path
+```
+````
+
+````{py:function} _clean(path: tuple, value, fallback)
+:canonical: space_flight.global_architecture.gameplay_settings._clean
+
+```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._clean
 ```
 ````
 
@@ -264,7 +297,7 @@
 
 ````
 
-````{py:method} sanitise(config: dict) -> dict
+````{py:method} sanitise(config: dict, fallback: dict) -> dict
 :canonical: space_flight.global_architecture.gameplay_settings.GameplaySettings.sanitise
 :staticmethod:
 

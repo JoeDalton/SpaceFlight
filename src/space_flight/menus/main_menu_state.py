@@ -1,7 +1,7 @@
 import sys
 
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton
+from space_flight.menus.menu_utils import CustomButton, MenuNavigator
 
 # TODO: Background image
 
@@ -47,6 +47,10 @@ class MainMenuState(BaseState):
             pos=(0.0, 0.0, -0.3),
             layout="center",
         )
+        self.menu_navigator = MenuNavigator(
+            self.app,
+            [[self.play_button], [self.settings_button], [self.quit_button]],
+        )
 
     def choose_level(self):
         """
@@ -81,6 +85,7 @@ class MainMenuState(BaseState):
         """
         Destroy all menu buttons and force a frame render.
         """
+        self.menu_navigator.remove()
         self.play_button.destroy()
         self.settings_button.destroy()
         self.quit_button.destroy()

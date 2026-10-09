@@ -67,10 +67,18 @@ Bases: {py:obj}`space_flight.ai.generic.generic_navigator.GenericNavigator`
 
 ````
 
-````{py:method} _find_target(target_id: uuid.UUID | None) -> space_flight.actors.pawn.Pawn | None
-:canonical: space_flight.ai.missile.missile_navigator.MissileNavigator._find_target
+````{py:method} pursue(target: typing.Any) -> tuple[numpy.ndarray, float]
+:canonical: space_flight.ai.missile.missile_navigator.MissileNavigator.pursue
 
-```{autodoc2-docstring} space_flight.ai.missile.missile_navigator.MissileNavigator._find_target
+```{autodoc2-docstring} space_flight.ai.missile.missile_navigator.MissileNavigator.pursue
+```
+
+````
+
+````{py:method} find_target(target_id: uuid.UUID | None) -> space_flight.actors.pawn.Pawn | None
+:canonical: space_flight.ai.missile.missile_navigator.MissileNavigator.find_target
+
+```{autodoc2-docstring} space_flight.ai.missile.missile_navigator.MissileNavigator.find_target
 ```
 
 ````

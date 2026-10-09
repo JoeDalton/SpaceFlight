@@ -19,8 +19,11 @@ import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
+from direct.showbase.ShowBaseGlobal import ClockObject
+
 from space_flight import THROTTLE_BOOST_VALUE
 from space_flight.actors.energy import BALANCED, ENGINES, LASERS, SHIELDS
+from space_flight.ui.input_reader import MENU_BUTTONS, InputState
 from space_flight.utils import low_pass_filter_first_order
 
 if TYPE_CHECKING:
@@ -28,7 +31,7 @@ if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
     from space_flight.global_architecture.base_state import BaseState
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
-    from space_flight.ui.input_reader import InputState
+    from space_flight.menus.menu_utils import MenuNavigator
 
 VIEW_BUTTON_INCREMENT = 1.0
 
@@ -92,8 +95,10 @@ class InputContext(ABC):
         Interprets *state* and drives game objects. Called once per frame
         while this context is on top of the stack.
 
-        :param state: The :class:`~space_flight.ui.input_reader.InputState`
-            produced by the active reader this frame.
+        :param state: The merged
+            :class:`~space_flight.ui.input_reader.InputState` produced by the
+            input reader (:class:`~space_flight.ui.input_reader.CompositeInputReader`)
+            this frame.
         """
 
     def clean(self):
@@ -142,10 +147,21 @@ class InputContextStack:
     the previous top; popping restores it.  The stack is owned by the app
     (``SpaceFlightSimulator.input_context_stack``); states push and pop
     their own contexts on it.
+
+    A context only sees the holds that started while it was on top: keys
+    already held when it became the top are left out of its ``repeats``
+    until released (their release still gets through, e.g. the radial menu
+    closing on its trigger's).  Otherwise the key that closes a menu, still
+    held, would act on the context below, like gamepad A (menu confirm)
+    firing a missile once the pause menu has resumed the flight.
     """
 
     def __init__(self):
         self.stack: list[InputContext] = []
+        # The context dispatched to last, and the keys held since before it
+        # became the top
+        self.dispatched_top: InputContext | None = None
+        self.stale_keys: set[str] = set()
 
     def push(self, context: InputContext):
         """
@@ -170,6 +186,21 @@ class InputContextStack:
         if self.stack:
             self.stack[-1].on_activate()
 
+    def remove(self, context: InputContext):
+        """
+        Removes *context* wherever it is in the stack, cleaning it; no-op if
+        it is not there (e.g. the stack was cleaned meanwhile).
+
+        :param context: The context to remove.
+        """
+        if not self.stack or context not in self.stack:
+            return
+        if context is self.stack[-1]:
+            self.pop()
+            return
+        self.stack.remove(context)
+        context.clean()
+
     def dispatch(self, state: InputState):
         """
         Passes *state* to the top context.  No-op if the stack is empty.
@@ -177,8 +208,33 @@ class InputContextStack:
         :param state: Current frame's
             :class:`~space_flight.ui.input_reader.InputState`.
         """
-        if self.stack:
-            self.stack[-1].consume(state)
+        if not self.stack:
+            return
+        top = self.stack[-1]
+        if top is not self.dispatched_top:
+            self.dispatched_top = top
+            self.stale_keys = set(state.repeats)
+        if self.stale_keys:
+            self.stale_keys &= state.repeats.keys()
+            state = self.without_stale_keys(state)
+        top.consume(state)
+
+    def without_stale_keys(self, state: InputState) -> InputState:
+        """
+        :param state: Current frame's input state.
+        :return: A copy of *state* without the stale keys in its repeats.
+        """
+        fresh = InputState()
+        fresh.buttons = state.buttons
+        fresh.repeats = {
+            key: held
+            for key, held in state.repeats.items()
+            if key not in self.stale_keys
+        }
+        fresh.releases = state.releases
+        fresh.axes = state.axes
+        fresh.mouse_moved = state.mouse_moved
+        return fresh
 
     def clean(self):
         """Pops and cleans all remaining contexts."""
@@ -468,43 +524,149 @@ def clamp_unit(value: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# PauseMenuInputContext
+# MenuInputContext
 # ---------------------------------------------------------------------------
 
+# Menu directions as (dx, dy), dy > 0 being down the screen
+MENU_DIRECTIONS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+# Menu actions on the joystick, taken from its flight bindings (its button
+# numbers vary between sticks, so they cannot be hardcoded). The hat is
+# inverted: pushing it forward looks down in flight, but moves up in menus
+JOYSTICK_MENU_ACTIONS = {
+    "up": "view_down",
+    "down": "view_up",
+    "left": "view_left",
+    "right": "view_right",
+    "confirm": "fire",
+    "back": "fire_secondary",
+}
+# Holding a direction repeats it after this delay, then at this interval (s)
+MENU_REPEAT_DELAY = 0.4
+MENU_REPEAT_INTERVAL = 0.1
+# A stick pushed past this moves the focus
+MENU_AXIS_THRESHOLD = 0.5
 
-class PauseMenuInputContext(InputContext):
+
+class MenuInputContext(InputContext):
     """
-    Pushed onto the stack when the game is paused.
+    Drives a menu's :class:`~space_flight.menus.menu_utils.MenuNavigator`
+    from the keyboard, a gamepad or a joystick.
 
-    Blocks all flight inputs (FlightInputContext is below and not ticked).
-    Pressing the pause key again calls state_manager.pop(), popping the top
-    menu state (normally PauseMenuState, whose exit() pops this context and
-    lets FlightState resume).
-
-    The flight pause binding of every device is checked.
+    Keyboard and gamepad keys are hardcoded (:data:`MENU_BUTTONS`), the
+    joystick's are its flight bindings (:data:`JOYSTICK_MENU_ACTIONS`); the
+    flight pause key of every device also goes back.  The gamepad left stick
+    and the joystick's radial-menu axes move the focus too, once pushed past
+    MENU_AXIS_THRESHOLD; a stick already pushed when the menu opens is
+    ignored until re-centred.  A held direction repeats on the real clock,
+    game time being frozen in the pause menu.  Moving the mouse hides the
+    focus and gives the hover back to the widget under the pointer.
     """
 
-    def __init__(self, app: SpaceFlightSimulator):
+    def __init__(self, app: SpaceFlightSimulator, menu_navigator: MenuNavigator):
         """
         :param app: The simulator app
+        :param menu_navigator: The menu's navigator
         """
         self.app = app
-        self.pause_keys = bound_keys(app.bindings, "flight", "pause")
+        self.menu_navigator = menu_navigator
+        self.refresh_bindings(app)
+        # Direction being held, and when it repeats next
+        self.held_direction: str | None = None
+        self.next_repeat_s = 0.0
+        # Stick direction last frame; sticks navigate once seen centred
+        self.stick_direction: str | None = None
+        self.stick_armed = False
+
+    def refresh_bindings(self, app: SpaceFlightSimulator):
+        keys: dict[str, set[str]] = {action: set() for action in JOYSTICK_MENU_ACTIONS}
+        for device_keys in MENU_BUTTONS.values():
+            for action, hw_names in device_keys.items():
+                keys[action].update(hw_names)
+        contexts = app.bindings.get("contexts", {})
+        joystick = contexts.get("flight", {}).get("joystick", {})
+        for action, flight_action in JOYSTICK_MENU_ACTIONS.items():
+            if key := joystick.get(flight_action):
+                keys[action].add(key)
+        keys["back"] |= bound_keys(app.bindings, "flight", "pause")
+        self.keys = {action: frozenset(names) for action, names in keys.items()}
+
+        # (x, y) stick axis pairs, y > 0 being up
+        self.sticks = [("left_x", "left_y")]
+        radial_joystick = contexts.get("radial_menu", {}).get("joystick", {})
+        if radial_joystick.get("axis_x") and radial_joystick.get("axis_y"):
+            self.sticks.append((radial_joystick["axis_x"], radial_joystick["axis_y"]))
 
     def consume(self, state: InputState):
         """
-        :param state: the current input state
+        :param state: Current
+            :class:`~space_flight.ui.input_reader.InputState`.
         """
-        for key in self.pause_keys:
-            if state.buttons.get(key):
-                self.app.state_manager.pop()
-                return
-
-    def refresh_bindings(self, app: SpaceFlightSimulator):
-        self.pause_keys = bound_keys(app.bindings, "flight", "pause")
+        if state.mouse_moved:
+            self.menu_navigator.hide_focus()
+            self.menu_navigator.refresh_hover()
+        if self.pressed(state, "back"):
+            self.menu_navigator.back()
+        elif self.pressed(state, "confirm"):
+            self.menu_navigator.confirm()
+        elif direction := self.direction(state):
+            self.menu_navigator.move(*MENU_DIRECTIONS[direction])
 
     def clean(self):
-        self.game = None
+        self.menu_navigator = None
+
+    # ------------------------------------------------------------------
+
+    def pressed(self, state: InputState, action: str) -> bool:
+        return any(state.buttons.get(key) for key in self.keys[action])
+
+    def held(self, state: InputState, action: str) -> bool:
+        return any(state.repeats.get(key) for key in self.keys[action])
+
+    def direction(self, state: InputState) -> str | None:
+        """
+        The direction to move this frame: a fresh press, else a held one when
+        its repeat is due.
+
+        :param state: Current input state.
+        :return: A :data:`MENU_DIRECTIONS` key, or None.
+        """
+        now_s = ClockObject.getGlobalClock().getFrameTime()
+        stick = self.read_stick(state)
+        fresh_stick = stick if stick != self.stick_direction else None
+        self.stick_direction = stick
+
+        for direction in MENU_DIRECTIONS:
+            if self.pressed(state, direction) or fresh_stick == direction:
+                self.held_direction = direction
+                self.next_repeat_s = now_s + MENU_REPEAT_DELAY
+                return direction
+
+        held = self.held_direction
+        if held and (self.held(state, held) or stick == held):
+            if now_s >= self.next_repeat_s:
+                self.next_repeat_s = now_s + MENU_REPEAT_INTERVAL
+                return held
+        else:
+            self.held_direction = None
+        return None
+
+    def read_stick(self, state: InputState) -> str | None:
+        """
+        :param state: Current input state.
+        :return: The direction a stick is pushed past MENU_AXIS_THRESHOLD
+            along its dominant axis, or None (also while not yet re-centred).
+        """
+        for axis_x, axis_y in self.sticks:
+            x = state.axes.get(axis_x, 0.0)
+            y = state.axes.get(axis_y, 0.0)
+            if max(abs(x), abs(y)) > MENU_AXIS_THRESHOLD:
+                if not self.stick_armed:
+                    return None
+                if abs(x) > abs(y):
+                    return "right" if x > 0 else "left"
+                return "up" if y > 0 else "down"
+        self.stick_armed = True
+        return None
 
 
 # ---------------------------------------------------------------------------

@@ -88,7 +88,7 @@ MISSILE_MARKER_HALF_SIZE = 1.5 * LEAD_INDICATOR_HALF_SIZE
 CROSSHAIR_COLOR = (1.0, 1.0, 1.0, 1.0)
 CROSSHAIR_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
 
-# Incoming missile warning (see AimHUD): the warning line under the crosshair,
+# Incoming missile warning (see AimHUD): the warning line below the screen centre,
 # in aspect2d coordinates, and the marker on the nearest missile, a violet ring
 # like the lead indicator's, only bigger
 MISSILE_WARNING_COLOR = (1.0, 0.1, 0.1, 1.0)
@@ -643,7 +643,7 @@ class AimHUD:
       the gameplay settings enable it.
     - while guided missiles home on the player (see
       :class:`~space_flight.ai.missile.incoming_missile.IncomingMissile`), a
-      red warning line under the crosshair, with the nearest missile's distance
+      red warning line below the screen centre, with the nearest missile's distance
       (and their count if several), blinking faster as it closes in, and a
       violet ring on the nearest missile, pinned to the screen border when off
       screen.
@@ -739,7 +739,7 @@ class AimHUD:
         )
         self.lead_indicator.reparentTo(self.root)
 
-        # Incoming missile warning: a line under the crosshair and a marker on
+        # Incoming missile warning: a line below the screen centre and a marker on
         # the nearest missile. The line blinks; blink_phase is its cycle's
         # progress, in [0, 1), the line showing during the first half.
         self.missile_warning_line = make_text_line(

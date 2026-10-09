@@ -31,6 +31,8 @@ from panda3d.core import (
     GamepadButton,
     InputDevice,
     InputDeviceNode,
+    MouseWatcher,
+    WindowProperties,
 )
 
 from space_flight import CONFIGURATION_PATH
@@ -190,6 +192,27 @@ JOYSTICK_AXIS_NAMES: frozenset[str] = frozenset({"pitch", "roll", "yaw", "thrott
 # CompositeInputReader.last_device)
 LAST_DEVICE_AXIS_THRESHOLD = 0.5
 
+# Menu navigation keys (see MenuInputContext), hardcoded and polled whatever
+# the bindings; the joystick's come from its flight bindings instead
+MENU_BUTTONS: dict[str, dict[str, tuple[str, ...]]] = {
+    "keyboard": {
+        "up": ("arrow_up",),
+        "down": ("arrow_down",),
+        "left": ("arrow_left",),
+        "right": ("arrow_right",),
+        "confirm": ("enter", "space"),
+        "back": ("escape",),
+    },
+    "gamepad": {
+        "up": ("gamepad_dpad_up",),
+        "down": ("gamepad_dpad_down",),
+        "left": ("gamepad_dpad_left",),
+        "right": ("gamepad_dpad_right",),
+        "confirm": ("gamepad_face_a",),
+        "back": ("gamepad_face_b",),
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # InputState  — plain data container, written by the reader, read by contexts
@@ -204,18 +227,21 @@ class InputState:
     repeats  — hardware names that were held down both this frame and last.
     releases — hardware names that transitioned down→up this frame.
     axes     — dead-zoned continuous axis values.
+    mouse_moved — whether the mouse pointer moved this frame (set by
+               :class:`CompositeInputReader` only).
 
-    All dicts are rebuilt each frame by :class:`InputReader`.  Contexts must
-    not mutate them.
+    All dicts are rebuilt each frame by each :class:`InputReader`, and merged
+    by :class:`CompositeInputReader`.  Contexts must not mutate them.
     """
 
-    __slots__ = ("buttons", "repeats", "releases", "axes")
+    __slots__ = ("buttons", "repeats", "releases", "axes", "mouse_moved")
 
     def __init__(self):
         self.buttons: dict[str, bool] = {}
         self.repeats: dict[str, bool] = {}
         self.releases: dict[str, bool] = {}
         self.axes: dict[str, float] = {}
+        self.mouse_moved = False
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +313,7 @@ class InputReader(DirectObject):
            between two polls), produces buttons (newly pressed), repeats
            (held), and releases (newly released) -- each press or release
            reported once, even when both sources see it on different frames.
-        4. :meth:`read_axes` populates state.axes.
+        3. :meth:`read_axes` populates state.axes.
 
         :return: The updated :class:`InputState` for this frame.
         """
@@ -412,7 +438,8 @@ class InputReader(DirectObject):
         buttons (i.e. not continuous axes).
 
         Reads every binding value of this reader's :attr:`device_type` across
-        all contexts and excludes any name present in *axis_names*.
+        all contexts and excludes any name present in *axis_names*, then adds
+        the device's :data:`MENU_BUTTONS`.
 
         :param axis_names: Frozenset of hardware names that represent
             continuous axes and must not be polled as buttons.
@@ -423,6 +450,8 @@ class InputReader(DirectObject):
             for hw_name in ctx_data.get(self.device_type, {}).values():
                 if isinstance(hw_name, str) and hw_name not in axis_names:
                     names.add(hw_name)
+        for hw_names in MENU_BUTTONS.get(self.device_type, {}).values():
+            names.update(hw_names)
         return frozenset(names)
 
 
@@ -784,12 +813,20 @@ class CompositeInputReader:
     Hardware names never collide across devices (keyboard keys,
     gamepad_* / left_x…, stick_button_N / pitch…), so merging is a plain
     dict union.  Each reader keeps its own transition state.
+
+    It also tells whether the mouse moved (InputState.mouse_moved), and hides
+    the mouse cursor while another device is in use, showing it again as
+    soon as the mouse moves.  While hidden, the GUI ignores the pointer, so
+    an invisible cursor never hovers a widget (e.g. one a newly opened menu
+    draws under it).
     """
 
-    def __init__(self, readers: list[InputReader]):
+    def __init__(self, app: SpaceFlightSimulator, readers: list[InputReader]):
         """
+        :param app: The Panda3D application instance.
         :param readers: The device readers to poll, one per device type.
         """
+        self.app = app
         self.readers = readers
         self.state = InputState()
         # Device type of the last reader that saw a button press or an axis
@@ -799,11 +836,15 @@ class CompositeInputReader:
         # Axes currently past the threshold: only crossing it counts, so a
         # throttle lever resting forward does not keep claiming last_device
         self.pushed_axes: set[str] = set()
+        self.mouse_position: tuple[float, float] | None = None
+        # Given to the GUI while the cursor is hidden: outside the data graph,
+        # it never sees the mouse
+        self.blind_mouse_watcher = MouseWatcher("hidden-cursor")
 
     def poll(self) -> InputState:
         """
-        Polls every reader and merges their states.  Call exactly once per
-        game frame.
+        Polls every reader and merges their states, then updates the cursor.
+        Call exactly once per game frame.
 
         :return: The merged :class:`InputState` for this frame.
         """
@@ -811,15 +852,51 @@ class CompositeInputReader:
         self.state.repeats.clear()
         self.state.releases.clear()
         self.state.axes.clear()
+        device_used = False
         for reader in self.readers:
             state = reader.poll()
             if state.buttons or self.update_pushed_axes(state.axes):
                 self.last_device = reader.device_type
+                device_used = True
             self.state.buttons.update(state.buttons)
             self.state.repeats.update(state.repeats)
             self.state.releases.update(state.releases)
             self.state.axes.update(state.axes)
+        self.state.mouse_moved = self.read_mouse_moved()
+        if self.state.mouse_moved:
+            self.set_cursor_hidden(False)
+        elif device_used:
+            self.set_cursor_hidden(True)
         return self.state
+
+    def read_mouse_moved(self) -> bool:
+        """
+        :return: True if the mouse pointer moved since last frame.
+        """
+        watcher = self.app.mouseWatcherNode
+        if not watcher.hasMouse():
+            return False
+        position = (watcher.getMouseX(), watcher.getMouseY())
+        moved = self.mouse_position is not None and position != self.mouse_position
+        self.mouse_position = position
+        return moved
+
+    def set_cursor_hidden(self, hidden: bool):
+        """
+        Hides or shows the mouse cursor, if not already, and makes the GUI
+        ignore the pointer while hidden.
+
+        :param hidden: Whether the cursor should be hidden.
+        """
+        window = self.app.win
+        if window is None or window.getProperties().getCursorHidden() == hidden:
+            return
+        properties = WindowProperties()
+        properties.setCursorHidden(hidden)
+        window.requestProperties(properties)
+        self.app.aspect2d.node().setMouseWatcher(
+            self.blind_mouse_watcher if hidden else self.app.mouseWatcherNode
+        )
 
     def update_pushed_axes(self, axes: dict[str, float]) -> bool:
         """
@@ -882,5 +959,6 @@ def reader_factory(app: SpaceFlightSimulator) -> CompositeInputReader:
     """
     app.bindings = load_bindings()
     return CompositeInputReader(
-        [KeyboardReader(app=app), GamepadReader(app=app), JoystickReader(app=app)]
+        app,
+        [KeyboardReader(app=app), GamepadReader(app=app), JoystickReader(app=app)],
     )

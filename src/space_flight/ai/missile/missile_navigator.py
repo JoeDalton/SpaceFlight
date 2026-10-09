@@ -20,8 +20,9 @@ _ZERO3 = np.zeros(3)
 class MissileNavigator(GenericNavigator):
     """
     A guided missile's navigator. A missile has no tactician: its intent is
-    always to engage the target given by its launcher, which it does by
-    constant-angle pursuit at its (constant) speed.
+    always to engage the target given by its launcher (or the flare that
+    decoyed it), which it does by constant-angle pursuit at its (constant)
+    speed.
     """
 
     def __init__(

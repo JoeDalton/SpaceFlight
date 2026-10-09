@@ -38,7 +38,7 @@ myst_enable_extensions = [
 ]
 # GitHub-style heading slugs, so in-page links like (#where-things-live)
 # resolve the same way in Sphinx as when browsing the repository.
-myst_heading_anchors = 3
+myst_heading_anchors = 4
 
 # -- Options for autodoc2 -----------------------------------------------------
 

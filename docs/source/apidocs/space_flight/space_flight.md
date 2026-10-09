@@ -50,6 +50,10 @@ space_flight.cli
   - ```{autodoc2-docstring} space_flight.CONFIGURATION_PATH
     :summary:
     ```
+* - {py:obj}`DEFAULT_CONFIGURATION_PATH <space_flight.DEFAULT_CONFIGURATION_PATH>`
+  - ```{autodoc2-docstring} space_flight.DEFAULT_CONFIGURATION_PATH
+    :summary:
+    ```
 * - {py:obj}`FIXTURES_PATH <space_flight.FIXTURES_PATH>`
   - ```{autodoc2-docstring} space_flight.FIXTURES_PATH
     :summary:
@@ -144,6 +148,16 @@ space_flight.cli
    None
 
 ```{autodoc2-docstring} space_flight.CONFIGURATION_PATH
+```
+
+````
+
+````{py:data} DEFAULT_CONFIGURATION_PATH
+:canonical: space_flight.DEFAULT_CONFIGURATION_PATH
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.DEFAULT_CONFIGURATION_PATH
 ```
 
 ````

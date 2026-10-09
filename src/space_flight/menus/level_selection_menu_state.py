@@ -3,7 +3,7 @@ from panda3d.core import TextNode
 
 from space_flight.game.levels import LEVELS as LEVEL_REGISTRY
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton
+from space_flight.menus.menu_utils import CustomButton, MenuNavigator
 
 # TODO: Background image
 
@@ -60,6 +60,12 @@ class LevelSelectionMenuState(BaseState):
 
         self.menu_selection: str | None = None
         self.create_level_list()
+        self.menu_navigator = MenuNavigator(
+            self.app,
+            [[btn] for btn in self.level_buttons]
+            + [[self.back_button, self.start_button]],
+            on_back=self.back,
+        )
 
     def start_game(self):
         level_names = []
@@ -75,6 +81,7 @@ class LevelSelectionMenuState(BaseState):
         self.app.state_manager.push(self.app.state_manager.MAIN_MENU_STATE)
 
     def exit(self):
+        self.menu_navigator.remove()
         self.back_button.destroy()
         self.start_button.destroy()
         self.lstActionMap.destroy()
@@ -196,6 +203,7 @@ class LevelSelectionMenuState(BaseState):
                     ]
                     btn.set_pressed()
                     self.start_button.show()
+                    self.menu_navigator.focus_on(self.start_button)
             else:
                 # Reset all other level buttons
                 btn.reset()

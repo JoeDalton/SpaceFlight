@@ -4,8 +4,9 @@ launcher a ship carries for each entry of its loadout.
 
 Every kind of ordnance shares the same code; they differ only by their
 configuration (``datafiles/models/ordnance/<name>/configuration.yaml``): the
-launch direction and speed, the guidance (missiles only) and the collision role
-(flares only stop other ordnance).
+launch direction and speed, the guidance and decoy response (missiles only), the
+target mobility (missiles, rockets) and the collision role (flares stop other
+ordnance, and may lure a guided missile).
 """
 
 from __future__ import annotations

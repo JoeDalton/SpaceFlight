@@ -30,9 +30,9 @@ if TYPE_CHECKING:
     from space_flight.game.scenario import Mission
 
 # --- tunable numbers -------------------------------------------------------
-# All illustrative placeholders, sized to fit comfortably inside the
-# "asteroids" scene's field (field_size=15000) -- easy to retune after a
-# playtest.
+# All illustrative placeholders, sized for the "asteroids" scene's field
+# (field_size=15000, so +/-7500m around the origin); the race's first
+# waypoints lie just beyond its far edge -- easy to retune after a playtest.
 PLAYER_SPAWN_POINT = [0, -3000, 500]
 WAYPOINT_1 = [0, 0, 500]
 WAYPOINT_1_ARRIVAL_RADIUS_M = 350

@@ -66,12 +66,12 @@ space_flight
 
 | Command | Purpose |
 | --- | --- |
-| `invoke test` | Run the tests |
+| `invoke test` | Run the tests in parallel (`pytest tests/ -n auto`, pytest-xdist); `poetry run pytest tests/test_x.py` runs one file serially |
 | `invoke coverage` | Run the tests with coverage (terminal, `htmlcov/` and `coverage.xml`) |
 | `invoke quality` | Run the pre-commit hooks (ruff lint and format, file checks) |
 | `invoke doc` | Build the Sphinx docs into `docs/build/latest` and `docs/build/<version>` |
 | `invoke profile` | Profile the dev level into `profiles/dev_level.prof` (view with `snakeviz`) |
-| `invoke deploy` | Publish a build to the `space_flight` Poetry repository (preferably done by the CI) |
+| `invoke deploy` | Publish a build to the `space_flight` Poetry repository (manual: not automated by the CI yet) |
 | `invoke clean` | Remove build artefacts |
 
 To add or remove a dependency: `poetry add/remove <dependency>`, with `--group test`, `--group dev` or `--group docs` for test, development or documentation dependencies.

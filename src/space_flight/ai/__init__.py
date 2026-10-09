@@ -87,7 +87,7 @@ class Personality:
             "missile_defense_time_s": 3.0,
             "intent_update_delay": 0.5,
             "commitment_times": {
-                Intent.ENGAGE: 10.0,
+                Intent.ENGAGE: 4.0,
                 Intent.EVADE: 1.5,
                 Intent.DEFEND_MISSILE: 0.5,
                 Intent.DISENGAGE: 5.0,
@@ -120,7 +120,8 @@ class Personality:
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
             },
             # Missiles and rockets (see FighterNavigator._fire_missile and
-            # _fire_rocket), on top of the guns, at primary targets only (see
+            # _fire_rocket), on top of the guns: missiles at primary targets
+            # only, rockets at any target of their target_mobility (see
             # FighterTactician._choose_weapon)
             "ordnance": {
                 # Launch a locked missile only within this fraction of its reach

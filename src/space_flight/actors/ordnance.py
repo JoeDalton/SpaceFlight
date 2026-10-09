@@ -6,7 +6,7 @@ speed (no engine, no aerodynamics), driven by an :class:`OrdnanceController`
 for a limited life. The controller flies it straight, except for a guided
 missile, which a navigator and a pilot steer toward its target -- piloted
 exactly like a fighter, but without a tactician since it always engages the
-target its launcher gave it.
+target its launcher gave it (unless a flare decoys it).
 """
 
 from __future__ import annotations
@@ -239,12 +239,13 @@ class OrdnanceController(Destructible):
     something, too. No explosion: it simply disappears.
 
     A guided missile with a target is steered by a :class:`MissileNavigator`
-    (always engaging that target) and a :class:`FighterPilot`; every other
+    (always engaging that target, unless a flare decoys it) and a
+    :class:`FighterPilot`; every other
     ordnance, and a missile whose target is lost, flies straight on.
 
     While it homes on its target, a guided missile keeps the target's
     :class:`IncomingMissile` message up to date. A flare can decoy it: it then
-    homes on the flare instead (see :meth:`decoy`), silently.
+    homes on the flare instead (see :meth:`offer_decoy`), silently.
     """
 
     def __init__(

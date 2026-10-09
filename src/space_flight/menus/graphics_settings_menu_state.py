@@ -33,7 +33,12 @@ from space_flight.global_architecture.graphics_settings import (
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
 )
-from space_flight.menus.menu_utils import CustomButton, CustomSlider, ScrollableList
+from space_flight.menus.menu_utils import (
+    CustomButton,
+    CustomSlider,
+    MenuNavigator,
+    ScrollableList,
+)
 
 if TYPE_CHECKING:
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
@@ -131,6 +136,9 @@ class GraphicsSettingsMenuState(BaseState):
         self.sliders: dict[tuple, CustomSlider] = {}
         self.slider_value_labels: dict[tuple, DirectLabel] = {}
         self.checkboxes: dict[tuple, object] = {}
+        # Navigable scroll rows: (row index, widgets)
+        self.navigable_rows: list[tuple[int, list]] = []
+        self.menu_navigator: MenuNavigator | None = None
         self.scroll_list = ScrollableList(
             app,
             row_height=_ROW_HEIGHT,
@@ -147,11 +155,21 @@ class GraphicsSettingsMenuState(BaseState):
         self.working_config = copy.deepcopy(self.app.graphics_settings.config)
         self.build_static_ui()
         self.rebuild_scroll()
+        rows, scroll_rows = self.navigation_rows()
+        self.menu_navigator = MenuNavigator(
+            self.app,
+            rows,
+            on_back=self.cancel,
+            scroll_list=self.scroll_list,
+            scroll_rows=scroll_rows,
+        )
         self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
         self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
 
     def exit(self):
         """Destroy every UI element and force a frame render."""
+        self.menu_navigator.remove()
+        self.menu_navigator = None
         self.app.ignore("wheel_up")
         self.app.ignore("wheel_down")
         self.scroll_list.destroy()
@@ -230,14 +248,16 @@ class GraphicsSettingsMenuState(BaseState):
         configuration.
 
         Called on :meth:`enter` and again by :meth:`load_default`. Also resets
-        the :attr:`mode_buttons`, :attr:`sliders`, :attr:`slider_value_labels`
-        and :attr:`checkboxes` caches so stale widget references are never
-        kept.
+        the :attr:`mode_buttons`, :attr:`sliders`, :attr:`slider_value_labels`,
+        :attr:`checkboxes` and :attr:`navigable_rows` caches so stale widget
+        references are never kept, and hands the new rows to the menu
+        navigator.
         """
         self.mode_buttons.clear()
         self.sliders.clear()
         self.slider_value_labels.clear()
         self.checkboxes.clear()
+        self.navigable_rows.clear()
 
         rows = self.make_row_data()
         self.scroll_list.rebuild(len(rows))
@@ -247,14 +267,33 @@ class GraphicsSettingsMenuState(BaseState):
             kind = row["kind"]
             if kind == "header":
                 self.scroll_list.add_header(row["text"], y)
-            elif kind == "mode":
+                continue
+            if kind == "mode":
                 self.add_mode_row(y)
+                widgets = [btn for _, btn in self.mode_buttons]
             elif kind == "slider":
                 self.add_slider_row(row["path"], y)
+                widgets = [self.sliders[row["path"]]]
             elif kind == "discrete":
                 self.add_discrete_row(row["path"], y)
+                widgets = [self.sliders[row["path"]]]
             else:
                 self.add_checkbox_row(row["path"], row["label"], y)
+                widgets = [self.checkboxes[row["path"]]]
+            self.navigable_rows.append((i, widgets))
+
+        if self.menu_navigator is not None:
+            self.menu_navigator.set_rows(*self.navigation_rows())
+
+    def navigation_rows(self) -> tuple[list[list], list[int | None]]:
+        """
+        :return: The menu navigator's rows (the scroll rows, then Default /
+            Cancel / Save) and their scroll-list row indices.
+        """
+        rows = [widgets for _, widgets in self.navigable_rows]
+        rows.append([self.default_btn, self.cancel_btn, self.save_btn])
+        scroll_rows = [i for i, _ in self.navigable_rows] + [None]
+        return rows, scroll_rows
 
     def add_mode_row(self, y: float):
         """Add the Display Mode button group to the scroll canvas."""
@@ -319,6 +358,7 @@ class GraphicsSettingsMenuState(BaseState):
             extraArgs=[path],
             scale=_SLIDER_SCALE,
             parent=self.scroll_list.content,
+            step=1,
         )
         self._add_value_label(path, labels[idx], y)
 

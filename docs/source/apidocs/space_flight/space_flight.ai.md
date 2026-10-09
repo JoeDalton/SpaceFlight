@@ -231,6 +231,16 @@ Bases: {py:obj}`enum.Enum`
 
 ````
 
+````{py:attribute} DEFEND_MISSILE
+:canonical: space_flight.ai.Intent.DEFEND_MISSILE
+:value: >
+   'auto(...)'
+
+```{autodoc2-docstring} space_flight.ai.Intent.DEFEND_MISSILE
+```
+
+````
+
 `````
 
 `````{py:class} AttackMode(*args, **kwds)

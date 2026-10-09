@@ -312,7 +312,7 @@ class InputSettingsMenuState(BaseState):
 
     Loads configuration/bindings.yaml on entry into an in-memory working
     copy. *Save* writes it back and rebuilds the
-    :class:`~space_flight.ui.input_reader.InputReader` so new bindings apply
+    :class:`~space_flight.ui.input_reader.CompositeInputReader` so new bindings apply
     without a restart; *Cancel* discards it; *Default* reloads
     datafiles/default_configuration/default_bindings.yaml into it without
     writing to disk.
@@ -800,7 +800,7 @@ class InputSettingsMenuState(BaseState):
         Flush edits, write the configuration to disk, and rebuild the reader.
 
         Writes :attr:`working_config` to configuration/bindings.yaml,
-        rebuilds the :class:`~space_flight.ui.input_reader.InputReader` and
+        rebuilds the :class:`~space_flight.ui.input_reader.CompositeInputReader` and
         refreshes every input context's bindings so the new bindings apply
         without a restart, then pops back to the settings screen.  Silently
         ignored if a dialog is open.
@@ -811,7 +811,7 @@ class InputSettingsMenuState(BaseState):
         with open(_BINDINGS_FILE, "w") as f:
             yaml.dump(self.working_config, f, default_flow_style=False, sort_keys=False)
         self.saved_config = copy.deepcopy(self.working_config)
-        # Rebuild the InputReader so the new bindings take effect immediately.
+        # Rebuild the input reader so the new bindings take effect immediately.
         # reader_factory re-reads the YAML, sets app.bindings, and re-registers
         # all accept() callbacks with the updated hardware names.
         self.app.input_reader.clean()

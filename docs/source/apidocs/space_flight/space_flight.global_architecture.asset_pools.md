@@ -155,6 +155,22 @@
 
 ````
 
+````{py:method} in_use_sounds() -> list[panda3d.core.AudioSound]
+:canonical: space_flight.global_architecture.asset_pools.SoundPool.in_use_sounds
+
+```{autodoc2-docstring} space_flight.global_architecture.asset_pools.SoundPool.in_use_sounds
+```
+
+````
+
+````{py:method} release_all()
+:canonical: space_flight.global_architecture.asset_pools.SoundPool.release_all
+
+```{autodoc2-docstring} space_flight.global_architecture.asset_pools.SoundPool.release_all
+```
+
+````
+
 `````
 
 ````{py:function} build_sound_pool(app: space_flight.global_architecture.simulator.SpaceFlightSimulator, directory: pathlib.Path, pattern: str, is_3d: bool) -> list
