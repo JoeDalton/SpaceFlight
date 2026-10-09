@@ -6,7 +6,7 @@ Reached from the main menu and the pause menu via their *Settings* button.
 """
 
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton
+from space_flight.menus.menu_utils import CustomButton, MenuNavigator
 
 
 class SettingsMenuState(BaseState):
@@ -54,6 +54,16 @@ class SettingsMenuState(BaseState):
             pos=(0.0, 0.0, -0.45),
             layout="center",
         )
+        self.navigator = MenuNavigator(
+            self.app,
+            [
+                [self.gameplay_button],
+                [self.input_button],
+                [self.graphics_button],
+                [self.back_button],
+            ],
+            on_back=self.back,
+        )
 
     def enter_gameplay_settings(self):
         """Navigate to the gameplay settings screen."""
@@ -87,6 +97,7 @@ class SettingsMenuState(BaseState):
 
     def exit(self):
         """Destroy all buttons and force a frame render."""
+        self.navigator.remove()
         self.gameplay_button.destroy()
         self.input_button.destroy()
         self.graphics_button.destroy()

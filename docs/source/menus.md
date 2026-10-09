@@ -17,6 +17,9 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - [`menu_utils.py`](../../src/space_flight/menus/menu_utils.py) is the shared
   widget toolkit, so styling and scrolling stay consistent and each screen's
   code only expresses layout and behaviour.
+- Every menu is navigable from the keyboard, a gamepad or a joystick as well
+  as the mouse: each screen lays its widgets out for a `MenuNavigator` (see
+  [Navigation](#navigation)).
 - The three settings screens share one pattern: edit an in-memory **working
   copy** of a YAML config, and only write it to disk (and apply it live where
   possible) on *Save*. *Cancel* discards the working copy. On the graphics and
@@ -33,7 +36,10 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - **`CustomButton`** wraps `DirectButton` with the game's geometry and styling,
   `layout="left"/"center"/"right"` text alignment, and
   `set_pressed()`/`reset()` to lock a button in its "click" look — used for
-  radio-style selectors (input type, display mode, level list).
+  radio-style selectors (device tabs, display mode, level list).
+  `set_focus()`/`activate()`/`is_hidden()` make it navigable: the focus
+  shows its "hover" look (a selected button's locked geom turns to "hover"
+  while focused), and activating runs its command as a click does.
 - **`CustomEntry`**, **`CustomSlider`**, **`CustomCheckButton`** apply the same
   treatment to `DirectEntry`/`DirectSlider`/`DirectCheckButton`, with thin
   `get`/`set`, `get_value`/`set_value` and `get_value` accessors respectively.
@@ -58,6 +64,32 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   `destroy()`, plus `add_header`/`add_row_label`/`add_checkbox` row helpers.
   Every settings screen uses it.
 
+## Navigation
+
+**`MenuNavigator`** (in `menu_utils.py`) moves a focus over a screen's
+widgets, laid out as rows from the top: up/down moves between rows (wrapping
+around, keeping the column chosen along the last multi-widget row),
+left/right moves along a row of several widgets, or adjusts a lone one that
+supports it. Hidden widgets are skipped. Confirm activates the focused
+widget, and back calls the screen's `on_back` (none on the main menu and
+level end).
+
+- A screen builds its navigator at the end of `enter()` and calls
+  `navigator.remove()` first in `exit()`. The navigator pushes a
+  `MenuInputContext` (see [docs/ui.md](ui.md)), so screens stacked on each
+  other (settings over the pause menu, ...) nest their contexts, and a menu
+  over the flight blocks the flight controls.
+- The focus is only shown from the first navigation input (which shows it
+  without moving or activating), and hidden again when the mouse moves, so
+  mouse users never see it. Showing it clears the mouse hover of every other
+  widget (the cursor hides on that input, see [docs/ui.md](ui.md)), and the
+  hover comes back on the widget under the pointer once the mouse moves.
+- A navigator whose widgets are all hidden (its screen covered by another
+  that hides it, like the main menu under the settings hub) ignores input.
+- Widgets are duck-typed: `is_hidden()`, `set_focus(focused)`,
+  `refresh_hover(region_name)`, `activate()`, and `adjust(direction)` for
+  adjustable ones.
+
 ## Startup and top-level navigation
 
 - **[`splash_state.py`](../../src/space_flight/menus/splash_state.py)** —
@@ -75,7 +107,7 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   the level registry `space_flight.game.levels.LEVELS` (see
   [docs/game.md](game.md#levels)), so it can't drift from what `FlightState`
   can build. Selecting a level shows its description and a *Start Game*
-  button, which sets `app.configuration["selected_level"]` and replaces the
+  button (and moves the navigation focus to it), which sets `app.configuration["selected_level"]` and replaces the
   current state with `GAME_STATE`.
 - **[`settings_menu_state.py`](../../src/space_flight/menus/settings_menu_state.py)** —
   `SettingsMenuState` is a landing screen (reached from the main and pause
@@ -86,9 +118,9 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 
 - **[`pause_menu_state.py`](../../src/space_flight/menus/pause_menu_state.py)** —
   `PauseMenuState` is pushed over a running `FlightState` and, keeping the
-  default `PAUSES_BELOW = True`, pauses it. It pushes a
-  `PauseMenuInputContext` (see [docs/ui.md](ui.md)) so gameplay input is
-  blocked while it is up. Buttons resume, open settings, return to the main
+  default `PAUSES_BELOW = True`, pauses it. Its navigator's context blocks
+  gameplay input while it is up, and going back (including with the pause
+  key) resumes. Buttons resume, open settings, return to the main
   menu (`state_manager.clear()` then `replace(MAIN_MENU_STATE)`), or quit;
   the last two save the flight record first when `RECORD_GAME` is set (see
   [docs/game.md](game.md#record)).

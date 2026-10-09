@@ -4,6 +4,7 @@ import pytest
 from panda3d.core import InputDevice
 
 from space_flight.ui.input_reader import (
+    MENU_BUTTONS,
     CompositeInputReader,
     GamepadReader,
     InputReader,
@@ -440,7 +441,19 @@ def test_collect_button_names_reads_only_own_device_type():
         }
     }
     names = reader.collect_button_names(frozenset({"right_x"}))
-    assert names == {"gamepad_lshoulder", "gamepad_face_a"}
+    menu_names = {name for names in MENU_BUTTONS["gamepad"].values() for name in names}
+    assert names == {"gamepad_lshoulder", "gamepad_face_a"} | menu_names
+
+
+def test_collect_button_names_polls_menu_keys_without_bindings():
+    """
+    The hardcoded menu keys are polled even though no binding uses them.
+    """
+    reader = _StubReader(device_type="keyboard")
+    reader.app = MagicMock()
+    reader.app.bindings = {"contexts": {}}
+    names = reader.collect_button_names(frozenset())
+    assert {"arrow_left", "arrow_right", "enter", "escape"} <= names
 
 
 # ---------------------------------------------------------------------------
@@ -517,13 +530,28 @@ def test_readers_do_not_replace_each_other_hotplug_handlers():
 # ---------------------------------------------------------------------------
 
 
-def make_composite():
+def make_composite_app(cursor_hidden=False):
     """
+    :param cursor_hidden: Whether the window's cursor is currently hidden.
+    :return: A mock app with a still mouse at the window centre.
+    """
+    app = MagicMock()
+    app.mouseWatcherNode.hasMouse.return_value = True
+    app.mouseWatcherNode.getMouseX.return_value = 0.0
+    app.mouseWatcherNode.getMouseY.return_value = 0.0
+    app.win.getProperties.return_value.getCursorHidden.return_value = cursor_hidden
+    return app
+
+
+def make_composite(app=None):
+    """
+    :param app: The mock app (a still-mouse one by default).
     :return: (composite, keyboard stub, gamepad stub)
     """
     keyboard = _StubReader(device_type="keyboard")
     gamepad = _StubReader(device_type="gamepad")
-    return CompositeInputReader([keyboard, gamepad]), keyboard, gamepad
+    app = app or make_composite_app()
+    return CompositeInputReader(app, [keyboard, gamepad]), keyboard, gamepad
 
 
 def test_composite_merges_every_reader_state():
@@ -614,7 +642,76 @@ def test_composite_last_device_ignores_axis_resting_past_threshold():
 
 def test_composite_clean_cleans_every_reader():
     first, second = MagicMock(), MagicMock()
-    composite = CompositeInputReader([first, second])
+    composite = CompositeInputReader(make_composite_app(), [first, second])
     composite.clean()
     first.clean.assert_called_once()
     second.clean.assert_called_once()
+
+
+def requested_cursor_hidden(app):
+    """
+    :return: The cursor-hidden flags requested on the window, in order.
+    """
+    return [
+        call.args[0].getCursorHidden()
+        for call in app.win.requestProperties.call_args_list
+    ]
+
+
+def test_composite_mouse_moved_only_after_a_move():
+    app = make_composite_app()
+    composite, _, _ = make_composite(app)
+    assert composite.poll().mouse_moved is False
+    assert composite.poll().mouse_moved is False
+    app.mouseWatcherNode.getMouseX.return_value = 0.3
+    assert composite.poll().mouse_moved is True
+    assert composite.poll().mouse_moved is False
+
+
+def test_composite_mouse_outside_window_is_not_a_move():
+    app = make_composite_app()
+    composite, _, _ = make_composite(app)
+    composite.poll()
+    app.mouseWatcherNode.hasMouse.return_value = False
+    assert composite.poll().mouse_moved is False
+
+
+def test_composite_hides_cursor_on_device_input():
+    app = make_composite_app()
+    composite, keyboard, _ = make_composite(app)
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    assert requested_cursor_hidden(app) == [True]
+
+
+def test_composite_shows_cursor_when_mouse_moves():
+    app = make_composite_app(cursor_hidden=True)
+    composite, _, _ = make_composite(app)
+    composite.poll()
+    app.mouseWatcherNode.getMouseX.return_value = 0.3
+    composite.poll()
+    assert requested_cursor_hidden(app) == [False]
+
+
+def test_composite_leaves_cursor_alone_when_already_right():
+    app = make_composite_app(cursor_hidden=True)
+    composite, keyboard, _ = make_composite(app)
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    app.win.requestProperties.assert_not_called()
+
+
+def test_composite_held_key_does_not_hide_cursor_again():
+    """
+    Only presses count, so a key held while the mouse moves leaves it shown.
+    """
+    app = make_composite_app()
+    composite, keyboard, _ = make_composite(app)
+    keyboard.hw_state = {"w": True}
+    composite.poll()
+    app.win.getProperties.return_value.getCursorHidden.return_value = True
+    app.mouseWatcherNode.getMouseX.return_value = 0.3
+    composite.poll()
+    app.win.getProperties.return_value.getCursorHidden.return_value = False
+    composite.poll()
+    assert requested_cursor_hidden(app) == [True, False]

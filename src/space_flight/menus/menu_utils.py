@@ -20,6 +20,7 @@ from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d
 from panda3d.core import NodePath, TextNode
 
 from space_flight import DATAFILES_PATH
+from space_flight.ui.input_context import MenuInputContext
 
 
 class ProgressBar:
@@ -402,6 +403,10 @@ class CustomButton:
         """
         self.app = app
         self.width_scale = width_scale
+        # Shown as the selected option (set_pressed), and focused by menu
+        # navigation (set_focus)
+        self.is_selected = False
+        self.is_focused = False
 
         if layout == "left":
             text_align = TextNode.ALeft
@@ -456,21 +461,65 @@ class CustomButton:
         """
         self.button.show()
 
+    def is_hidden(self) -> bool:
+        """
+        :return: True while the button is hidden.
+        """
+        return self.button.isHidden()
+
     def set_pressed(self):
         """
         Lock the button into its "click" visual state regardless of mouse
         interaction, so the caller can signal that the associated option is
-        currently active.
+        currently active.  While focused it shows its "hover" state instead,
+        the focus look.
         """
-        self.button["geom"] = self.app.menu_models.button_geom[1]
-        self.stretch_geoms()
+        self.is_selected = True
+        self.update_selected_geom()
 
     def reset(self):
         """
         Restore the full four-state geometry tuple so the button cycles through
         ready, click, hover, and disabled states normally again.
         """
+        self.is_selected = False
         self.button["geom"] = self.app.menu_models.button_geom
+        self.stretch_geoms()
+
+    def set_focus(self, focused: bool):
+        """
+        Show or clear the menu-navigation focus: the "hover" state, as if
+        the mouse were over the button.
+
+        :param focused: Whether the button has the focus.
+        """
+        self.is_focused = focused
+        self.button.guiItem.setState(2 if focused else 0)  # rollover / ready
+        if self.is_selected:
+            self.update_selected_geom()
+
+    def refresh_hover(self, region_name: str):
+        """
+        Show the "hover" state if the mouse is over the button.
+
+        :param region_name: Name of the mouse region under the pointer.
+        """
+        if region_name == self.button.guiItem.getId():
+            self.button.guiItem.setState(2)  # rollover
+
+    def activate(self):
+        """
+        Run the button's command, as a click does.
+        """
+        self.button.commandFunc(None)
+
+    def update_selected_geom(self):
+        """
+        Overlay the selected button's locked geom: "click", or "hover" while
+        focused.
+        """
+        state = 2 if self.is_focused else 1
+        self.button["geom"] = self.app.menu_models.button_geom[state]
         self.stretch_geoms()
 
     def stretch_geoms(self):
@@ -481,6 +530,202 @@ class CustomButton:
         for name in self.button.components():
             if name.startswith("geom"):
                 self.button.component(name).setScale(self.width_scale, 1, 1)
+
+
+class MenuNavigator:
+    """
+    Keyboard, gamepad and joystick focus over a menu's widgets, driven by a
+    :class:`~space_flight.ui.input_context.MenuInputContext` pushed while the
+    navigator lives.
+
+    The widgets are laid out as rows: up/down moves between rows (wrapping
+    around), left/right moves within a row of several widgets, or adjusts a
+    lone one that supports it.  Hidden widgets are skipped, and a navigator
+    whose widgets are all hidden (its screen covered by another) ignores
+    input.
+
+    The focus only shows from the first navigation input (which shows it
+    without moving it), and hides again when the mouse moves, so mouse users
+    never see it.
+
+    Widgets are duck-typed: ``is_hidden()``, ``set_focus(focused)``,
+    ``refresh_hover(region_name)`` and ``activate()``, plus
+    ``adjust(direction)`` for adjustable ones.
+    """
+
+    def __init__(
+        self, app: ShowBase, rows: list[list], on_back: Callable | None = None
+    ):
+        """
+        Push the navigator's input context.
+
+        :param app: The running ShowBase application
+        :param rows: The widgets, row by row, from the top
+        :param on_back: Called when the back key is pressed; None ignores it
+        """
+        self.app = app
+        self.rows = rows
+        self.on_back = on_back
+        self.row = 0
+        self.column = 0
+        # Column chosen along the last row of several widgets, kept through
+        # single-widget rows
+        self.preferred_column = 0
+        self.focus_shown = False
+        self.context = MenuInputContext(app, self)
+        app.input_context_stack.push(self.context)
+
+    def remove(self):
+        """
+        Remove the input context.  Call from the menu state's exit.
+        """
+        self.app.input_context_stack.remove(self.context)
+
+    # ------------------------------------------------------------------
+    # Focus
+    # ------------------------------------------------------------------
+
+    @property
+    def focused(self):
+        """
+        :return: The widget with the focus (shown or not).
+        """
+        return self.rows[self.row][self.column]
+
+    def is_active(self) -> bool:
+        """
+        :return: False while every widget is hidden (screen covered).
+        """
+        return any(not w.is_hidden() for row in self.rows for w in row)
+
+    def show_focus(self):
+        """
+        Show the focus, first moving it to a visible widget if needed, and
+        clear the mouse hover of every other widget (the cursor hides as a
+        key is pressed, but the widget under it would stay highlighted).
+        """
+        if self.focused.is_hidden():
+            self.step_row(1)
+        for row in self.rows:
+            for widget in row:
+                widget.set_focus(False)
+        self.focus_shown = True
+        self.focused.set_focus(True)
+
+    def hide_focus(self):
+        """
+        Hide the focus, keeping its position.
+        """
+        if self.focus_shown:
+            self.focus_shown = False
+            self.focused.set_focus(False)
+
+    def refresh_hover(self):
+        """
+        Give the hover look back to the widget under the mouse pointer, which
+        the focus cleared without the pointer leaving it.
+        """
+        over = self.app.mouseWatcherNode.getOverRegion()
+        if over is None:
+            return
+        for row in self.rows:
+            for widget in row:
+                widget.refresh_hover(over.getName())
+
+    def focus_on(self, widget):
+        """
+        Move the focus to *widget*, shown only if the focus is.
+
+        :param widget: One of the navigator's widgets.
+        """
+        for row_index, row in enumerate(self.rows):
+            if widget in row:
+                self.preferred_column = row.index(widget)
+                self.set_position(row_index, self.preferred_column)
+                return
+
+    def set_position(self, row: int, column: int):
+        """
+        :param row: The row of the newly focused widget.
+        :param column: Its column.
+        """
+        if self.focus_shown:
+            self.focused.set_focus(False)
+        self.row = row
+        self.column = column
+        if self.focus_shown:
+            self.focused.set_focus(True)
+
+    # ------------------------------------------------------------------
+    # Navigation (called by MenuInputContext)
+    # ------------------------------------------------------------------
+
+    def move(self, dx: int, dy: int):
+        """
+        Move the focus by one row (dy) or along the row (dx); show it only,
+        if hidden.
+
+        :param dx: -1 (left), 0 or 1 (right)
+        :param dy: -1 (up), 0 or 1 (down)
+        """
+        if not self.is_active():
+            return
+        if not self.focus_shown:
+            self.show_focus()
+        elif dy:
+            self.step_row(dy)
+        elif dx:
+            self.step_column(dx)
+
+    def confirm(self):
+        """
+        Activate the focused widget; show the focus only, if hidden.
+        """
+        if not self.is_active():
+            return
+        if not self.focus_shown:
+            self.show_focus()
+        else:
+            self.focused.activate()
+
+    def back(self):
+        """
+        Call on_back, unless the screen is covered.
+        """
+        if self.on_back is not None and self.is_active():
+            self.on_back()
+
+    def step_row(self, dy: int):
+        """
+        Focus the next row holding a visible widget, wrapping around.
+
+        :param dy: -1 (up) or 1 (down)
+        """
+        n_rows = len(self.rows)
+        for offset in range(1, n_rows + 1):
+            row_index = (self.row + dy * offset) % n_rows
+            visible = [
+                c for c, w in enumerate(self.rows[row_index]) if not w.is_hidden()
+            ]
+            if visible:
+                column = min(visible, key=lambda c: abs(c - self.preferred_column))
+                self.set_position(row_index, column)
+                return
+
+    def step_column(self, dx: int):
+        """
+        Focus the next visible widget along the row, or adjust a lone one.
+
+        :param dx: -1 (left) or 1 (right)
+        """
+        row = self.rows[self.row]
+        visible = [c for c, w in enumerate(row) if not w.is_hidden()]
+        if len(visible) > 1:
+            position = visible.index(self.column) if self.column in visible else 0
+            self.preferred_column = visible[(position + dx) % len(visible)]
+            self.set_position(self.row, self.preferred_column)
+        elif hasattr(self.focused, "adjust"):
+            self.focused.adjust(dx)
 
 
 class CustomEntry:

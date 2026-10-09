@@ -12,7 +12,7 @@ from direct.gui.DirectGui import DirectFrame, DirectLabel
 
 from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton
+from space_flight.menus.menu_utils import CustomButton, MenuNavigator
 
 if TYPE_CHECKING:
     from direct.showbase.ShowBase import ShowBase
@@ -99,6 +99,10 @@ class LevelEndState(BaseState):
             pos=(0.0, 0.0, -0.4),
             layout="center",
         )
+        # Also blocks the flight inputs below
+        self.navigator = MenuNavigator(
+            self.app, [[self.return_button], [self.quit_button]]
+        )
 
     def return_to_main(self):
         """
@@ -123,6 +127,7 @@ class LevelEndState(BaseState):
         """
         Destroy the overlay's widgets.
         """
+        self.navigator.remove()
         self.text_label.destroy()
         self.subtitle_label.destroy()
         self.return_button.destroy()

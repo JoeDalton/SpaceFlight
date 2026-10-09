@@ -65,7 +65,9 @@ bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`):
   `last_device`: the device of the last button press, or of the last axis
   pushed past 0.5 (crossing it, so a lever resting forward does not keep
   claiming it). `InputContext.key_label` uses it to show prompts for the
-  device the player is using.
+  device the player is using. It also sets `InputState.mouse_moved`, and
+  hides the mouse cursor on such device input (menus and flight alike),
+  showing it again as soon as the mouse moves.
 - **`reader_factory(app)`** loads `bindings.yaml` onto `app.bindings` and
   builds the `CompositeInputReader`. It runs at startup and again when input
   settings are saved (see [docs/menus.md](menus.md#settings-screens)), so
@@ -100,12 +102,28 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
     resting forward at spawn does nothing), and the keyboard takes it over
     while a throttle key is held, stepping from the current value (clamped to
     `[0, 1]`).
-- **`PauseMenuInputContext`** — pushed by the pause menu, it blocks everything
-  except the pause key (of any device), which calls
-  `state_manager.pop()`: normally that pops the pause menu, whose `exit()`
-  pops this context and resumes `FlightState` (if a settings screen is open
-  above the pause menu, that screen is popped instead). Sitting above
-  `FlightInputContext`, it freezes the ship's controls with no extra logic.
+- **`MenuInputContext`** — pushed by every menu's `MenuNavigator` (see
+  [docs/menus.md](menus.md#navigation)), it turns input into navigator calls:
+  - keyboard and gamepad keys are hardcoded (`MENU_BUTTONS` in
+    `input_reader.py`, polled whatever the bindings): arrows / d-pad move,
+    Enter or Space / A confirm, Escape / B go back; the joystick reuses its
+    flight bindings (`JOYSTICK_MENU_ACTIONS`: the `view_*` hat moves, inverted
+    so that pushing it forward moves up, `fire` confirms, `fire_secondary`
+    goes back), its button numbers varying between sticks. Every device's flight `pause` key also goes back, so it closes
+    the pause menu;
+  - the gamepad left stick and the joystick's radial-menu axes move once
+    pushed past `MENU_AXIS_THRESHOLD`, along their dominant axis; a stick
+    already pushed when the menu opens is ignored until re-centred;
+  - a held direction repeats after `MENU_REPEAT_DELAY`, then every
+    `MENU_REPEAT_INTERVAL`, on the real clock (game time is frozen in the
+    pause menu);
+  - moving the mouse hides the focus and gives the hover look back to the
+    widget under the pointer (`MenuNavigator.refresh_hover`).
+
+  Sitting above `FlightInputContext` (pause menu, level end), it freezes the
+  ship's controls with no extra logic. `InputContextStack.remove(context)`
+  lets a menu remove its own context wherever it is, a no-op once the stack
+  was cleaned (e.g. leaving the level clears the flight state first).
 - **`HyperspaceInputContext`** — the same blocking pattern for the hyperspace
   overlay's "press key to drop out" prompt (see [docs/game.md](game.md)): it
   fires its callback once on the `drop_hyperspace` key (of any device), then

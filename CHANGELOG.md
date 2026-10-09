@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add missile weapons and flares in bot behaviours #127
+- Keyboard/Gamepad/joystick navigation in menus #147
 
 ### Changed
 

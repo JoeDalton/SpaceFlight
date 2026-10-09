@@ -1,15 +1,17 @@
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from space_flight import THROTTLE_BOOST_VALUE
 from space_flight.ui.input_context import (
+    MENU_REPEAT_DELAY,
+    MENU_REPEAT_INTERVAL,
     FlightInputContext,
     HyperspaceInputContext,
     InputContext,
     InputContextStack,
-    PauseMenuInputContext,
+    MenuInputContext,
     RadialMenuInputContext,
     angle_to_slice,
     bound_keys,
@@ -321,6 +323,37 @@ def test_stack_clean_calls_on_deactivate_before_clean(stack):
     ctx.calls.clear()
     stack.clean()
     assert ctx.calls.index("deactivate") < ctx.calls.index("clean")
+
+
+def test_stack_remove_top_reactivates_below(stack):
+    below, top = TrackingContext("below"), TrackingContext("top")
+    stack.push(below)
+    stack.push(top)
+    stack.remove(top)
+    assert stack.stack == [below]
+    assert top.calls[-1] == "clean"
+    assert below.calls[-1] == "activate"
+
+
+def test_stack_remove_below_top_keeps_top_active(stack):
+    below, top = TrackingContext("below"), TrackingContext("top")
+    stack.push(below)
+    stack.push(top)
+    stack.remove(below)
+    assert stack.stack == [top]
+    assert below.calls[-1] == "clean"
+    assert top.calls == ["activate"]
+
+
+def test_stack_remove_absent_context_is_noop(stack):
+    """
+    A state removing its context after the stack was cleaned (e.g. leaving
+    the level clears the flight state first) must not pop another one.
+    """
+    other = TrackingContext("other")
+    stack.push(other)
+    stack.remove(TrackingContext("gone"))
+    assert stack.stack == [other]
 
 
 # ---------------------------------------------------------------------------
@@ -753,73 +786,196 @@ def test_flight_ctx_clean_nulls_references():
 
 
 # ---------------------------------------------------------------------------
-# PauseMenuInputContext
+# MenuInputContext
 # ---------------------------------------------------------------------------
 
 
-def make_pause_ctx(keyboard_pause=None, joystick_pause=None):
+@pytest.fixture
+def clock():
     """
-    Return a PauseMenuInputContext backed by a mock game.
+    Patch the real clock the menu context times repeats with.
 
-    :param keyboard_pause: Hardware key mapped to pause on the keyboard.
-    :param joystick_pause: Hardware key mapped to pause on the joystick.
-    :return: Tuple of (PauseMenuInputContext, game_mock).
+    :return: The mock clock; set clock.getFrameTime.return_value.
     """
-    game = make_game(
-        device_bindings={"pause": keyboard_pause} if keyboard_pause else {},
-        joystick_bindings={"pause": joystick_pause} if joystick_pause else {},
+    with patch("space_flight.ui.input_context.ClockObject") as clock_object:
+        mock_clock = clock_object.getGlobalClock.return_value
+        mock_clock.getFrameTime.return_value = 0.0
+        yield mock_clock
+
+
+def make_menu_ctx(joystick_flight=None, radial_joystick=None):
+    """
+    Return a (MenuInputContext, navigator_mock) pair.
+
+    :param joystick_flight: The joystick's flight bindings.
+    :param radial_joystick: The joystick's radial_menu bindings.
+    """
+    app = MagicMock()
+    app.bindings = {
+        "contexts": {
+            "flight": {
+                "keyboard": {"pause": "escape"},
+                "gamepad": {"pause": "gamepad_start"},
+                "joystick": joystick_flight or {},
+            },
+            "radial_menu": {"joystick": radial_joystick or {}},
+        }
+    }
+    navigator = MagicMock()
+    return MenuInputContext(app, navigator), navigator
+
+
+@pytest.mark.parametrize("key", ["escape", "gamepad_face_b", "gamepad_start"])
+def test_menu_ctx_back_keys(clock, key):
+    """
+    Escape, gamepad B and the flight pause keys go back.
+    """
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(buttons={key: True}))
+    navigator.back.assert_called_once()
+    navigator.confirm.assert_not_called()
+
+
+@pytest.mark.parametrize("key", ["enter", "space", "gamepad_face_a"])
+def test_menu_ctx_confirm_keys(clock, key):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(buttons={key: True}))
+    navigator.confirm.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "key, move",
+    [
+        ("arrow_up", (0, -1)),
+        ("arrow_down", (0, 1)),
+        ("arrow_left", (-1, 0)),
+        ("gamepad_dpad_right", (1, 0)),
+    ],
+)
+def test_menu_ctx_direction_keys(clock, key, move):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(buttons={key: True}))
+    navigator.move.assert_called_once_with(*move)
+
+
+def test_menu_ctx_joystick_reuses_flight_bindings(clock):
+    ctx, navigator = make_menu_ctx(
+        joystick_flight={
+            "view_up": "stick_button_18",
+            "fire": "stick_button_1",
+            "fire_secondary": "stick_button_2",
+        }
     )
-    ctx = PauseMenuInputContext(app=game.app)
-    return ctx, game
+    # The hat is inverted: its "look up" moves down in menus
+    ctx.consume(make_state(buttons={"stick_button_18": True}))
+    navigator.move.assert_called_once_with(0, 1)
+    ctx.consume(make_state(buttons={"stick_button_1": True}))
+    navigator.confirm.assert_called_once()
+    ctx.consume(make_state(buttons={"stick_button_2": True}))
+    navigator.back.assert_called_once()
 
 
-def test_pause_ctx_consume_pops_state_manager_on_device_key():
-    """
-    consume() must call app.state_manager.pop() when the device-specific
-    pause key is in state.buttons.
-    """
-    ctx, game = make_pause_ctx(joystick_pause="stick_button_7")
-    ctx.consume(make_state(buttons={"stick_button_7": True}))
-    game.app.state_manager.pop.assert_called_once()
+def test_menu_ctx_held_direction_repeats_after_delay(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(buttons={"arrow_down": True}))
+    clock.getFrameTime.return_value = MENU_REPEAT_DELAY - 0.01
+    ctx.consume(make_state(repeats={"arrow_down": True}))
+    assert navigator.move.call_count == 1
+    clock.getFrameTime.return_value = MENU_REPEAT_DELAY
+    ctx.consume(make_state(repeats={"arrow_down": True}))
+    assert navigator.move.call_count == 2
+    clock.getFrameTime.return_value = MENU_REPEAT_DELAY + MENU_REPEAT_INTERVAL / 2
+    ctx.consume(make_state(repeats={"arrow_down": True}))
+    assert navigator.move.call_count == 2
+    clock.getFrameTime.return_value = MENU_REPEAT_DELAY + MENU_REPEAT_INTERVAL
+    ctx.consume(make_state(repeats={"arrow_down": True}))
+    assert navigator.move.call_count == 3
 
 
-def test_pause_ctx_consume_pops_state_manager_on_other_device_key():
-    """
-    consume() must call app.state_manager.pop() when another device's pause
-    key (escape) is in state.buttons.
-    """
-    ctx, game = make_pause_ctx(keyboard_pause="escape", joystick_pause="stick_button_7")
-    ctx.consume(make_state(buttons={"escape": True}))
-    game.app.state_manager.pop.assert_called_once()
+def test_menu_ctx_released_direction_stops_repeating(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(buttons={"arrow_down": True}))
+    ctx.consume(make_state())
+    clock.getFrameTime.return_value = 10.0
+    ctx.consume(make_state())
+    navigator.move.assert_called_once()
 
 
-def test_pause_ctx_consume_does_not_pop_when_no_key_pressed():
-    """
-    consume() must not call app.state_manager.pop() when neither pause key
-    is present in state.buttons.
-    """
-    ctx, game = make_pause_ctx(keyboard_pause="escape", joystick_pause="stick_button_7")
-    ctx.consume(make_state(buttons={}))
-    game.app.state_manager.pop.assert_not_called()
+def test_menu_ctx_stick_moves_once_past_threshold(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(axes={"left_y": 0.0}))
+    ctx.consume(make_state(axes={"left_y": 0.3}))
+    navigator.move.assert_not_called()
+    ctx.consume(make_state(axes={"left_y": 0.8}))
+    navigator.move.assert_called_once_with(0, -1)  # pushed up
+    ctx.consume(make_state(axes={"left_y": 0.8}))
+    navigator.move.assert_called_once()
 
 
-def test_pause_ctx_consume_pops_only_once_when_both_keys_pressed():
-    """
-    consume() must call pop() at most once even if the pause keys of two
-    devices are pressed simultaneously.
-    """
-    ctx, game = make_pause_ctx(keyboard_pause="escape", joystick_pause="stick_button_7")
-    ctx.consume(make_state(buttons={"stick_button_7": True, "escape": True}))
-    game.app.state_manager.pop.assert_called_once()
+def test_menu_ctx_stick_uses_dominant_axis(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state())
+    ctx.consume(make_state(axes={"left_x": -0.9, "left_y": 0.6}))
+    navigator.move.assert_called_once_with(-1, 0)
 
 
-def test_pause_ctx_clean_nulls_game():
+def test_menu_ctx_stick_held_repeats(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state())
+    ctx.consume(make_state(axes={"left_y": -0.8}))
+    clock.getFrameTime.return_value = MENU_REPEAT_DELAY
+    ctx.consume(make_state(axes={"left_y": -0.8}))
+    assert navigator.move.call_count == 2
+
+
+def test_menu_ctx_stick_pushed_at_open_ignored_until_recentred(clock):
     """
-    clean() must set the game reference to None.
+    A stick already pushed when the menu opens does nothing until centred.
     """
-    ctx, _ = make_pause_ctx(keyboard_pause="escape")
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state(axes={"left_y": 0.9}))
+    clock.getFrameTime.return_value = 10.0
+    ctx.consume(make_state(axes={"left_y": 0.9}))
+    navigator.move.assert_not_called()
+    ctx.consume(make_state(axes={"left_y": 0.0}))
+    ctx.consume(make_state(axes={"left_y": 0.9}))
+    navigator.move.assert_called_once_with(0, -1)
+
+
+def test_menu_ctx_joystick_stick_from_radial_axes(clock):
+    ctx, navigator = make_menu_ctx(
+        radial_joystick={"axis_x": "roll", "axis_y": "pitch"}
+    )
+    ctx.consume(make_state())
+    ctx.consume(make_state(axes={"roll": 0.9}))
+    navigator.move.assert_called_once_with(1, 0)
+
+
+def test_menu_ctx_mouse_move_hides_focus_and_refreshes_hover(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.consume(make_state())
+    navigator.hide_focus.assert_not_called()
+    state = make_state()
+    state.mouse_moved = True
+    ctx.consume(state)
+    navigator.hide_focus.assert_called_once()
+    navigator.refresh_hover.assert_called_once()
+
+
+def test_menu_ctx_refresh_bindings_follows_pause_remap(clock):
+    ctx, navigator = make_menu_ctx()
+    ctx.app.bindings["contexts"]["flight"]["gamepad"]["pause"] = "gamepad_back"
+    ctx.refresh_bindings(ctx.app)
+    ctx.consume(make_state(buttons={"gamepad_start": True}))
+    navigator.back.assert_not_called()
+    ctx.consume(make_state(buttons={"gamepad_back": True}))
+    navigator.back.assert_called_once()
+
+
+def test_menu_ctx_clean_drops_navigator(clock):
+    ctx, _ = make_menu_ctx()
     ctx.clean()
-    assert ctx.game is None
+    assert ctx.navigator is None
 
 
 # ---------------------------------------------------------------------------
@@ -1176,30 +1332,6 @@ def test_flight_ctx_refresh_bindings_old_key_no_longer_triggers():
     ctx.refresh_bindings(game.app)
     state = make_state(buttons={"space": True})
     assert ctx.pressed(state, "fire") is False
-
-
-def test_pause_ctx_refresh_bindings_new_key_triggers_pop():
-    """
-    After refresh_bindings with a new pause key, pressing the new key must
-    call state_manager.pop().
-    """
-    ctx, game = make_pause_ctx(keyboard_pause="escape")
-    game.app.bindings["contexts"]["flight"]["keyboard"]["pause"] = "p"
-    ctx.refresh_bindings(game.app)
-    ctx.consume(make_state(buttons={"p": True}))
-    game.app.state_manager.pop.assert_called_once()
-
-
-def test_pause_ctx_refresh_bindings_old_key_no_longer_triggers():
-    """
-    After refresh_bindings, the previously mapped pause key must no longer
-    trigger state_manager.pop().
-    """
-    ctx, game = make_pause_ctx(keyboard_pause="escape")
-    game.app.bindings["contexts"]["flight"]["keyboard"]["pause"] = "p"
-    ctx.refresh_bindings(game.app)
-    ctx.consume(make_state(buttons={"escape": True}))
-    game.app.state_manager.pop.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
