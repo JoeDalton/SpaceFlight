@@ -23,7 +23,7 @@ from direct.showbase.ShowBaseGlobal import ClockObject
 
 from space_flight import THROTTLE_BOOST_VALUE
 from space_flight.actors.energy import BALANCED, ENGINES, LASERS, SHIELDS
-from space_flight.ui.input_reader import MENU_BUTTONS
+from space_flight.ui.input_reader import MENU_BUTTONS, InputState
 from space_flight.utils import low_pass_filter_first_order
 
 if TYPE_CHECKING:
@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from space_flight.global_architecture.base_state import BaseState
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
     from space_flight.menus.menu_utils import MenuNavigator
-    from space_flight.ui.input_reader import InputState
 
 VIEW_BUTTON_INCREMENT = 1.0
 
@@ -146,10 +145,21 @@ class InputContextStack:
     the previous top; popping restores it.  The stack is owned by the app
     (``SpaceFlightSimulator.input_context_stack``); states push and pop
     their own contexts on it.
+
+    A context only sees the holds that started while it was on top: keys
+    already held when it became the top are left out of its ``repeats``
+    until released (their release still gets through, e.g. the radial menu
+    closing on its trigger's).  Otherwise the key that closes a menu, still
+    held, would act on the context below, like gamepad A (menu confirm)
+    firing a missile once the pause menu has resumed the flight.
     """
 
     def __init__(self):
         self.stack: list[InputContext] = []
+        # The context dispatched to last, and the keys held since before it
+        # became the top
+        self.dispatched_top: InputContext | None = None
+        self.stale_keys: set[str] = set()
 
     def push(self, context: InputContext):
         """
@@ -196,8 +206,33 @@ class InputContextStack:
         :param state: Current frame's
             :class:`~space_flight.ui.input_reader.InputState`.
         """
-        if self.stack:
-            self.stack[-1].consume(state)
+        if not self.stack:
+            return
+        top = self.stack[-1]
+        if top is not self.dispatched_top:
+            self.dispatched_top = top
+            self.stale_keys = set(state.repeats)
+        if self.stale_keys:
+            self.stale_keys &= state.repeats.keys()
+            state = self.without_stale_keys(state)
+        top.consume(state)
+
+    def without_stale_keys(self, state: InputState) -> InputState:
+        """
+        :param state: Current frame's input state.
+        :return: A copy of *state* without the stale keys in its repeats.
+        """
+        fresh = InputState()
+        fresh.buttons = state.buttons
+        fresh.repeats = {
+            key: held
+            for key, held in state.repeats.items()
+            if key not in self.stale_keys
+        }
+        fresh.releases = state.releases
+        fresh.axes = state.axes
+        fresh.mouse_moved = state.mouse_moved
+        return fresh
 
     def clean(self):
         """Pops and cleans all remaining contexts."""

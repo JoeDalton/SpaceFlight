@@ -81,7 +81,13 @@ bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`):
 `InputContext` is the abstract base (`consume(state)` is the only required
 method; `on_activate`/`on_deactivate`/`clean`/`refresh_bindings` are optional
 hooks). `InputContextStack.dispatch()` only calls the top context, and
-`push`/`pop` handle (de)activation. Concrete contexts:
+`push`/`pop` handle (de)activation. A context only sees the holds that
+started while it was on top: keys already held when it became the top
+(`stale_keys`) are left out of its `repeats` until released, while their
+release still gets through (the radial menu closes on its trigger's).
+Otherwise the key closing a menu, still held, would act on the context
+below: gamepad A (menu confirm, flight `fire_secondary`) would launch a
+missile as the pause menu resumes the flight. Concrete contexts:
 
 - **`FlightInputContext`** — the gameplay context: ship axes, weapons, boost,
   targeting, mirror, radial menu, head-look and pause, read from

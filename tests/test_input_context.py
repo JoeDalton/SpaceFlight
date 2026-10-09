@@ -356,6 +356,103 @@ def test_stack_remove_absent_context_is_noop(stack):
     assert stack.stack == [other]
 
 
+class RecordingContext(InputContext):
+    """
+    InputContext recording every state it consumes.
+    """
+
+    def __init__(self):
+        self.states = []
+
+    def consume(self, state):
+        """
+        :param state: The InputState dispatched to it.
+        """
+        self.states.append(state)
+
+
+def switch_top(stack, held_key):
+    """
+    Dispatch a frame with *held_key* held to a first context, then push a
+    second one (as a menu closing on that key's press would hand over).
+
+    :return: The new top context.
+    """
+    below = RecordingContext()
+    stack.push(below)
+    stack.dispatch(make_state(repeats={held_key: True}))
+    top = RecordingContext()
+    stack.push(top)
+    return top
+
+
+def test_stack_hides_key_held_from_before_top_change(stack):
+    top = switch_top(stack, "gamepad_face_a")
+    stack.dispatch(make_state(repeats={"gamepad_face_a": True}))
+    assert top.states[-1].repeats == {}
+    # A key pressed after the change is held normally
+    stack.dispatch(make_state(buttons={"x": True}, repeats={"gamepad_face_a": True}))
+    stack.dispatch(make_state(repeats={"gamepad_face_a": True, "x": True}))
+    assert top.states[-1].repeats == {"x": True}
+
+
+def test_stack_stale_key_counts_again_once_repressed(stack):
+    top = switch_top(stack, "gamepad_face_a")
+    stack.dispatch(make_state(repeats={"gamepad_face_a": True}))
+    stack.dispatch(make_state(releases={"gamepad_face_a": True}))
+    stack.dispatch(make_state(buttons={"gamepad_face_a": True}))
+    stack.dispatch(make_state(repeats={"gamepad_face_a": True}))
+    assert top.states[-2].buttons == {"gamepad_face_a": True}
+    assert top.states[-1].repeats == {"gamepad_face_a": True}
+
+
+def test_stack_stale_key_release_still_reaches_top(stack):
+    """
+    The radial menu, opened by pressing its trigger in flight, closes on the
+    trigger's release.
+    """
+    top = switch_top(stack, "r")
+    stack.dispatch(make_state(repeats={"r": True}))
+    stack.dispatch(make_state(releases={"r": True}))
+    assert top.states[-1].releases == {"r": True}
+
+
+def test_stack_press_on_switch_frame_reaches_new_top(stack):
+    top = switch_top(stack, "x")
+    stack.dispatch(make_state(buttons={"enter": True}, repeats={"x": True}))
+    assert top.states[-1].buttons == {"enter": True}
+    stack.dispatch(make_state(repeats={"enter": True}))
+    assert top.states[-1].repeats == {"enter": True}
+
+
+def test_stack_passes_state_through_without_top_change(stack):
+    ctx = RecordingContext()
+    stack.push(ctx)
+    state = make_state(repeats={"x": True})
+    stack.dispatch(make_state())
+    stack.dispatch(state)
+    assert ctx.states[-1] is state
+
+
+def test_stack_key_held_through_pop_does_not_reach_context_below(stack):
+    """
+    The reported case: gamepad A (menu confirm, flight fire_secondary)
+    resumes from the pause menu and is still held on the next frames: it
+    must not launch a missile.
+    """
+    ctx, game, player = make_flight_ctx(
+        gamepad_bindings={"fire_secondary": "gamepad_face_a"}
+    )
+    stack.push(ctx)
+    stack.dispatch(make_state())
+    stack.push(RecordingContext())  # the pause menu
+    stack.dispatch(make_state(buttons={"gamepad_face_a": True}))
+    stack.pop()  # Resume pressed
+    stack.dispatch(make_state(repeats={"gamepad_face_a": True}))
+    stack.dispatch(make_state(repeats={"gamepad_face_a": True}))
+    player.pawn.fire_secondary.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # FlightInputContext — binding helpers
 # ---------------------------------------------------------------------------
