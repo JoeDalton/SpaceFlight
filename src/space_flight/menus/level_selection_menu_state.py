@@ -60,7 +60,7 @@ class LevelSelectionMenuState(BaseState):
 
         self.menu_selection: str | None = None
         self.create_level_list()
-        self.navigator = MenuNavigator(
+        self.menu_navigator = MenuNavigator(
             self.app,
             [[btn] for btn in self.level_buttons]
             + [[self.back_button, self.start_button]],
@@ -81,7 +81,7 @@ class LevelSelectionMenuState(BaseState):
         self.app.state_manager.push(self.app.state_manager.MAIN_MENU_STATE)
 
     def exit(self):
-        self.navigator.remove()
+        self.menu_navigator.remove()
         self.back_button.destroy()
         self.start_button.destroy()
         self.lstActionMap.destroy()
@@ -203,7 +203,7 @@ class LevelSelectionMenuState(BaseState):
                     ]
                     btn.set_pressed()
                     self.start_button.show()
-                    self.navigator.focus_on(self.start_button)
+                    self.menu_navigator.focus_on(self.start_button)
             else:
                 # Reset all other level buttons
                 btn.reset()

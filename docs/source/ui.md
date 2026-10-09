@@ -103,7 +103,7 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
     while a throttle key is held, stepping from the current value (clamped to
     `[0, 1]`).
 - **`MenuInputContext`** — pushed by every menu's `MenuNavigator` (see
-  [docs/menus.md](menus.md#navigation)), it turns input into navigator calls:
+  [docs/menus.md](menus.md#navigation)), it turns input into menu navigator calls:
   - keyboard and gamepad keys are hardcoded (`MENU_BUTTONS` in
     `input_reader.py`, polled whatever the bindings): arrows / d-pad move,
     Enter or Space / A confirm, Escape / B go back; the joystick reuses its

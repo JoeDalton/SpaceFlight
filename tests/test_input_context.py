@@ -821,8 +821,8 @@ def make_menu_ctx(joystick_flight=None, radial_joystick=None):
             "radial_menu": {"joystick": radial_joystick or {}},
         }
     }
-    navigator = MagicMock()
-    return MenuInputContext(app, navigator), navigator
+    menu_navigator = MagicMock()
+    return MenuInputContext(app, menu_navigator), menu_navigator
 
 
 @pytest.mark.parametrize("key", ["escape", "gamepad_face_b", "gamepad_start"])
@@ -830,17 +830,17 @@ def test_menu_ctx_back_keys(clock, key):
     """
     Escape, gamepad B and the flight pause keys go back.
     """
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(buttons={key: True}))
-    navigator.back.assert_called_once()
-    navigator.confirm.assert_not_called()
+    menu_navigator.back.assert_called_once()
+    menu_navigator.confirm.assert_not_called()
 
 
 @pytest.mark.parametrize("key", ["enter", "space", "gamepad_face_a"])
 def test_menu_ctx_confirm_keys(clock, key):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(buttons={key: True}))
-    navigator.confirm.assert_called_once()
+    menu_navigator.confirm.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -853,13 +853,13 @@ def test_menu_ctx_confirm_keys(clock, key):
     ],
 )
 def test_menu_ctx_direction_keys(clock, key, move):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(buttons={key: True}))
-    navigator.move.assert_called_once_with(*move)
+    menu_navigator.move.assert_called_once_with(*move)
 
 
 def test_menu_ctx_joystick_reuses_flight_bindings(clock):
-    ctx, navigator = make_menu_ctx(
+    ctx, menu_navigator = make_menu_ctx(
         joystick_flight={
             "view_up": "stick_button_18",
             "fire": "stick_button_1",
@@ -868,114 +868,114 @@ def test_menu_ctx_joystick_reuses_flight_bindings(clock):
     )
     # The hat is inverted: its "look up" moves down in menus
     ctx.consume(make_state(buttons={"stick_button_18": True}))
-    navigator.move.assert_called_once_with(0, 1)
+    menu_navigator.move.assert_called_once_with(0, 1)
     ctx.consume(make_state(buttons={"stick_button_1": True}))
-    navigator.confirm.assert_called_once()
+    menu_navigator.confirm.assert_called_once()
     ctx.consume(make_state(buttons={"stick_button_2": True}))
-    navigator.back.assert_called_once()
+    menu_navigator.back.assert_called_once()
 
 
 def test_menu_ctx_held_direction_repeats_after_delay(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(buttons={"arrow_down": True}))
     clock.getFrameTime.return_value = MENU_REPEAT_DELAY - 0.01
     ctx.consume(make_state(repeats={"arrow_down": True}))
-    assert navigator.move.call_count == 1
+    assert menu_navigator.move.call_count == 1
     clock.getFrameTime.return_value = MENU_REPEAT_DELAY
     ctx.consume(make_state(repeats={"arrow_down": True}))
-    assert navigator.move.call_count == 2
+    assert menu_navigator.move.call_count == 2
     clock.getFrameTime.return_value = MENU_REPEAT_DELAY + MENU_REPEAT_INTERVAL / 2
     ctx.consume(make_state(repeats={"arrow_down": True}))
-    assert navigator.move.call_count == 2
+    assert menu_navigator.move.call_count == 2
     clock.getFrameTime.return_value = MENU_REPEAT_DELAY + MENU_REPEAT_INTERVAL
     ctx.consume(make_state(repeats={"arrow_down": True}))
-    assert navigator.move.call_count == 3
+    assert menu_navigator.move.call_count == 3
 
 
 def test_menu_ctx_released_direction_stops_repeating(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(buttons={"arrow_down": True}))
     ctx.consume(make_state())
     clock.getFrameTime.return_value = 10.0
     ctx.consume(make_state())
-    navigator.move.assert_called_once()
+    menu_navigator.move.assert_called_once()
 
 
 def test_menu_ctx_stick_moves_once_past_threshold(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(axes={"left_y": 0.0}))
     ctx.consume(make_state(axes={"left_y": 0.3}))
-    navigator.move.assert_not_called()
+    menu_navigator.move.assert_not_called()
     ctx.consume(make_state(axes={"left_y": 0.8}))
-    navigator.move.assert_called_once_with(0, -1)  # pushed up
+    menu_navigator.move.assert_called_once_with(0, -1)  # pushed up
     ctx.consume(make_state(axes={"left_y": 0.8}))
-    navigator.move.assert_called_once()
+    menu_navigator.move.assert_called_once()
 
 
 def test_menu_ctx_stick_uses_dominant_axis(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state())
     ctx.consume(make_state(axes={"left_x": -0.9, "left_y": 0.6}))
-    navigator.move.assert_called_once_with(-1, 0)
+    menu_navigator.move.assert_called_once_with(-1, 0)
 
 
 def test_menu_ctx_stick_held_repeats(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state())
     ctx.consume(make_state(axes={"left_y": -0.8}))
     clock.getFrameTime.return_value = MENU_REPEAT_DELAY
     ctx.consume(make_state(axes={"left_y": -0.8}))
-    assert navigator.move.call_count == 2
+    assert menu_navigator.move.call_count == 2
 
 
 def test_menu_ctx_stick_pushed_at_open_ignored_until_recentred(clock):
     """
     A stick already pushed when the menu opens does nothing until centred.
     """
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state(axes={"left_y": 0.9}))
     clock.getFrameTime.return_value = 10.0
     ctx.consume(make_state(axes={"left_y": 0.9}))
-    navigator.move.assert_not_called()
+    menu_navigator.move.assert_not_called()
     ctx.consume(make_state(axes={"left_y": 0.0}))
     ctx.consume(make_state(axes={"left_y": 0.9}))
-    navigator.move.assert_called_once_with(0, -1)
+    menu_navigator.move.assert_called_once_with(0, -1)
 
 
 def test_menu_ctx_joystick_stick_from_radial_axes(clock):
-    ctx, navigator = make_menu_ctx(
+    ctx, menu_navigator = make_menu_ctx(
         radial_joystick={"axis_x": "roll", "axis_y": "pitch"}
     )
     ctx.consume(make_state())
     ctx.consume(make_state(axes={"roll": 0.9}))
-    navigator.move.assert_called_once_with(1, 0)
+    menu_navigator.move.assert_called_once_with(1, 0)
 
 
 def test_menu_ctx_mouse_move_hides_focus_and_refreshes_hover(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.consume(make_state())
-    navigator.hide_focus.assert_not_called()
+    menu_navigator.hide_focus.assert_not_called()
     state = make_state()
     state.mouse_moved = True
     ctx.consume(state)
-    navigator.hide_focus.assert_called_once()
-    navigator.refresh_hover.assert_called_once()
+    menu_navigator.hide_focus.assert_called_once()
+    menu_navigator.refresh_hover.assert_called_once()
 
 
 def test_menu_ctx_refresh_bindings_follows_pause_remap(clock):
-    ctx, navigator = make_menu_ctx()
+    ctx, menu_navigator = make_menu_ctx()
     ctx.app.bindings["contexts"]["flight"]["gamepad"]["pause"] = "gamepad_back"
     ctx.refresh_bindings(ctx.app)
     ctx.consume(make_state(buttons={"gamepad_start": True}))
-    navigator.back.assert_not_called()
+    menu_navigator.back.assert_not_called()
     ctx.consume(make_state(buttons={"gamepad_back": True}))
-    navigator.back.assert_called_once()
+    menu_navigator.back.assert_called_once()
 
 
 def test_menu_ctx_clean_drops_navigator(clock):
     ctx, _ = make_menu_ctx()
     ctx.clean()
-    assert ctx.navigator is None
+    assert ctx.menu_navigator is None
 
 
 # ---------------------------------------------------------------------------

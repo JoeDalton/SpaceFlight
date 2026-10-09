@@ -47,7 +47,7 @@ class MainMenuState(BaseState):
             pos=(0.0, 0.0, -0.3),
             layout="center",
         )
-        self.navigator = MenuNavigator(
+        self.menu_navigator = MenuNavigator(
             self.app,
             [[self.play_button], [self.settings_button], [self.quit_button]],
         )
@@ -85,7 +85,7 @@ class MainMenuState(BaseState):
         """
         Destroy all menu buttons and force a frame render.
         """
-        self.navigator.remove()
+        self.menu_navigator.remove()
         self.play_button.destroy()
         self.settings_button.destroy()
         self.quit_button.destroy()

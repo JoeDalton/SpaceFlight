@@ -36,6 +36,7 @@ from space_flight.menus.menu_utils import (
     CustomButton,
     CustomDropDown,
     CustomSlider,
+    MenuNavigator,
     ScrollableList,
 )
 
@@ -108,6 +109,9 @@ class GameplaySettingsMenuState(BaseState):
         self.sliders: dict[tuple, CustomSlider] = {}
         self.slider_value_labels: dict[tuple, DirectLabel] = {}
         self.checkboxes: dict[tuple, object] = {}
+        # Navigable scroll rows: (row index, widgets)
+        self.navigable_rows: list[tuple[int, list]] = []
+        self.menu_navigator: MenuNavigator | None = None
         self.scroll_list = ScrollableList(
             app,
             row_height=_ROW_HEIGHT,
@@ -124,11 +128,21 @@ class GameplaySettingsMenuState(BaseState):
         self.working_config = copy.deepcopy(self.app.gameplay_settings.config)
         self.build_static_ui()
         self.rebuild_scroll()
+        rows, scroll_rows = self.navigation_rows()
+        self.menu_navigator = MenuNavigator(
+            self.app,
+            rows,
+            on_back=self.cancel,
+            scroll_list=self.scroll_list,
+            scroll_rows=scroll_rows,
+        )
         self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
         self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
 
     def exit(self):
         """Destroy every UI element and force a frame render."""
+        self.menu_navigator.remove()
+        self.menu_navigator = None
         self.app.ignore("wheel_up")
         self.app.ignore("wheel_down")
         self.scroll_list.destroy()
@@ -224,12 +238,14 @@ class GameplaySettingsMenuState(BaseState):
         configuration.
 
         Called on :meth:`enter` and again when a preset is picked. Also resets
-        the :attr:`sliders`, :attr:`slider_value_labels` and :attr:`checkboxes`
-        caches so stale widget references are never kept.
+        the :attr:`sliders`, :attr:`slider_value_labels`, :attr:`checkboxes`
+        and :attr:`navigable_rows` caches so stale widget references are never
+        kept, and hands the new rows to the menu navigator.
         """
         self.sliders.clear()
         self.slider_value_labels.clear()
         self.checkboxes.clear()
+        self.navigable_rows.clear()
 
         rows = self.make_row_data()
         self.scroll_list.rebuild(len(rows))
@@ -241,12 +257,28 @@ class GameplaySettingsMenuState(BaseState):
                 self.scroll_list.add_header(row["text"], y)
             elif kind == "slider":
                 self.add_slider_row(row["path"], y)
+                self.navigable_rows.append((i, [self.sliders[row["path"]]]))
             else:
                 self.add_checkbox_row(row["path"], y)
+                self.navigable_rows.append((i, [self.checkboxes[row["path"]]]))
+
+        if self.menu_navigator is not None:
+            self.menu_navigator.set_rows(*self.navigation_rows())
+
+    def navigation_rows(self) -> tuple[list[list], list[int | None]]:
+        """
+        :return: The menu navigator's rows (the preset drop-down, the scroll
+            rows, then Cancel / Save) and their scroll-list row indices.
+        """
+        rows = [[self.preset_menu]]
+        rows += [widgets for _, widgets in self.navigable_rows]
+        rows.append([self.cancel_btn, self.save_btn])
+        scroll_rows = [None] + [i for i, _ in self.navigable_rows] + [None]
+        return rows, scroll_rows
 
     def add_slider_row(self, path: tuple, y: float):
         """Add a slider row (label, slider, value readout) for a full path."""
-        label, _step, value_format = _SLIDERS[path[1:]]
+        label, step, value_format = _SLIDERS[path[1:]]
         self.scroll_list.add_row_label(label, y)
         value = _get_by_path(self.working_config, path)
         self.sliders[path] = CustomSlider(
@@ -258,6 +290,7 @@ class GameplaySettingsMenuState(BaseState):
             extraArgs=[path],
             scale=_SLIDER_SCALE,
             parent=self.scroll_list.content,
+            step=step,
         )
         value_label = DirectLabel(
             parent=self.scroll_list.content,

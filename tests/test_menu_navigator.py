@@ -64,32 +64,34 @@ class AdjustableWidget(StubWidget):
         self.adjustments.append(direction)
 
 
-def make_navigator(rows, on_back=None):
+def make_menu_navigator(rows, on_back=None, scroll_list=None, scroll_rows=None):
     """
     :param rows: Widget rows.
     :param on_back: Back callback.
+    :param scroll_list: The (mock) scroll list.
+    :param scroll_rows: Each row's scroll-list index, or None.
     :return: A MenuNavigator on a mock app with a real context stack.
     """
     app = MagicMock()
     app.bindings = {"contexts": {}}
     app.input_context_stack = InputContextStack()
-    return MenuNavigator(app, rows, on_back)
+    return MenuNavigator(app, rows, on_back, scroll_list, scroll_rows)
 
 
-def focused(navigator):
+def focused(menu_navigator):
     """
     :return: The widgets showing the focus.
     """
-    return [w for row in navigator.rows for w in row if w.focused]
+    return [w for row in menu_navigator.rows for w in row if w.focused]
 
 
 @pytest.fixture
 def column():
     """
-    A three-button column navigator: (navigator, [a, b, c]).
+    A three-button column menu_navigator: (menu_navigator, [a, b, c]).
     """
     widgets = [StubWidget("a"), StubWidget("b"), StubWidget("c")]
-    return make_navigator([[w] for w in widgets]), widgets
+    return make_menu_navigator([[w] for w in widgets]), widgets
 
 
 # ---------------------------------------------------------------------------
@@ -97,12 +99,12 @@ def column():
 # ---------------------------------------------------------------------------
 
 
-def test_navigator_pushes_and_removes_its_context():
-    navigator = make_navigator([[StubWidget("a")]])
-    stack = navigator.app.input_context_stack
+def test_menu_navigator_pushes_and_removes_its_context():
+    menu_navigator = make_menu_navigator([[StubWidget("a")]])
+    stack = menu_navigator.app.input_context_stack
     assert isinstance(stack.stack[-1], MenuInputContext)
-    assert stack.stack[-1].navigator is navigator
-    navigator.remove()
+    assert stack.stack[-1].menu_navigator is menu_navigator
+    menu_navigator.remove()
     assert stack.stack == []
 
 
@@ -112,31 +114,31 @@ def test_navigator_pushes_and_removes_its_context():
 
 
 def test_focus_hidden_until_first_input(column):
-    navigator, _ = column
-    assert focused(navigator) == []
+    menu_navigator, _ = column
+    assert focused(menu_navigator) == []
 
 
 def test_first_move_only_shows_focus(column):
-    navigator, (a, _, _) = column
-    navigator.move(0, 1)
-    assert focused(navigator) == [a]
+    menu_navigator, (a, _, _) = column
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [a]
 
 
 def test_first_confirm_only_shows_focus(column):
-    navigator, (a, _, _) = column
-    navigator.confirm()
-    assert focused(navigator) == [a]
+    menu_navigator, (a, _, _) = column
+    menu_navigator.confirm()
+    assert focused(menu_navigator) == [a]
     assert a.activations == 0
 
 
 def test_hide_focus_keeps_position(column):
-    navigator, (_, b, _) = column
-    navigator.move(0, 1)
-    navigator.move(0, 1)
-    navigator.hide_focus()
-    assert focused(navigator) == []
-    navigator.move(0, 1)
-    assert focused(navigator) == [b]
+    menu_navigator, (_, b, _) = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, 1)
+    menu_navigator.hide_focus()
+    assert focused(menu_navigator) == []
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [b]
 
 
 def test_show_focus_clears_mouse_hover(column):
@@ -144,34 +146,33 @@ def test_show_focus_clears_mouse_hover(column):
     The cursor hides on a key press: the widget under it must not keep its
     hover look next to the focus.
     """
-    navigator, (_, b, _) = column
+    menu_navigator, (_, b, _) = column
     b.hovered = True
-    navigator.move(0, 1)
+    menu_navigator.move(0, 1)
     assert not b.hovered
 
 
 def test_refresh_hover_restores_widget_under_mouse(column):
-    navigator, (_, b, c) = column
-    navigator.app.mouseWatcherNode.getOverRegion.return_value.getName.return_value = (
-        b.region
-    )
-    navigator.refresh_hover()
+    menu_navigator, (_, b, c) = column
+    over_region = menu_navigator.app.mouseWatcherNode.getOverRegion.return_value
+    over_region.getName.return_value = b.region
+    menu_navigator.refresh_hover()
     assert b.hovered
     assert not c.hovered
 
 
 def test_refresh_hover_without_region_under_mouse(column):
-    navigator, (a, _, _) = column
-    navigator.app.mouseWatcherNode.getOverRegion.return_value = None
-    navigator.refresh_hover()  # must not raise
+    menu_navigator, (a, _, _) = column
+    menu_navigator.app.mouseWatcherNode.getOverRegion.return_value = None
+    menu_navigator.refresh_hover()  # must not raise
     assert not a.hovered
 
 
 def test_show_focus_skips_hidden_first_widget():
     a, b = StubWidget("a", hidden=True), StubWidget("b")
-    navigator = make_navigator([[a], [b]])
-    navigator.move(0, 1)
-    assert focused(navigator) == [b]
+    menu_navigator = make_menu_navigator([[a], [b]])
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [b]
 
 
 # ---------------------------------------------------------------------------
@@ -180,39 +181,39 @@ def test_show_focus_skips_hidden_first_widget():
 
 
 def test_move_down_and_up(column):
-    navigator, (a, b, _) = column
-    navigator.move(0, 1)
-    navigator.move(0, 1)
-    assert focused(navigator) == [b]
-    navigator.move(0, -1)
-    assert focused(navigator) == [a]
+    menu_navigator, (a, b, _) = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [b]
+    menu_navigator.move(0, -1)
+    assert focused(menu_navigator) == [a]
 
 
 def test_move_wraps_around(column):
-    navigator, (_, _, c) = column
-    navigator.move(0, 1)
-    navigator.move(0, -1)
-    assert focused(navigator) == [c]
+    menu_navigator, (_, _, c) = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, -1)
+    assert focused(menu_navigator) == [c]
 
 
 def test_move_skips_hidden_rows():
     a, b, c = StubWidget("a"), StubWidget("b", hidden=True), StubWidget("c")
-    navigator = make_navigator([[a], [b], [c]])
-    navigator.move(0, 1)
-    navigator.move(0, 1)
-    assert focused(navigator) == [c]
+    menu_navigator = make_menu_navigator([[a], [b], [c]])
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [c]
 
 
 def test_move_along_row():
     a, back, start = StubWidget("a"), StubWidget("back"), StubWidget("start")
-    navigator = make_navigator([[a], [back, start]])
-    navigator.move(0, 1)
-    navigator.move(0, 1)
-    assert focused(navigator) == [back]
-    navigator.move(1, 0)
-    assert focused(navigator) == [start]
-    navigator.move(1, 0)
-    assert focused(navigator) == [back]
+    menu_navigator = make_menu_navigator([[a], [back, start]])
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [back]
+    menu_navigator.move(1, 0)
+    assert focused(menu_navigator) == [start]
+    menu_navigator.move(1, 0)
+    assert focused(menu_navigator) == [back]
 
 
 def test_move_along_row_skips_hidden():
@@ -220,53 +221,98 @@ def test_move_along_row_skips_hidden():
     A row whose other widget is hidden acts as a lone widget.
     """
     back, start = StubWidget("back"), StubWidget("start", hidden=True)
-    navigator = make_navigator([[back, start]])
-    navigator.move(0, 1)
-    navigator.move(1, 0)
-    assert focused(navigator) == [back]
+    menu_navigator = make_menu_navigator([[back, start]])
+    menu_navigator.move(0, 1)
+    menu_navigator.move(1, 0)
+    assert focused(menu_navigator) == [back]
 
 
 def test_move_into_row_keeps_nearest_column():
     left, right = StubWidget("left"), StubWidget("right")
     below = StubWidget("below")
-    navigator = make_navigator([[left, right], [below]])
-    navigator.move(0, 1)
-    navigator.move(1, 0)
-    navigator.move(0, 1)
-    assert focused(navigator) == [below]
-    navigator.move(0, -1)
-    assert focused(navigator) == [right]
+    menu_navigator = make_menu_navigator([[left, right], [below]])
+    menu_navigator.move(0, 1)
+    menu_navigator.move(1, 0)
+    menu_navigator.move(0, 1)
+    assert focused(menu_navigator) == [below]
+    menu_navigator.move(0, -1)
+    assert focused(menu_navigator) == [right]
 
 
 def test_left_right_adjusts_lone_widget():
     slider = AdjustableWidget("slider")
-    navigator = make_navigator([[slider]])
-    navigator.move(0, 1)
-    navigator.move(1, 0)
-    navigator.move(-1, 0)
+    menu_navigator = make_menu_navigator([[slider]])
+    menu_navigator.move(0, 1)
+    menu_navigator.move(1, 0)
+    menu_navigator.move(-1, 0)
     assert slider.adjustments == [1, -1]
 
 
 def test_left_right_on_plain_lone_widget_does_nothing(column):
-    navigator, (a, _, _) = column
-    navigator.move(0, 1)
-    navigator.move(1, 0)
-    assert focused(navigator) == [a]
+    menu_navigator, (a, _, _) = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(1, 0)
+    assert focused(menu_navigator) == [a]
 
 
 def test_focus_on_moves_focus(column):
-    navigator, (a, _, c) = column
-    navigator.focus_on(c)
-    navigator.move(0, 1)  # shows it
-    assert focused(navigator) == [c]
-    navigator.focus_on(a)
-    assert focused(navigator) == [a]
+    menu_navigator, (a, _, c) = column
+    menu_navigator.focus_on(c)
+    menu_navigator.move(0, 1)  # shows it
+    assert focused(menu_navigator) == [c]
+    menu_navigator.focus_on(a)
+    assert focused(menu_navigator) == [a]
 
 
 def test_focus_on_does_not_show_hidden_focus(column):
-    navigator, (_, _, c) = column
-    navigator.focus_on(c)
-    assert focused(navigator) == []
+    menu_navigator, (_, _, c) = column
+    menu_navigator.focus_on(c)
+    assert focused(menu_navigator) == []
+
+
+def test_set_rows_keeps_position_and_focus_on_new_widget(column):
+    """
+    A screen rebuilding its list hands new widgets: the focus moves onto the
+    widget now at its position, without touching the (destroyed) old ones.
+    """
+    menu_navigator, (_, b, _) = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, 1)
+    new = [StubWidget("x"), StubWidget("y"), StubWidget("z")]
+    b.set_focus = MagicMock(side_effect=AssertionError("destroyed"))
+    menu_navigator.set_rows([[w] for w in new])
+    assert focused(menu_navigator) == [new[1]]
+
+
+def test_set_rows_clamps_position_to_fewer_rows(column):
+    menu_navigator, _ = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, -1)  # wraps to the last row
+    new = StubWidget("only")
+    menu_navigator.set_rows([[new]])
+    assert focused(menu_navigator) == [new]
+
+
+def test_focus_move_scrolls_list_rows_into_view():
+    widgets = [StubWidget("top"), StubWidget("in_list"), StubWidget("bottom")]
+    scroll_list = MagicMock()
+    menu_navigator = make_menu_navigator(
+        [[w] for w in widgets], scroll_list=scroll_list, scroll_rows=[None, 4, None]
+    )
+    menu_navigator.move(0, 1)  # shows the focus on "top": not in the list
+    scroll_list.scroll_to.assert_not_called()
+    menu_navigator.move(0, 1)
+    scroll_list.scroll_to.assert_called_once_with(4)
+
+
+def test_hidden_focus_does_not_scroll():
+    widgets = [StubWidget("a"), StubWidget("b")]
+    scroll_list = MagicMock()
+    menu_navigator = make_menu_navigator(
+        [[w] for w in widgets], scroll_list=scroll_list, scroll_rows=[0, 1]
+    )
+    menu_navigator.focus_on(widgets[1])
+    scroll_list.scroll_to.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -275,23 +321,23 @@ def test_focus_on_does_not_show_hidden_focus(column):
 
 
 def test_confirm_activates_focused(column):
-    navigator, (_, b, _) = column
-    navigator.move(0, 1)
-    navigator.move(0, 1)
-    navigator.confirm()
+    menu_navigator, (_, b, _) = column
+    menu_navigator.move(0, 1)
+    menu_navigator.move(0, 1)
+    menu_navigator.confirm()
     assert b.activations == 1
 
 
 def test_back_calls_on_back():
     on_back = MagicMock()
-    navigator = make_navigator([[StubWidget("a")]], on_back)
-    navigator.back()
+    menu_navigator = make_menu_navigator([[StubWidget("a")]], on_back)
+    menu_navigator.back()
     on_back.assert_called_once()
 
 
 def test_back_without_callback_is_noop(column):
-    navigator, _ = column
-    navigator.back()  # must not raise
+    menu_navigator, _ = column
+    menu_navigator.back()  # must not raise
 
 
 def test_covered_screen_ignores_input():
@@ -300,11 +346,11 @@ def test_covered_screen_ignores_input():
     """
     a = StubWidget("a", hidden=True)
     on_back = MagicMock()
-    navigator = make_navigator([[a]], on_back)
-    navigator.move(0, 1)
-    navigator.confirm()
-    navigator.back()
-    assert focused(navigator) == []
+    menu_navigator = make_menu_navigator([[a]], on_back)
+    menu_navigator.move(0, 1)
+    menu_navigator.confirm()
+    menu_navigator.back()
+    assert focused(menu_navigator) == []
     assert a.activations == 0
     on_back.assert_not_called()
 

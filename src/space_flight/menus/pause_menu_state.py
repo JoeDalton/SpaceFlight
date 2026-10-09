@@ -9,8 +9,8 @@ from space_flight.menus.menu_utils import CustomButton, MenuNavigator
 
 class PauseMenuState(BaseState):
     """
-    In-game pause menu.  Its navigator blocks the flight inputs below it, and
-    going back (including with the pause key) resumes the game.
+    In-game pause menu.  Its menu navigator blocks the flight inputs below it,
+    and going back (including with the pause key) resumes the game.
     """
 
     def enter(self):
@@ -58,7 +58,7 @@ class PauseMenuState(BaseState):
             pos=(0.0, 0.0, -0.45),
             layout="center",
         )
-        self.navigator = MenuNavigator(
+        self.menu_navigator = MenuNavigator(
             self.app,
             [
                 [self.resume_button],
@@ -103,7 +103,7 @@ class PauseMenuState(BaseState):
         sys.exit()
 
     def exit(self):
-        self.navigator.remove()
+        self.menu_navigator.remove()
         self.resume_button.destroy()
         self.settings_button.destroy()
         self.return_button.destroy()

@@ -525,13 +525,13 @@ class MenuInputContext(InputContext):
     focus and gives the hover back to the widget under the pointer.
     """
 
-    def __init__(self, app: SpaceFlightSimulator, navigator: MenuNavigator):
+    def __init__(self, app: SpaceFlightSimulator, menu_navigator: MenuNavigator):
         """
         :param app: The simulator app
-        :param navigator: The menu's navigator
+        :param menu_navigator: The menu's navigator
         """
         self.app = app
-        self.navigator = navigator
+        self.menu_navigator = menu_navigator
         self.refresh_bindings(app)
         # Direction being held, and when it repeats next
         self.held_direction: str | None = None
@@ -565,17 +565,17 @@ class MenuInputContext(InputContext):
             :class:`~space_flight.ui.input_reader.InputState`.
         """
         if state.mouse_moved:
-            self.navigator.hide_focus()
-            self.navigator.refresh_hover()
+            self.menu_navigator.hide_focus()
+            self.menu_navigator.refresh_hover()
         if self.pressed(state, "back"):
-            self.navigator.back()
+            self.menu_navigator.back()
         elif self.pressed(state, "confirm"):
-            self.navigator.confirm()
+            self.menu_navigator.confirm()
         elif direction := self.direction(state):
-            self.navigator.move(*MENU_DIRECTIONS[direction])
+            self.menu_navigator.move(*MENU_DIRECTIONS[direction])
 
     def clean(self):
-        self.navigator = None
+        self.menu_navigator = None
 
     # ------------------------------------------------------------------
 

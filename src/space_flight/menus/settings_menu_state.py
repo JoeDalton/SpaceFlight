@@ -54,7 +54,7 @@ class SettingsMenuState(BaseState):
             pos=(0.0, 0.0, -0.45),
             layout="center",
         )
-        self.navigator = MenuNavigator(
+        self.menu_navigator = MenuNavigator(
             self.app,
             [
                 [self.gameplay_button],
@@ -97,7 +97,7 @@ class SettingsMenuState(BaseState):
 
     def exit(self):
         """Destroy all buttons and force a frame render."""
-        self.navigator.remove()
+        self.menu_navigator.remove()
         self.gameplay_button.destroy()
         self.input_button.destroy()
         self.graphics_button.destroy()

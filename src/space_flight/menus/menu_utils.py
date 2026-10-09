@@ -22,6 +22,9 @@ from panda3d.core import NodePath, TextNode
 from space_flight import DATAFILES_PATH
 from space_flight.ui.input_context import MenuInputContext
 
+# Colour scale marking the focus on widgets without a "hover" image
+_FOCUS_TINT = (0.1, 0.5, 1.0, 1.0)
+
 
 class ProgressBar:
     """
@@ -329,6 +332,28 @@ class ScrollableList:
             parent=self.content,
         )
 
+    def scroll_to(self, index: int):
+        """
+        Scroll the least needed to show row *index* with one row of margin on
+        each side (e.g. the header above the first row of a section).  A no-op
+        before the first :meth:`rebuild`.
+
+        :param index: The row to show.
+        """
+        if self.v_scrollbar is None:
+            return
+        vs = self.v_scrollbar
+        lo, hi = vs["range"]
+        frame_h = self.frame_top - self.frame_bottom
+        top = max(0, index - 1) * self.row_height
+        bottom = (index + 2) * self.row_height
+        value = vs["value"]
+        if top < value:
+            value = top
+        elif bottom > value + frame_h:
+            value = bottom - frame_h
+        vs["value"] = max(lo, min(hi, value))
+
     def wheel_scroll(self, step: float):
         """
         Scroll by *step* scroll-bar units (negative toward the top, positive
@@ -536,11 +561,11 @@ class MenuNavigator:
     """
     Keyboard, gamepad and joystick focus over a menu's widgets, driven by a
     :class:`~space_flight.ui.input_context.MenuInputContext` pushed while the
-    navigator lives.
+    menu navigator lives.
 
     The widgets are laid out as rows: up/down moves between rows (wrapping
     around), left/right moves within a row of several widgets, or adjusts a
-    lone one that supports it.  Hidden widgets are skipped, and a navigator
+    lone one that supports it.  Hidden widgets are skipped, and a menu navigator
     whose widgets are all hidden (its screen covered by another) ignores
     input.
 
@@ -554,26 +579,53 @@ class MenuNavigator:
     """
 
     def __init__(
-        self, app: ShowBase, rows: list[list], on_back: Callable | None = None
+        self,
+        app: ShowBase,
+        rows: list[list],
+        on_back: Callable | None = None,
+        scroll_list: ScrollableList | None = None,
+        scroll_rows: list[int | None] | None = None,
     ):
         """
-        Push the navigator's input context.
+        Push the menu navigator's input context.
 
         :param app: The running ShowBase application
         :param rows: The widgets, row by row, from the top
         :param on_back: Called when the back key is pressed; None ignores it
+        :param scroll_list: The list some rows sit in, scrolled to show the
+            focus
+        :param scroll_rows: For each row, its row index in *scroll_list*, or
+            None if not in it
         """
         self.app = app
-        self.rows = rows
         self.on_back = on_back
+        self.scroll_list = scroll_list
         self.row = 0
         self.column = 0
         # Column chosen along the last row of several widgets, kept through
         # single-widget rows
         self.preferred_column = 0
         self.focus_shown = False
+        self.set_rows(rows, scroll_rows)
         self.context = MenuInputContext(app, self)
         app.input_context_stack.push(self.context)
+
+    def set_rows(self, rows: list[list], scroll_rows: list[int | None] | None = None):
+        """
+        Replace the widgets (e.g. after a screen rebuilt its list), keeping
+        the focus position as far as the new rows allow.  The old widgets are
+        not touched: they may be destroyed already.
+
+        :param rows: The widgets, row by row, from the top
+        :param scroll_rows: For each row, its row index in the scroll list, or
+            None
+        """
+        self.rows = rows
+        self.scroll_rows = scroll_rows or [None] * len(rows)
+        self.row = min(self.row, len(rows) - 1)
+        self.column = min(self.column, len(rows[self.row]) - 1)
+        if self.focus_shown:
+            self.focused.set_focus(True)
 
     def remove(self):
         """
@@ -611,6 +663,7 @@ class MenuNavigator:
                 widget.set_focus(False)
         self.focus_shown = True
         self.focused.set_focus(True)
+        self.scroll_to_focus()
 
     def hide_focus(self):
         """
@@ -636,7 +689,7 @@ class MenuNavigator:
         """
         Move the focus to *widget*, shown only if the focus is.
 
-        :param widget: One of the navigator's widgets.
+        :param widget: One of the menu navigator's widgets.
         """
         for row_index, row in enumerate(self.rows):
             if widget in row:
@@ -655,6 +708,15 @@ class MenuNavigator:
         self.column = column
         if self.focus_shown:
             self.focused.set_focus(True)
+            self.scroll_to_focus()
+
+    def scroll_to_focus(self):
+        """
+        Scroll the list to show the focused row, if it sits in it.
+        """
+        index = self.scroll_rows[self.row]
+        if index is not None and self.scroll_list is not None:
+            self.scroll_list.scroll_to(index)
 
     # ------------------------------------------------------------------
     # Navigation (called by MenuInputContext)
@@ -811,6 +873,7 @@ class CustomSlider:
         extraArgs: list = [],
         parent: NodePath | None = None,
         scale: float = 0.4,
+        step: float | None = None,
     ):
         """
         Create the underlying DirectSlider with game-standard styling.
@@ -824,8 +887,12 @@ class CustomSlider:
         :param extraArgs: Additional positional arguments forwarded to *command*.
         :param parent: Panda3D node to attach to. Defaults to aspect2d.
         :param scale: Uniform scale applied to the slider node.
+        :param step: Value change per menu-navigation step (:meth:`adjust`);
+            a twentieth of the range by default.
         """
         self.app = app
+        self.value_range = value_range
+        self.step = step or (value_range[1] - value_range[0]) / 20.0
         self.slider = DirectSlider(
             parent=parent,
             pos=pos,
@@ -852,8 +919,45 @@ class CustomSlider:
         return self.slider["value"]
 
     def set_value(self, value: float):
-        """Set the slider's value (does not fire the command)."""
+        """
+        Set the slider's value.  The command still fires, one event pass
+        later (PGSliderBar throws its ADJUST event asynchronously), so a
+        command must never set the value back.
+        """
         self.slider["value"] = value
+
+    def adjust(self, direction: int):
+        """
+        Move the value by one :attr:`step` (menu navigation), within range.
+
+        :param direction: -1 (down) or 1 (up)
+        """
+        low, high = self.value_range
+        self.set_value(max(low, min(high, self.get_value() + direction * self.step)))
+
+    def is_hidden(self) -> bool:
+        """:return: True while the slider is hidden."""
+        return self.slider.isHidden()
+
+    def set_focus(self, focused: bool):
+        """
+        Show or clear the menu-navigation focus: the thumb's "hover" state.
+
+        :param focused: Whether the slider has the focus.
+        """
+        self.slider.thumb.guiItem.setState(2 if focused else 0)  # rollover / ready
+
+    def refresh_hover(self, region_name: str):
+        """
+        Show the thumb's "hover" state if the mouse is over it.
+
+        :param region_name: Name of the mouse region under the pointer.
+        """
+        if region_name == self.slider.thumb.guiItem.getId():
+            self.slider.thumb.guiItem.setState(2)
+
+    def activate(self):
+        """Nothing to do: a slider is adjusted with left/right."""
 
     def destroy(self):
         """Remove the slider from the scene graph and free its resources."""
@@ -917,6 +1021,29 @@ class CustomCheckButton:
     def get_value(self) -> bool:
         """Return the current checked state."""
         return bool(self.checkbox["indicatorValue"])
+
+    def is_hidden(self) -> bool:
+        """:return: True while the checkbox is hidden."""
+        return self.checkbox.isHidden()
+
+    def set_focus(self, focused: bool):
+        """
+        Show or clear the menu-navigation focus: a tint, the box having no
+        "hover" look.
+
+        :param focused: Whether the checkbox has the focus.
+        """
+        if focused:
+            self.checkbox.setColorScale(_FOCUS_TINT)
+        else:
+            self.checkbox.clearColorScale()
+
+    def refresh_hover(self, region_name: str):
+        """No "hover" look to give back."""
+
+    def activate(self):
+        """Toggle the checkbox, as a click does."""
+        self.checkbox.commandFunc(None)
 
     def destroy(self):
         """Remove the checkbox from the scene graph and free its resources."""
@@ -1069,6 +1196,37 @@ class CustomDropDown:
         self.close()
         self.set_value(value)
         self.command(value)
+
+    def adjust(self, direction: int):
+        """
+        Select the previous or next option, wrapping around (menu
+        navigation: the list itself is not navigated).
+
+        :param direction: -1 (previous) or 1 (next)
+        """
+        index = self.values.index(self.value) if self.value in self.values else 0
+        self.select(self.values[(index + direction) % len(self.values)])
+
+    def activate(self):
+        """Select the next option (menu navigation)."""
+        self.adjust(1)
+
+    def is_hidden(self) -> bool:
+        """:return: True while the head is hidden."""
+        return self.head.is_hidden()
+
+    def set_focus(self, focused: bool):
+        """
+        :param focused: Whether the drop-down has the menu-navigation focus,
+            shown on its head.
+        """
+        self.head.set_focus(focused)
+
+    def refresh_hover(self, region_name: str):
+        """
+        :param region_name: Name of the mouse region under the pointer.
+        """
+        self.head.refresh_hover(region_name)
 
     def get_value(self) -> Any:
         """Return the selected option's value."""

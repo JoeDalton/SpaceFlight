@@ -100,7 +100,7 @@ class LevelEndState(BaseState):
             layout="center",
         )
         # Also blocks the flight inputs below
-        self.navigator = MenuNavigator(
+        self.menu_navigator = MenuNavigator(
             self.app, [[self.return_button], [self.quit_button]]
         )
 
@@ -127,7 +127,7 @@ class LevelEndState(BaseState):
         """
         Destroy the overlay's widgets.
         """
-        self.navigator.remove()
+        self.menu_navigator.remove()
         self.text_label.destroy()
         self.subtitle_label.destroy()
         self.return_button.destroy()

@@ -43,6 +43,12 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - **`CustomEntry`**, **`CustomSlider`**, **`CustomCheckButton`** apply the same
   treatment to `DirectEntry`/`DirectSlider`/`DirectCheckButton`, with thin
   `get`/`set`, `get_value`/`set_value` and `get_value` accessors respectively.
+  The slider and checkbox are navigable: the slider's focus is its thumb's
+  "hover" look and `adjust(direction)` moves it by its `step` (a twentieth of
+  the range by default); `set_value` fires the command one event pass later
+  (ADJUST is asynchronous), so commands never set the value back. The
+  checkbox, having no "hover" look, is tinted (`_FOCUS_TINT`) while focused,
+  and `activate()` toggles it.
 - **`CustomDropDown`** is a drop-down list made of `CustomButton`s, over
   `(label, value)` options. Its head shows the selected label and a down
   arrow (the scrollbars' `inc_geom`); a click opens the option buttons stacked
@@ -54,13 +60,17 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   widget), with a transparent full-screen frame first under it to catch the
   clicks elsewhere. `set_value` selects without calling the command. Unlike
   `DirectOptionMenu`, it needs no held click and looks like the other
-  buttons.
+  buttons. Navigation does not open the list: its focus shows on the head,
+  `adjust(direction)` selects the previous/next option (wrapping around), and
+  `activate()` the next one.
 - **`ProgressBar`** is a white fill bar with a rotating random hint ("blurb")
   above it, used by `SplashState` while assets load.
 - **`ScrollableList`** pairs a `DirectScrolledFrame` (used only as a
   border/clip) with a `DirectScrollBar` that moves a plain "content" node the
   caller parents its rows to, so the canvas never resizes. API:
   `rebuild(n_rows)` → content node, `row_y(i)`, `wheel_scroll(step)`,
+  `scroll_to(i)` (the least scroll showing row *i* with a row of margin on
+  each side, so the header above a section's first row shows),
   `destroy()`, plus `add_header`/`add_row_label`/`add_checkbox` row helpers.
   Every settings screen uses it.
 
@@ -74,8 +84,8 @@ supports it. Hidden widgets are skipped. Confirm activates the focused
 widget, and back calls the screen's `on_back` (none on the main menu and
 level end).
 
-- A screen builds its navigator at the end of `enter()` and calls
-  `navigator.remove()` first in `exit()`. The navigator pushes a
+- A screen builds its `menu_navigator` at the end of `enter()` and calls
+  `menu_navigator.remove()` first in `exit()`. The menu navigator pushes a
   `MenuInputContext` (see [docs/ui.md](ui.md)), so screens stacked on each
   other (settings over the pause menu, ...) nest their contexts, and a menu
   over the flight blocks the flight controls.
@@ -84,11 +94,17 @@ level end).
   mouse users never see it. Showing it clears the mouse hover of every other
   widget (the cursor hides on that input, see [docs/ui.md](ui.md)), and the
   hover comes back on the widget under the pointer once the mouse moves.
-- A navigator whose widgets are all hidden (its screen covered by another
+- A menu navigator whose widgets are all hidden (its screen covered by another
   that hides it, like the main menu under the settings hub) ignores input.
 - Widgets are duck-typed: `is_hidden()`, `set_focus(focused)`,
   `refresh_hover(region_name)`, `activate()`, and `adjust(direction)` for
   adjustable ones.
+- On the settings screens some rows sit in a `ScrollableList`: given the list
+  and each row's index in it (`scroll_list`/`scroll_rows`), the menu navigator
+  scrolls it to show the focus. A screen rebuilding its list (preset picked,
+  *Default*) hands the new widgets over with `set_rows`, which keeps the
+  focus position. Their rows are listed by `navigation_rows()`, and going
+  back cancels.
 
 ## Startup and top-level navigation
 
@@ -118,7 +134,7 @@ level end).
 
 - **[`pause_menu_state.py`](../../src/space_flight/menus/pause_menu_state.py)** —
   `PauseMenuState` is pushed over a running `FlightState` and, keeping the
-  default `PAUSES_BELOW = True`, pauses it. Its navigator's context blocks
+  default `PAUSES_BELOW = True`, pauses it. Its menu navigator's context blocks
   gameplay input while it is up, and going back (including with the pause
   key) resumes. Buttons resume, open settings, return to the main
   menu (`state_manager.clear()` then `replace(MAIN_MENU_STATE)`), or quit;
@@ -155,6 +171,8 @@ level end).
   (`_SLIDERS`: lock delay, lock angle, assist angle, shot deviation, damage
   multipliers) and checkboxes (`_CHECKBOXES`: auto-aim, lead indicator).
   Editing any of them switches the drop-down to *Custom* (`mark_custom`).
+  Navigation goes from the drop-down through the rows to *Cancel* / *Save*,
+  each slider stepping by its `_SLIDERS` step.
   *Save* calls `GameplaySettings.save()`; every setting applies from the next
   mission, as an on-screen warning says. There is no *Default*: the `normal`
   preset is the default.
@@ -177,7 +195,9 @@ level end).
   quality are sliders snapped to discrete stops (`_DISCRETE_SLIDERS`, cheapest
   first so dragging right always costs more), and FXAA, *Alternate Model
   Orientation* (a manual workaround for glTF models loading mis-rotated on
-  some systems) and *FPS Counter* are checkboxes. *Save* calls
+  some systems) and *FPS Counter* are checkboxes. Navigation goes through the
+  rows (left/right along the display-mode buttons, discrete sliders stepping
+  one stop) to *Default* / *Cancel* / *Save*. *Save* calls
   `GraphicsSettings.save()` (re-sanitises and persists) and
   `GraphicsManager.apply_window_settings()`, so the display mode changes
   live; everything else takes effect on the next level load, as an on-screen
