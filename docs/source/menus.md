@@ -157,10 +157,11 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
   game.
 - **[`input_settings_menu_state.py`](../../src/space_flight/menus/input_settings_menu_state.py)**:
   - **`InputSettingsMenuState`** loads `bindings.yaml` and lists the dead
-    zones, the global bindings, and each context's bindings for the selected
-    input type (keyboard/gamepad/joystick), with checkboxes for boolean
-    options such as `invert_*` (`make_row_data`/`rebuild_scroll`). Switching
-    input type flushes typed dead-zone edits, then rebuilds the list. *Save*
+    zones and each context's bindings for the device tab being edited
+    (keyboard/gamepad/joystick, `edited_device`; every device is live in
+    game, the tab is not saved), with checkboxes for boolean options such as
+    `invert_*` (`make_row_data`/`rebuild_scroll`). Switching tab flushes
+    typed dead-zone edits, then rebuilds the list. *Save*
     writes the YAML, rebuilds the live `InputReader` (`reader_factory`) and
     calls `InputContextStack.refresh_all_bindings`, so remapped controls work
     without a restart.

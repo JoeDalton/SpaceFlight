@@ -18,6 +18,7 @@ button press *means* in a given game mode.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -850,15 +851,21 @@ class CompositeInputReader:
 # ---------------------------------------------------------------------------
 
 
-def load_bindings() -> dict:
+def load_bindings(path: Path = CONFIGURATION_PATH / "bindings.yaml") -> dict:
     """
-    Reads and parses configuration/bindings.yaml.
+    Reads and parses a bindings file, configuration/bindings.yaml by default.
 
+    Drops the keys of older files that every device being live at once made
+    obsolete (input_type, global), so they are not saved back.
+
+    :param path: Path to the YAML bindings file.
     :return: Parsed configuration dict.
     """
-    filepath = CONFIGURATION_PATH / "bindings.yaml"
-    with open(filepath, "r") as f:
-        return yaml.safe_load(f)
+    with open(path, "r") as f:
+        bindings = yaml.safe_load(f)
+    for key in ("input_type", "global"):
+        bindings.pop(key, None)
+    return bindings
 
 
 def reader_factory(app: SpaceFlightSimulator) -> CompositeInputReader:
