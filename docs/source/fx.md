@@ -195,6 +195,10 @@ sound:
   render origin — which is on the listener (see
   [the floating render origin](game.md#the-floating-render-origin)), giving a
   loud blip.
+- **Pause and level exit.** `pause()` silences the effects while the game is
+  frozen behind a menu (looping sounds are suspended until `resume()`,
+  one-shots stop), and `stop_level_sounds()` releases every pooled sound still
+  in use when the level exits (`SoundPool.in_use_sounds`/`release_all`).
 - **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` only log (see
   [subsystems.md](subsystems.md)).
 - **Update.** `update_task` calls `Audio3DManager.update()` from Panda3D's
@@ -207,7 +211,7 @@ sound:
   `attach_sound(sound, node, velocity_source=…)` gives each sound a weakly
   referenced *velocity source* (any object with a world-frame `speed`), read
   at every update:
-  - engine sounds: their `Ship` / `CapitalShip`;
+  - engine sounds: their `Ship` (fighters and capital ships alike);
   - cannon shots: `LaserCannon.parent` (a fighter, or a turret, whose `speed`
     is its host ship's);
   - hits on and crashes of the player, and the listener (set by

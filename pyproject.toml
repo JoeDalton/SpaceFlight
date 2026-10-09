@@ -1,11 +1,13 @@
 [tool.poetry]
 name = "space_flight"
 version = "0.0.0"
-description = "An arcade space flight simulator"
+description = "A home-made space combat flight simulator, heavily inspired by Star Wars Squadrons"
 authors = ["Guilhem Lavabre"]
 license = ""
 readme = "README.md"
-include = ["src/space_flight/_version.py", "resources","scripts"]
+homepage = "https://github.com/JoeDalton/SpaceFlight"
+repository = "https://github.com/JoeDalton/SpaceFlight"
+include = ["src/space_flight/_version.py", "scripts"]
 
 
 [tool.poetry.dependencies]

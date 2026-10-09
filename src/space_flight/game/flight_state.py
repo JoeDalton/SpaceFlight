@@ -126,8 +126,8 @@ class FlightState(BaseState):
 
     def _jump_prompt(self) -> str:
         """
-        Build the "press [key] to drop out of hyperspace" prompt from the
-        active drop_hyperspace binding.
+        Build the "press [key] to drop out of hyperspace" prompt from the last
+        used device's drop_hyperspace binding (see InputContext.key_label).
 
         :return: the prompt string shown by the loading overlay
         """

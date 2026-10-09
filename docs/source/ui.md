@@ -14,14 +14,16 @@ All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
   *hardware* (which raw button/axis is active this frame — no game logic);
   [`input_context.py`](../../src/space_flight/ui/input_context.py) only knows
   *meaning* (what a bound action does in the current game mode). A new game
-  mode means a new `InputContext` pushed on the stack — never touching the
-  reader.
+  mode means a new `InputContext` pushed on the stack, without touching the
+  reader as long as its keys are bound in the YAML (unbound keys, like the
+  menu keys, must be added to the polled set: `MENU_BUTTONS`).
 - Only the **top** of the `InputContextStack` receives input each frame, so
   pushing a context (e.g. the radial menu over flight) blocks whatever is
   beneath it without either context knowing about the other.
 - Every action name (`"fire"`, `"pause"`, `"throttle_up"`, ...) is resolved
   through the YAML bindings (`configuration/bindings.yaml`), never
-  hardcoded to a key. Every device is live at once: the readers' `InputState`s
+  hardcoded to a key, except the keyboard and gamepad menu-navigation keys
+  (`MENU_BUTTONS`, see `MenuInputContext` below). Every device is live at once: the readers' `InputState`s
   are merged, and an action fires from whichever device it is bound on.
 - `HUD`, `AimHUD` and `PlayerWaypoints` follow the scene-piece lifecycle
   (see [docs/scenes.md](scenes.md)): construct with `game`, register a
@@ -33,14 +35,16 @@ All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
 
 Each frame every reader subclass rebuilds a plain `InputState` snapshot
 (`buttons`/`repeats`/`releases`/`axes`) of its own device, from that device's
-bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`):
+bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`) plus its
+hardcoded menu keys (`MENU_BUTTONS`):
 
 - **Hybrid detection.** **Polling** is the primary source: `read_all_buttons()`
   each frame, compared with the previous frame to derive pressed/held/released.
   **`accept()` events** are a safety net for a button pressed *and* released
   between two polls, which polling alone would miss. `event-repeat` is
   deliberately unused — held state comes from polling only.
-- **`KeyboardReader`** polls Panda3D's `MouseWatcher` for every bound key.
+- **`KeyboardReader`** polls Panda3D's `MouseWatcher` for every bound key and
+  menu key.
   Keyboards have no analogue axes, so `read_axes` is a no-op and flight axes
   are synthesised in `FlightInputContext`.
 - **`GamepadReader`** and **`JoystickReader`** poll their device, apply dead
@@ -59,7 +63,8 @@ bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`):
   `VID_xxxx&PID_xxxx`).
 - **Readers are `DirectObject`s**, so each one's `accept()` callbacks (e.g.
   the gamepad and joystick readers' `connect-device`) never replace another's,
-  and `clean()` is just `ignoreAll()`.
+  and `clean()` only needs `ignoreAll()` to drop its callbacks (the gamepad
+  and joystick readers also detach their device).
 - **`CompositeInputReader`** polls the three readers and merges their states
   (hardware names never collide across devices). It also tracks
   `last_device`: the device of the last button press, or of the last axis
@@ -111,7 +116,8 @@ missile as the pause menu resumes the flight. Concrete contexts:
     resting forward at spawn does nothing), and the keyboard takes it over
     while a throttle key is held, stepping from the current value (clamped to
     `[0, 1]`).
-- **`MenuInputContext`** — pushed by every menu's `MenuNavigator` (see
+- **`MenuInputContext`** — pushed by the `MenuNavigator` of each navigable
+  menu (all but input settings, still mouse-only; see
   [docs/menus.md](menus.md#navigation)), it turns input into menu navigator calls:
   - keyboard and gamepad keys are hardcoded (`MENU_BUTTONS` in
     `input_reader.py`, polled whatever the bindings): arrows / d-pad move,
@@ -135,9 +141,9 @@ missile as the pause menu resumes the flight. Concrete contexts:
   was cleaned (e.g. leaving the level clears the flight state first).
 - **`HyperspaceInputContext`** — the same blocking pattern for the hyperspace
   overlay's "press key to drop out" prompt (see [docs/game.md](game.md)): it
-  fires its callback once on the `drop_hyperspace` key (of any device), then
-  ignores input
-  until the overlay pops it.
+  calls its callback on each press of the `drop_hyperspace` key (of any
+  device) until the callback accepts it (an early press must not use up the
+  trigger), then ignores input until the level reveal pops it.
 - **`RadialMenuInputContext`** — drives the radial target-filter menu (see
   [docs/menus.md](menus.md#in-session-overlays)). Each frame `read_direction`
   gets a 2D direction (each device's analog axes, or directional keys combined
@@ -203,7 +209,7 @@ missile as the pause menu resumes the flight. Concrete contexts:
     bar.
   - an **incoming missile warning**, while guided missiles home on the player
     (`nearest_incoming`, see [docs/ai.md](ai.md#guided-missiles-a-navigator-and-a-pilot-no-tactician)):
-    a red line under the crosshair with the nearest missile's distance (and
+    a red line below the screen centre with the nearest missile's distance (and
     their count if several), blinking faster as its time to impact shrinks,
     and a violet ring (the lead indicator's, 1.5 times bigger) on the nearest
     missile, pinned to the screen border like the target box

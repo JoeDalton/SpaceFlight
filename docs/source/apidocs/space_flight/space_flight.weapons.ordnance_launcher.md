@@ -67,6 +67,14 @@
   - ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.DAMAGE_TYPES
     :summary:
     ```
+* - {py:obj}`MISSILE_DECOY_KEYS <space_flight.weapons.ordnance_launcher.MISSILE_DECOY_KEYS>`
+  - ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.MISSILE_DECOY_KEYS
+    :summary:
+    ```
+* - {py:obj}`TARGET_MOBILITIES <space_flight.weapons.ordnance_launcher.TARGET_MOBILITIES>`
+  - ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.TARGET_MOBILITIES
+    :summary:
+    ```
 ````
 
 ### API
@@ -131,6 +139,26 @@
 
 ````
 
+````{py:data} MISSILE_DECOY_KEYS
+:canonical: space_flight.weapons.ordnance_launcher.MISSILE_DECOY_KEYS
+:value: >
+   ('decoy_range_m', 'decoy_cone_angle_deg', 'decoy_chance')
+
+```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.MISSILE_DECOY_KEYS
+```
+
+````
+
+````{py:data} TARGET_MOBILITIES
+:canonical: space_flight.weapons.ordnance_launcher.TARGET_MOBILITIES
+:value: >
+   ('agile', 'slow')
+
+```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.TARGET_MOBILITIES
+```
+
+````
+
 ````{py:function} _read_ordnance_configuration(name: str) -> dict
 :canonical: space_flight.weapons.ordnance_launcher._read_ordnance_configuration
 
@@ -184,7 +212,7 @@ Bases: {py:obj}`space_flight.weapons.Weapon`
 
 ````
 
-````{py:method} launch(target_id: uuid.UUID | None = None) -> bool
+````{py:method} launch(target_id: uuid.UUID | None = None) -> space_flight.actors.ordnance.OrdnanceController | None
 :canonical: space_flight.weapons.ordnance_launcher.OrdnanceLauncher.launch
 
 ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.OrdnanceLauncher.launch

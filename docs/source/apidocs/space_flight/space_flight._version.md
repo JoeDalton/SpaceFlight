@@ -30,7 +30,7 @@
 ````{py:data} __version__
 :canonical: space_flight._version.__version__
 :value: >
-   '0.0.1.dev307+691e2ed.dirty'
+   '0.1.1.dev12+53c753e'
 
 ```{autodoc2-docstring} space_flight._version.__version__
 ```
@@ -40,7 +40,7 @@
 ````{py:data} __version_tuple__
 :canonical: space_flight._version.__version_tuple__
 :value: >
-   (0, 0, 1, 'dev307', '691e2ed.dirty')
+   (0, 1, 1, 'dev12', '53c753e')
 
 ```{autodoc2-docstring} space_flight._version.__version_tuple__
 ```

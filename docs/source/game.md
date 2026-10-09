@@ -53,8 +53,11 @@ HUD, and drives the per-frame update.
 - **`initialize_game_structure()`** builds the session-scoped objects in
   dependency order; **`exit()`** tears them down in roughly reverse order
   (the `Mission` is simply dropped).
-- `pause()`/`resume()` propagate to `IntervalManager` and `GameTimeManager`,
-  so intervals and the game clock freeze together (e.g. for the pause menu).
+- `pause()`/`resume()` propagate to `IntervalManager`, `GameTimeManager` and
+  `SFX` (sounds are silenced while a menu is open), so intervals, the game
+  clock and the sound freeze together (e.g. for the pause menu). `exit()` also
+  stops and releases every pooled sound still playing
+  (`SFX.stop_level_sounds`).
 
 ## The floating render origin
 

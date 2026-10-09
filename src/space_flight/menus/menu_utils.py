@@ -184,8 +184,8 @@ class ScrollableList:
     the content node; callers parent their own row widgets to it, positioned
     via :meth:`row_y`.
 
-    Shared by the input and graphics settings menus so both option lists
-    scroll identically.
+    Shared by the gameplay, input and graphics settings menus so their option
+    lists scroll identically.
     """
 
     def __init__(

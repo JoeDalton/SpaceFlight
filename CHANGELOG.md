@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-09
+
+Second alpha release: play with any input device at any time, navigate the menus
+without the mouse, and face bots that fight with missiles and flares.
+
 ### Added
 
 - Add missile weapons and flares in bot behaviours #127
@@ -22,8 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed level 1 waypoints in asteroid #138
-
-### Removed
 
 ## [0.1.0] - 2026-10-04
 

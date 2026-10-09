@@ -120,7 +120,8 @@ class Personality:
                 "minimum_cos_angle": np.cos(np.deg2rad(5)),
             },
             # Missiles and rockets (see FighterNavigator._fire_missile and
-            # _fire_rocket), on top of the guns, at primary targets only (see
+            # _fire_rocket), on top of the guns: missiles at primary targets
+            # only, rockets at any target of their target_mobility (see
             # FighterTactician._choose_weapon)
             "ordnance": {
                 # Launch a locked missile only within this fraction of its reach

@@ -1187,7 +1187,8 @@ class FighterNavigator(GenericShipNavigator):
     ) -> Tuple[np.ndarray, float]:
         """
         Turn hard away from the target to avoid passing in front of it: point in
-        the opposite direction at turning speed.
+        the opposite direction at turning speed, raised to the pursuit speed
+        floor (see compute_minimum_speed).
 
         TODO: do something for immobile targets (turrets. They should not be evaded
         the same way as ships)

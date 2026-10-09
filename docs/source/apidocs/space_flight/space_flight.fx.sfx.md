@@ -325,6 +325,30 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
+````{py:method} pause()
+:canonical: space_flight.fx.sfx.SFX.pause
+
+```{autodoc2-docstring} space_flight.fx.sfx.SFX.pause
+```
+
+````
+
+````{py:method} resume()
+:canonical: space_flight.fx.sfx.SFX.resume
+
+```{autodoc2-docstring} space_flight.fx.sfx.SFX.resume
+```
+
+````
+
+````{py:method} stop_level_sounds()
+:canonical: space_flight.fx.sfx.SFX.stop_level_sounds
+
+```{autodoc2-docstring} space_flight.fx.sfx.SFX.stop_level_sounds
+```
+
+````
+
 ````{py:method} build_sound_pool(directory: pathlib.Path, pattern: str, is_3d: bool) -> list[panda3d.core.AudioSound]
 :canonical: space_flight.fx.sfx.SFX.build_sound_pool
 

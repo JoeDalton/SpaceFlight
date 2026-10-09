@@ -1,5 +1,6 @@
 # Flare: a decoy dropped just behind the ship, drifting with the ship's velocity
-# at release. Enemy ordnance hitting it is spent, and so is the flare.
+# at release. Enemy ordnance hitting it is spent, and so is the flare. It may
+# also lure a guided missile homing on its ship (see the missiles' decoy_* keys).
 type: flare
 life_time_s: 5.0
 damage: 0.0

@@ -10,11 +10,18 @@ dead_zones:
 #   keyboard  — Panda3D key strings: space, arrow_up, lshift, a, escape, …
 #   gamepad   — buttons: gamepad_lshoulder, gamepad_rshoulder, gamepad_start,
 #                        gamepad_back, gamepad_face_a/b/x/y,
-#                        gamepad_dpad_up/down/left/right
+#                        gamepad_dpad_up/down/left/right,
+#                        gamepad_lstick, gamepad_rstick
 #               axes:    left_x, left_y, right_x, right_y,
 #                        left_trigger, right_trigger
 #   joystick  — buttons: stick_button_N  (1-indexed, matches physical label)
 #               axes:    pitch, roll, yaw, throttle
+#
+# Menu navigation keys are fixed for the keyboard (arrows, Enter or Space,
+# Escape) and the gamepad (d-pad or left stick, A, B). The joystick's are its
+# flight bindings below: view_* (the hat, inverted) and the radial-menu axes
+# move, fire confirms, fire_secondary goes back. Every device's pause key
+# also goes back.
 
 contexts:
 

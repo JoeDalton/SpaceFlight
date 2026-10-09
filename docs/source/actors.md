@@ -296,7 +296,7 @@ system, so `Bot` skips the duplicate registration.
 
 `move_bot_task` differs by `bot_type` only in the navigator/pilot I/O: for
 ships, a direction plus desired speed becomes `throttle`/yaw/pitch/roll (with
-the navigator's optional up-reference); for tracking mounts, a direction
+the navigator's optional up-reference and speed floor); for tracking mounts, a direction
 becomes just yaw/pitch, and the navigator runs every frame (only the pilot
 waits for a think). While the bot is dying it skips the AI entirely and
 drives the pawn's tumble instead.

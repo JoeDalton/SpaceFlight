@@ -95,8 +95,10 @@ class InputContext(ABC):
         Interprets *state* and drives game objects. Called once per frame
         while this context is on top of the stack.
 
-        :param state: The :class:`~space_flight.ui.input_reader.InputState`
-            produced by the active reader this frame.
+        :param state: The merged
+            :class:`~space_flight.ui.input_reader.InputState` produced by the
+            input reader (:class:`~space_flight.ui.input_reader.CompositeInputReader`)
+            this frame.
         """
 
     def clean(self):

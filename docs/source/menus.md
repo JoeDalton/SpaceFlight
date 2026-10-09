@@ -17,8 +17,9 @@ All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
 - [`menu_utils.py`](../../src/space_flight/menus/menu_utils.py) is the shared
   widget toolkit, so styling and scrolling stay consistent and each screen's
   code only expresses layout and behaviour.
-- Every menu is navigable from the keyboard, a gamepad or a joystick as well
-  as the mouse: each screen lays its widgets out for a `MenuNavigator` (see
+- Every menu screen except input settings (still mouse-only) is navigable
+  from the keyboard, a gamepad or a joystick as well as the mouse: each such
+  screen lays its widgets out for a `MenuNavigator` (see
   [Navigation](#navigation)).
 - The three settings screens share one pattern: edit an in-memory **working
   copy** of a YAML config, and only write it to disk (and apply it live where
@@ -99,7 +100,8 @@ level end).
 - Widgets are duck-typed: `is_hidden()`, `set_focus(focused)`,
   `refresh_hover(region_name)`, `activate()`, and `adjust(direction)` for
   adjustable ones.
-- On the settings screens some rows sit in a `ScrollableList`: given the list
+- On the gameplay and graphics settings screens some rows sit in a
+  `ScrollableList`: given the list
   and each row's index in it (`scroll_list`/`scroll_rows`), the menu navigator
   scrolls it to show the focus. A screen rebuilding its list (preset picked,
   *Default*) hands the new widgets over with `set_rows`, which keeps the
@@ -215,7 +217,7 @@ level end).
     game, the tab is not saved), with checkboxes for boolean options such as
     `invert_*` (`make_row_data`/`rebuild_scroll`). Switching tab flushes
     typed dead-zone edits, then rebuilds the list. *Save*
-    writes the YAML, rebuilds the live `InputReader` (`reader_factory`) and
+    writes the YAML, rebuilds the live `CompositeInputReader` (`reader_factory`) and
     calls `InputContextStack.refresh_all_bindings`, so remapped controls work
     without a restart.
   - **`ChangeBindingDialog`** is the "press any key" dialog behind each row's

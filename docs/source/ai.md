@@ -89,10 +89,20 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
   `follow_waypoints`, which decelerates a ship that stops getting closer to its
   waypoint, e.g. orbiting it because its turn radius is too large) and `formation` (station-keeping on a wing leader by
   lead pursuit).
+  A navigator may set a speed floor, `minimum_speed_mps` (`compute_minimum_speed`:
+  an intent's `minimum_speed_factor` × `max_speed_mps`); a fighter's pursuit
+  raises it to `attack.minimum_speed_factor` (reposition included), and with
+  `minimum_speed_overrides_avoidance` avoidance cannot slow the ship below it
+  (it still steers).
 - **`GenericShipPilot`** owns four PID loops (yaw, pitch, roll, throttle),
   fed at each think by `compute_angular_error` (subclass-specific — a fighter
   and a capital ship point their axes differently) and the velocity error
-  against the desired speed.
+  against the desired speed. The throttle is a feedforward estimate of the
+  throttle holding the desired speed (`compute_feedforward_throttle`: drag
+  plus lift-induced drag) plus the PID correction. Below the navigator's
+  speed floor, the yaw/pitch commands are eased down to `min_turn_authority`
+  over `energy_protection_range_factor` × `max_speed_mps`
+  (`compute_turn_authority`, energy protection); roll is never limited.
 
 | Family | Tactician | Navigator | Pilot |
 |--------|-----------|-----------|-------|
@@ -162,8 +172,8 @@ the personality):
   `missile_max_range_fraction` of its reach (launch speed × life time), and
   while fewer than `max_missiles_in_flight` of the bot's missiles already home
   on the target (read from its `incoming_missiles`);
-- a **rocket** once the lead solution for its flight time is within gun range
-  and `rocket_fire_min_cos_angle` of the nose.
+- a **rocket** once the target is within gun range and the lead solution for
+  the rocket's flight time is within `rocket_fire_min_cos_angle` of the nose.
 
 **`DEFEND_MISSILE`** is a beam turn (`defend_missile`): full speed,
 perpendicular to the missile's line of sight, on the side closest to the
@@ -308,7 +318,8 @@ with `alive`) are compacted, so their positions are not the slot indices from
 
 [`ai/`](../../src/space_flight/ai/): `generic/` holds the
 tactician/navigator/pilot base classes, `fighter/`, `capital_ship/` and
-`tracking_mount/` each family's subclasses, `missile/` the missile navigator,
+`tracking_mount/` each family's subclasses, `missile/` the missile navigator
+and the incoming-missile message (`incoming_missile.py`),
 and `__init__.py` the shared
 `Personality`, `Intent` and `AttackMode`. `auto_aim.py`, `collision_sensor.py`,
 `formation.py`, `interactions.py` and `think_scheduler.py` are the supporting

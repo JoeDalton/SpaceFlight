@@ -81,9 +81,11 @@ ignored, with a warning).
 
 - **Pro-rata perks.** With `initial` generators and `alive` still standing,
   the fraction `alive / initial` scales both the maximum strength and the
-  regeneration rate, and the current strength is clamped down to the reduced
-  maximum. Shooting off one of three generators leaves the shield at
-  two-thirds strength; this is recomputed every frame.
+  regeneration rate, and the current strength is scaled by the same ratio as
+  the maximum (a partly depleted shield loses the same proportion). Shooting
+  off one of three generators leaves the shield at two-thirds strength; this
+  is recomputed every frame. `get_shield_level()` reads 0 once the shield's
+  final death has begun.
 - **One-way coupling.** The shield polls the generators' alive state; the
   generators know nothing of the shield and stay plain destructible hardware.
   The shield's `get_shield_level()` (its current strength) feeds the fleet

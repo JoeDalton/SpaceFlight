@@ -230,8 +230,8 @@ class InputState:
     mouse_moved — whether the mouse pointer moved this frame (set by
                :class:`CompositeInputReader` only).
 
-    All dicts are rebuilt each frame by :class:`InputReader`.  Contexts must
-    not mutate them.
+    All dicts are rebuilt each frame by each :class:`InputReader`, and merged
+    by :class:`CompositeInputReader`.  Contexts must not mutate them.
     """
 
     __slots__ = ("buttons", "repeats", "releases", "axes", "mouse_moved")
@@ -313,7 +313,7 @@ class InputReader(DirectObject):
            between two polls), produces buttons (newly pressed), repeats
            (held), and releases (newly released) -- each press or release
            reported once, even when both sources see it on different frames.
-        4. :meth:`read_axes` populates state.axes.
+        3. :meth:`read_axes` populates state.axes.
 
         :return: The updated :class:`InputState` for this frame.
         """
