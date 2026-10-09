@@ -43,7 +43,7 @@ plain `InputState` snapshot (`buttons`/`repeats`/`releases`/`axes`):
   Keyboards have no analogue axes, so `read_axes` is a no-op and flight axes
   are synthesised in `FlightInputContext`.
 - **`GamepadReader`** and **`JoystickReader`** poll their device, apply dead
-  zones (`dz()`: zeroes the band and shifts the rest down so output starts at
+  zones (`apply_dead_zone()`: zeroes the band and shifts the rest down so output starts at
   0 at its edge; not renormalised, so full deflection gives `1 - dead_zone`),
   and handle hot-plugging (falling back to another device of the same class,
   or showing an on-screen warning when none is attached). Only

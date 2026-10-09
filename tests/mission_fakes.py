@@ -161,7 +161,6 @@ class FakeGame:
         self.player_waypoints = None
         self.app = SimpleNamespace(
             bindings={
-                "input_type": "keyboard",
                 "contexts": {
                     "flight": {"keyboard": {"radial_menu": "r", "loop_target": ","}}
                 },

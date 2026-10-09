@@ -1,7 +1,9 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
+from space_flight import THROTTLE_BOOST_VALUE
 from space_flight.ui.input_context import (
     FlightInputContext,
     HyperspaceInputContext,
@@ -10,6 +12,7 @@ from space_flight.ui.input_context import (
     PauseMenuInputContext,
     RadialMenuInputContext,
     angle_to_slice,
+    bound_keys,
 )
 from space_flight.ui.input_reader import InputState
 
@@ -36,35 +39,41 @@ def make_state(buttons=None, repeats=None, releases=None, axes=None):
     return state
 
 
-def make_game(input_type="keyboard", device_bindings=None, global_bindings=None):
+def make_game(device_bindings=None, gamepad_bindings=None, joystick_bindings=None):
     """
     Build a minimal mock game whose app.bindings reflects the given config.
 
-    :param input_type: Active device type string.
-    :param device_bindings: Action → hardware-name dict for the device.
-    :param global_bindings: Action → hardware-name dict for universal keys.
+    :param device_bindings: Action → hardware-name dict for the keyboard.
+    :param gamepad_bindings: Action → hardware-name dict for the gamepad.
+    :param joystick_bindings: Action → hardware-name dict for the joystick.
     :return: MagicMock with app.bindings configured.
     """
     game = MagicMock()
     game.app.bindings = {
-        "input_type": input_type,
-        "contexts": {"flight": {input_type: device_bindings or {}}},
-        "global": global_bindings or {},
+        "contexts": {
+            "flight": {
+                "keyboard": device_bindings or {},
+                "gamepad": gamepad_bindings or {},
+                "joystick": joystick_bindings or {},
+            }
+        },
     }
     game.game_time.get_time_step.return_value = 0.016
     return game
 
 
-def make_flight_ctx(device_bindings=None, global_bindings=None, input_type="keyboard"):
+def make_flight_ctx(
+    device_bindings=None, gamepad_bindings=None, joystick_bindings=None
+):
     """
     Return a (FlightInputContext, game_mock, player_mock) triple.
 
-    :param device_bindings: Device-specific bindings dict.
-    :param global_bindings: Global bindings dict.
-    :param input_type: Active device type.
+    :param device_bindings: Keyboard bindings dict.
+    :param gamepad_bindings: Gamepad bindings dict.
+    :param joystick_bindings: Joystick bindings dict.
     :return: Tuple of (context, game, player).
     """
-    game = make_game(input_type, device_bindings, global_bindings)
+    game = make_game(device_bindings, gamepad_bindings, joystick_bindings)
     player = MagicMock()
     player.view_offset = [0.0, 0.0]
     player.is_dying = False
@@ -123,30 +132,74 @@ def stack():
 # ---------------------------------------------------------------------------
 
 
-def test_key_label_returns_uppercased_bound_key():
-    bindings = {
-        "input_type": "keyboard",
-        "contexts": {"flight": {"keyboard": {"radial_menu": "r"}}},
-    }
-    assert InputContext.key_label(bindings, "flight", "radial_menu") == "R"
-
-
-def test_key_label_uses_the_active_input_type():
-    bindings = {
-        "input_type": "gamepad",
+def make_label_app(last_device="keyboard"):
+    """
+    :param last_device: The device the input reader saw last.
+    :return: A mock app with keyboard and gamepad radial_menu bindings.
+    """
+    app = MagicMock()
+    app.input_reader.last_device = last_device
+    app.bindings = {
         "contexts": {
             "flight": {
                 "keyboard": {"radial_menu": "r"},
-                "gamepad": {"radial_menu": "dpad_down"},
+                "gamepad": {"radial_menu": "gamepad_dpad_down"},
             }
         },
     }
-    assert InputContext.key_label(bindings, "flight", "radial_menu") == "DPAD_DOWN"
+    return app
+
+
+def test_key_label_returns_uppercased_bound_key():
+    app = make_label_app()
+    assert InputContext.key_label(app, "flight", "radial_menu") == "R"
+
+
+def test_key_label_uses_the_last_used_device():
+    app = make_label_app(last_device="gamepad")
+    assert InputContext.key_label(app, "flight", "radial_menu") == "GAMEPAD_DPAD_DOWN"
+
+
+def test_key_label_defaults_to_keyboard_without_reader():
+    """Headless apps have no input reader."""
+    app = SimpleNamespace(bindings=make_label_app().bindings)
+    assert InputContext.key_label(app, "flight", "radial_menu") == "R"
 
 
 def test_key_label_falls_back_when_unbound():
-    assert InputContext.key_label({}, "flight", "radial_menu", "fallback") == "fallback"
-    assert InputContext.key_label({}, "flight", "radial_menu") == ""
+    app = make_label_app(last_device="joystick")
+    assert (
+        InputContext.key_label(app, "flight", "radial_menu", "fallback") == "fallback"
+    )
+    assert InputContext.key_label(app, "flight", "radial_menu") == ""
+
+
+# ---------------------------------------------------------------------------
+# bound_keys
+# ---------------------------------------------------------------------------
+
+
+def test_bound_keys_collects_every_device():
+    bindings = make_game(
+        device_bindings={"fire": "space"},
+        gamepad_bindings={"fire": "gamepad_lshoulder"},
+        joystick_bindings={"fire": "stick_button_1"},
+    ).app.bindings
+    assert bound_keys(bindings, "flight", "fire") == {
+        "space",
+        "gamepad_lshoulder",
+        "stick_button_1",
+    }
+
+
+def test_bound_keys_skips_unbound_devices_and_non_keys():
+    bindings = make_game(
+        device_bindings={"fire": "space"},
+        gamepad_bindings={"invert_yaw": True},
+    ).app.bindings
+    assert bound_keys(bindings, "flight", "fire") == {"space"}
+    assert bound_keys(bindings, "flight", "invert_yaw") == frozenset()
+    assert bound_keys(bindings, "unknown", "fire") == frozenset()
 
 
 # ---------------------------------------------------------------------------
@@ -294,30 +347,16 @@ def test_flight_ctx_pressed_returns_false_when_not_pressed():
     assert ctx.pressed(state, "fire") is False
 
 
-def test_flight_ctx_pressed_falls_back_to_global_binding():
+def test_flight_ctx_pressed_detects_any_device_binding():
     """
-    pressed must return True via the global binding when the device binding
-    is absent but the global key is in state.buttons.
-    """
-    ctx, _, _ = make_flight_ctx(
-        device_bindings={},
-        global_bindings={"pause": "escape"},
-    )
-    state = make_state(buttons={"escape": True})
-    assert ctx.pressed(state, "pause") is True
-
-
-def test_flight_ctx_pressed_device_binding_takes_precedence():
-    """
-    When both a device binding and a global binding exist for the same action,
-    the device binding key being pressed must be sufficient to return True.
+    pressed must return True when the action's key on any device is pressed.
     """
     ctx, _, _ = make_flight_ctx(
-        device_bindings={"pause": "gamepad_start"},
-        global_bindings={"pause": "escape"},
+        device_bindings={"pause": "escape"},
+        gamepad_bindings={"pause": "gamepad_start"},
     )
-    state = make_state(buttons={"gamepad_start": True})
-    assert ctx.pressed(state, "pause") is True
+    assert ctx.pressed(make_state(buttons={"escape": True}), "pause") is True
+    assert ctx.pressed(make_state(buttons={"gamepad_start": True}), "pause") is True
 
 
 def test_flight_ctx_held_detects_device_binding():
@@ -329,17 +368,16 @@ def test_flight_ctx_held_detects_device_binding():
     assert ctx.held(state, "fire") is True
 
 
-def test_flight_ctx_held_falls_back_to_global_binding():
+def test_flight_ctx_held_detects_other_device_binding():
     """
-    held must return True via the global binding when the global key is in
-    state.repeats.
+    held must return True when another device's key is in state.repeats.
     """
     ctx, _, _ = make_flight_ctx(
-        device_bindings={},
-        global_bindings={"pause": "escape"},
+        device_bindings={"fire": "space"},
+        joystick_bindings={"fire": "stick_button_1"},
     )
-    state = make_state(repeats={"escape": True})
-    assert ctx.held(state, "pause") is True
+    state = make_state(repeats={"stick_button_1": True})
+    assert ctx.held(state, "fire") is True
 
 
 def test_flight_ctx_released_detects_device_binding():
@@ -352,17 +390,16 @@ def test_flight_ctx_released_detects_device_binding():
     assert ctx.released(state, "boost_off") is True
 
 
-def test_flight_ctx_released_falls_back_to_global_binding():
+def test_flight_ctx_released_detects_other_device_binding():
     """
-    released must return True via the global binding when the global key is
-    in state.releases.
+    released must return True when another device's key is in state.releases.
     """
     ctx, _, _ = make_flight_ctx(
-        device_bindings={},
-        global_bindings={"pause": "escape"},
+        device_bindings={"boost_off": "b"},
+        gamepad_bindings={"boost_off": "gamepad_rshoulder"},
     )
-    state = make_state(releases={"escape": True})
-    assert ctx.released(state, "pause") is True
+    state = make_state(releases={"gamepad_rshoulder": True})
+    assert ctx.released(state, "boost_off") is True
 
 
 def test_flight_ctx_active_true_on_press():
@@ -539,23 +576,169 @@ def test_flight_ctx_handle_actions_no_ordnance_when_idle():
 
 def test_flight_ctx_axis_returns_value():
     """
-    axis must return the axis value from state.axes for the bound action.
+    axis must return the device's axis value from state.axes for the action.
+    """
+    ctx, _, _ = make_flight_ctx(gamepad_bindings={"throttle": "right_trigger"})
+    state = make_state(axes={"right_trigger": 0.8})
+    assert ctx.axis(state, "gamepad", "throttle") == pytest.approx(0.8)
+
+
+def test_flight_ctx_axis_applies_invert():
+    ctx, _, _ = make_flight_ctx(gamepad_bindings={"yaw": "right_x", "invert_yaw": True})
+    state = make_state(axes={"right_x": 0.5})
+    assert ctx.axis(state, "gamepad", "yaw") == pytest.approx(-0.5)
+
+
+def test_flight_ctx_axis_returns_none_for_unknown_action():
+    """
+    axis must return None when the action has no binding on the device.
+    """
+    ctx, _, _ = make_flight_ctx()
+    state = make_state(axes={"right_trigger": 0.8})
+    assert ctx.axis(state, "gamepad", "throttle") is None
+
+
+def test_flight_ctx_axis_returns_none_for_disconnected_device():
+    """
+    A device that is not connected reports no axes: axis must return None.
+    """
+    ctx, _, _ = make_flight_ctx(gamepad_bindings={"throttle": "right_trigger"})
+    assert ctx.axis(make_state(), "gamepad", "throttle") is None
+
+
+# ---------------------------------------------------------------------------
+# FlightInputContext — flight axes
+# ---------------------------------------------------------------------------
+
+KEYBOARD_FLIGHT = {
+    "throttle_up": "arrow_up",
+    "throttle_down": "arrow_down",
+    "yaw_left": "q",
+}
+GAMEPAD_FLIGHT = {"throttle": "right_trigger", "yaw": "right_x"}
+JOYSTICK_FLIGHT = {"throttle": "throttle", "yaw": "yaw"}
+
+
+def make_axes_ctx():
+    """
+    :return: A flight context with keyboard, gamepad and joystick axes bound.
     """
     ctx, _, _ = make_flight_ctx(
-        device_bindings={"throttle": "right_trigger"},
-        input_type="gamepad",
+        device_bindings=KEYBOARD_FLIGHT,
+        gamepad_bindings=GAMEPAD_FLIGHT,
+        joystick_bindings=JOYSTICK_FLIGHT,
     )
-    state = make_state(axes={"right_trigger": 0.8})
-    assert ctx.axis(state, "throttle") == pytest.approx(0.8)
+    return ctx
 
 
-def test_flight_ctx_axis_returns_zero_for_unknown_action():
+def test_flight_axes_sum_rates_across_devices():
+    ctx = make_axes_ctx()
+    _, yaw, _, _ = ctx.flight_axes(make_state(axes={"right_x": 0.2, "yaw": 0.3}))
+    assert yaw == pytest.approx(0.5)
+
+
+def test_flight_axes_clamp_summed_rates():
+    ctx = make_axes_ctx()
+    _, yaw, _, _ = ctx.flight_axes(make_state(axes={"right_x": 0.8, "yaw": 0.7}))
+    assert yaw == pytest.approx(1.0)
+
+
+def test_flight_axes_add_smoothed_keyboard_rate():
+    ctx = make_axes_ctx()
+    _, yaw, _, _ = ctx.flight_axes(make_state(repeats={"q": True}))
+    assert 0.0 < yaw < 1.0
+    _, yaw_with_stick, _, _ = ctx.flight_axes(
+        make_state(repeats={"q": True}, axes={"yaw": -0.2})
+    )
+    assert yaw_with_stick == pytest.approx(ctx.yaw_smoothed - 0.2)
+
+
+def test_throttle_ignores_analog_resting_where_first_seen():
     """
-    axis must return 0.0 when the action has no binding.
+    A throttle lever left forward at spawn does not take the throttle.
     """
-    ctx, _, _ = make_flight_ctx(device_bindings={})
-    state = make_state(axes={"right_trigger": 0.8})
-    assert ctx.axis(state, "throttle") == pytest.approx(0.0)
+    ctx = make_axes_ctx()
+    throttle, *_ = ctx.flight_axes(make_state(axes={"throttle": 0.8}))
+    assert throttle == pytest.approx(0.0)
+    assert ctx.throttle_owner is None
+
+
+def test_throttle_analog_takes_over_once_moved():
+    ctx = make_axes_ctx()
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))
+    throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.6}))
+    assert throttle == pytest.approx(0.6)
+    assert ctx.throttle_owner == "gamepad"
+
+
+def test_throttle_analog_owner_follows_small_moves():
+    ctx = make_axes_ctx()
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.6}))
+    throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.62}))
+    assert throttle == pytest.approx(0.62)
+
+
+def test_throttle_keyboard_steps_from_analog_value():
+    """
+    The keyboard takes the throttle over from where the analog left it.
+    """
+    ctx = make_axes_ctx()
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.6}))
+    throttle, *_ = ctx.flight_axes(
+        make_state(repeats={"arrow_up": True}, axes={"right_trigger": 0.6})
+    )
+    assert throttle == pytest.approx(0.605)
+    assert ctx.throttle_owner == "keyboard"
+
+
+def test_throttle_analog_does_not_retake_without_moving():
+    """
+    Once the keyboard owns the throttle, a still analog does not take it back.
+    """
+    ctx = make_axes_ctx()
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.6}))
+    ctx.flight_axes(
+        make_state(repeats={"arrow_down": True}, axes={"right_trigger": 0.6})
+    )
+    throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.62}))
+    assert throttle == pytest.approx(0.595)
+    assert ctx.throttle_owner == "keyboard"
+
+
+def test_throttle_analog_retakes_once_moved_again():
+    ctx = make_axes_ctx()
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.6}))
+    ctx.flight_axes(
+        make_state(repeats={"arrow_down": True}, axes={"right_trigger": 0.6})
+    )
+    throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))
+    assert throttle == pytest.approx(0.0)
+    assert ctx.throttle_owner == "gamepad"
+
+
+def test_throttle_kept_when_owner_disconnects():
+    ctx = make_axes_ctx()
+    ctx.flight_axes(make_state(axes={"throttle": 0.0}))
+    ctx.flight_axes(make_state(axes={"throttle": 0.7}))
+    throttle, *_ = ctx.flight_axes(make_state())
+    assert throttle == pytest.approx(0.7)
+
+
+def test_throttle_keyboard_clamped_to_unit_range():
+    ctx = make_axes_ctx()
+    throttle, *_ = ctx.flight_axes(make_state(repeats={"arrow_down": True}))
+    assert throttle == pytest.approx(0.0)
+
+
+def test_throttle_boost_overrides_owner():
+    ctx = make_axes_ctx()
+    ctx.is_boost = True
+    throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.3}))
+    assert throttle == pytest.approx(THROTTLE_BOOST_VALUE)
 
 
 def test_flight_ctx_clean_nulls_references():
@@ -574,18 +757,17 @@ def test_flight_ctx_clean_nulls_references():
 # ---------------------------------------------------------------------------
 
 
-def make_pause_ctx(device_pause=None, global_pause=None):
+def make_pause_ctx(keyboard_pause=None, joystick_pause=None):
     """
     Return a PauseMenuInputContext backed by a mock game.
 
-    :param device_pause: Hardware key mapped to pause in the device bindings.
-    :param global_pause: Hardware key mapped to pause in the global bindings.
+    :param keyboard_pause: Hardware key mapped to pause on the keyboard.
+    :param joystick_pause: Hardware key mapped to pause on the joystick.
     :return: Tuple of (PauseMenuInputContext, game_mock).
     """
     game = make_game(
-        input_type="joystick",
-        device_bindings={"pause": device_pause} if device_pause else {},
-        global_bindings={"pause": global_pause} if global_pause else {},
+        device_bindings={"pause": keyboard_pause} if keyboard_pause else {},
+        joystick_bindings={"pause": joystick_pause} if joystick_pause else {},
     )
     ctx = PauseMenuInputContext(app=game.app)
     return ctx, game
@@ -596,17 +778,17 @@ def test_pause_ctx_consume_pops_state_manager_on_device_key():
     consume() must call app.state_manager.pop() when the device-specific
     pause key is in state.buttons.
     """
-    ctx, game = make_pause_ctx(device_pause="stick_button_7")
+    ctx, game = make_pause_ctx(joystick_pause="stick_button_7")
     ctx.consume(make_state(buttons={"stick_button_7": True}))
     game.app.state_manager.pop.assert_called_once()
 
 
-def test_pause_ctx_consume_pops_state_manager_on_global_key():
+def test_pause_ctx_consume_pops_state_manager_on_other_device_key():
     """
-    consume() must call app.state_manager.pop() when the global pause key
-    (escape) is in state.buttons, regardless of device type.
+    consume() must call app.state_manager.pop() when another device's pause
+    key (escape) is in state.buttons.
     """
-    ctx, game = make_pause_ctx(global_pause="escape")
+    ctx, game = make_pause_ctx(keyboard_pause="escape", joystick_pause="stick_button_7")
     ctx.consume(make_state(buttons={"escape": True}))
     game.app.state_manager.pop.assert_called_once()
 
@@ -616,17 +798,17 @@ def test_pause_ctx_consume_does_not_pop_when_no_key_pressed():
     consume() must not call app.state_manager.pop() when neither pause key
     is present in state.buttons.
     """
-    ctx, game = make_pause_ctx(device_pause="stick_button_7", global_pause="escape")
+    ctx, game = make_pause_ctx(keyboard_pause="escape", joystick_pause="stick_button_7")
     ctx.consume(make_state(buttons={}))
     game.app.state_manager.pop.assert_not_called()
 
 
 def test_pause_ctx_consume_pops_only_once_when_both_keys_pressed():
     """
-    consume() must call pop() at most once even if both the device key and
-    the global key are pressed simultaneously.
+    consume() must call pop() at most once even if the pause keys of two
+    devices are pressed simultaneously.
     """
-    ctx, game = make_pause_ctx(device_pause="stick_button_7", global_pause="escape")
+    ctx, game = make_pause_ctx(keyboard_pause="escape", joystick_pause="stick_button_7")
     ctx.consume(make_state(buttons={"stick_button_7": True, "escape": True}))
     game.app.state_manager.pop.assert_called_once()
 
@@ -635,7 +817,7 @@ def test_pause_ctx_clean_nulls_game():
     """
     clean() must set the game reference to None.
     """
-    ctx, _ = make_pause_ctx(global_pause="escape")
+    ctx, _ = make_pause_ctx(keyboard_pause="escape")
     ctx.clean()
     assert ctx.game is None
 
@@ -684,9 +866,8 @@ def test_angle_to_slice_wraps_near_top():
 
 
 def make_radial_ctx(
-    input_type="keyboard",
-    device_bindings=None,
     radial_bindings=None,
+    gamepad_radial_bindings=None,
     n_slices=4,
     trigger_hw="r",
     min_magnitude=0.3,
@@ -694,30 +875,32 @@ def make_radial_ctx(
     """
     Build a RadialMenuInputContext with a fresh mock game.
 
-    :param input_type: Active device type.
-    :param device_bindings: Flight context device bindings.
-    :param radial_bindings: radial_menu context bindings (direction keys /
-        axes).
+    :param radial_bindings: Keyboard radial_menu context bindings (direction
+        keys).
+    :param gamepad_radial_bindings: Gamepad radial_menu context bindings
+        (axes).
     :param n_slices: Number of radial slices.
-    :param trigger_hw: Hardware name of the trigger button.
+    :param trigger_hw: Hardware name(s) of the trigger button(s).
     :param min_magnitude: Dead-zone threshold.
     :return: Tuple of (RadialMenuInputContext, game_mock, on_select_mock).
     """
     game = MagicMock()
     game.app.bindings = {
-        "input_type": input_type,
         "contexts": {
-            "flight": {input_type: device_bindings or {}},
-            "radial_menu": {input_type: radial_bindings or {}},
+            "radial_menu": {
+                "keyboard": radial_bindings or {},
+                "gamepad": gamepad_radial_bindings or {},
+            },
         },
-        "global": {},
     }
     on_select = MagicMock()
     ctx = RadialMenuInputContext(
         game=game,
         n_slices=n_slices,
         on_select=on_select,
-        trigger_hw_name=trigger_hw,
+        trigger_hw_names=frozenset(
+            [trigger_hw] if isinstance(trigger_hw, str) else trigger_hw
+        ),
         min_magnitude=min_magnitude,
     )
     return ctx, game, on_select
@@ -781,11 +964,30 @@ def test_radial_ctx_selects_slice_from_analog_axis():
     When axis bindings are present, the direction must be read from state.axes.
     """
     ctx, _, _ = make_radial_ctx(
-        input_type="gamepad",
-        radial_bindings={"axis_x": "right_x", "axis_y": "right_y"},
+        gamepad_radial_bindings={"axis_x": "right_x", "axis_y": "right_y"},
     )
     ctx.consume(make_state(axes={"right_x": 0.0, "right_y": 0.8}))  # up → slice 0
     assert ctx.selected_slice == 0
+
+
+def test_radial_ctx_sums_device_directions():
+    """
+    Keys and stick point together: right key + stick up → up-right.
+    """
+    ctx, _, _ = make_radial_ctx(
+        radial_bindings={"dir_right": "l"},
+        gamepad_radial_bindings={"axis_x": "right_x", "axis_y": "right_y"},
+        n_slices=8,
+    )
+    ctx.consume(make_state(repeats={"l": True}, axes={"right_y": 1.0}))
+    assert ctx.selected_slice == 1
+
+
+def test_radial_ctx_any_trigger_release_closes():
+    ctx, game, on_select = make_radial_ctx(trigger_hw=("r", "gamepad_dpad_down"))
+    ctx.consume(make_state(releases={"gamepad_dpad_down": True}))
+    game.app.state_manager.pop.assert_called_once()
+    on_select.assert_called_once_with(None)
 
 
 def test_radial_ctx_calls_on_hover_every_frame():
@@ -795,18 +997,13 @@ def test_radial_ctx_calls_on_hover_every_frame():
     hover = MagicMock()
     game = MagicMock()
     game.app.bindings = {
-        "input_type": "keyboard",
-        "contexts": {
-            "radial_menu": {"keyboard": {"dir_up": "i"}},
-            "flight": {"keyboard": {}},
-        },
-        "global": {},
+        "contexts": {"radial_menu": {"keyboard": {"dir_up": "i"}}},
     }
     ctx = RadialMenuInputContext(
         game=game,
         n_slices=4,
         on_select=MagicMock(),
-        trigger_hw_name="r",
+        trigger_hw_names=frozenset({"r"}),
         on_hover=hover,
     )
     ctx.consume(make_state(repeats={"i": True}))
@@ -820,16 +1017,12 @@ def test_radial_ctx_on_hover_none_when_no_direction():
     """
     hover = MagicMock()
     game = MagicMock()
-    game.app.bindings = {
-        "input_type": "keyboard",
-        "contexts": {"radial_menu": {"keyboard": {}}, "flight": {"keyboard": {}}},
-        "global": {},
-    }
+    game.app.bindings = {"contexts": {"radial_menu": {"keyboard": {}}}}
     ctx = RadialMenuInputContext(
         game=game,
         n_slices=4,
         on_select=MagicMock(),
-        trigger_hw_name="r",
+        trigger_hw_names=frozenset({"r"}),
         on_hover=hover,
     )
     ctx.consume(make_state())
@@ -985,37 +1178,13 @@ def test_flight_ctx_refresh_bindings_old_key_no_longer_triggers():
     assert ctx.pressed(state, "fire") is False
 
 
-def test_flight_ctx_refresh_bindings_updates_global_bindings():
-    """
-    After refresh_bindings, the global binding dict must also reflect the
-    updated app.bindings so that global keys (e.g. pause) use the new mapping.
-    """
-    ctx, game, _ = make_flight_ctx(global_bindings={"pause": "escape"})
-    game.app.bindings["global"]["pause"] = "p"
-    ctx.refresh_bindings(game.app)
-    state = make_state(buttons={"p": True})
-    assert ctx.pressed(state, "pause") is True
-    assert ctx.pressed(make_state(buttons={"escape": True}), "pause") is False
-
-
-def test_flight_ctx_refresh_bindings_updates_input_type():
-    """
-    refresh_bindings must update input_type when the active device changes.
-    """
-    ctx, game, _ = make_flight_ctx(input_type="keyboard")
-    game.app.bindings["input_type"] = "gamepad"
-    game.app.bindings["contexts"]["flight"]["gamepad"] = {"fire": "gamepad_a"}
-    ctx.refresh_bindings(game.app)
-    assert ctx.input_type == "gamepad"
-
-
 def test_pause_ctx_refresh_bindings_new_key_triggers_pop():
     """
     After refresh_bindings with a new pause key, pressing the new key must
     call state_manager.pop().
     """
-    ctx, game = make_pause_ctx(global_pause="escape")
-    game.app.bindings["global"]["pause"] = "p"
+    ctx, game = make_pause_ctx(keyboard_pause="escape")
+    game.app.bindings["contexts"]["flight"]["keyboard"]["pause"] = "p"
     ctx.refresh_bindings(game.app)
     ctx.consume(make_state(buttons={"p": True}))
     game.app.state_manager.pop.assert_called_once()
@@ -1026,8 +1195,8 @@ def test_pause_ctx_refresh_bindings_old_key_no_longer_triggers():
     After refresh_bindings, the previously mapped pause key must no longer
     trigger state_manager.pop().
     """
-    ctx, game = make_pause_ctx(global_pause="escape")
-    game.app.bindings["global"]["pause"] = "p"
+    ctx, game = make_pause_ctx(keyboard_pause="escape")
+    game.app.bindings["contexts"]["flight"]["keyboard"]["pause"] = "p"
     ctx.refresh_bindings(game.app)
     ctx.consume(make_state(buttons={"escape": True}))
     game.app.state_manager.pop.assert_not_called()
@@ -1038,24 +1207,22 @@ def test_pause_ctx_refresh_bindings_old_key_no_longer_triggers():
 # ---------------------------------------------------------------------------
 
 
-def make_hyperspace_ctx(device_key=None, global_key=None, input_type="keyboard"):
+def make_hyperspace_ctx(device_key=None, gamepad_key=None):
     """
     Return a (HyperspaceInputContext, app_mock, on_trigger_mock) triple.
 
-    :param device_key: hardware name bound to drop_hyperspace for the device
-    :param global_key: hardware name bound to drop_hyperspace globally
-    :param input_type: active device type
+    :param device_key: hardware name bound to drop_hyperspace on the keyboard
+    :param gamepad_key: hardware name bound to drop_hyperspace on the gamepad
     :return: tuple of (context, app, on_trigger)
     """
     app = MagicMock()
     app.bindings = {
-        "input_type": input_type,
         "contexts": {
             "hyperspace": {
-                input_type: {"drop_hyperspace": device_key} if device_key else {}
+                "keyboard": {"drop_hyperspace": device_key} if device_key else {},
+                "gamepad": {"drop_hyperspace": gamepad_key} if gamepad_key else {},
             }
         },
-        "global": {"drop_hyperspace": global_key} if global_key else {},
     }
     on_trigger = MagicMock(return_value=True)
     ctx = HyperspaceInputContext(app=app, on_trigger=on_trigger)
@@ -1097,10 +1264,12 @@ def test_hyperspace_ctx_ignores_unbound_keys():
     assert not ctx.triggered
 
 
-def test_hyperspace_ctx_honours_global_binding():
-    """The drop key works when bound only in the global section."""
-    ctx, _, on_trigger = make_hyperspace_ctx(global_key="space")
-    ctx.consume(make_state(buttons={"space": True}))
+def test_hyperspace_ctx_honours_every_device_binding():
+    """The drop key of any device works."""
+    ctx, _, on_trigger = make_hyperspace_ctx(
+        device_key="space", gamepad_key="gamepad_lshoulder"
+    )
+    ctx.consume(make_state(buttons={"gamepad_lshoulder": True}))
     on_trigger.assert_called_once()
 
 
