@@ -31,6 +31,7 @@ from panda3d.core import (
     GamepadButton,
     InputDevice,
     InputDeviceNode,
+    MouseWatcher,
     WindowProperties,
 )
 
@@ -815,7 +816,9 @@ class CompositeInputReader:
 
     It also tells whether the mouse moved (InputState.mouse_moved), and hides
     the mouse cursor while another device is in use, showing it again as
-    soon as the mouse moves.
+    soon as the mouse moves.  While hidden, the GUI ignores the pointer, so
+    an invisible cursor never hovers a widget (e.g. one a newly opened menu
+    draws under it).
     """
 
     def __init__(self, app: SpaceFlightSimulator, readers: list[InputReader]):
@@ -834,6 +837,9 @@ class CompositeInputReader:
         # throttle lever resting forward does not keep claiming last_device
         self.pushed_axes: set[str] = set()
         self.mouse_position: tuple[float, float] | None = None
+        # Given to the GUI while the cursor is hidden: outside the data graph,
+        # it never sees the mouse
+        self.blind_mouse_watcher = MouseWatcher("hidden-cursor")
 
     def poll(self) -> InputState:
         """
@@ -877,7 +883,8 @@ class CompositeInputReader:
 
     def set_cursor_hidden(self, hidden: bool):
         """
-        Hides or shows the mouse cursor, if not already.
+        Hides or shows the mouse cursor, if not already, and makes the GUI
+        ignore the pointer while hidden.
 
         :param hidden: Whether the cursor should be hidden.
         """
@@ -887,6 +894,9 @@ class CompositeInputReader:
         properties = WindowProperties()
         properties.setCursorHidden(hidden)
         window.requestProperties(properties)
+        self.app.aspect2d.node().setMouseWatcher(
+            self.blind_mouse_watcher if hidden else self.app.mouseWatcherNode
+        )
 
     def update_pushed_axes(self, axes: dict[str, float]) -> bool:
         """

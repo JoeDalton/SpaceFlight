@@ -693,6 +693,24 @@ def test_composite_shows_cursor_when_mouse_moves():
     assert requested_cursor_hidden(app) == [False]
 
 
+def test_composite_gui_ignores_pointer_while_cursor_hidden():
+    """
+    While the cursor is hidden, the GUI watches a mouse watcher that never
+    sees the mouse, so the invisible pointer hovers nothing; it gets the real
+    one back when the mouse moves.
+    """
+    app = make_composite_app()
+    composite, keyboard, _ = make_composite(app)
+    gui_top = app.aspect2d.node.return_value
+    keyboard.hw_state = {"space": True}
+    composite.poll()
+    gui_top.setMouseWatcher.assert_called_once_with(composite.blind_mouse_watcher)
+    app.win.getProperties.return_value.getCursorHidden.return_value = True
+    app.mouseWatcherNode.getMouseX.return_value = 0.3
+    composite.poll()
+    gui_top.setMouseWatcher.assert_called_with(app.mouseWatcherNode)
+
+
 def test_composite_leaves_cursor_alone_when_already_right():
     app = make_composite_app(cursor_hidden=True)
     composite, keyboard, _ = make_composite(app)

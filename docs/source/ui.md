@@ -67,7 +67,10 @@ bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`):
   claiming it). `InputContext.key_label` uses it to show prompts for the
   device the player is using. It also sets `InputState.mouse_moved`, and
   hides the mouse cursor on such device input (menus and flight alike),
-  showing it again as soon as the mouse moves.
+  showing it again as soon as the mouse moves. While it is hidden, the GUI
+  (`aspect2d`'s `PGTop`) watches a "blind" `MouseWatcher` outside the data
+  graph, so the invisible pointer hovers nothing, not even the widgets of a
+  menu newly opened under it.
 - **`reader_factory(app)`** loads `bindings.yaml` onto `app.bindings` and
   builds the `CompositeInputReader`. It runs at startup and again when input
   settings are saved (see [docs/menus.md](menus.md#settings-screens)), so
