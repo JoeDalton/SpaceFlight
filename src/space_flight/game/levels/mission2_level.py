@@ -175,10 +175,10 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     """
     game = m.game
     radial_key = InputContext.key_label(
-        game.app.bindings, "flight", "radial_menu", "the target-menu key"
+        game.app, "flight", "radial_menu", "the target-menu key"
     )
     loop_key = InputContext.key_label(
-        game.app.bindings, "flight", "loop_target", "the cycle-target key"
+        game.app, "flight", "loop_target", "the cycle-target key"
     )
 
     # Handles first, so the rules below can refer to waves not spawned yet.

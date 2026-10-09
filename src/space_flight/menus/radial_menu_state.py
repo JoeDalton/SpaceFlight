@@ -21,7 +21,7 @@ from direct.gui.DirectGui import DirectLabel
 from panda3d.core import Geom, GeomNode, NodePath, TransparencyAttrib
 
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.ui.input_context import RadialMenuInputContext
+from space_flight.ui.input_context import RadialMenuInputContext, bound_keys
 from space_flight.ui.utils import make_ring_sector_geom
 
 if TYPE_CHECKING:
@@ -185,14 +185,9 @@ class RadialMenuState(BaseState):
         self.visual: RadialMenuVisual | None = None
 
     def enter(self):
-        # Resolve the trigger hardware name from the flight context bindings
-        # so we don't duplicate it in the YAML.
-        input_type = self.app.bindings["input_type"]
-        trigger_hw_name: str = (
-            self.app.bindings["contexts"]["flight"]
-            .get(input_type, {})
-            .get("radial_menu", "")
-        )
+        # Resolve the trigger hardware names from the flight context bindings
+        # so we don't duplicate them in the YAML.
+        trigger_hw_names = bound_keys(self.app.bindings, "flight", "radial_menu")
 
         game_state = self.app.state_manager.stack[-2]
         self.visual = RadialMenuVisual(self.app, self.slice_labels)
@@ -200,7 +195,7 @@ class RadialMenuState(BaseState):
             game=game_state,
             n_slices=self.n_slices,
             on_select=self.on_select,
-            trigger_hw_name=trigger_hw_name,
+            trigger_hw_names=trigger_hw_names,
             on_hover=self.visual.update,
             min_magnitude=self.min_magnitude,
         )

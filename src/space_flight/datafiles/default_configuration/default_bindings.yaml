@@ -1,9 +1,5 @@
-input_type: keyboard  # keyboard | gamepad | joystick
-
-# Bindings active on ALL input types (keyboard shortcuts that always work)
-global:
-  pause: escape
-  drop_hyperspace: space
+# Every device's bindings are live at once: an action fires from whichever
+# device it is bound on.
 
 dead_zones:
   stick: 0.15

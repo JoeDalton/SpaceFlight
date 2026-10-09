@@ -19,8 +19,9 @@ You can play with :
 - A gamepad (tested with xbox one and ps4 controllers)
 - A joystick/HOTAS (developped with a ThrustMaster T.Flight Hotas One, possible fiddling necessary for other devices)
 
-Only one input device can be selected at a time. Default is `keyboard`. You can change
-the input device and remap bindings to your liking within the game interface.
+All devices can be used at the same time, without any setting: an action fires from
+whichever device it is bound on. You can remap bindings to your liking within the game
+interface.
 
 
 ## Windows user

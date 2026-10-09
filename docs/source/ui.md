@@ -21,8 +21,8 @@ All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
   beneath it without either context knowing about the other.
 - Every action name (`"fire"`, `"pause"`, `"throttle_up"`, ...) is resolved
   through the YAML bindings (`configuration/bindings.yaml`), never
-  hardcoded to a key. Since every reader exposes the same `InputState` shape,
-  the same context code drives keyboard, gamepad and joystick.
+  hardcoded to a key. Every device is live at once: the readers' `InputState`s
+  are merged, and an action fires from whichever device it is bound on.
 - `HUD`, `AimHUD` and `PlayerWaypoints` follow the scene-piece lifecycle
   (see [docs/scenes.md](scenes.md)): construct with `game`, register a
   per-frame update in `game.method_lists`, `clean()`. `RearViewMirror` (owned
@@ -31,8 +31,9 @@ All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
 
 ## `input_reader.py` — the hardware layer
 
-Each frame the reader subclass matching the configured `input_type` rebuilds a
-plain `InputState` snapshot (`buttons`/`repeats`/`releases`/`axes`):
+Each frame every reader subclass rebuilds a plain `InputState` snapshot
+(`buttons`/`repeats`/`releases`/`axes`) of its own device, from that device's
+bindings (its `device_type`: `keyboard`, `gamepad` or `joystick`):
 
 - **Hybrid detection.** **Polling** is the primary source: `read_all_buttons()`
   each frame, compared with the previous frame to derive pressed/held/released.
@@ -43,10 +44,10 @@ plain `InputState` snapshot (`buttons`/`repeats`/`releases`/`axes`):
   Keyboards have no analogue axes, so `read_axes` is a no-op and flight axes
   are synthesised in `FlightInputContext`.
 - **`GamepadReader`** and **`JoystickReader`** poll their device, apply dead
-  zones (`dz()`: zeroes the band and shifts the rest down so output starts at
+  zones (`apply_dead_zone()`: zeroes the band and shifts the rest down so output starts at
   0 at its edge; not renormalised, so full deflection gives `1 - dead_zone`),
-  and handle hot-plugging (falling back to another device of the same class,
-  or showing an on-screen warning when none is attached). Only
+  and handle hot-plugging (falling back to another device of the same class;
+  with none attached they simply report nothing). Only
   `GamepadReader` registers per-button safety-net events; most flight-stick
   buttons don't generate reliable Panda3D events, so `JoystickReader` is
   polling-only.
@@ -56,8 +57,17 @@ plain `InputState` snapshot (`buttons`/`repeats`/`releases`/`axes`):
   controllers. `safe_device_name()` provides a printable name instead, with a
   three-tier fallback (direct read → re-encode → synthesised
   `VID_xxxx&PID_xxxx`).
+- **Readers are `DirectObject`s**, so each one's `accept()` callbacks (e.g.
+  the gamepad and joystick readers' `connect-device`) never replace another's,
+  and `clean()` is just `ignoreAll()`.
+- **`CompositeInputReader`** polls the three readers and merges their states
+  (hardware names never collide across devices). It also tracks
+  `last_device`: the device of the last button press, or of the last axis
+  pushed past 0.5 (crossing it, so a lever resting forward does not keep
+  claiming it). `InputContext.key_label` uses it to show prompts for the
+  device the player is using.
 - **`reader_factory(app)`** loads `bindings.yaml` onto `app.bindings` and
-  instantiates the matching reader. It runs at startup and again when input
+  builds the `CompositeInputReader`. It runs at startup and again when input
   settings are saved (see [docs/menus.md](menus.md#settings-screens)), so
   remapped bindings apply without a restart.
 
@@ -70,38 +80,44 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
 
 - **`FlightInputContext`** — the gameplay context: ship axes, weapons, boost,
   targeting, mirror, radial menu, head-look and pause, read from
-  `contexts.flight.<input_type>`. Weapons are `fire` (lasers),
+  `contexts.flight` for every device at once (`bound_keys`). Weapons are `fire` (lasers),
   `fire_secondary` (the selected bomb, rocket or missile launcher, while
   held), `cycle_secondary` (on press) and `drop_flare` (while held); held
   launches are paced by each launcher's reload, and a newly selected launcher
   reloads before it can fire. Energy distribution (see
   [docs/actors.md](actors.md#energy-management)) is set on press by
   `energy_engines`, `energy_lasers`, `energy_shields` and `energy_balanced`
-  (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick). Its `pressed`/`held`/`active`/`released`
-  helpers also check the `global` section (`axis` does not), so a key bound
-  once globally (e.g. Escape for pause) works on every input type.
-  `keyboard_axes` synthesises continuous axes from key presses: throttle
-  accumulates while held (clamped to `[0, 1]`), and yaw/pitch/roll go through
-  `low_pass_filter_first_order` so a key press doesn't snap to full
-  deflection. `analog_axes` reads gamepad/joystick axes directly, applying
-  the `invert_*` bindings.
+  (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick). Its
+  `pressed`/`held`/`active`/`released` helpers are true when the action's key
+  on any device is. `flight_axes` combines the devices:
+  - yaw/pitch/roll add up, clamped to `[-1, 1]`: the keyboard's are synthesised
+    from key presses through `low_pass_filter_first_order` (so a key press
+    doesn't snap to full deflection), and the gamepad/joystick axes are read
+    by `axis`, applying the `invert_*` bindings;
+  - the throttle follows the device that last touched it (`update_throttle`):
+    an analog throttle takes it over once moved more than `THROTTLE_TAKEOVER`
+    from where it last left it (or from where it was first seen, so a lever
+    resting forward at spawn does nothing), and the keyboard takes it over
+    while a throttle key is held, stepping from the current value (clamped to
+    `[0, 1]`).
 - **`PauseMenuInputContext`** — pushed by the pause menu, it blocks everything
-  except the pause key (device-specific or global), which calls
+  except the pause key (of any device), which calls
   `state_manager.pop()`: normally that pops the pause menu, whose `exit()`
   pops this context and resumes `FlightState` (if a settings screen is open
   above the pause menu, that screen is popped instead). Sitting above
   `FlightInputContext`, it freezes the ship's controls with no extra logic.
 - **`HyperspaceInputContext`** — the same blocking pattern for the hyperspace
   overlay's "press key to drop out" prompt (see [docs/game.md](game.md)): it
-  fires its callback once on the `drop_hyperspace` key (device-specific or
-  global, so the keyboard key works on any input type), then ignores input
+  fires its callback once on the `drop_hyperspace` key (of any device), then
+  ignores input
   until the overlay pops it.
 - **`RadialMenuInputContext`** — drives the radial target-filter menu (see
   [docs/menus.md](menus.md#in-session-overlays)). Each frame `read_direction`
-  gets a 2D direction (analog axes, or directional keys combined into a
-  vector); once its magnitude clears `min_magnitude`, `angle_to_slice` maps it
+  gets a 2D direction (each device's analog axes, or directional keys combined
+  into a vector, summed over the devices); once its magnitude clears `min_magnitude`, `angle_to_slice` maps it
   to a slice (0 at the top, clockwise), and `on_hover` is called so the
-  overlay highlights it live. Releasing the trigger pops the radial menu
+  overlay highlights it live. Releasing the trigger (any device's
+  `radial_menu` key) pops the radial menu
   state and calls `on_select` with the slice (or `None`).
 
 ## `hud.py` — heads-up display

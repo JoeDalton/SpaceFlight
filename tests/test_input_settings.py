@@ -6,6 +6,7 @@ Unit tests for pure functions and data methods in the input settings menu
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
 from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 from space_flight.menus.input_settings_menu_state import (
@@ -35,8 +36,6 @@ def state():
 def cfg():
     """Minimal valid configuration dict matching the YAML structure."""
     return {
-        "input_type": "keyboard",
-        "global": {"pause": "escape"},
         "dead_zones": {"stick": 0.15, "throttle": 0.04},
         "contexts": {
             "flight": {
@@ -109,27 +108,31 @@ class TestFormatBinding:
 
 
 # ---------------------------------------------------------------------------
-# InputSettingsMenuState.load_file
+# load_bindings
 # ---------------------------------------------------------------------------
 
 
-class TestLoadFile:
-    def test_parses_yaml_to_dict(self, tmp_path):
-        f = tmp_path / "cfg.yaml"
-        f.write_text("input_type: keyboard\n")
-        assert InputSettingsMenuState.load_file(f) == {"input_type": "keyboard"}
-
+class TestLoadBindings:
     def test_nested_structure_preserved(self, tmp_path):
         f = tmp_path / "cfg.yaml"
         f.write_text("dead_zones:\n  stick: 0.15\n  throttle: 0.04\n")
-        result = InputSettingsMenuState.load_file(f)
+        result = load_bindings(f)
         assert result["dead_zones"]["stick"] == pytest.approx(0.15)
 
     def test_float_values_parsed_as_float(self, tmp_path):
         f = tmp_path / "cfg.yaml"
         f.write_text("dead_zones:\n  stick: 0.15\n")
-        result = InputSettingsMenuState.load_file(f)
+        result = load_bindings(f)
         assert isinstance(result["dead_zones"]["stick"], float)
+
+    def test_drops_obsolete_keys(self, tmp_path):
+        """
+        input_type and global from older files are dropped, so the menu does
+        not save them back.
+        """
+        f = tmp_path / "cfg.yaml"
+        f.write_text("input_type: gamepad\nglobal:\n  pause: escape\ndead_zones: {}\n")
+        assert load_bindings(f) == {"dead_zones": {}}
 
 
 # ---------------------------------------------------------------------------
@@ -146,15 +149,24 @@ class TestBindingsFiles:
         )
 
     @pytest.mark.parametrize("path", [_BINDINGS_FILE, _DEFAULT_BINDINGS_FILE])
-    def test_shipped_file_loads(self, path):
-        assert InputSettingsMenuState.load_file(path)["input_type"] in (
-            "keyboard",
-            "gamepad",
-            "joystick",
-        )
+    def test_shipped_file_has_no_obsolete_keys(self, path):
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+        assert "input_type" not in raw
+        assert "global" not in raw
+
+    @pytest.mark.parametrize("path", [_BINDINGS_FILE, _DEFAULT_BINDINGS_FILE])
+    def test_shipped_file_binds_pause_and_drop_on_keyboard(self, path):
+        """
+        Escape and Space used to be global bindings; they now live in the
+        keyboard bindings.
+        """
+        contexts = load_bindings(path)["contexts"]
+        assert contexts["flight"]["keyboard"]["pause"] == "escape"
+        assert contexts["hyperspace"]["keyboard"]["drop_hyperspace"] == "space"
 
     def test_load_bindings_reads_bindings_file(self):
-        assert load_bindings() == InputSettingsMenuState.load_file(_BINDINGS_FILE)
+        assert load_bindings() == load_bindings(_BINDINGS_FILE)
 
 
 # ---------------------------------------------------------------------------
@@ -176,29 +188,19 @@ class TestMakeRowData:
         assert "Stick" in labels
         assert "Throttle" in labels
 
-    def test_global_bindings_header_present(self, state, cfg):
-        state.working_config = cfg
-        headers = [r["text"] for r in state.make_row_data() if r["kind"] == "header"]
-        assert "Global Bindings" in headers
-
-    def test_global_binding_row_per_action(self, state, cfg):
-        state.working_config = cfg
-        paths = [r["path"] for r in state.make_row_data() if r["kind"] == "binding"]
-        assert ("global", "pause") in paths
-
-    def test_keyboard_bindings_included_for_keyboard_type(self, state, cfg):
-        state.working_config = cfg  # input_type = "keyboard"
+    def test_keyboard_bindings_included_by_default(self, state, cfg):
+        state.working_config = cfg  # edited_device = "keyboard"
         paths = [r["path"] for r in state.make_row_data() if r["kind"] == "binding"]
         assert ("contexts", "flight", "keyboard", "fire") in paths
 
-    def test_gamepad_bindings_included_for_gamepad_type(self, state, cfg):
-        cfg["input_type"] = "gamepad"
+    def test_gamepad_bindings_included_for_gamepad_tab(self, state, cfg):
+        state.edited_device = "gamepad"
         state.working_config = cfg
         paths = [r["path"] for r in state.make_row_data() if r["kind"] == "binding"]
         assert ("contexts", "flight", "gamepad", "fire") in paths
 
-    def test_inactive_input_type_bindings_excluded(self, state, cfg):
-        state.working_config = cfg  # input_type = "keyboard"
+    def test_other_device_bindings_excluded(self, state, cfg):
+        state.working_config = cfg  # edited_device = "keyboard"
         paths = [r["path"] for r in state.make_row_data() if r["kind"] == "binding"]
         assert ("contexts", "flight", "gamepad", "fire") not in paths
 
@@ -221,22 +223,9 @@ class TestMakeRowData:
         assert dz_header_idx < first_binding_idx
 
     def test_empty_contexts_produces_no_binding_rows(self, state):
-        state.working_config = {
-            "input_type": "keyboard",
-            "dead_zones": {},
-            "contexts": {},
-        }
+        state.working_config = {"dead_zones": {}, "contexts": {}}
         rows = state.make_row_data()
         assert not any(r["kind"] == "binding" for r in rows)
-
-    def test_missing_global_omits_global_header(self, state):
-        state.working_config = {
-            "input_type": "keyboard",
-            "dead_zones": {},
-            "contexts": {},
-        }
-        headers = [r["text"] for r in state.make_row_data() if r["kind"] == "header"]
-        assert "Global Bindings" not in headers
 
     def test_deadzone_path_tuple_structure(self, state, cfg):
         state.working_config = cfg
@@ -309,29 +298,28 @@ class TestFlushDeadZones:
 class TestOnConfirmed:
     def test_none_value_leaves_config_unchanged(self, state):
         state.active_dialog = MagicMock()
-        state.working_config = {"global": {"pause": "escape"}}
+        state.working_config = {"dead_zones": {"stick": 0.15}}
         state.binding_labels = {}
-        state.on_confirmed(("global", "pause"), None, None)
-        assert state.working_config["global"]["pause"] == "escape"
+        state.on_confirmed(("dead_zones", "stick"), None, None)
+        assert state.working_config["dead_zones"]["stick"] == 0.15
 
     def test_active_dialog_cleared_regardless_of_value(self, state):
         state.active_dialog = MagicMock()
-        state.working_config = {"global": {"pause": "escape"}}
+        state.working_config = {"dead_zones": {"stick": 0.15}}
         state.binding_labels = {}
-        state.on_confirmed(("global", "pause"), None, None)
+        state.on_confirmed(("dead_zones", "stick"), None, None)
         assert state.active_dialog is None
 
     def test_new_value_updates_config(self, state):
         state.active_dialog = MagicMock()
-        state.working_config = {"global": {"pause": "escape"}}
+        state.working_config = {"dead_zones": {"stick": 0.15}}
         state.binding_labels = {}
-        state.on_confirmed(("global", "pause"), "button", "f1")
-        assert state.working_config["global"]["pause"] == "f1"
+        state.on_confirmed(("dead_zones", "stick"), "button", "f1")
+        assert state.working_config["dead_zones"]["stick"] == "f1"
 
     def test_deep_nested_path_updated(self, state):
         state.active_dialog = MagicMock()
         state.working_config = {
-            "input_type": "keyboard",
             "contexts": {"flight": {"keyboard": {"fire": "space"}}},
         }
         state.binding_labels = {}
@@ -342,7 +330,6 @@ class TestOnConfirmed:
     def test_binding_label_updated_when_path_present(self, state):
         state.active_dialog = MagicMock()
         state.working_config = {
-            "input_type": "keyboard",
             "contexts": {"flight": {"keyboard": {"fire": "space"}}},
         }
         path = ("contexts", "flight", "keyboard", "fire")
@@ -356,16 +343,16 @@ class TestOnConfirmed:
 
     def test_binding_label_not_touched_when_path_absent(self, state):
         state.active_dialog = MagicMock()
-        state.working_config = {"global": {"pause": "escape"}}
+        state.working_config = {"dead_zones": {"stick": 0.15}}
         other_lbl = MagicMock()
         state.binding_labels = {("other", "key"): other_lbl}
-        state.on_confirmed(("global", "pause"), "button", "f1")
+        state.on_confirmed(("dead_zones", "stick"), "button", "f1")
         other_lbl.__setitem__.assert_not_called()
 
     def test_axis_binding_label_shows_axis_prefix(self, state):
         state.active_dialog = MagicMock()
+        state.edited_device = "gamepad"
         state.working_config = {
-            "input_type": "gamepad",
             "contexts": {"flight": {"gamepad": {"throttle": "right_trigger"}}},
         }
         path = ("contexts", "flight", "gamepad", "throttle")

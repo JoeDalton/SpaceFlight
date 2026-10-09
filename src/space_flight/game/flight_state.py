@@ -132,7 +132,7 @@ class FlightState(BaseState):
         :return: the prompt string shown by the loading overlay
         """
         label = InputContext.key_label(
-            self.app.bindings, "hyperspace", "drop_hyperspace", fallback="the jump key"
+            self.app, "hyperspace", "drop_hyperspace", fallback="the jump key"
         )
         return f"Press [{label}] to drop out of hyperspace"
 

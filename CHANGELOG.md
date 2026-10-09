@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better radial menu #93
 - Parallelized pytest config #118
 - Improve bot hunting behaviour #10
+- Accept all input sources at the same time #145
 
 ### Fixed
 

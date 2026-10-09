@@ -132,10 +132,10 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # 1. A single waypoint, teaching the Waypoints filter + loop.
     # ==================================================================
     radial_key = InputContext.key_label(
-        game.app.bindings, "flight", "radial_menu", "the target-menu key"
+        game.app, "flight", "radial_menu", "the target-menu key"
     )
     loop_key = InputContext.key_label(
-        game.app.bindings, "flight", "loop_target", "the cycle-target key"
+        game.app, "flight", "loop_target", "the cycle-target key"
     )
 
     m.player_waypoints([WAYPOINT_1], arrival_radius_m=WAYPOINT_1_ARRIVAL_RADIUS_M)

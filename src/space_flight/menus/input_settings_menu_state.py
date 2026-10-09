@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
@@ -24,6 +23,7 @@ from space_flight.menus.menu_utils import (
 from space_flight.ui.input_reader import (
     GAMEPAD_AXIS_NAMES,
     JOYSTICK_AXIS_NAMES,
+    load_bindings,
     reader_factory,
 )
 
@@ -48,8 +48,8 @@ def format_binding(input_type: str, value: str, forced_type: str | None = None) 
     on whether *value* is recognised as an axis name for *input_type*.
     When *forced_type* is given it overrides the heuristic lookup.
 
-    :param input_type: Active input type ("keyboard", "gamepad", or
-        "joystick").
+    :param input_type: The device the binding belongs to ("keyboard",
+        "gamepad", or "joystick").
     :param value: Raw hardware name stored in the YAML configuration.
     :param forced_type: "axis" or "button" to bypass the heuristic;
         None to auto-detect.
@@ -109,7 +109,7 @@ class ChangeBindingDialog(object):
         :param app: The Panda3D application instance.
         :param action: Human-readable name of the action being remapped; passed
             back unchanged to the command callback.
-        :param input_type: Active device type ("keyboard", "gamepad", or
+        :param input_type: The device being bound ("keyboard", "gamepad", or
             "joystick"); used to apply the "gamepad_" prefix required by
             the YAML convention for gamepad button names.
         :param button_geom: Four-state geom tuple for the OK / Cancel buttons,
@@ -326,7 +326,10 @@ class InputSettingsMenuState(BaseState):
         self.dz_entries: dict[tuple, CustomEntry] = {}
         self.binding_labels: dict[tuple, DirectLabel] = {}
         self.checkbox_buttons: dict[tuple, CustomCheckButton] = {}
-        self.input_type_buttons: dict[str, CustomButton] = {}
+        # Device whose bindings are listed and edited (every device is live
+        # in game; this only picks the tab)
+        self.edited_device = "keyboard"
+        self.device_buttons: dict[str, CustomButton] = {}
         self.static_widgets: list = []
         self.active_dialog: ChangeBindingDialog | None = None
         self.scroll_list = ScrollableList(
@@ -345,7 +348,7 @@ class InputSettingsMenuState(BaseState):
         The YAML is read from disk each time the state is entered, so any
         changes written by a previous session are picked up automatically.
         """
-        self.working_config = self.load_file(_BINDINGS_FILE)
+        self.working_config = load_bindings(_BINDINGS_FILE)
         self.saved_config = copy.deepcopy(self.working_config)
         self.build_static_ui()
         self.rebuild_scroll()
@@ -382,7 +385,7 @@ class InputSettingsMenuState(BaseState):
         self.bg.destroy()
         for w in self.static_widgets:
             w.destroy()
-        for btn in self.input_type_buttons.values():
+        for btn in self.device_buttons.values():
             btn.destroy()
         self.default_btn.destroy()
         self.cancel_btn.destroy()
@@ -398,10 +401,10 @@ class InputSettingsMenuState(BaseState):
         Create the persistent UI elements shown for the lifetime of this state.
 
         Builds the full-screen background frame, the title label, the three
-        input-type selector buttons (Keyboard / Gamepad / Joystick), and the
+        device tab buttons (Keyboard / Gamepad / Joystick), and the
         Save / Cancel / Default action buttons.  Called once per :meth:`enter`
-        invocation; only the scrollable content is rebuilt when the input type
-        changes.
+        invocation; only the scrollable content is rebuilt when the edited
+        device changes.
         """
         self.bg = DirectFrame(
             frameSize=(self.app.a2dLeft, self.app.a2dRight, -1.0, 1.0),
@@ -421,9 +424,9 @@ class InputSettingsMenuState(BaseState):
         )
         self.title.setTransparency(True)
 
-        # Input type label
+        # Device tabs label
         it_label = DirectLabel(
-            text="Input type:",
+            text="Device:",
             scale=0.06,
             pos=(-0.85, 0, 0.73),
             frameColor=(0, 0, 0, 0),
@@ -433,20 +436,20 @@ class InputSettingsMenuState(BaseState):
         it_label.setTransparency(True)
         self.static_widgets.append(it_label)
 
-        # Input type selector buttons
+        # Device tab buttons
         xs = {"keyboard": -0.1, "gamepad": 0.38, "joystick": 0.86}
         for name, x in xs.items():
             btn = CustomButton(
                 app=self.app,
                 pos=(x, 0, 0.73),
-                command=self.select_input_type,
+                command=self.select_device,
                 text=name.capitalize(),
                 scale=0.23,
                 layout="center",
                 extraArgs=[name],
             )
-            self.input_type_buttons[name] = btn
-        self.refresh_input_type_buttons()
+            self.device_buttons[name] = btn
+        self.refresh_device_buttons()
 
         # Bottom action buttons
         self.default_btn = CustomButton(
@@ -479,8 +482,8 @@ class InputSettingsMenuState(BaseState):
         Destroy the current scrollable frame and rebuild it from the working
         configuration.
 
-        Called on :meth:`enter` and again each time the input type is changed so
-        the binding list always reflects the active device's mappings.  Also
+        Called on :meth:`enter` and again each time the edited device changes
+        so the binding list always reflects that device's mappings.  Also
         resets the :attr:`dz_entries`, :attr:`binding_labels` and
         :attr:`checkbox_buttons` caches so stale widget references are never
         kept.
@@ -564,13 +567,11 @@ class InputSettingsMenuState(BaseState):
             "value" keys.
         :param y: Vertical position on the canvas.
         """
-        inp = self.working_config.get("input_type", "keyboard")
-
         self.scroll_list.add_row_label(row["label"], y)
 
         val_lbl = DirectLabel(
             parent=canvas,
-            text=format_binding(inp, row["value"]),
+            text=format_binding(self.edited_device, row["value"]),
             scale=0.045,
             pos=(-0.15, 0, y - 0.015),
             frameColor=(0, 0, 0, 0),
@@ -592,14 +593,13 @@ class InputSettingsMenuState(BaseState):
             parent=canvas,
         )
 
-    def refresh_input_type_buttons(self):
+    def refresh_device_buttons(self):
         """
-        Visually mark the active input-type button as pressed and reset the
-        others so the selector reflects working_config["input_type"].
+        Visually mark the edited device's tab button as pressed and reset the
+        others.
         """
-        cur = self.working_config.get("input_type", "keyboard")
-        for name, btn in self.input_type_buttons.items():
-            if name == cur:
+        for name, btn in self.device_buttons.items():
+            if name == self.edited_device:
                 btn.set_pressed()
             else:
                 btn.reset()
@@ -622,13 +622,13 @@ class InputSettingsMenuState(BaseState):
         - "checkbox" — boolean toggle with "label", "path", and
           "value" keys.
 
-        Order: dead zones, then global bindings, then one section per context
-        (flight, radial menu, …) filtered to the currently selected input type.
+        Order: dead zones, then one section per context (flight, radial
+        menu, …) filtered to the edited device.
 
         :return: Ordered list of row descriptor dicts.
         """
         cfg = self.working_config
-        inp = cfg.get("input_type", "keyboard")
+        inp = self.edited_device
         rows = []
 
         rows.append({"kind": "header", "text": "Dead Zones"})
@@ -641,18 +641,6 @@ class InputSettingsMenuState(BaseState):
                     "value": str(val),
                 }
             )
-
-        if cfg.get("global"):
-            rows.append({"kind": "header", "text": "Global Bindings"})
-            for action, binding in cfg["global"].items():
-                rows.append(
-                    {
-                        "kind": "binding",
-                        "label": action.replace("_", " ").capitalize(),
-                        "path": ("global", action),
-                        "value": str(binding) if binding is not None else "",
-                    }
-                )
 
         for ctx_name, ctx_data in cfg.get("contexts", {}).items():
             bindings = ctx_data.get(inp, {})
@@ -686,22 +674,11 @@ class InputSettingsMenuState(BaseState):
     # Config helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def load_file(path: Path) -> dict:
-        """
-        Parse a YAML configuration file and return its contents as a dict.
-
-        :param path: Path to the YAML file.
-        :return: Parsed configuration dict.
-        """
-        with open(path, "r") as f:
-            return yaml.safe_load(f)
-
     def flush_dead_zones(self):
         """
         Write current entry widget values back into :attr:`working_config`.
 
-        Called before saving or switching the input type so that typed dead-zone
+        Called before saving or switching the edited device so that typed dead-zone
         edits are not silently discarded.  Values are converted to float when
         the original YAML value was a float; strings that cannot be parsed are
         kept as strings.
@@ -722,7 +699,7 @@ class InputSettingsMenuState(BaseState):
     def on_checkbox_toggle(self, status: int, path: tuple):
         """
         Write a toggled checkbox value straight into :attr:`working_config`
-        (unlike dead-zone entries, which are only flushed on save or input-type
+        (unlike dead-zone entries, which are only flushed on save or device
         switch).
 
         :param status: 1 (checked) or 0 (unchecked), as reported by
@@ -750,11 +727,10 @@ class InputSettingsMenuState(BaseState):
         """
         if self.active_dialog is not None:
             return
-        inp = self.working_config.get("input_type", "keyboard")
         self.active_dialog = ChangeBindingDialog(
             app=self.app,
             action=label,
-            input_type=inp,
+            input_type=self.edited_device,
             button_geom=self.app.menu_models.button_geom,
             command=lambda _, t, v: self.on_confirmed(path, t, v),
         )
@@ -780,9 +756,10 @@ class InputSettingsMenuState(BaseState):
         for key in path[:-1]:
             d = d[key]
         d[path[-1]] = new_value
-        inp = self.working_config.get("input_type", "keyboard")
         if path in self.binding_labels:
-            self.binding_labels[path]["text"] = format_binding(inp, new_value, new_type)
+            self.binding_labels[path]["text"] = format_binding(
+                self.edited_device, new_value, new_type
+            )
 
     # ------------------------------------------------------------------
     # Button callbacks
@@ -802,21 +779,20 @@ class InputSettingsMenuState(BaseState):
             return
         self.scroll_list.wheel_scroll(direction)
 
-    def select_input_type(self, input_type: str):
+    def select_device(self, device: str):
         """
-        Switch the active input type and rebuild the binding list.
+        Switch the edited device and rebuild the binding list.
 
         Flushes unsaved dead-zone edits before rebuilding so they are not lost.
         Silently ignored if a dialog is open.
 
-        :param input_type: One of "keyboard", "gamepad", or
-            "joystick".
+        :param device: One of "keyboard", "gamepad", or "joystick".
         """
         if self.active_dialog is not None:
             return
         self.flush_dead_zones()
-        self.working_config["input_type"] = input_type
-        self.refresh_input_type_buttons()
+        self.edited_device = device
+        self.refresh_device_buttons()
         self.rebuild_scroll()
 
     def save(self):
@@ -864,6 +840,5 @@ class InputSettingsMenuState(BaseState):
         """
         if self.active_dialog is not None:
             return
-        self.working_config = self.load_file(_DEFAULT_BINDINGS_FILE)
-        self.refresh_input_type_buttons()
+        self.working_config = load_bindings(_DEFAULT_BINDINGS_FILE)
         self.rebuild_scroll()

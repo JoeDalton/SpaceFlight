@@ -8,6 +8,9 @@ current trajectory while the menu is open.
 
 Adding a new game mode means writing a new InputContext subclass and pushing
 it at the right moment — no changes to the reader or the game loop.
+
+Every device's bindings are live at once: an action fires from whichever
+device it is bound on.
 """
 
 from __future__ import annotations
@@ -29,6 +32,14 @@ if TYPE_CHECKING:
 
 VIEW_BUTTON_INCREMENT = 1.0
 
+# Devices whose flight axes are read from analog values (the keyboard
+# synthesises its own from buttons)
+ANALOG_DEVICES = ("gamepad", "joystick")
+# Keyboard throttle change per frame while a throttle key is held
+KEYBOARD_THROTTLE_STEP = 0.005
+# How far an analog throttle must move to take the throttle over
+THROTTLE_TAKEOVER = 0.05
+
 # Flight actions selecting an energy distribution mode
 ENERGY_MODE_ACTIONS = {
     "energy_engines": ENGINES,
@@ -36,6 +47,23 @@ ENERGY_MODE_ACTIONS = {
     "energy_shields": SHIELDS,
     "energy_balanced": BALANCED,
 }
+
+
+def bound_keys(bindings: dict, context: str, action: str) -> frozenset[str]:
+    """
+    Hardware names bound to *action* under *context*, on every device.
+
+    :param bindings: The parsed bindings config (``app.bindings``)
+    :param context: The bindings context the action lives under (e.g. "flight")
+    :param action: The action name within that context (e.g. "pause")
+    :return: The bound hardware names, possibly empty
+    """
+    devices = bindings.get("contexts", {}).get(context, {})
+    return frozenset(
+        key
+        for device_bindings in devices.values()
+        if isinstance(key := device_bindings.get(action), str) and key
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -75,28 +103,32 @@ class InputContext(ABC):
         pass
 
     @staticmethod
-    def key_label(bindings: dict, context: str, action: str, fallback: str = "") -> str:
+    def key_label(
+        app: SpaceFlightSimulator, context: str, action: str, fallback: str = ""
+    ) -> str:
         """
         Human-readable keybinding label for a bound action, e.g. "R" for the
         keyboard's radial_menu binding under the "flight" context.
 
-        The one shared place for the "read the active device's raw binding
+        The one shared place for the "read the last used device's raw binding
         and uppercase it" pattern needed to show a keybinding to the player
         (e.g. a HUD prompt or an on-screen hint) so it stays correct if they
         rebind the key, instead of every caller hardcoding a key name or
         re-deriving this lookup itself.
 
-        :param bindings: The parsed bindings config (``app.bindings``)
+        :param app: The simulator app; its input reader tells the last used
+            device (keyboard without a reader, e.g. headless)
         :param context: The bindings context the action lives under (e.g. "flight")
         :param action: The action name within that context (e.g. "radial_menu")
         :param fallback: Returned instead if the action has no binding
         :return: The uppercased key label, or fallback
         """
-        input_type = bindings.get("input_type", "keyboard")
+        reader = getattr(app, "input_reader", None)
+        device = getattr(reader, "last_device", "keyboard")
         key = (
-            bindings.get("contexts", {})
+            app.bindings.get("contexts", {})
             .get(context, {})
-            .get(input_type, {})
+            .get(device, {})
             .get(action, "")
         )
         return key.upper() if key else fallback
@@ -171,14 +203,17 @@ class FlightInputContext(InputContext):
     In-game flight context.  Maps hardware input onto ship controls, weapon
     fire, boost, targeting, and camera look.
 
-    Bindings are loaded from the contexts.flight.<input_type> section of
-    bindings.yaml so that every action can be remapped without
+    Bindings are loaded from the contexts.flight section of bindings.yaml,
+    every device at once, so that every action can be remapped without
     touching code.
 
-    Keyboard throttle is accumulated (+=) each frame the key is held.
-    Analog throttle is read directly from the axis value.
-    Yaw/pitch/roll axes on keyboard pass through a low-pass filter to
-    soften the step response.
+    Yaw/pitch/roll add up across devices; the keyboard's pass through a
+    low-pass filter first to soften the step response.
+
+    The throttle follows the device that last touched it: the keyboard steps
+    it (+=) each frame a throttle key is held, from wherever it is, and an
+    analog throttle sets it directly once moved by more than
+    THROTTLE_TAKEOVER, so a lever left forward does not hold it.
     """
 
     def __init__(
@@ -198,15 +233,15 @@ class FlightInputContext(InputContext):
         self.player = player
         self.radial_menu_factory = radial_menu_factory
 
-        input_type = game.app.bindings["input_type"]
-        self.input_type = input_type
-        self.bindings: dict[str, str] = game.app.bindings["contexts"]["flight"][
-            input_type
-        ]
-        self.global_bindings: dict[str, str] = game.app.bindings.get("global", {})
+        self.refresh_bindings(game.app)
 
         # Persistent flight state
-        self.throttle = 0.0  # keyboard accumulator
+        self.throttle = 0.0
+        # Device driving the throttle (None until one touches it)
+        self.throttle_owner: str | None = None
+        # Each analog throttle's value when it last owned the throttle (or
+        # when first seen): moving away from it takes the throttle over
+        self.throttle_anchors: dict[str, float] = {}
         self.is_boost = False
 
         # Keyboard axis smoothing state
@@ -236,46 +271,42 @@ class FlightInputContext(InputContext):
         self.radial_menu_factory = None
 
     def refresh_bindings(self, app: SpaceFlightSimulator):
-        input_type = app.bindings["input_type"]
-        self.input_type = input_type
-        self.bindings = app.bindings["contexts"]["flight"][input_type]
-        self.global_bindings = app.bindings.get("global", {})
+        self.bindings = app.bindings
 
     # ------------------------------------------------------------------
     # Binding helpers
     # ------------------------------------------------------------------
 
     def pressed(self, state: InputState, action: str) -> bool:
-        key = self.bindings.get(action)
-        if key and state.buttons.get(key):
-            return True
-        key = self.global_bindings.get(action)
-        return bool(key and state.buttons.get(key))
+        keys = bound_keys(self.bindings, "flight", action)
+        return any(state.buttons.get(key) for key in keys)
 
     def held(self, state: InputState, action: str) -> bool:
-        key = self.bindings.get(action)
-        if key and state.repeats.get(key):
-            return True
-        key = self.global_bindings.get(action)
-        return bool(key and state.repeats.get(key))
+        keys = bound_keys(self.bindings, "flight", action)
+        return any(state.repeats.get(key) for key in keys)
 
     def active(self, state: InputState, action: str) -> bool:
         """True on the frame of first press OR while held."""
         return self.pressed(state, action) or self.held(state, action)
 
     def released(self, state: InputState, action: str) -> bool:
-        key = self.bindings.get(action)
-        if key and state.releases.get(key):
-            return True
-        key = self.global_bindings.get(action)
-        return bool(key and state.releases.get(key))
+        keys = bound_keys(self.bindings, "flight", action)
+        return any(state.releases.get(key) for key in keys)
 
-    def axis(self, state: InputState, action: str) -> float:
-        key = self.bindings.get(action)
-        if not key:
-            return 0.0
-        value = state.axes.get(key, 0.0)
-        if self.bindings.get(f"invert_{action}"):
+    def axis(self, state: InputState, device: str, action: str) -> float | None:
+        """
+        :param state: Current input state.
+        :param device: The device whose binding is read (e.g. "gamepad").
+        :param action: The axis action (e.g. "yaw").
+        :return: The bound axis value, inverted if configured, or None if the
+            action is unbound or the device is not connected.
+        """
+        device_bindings = self.bindings["contexts"]["flight"].get(device, {})
+        key = device_bindings.get(action)
+        if not key or key not in state.axes:
+            return None
+        value = state.axes[key]
+        if device_bindings.get(f"invert_{action}"):
             value = -value
         return value
 
@@ -354,16 +385,21 @@ class FlightInputContext(InputContext):
     # ------------------------------------------------------------------
 
     def flight_axes(self, state: InputState) -> tuple[float, float, float, float]:
-        if self.input_type == "keyboard":
-            return self.keyboard_axes(state)
-        return self.analog_axes(state)
+        yaw, pitch, roll = self.keyboard_rates(state)
+        for device in ANALOG_DEVICES:
+            yaw += self.axis(state, device, "yaw") or 0.0
+            pitch += self.axis(state, device, "pitch") or 0.0
+            roll += self.axis(state, device, "roll") or 0.0
+        throttle = self.update_throttle(state)
+        if self.is_boost:
+            throttle = THROTTLE_BOOST_VALUE
+        return throttle, clamp_unit(yaw), clamp_unit(pitch), clamp_unit(roll)
 
-    def keyboard_axes(self, state: InputState) -> tuple[float, float, float, float]:
-        throttle_up = self.active(state, "throttle_up")
-        throttle_down = self.active(state, "throttle_down")
-        self.throttle += 0.005 * (float(throttle_up) - float(throttle_down))
-        self.throttle = max(0.0, min(1.0, self.throttle))
-
+    def keyboard_rates(self, state: InputState) -> tuple[float, float, float]:
+        """
+        :param state: Current input state.
+        :return: The smoothed (yaw, pitch, roll) from the rotation keys.
+        """
         yaw = float(self.active(state, "yaw_left")) - float(
             self.active(state, "yaw_right")
         )
@@ -392,18 +428,43 @@ class FlightInputContext(InputContext):
             rise_time=0.05,
             fall_time=0.01,
         )
+        return self.yaw_smoothed, self.pitch_smoothed, self.roll_smoothed
 
-        throttle = THROTTLE_BOOST_VALUE if self.is_boost else self.throttle
-        return throttle, self.yaw_smoothed, self.pitch_smoothed, self.roll_smoothed
+    def update_throttle(self, state: InputState) -> float:
+        """
+        Hands the throttle to the device that last touched it and returns it.
 
-    def analog_axes(self, state: InputState) -> tuple[float, float, float, float]:
-        throttle = self.axis(state, "throttle")
-        yaw = self.axis(state, "yaw")
-        pitch = self.axis(state, "pitch")
-        roll = self.axis(state, "roll")
-        if self.is_boost:
-            throttle = THROTTLE_BOOST_VALUE
-        return throttle, yaw, pitch, roll
+        :param state: Current input state.
+        :return: The throttle, before boost.
+        """
+        for device in ANALOG_DEVICES:
+            value = self.axis(state, device, "throttle")
+            if value is None:
+                continue
+            anchor = self.throttle_anchors.setdefault(device, value)
+            if device == self.throttle_owner or abs(value - anchor) > THROTTLE_TAKEOVER:
+                self.throttle_owner = device
+                self.throttle_anchors[device] = value
+                self.throttle = value
+
+        throttle_up = self.active(state, "throttle_up")
+        throttle_down = self.active(state, "throttle_down")
+        if throttle_up or throttle_down:
+            # Steps from the current throttle, whichever device set it
+            self.throttle_owner = "keyboard"
+            self.throttle += KEYBOARD_THROTTLE_STEP * (
+                float(throttle_up) - float(throttle_down)
+            )
+            self.throttle = max(0.0, min(1.0, self.throttle))
+        return self.throttle
+
+
+def clamp_unit(value: float) -> float:
+    """
+    :param value: Any value.
+    :return: *value* clamped to [-1, 1].
+    """
+    return max(-1.0, min(1.0, value))
 
 
 # ---------------------------------------------------------------------------
@@ -420,8 +481,7 @@ class PauseMenuInputContext(InputContext):
     menu state (normally PauseMenuState, whose exit() pops this context and
     lets FlightState resume).
 
-    Both the device-specific pause binding and the global one are checked so
-    that escape always works regardless of the active input type.
+    The flight pause binding of every device is checked.
     """
 
     def __init__(self, app: SpaceFlightSimulator):
@@ -429,14 +489,7 @@ class PauseMenuInputContext(InputContext):
         :param app: The simulator app
         """
         self.app = app
-        input_type = app.bindings["input_type"]
-        device_bindings = app.bindings["contexts"]["flight"].get(input_type, {})
-        global_bindings = app.bindings.get("global", {})
-        pause_device = device_bindings.get("pause")
-        pause_global = global_bindings.get("pause")
-        self.pause_keys: frozenset[str] = frozenset(
-            k for k in (pause_device, pause_global) if k
-        )
+        self.pause_keys = bound_keys(app.bindings, "flight", "pause")
 
     def consume(self, state: InputState):
         """
@@ -448,12 +501,7 @@ class PauseMenuInputContext(InputContext):
                 return
 
     def refresh_bindings(self, app: SpaceFlightSimulator):
-        input_type = app.bindings["input_type"]
-        device_bindings = app.bindings["contexts"]["flight"].get(input_type, {})
-        global_bindings = app.bindings.get("global", {})
-        pause_device = device_bindings.get("pause")
-        pause_global = global_bindings.get("pause")
-        self.pause_keys = frozenset(k for k in (pause_device, pause_global) if k)
+        self.pause_keys = bound_keys(app.bindings, "flight", "pause")
 
     def clean(self):
         self.game = None
@@ -474,7 +522,7 @@ class HyperspaceInputContext(InputContext):
     Being on top of the stack, it also blocks the flight context below
     so the ship cannot be controlled until the world is revealed.
 
-    Both the device-specific binding and the global one are honoured.
+    The drop_hyperspace binding of every device is honoured.
     """
 
     def __init__(self, app: SpaceFlightSimulator, on_trigger: Callable):
@@ -486,18 +534,7 @@ class HyperspaceInputContext(InputContext):
         self.app = app
         self.on_trigger = on_trigger
         self.triggered = False
-        self.drop_keys = self._resolve_keys(app)
-
-    @staticmethod
-    def _resolve_keys(app: SpaceFlightSimulator) -> frozenset[str]:
-        """Collect the device-specific and global drop_hyperspace keys."""
-        input_type = app.bindings["input_type"]
-        device = (
-            app.bindings.get("contexts", {}).get("hyperspace", {}).get(input_type, {})
-        )
-        global_bindings = app.bindings.get("global", {})
-        keys = (device.get("drop_hyperspace"), global_bindings.get("drop_hyperspace"))
-        return frozenset(k for k in keys if k)
+        self.drop_keys = bound_keys(app.bindings, "hyperspace", "drop_hyperspace")
 
     def consume(self, state: InputState):
         """
@@ -515,7 +552,7 @@ class HyperspaceInputContext(InputContext):
                 return
 
     def refresh_bindings(self, app: SpaceFlightSimulator):
-        self.drop_keys = self._resolve_keys(app)
+        self.drop_keys = bound_keys(app.bindings, "hyperspace", "drop_hyperspace")
 
     def clean(self):
         self.on_trigger = None
@@ -547,11 +584,12 @@ class RadialMenuInputContext(InputContext):
     """
     Input context active while a radial menu is open.
 
-    Reads a 2-D direction vector each frame (from analog axes or keyboard
-    directional keys, as configured in the radial_menu YAML context) and
+    Reads a 2-D direction vector each frame (the sum over every device of its
+    analog axes or directional keys, as configured in the radial_menu YAML
+    context) and
     determines which slice the player is pointing at.  The last slice pointed
     at stays selected when the direction returns to the dead zone, until
-    another slice is pointed at.  When the trigger button is released the
+    another slice is pointed at.  When a trigger button is released the
     on_select callback receives the chosen slice index (or None if no slice was
     ever pointed at, i.e. the vector magnitude never reached min_magnitude).
 
@@ -565,7 +603,7 @@ class RadialMenuInputContext(InputContext):
         game: BaseState,
         n_slices: int,
         on_select: Callable,
-        trigger_hw_name: str,
+        trigger_hw_names: frozenset[str],
         on_hover: Callable | None = None,
         min_magnitude: float = 0.8,
     ):
@@ -574,8 +612,8 @@ class RadialMenuInputContext(InputContext):
         :param n_slices: Number of radial slices.
         :param on_select: Called with the selected slice index (or None)
             when the trigger is released.
-        :param trigger_hw_name: Hardware name of the button that opened the
-            menu.  Release of this button closes the menu.
+        :param trigger_hw_names: Hardware names of the buttons that open the
+            menu, on every device.  Releasing any of them closes the menu.
         :param on_hover: Optional callback called every frame with the
             currently highlighted slice index (or None); used to update
             the visual overlay.
@@ -585,15 +623,12 @@ class RadialMenuInputContext(InputContext):
         self.game = game
         self.n_slices = n_slices
         self.on_select = on_select
-        self.trigger_hw_name = trigger_hw_name
+        self.trigger_hw_names = trigger_hw_names
         self.on_hover = on_hover
         self.min_magnitude = min_magnitude
 
-        input_type = game.app.bindings["input_type"]
-        self.bindings: dict[str, str] = (
-            game.app.bindings.get("contexts", {})
-            .get("radial_menu", {})
-            .get(input_type, {})
+        self.bindings: dict[str, dict] = game.app.bindings.get("contexts", {}).get(
+            "radial_menu", {}
         )
         self.selected_slice: int | None = None
 
@@ -617,7 +652,7 @@ class RadialMenuInputContext(InputContext):
         if self.on_hover is not None:
             self.on_hover(self.selected_slice)
 
-        if state.releases.get(self.trigger_hw_name):
+        if any(state.releases.get(key) for key in self.trigger_hw_names):
             selected = self.selected_slice
             on_select = self.on_select
             self.game.app.state_manager.pop()
@@ -634,13 +669,29 @@ class RadialMenuInputContext(InputContext):
 
     def read_direction(self, state: InputState) -> tuple[float, float]:
         """
-        Return (x, y) in [-1, 1] from analog axes or keyboard keys.
+        Return (x, y) summed over every device's direction.
 
         :param state: Current input state.
         :return: (x, y) direction tuple.
         """
-        ax = self.bindings.get("axis_x")
-        ay = self.bindings.get("axis_y")
+        x = y = 0.0
+        for device_bindings in self.bindings.values():
+            dx, dy = self.device_direction(state, device_bindings)
+            x += dx
+            y += dy
+        return x, y
+
+    @staticmethod
+    def device_direction(state: InputState, bindings: dict) -> tuple[float, float]:
+        """
+        Return (x, y) in [-1, 1] from one device's analog axes or keys.
+
+        :param state: Current input state.
+        :param bindings: The device's radial_menu bindings.
+        :return: (x, y) direction tuple.
+        """
+        ax = bindings.get("axis_x")
+        ay = bindings.get("axis_y")
         if ax and ay:
             return state.axes.get(ax, 0.0), state.axes.get(ay, 0.0)
 
@@ -649,8 +700,8 @@ class RadialMenuInputContext(InputContext):
                 return 0.0
             return 1.0 if (state.buttons.get(key) or state.repeats.get(key)) else 0.0
 
-        right = active(self.bindings.get("dir_right", ""))
-        left = active(self.bindings.get("dir_left", ""))
-        up = active(self.bindings.get("dir_up", ""))
-        down = active(self.bindings.get("dir_down", ""))
+        right = active(bindings.get("dir_right", ""))
+        left = active(bindings.get("dir_left", ""))
+        up = active(bindings.get("dir_up", ""))
+        down = active(bindings.get("dir_down", ""))
         return right - left, up - down
