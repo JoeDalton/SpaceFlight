@@ -101,8 +101,10 @@ restarts its reload (`Weapon.restart_reload`). A missile is guided to the
 current target only while its launcher's lock holds (`is_missile_locked`, see
 [`TargetLock`](ai.md#targetlock)): only the armed missile — selected, with
 stock left — works on its lock, the others drop theirs.
+Bots select the launcher their tactician chose with `select_secondary`.
 Flares have their own trigger, `drop_flare`, from the loadout's flare launcher
-(`flare_launcher`).
+(`flare_launcher`): a flare dropped is offered to every missile homing on the
+ship (`incoming_missiles`), which it may decoy.
 
 #### Energy management
 
@@ -190,8 +192,11 @@ All four share the same code; they differ only by their configuration,
 `damage_type` (`physical` only for now), `reload_s`, the launch
 (`launch_direction` — `forward`, `down` or `backward` — `speed_mps` relative to
 the launching ship, `launch_offset_m`), the placeholder look and collision
-(`visual_radius_m`, `collision_radius_m`, RGBA `color`) and, for missiles, the
-turn rates and the target lock (`lock_delay_s`, `lock_cone_angle_deg`).
+(`visual_radius_m`, `collision_radius_m`, RGBA `color`), for missiles and
+rockets the targets they are fired at (`target_mobility`: `agile` or `slow`,
+see [the AI's weapon choice](ai.md)) and, for missiles, the turn rates, the
+target lock (`lock_delay_s`, `lock_cone_angle_deg`) and how flares decoy them
+(`decoy_range_m`, `decoy_cone_angle_deg`, `decoy_chance`).
 
 - **`OrdnanceLauncher`**
   ([`weapons/ordnance_launcher.py`](../../src/space_flight/weapons/ordnance_launcher.py))
@@ -200,9 +205,9 @@ turn rates and the target lock (`lock_delay_s`, `lock_cone_angle_deg`).
   limited `stock` and a reload gate, and is the single source of the
   launch properties: `initial_velocity()` is the ship's velocity plus
   `speed_mps` along the launch direction — read by the bomb-run release solver
-  as well. `launch(target_id)` spends one unit only on an actual launch, and
-  only a missile locked on the target (`is_locked`, its `target_lock`) keeps
-  it.
+  as well. `launch(target_id)` spends one unit only on an actual launch
+  (returning the ordnance's controller, None otherwise), and only a missile
+  locked on the target (`is_locked`, its `target_lock`) keeps it.
 - **`Ordnance`** ([`actors/ordnance.py`](../../src/space_flight/actors/ordnance.py))
   is a `Ship` flying at a constant speed: its velocity is frozen in its body
   axes (no engine, no aerodynamics), so it flies straight unless it turns —
@@ -219,9 +224,16 @@ turn rates and the target lock (`lock_delay_s`, `lock_cone_angle_deg`).
   [`MissileNavigator`](../../src/space_flight/ai/missile/missile_navigator.py)
   (constant-angle pursuit) and a `FighterPilot`
   (`Personality.MISSILE_DEFAULT`); everything else — and a missile whose target
-  is lost — flies straight on.
+  is lost — flies straight on. While it homes, a missile keeps its target's
+  "missile incoming" message up to date (see
+  [guided missiles](ai.md#guided-missiles-a-navigator-and-a-pilot-no-tactician)).
 
-Flares are decoys: they only stop other ordnance (both are spent), never
+Flares are decoys. A flare just dropped is offered to each missile homing on
+the ship (`OrdnanceController.offer_decoy`): within the missile's
+`decoy_range_m` and `decoy_cone_angle_deg` of its nose, it lures the missile
+with probability `decoy_chance`. A lured missile withdraws its target's
+warning and homes on the flare, then flies straight on once the flare is
+spent. Flares also stop other ordnance hitting them (both are spent), never
 each other, and never their own team's ordnance (see [Game](game.md)).
 
 ## `Destructible` and `Destructibles` — central death handling

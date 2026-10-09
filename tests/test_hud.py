@@ -1,8 +1,8 @@
 """
 Unit tests for the HUD (space_flight.ui.hud): the screen projection, the target
 box tint while a missile is locked, the aiming cues (crosshair and lead
-indicator), the ordnance HUD (secondary weapons drum and flares left) and the
-energy gauges.
+indicator), the incoming missile warning, the ordnance HUD (secondary weapons
+drum and flares left) and the energy gauges.
 """
 
 from types import SimpleNamespace
@@ -13,12 +13,17 @@ import pytest
 from panda3d.core import NodePath, PerspectiveLens, Point3, Vec3
 
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS, EnergySystem
+from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.ui.hud import (
     CROSSHAIR_COLOR,
     CROSSHAIR_LOCKED_COLOR,
+    EDGE_HORIZONTAL,
+    EDGE_VERTICAL,
     FAVOURED_GAUGE_BRIGHTNESS,
     GAUGE_BRIGHTNESS,
     MIN_PROJECTION_DEPTH,
+    MISSILE_WARNING_MAX_BLINK_PERIOD_S,
+    MISSILE_WARNING_MIN_BLINK_PERIOD_S,
     TARGET_BOX_COLOR,
     TARGET_BOX_MISSILE_LOCKED_COLOR,
     AimHUD,
@@ -26,6 +31,9 @@ from space_flight.ui.hud import (
     OrdnanceHUD,
     gauge_brightness,
     is_on_screen,
+    missile_warning_blink_period_s,
+    missile_warning_text,
+    pin_to_screen_edge,
     project_to_screen,
 )
 
@@ -76,6 +84,34 @@ def test_is_on_screen(x, z, behind, expected):
     assert is_on_screen(x, z, behind) is expected
 
 
+@pytest.mark.parametrize(
+    "x, z, behind, expected",
+    [
+        # Inside the edge rectangle: the projection itself
+        (0.3, -0.2, False, (0.3, -0.2)),
+        # Off to the right: pinned to the right border, same direction
+        (
+            2.0 * EDGE_HORIZONTAL,
+            0.5 * EDGE_VERTICAL,
+            False,
+            (EDGE_HORIZONTAL, 0.25 * EDGE_VERTICAL),
+        ),
+        # Off the top: pinned to the top border
+        (0.0, 3.0, False, (0.0, EDGE_VERTICAL)),
+        # Behind, mirrored projection to the left: really to the right
+        (-0.5, 0.0, True, (EDGE_HORIZONTAL, 0.0)),
+        # Dead centre behind: parked on the right border
+        (0.0, 0.0, True, (EDGE_HORIZONTAL, 0.0)),
+    ],
+)
+def test_pin_to_screen_edge(x, z, behind, expected):
+    """
+    A point inside the edge rectangle stays where it projects; otherwise it is
+    pinned to the rectangle's border, along its true direction.
+    """
+    assert pin_to_screen_edge(x, z, behind) == pytest.approx(expected)
+
+
 # ---------------------------
 # AimHUD: target box, crosshair, lead indicator
 # ---------------------------
@@ -109,8 +145,12 @@ def make_aim_hud() -> AimHUD:
         "distance_label",
         "crosshair",
         "lead_indicator",
+        "missile_warning_line",
+        "missile_marker",
     ):
         setattr(aim_hud, node, MagicMock())
+    aim_hud.missile_blink_phase = 0.0
+    pawn.incoming_missiles = {}
     return aim_hud
 
 
@@ -321,13 +361,14 @@ def test_lead_indicator_is_hidden_on_a_dead_target():
 
 
 def test_aim_hud_clean_unregisters_its_update_task():
-    """clean() removes the update task, the labels and the cards, and drops
-    the game."""
+    """clean() removes the update task, the labels, the cards and the missile
+    warning line, and drops the game."""
     aim_hud = make_aim_hud()
     aim_hud.id = "aim"
     game = aim_hud.game
     game.method_lists = {"aim": [aim_hud.aim_hud_update_task]}
     aim_hud.root = MagicMock()
+    missile_warning_line = aim_hud.missile_warning_line
 
     aim_hud.clean()
 
@@ -335,7 +376,136 @@ def test_aim_hud_clean_unregisters_its_update_task():
     aim_hud.root.removeNode.assert_called_once()
     aim_hud.name_label.destroy.assert_called_once()
     aim_hud.distance_label.destroy.assert_called_once()
+    missile_warning_line.removeNode.assert_called_once()
     assert aim_hud.game is None
+
+
+def test_aim_hud_builds_hidden_and_cleans_up(spaceflight_app):
+    """
+    The real AimHUD starts with every cue hidden, the missile marker a ring
+    1.5 times the lead indicator's size, and clean() removes its nodes.
+    """
+    game = MagicMock()
+    game.app.loader = spaceflight_app.loader
+    aim_hud = AimHUD(game=game)
+    missile_warning_line = aim_hud.missile_warning_line
+    root = aim_hud.root
+
+    for node in (missile_warning_line, aim_hud.missile_marker, aim_hud.lead_indicator):
+        assert node.isHidden()
+    lead_low, lead_high = aim_hud.lead_indicator.getTightBounds()
+    marker_low, marker_high = aim_hud.missile_marker.getTightBounds()
+    np.testing.assert_allclose(
+        np.array(marker_high - marker_low), 1.5 * np.array(lead_high - lead_low)
+    )
+    assert aim_hud.missile_marker.getTexture() == aim_hud.lead_indicator.getTexture()
+
+    aim_hud.clean()
+
+    assert missile_warning_line.isEmpty()
+    assert root.isEmpty()
+
+
+# ---------------------------
+# AimHUD: missile warning
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "count, distance_m, text",
+    [(1, 420.4, "MISSILE 420 m"), (3, 99.6, "3 MISSILES 100 m")],
+)
+def test_missile_warning_text(count, distance_m, text):
+    """The nearest missile's distance, and how many when several."""
+    assert missile_warning_text(count, distance_m) == text
+
+
+def test_missile_warning_blinks_faster_as_the_missile_closes_in():
+    """
+    The blink period shrinks with the time to impact, within its bounds.
+    """
+    periods = [missile_warning_blink_period_s(t) for t in (np.inf, 2.0, 1.0, 0.0)]
+
+    assert periods[0] == MISSILE_WARNING_MAX_BLINK_PERIOD_S
+    assert periods[1] > periods[2]
+    assert periods[-1] == MISSILE_WARNING_MIN_BLINK_PERIOD_S
+
+
+def make_aim_hud_under_fire(*distances_m: float) -> AimHUD:
+    """
+    An AimHUD as in make_aim_hud, with missiles straight ahead at these
+    distances, closing in at 400 m/s, homing on the player, at 60 fps.
+    """
+    aim_hud = make_aim_hud()
+    aim_hud.game.game_time.get_time_step.return_value = 1 / 60
+    aim_hud.game.player.pawn.incoming_missiles = {
+        index: IncomingMissile(
+            controller=MagicMock(),
+            position=np.array([0.0, distance_m, 0.0]),
+            distance_m=distance_m,
+            closing_speed_mps=400.0,
+        )
+        for index, distance_m in enumerate(distances_m)
+    }
+    return aim_hud
+
+
+def test_missile_warning_is_hidden_without_incoming_missiles():
+    """Nothing homes on the player: no line, no marker."""
+    aim_hud = make_aim_hud_under_fire()
+
+    aim_hud.update_missile_warning()
+
+    aim_hud.missile_warning_line.hide.assert_called_once()
+    aim_hud.missile_marker.hide.assert_called_once()
+    aim_hud.missile_warning_line.show.assert_not_called()
+    aim_hud.missile_marker.show.assert_not_called()
+
+
+def test_missile_warning_shows_the_nearest_missile():
+    """
+    The line gives the count and the nearest distance; the marker sits on the
+    nearest missile.
+    """
+    aim_hud = make_aim_hud_under_fire(900.0, 300.0)
+
+    aim_hud.update_missile_warning()
+
+    aim_hud.missile_warning_line.node().setText.assert_called_once_with(
+        "2 MISSILES 300 m"
+    )
+    aim_hud.missile_warning_line.show.assert_called_once()
+    x, _, z = aim_hud.missile_marker.setPos.call_args.args
+    assert (x, z) == pytest.approx((0.0, 0.0))
+    aim_hud.missile_marker.show.assert_called_once()
+
+
+def test_missile_marker_is_pinned_to_the_edge_when_behind():
+    """A missile coming from behind is marked on the screen border."""
+    aim_hud = make_aim_hud_under_fire(300.0)
+    (incoming,) = aim_hud.game.player.pawn.incoming_missiles.values()
+    incoming.position = np.array([10.0, -300.0, 0.0])
+
+    aim_hud.update_missile_warning()
+
+    x, _, z = aim_hud.missile_marker.setPos.call_args.args
+    assert (x, z) == pytest.approx((EDGE_HORIZONTAL, 0.0))
+
+
+def test_missile_warning_line_blinks():
+    """
+    The line shows for the first half of each blink period, then hides: with a
+    missile 300 m away closing at 400 m/s, the period is 0.15 s (9 frames at
+    60 fps).
+    """
+    aim_hud = make_aim_hud_under_fire(300.0)
+    shown = []
+    for _ in range(10):
+        aim_hud.missile_warning_line.reset_mock()
+        aim_hud.update_missile_warning()
+        shown.append(aim_hud.missile_warning_line.show.called)
+
+    assert shown == [True] * 4 + [False] * 4 + [True] * 2
 
 
 # ---------------------------

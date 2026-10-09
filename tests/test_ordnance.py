@@ -17,7 +17,7 @@ import pytest
 from panda3d.core import NodePath
 
 from space_flight.actors.destructibles import Destructibles
-from space_flight.actors.ordnance import Ordnance
+from space_flight.actors.ordnance import Ordnance, OrdnanceController
 from space_flight.game.integrator import Integrator
 from space_flight.weapons.ordnance_launcher import (
     OrdnanceLauncher,
@@ -114,6 +114,7 @@ def make_target(position, speed):
         position=np.array(position, dtype=float),
         speed=np.array(speed, dtype=float),
         is_dead=False,
+        incoming_missiles={},
     )
 
 
@@ -132,13 +133,10 @@ def launch(game, name, ship=None, target_id=None, damage_multiplier=1.0):
     launcher.last_fire_time = -np.inf  # no initial reload
     if target_id is not None:
         launcher.target_lock = MagicMock(is_locked=True)
-    assert launcher.launch(target_id=target_id) is True
-    (controller,) = [
-        destructible
-        for destructible in game.destructibles.alive_objects
-        if getattr(destructible, "pawn", None) is not None
-        and destructible.pawn.origin_ship is ship
-    ]
+    controller = launcher.launch(target_id=target_id)
+    assert controller is not None
+    assert controller in game.destructibles.alive_objects
+    assert controller.pawn.origin_ship is ship
     return controller
 
 
@@ -335,3 +333,230 @@ def test_impact_position_is_the_ordnance_position(game):
     pawn = launch(game, "rocket", ship=make_ship(position=(1.0, 2.0, 3.0))).pawn
 
     assert tuple(pawn.impact_position()) == pytest.approx((1.0, 2.0, 3.0))
+
+
+# ---------------------------
+# "missile incoming" message
+# ---------------------------
+
+
+def test_guided_missile_keeps_its_target_warned(game):
+    """
+    A guided missile sends its target an IncomingMissile message on its first
+    frame, and keeps it up to date as it closes in.
+    """
+    target = make_target(position=[0.0, 1500.0, 0.0], speed=[0.0, 0.0, 0.0])
+    game.interactions.actors.append(target)
+    controller = launch(game, "concussion_missile", target_id=target.id)
+
+    step(game)
+    message = target.incoming_missiles[controller.id]
+    first_distance_m = message.distance_m
+    assert message.controller is controller
+    # Sent from the controller's task: it may lag the integrated position by a
+    # frame, but is consistent with itself
+    assert first_distance_m == pytest.approx(
+        np.linalg.norm(target.position - message.position)
+    )
+    assert np.linalg.norm(message.position - controller.pawn.position) < 10.0
+    # Launched at 300 m/s on top of the ship's 100 m/s, straight at the target
+    assert message.closing_speed_mps == pytest.approx(400.0, rel=1e-3)
+    assert message.time_to_impact_s == pytest.approx(first_distance_m / 400.0, rel=1e-3)
+
+    step(game, n_frames=30)
+    assert target.incoming_missiles[controller.id].distance_m < first_distance_m
+
+
+def test_unguided_ordnance_warns_nobody(game):
+    """
+    A missile launched without a lock flies blind: nobody is warned.
+    """
+    target = make_target(position=[0.0, 1500.0, 0.0], speed=[0.0, 0.0, 0.0])
+    game.interactions.actors.append(target)
+    launch(game, "concussion_missile")
+
+    step(game, n_frames=5)
+
+    assert target.incoming_missiles == {}
+
+
+def test_warning_is_withdrawn_once_the_target_is_lost(game):
+    """
+    When the missile loses its target, its message is withdrawn.
+    """
+    target = make_target(position=[0.0, 1500.0, 0.0], speed=[0.0, 0.0, 0.0])
+    game.interactions.actors.append(target)
+    launch(game, "concussion_missile", target_id=target.id)
+    step(game)
+    assert target.incoming_missiles
+
+    game.interactions.actors.remove(target)
+    step(game)
+
+    assert target.incoming_missiles == {}
+
+
+def test_warning_is_withdrawn_when_the_missile_is_spent(game):
+    """
+    When the missile hits something, its message is withdrawn as it is removed.
+    """
+    target = make_target(position=[0.0, 1500.0, 0.0], speed=[0.0, 0.0, 0.0])
+    game.interactions.actors.append(target)
+    controller = launch(game, "concussion_missile", target_id=target.id)
+    step(game)
+    assert target.incoming_missiles
+
+    controller.pawn.on_impact()
+    step(game)
+
+    assert target.incoming_missiles == {}
+
+
+# ---------------------------
+# flare decoy
+# ---------------------------
+
+
+def _missile_and_flare_in_reach(game):
+    """
+    A missile homing on a target 1500 m ahead, and an enemy flare dropped about
+    300 m ahead of it and 20 deg off its nose: within its decoy range and cone.
+    """
+    target = make_target(position=[0.0, 1500.0, 0.0], speed=[0.0, 0.0, 0.0])
+    game.interactions.actors.append(target)
+    missile = launch(game, "concussion_missile", target_id=target.id)
+    flare = launch(
+        game, "flare", ship=make_ship(position=(100.0, 300.0, 0.0), team=2)
+    ).pawn
+    step(game)
+    return target, missile, flare
+
+
+def test_decoyed_missile_homes_on_the_flare_silently(game, monkeypatch):
+    """
+    A missile lured by a flare withdraws its target's warning and homes on the
+    flare.
+    """
+    target, missile, flare = _missile_and_flare_in_reach(game)
+    monkeypatch.setattr(np.random, "random", lambda: 0.0)
+
+    assert missile.offer_decoy(flare) is True
+
+    min_distance_m = np.inf
+    for _ in range(int(3.0 / DT_S)):
+        step(game)
+        assert target.incoming_missiles == {}
+        min_distance_m = min(
+            min_distance_m, np.linalg.norm(flare.position - missile.pawn.position)
+        )
+    assert min_distance_m < flare.conf["collision_radius_m"]
+
+
+def test_missile_not_lured_keeps_homing_on_its_target(game, monkeypatch):
+    """
+    A missile the flare does not lure (here, by chance) ignores it.
+    """
+    target, missile, flare = _missile_and_flare_in_reach(game)
+    monkeypatch.setattr(np.random, "random", lambda: 1.0)
+
+    assert missile.offer_decoy(flare) is False
+
+    step(game)
+    assert missile.decoy_pawn is None
+    assert missile.id in target.incoming_missiles
+
+
+def test_decoyed_missile_flies_straight_once_the_flare_is_spent(game, monkeypatch):
+    """
+    Once its flare burns out, a decoyed missile drops its guidance: it does not
+    go back to its target.
+    """
+    target, missile, flare = _missile_and_flare_in_reach(game)
+    monkeypatch.setattr(np.random, "random", lambda: 0.0)
+    missile.offer_decoy(flare)
+    step(game)
+
+    flare.health = 0.0
+    step(game, n_frames=2)
+
+    assert missile.navigator is None
+    assert missile.decoy_pawn is None
+    assert target.incoming_missiles == {}
+
+
+def test_unguided_ordnance_ignores_flares(game, monkeypatch):
+    """
+    Only a guided missile can be decoyed.
+    """
+    rocket = launch(game, "rocket")
+    flare = launch(game, "flare", ship=make_ship(position=(0.0, 100.0, 0.0))).pawn
+    monkeypatch.setattr(np.random, "random", lambda: 0.0)
+
+    assert rocket.offer_decoy(flare) is False
+
+
+def _guided_missile():
+    """
+    A guided missile at the origin flying +Y, decoyed within 400 m and 30 deg
+    with a 0.7 chance, its controller built without a game.
+    """
+    controller = object.__new__(OrdnanceController)
+    controller.name = "missile"
+    controller.navigator = MagicMock()
+    controller.decoy_pawn = None
+    controller.warned_target = None
+    controller.pawn = SimpleNamespace(
+        position=np.zeros(3),
+        forward=np.array([0.0, 1.0, 0.0]),
+        conf={
+            "decoy_range_m": 400.0,
+            "decoy_cone_angle_deg": 30.0,
+            "decoy_chance": 0.7,
+        },
+    )
+    return controller
+
+
+@pytest.mark.parametrize(
+    "flare_position, draw, expected",
+    [
+        # Ahead, in range: lured if the draw is under the chance
+        ([0.0, 300.0, 0.0], 0.5, True),
+        ([0.0, 300.0, 0.0], 0.8, False),
+        # Too far
+        ([0.0, 500.0, 0.0], 0.0, False),
+        # In range but outside the seeker cone (about 70 deg off the nose)
+        ([280.0, 100.0, 0.0], 0.0, False),
+        # Just inside the cone
+        ([140.0, 260.0, 0.0], 0.0, True),
+        # Right on the missile
+        ([0.0, 0.0, 0.0], 0.0, True),
+    ],
+)
+def test_flare_lures_a_missile_within_range_and_cone_by_chance(
+    flare_position, draw, expected, monkeypatch
+):
+    """
+    A flare lures a missile only within its decoy range and seeker cone, and
+    then by chance.
+    """
+    controller = _guided_missile()
+    flare = SimpleNamespace(position=np.array(flare_position, dtype=float))
+    monkeypatch.setattr(np.random, "random", lambda: draw)
+
+    assert controller.offer_decoy(flare) is expected
+    assert (controller.decoy_pawn is flare) is expected
+
+
+def test_a_decoyed_missile_ignores_further_flares(monkeypatch):
+    """
+    A missile already decoyed keeps chasing its first flare.
+    """
+    controller = _guided_missile()
+    first = SimpleNamespace(position=np.array([0.0, 300.0, 0.0]))
+    second = SimpleNamespace(position=np.array([0.0, 200.0, 0.0]))
+    monkeypatch.setattr(np.random, "random", lambda: 0.0)
+
+    assert controller.offer_decoy(first) is True
+    assert controller.offer_decoy(second) is False
+    assert controller.decoy_pawn is first

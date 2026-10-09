@@ -12,6 +12,10 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.ai.missile.incoming_missile import (
+    IncomingMissile,
+    nearest_incoming,
+)
 from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
 
 if TYPE_CHECKING:
@@ -38,8 +42,12 @@ class FighterNavigator(GenericShipNavigator):
         self.time_in_spiral_s = 0.0
         # Weapon decision the last navigate() left for update_triggers to keep
         # taking every frame until the next one: (weapon, target_id, min cos
-        # angle), weapon being "guns" or "bomb"; None when nothing is armed
+        # angle), weapon being "guns", "bomb", "missile" or "rocket" (the last
+        # two along with the guns); None when nothing is armed
         self._armed_trigger = None
+        # The incoming missiles a flare was already dropped against (see
+        # defend_missile), by missile controller id
+        self._flared_missile_ids = set()
 
     def navigate_intent(
         self, intent: Intent, target_dict: dict
@@ -63,6 +71,9 @@ class FighterNavigator(GenericShipNavigator):
         elif intent == Intent.EVADE:
             self.engage_phase = ""
             return self.evade_target(target_dict)
+        elif intent == Intent.DEFEND_MISSILE:
+            self.engage_phase = ""
+            return self.defend_missile(target_dict)
         elif intent == Intent.REGROUP:
             self.engage_phase = ""
             return self.regroup(target_dict)
@@ -204,7 +215,7 @@ class FighterNavigator(GenericShipNavigator):
         # Decide whether to shoot, now and on every frame until the next think
         self._arm_trigger(
             target_dict,
-            weapon="guns",
+            weapon=target_dict.get("weapon", "guns"),
             min_cos_angle=self.personality["navigator"]["fire"]["minimum_cos_angle"],
         )
 
@@ -320,7 +331,9 @@ class FighterNavigator(GenericShipNavigator):
         # the nose within the 5deg pursuit cone, and auto-aim bends the shot the
         # rest of the way.
         self._arm_trigger(
-            target_dict, weapon="guns", min_cos_angle=strafe["fire_min_cos_angle"]
+            target_dict,
+            weapon=target_dict.get("weapon", "guns"),
+            min_cos_angle=strafe["fire_min_cos_angle"],
         )
 
         # Hard altitude floor: force a recovery break if we drop too low.
@@ -414,13 +427,18 @@ class FighterNavigator(GenericShipNavigator):
     ) -> bool:
         """
         Take a weapon decision now, and arm it for update_triggers to keep
-        taking every frame until the next navigate().
+        taking every frame until the next navigate(). The secondary weapon the
+        tactician chose for it (target_dict["launcher"]) is selected, while it
+        has stock left.
 
         :param target_dict: The target info enriched with the engagement geometry
-        :param weapon: "guns" or "bomb"
+        :param weapon: "guns", "bomb", "missile" or "rocket"
         :param min_cos_angle: For guns, the firing cone around the lead solution
         :return: Whether the weapon fired now
         """
+        launcher = target_dict.get("launcher")
+        if launcher is not None and launcher.stock > 0:
+            self.pawn.select_secondary(launcher)
         self._armed_trigger = (weapon, target_dict.get("target_id"), min_cos_angle)
         return self._pull_trigger(target_dict)
 
@@ -430,9 +448,11 @@ class FighterNavigator(GenericShipNavigator):
 
         Guns: the lead solution is in range and within the armed cone of the
         nose. Bomb: a bomb dropped now would hit, then the run breaks off.
+        Missile or rocket: launched if its own solution is met (see
+        _fire_missile and _fire_rocket), the guns firing as well.
 
         :param target_dict: The target info enriched with the engagement geometry
-        :return: Whether the weapon fired
+        :return: Whether the weapon fired (the guns, along a missile or rocket)
         """
         weapon, _, min_cos_angle = self._armed_trigger
         target_position = target_dict["target_current_position"]
@@ -452,6 +472,10 @@ class FighterNavigator(GenericShipNavigator):
             self.behaviour_sm.request("bomb_break")
             self._armed_trigger = None
             return True
+        if weapon == "missile":
+            self._fire_missile(target_dict)
+        elif weapon == "rocket":
+            self._fire_rocket(target_dict)
 
         distance_m = target_dict["distance_m"]
         lead_direction = self.compute_lead_pursuit(
@@ -469,6 +493,87 @@ class FighterNavigator(GenericShipNavigator):
             distance_m=distance_m, firing_alignment=firing_alignment, fired=fired
         )
         return fired
+
+    def _selected_secondary_with_stock(self, category: str) -> OrdnanceLauncher | None:
+        """
+        :param category: The ordnance type ("missile" or "rocket")
+        :return: The selected secondary weapon if it is of that type with stock
+            left, else None
+        """
+        launcher = self.pawn.selected_secondary
+        if launcher is None or launcher.category != category or launcher.stock <= 0:
+            return None
+        return launcher
+
+    def _fire_missile(self, target_dict: dict) -> bool:
+        """
+        Launch a missile at the target once it is locked (the lock builds while
+        the missile is selected, see Fighter._update_missile_locks), within
+        reach, and with few enough of our missiles already homing on it.
+
+        :param target_dict: The target info enriched with the engagement geometry
+        :return: Whether a missile was launched
+        """
+        launcher = self._selected_secondary_with_stock("missile")
+        if launcher is None or not self.pawn.is_missile_locked:
+            return False
+        ordnance = self.personality["navigator"]["ordnance"]
+        reach_m = launcher.speed_mps * launcher.conf["life_time_s"]
+        if target_dict["distance_m"] > ordnance["missile_max_range_fraction"] * reach_m:
+            return False
+        if (
+            self._missiles_in_flight(target_dict["target_id"])
+            >= ordnance["max_missiles_in_flight"]
+        ):
+            return False
+        return self.pawn.fire_secondary()
+
+    def _missiles_in_flight(self, target_id) -> int:
+        """
+        :param target_id: The target's id
+        :return: How many of our missiles home on the target (read from its
+            "missile incoming" messages; 0 for a target that gets none)
+        """
+        try:
+            target_index = self.game.interactions.get_actor_index_from_id(target_id)
+            target = self.game.interactions.actors[target_index]
+        except (ValueError, KeyError, IndexError):
+            return 0
+        return sum(
+            incoming.controller.pawn.origin_ship is self.pawn
+            for incoming in getattr(target, "incoming_missiles", {}).values()
+        )
+
+    def _fire_rocket(self, target_dict: dict) -> bool:
+        """
+        Fire a rocket when its lead solution (for the rocket's flight time) is
+        in gun range and within the rocket cone of the nose: unguided, it needs
+        a tighter aim than the guns.
+
+        :param target_dict: The target info enriched with the engagement geometry
+        :return: Whether a rocket was fired
+        """
+        launcher = self._selected_secondary_with_stock("rocket")
+        if launcher is None:
+            return False
+        distance_m = target_dict["distance_m"]
+        if distance_m > self.personality["navigator"]["fire"]["maximum_distance_m"]:
+            return False
+        # The rocket closes in at its launch speed on top of ours (floored, for
+        # a target outrunning it)
+        closing_speed_mps = -target_dict["longitudinal_speed_scalar_mps"]
+        flight_time_s = distance_m / max(launcher.speed_mps + closing_speed_mps, 1.0)
+        lead_direction = self.compute_lead_pursuit(
+            target_current_position=target_dict["target_current_position"],
+            target_current_speed=target_dict["target_current_speed"],
+            lead_time_s=flight_time_s,
+        )
+        min_cos_angle = self.personality["navigator"]["ordnance"][
+            "rocket_fire_min_cos_angle"
+        ]
+        if np.dot(lead_direction, self.pawn.forward) <= min_cos_angle:
+            return False
+        return self.pawn.fire_secondary()
 
     def _below_altitude_floor(
         self,
@@ -1103,6 +1208,64 @@ class FighterNavigator(GenericShipNavigator):
         return np.zeros(3), self.personality["navigator"]["speeding"]["speed_mps"]
 
     # %% ==== EVADE ====
+
+    def defend_missile(self, target_dict: dict) -> Tuple[np.ndarray, float]:
+        """
+        Beam turn against an incoming missile: fly at full speed perpendicular
+        to the missile's line of sight, on the side closest to the current
+        heading, so the missile must turn hardest to follow; and drop a flare
+        against it once in reach of the flare's lure (see _drop_flare).
+
+        :param target_dict: A dictionary with the missile's controller id
+        :return: The direction to point to and the desired speed
+        """
+        incoming = self.pawn.incoming_missiles.get(target_dict.get("target_id"))
+        if incoming is None:
+            # Gone since the tactician's decision: defend against the next one
+            incoming = nearest_incoming(self.pawn)
+        if incoming is None:
+            return NO_DIRECTION
+        self._drop_flare(incoming)
+
+        line_of_sight = self.pawn.position - incoming.position
+        distance_m = magnitude(line_of_sight)
+        if distance_m < TARGET_DISTANCE_TOLERANCE_M:
+            return NO_DIRECTION
+        line_of_sight /= distance_m
+
+        beam = self.pawn.forward - np.dot(self.pawn.forward, line_of_sight) * (
+            line_of_sight
+        )
+        if magnitude(beam) < 1e-3:
+            # Flying straight along the line of sight: break to the right
+            beam = self.pawn.right - np.dot(self.pawn.right, line_of_sight) * (
+                line_of_sight
+            )
+        return beam / magnitude(beam), self.pawn.max_speed_mps
+
+    def _drop_flare(self, incoming: IncomingMissile):
+        """
+        Drop a flare against an incoming missile once it is within reach of a
+        flare's lure (see the countermeasures personality and
+        OrdnanceController.offer_decoy), once per missile.
+
+        :param incoming: The missile defended against
+        """
+        launcher = self.pawn.flare_launcher
+        if launcher is None or launcher.stock <= 0:
+            return
+        # Forget the missiles no longer homing on us
+        self._flared_missile_ids.intersection_update(self.pawn.incoming_missiles)
+        if incoming.controller.id in self._flared_missile_ids:
+            return
+        decoy_range_m = incoming.controller.pawn.conf["decoy_range_m"]
+        fraction = self.personality["navigator"]["countermeasures"][
+            "flare_range_fraction"
+        ]
+        if incoming.distance_m > fraction * decoy_range_m:
+            return
+        if self.pawn.drop_flare():
+            self._flared_missile_ids.add(incoming.controller.id)
 
     def evade_target(self, target_dict: dict = {}) -> Tuple[np.ndarray, float]:
         """

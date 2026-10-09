@@ -6,6 +6,7 @@ All tests bypass __init__ via object.__new__() and populate the instance with
 the minimal attributes consumed by each method.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -13,6 +14,8 @@ import pytest
 
 from space_flight.ai import Intent, Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
+from space_flight.ai.generic.generic_ship_navigator import NO_DIRECTION
+from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.utils.state_machine import StateMachine
 
 
@@ -70,6 +73,7 @@ def make_fighter_navigator(
     nav._last_navigate_s = None
     nav.think_dt_s = 0.1  # matches get_time_step above
     nav._armed_trigger = None
+    nav._flared_missile_ids = set()
     nav.collision_sensor = MagicMock()
     nav.collision_sensor.compute_repulsion.return_value = (np.zeros(3), 0.0)
     nav.engage_phase = ""
@@ -1054,6 +1058,307 @@ def test_bomb_released_between_thinks_once_the_solution_is_met():
 
     nav.pawn.fire_secondary.assert_called_once()
     assert nav.behaviour == "bomb_break"
+
+
+def _secondary(category: str, stock: int = 4) -> SimpleNamespace:
+    """A stand-in missile or rocket launcher: 300 m/s for 10 s."""
+    return SimpleNamespace(
+        category=category, stock=stock, speed_mps=300.0, conf={"life_time_s": 10.0}
+    )
+
+
+def _held_with(nav, weapon: str, launcher, locked: bool = True, in_flight: int = 0):
+    """
+    A primary target dead ahead at 300 m (see _held_on_target), to attack with
+    this weapon and launcher, already selected. in_flight of our missiles
+    already home on it.
+    """
+    target_dict = _held_on_target(nav)
+    target_dict.update(weapon=weapon, launcher=launcher)
+    nav.pawn.selected_secondary = launcher
+    nav.pawn.is_missile_locked = locked
+    missile = SimpleNamespace(pawn=SimpleNamespace(origin_ship=nav.pawn))
+    ours = SimpleNamespace(controller=missile)
+    target = SimpleNamespace(incoming_missiles=dict(enumerate([ours] * in_flight)))
+    nav.game.interactions.get_actor_index_from_id.return_value = 0
+    nav.game.interactions.actors = [target]
+    return target_dict
+
+
+@pytest.mark.parametrize("stock, selected", [(4, True), (0, False)])
+def test_arming_selects_the_tacticians_secondary_weapon(stock, selected):
+    """
+    Arming a trigger selects the secondary weapon the tactician chose, while it
+    has stock left.
+    """
+    nav = make_fighter_navigator()
+    launcher = _secondary("missile", stock=stock)
+    target_dict = _held_with(nav, "missile", launcher)
+
+    nav._arm_trigger(target_dict, weapon="missile", min_cos_angle=0.99)
+
+    if selected:
+        nav.pawn.select_secondary.assert_called_once_with(launcher)
+    else:
+        nav.pawn.select_secondary.assert_not_called()
+
+
+def test_locked_missile_is_launched_along_the_guns():
+    """
+    A missile locked on a target within reach is launched, the guns firing as
+    well.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "missile", _secondary("missile"))
+
+    nav._arm_trigger(target_dict, weapon="missile", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_called_once()
+    nav.pawn.laser_cannon.fire.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "change", ["not_locked", "out_of_reach", "one_in_flight", "spent", "not_selected"]
+)
+def test_missile_held_until_its_solution_is_met(change):
+    """
+    No missile without a lock, beyond the missile's reach, while one of ours
+    already homes on the target, or without a missile with stock selected.
+    """
+    nav = make_fighter_navigator()
+    launcher = _secondary("missile")
+    target_dict = _held_with(
+        nav,
+        "missile",
+        launcher,
+        locked=change != "not_locked",
+        in_flight=int(change == "one_in_flight"),
+    )
+    reach_m = launcher.speed_mps * launcher.conf["life_time_s"]
+    fraction = nav.personality["navigator"]["ordnance"]["missile_max_range_fraction"]
+    if change == "out_of_reach":
+        target_dict["distance_m"] = 1.1 * fraction * reach_m
+    elif change == "spent":
+        launcher.stock = 0
+    elif change == "not_selected":
+        nav.pawn.selected_secondary = _secondary("rocket")
+
+    nav._arm_trigger(target_dict, weapon="missile", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_not_called()
+
+
+def test_aligned_rocket_is_fired_along_the_guns():
+    """
+    A rocket is fired when its lead solution is dead ahead, the guns firing as
+    well.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "rocket", _secondary("rocket"))
+
+    nav._arm_trigger(target_dict, weapon="rocket", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_called_once()
+    nav.pawn.laser_cannon.fire.assert_called_once()
+
+
+@pytest.mark.parametrize("change", ["off_cone", "out_of_range"])
+def test_rocket_held_off_its_solution(change):
+    """
+    No rocket outside its (tight) cone or beyond gun range.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "rocket", _secondary("rocket"))
+    if change == "off_cone":
+        angle = np.deg2rad(4.0)  # the rocket cone is 3 deg
+        nav.pawn.forward = np.array([np.sin(angle), np.cos(angle), 0.0])
+    else:
+        fire = nav.personality["navigator"]["fire"]
+        distance_m = 1.1 * fire["maximum_distance_m"]
+        target_dict.update(
+            distance_m=distance_m,
+            target_current_position=np.array([0.0, distance_m, 0.0]),
+        )
+
+    nav._arm_trigger(target_dict, weapon="rocket", min_cos_angle=0.99)
+
+    nav.pawn.fire_secondary.assert_not_called()
+
+
+@pytest.mark.parametrize("attack", ["pursue_target", "strafe_target"])
+def test_pursuit_and_strafe_arm_the_tacticians_weapon(attack):
+    """
+    The pursuit and strafe runs arm the weapon the tactician chose.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_with(nav, "rocket", _secondary("rocket"))
+    nav.check_overshoot_risk = MagicMock(return_value=False)
+    nav.check_extend_conditions = MagicMock(return_value=False)
+
+    getattr(nav, attack)(target_dict)
+
+    assert nav._armed_trigger[0] == "rocket"
+
+
+# ---------------------------------------------------------------------------
+# Missile defense: beam turn and flares
+# ---------------------------------------------------------------------------
+
+
+def _under_fire(nav, *missiles):
+    """
+    The navigator's ship at the origin, flying +Y, with these (missile id,
+    position) homing on it, closing in at 400 m/s, each with a 400 m decoy
+    range. It carries flares.
+    """
+    nav.pawn.forward = np.array([0.0, 1.0, 0.0])
+    nav.pawn.right = np.array([1.0, 0.0, 0.0])
+    nav.pawn.flare_launcher = SimpleNamespace(stock=10)
+    nav.pawn.drop_flare.return_value = True
+    nav.pawn.incoming_missiles = {
+        missile_id: IncomingMissile(
+            controller=SimpleNamespace(
+                id=missile_id, pawn=SimpleNamespace(conf={"decoy_range_m": 400.0})
+            ),
+            position=np.array(position, dtype=float),
+            distance_m=float(np.linalg.norm(position)),
+            closing_speed_mps=400.0,
+        )
+        for missile_id, position in missiles
+    }
+
+
+@pytest.mark.parametrize(
+    "missile_position, expected",
+    [
+        # From behind-left: the perpendicular closest to the heading (+Y)
+        ([-300.0, -400.0, 0.0], [-0.8, 0.6, 0.0]),
+        # Dead astern: straight along the line of sight, break right
+        ([0.0, -500.0, 0.0], [1.0, 0.0, 0.0]),
+    ],
+)
+def test_defend_missile_beams_the_missile(missile_position, expected):
+    """
+    The ship turns perpendicular to the missile's line of sight, on the side
+    of its heading, at full speed.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("m", missile_position))
+
+    direction, speed_mps = nav.navigate_intent(
+        intent=Intent.DEFEND_MISSILE, target_dict={"target_id": "m"}
+    )
+
+    line_of_sight = -np.asarray(missile_position) / np.linalg.norm(missile_position)
+    assert np.dot(direction, line_of_sight) == pytest.approx(0.0, abs=1e-9)
+    np.testing.assert_allclose(direction, expected, atol=1e-9)
+    assert speed_mps == nav.pawn.max_speed_mps
+
+
+def test_defend_missile_turns_to_the_next_missile_once_it_is_gone():
+    """
+    The missile the tactician picked is gone (decoyed, spent): defend against
+    the nearest one left, or fly on if there is none.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("other", [500.0, 0.0, 0.0]))
+
+    direction, _ = nav.defend_missile({"target_id": "gone"})
+    assert np.dot(direction, [1.0, 0.0, 0.0]) == pytest.approx(0.0, abs=1e-9)
+
+    nav.pawn.incoming_missiles = {}
+    assert nav.defend_missile({"target_id": "gone"}) == NO_DIRECTION
+
+
+@pytest.mark.parametrize(
+    "distance_m, dropped",
+    [(500.0, False), (330.0, False), (310.0, True), (50.0, True)],
+)
+def test_flare_dropped_within_reach_of_its_lure(distance_m, dropped):
+    """
+    Defending against a missile, a flare is dropped once it is within the
+    configured fraction (0.8) of its decoy range (400 m), so 320 m.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("m", [0.0, -distance_m, 0.0]))
+
+    nav.navigate_intent(intent=Intent.DEFEND_MISSILE, target_dict={"target_id": "m"})
+
+    assert nav.pawn.drop_flare.called is dropped
+
+
+def test_no_flare_unless_defending_against_the_missile():
+    """
+    Flares are only dropped while defending against a missile.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("m", [0.0, -100.0, 0.0]))
+
+    nav.navigate_intent(intent=Intent.IDLE, target_dict={})
+
+    nav.pawn.drop_flare.assert_not_called()
+
+
+def test_one_flare_per_missile():
+    """
+    One flare per missile, then one against the next missile defended against.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("first", [0.0, -100.0, 0.0]))
+
+    for _ in range(5):
+        nav.defend_missile({"target_id": "first"})
+    assert nav.pawn.drop_flare.call_count == 1
+
+    _under_fire(nav, ("first", [0.0, -100.0, 0.0]), ("second", [0.0, -50.0, 0.0]))
+    nav.defend_missile({"target_id": "second"})
+    assert nav.pawn.drop_flare.call_count == 2
+
+
+def test_flare_retried_when_the_drop_is_refused():
+    """
+    A refused drop (reloading) is retried at the next think.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("m", [0.0, -100.0, 0.0]))
+    nav.pawn.drop_flare.return_value = False
+
+    nav.defend_missile({"target_id": "m"})
+    nav.pawn.drop_flare.return_value = True
+    nav.defend_missile({"target_id": "m"})
+    nav.defend_missile({"target_id": "m"})
+
+    assert nav.pawn.drop_flare.call_count == 2
+
+
+def test_flared_missiles_are_forgotten_once_gone():
+    """
+    The flared missiles no longer homing on the ship are forgotten.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("m", [0.0, -100.0, 0.0]))
+    nav.defend_missile({"target_id": "m"})
+
+    _under_fire(nav, ("other", [0.0, -900.0, 0.0]))
+    nav.defend_missile({"target_id": "other"})
+
+    assert nav._flared_missile_ids == set()
+
+
+@pytest.mark.parametrize("flare_launcher", [None, SimpleNamespace(stock=0)])
+def test_no_flare_without_flares(flare_launcher):
+    """
+    Without flares (none carried, or all spent), nothing is dropped: the beam
+    turn goes on.
+    """
+    nav = make_fighter_navigator()
+    _under_fire(nav, ("m", [0.0, -100.0, 0.0]))
+    nav.pawn.flare_launcher = flare_launcher
+
+    direction, _ = nav.defend_missile({"target_id": "m"})
+
+    nav.pawn.drop_flare.assert_not_called()
+    assert np.linalg.norm(direction) == pytest.approx(1.0)
 
 
 def test_time_in_spiral_accrues_the_time_between_thinks():

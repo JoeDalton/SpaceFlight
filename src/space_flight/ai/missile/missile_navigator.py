@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -42,8 +42,18 @@ class MissileNavigator(GenericNavigator):
         :return: The direction to point to, zero once the target is lost (dead or
             gone), and the missile's speed
         """
+        return self.pursue(self.find_target(target_dict.get("target_id")))
+
+    def pursue(self, target: Any) -> tuple[np.ndarray, float]:
+        """
+        Point to a target by constant-angle pursuit. Unlike navigate, the target
+        needs not be an interacting actor (e.g. a decoy flare).
+
+        :param target: The live target (static if it has no speed), None if lost
+        :return: The direction to point to, zero if the target is lost, and the
+            missile's speed
+        """
         speed_mps = self.pawn.max_speed_mps
-        target = self._find_target(target_dict.get("target_id"))
         if target is None:
             return np.zeros(3), speed_mps
 
@@ -70,7 +80,7 @@ class MissileNavigator(GenericNavigator):
             speed_mps,
         )
 
-    def _find_target(self, target_id: uuid.UUID | None) -> Pawn | None:
+    def find_target(self, target_id: uuid.UUID | None) -> Pawn | None:
         """
         :param target_id: The target's id
         :return: The live target actor, or None if it is no longer an interacting

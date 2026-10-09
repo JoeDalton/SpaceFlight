@@ -20,6 +20,7 @@ from panda3d.core import (
 
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
+from space_flight.ai.missile.incoming_missile import nearest_incoming
 from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.ui.utils import (
     ArcGauge,
@@ -82,9 +83,23 @@ TARGET_BOX_MISSILE_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
 # Crosshair and lead indicator half-sizes, in their textures' proportions
 CROSSHAIR_HALF_SIZE = 0.03
 LEAD_INDICATOR_HALF_SIZE = 0.027
+MISSILE_MARKER_HALF_SIZE = 1.5 * LEAD_INDICATOR_HALF_SIZE
 # Crosshair tint, by auto-aim lock (shots lead the target) or not.
 CROSSHAIR_COLOR = (1.0, 1.0, 1.0, 1.0)
 CROSSHAIR_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
+
+# Incoming missile warning (see AimHUD): the warning line under the crosshair,
+# in aspect2d coordinates, and the marker on the nearest missile, a violet ring
+# like the lead indicator's, only bigger
+MISSILE_WARNING_COLOR = (1.0, 0.1, 0.1, 1.0)
+MISSILE_WARNING_Z = -0.3
+MISSILE_WARNING_TEXT_SCALE = 0.07
+MISSILE_MARKER_COLOR = (0.8, 0.3, 1.0, 1.0)
+# The warning line blinks faster as the missile closes in: its blink period is
+# the time to impact divided by this, within the bounds below
+MISSILE_WARNING_BLINKS_PER_IMPACT = 5.0
+MISSILE_WARNING_MIN_BLINK_PERIOD_S = 0.15
+MISSILE_WARNING_MAX_BLINK_PERIOD_S = 0.6
 
 # Transparent fill of the scan bar: while scanning, then by scan result.
 SCAN_BAR_COLORS = {
@@ -120,6 +135,51 @@ def is_on_screen(x: float, z: float, behind: bool) -> bool:
     :return: Whether a point projected at (x, z) is ahead and inside the screen
     """
     return not behind and abs(x) <= 1.0 and abs(z) <= 1.0
+
+
+def pin_to_screen_edge(x: float, z: float, behind: bool) -> tuple[float, float]:
+    """
+    Where to put an indicator that never leaves the screen: on a point's
+    projection while it is inside the edge rectangle (EDGE_HORIZONTAL,
+    EDGE_VERTICAL), else pinned to that rectangle's border, in the direction of
+    the point.
+
+    :param x: The point's projected screen x (see project_to_screen)
+    :param z: The point's projected screen z
+    :param behind: Whether the point is behind the camera
+    :return: The indicator's screen coordinates (x, z)
+    """
+    if behind:
+        # The perspective divide in lens.project() is by a negative depth,
+        # which mirrors the projection through the screen centre: both x and z
+        # come out with the wrong sign. Negate them to recover the true
+        # on-screen direction, so the indicator sits on the correct edge and
+        # only ever switches sides once, when the point passes directly behind.
+        x = -x
+        z = -z
+    elif abs(x) <= EDGE_HORIZONTAL and abs(z) <= EDGE_VERTICAL:
+        return x, z
+
+    # Off screen (out of the FoV or behind): intersect the (x, z) ray with the
+    # edge rectangle by scaling the whole vector by a single factor, so the
+    # position varies smoothly as the direction rotates.
+    #
+    # Clamping each axis independently instead would drive both components to
+    # their maxima whenever the projection is large on both axes (which happens
+    # as the depth approaches zero, near the camera's XZ plane), snapping the
+    # card to a corner that flips around as the point wobbles -> jitter.
+    # Ray-to-rectangle scaling avoids that and is continuous with the in-view
+    # projection (the scale is exactly 1 at the border).
+    ax = abs(x)
+    az = abs(z)
+    scale_x = EDGE_HORIZONTAL / ax if ax > EPSILON_TOLERANCE else np.inf
+    scale_z = EDGE_VERTICAL / az if az > EPSILON_TOLERANCE else np.inf
+    scale = min(scale_x, scale_z)
+    if not np.isfinite(scale):
+        # Direction undefined (point dead centre while behind): park the
+        # indicator on one side rather than at the origin.
+        return EDGE_HORIZONTAL, 0.0
+    return x * scale, z * scale
 
 
 def make_hud_card(
@@ -544,6 +604,32 @@ class EnergyHUD:
         self.game = None
 
 
+def missile_warning_text(count: int, distance_m: float) -> str:
+    """
+    :param count: How many missiles home on the player
+    :param distance_m: The nearest one's distance
+    :return: The missile warning line
+    """
+    if count == 1:
+        return f"MISSILE {distance_m:.0f} m"
+    return f"{count} MISSILES {distance_m:.0f} m"
+
+
+def missile_warning_blink_period_s(time_to_impact_s: float) -> float:
+    """
+    :param time_to_impact_s: The nearest missile's time to impact (infinite if
+        not closing in)
+    :return: The warning line's blink period: shorter as the missile closes in
+    """
+    return float(
+        np.clip(
+            time_to_impact_s / MISSILE_WARNING_BLINKS_PER_IMPACT,
+            MISSILE_WARNING_MIN_BLINK_PERIOD_S,
+            MISSILE_WARNING_MAX_BLINK_PERIOD_S,
+        )
+    )
+
+
 class AimHUD:
     """
     The player's aiming cues:
@@ -555,6 +641,12 @@ class AimHUD:
     - a lead indicator where to aim to hit the target (see
       AutoAim.predict_target_position), shown only when on screen, and only if
       the gameplay settings enable it.
+    - while guided missiles home on the player (see
+      :class:`~space_flight.ai.missile.incoming_missile.IncomingMissile`), a
+      red warning line under the crosshair, with the nearest missile's distance
+      (and their count if several), blinking faster as it closes in, and a
+      violet ring on the nearest missile, pinned to the screen border when off
+      screen.
     """
 
     def __init__(self, game: FlightState) -> None:
@@ -636,19 +728,43 @@ class AimHUD:
             loader.loadTexture(DATAFILES_PATH / "models/UI/crosshair.png"),
         )
         self.crosshair.reparentTo(self.root)
+        lead_texture = loader.loadTexture(
+            DATAFILES_PATH / "models/UI/lead_indicator.png"
+        )
         self.lead_indicator = make_hud_card(
             "leadIndicator",
             LEAD_INDICATOR_HALF_SIZE,
             LEAD_INDICATOR_HALF_SIZE,
-            loader.loadTexture(DATAFILES_PATH / "models/UI/lead_indicator.png"),
+            lead_texture,
         )
         self.lead_indicator.reparentTo(self.root)
+
+        # Incoming missile warning: a line under the crosshair and a marker on
+        # the nearest missile. The line blinks; blink_phase is its cycle's
+        # progress, in [0, 1), the line showing during the first half.
+        self.missile_warning_line = make_text_line(
+            aspect2d, "missileWarning", TextNode.ACenter
+        )
+        self.missile_warning_line.setPos(0, 0, MISSILE_WARNING_Z)
+        self.missile_warning_line.setScale(MISSILE_WARNING_TEXT_SCALE)
+        self.missile_warning_line.node().setTextColor(*MISSILE_WARNING_COLOR)
+        self.missile_blink_phase = 0.0
+        self.missile_marker = make_hud_card(
+            "missileMarker",
+            MISSILE_MARKER_HALF_SIZE,
+            MISSILE_MARKER_HALF_SIZE,
+            lead_texture,
+        )
+        self.missile_marker.setColorScale(*MISSILE_MARKER_COLOR)
+        self.missile_marker.reparentTo(self.root)
 
         # Hide at startup
         self.target_anchor.hide()
         self.scan_bar.hide()
         self.crosshair.hide()
         self.lead_indicator.hide()
+        self.missile_warning_line.hide()
+        self.missile_marker.hide()
 
         self.game.method_lists[self.id] = [self.aim_hud_update_task]
 
@@ -660,9 +776,11 @@ class AimHUD:
         self.target_aspect.setScale(1, 1, aspect)
         self.crosshair.setScale(1, 1, aspect)
         self.lead_indicator.setScale(1, 1, aspect)
+        self.missile_marker.setScale(1, 1, aspect)
         self.update_target_box()
         self.update_crosshair()
         self.update_lead_indicator()
+        self.update_missile_warning()
 
     def update_target_box(self) -> None:
         """
@@ -700,60 +818,13 @@ class AimHUD:
         # World position of target
         world_pos = Point3(*target.position)
 
-        # Convert to camera space and project. Default case: target is ahead,
-        # just take the projection
+        # Convert to camera space, project, and pin to the border if off screen
         cam_space_pos = self.game.app.cam.getRelativePoint(
             self.game.root_node, world_pos
         )
-        indic_x, indic_z, behind = project_to_screen(
-            self.game.app.camLens, cam_space_pos
+        indic_x, indic_z = pin_to_screen_edge(
+            *project_to_screen(self.game.app.camLens, cam_space_pos)
         )
-
-        if behind:
-            # Target is behind the camera. The perspective divide in
-            # lens.project() is by a negative depth (cam_space_pos.y < 0),
-            # which mirrors the projection through the screen centre: both
-            # indic_x and indic_z come out with the wrong sign. Negate them
-            # to recover the true on-screen direction (sign(cam_x),
-            # sign(cam_z)), so the indicator sits on the correct edge and
-            # only ever switches sides once, when the target passes directly
-            # behind.
-            indic_x = -indic_x
-            indic_z = -indic_z
-
-        inside = (
-            not behind
-            and abs(indic_x) <= EDGE_HORIZONTAL
-            and abs(indic_z) <= EDGE_VERTICAL
-        )
-        if not inside:
-            # Target is off-screen (out of the FoV or behind): pin the
-            # indicator to the screen border along the direction to the
-            # target. We intersect the (indic_x, indic_z) ray with the edge
-            # rectangle by scaling the whole vector by a single factor, so
-            # the position varies smoothly as the direction rotates.
-            #
-            # Clamping each axis independently instead would drive both
-            # components to their maxima whenever the projection is large on
-            # both axes (which happens as the depth approaches zero, near
-            # the camera's XZ plane), snapping the card to a corner that
-            # flips around as the target wobbles -> jitter. Ray-to-rectangle
-            # scaling avoids that and is continuous with the in-view
-            # projection (the scale is exactly 1 at the border).
-            ax = abs(indic_x)
-            az = abs(indic_z)
-            scale_x = EDGE_HORIZONTAL / ax if ax > EPSILON_TOLERANCE else np.inf
-            scale_z = EDGE_VERTICAL / az if az > EPSILON_TOLERANCE else np.inf
-            scale = min(scale_x, scale_z)
-            if np.isfinite(scale):
-                indic_x *= scale
-                indic_z *= scale
-            else:
-                # Direction undefined (target dead centre while behind):
-                # park the indicator on one side rather than at the origin.
-                indic_x = EDGE_HORIZONTAL
-                indic_z = 0.0
-
         self.target_anchor.setPos(indic_x, 0, indic_z)
 
         # Find distance and write it below the box
@@ -807,6 +878,41 @@ class AimHUD:
         )
         self._place_on_screen(self.lead_indicator, cam_space_pos)
 
+    def update_missile_warning(self) -> None:
+        """
+        Show the warning line and the marker on the nearest missile while
+        missiles home on the player, hide them otherwise.
+        """
+        pawn = self.game.player.pawn
+        incoming = nearest_incoming(pawn)
+        if incoming is None:
+            self.missile_warning_line.hide()
+            self.missile_marker.hide()
+            self.missile_blink_phase = 0.0
+            return
+
+        self.missile_warning_line.node().setText(
+            missile_warning_text(len(pawn.incoming_missiles), incoming.distance_m)
+        )
+        self.missile_blink_phase = (
+            self.missile_blink_phase
+            + self.game.game_time.get_time_step()
+            / missile_warning_blink_period_s(incoming.time_to_impact_s)
+        ) % 1.0
+        if self.missile_blink_phase < 0.5:
+            self.missile_warning_line.show()
+        else:
+            self.missile_warning_line.hide()
+
+        cam_space_pos = self.game.app.cam.getRelativePoint(
+            self.game.root_node, Point3(*incoming.position)
+        )
+        x, z = pin_to_screen_edge(
+            *project_to_screen(self.game.app.camLens, cam_space_pos)
+        )
+        self.missile_marker.setPos(x, 0, z)
+        self.missile_marker.show()
+
     def _place_on_screen(self, card: NodePath, cam_space_pos: Point3) -> None:
         """
         Place a card on a camera-space point, or hide it if that is off screen.
@@ -829,5 +935,8 @@ class AimHUD:
                 pass
         self.name_label.destroy()
         self.distance_label.destroy()
+        # The warning line is on aspect2d; the cards go with the root
+        self.missile_warning_line.removeNode()
+        self.missile_warning_line = None
         self.root.removeNode()
         self.game = None  # type: ignore[assignment]  # released on clean

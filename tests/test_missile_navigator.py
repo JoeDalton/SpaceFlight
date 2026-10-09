@@ -93,3 +93,18 @@ def test_lost_target_gives_no_direction(case):
 
     np.testing.assert_array_equal(direction, np.zeros(3))
     assert speed_mps == pytest.approx(300.0)
+
+
+def test_pursue_takes_the_target_itself():
+    """
+    pursue takes the target itself, which needs not be an interacting actor
+    (e.g. a decoy flare), or None once lost.
+    """
+    target = make_target([0.0, 1000.0, 0.0], speed=[0.0, 0.0, 0.0])
+    navigator = make_navigator()
+
+    direction, _ = navigator.pursue(target)
+    lost_direction, _ = navigator.pursue(None)
+
+    np.testing.assert_allclose(direction, [0.0, 1.0, 0.0], atol=1e-9)
+    np.testing.assert_array_equal(lost_direction, np.zeros(3))

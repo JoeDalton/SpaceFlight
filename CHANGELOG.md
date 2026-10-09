@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add missile weapons and flares in bot behaviours #127
+
 ### Changed
 
 - Better radial menu #93

@@ -12,10 +12,10 @@ the guided tour; the per-class API is in the [code reference](apidocs/index.rst)
 
 - **Tactician** ([`generic_tactician.py`](../../src/space_flight/ai/generic/generic_tactician.py)):
   a finite state machine over `Intent` (`ENGAGE`, `EVADE`, `DISENGAGE`,
-  `REGROUP`, `PATROL`, `FORMATION`, `IDLE`). `think()` re-evaluates the
-  intent every `intent_update_delay` and only switches once the current
-  intent's **commitment time** has elapsed — hysteresis that stops a bot
-  flip-flopping between behaviours. `update_intent()` (subclass-specific)
+  `REGROUP`, `PATROL`, `FORMATION`, `IDLE`, `DEFEND_MISSILE`). `think()`
+  re-evaluates the intent every `intent_update_delay` and only switches once
+  the current intent's **commitment time** has elapsed — hysteresis that stops
+  a bot flip-flopping between behaviours. `update_intent()` (subclass-specific)
   scores the situation and returns `(intent, target_dict)`.
 - **Navigator** ([`generic_navigator.py`](../../src/space_flight/ai/generic/generic_navigator.py)):
   turns `(intent, target_dict)` into a direction (plus, for ships, a desired
@@ -100,19 +100,37 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
 | Capital ship | [`capital_ship_tactician.py`](../../src/space_flight/ai/capital_ship/capital_ship_tactician.py) | [`capital_ship_navigator.py`](../../src/space_flight/ai/capital_ship/capital_ship_navigator.py) | [`capital_ship_pilot.py`](../../src/space_flight/ai/capital_ship/capital_ship_pilot.py) |
 
 **`FighterTactician`** falls through a priority list (not a weighted blend):
-evade an overwhelming threat (`evaluate_threats` ≥ `max_threat_score`),
-disengage if `evaluate_fighting_shape` (half health + shield) is too low,
-engage the best-scored prey (`evaluate_preys`, boosted for
+defend against a missile close to impact (see below), evade an overwhelming
+threat (`evaluate_threats` ≥ `max_threat_score`), disengage if
+`evaluate_fighting_shape` (half health + shield) is too low, engage the
+best-scored prey (`evaluate_preys`, boosted for
 `primary_target_ids`), hold formation, patrol, else regroup. A wingman holds
 formation even when it carries waypoints (`evaluate_orders`): every member of a
 wave gets the route, so whoever takes the lead after the leader's death follows
 it from where the leader left it (wingmen keep their route progress in step
 with the leader's). When engaging it
-also picks the `AttackMode` (in `target_dict["attack_mode"]`): first the weapon
-(`_choose_weapon` — a limited bomb only against a target both tough and
-valuable, stationary enough, with stock to spare — only while the selected
-secondary weapon is a bomb launcher), then the geometry: `BOMB`,
-or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
+also plans the attack (`_plan_attack`, in `target_dict`): first the weapon and
+its launcher (`weapon`, `launcher`), then the geometry (`attack_mode`): `BOMB`
+for a bomb, otherwise `STRAFE` vs. `PURSUIT` by the target's mobility (below
+`strafe_mobility_threshold`, a target is *slow*, otherwise *agile*). The
+weapon (`_choose_weapon`), among the launchers with stock left in the loadout,
+matching the target's mobility (each missile and rocket says which targets it
+is for, `target_mobility`):
+- **heavy ordnance** — a bomb, or a torpedo against a slow *primary* target,
+  whichever `prefer_torpedoes_to_bombs` puts first — only if it beats guns
+  (`_heavy_ordnance_beats_guns`, `heavy_ordnance_scoring`: a target both tough
+  and valuable, stationary enough, with stock to spare);
+- a **concussion missile** against an agile *primary* target;
+- a **rocket** against any slow target;
+- the **guns** otherwise.
+
+**Missile defense** comes first in that priority list:
+`FighterTactician.evaluate_missile_defense` picks `DEFEND_MISSILE` (like any
+intent change, once the current intent's commitment has elapsed) when the
+nearest missile homing on the pawn (its `incoming_missiles`, see
+[guided missiles](#guided-missiles-a-navigator-and-a-pilot-no-tactician)) is
+within `missile_defense_time_s` of impact; its `target_id` is that missile's
+controller id.
 
 **`FighterNavigator.engage_target`** dispatches on that attack mode:
 - **`PURSUIT`** — blends Constant Angle Pursuit (`compute_constant_angle_pursuit`
@@ -136,6 +154,22 @@ or for guns `STRAFE` vs. `PURSUIT` by the target's mobility.
   flight-time-led intercept falls inside a cone of that velocity; the drop
   goes through the player's own `pawn.fire_secondary()`, with the selected
   secondary weapon (nothing is released if it is not a bomb).
+
+Arming a weapon selects the launcher the tactician chose (while it has stock
+left). Pursuit and strafe runs fire the guns, plus (`navigator.ordnance` in
+the personality):
+- a **missile** once locked (the lock builds while it is selected), within
+  `missile_max_range_fraction` of its reach (launch speed × life time), and
+  while fewer than `max_missiles_in_flight` of the bot's missiles already home
+  on the target (read from its `incoming_missiles`);
+- a **rocket** once the lead solution for its flight time is within gun range
+  and `rocket_fire_min_cos_angle` of the nose.
+
+**`DEFEND_MISSILE`** is a beam turn (`defend_missile`): full speed,
+perpendicular to the missile's line of sight, on the side closest to the
+heading. A fighter carrying flares also drops one per missile, at the think
+the missile is within `flare_range_fraction` of its `decoy_range_m`
+(`navigator.countermeasures`), where a flare may lure it.
 
 **`CapitalShipTactician`** is the fighter's list without threat evasion or
 prey scoring: it engages a scripted prey (`scripted_prey_dict`) tagged
@@ -181,6 +215,15 @@ and returns a zero direction once the target is lost (destroyed or gone from
 is flown by an ordinary `FighterPilot` with `Personality.MISSILE_DEFAULT`,
 every frame (an `OrdnanceController` is not scheduled by the
 `ThinkScheduler`). See [ordnance](actors.md#ordnance-bombs-rockets-missiles-flares).
+
+While it homes, a missile keeps its target warned: the target pawn's
+`incoming_missiles` dictionary holds an
+[`IncomingMissile`](../../src/space_flight/ai/missile/incoming_missile.py)
+message per missile (position, distance, closing speed, `time_to_impact_s`),
+keyed by the missile's controller id, withdrawn once the missile is lost,
+spent or decoyed. `nearest_incoming(pawn)` reads the nearest one: the bots'
+missile defense and the player's [HUD](ui.md) use it. Only pawns get it (not
+capital-ship subsystems).
 
 ## Supporting systems
 

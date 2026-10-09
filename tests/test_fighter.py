@@ -1,6 +1,8 @@
 import copy
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from space_flight.actors.energy import (
@@ -50,6 +52,7 @@ def make_fighter_without_init(
     # apply_damage reads is_dying -- a property mirroring the controlling
     # Bot/Player -- to make a dying wreck inert; give it a live controller.
     fighter.parent = MagicMock(is_dying=False)
+    fighter.incoming_missiles = {}
     return fighter
 
 
@@ -171,7 +174,8 @@ class FakeLock:
 class FakeLauncher:
     """
     Stands in for an OrdnanceLauncher: spends one unit of stock per launch and
-    records the target it was given. Only a missile launcher has a target lock.
+    records the target it was given, and returns a stand-in controller of the
+    launched ordnance. Only a missile launcher has a target lock.
     """
 
     def __init__(self, category: str, stock: int, name: str = ""):
@@ -181,6 +185,7 @@ class FakeLauncher:
         self.targets = []
         self.target_lock = FakeLock() if category == "missile" else None
         self.reloads = 0
+        self.launched_pawn = SimpleNamespace(position=np.zeros(3))
 
     @property
     def is_locked(self) -> bool:
@@ -189,12 +194,12 @@ class FakeLauncher:
     def restart_reload(self):
         self.reloads += 1
 
-    def launch(self, target_id=None) -> bool:
+    def launch(self, target_id=None) -> SimpleNamespace | None:
         if self.stock <= 0:
-            return False
+            return None
         self.stock -= 1
         self.targets.append(target_id)
-        return True
+        return SimpleNamespace(pawn=self.launched_pawn)
 
 
 def _fighter_with_loadout(*launchers: FakeLauncher, auto_aim_locked: bool = False):
@@ -447,6 +452,53 @@ def test_drop_flare_launches_a_flare_not_the_secondary():
     assert fighter.drop_flare() is True
     assert flare.stock == 9
     assert missile.stock == 2
+
+
+def _incoming(fighter, lured: bool = False):
+    """
+    Register a stand-in missile homing on the fighter. A flare lures it if
+    lured, which withdraws its message, like OrdnanceController.offer_decoy.
+    """
+    controller = MagicMock()
+    controller.id = object()
+    fighter.incoming_missiles[controller.id] = SimpleNamespace(controller=controller)
+
+    def offer_decoy(flare):
+        if lured:
+            fighter.incoming_missiles.pop(controller.id)
+        return lured
+
+    controller.offer_decoy.side_effect = offer_decoy
+    return controller
+
+
+def test_drop_flare_is_offered_to_every_incoming_missile():
+    """
+    A dropped flare is offered to every missile homing on the ship, even as
+    those it lures withdraw their message.
+    """
+    flare = FakeLauncher("flare", 10)
+    fighter = _fighter_with_loadout(flare)
+    lured = _incoming(fighter, lured=True)
+    missed = _incoming(fighter)
+
+    assert fighter.drop_flare() is True
+
+    lured.offer_decoy.assert_called_once_with(flare.launched_pawn)
+    missed.offer_decoy.assert_called_once_with(flare.launched_pawn)
+    assert list(fighter.incoming_missiles) == [missed.id]
+
+
+def test_drop_flare_refused_decoys_nothing():
+    """
+    Out of flares (or reloading), nothing is dropped nor offered.
+    """
+    fighter = _fighter_with_loadout(FakeLauncher("flare", 0))
+    missile = _incoming(fighter, lured=True)
+
+    assert fighter.drop_flare() is False
+
+    missile.offer_decoy.assert_not_called()
 
 
 # ---------------------------

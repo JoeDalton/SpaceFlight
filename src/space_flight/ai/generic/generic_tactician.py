@@ -80,6 +80,9 @@ class GenericTactician:
                     target_dict.get("attack_mode")
                     != self.target_dict.get("attack_mode")
                 )
+                or (  # Switching secondary weapon (e.g. missiles -> rockets)
+                    target_dict.get("launcher") != self.target_dict.get("launcher")
+                )
             ):
                 if self.debug:
                     LOGGER.info(

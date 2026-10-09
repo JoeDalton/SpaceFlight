@@ -158,6 +158,13 @@ hooks). `InputContextStack.dispatch()` only calls the top context, and
     ("SCANNING 42%", "CLEAR", "CONTRABAND") is appended to the name. Only
     that attribute is read, so any pawn a mission makes scannable gets the
     bar.
+  - an **incoming missile warning**, while guided missiles home on the player
+    (`nearest_incoming`, see [docs/ai.md](ai.md#guided-missiles-a-navigator-and-a-pilot-no-tactician)):
+    a red line under the crosshair with the nearest missile's distance (and
+    their count if several), blinking faster as its time to impact shrinks,
+    and a violet ring (the lead indicator's, 1.5 times bigger) on the nearest
+    missile, pinned to the screen border like the target box
+    (`pin_to_screen_edge`) when off screen.
 
 ## `rear_view_mirror.py`
 

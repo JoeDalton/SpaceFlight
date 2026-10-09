@@ -238,11 +238,11 @@ class Fighter(Ship):
             return
         if self.selected_secondary in candidates:
             index = candidates.index(self.selected_secondary)
-            self._select_secondary(candidates[(index + 1) % len(candidates)])
+            self.select_secondary(candidates[(index + 1) % len(candidates)])
         else:
-            self._select_secondary(candidates[0])
+            self.select_secondary(candidates[0])
 
-    def _select_secondary(self, launcher: OrdnanceLauncher):
+    def select_secondary(self, launcher: OrdnanceLauncher):
         """
         Select a secondary weapon, which reloads if it was not selected already.
 
@@ -279,16 +279,26 @@ class Fighter(Ship):
         for step in range(1, len(cycle)):
             launcher = cycle[(index + step) % len(cycle)]
             if launcher.stock > 0:
-                self._select_secondary(launcher)
+                self.select_secondary(launcher)
                 return
 
     def drop_flare(self) -> bool:
         """
-        Drop a flare behind the ship, if any is left.
+        Drop a flare behind the ship, if any is left. It is offered to the
+        missiles homing on the ship, which it may decoy (see
+        OrdnanceController.offer_decoy).
 
         :return: True if dropped, False if out of flares or reloading
         """
-        return self._launch(self.flare_launcher)
+        if self.flare_launcher is None:
+            return False
+        flare_controller = self.flare_launcher.launch()
+        if flare_controller is None:
+            return False
+        # Decoying a missile withdraws its message: iterate over a copy
+        for incoming in list(self.incoming_missiles.values()):
+            incoming.controller.offer_decoy(flare_controller.pawn)
+        return True
 
     def _launch(self, launcher: OrdnanceLauncher | None) -> bool:
         """
@@ -300,7 +310,7 @@ class Fighter(Ship):
         """
         if launcher is None:
             return False
-        return launcher.launch(target_id=self.target_id)
+        return launcher.launch(target_id=self.target_id) is not None
 
     def apply_damage(self, damage: float, damage_type: str):
         """

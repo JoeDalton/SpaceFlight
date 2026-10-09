@@ -20,8 +20,9 @@ from panda3d.core import NodePath, Point3, Vec3
 
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.ship import Ship
-from space_flight.ai import Intent, Personality
+from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
+from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.ai.missile.missile_navigator import MissileNavigator
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.utils import magnitude, rotation_matrix_coefficients
@@ -240,6 +241,10 @@ class OrdnanceController(Destructible):
     A guided missile with a target is steered by a :class:`MissileNavigator`
     (always engaging that target) and a :class:`FighterPilot`; every other
     ordnance, and a missile whose target is lost, flies straight on.
+
+    While it homes on its target, a guided missile keeps the target's
+    :class:`IncomingMissile` message up to date. A flare can decoy it: it then
+    homes on the flare instead (see :meth:`decoy`), silently.
     """
 
     def __init__(
@@ -276,6 +281,10 @@ class OrdnanceController(Destructible):
 
         self.navigator = None
         self.pilot = None
+        # The actor holding this missile's IncomingMissile message, if any
+        self.warned_target = None
+        # The flare this missile homes on instead of its target, once decoyed
+        self.decoy_pawn = None
         if self.pawn.category == "missile" and target_id is not None:
             self.navigator = MissileNavigator(game=self.game, pawn=self.pawn)
             self.pilot = FighterPilot(
@@ -300,9 +309,10 @@ class OrdnanceController(Destructible):
 
         commands = COAST_COMMANDS
         if self.navigator is not None:
-            target_direction, desired_speed_mps = self.navigator.navigate(
-                intent=Intent.ENGAGE, target_dict={"target_id": self.target_id}
-            )
+            target = self._find_homing_target()
+            if target is not None and self.decoy_pawn is None:
+                self._warn(target)
+            target_direction, desired_speed_mps = self.navigator.pursue(target)
             if np.any(target_direction):
                 commands = self.pilot.pilot(
                     target_direction=target_direction,
@@ -319,8 +329,78 @@ class OrdnanceController(Destructible):
             roll_rate=roll_rate,
         )
 
+    def _find_homing_target(self):
+        """
+        :return: The live actor the missile homes on: its decoy once decoyed,
+            else its target. None once it is lost (dead or gone).
+        """
+        if self.decoy_pawn is None:
+            return self.navigator.find_target(self.target_id)
+        if self.decoy_pawn.is_dead or self.decoy_pawn.health <= 0.0:
+            return None
+        return self.decoy_pawn
+
+    def _warn(self, target):
+        """
+        Send (or update) the "missile incoming" message to the target.
+
+        :param target: The missile's live target
+        """
+        incoming_missiles = getattr(target, "incoming_missiles", None)
+        if incoming_missiles is None:
+            # Not a pawn (e.g. a subsystem): nobody to warn
+            return
+        incoming_missiles[self.id] = IncomingMissile.between(self, target)
+        self.warned_target = target
+
+    def _withdraw_warning(self):
+        """Remove the "missile incoming" message from the target, if sent."""
+        if self.warned_target is not None:
+            self.warned_target.incoming_missiles.pop(self.id, None)
+            self.warned_target = None
+
+    def offer_decoy(self, flare: Ordnance) -> bool:
+        """
+        Offer a flare just dropped by the target to a guided missile. If the
+        flare lures it (see _is_lured_by), the missile homes on the flare from
+        now on (and flies straight on once the flare is spent), and its target is
+        no longer warned.
+
+        :param flare: The flare
+        :return: True if the missile is now decoyed
+        """
+        if self.navigator is None or self.decoy_pawn is not None:
+            return False
+        if not self._is_lured_by(flare):
+            return False
+        self._withdraw_warning()
+        self.decoy_pawn = flare
+        LOGGER.info("%s decoyed by a flare", self.name)
+        return True
+
+    def _is_lured_by(self, flare: Ordnance) -> bool:
+        """
+        Whether a flare lures the missile: it must be close enough to the
+        missile and within its seeker cone, and the missile then falls for it by
+        chance (see MISSILE_DECOY_KEYS).
+
+        :param flare: The flare
+        :return: True if lured
+        """
+        conf = self.pawn.conf
+        offset = np.asarray(flare.position, dtype=float) - self.pawn.position
+        distance_m = magnitude(offset)
+        if distance_m > conf["decoy_range_m"]:
+            return False
+        if distance_m > 0.0:
+            cos_angle = np.dot(self.pawn.forward, offset) / distance_m
+            if cos_angle < np.cos(np.deg2rad(conf["decoy_cone_angle_deg"])):
+                return False
+        return bool(np.random.random() < conf["decoy_chance"])
+
     def _drop_guidance(self):
         """Remove the navigator and pilot: the ordnance flies straight on."""
+        self._withdraw_warning()
         if self.navigator is not None:
             self.navigator.clean()
             self.navigator = None
@@ -328,6 +408,7 @@ class OrdnanceController(Destructible):
             self.pilot.clean()
             self.pilot = None
         self.target_id = None
+        self.decoy_pawn = None
 
     def get_health(self) -> float:
         """
