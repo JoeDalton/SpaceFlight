@@ -128,7 +128,8 @@ level end).
 - **[`settings_menu_state.py`](../../src/space_flight/menus/settings_menu_state.py)** —
   `SettingsMenuState` is a landing screen (reached from the main and pause
   menus) routing to `GAMEPLAY_SETTINGS_STATE`, `INPUT_SETTINGS_STATE` or
-  `GRAPHICS_SETTINGS_STATE`.
+  `GRAPHICS_SETTINGS_STATE`. Its all-black background hides the paused
+  flight when opened from the pause menu, so it looks the same from both.
 
 ## In-session overlays
 
