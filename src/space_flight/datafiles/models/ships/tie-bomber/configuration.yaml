@@ -28,6 +28,7 @@ laser_shot_energy_cost: 0.022  # laser gauge fraction per bolt
 loadout:
   proton_bomb: 8
   concussion_missile: 4
+  flare: 10
 
 explosion_scale: 5.0
 death_spin_duration_s: 2.5
