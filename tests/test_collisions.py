@@ -13,7 +13,19 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from panda3d.core import BitMask32, Vec3
+from panda3d.core import (
+    BitMask32,
+    CollisionBox,
+    CollisionHandlerQueue,
+    CollisionNode,
+    CollisionSegment,
+    CollisionSphere,
+    CollisionTraverser,
+    CollisionTube,
+    NodePath,
+    Point3,
+    Vec3,
+)
 
 from space_flight.fx import spark_fx
 from space_flight.game.collisions import (
@@ -24,8 +36,8 @@ from space_flight.game.collisions import (
 )
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.shield import Shield
-    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.major_ship.shield import Shield
+    from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.ship import Ship
     from space_flight.weapons.laser_cannon import LaserShot
 
@@ -153,6 +165,7 @@ def make_collision_system_without_init() -> CollisionSystem:
     """
     system = object.__new__(CollisionSystem)
     system.game = MagicMock()
+    system.game.game_time.get_average_frame_rate.return_value = 60.0
     system.player_collision_damage_multiplier = 1.0
     return system
 
@@ -512,9 +525,12 @@ def make_laser_and_shield(
     laser = MagicMock()
     laser.speed = np.asarray(velocity, dtype=float)
     laser.power = power
+    laser.launch_position = np.array([1000.0, 0.0, 0.0])
 
     shield = MagicMock()
     shield.is_enabled = enabled
+    # The laser was fired from outside the bubble, unless a test says otherwise
+    shield.contains.return_value = False
     # A shield has no velocity of its own; it rides the ship it is mounted on.
     # Sparks spawned on a blocked hit read that velocity via _hit_velocity.
     shield.speed = None
@@ -542,8 +558,8 @@ def make_shield_entry(
 
 def test_laser_from_outside_is_blocked():
     """
-    A laser crossing inward (velocity opposed to the outward normal, dot < 0) is
-    absorbed by the shield and removed.
+    A laser fired from outside the bubble is absorbed by the shield and
+    removed.
     """
     system = make_collision_system_without_init()
     laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
@@ -558,10 +574,11 @@ def test_laser_from_outside_is_blocked():
 
 def test_laser_from_inside_passes_through():
     """
-    A laser fired from inside, crossing outward (dot > 0), is not blocked.
+    A laser fired from inside the bubble is not blocked.
     """
     system = make_collision_system_without_init()
     laser, shield = make_laser_and_shield(velocity=[10.0, 0.0, 0.0])
+    shield.contains.return_value = True
     entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
 
     system.munition_into_shield(entry)
@@ -570,19 +587,17 @@ def test_laser_from_inside_passes_through():
     laser.on_impact.assert_not_called()
 
 
-def test_laser_with_degenerate_normal_passes_through():
+def test_shield_checks_the_launch_point():
     """
-    A segment originating inside the solid yields a degenerate (zero) normal;
-    dot == 0 is treated as a pass, so the laser is not blocked.
+    Whether the laser passes is decided on its launch point.
     """
     system = make_collision_system_without_init()
     laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
-    entry = make_shield_entry(laser, shield, Vec3(0.0, 0.0, 0.0))
+    entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
 
     system.munition_into_shield(entry)
 
-    shield.take_hit.assert_not_called()
-    laser.on_impact.assert_not_called()
+    shield.contains.assert_called_once_with(laser.launch_position)
 
 
 def test_disabled_shield_lets_lasers_through():
@@ -633,6 +648,133 @@ def test_laser_does_not_hit_its_own_ships_shield():
 
     shield.take_hit.assert_not_called()
     laser.on_impact.assert_not_called()
+
+
+# A capital ship's bubble: a capsule along y, like the star destroyer's
+BIG_SHIELD_TUBE = ((0.0, -550.0, 0.0), (0.0, 450.0, 0.0), 480.0)
+
+
+def traverse_munition_into_shield(system: CollisionSystem, munition, from_solid):
+    """
+    Run a real panda3d traversal of a munition collider against a real tube
+    shield collider (BIG_SHIELD_TUBE) owned by a stand-in shield whose
+    contains() is the real Shield.contains, then move the munition on by one
+    frame of travel: the game handles collision events on the next frame.
+
+    :param system: The collision system whose handler will read the entries
+    :param munition: The munition (from-owner), with its world speed
+    :param from_solid: The munition's collision solid (segment or sphere)
+    :return: The shield, and the collision entries panda3d reported
+    """
+    from space_flight.actors.major_ship.shield import Shield as RealShield
+
+    root = NodePath("root")
+    point_a, point_b, radius = BIG_SHIELD_TUBE
+    shield = MagicMock()
+    shield.is_enabled = True
+    shield.speed = None
+    shield.mounted_on = SimpleNamespace(speed=np.zeros(3))
+    shield.game = SimpleNamespace(root_node=root)
+    shield.node = root.attachNewNode("shield_node")
+    shield.model = SimpleNamespace(
+        shape_type="tube", point_a=point_a, point_b=point_b, radius_m=radius
+    )
+    shield.contains.side_effect = lambda point: RealShield.contains(shield, point)
+
+    into_node = CollisionNode("shield")
+    into_node.addSolid(CollisionTube(*point_a, *point_b, radius))
+    into_node.setIntoCollideMask(BitMask32.bit(1))
+    into_node.setFromCollideMask(BitMask32.allOff())
+    shield.node.attachNewNode(into_node).setPythonTag("owner", shield)
+
+    from_node = CollisionNode("munition")
+    from_node.addSolid(from_solid)
+    from_node.setFromCollideMask(BitMask32.bit(1))
+    from_node.setIntoCollideMask(BitMask32.allOff())
+    from_np = root.attachNewNode(from_node)
+    from_np.setPythonTag("owner", munition)
+
+    traverser = CollisionTraverser()
+    queue = CollisionHandlerQueue()
+    traverser.addCollider(from_np, queue)
+    traverser.traverse(root)
+    entries = list(queue.entries)
+
+    # Handled next frame: the munition has moved on meanwhile
+    from_np.setPos(Vec3(*(np.asarray(munition.speed) / 60.0)))
+    system.game.root_node = root
+    return shield, entries
+
+
+@pytest.mark.parametrize(
+    "launch, start, end, blocked",
+    [
+        ((0, 0, 900), (0, 0, 500), (0, 0, 450), True),  # outside, crossing in
+        ((0, 0, 900), (0, 0, 470), (0, 0, 440), True),  # outside, missed the cross
+        ((0, 0, 400), (0, 0, 300), (0, 0, 250), False),  # inside, to the axis
+        ((0, 0, 60), (0, 0, 20), (0, 0, -30), False),  # inside, across the axis
+        ((0, 0, 479), (0, 0, 470), (0, 0, 440), False),  # inside, by the wall
+        ((0, 0, 400), (0, 0, 460), (0, 0, 510), False),  # inside, crossing out
+    ],
+    ids=[
+        "outside_in",
+        "outside_missed_crossing",
+        "inside_to_axis",
+        "inside_across",
+        "inside_by_the_wall",
+        "exiting",
+    ],
+)
+def test_laser_against_a_real_shield_tube(launch, start, end, blocked):
+    """
+    A laser fired from outside the bubble is blocked, even when first reported
+    wholly inside it (a frame longer than its segment); one fired inside passes,
+    whichever way it flies. The handler runs a frame late, once the laser has
+    moved on (regression: shots fired inside a star destroyer's bubble toward
+    its axis hit the bubble, then shots from outside were let through).
+    """
+    system = make_collision_system_without_init()
+    velocity = np.subtract(end, start) * 60.0  # the segment spans one 60 Hz frame
+    laser, _ = make_laser_and_shield(velocity=velocity)
+    laser.launch_position = np.array(launch, dtype=float)
+    shield, entries = traverse_munition_into_shield(
+        system, laser, CollisionSegment(*start, *end)
+    )
+    assert entries  # panda3d reports every case, inside ones included
+
+    for entry in entries:
+        system.munition_into_shield(entry)
+
+    assert shield.take_hit.called is blocked
+    assert laser.on_impact.called is blocked
+
+
+@pytest.mark.parametrize(
+    "launch, position, blocked",
+    [
+        ((0, 0, 900), (0, 0, 480.5), True),  # outside, straddling the surface
+        ((0, 0, 900), (0, 0, 470), True),  # outside, jumped in within a frame
+        ((0, 0, 400), (0, 0, 300), False),  # launched inside
+    ],
+    ids=["straddling", "tunnelled_in", "launched_inside"],
+)
+def test_ordnance_against_a_real_shield_tube(launch, position, blocked):
+    """
+    An ordnance follows the same launch-point rule as a laser.
+    """
+    system = make_collision_system_without_init()
+    ordnance, _ = make_laser_and_shield(velocity=[0.0, 0.0, -1200.0])
+    ordnance.launch_position = np.array(launch, dtype=float)
+    shield, entries = traverse_munition_into_shield(
+        system, ordnance, CollisionSphere(*position, 1.0)
+    )
+    assert entries
+
+    for entry in entries:
+        system.munition_into_shield(entry)
+
+    assert shield.take_hit.called is blocked
+    assert ordnance.on_impact.called is blocked
 
 
 # ---------------------------
@@ -756,6 +898,24 @@ def test_hit_on_shielded_fighter_sparks_ice():
     system.munition_into_destructible(entry)
 
     assert spawned_spark_preset(system) is spark_fx.ICE
+
+
+def test_hull_hit_on_a_shielded_major_ship_sparks_metal():
+    """
+    A laser reaching a major ship's hull throws metal sparks even while its
+    bubble is up: its shield_level is the bubble's strength, which the shot got
+    past (regression: shots fired inside a star destroyer's bubble at its hull,
+    or at a hangar the hull collider overlaps, sparked blue).
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    major_ship = make_target_fighter(shield_level=40000.0)
+    major_ship.category = "capital_ship"
+    entry = make_destructible_entry(make_enemy_laser(), major_ship)
+
+    system.munition_into_destructible(entry)
+
+    assert spawned_spark_preset(system) is spark_fx.METAL
 
 
 def test_hit_on_bare_hull_sparks_metal():
@@ -921,3 +1081,113 @@ def test_inactive_sensor_is_left_out_of_the_traverse():
     sensor.set_active(True)
     system.update_collisions()
     assert system.sensor_into_obstacle.call_count == 3
+
+
+# ---------------------------
+# attach_collision_box
+# ---------------------------
+
+
+def test_attach_collision_box_builds_a_tagged_box():
+    """
+    attach_collision_box attaches a box of the given centre and half-extents,
+    masked as its collider type and tagged with its owner.
+    """
+    from space_flight.game.collisions import attach_collision_box
+
+    game = MagicMock()
+    parent = NodePath("ship")
+    owner = object()
+
+    box_np = attach_collision_box(
+        game=game,
+        name="subsystem",
+        center=[1.0, 2.0, 3.0],
+        half_extents=[10.0, 20.0, 30.0],
+        collider_type="subsystem",
+        parent_node=parent,
+        parent_object=owner,
+    )
+
+    solid = box_np.node().getSolid(0)
+    assert isinstance(solid, CollisionBox)
+    np.testing.assert_allclose(solid.getMin(), [-9.0, -18.0, -27.0])
+    np.testing.assert_allclose(solid.getMax(), [11.0, 22.0, 33.0])
+    _, into_mask, _ = CollisionLayers.define_collision_masks("subsystem")
+    assert box_np.node().getIntoCollideMask() == into_mask
+    assert box_np.getPythonTag("owner") is owner
+    assert box_np.getParent() == parent
+
+
+@pytest.mark.parametrize(
+    "from_solid",
+    [
+        CollisionSphere(0, 0, -34, 6.0),  # a ship ramming the bay floor
+        CollisionSegment(0, 0, -60, 0, 0, -10),  # a laser shot into the bay
+        CollisionSphere(0, 0, -30.5, 1.0),  # an ordnance at the floor
+    ],
+    ids=["ship", "laser", "ordnance"],
+)
+def test_box_colliders_are_hit_by_ships_lasers_and_ordnance(from_solid):
+    """
+    Panda3d reports the game's from-solids (ship and ordnance spheres, laser
+    segments) against a box subsystem collider, with the outward normal of the
+    face hit: panda3d's own (for the ship pushback), or, when it reports a zero
+    one (a laser on some faces), the face the hit point lies on.
+    """
+    root = NodePath("root")
+    box = CollisionNode("bay")
+    box.addSolid(CollisionBox((0.0, 0.0, 0.0), 90.0, 169.0, 30.0))
+    box.setIntoCollideMask(BitMask32.bit(1))
+    box.setFromCollideMask(BitMask32.allOff())
+    root.attachNewNode(box)
+    from_node = CollisionNode("from")
+    from_node.addSolid(from_solid)
+    from_node.setFromCollideMask(BitMask32.bit(1))
+    from_node.setIntoCollideMask(BitMask32.allOff())
+    from_np = root.attachNewNode(from_node)
+    traverser = CollisionTraverser()
+    queue = CollisionHandlerQueue()
+    traverser.addCollider(from_np, queue)
+
+    traverser.traverse(root)
+
+    assert queue.getNumEntries() == 1
+    entry = queue.getEntry(0)
+    normal = entry.getSurfaceNormal(root)
+    if normal.almostEqual(Vec3(0, 0, 0)):
+        system = make_collision_system_without_init()
+        system.game.root_node = root
+        normal = system._box_face_normal(entry)
+    np.testing.assert_allclose(normal, [0, 0, -1], atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "point, expected",
+    [
+        ((0.0, 6.0, -30.0), (0, 0, -1)),  # floor
+        ((89.99, 0.0, 0.0), (1, 0, 0)),  # side
+        ((0.0, -169.0, 10.0), (0, -1, 0)),  # aft wall
+    ],
+)
+def test_box_face_normal_picks_the_face_of_the_hit_point(point, expected):
+    """The fallback normal is the outward normal of the face hit, in world space."""
+    root = NodePath("root")
+    ship = root.attachNewNode("ship")
+    ship.setH(90.0)  # turned: ship +x is world +y
+    box = CollisionBox((0.0, 0.0, 0.0), 90.0, 169.0, 30.0)
+    box_node = CollisionNode("bay")
+    box_node.addSolid(box)
+    box_np = ship.attachNewNode(box_node)
+    entry = MagicMock()
+    entry.getInto.return_value = box
+    entry.getIntoNodePath.return_value = box_np
+    entry.getSurfacePoint.return_value = Point3(*point)
+    system = make_collision_system_without_init()
+    system.game.root_node = root
+
+    normal = system._box_face_normal(entry)
+
+    np.testing.assert_allclose(
+        normal, root.getRelativeVector(box_np, Vec3(*expected)), atol=1e-6
+    )

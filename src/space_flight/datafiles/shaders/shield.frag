@@ -20,7 +20,7 @@ uniform float iTime;
 // (p3d_ModelMatrix), however the game root is offset under render.
 uniform mat4  p3d_ViewMatrixInverse;
 
-// --- Look knobs (set from actors/capital_ship/shield_model.py) --------------
+// --- Look knobs (set from actors/major_ship/shield_model.py) --------------
 uniform vec3  uColorFull;      // tint at full health (the shield's colour)
 uniform vec3  uColorMid;       // tint at half health (light violet)
 uniform vec3  uColorLow;       // tint at zero health (pink-violet)

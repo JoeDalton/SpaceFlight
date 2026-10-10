@@ -2,7 +2,7 @@
 Shield presentation: the visible bubble mesh + its animated GLSL shader.
 
 This module owns everything *visual* about a shield, kept separate from the
-game-logic :class:`~space_flight.actors.capital_ship.shield.Shield` (health,
+game-logic :class:`~space_flight.actors.major_ship.shield.Shield` (health,
 collision, lifecycle). It bundles two things:
 
 - :func:`make_capsule` -- the procedural capsule mesh used by tube shields
@@ -72,8 +72,9 @@ _PATTERN_GAIN = 0.55  # interior brightness driven by the field
 _PATTERN_ALPHA = 0.12  # how much the field firms up the opacity
 _IMPACT_WHITEN = 0.45  # white-hotness of an impact flash
 
-# Impact-flash scales: radius as a fraction of the bubble radius, decay in 1/s.
-_IMPACT_RADIUS_FRAC = 0.22
+# Impact-flash scales: radius in world metres (the same mark on any bubble, a
+# frigate's or a star destroyer's), decay in 1/s.
+_IMPACT_RADIUS_M = 15.0
 _IMPACT_DECAY = 3.5
 
 # Fluid death/appearance look knobs. The *_FRAC ones scale with the radius.
@@ -244,6 +245,8 @@ class ShieldModel:
         # which sinks and impacts are expressed.
         self.geom_np = None
         self.local_radius = 1.0
+        # Impact flash radius in geometry units (set with the shader)
+        self.impact_radius_local = _IMPACT_RADIUS_M
 
         # Impact flashes + retraction sinks, uploaded to the shader as arrays.
         self._impacts = []  # list of (Vec3 geometry-space pos, float start_time)
@@ -358,8 +361,9 @@ class ShieldModel:
     def _apply_shader(self, color: Sequence[float]):
         """
         Apply the shield shader and seed all its uniforms. Sizes the
-        pattern/impact/death scales from the geometry's own radius so the look is
-        consistent for any shield shape or modelling scale.
+        pattern/death scales from the geometry's own radius so the look is
+        consistent for any shield shape or modelling scale; the impact flash
+        keeps one size in world metres, so it reads the same on any bubble.
         """
         lr = self.local_radius
         r, g, b = color[0], color[1], color[2]
@@ -385,7 +389,9 @@ class ShieldModel:
         v.setShaderInput("uPatternAlpha", _PATTERN_ALPHA)
         v.setShaderInput("uImpactWhiten", _IMPACT_WHITEN)
         # Impacts
-        v.setShaderInput("uImpactRadius", _IMPACT_RADIUS_FRAC * lr)
+        # The flash radius in geometry units (the shader's vObjPos space)
+        self.impact_radius_local = _IMPACT_RADIUS_M / self._geom_scale()
+        v.setShaderInput("uImpactRadius", self.impact_radius_local)
         v.setShaderInput("uImpactDecay", _IMPACT_DECAY)
         v.setShaderInput("uImpactLife", _IMPACT_LIFE_S)
         v.setShaderInput("uImpacts", self._impact_pta)
@@ -434,6 +440,20 @@ class ShieldModel:
         self.visual.setShaderInput("uSinks", self._sink_pta)
         self.visual.setShaderInput("uSinkCount", count)
         self.visual.setShaderInput("uMaxReach", max_reach)
+
+    def _geom_scale(self) -> float:
+        """
+        World metres per geometry-local unit (the shader's vObjPos space): the
+        geometry's scale relative to the ship carrying the bubble (e.g. a stock
+        unit sphere scaled to the shield radius).
+
+        :return: The (mean) scale factor
+        """
+        if self.geom_np is None or self.geom_np.isEmpty():
+            return 1.0
+        scale = self.geom_np.getScale(self.visual.getParent())
+        mean_scale = (abs(scale[0]) + abs(scale[1]) + abs(scale[2])) / 3.0
+        return mean_scale if mean_scale > 0.0 else 1.0
 
     def add_impact(self, world_point: Point3, root: NodePath, now: float):
         """

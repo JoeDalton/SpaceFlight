@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.actors.capital_ship.shield import Shield
-from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
-from space_flight.actors.capital_ship.targeting_system import TargetingSystem
+from space_flight.actors.major_ship.hangar import Hangar
+from space_flight.actors.major_ship.shield import Shield
+from space_flight.actors.major_ship.shield_generator import ShieldGenerator
+from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 from space_flight.game.collisions import attach_collision_sphere
 
@@ -20,9 +21,12 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger()
 
 
-class CapitalShip(Ship):
+class MajorShip(Ship):
     """
-    A class for capital ships, heavy bombers, big freighter, etc.
+    Base class for the big ships carrying subsystems (shield generators, turrets,
+    hangars, ...): escort ships (transports, frigates, corvettes) and capital
+    ships (star destroyers). Each ship config picks its subclass (see
+    :func:`make_major_ship`).
     (Slow and not very manoeuverable, attacks from their side or bottom)
     """
 
@@ -48,7 +52,8 @@ class CapitalShip(Ship):
             team=team,
         )
 
-        # Actor category, so target filters can single capital ships out.
+        # Actor category, so target filters can single major ships out (the HUD
+        # "Capital ships" filter covers escort and capital ships alike).
         self.category = "capital_ship"
 
         # Subsystems declared in the ship config (possibly none)
@@ -90,6 +95,10 @@ class CapitalShip(Ship):
                 )
             )
 
+        # Hangars, launching fighters on request
+        self.hangars = self._build_hangars(sub_systems_conf)
+        self.sub_systems.extend(self.hangars)
+
         # Mounted, bot-controlled subsystems (turrets, tractor beams): each has
         # its own AI, so it is spawned as a Bot whose pawn is mounted on us.
         self.mounted_bots = self._spawn_mounted_bots(
@@ -112,6 +121,40 @@ class CapitalShip(Ship):
         # Set explosion size for death animation
         self.explosion_scale = self.conf["explosion_scale"]
 
+    def _build_hangars(self, sub_systems_conf: dict) -> list[Hangar]:
+        """
+        Build the hangars declared in the ship config.
+
+        :param sub_systems_conf: The ship's sub_systems config section
+        :return: The hangars
+        """
+        hangars = []
+        for i, hangar_conf in enumerate(sub_systems_conf.get("hangars", [])):
+            hangars.append(
+                Hangar(
+                    game=self.game,
+                    parent=self,
+                    relative_position=np.array(
+                        hangar_conf.get("relative_position", [0.0, 0.0, 0.0])
+                    ),
+                    half_extents_m=hangar_conf.get(
+                        "half_extents_m", [20.0, 20.0, 10.0]
+                    ),
+                    health=hangar_conf.get("health", 3000.0),
+                    explosion_scale=hangar_conf.get("explosion_scale", 40.0),
+                    group_size=hangar_conf.get("group_size", 3),
+                    launch_interval_s=hangar_conf.get("launch_interval_s", 1.5),
+                    max_active=hangar_conf.get("max_active", 6),
+                    launch_direction=hangar_conf.get(
+                        "launch_direction", [0.0, 0.0, -1.0]
+                    ),
+                    launch_speed_mps=hangar_conf.get("launch_speed_mps", 30.0),
+                    launch_margin_m=hangar_conf.get("launch_margin_m", 5.0),
+                    name=f"hangar_{i}",
+                )
+            )
+        return hangars
+
     def _spawn_mounted_bots(
         self, config_key: str, bot_type: str, model_key: str
     ) -> list:
@@ -127,7 +170,7 @@ class CapitalShip(Ship):
         :param model_key: The config field naming each mount's model/config
         :return: The spawned mount bots
         """
-        # Deferred import: bot imports CapitalShip, so importing spawn_bot at the
+        # Deferred import: bot imports MajorShip, so importing spawn_bot at the
         # top would be circular.
         from space_flight.actors.bot import spawn_bot
 
@@ -207,7 +250,7 @@ class CapitalShip(Ship):
     @property
     def shield_level(self) -> float:
         """
-        A capital ship's shield is a :class:`Shield` object (or None when the
+        A major ship's shield is a :class:`Shield` object (or None when the
         ship has no shield generators); expose its strength as a plain scalar.
 
         :return: The current shield strength, or 0 when unshielded
@@ -248,6 +291,7 @@ class CapitalShip(Ship):
             # would leave dead husks in alive_objects reporting stale health.
             self.sub_systems = []
             self.shield_generators = []
+            self.hangars = []
             self.shield = None
             self.mounted_bots = []
             super().clean()

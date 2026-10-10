@@ -93,8 +93,10 @@ of round glowing sparks thrown out of a laser impact.
   and `SPARK_JET_ANGLE_SCALE` scale every preset at once.
 - Wiring, in the laser handlers of
   [`collisions.py`](../../src/space_flight/game/collisions.py):
-  - bot hits: `ICE` if the target's shield was still up, else `METAL`;
-  - capital-ship shield-bubble hits: `ICE`, on top of the shield's own flash;
+  - bot hits: `ICE` if the target's own (fighter) shield was still up, else
+    `METAL`; a major ship's hull and subsystems always spark `METAL`, as a
+    shot reaching them got past its bubble;
+  - major-ship shield-bubble hits: `ICE`, on top of the shield's own flash;
   - terrain hits: `_TERRAIN_SPARK_PRESET[terrain.material]` (`"water"` →
     `ICE`, `"rock"` → `ROCK`, `"metal"` → `METAL`; `ROCK` if absent).
 

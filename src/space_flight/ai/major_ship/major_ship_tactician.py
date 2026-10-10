@@ -15,12 +15,12 @@ if TYPE_CHECKING:
 # from the scene
 
 
-class CapitalShipTactician(GenericTactician):
+class MajorShipTactician(GenericTactician):
     def __init__(
         self,
         game: FlightState,
         pawn: Pawn,
-        personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
+        personality: dict = Personality.ESCORT_SHIP_DEFAULT,
         debug: bool = False,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)

@@ -29,7 +29,7 @@ from space_flight.ui.input_context import InputContextStack
 from space_flight.ui.input_reader import load_bindings, reader_factory
 
 if TYPE_CHECKING:
-    from direct.task.Task import Task
+    from direct.task import Task
 
 LOGGER = logging.getLogger()
 

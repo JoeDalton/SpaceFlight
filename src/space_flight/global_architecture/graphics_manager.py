@@ -39,7 +39,7 @@ from panda3d.core import (
 from space_flight import DATAFILES_PATH
 
 if TYPE_CHECKING:
-    from direct.task.Task import Task
+    from direct.task import Task
     from panda3d.core import NodePath
 
     from space_flight.global_architecture.simulator import SpaceFlightSimulator

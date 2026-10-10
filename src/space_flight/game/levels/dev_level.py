@@ -36,34 +36,48 @@ PATROL_ROUTE = [
     [0, 0, 500],
 ]
 
-# A lone enemy CR-90 frigate. It carries a bot-controlled turret on its hull
+# A lone allied CR-90 frigate. It carries a bot-controlled turret on its hull
 # (declared in the ship config), which spawns and fights along with it.
-ENEMY_FRIGATE = WaveSpec(
-    name="enemy_frigate",
+ALLIED_FRIGATE = WaveSpec(
+    name="allied_frigate",
     ship_model="cr-90",
     size=1,
-    bot_type="capital_ship",
-    team=2,
+    bot_type="major_ship",
+    team=1,
     spawn_point=[0, -1500, 500],
     spawn_orientation=[1, 0, 0, 0],
     record=True,
     waypoints=PATROL_ROUTE,
 )
 
-# Two more capital ships alongside ENEMY_FRIGATE, for CPU load profiling.
-ENEMY_FRIGATE_WING = WaveSpec(
-    name="frigate_wing",
-    ship_model="cr-90",
-    size=2,
-    bot_type="capital_ship",
+# An enemy Imperial Star Destroyer: a scripted capital ship that only patrols
+# its racetrack (no tactician, no collision avoidance). Its turn radius is
+# close to a kilometre, hence the wide route.
+ENEMY_CAPITAL_SHIP = WaveSpec(
+    name="enemy_isd",
+    ship_model="isd",
+    size=1,
+    bot_type="major_ship",
     team=2,
-    spawn_point=[300, -1500, 500],
+    spawn_point=[0, 1000, 900],
     spawn_orientation=[1, 0, 0, 0],
     record=True,
-    waypoints=PATROL_ROUTE,
+    waypoints=[
+        [3000, 5000, 900],
+        [1000, 5000, 900],
+        [1000, -3000, 900],
+        [3000, -3000, 900],
+    ],
 )
 
 # A squadron of fighters, for CPU load profiling.
+# What the star destroyer's hangar holds: fighters of each type
+ENEMY_CAPITAL_SHIP_HANGAR_STOCK = {
+    "tie-fighter": 12,
+    "tie-interceptor": 6,
+    "tie-bomber": 6,
+}
+
 ENEMY_FIGHTER_SQUADRON = WaveSpec(
     name="enemy_fighter_squadron",
     ship_model="tie-fighter",
@@ -77,7 +91,7 @@ ENEMY_FIGHTER_SQUADRON = WaveSpec(
     waypoints=PATROL_ROUTE,
 )
 
-# An allied Y-wing patrol, given the enemy frigates as primary targets (see
+# An allied Y-wing patrol, given the enemy big ships as primary targets (see
 # dev_mission) to have it bomb and torpedo them.
 ALLIED_PATROL = WaveSpec(
     name="allied_patrol",
@@ -120,17 +134,26 @@ def build_dev_upfront(game: FlightState):
 
 def dev_mission(m: Mission) -> Iterator[None]:
     """
-    The dev sandbox's mission body: after 2s, 3 enemy capital ships, 17
-    enemy fighters and 10 allied Y-wings (30 ships, for CPU load testing),
-    the frigates being the Y-wings' primary targets. No win/lose condition.
+    The dev sandbox's mission body
 
     :param m: The level's :class:`Mission`
     """
     yield from m.wait(2)
     m.hud("Enemy forces inbound")
-    frigate = m.spawn(ENEMY_FRIGATE)
-    frigate_wing = m.spawn(ENEMY_FRIGATE_WING)
-    m.spawn(ENEMY_FIGHTER_SQUADRON)
-    # Targets are resolved as each Y-wing spawns: let the frigates spawn first
-    yield from m.wait(1)
-    m.spawn(ALLIED_PATROL, target=[frigate, frigate_wing])
+    capital_ship = m.spawn(ENEMY_CAPITAL_SHIP)
+    frigate = m.spawn(ALLIED_FRIGATE, target=[capital_ship])
+    print(frigate)
+    # TEMPORARY (#83 phase 2): launch fighters straight from the star
+    # destroyer's hangar, until the wave scripting API (phase 3) replaces this
+    yield from m.wait(5)
+    hangar = capital_ship.pawns()[0].hangars[0]
+    hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
+    m.hud("TIEs launching")
+    squadron = m.launch(hangar, "tie-fighter", 3, target=frigate)
+    m.on(squadron.all_destroyed, lambda: m.hud("TIE squadron destroyed"))
+    yield from m.wait(20)
+    m.launch(hangar, "tie-bomber", 6, target=frigate)
+    # m.spawn(ENEMY_FIGHTER_SQUADRON)
+    # Targets are resolved as each Y-wing spawns: let the big ships spawn first
+    # yield from m.wait(1)
+    # m.spawn(ALLIED_PATROL, target=[frigate, capital_ship])

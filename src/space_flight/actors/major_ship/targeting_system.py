@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from space_flight.actors.capital_ship.sub_system import SubSystem
+from space_flight.actors.major_ship.sub_system import SubSystem
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship import CapitalShip
+    from space_flight.actors.major_ship.major_ship import MajorShip
     from space_flight.game.flight_state import FlightState
 
 
@@ -18,7 +18,7 @@ class TargetingSystem(SubSystem):
     While alive, it grants every turret mounted on the same ship auto-aim
     (tuned by :attr:`auto_aim_params`) and a faster rate of fire
     (:attr:`fire_rate_multiplier`). The turrets *pull* these each frame (see
-    :meth:`~space_flight.actors.capital_ship.turret.Turret._active_targeting_system`),
+    :meth:`~space_flight.actors.major_ship.turret.Turret._active_targeting_system`),
     so the targeting system need not know its turrets; once it is dead the
     turrets revert to unassisted fire at their base rate.
 
@@ -40,7 +40,7 @@ class TargetingSystem(SubSystem):
     def __init__(
         self,
         game: FlightState,
-        parent: CapitalShip,
+        parent: MajorShip,
         relative_position: np.ndarray = np.zeros(3),
         hit_box_radius_m: float = 5.0,
         health: float = 1000.0,

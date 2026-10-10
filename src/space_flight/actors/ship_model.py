@@ -173,6 +173,18 @@ class ShipModel:
                 self.offset = np.array([0.0, 0.0, 0.0])
                 self.orientation = np.quaternion(0.0, 0.0, 0.0, 1.0)
                 self.model.setScale(1.0)
+        elif self.ship_type == "isd":
+            if is_cockpit:
+                raise NotImplementedError(ship_type + f" {is_cockpit=}")
+            else:
+                self.game.app.asset_manager.instantiate_3d_model_to_node(
+                    path=DATAFILES_PATH
+                    / "models/star_wars_imperial-class_star_destroyer/scene.gltf",
+                    parent_node=self.model,
+                )
+                self.offset = np.array([0.0, -700.0, 0.0])
+                self.orientation = np.quaternion(0.0, 0.0, 0.0, 1.0)
+                self.model.setScale(1.0)
         else:
             raise NotImplementedError(f"{ship_type=}")
 

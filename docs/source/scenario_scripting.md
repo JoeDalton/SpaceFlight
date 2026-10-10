@@ -38,7 +38,7 @@ TRANSPORTS = WaveSpec(
     name="transports",
     ship_model="cr-90",
     size=3,
-    bot_type="capital_ship",
+    bot_type="major_ship",
     team=1,
     spawn_point=[0, -2000, 200],
     formation="arrowhead",
@@ -110,7 +110,7 @@ unknown field raises `TypeError`; a missing `size` for a single model, or a
 | `ship_model` | required | A pawn model, or `(model, count)` pairs for a mixed wave |
 | `size` | `None` | Number of ships; required for a single model, inferred for a mixed wave |
 | `spawn_point` | `None` | Leader's world position; may instead be given at spawn time |
-| `bot_type` | `"fighter"` | `"fighter"` or `"capital_ship"` |
+| `bot_type` | `"fighter"` | `"fighter"` or `"major_ship"` (the ship config picks an escort ship or a scripted capital ship) |
 | `team` | `2` | |
 | `spawn_orientation` | `(0, 0, 0, 1)` | Quaternion `(w, x, y, z)`, passed straight to Panda3D — the default is a 180° turn about z, **not** the identity |
 | `formation` | `None` | `"arrowhead"`, `"diamond"`, `"around_diamond"`; `None` spawns in a centred line |
@@ -147,6 +147,8 @@ wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
   that is still spawning.
 - Calling `spawn()` again on the same handle spawns the same composition
   again into the same wave.
+- Fighters launched from a carrier's hangar make a wave too, with
+  `m.launch(hangar, ...)` (see [Capital ships and hangars](#capital-ships-and-hangars)).
 
 ### `WaveHandle`
 
@@ -156,19 +158,81 @@ and after the wave exists:
 | Member | Meaning |
 |---|---|
 | `alive()` | at least one member is alive |
-| `all_destroyed()` | spawned, and every member is dead (false before spawning) |
+| `all_destroyed()` | spawned, and every member is dead (false before spawning); for a [launched wave](#capital-ships-and-hangars), once the launch is over |
 | `any_destroyed()` | spawned, and at least one member has died (stays true after a total wipe) |
 | `pawns()` | the live members, in spawn order (the formation leader first) |
 | `formation` | the wave's `Formation`, once spawned (or `None`) |
 | `set_targets(who)` | every live member attacks every live pawn of `who` |
-| `set_team(team)` | reassigns every live member, cascading a capital ship's cached team to its sub-systems, shield and mounted turrets/tractor beams |
+| `set_team(team)` | reassigns every live member, cascading a major ship's cached team to its sub-systems, shield and mounted turrets/tractor beams (not to fighters it already launched) |
 | `set_waypoints(points, loop=True)` | gives every live member a new route; only the formation leader flies it, wingmen hold formation |
-| `follow(leader)` | every live member forms up on `leader` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, so none patrols a stale one if it takes the lead |
+| `follow(leader)` | every live member forms up on `leader` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, so none patrols a stale one if it takes the lead. Scripted capital ships are left out and keep their routes |
 | `break_formation()` | every live member leaves the formation and flies its own route (e.g. before a race) |
 
 `alive`, `all_destroyed` and `any_destroyed` are plain methods. Call one to
 get a bool; pass it **uncalled** to use it as a condition:
 `m.on(wave.all_destroyed, ...)`.
+
+### Capital ships and hangars
+
+A `WaveSpec` with `bot_type="major_ship"` spawns the ship type's class, picked
+by its config's `ship_class`: an **escort ship** (frigate, corvette, transport)
+fights on its own like any bot; a **capital ship** (star destroyer) is
+scripted. It has no tactician: it always patrols the `waypoints` it is given
+(`WaveSpec.waypoints`, `set_waypoints`, `reached_waypoint` work as for any
+ship), without avoiding obstacles, and ignores targets; its turrets still
+fight on their own. With no route left, it holds its heading. Its turn radius
+is over a kilometre: give it widely spaced waypoints.
+
+A major ship whose config declares `hangars` launches fighters on request,
+through its `Hangar` subsystems (see [subsystems.md](subsystems.md#hangar)).
+What a hangar holds is up to the level: declare the stock in the level module,
+as fighters per type, and hand it to the hangar once the ship has spawned.
+Then `m.launch` launches fighters from it **as a wave**:
+
+```python
+ENEMY_CAPITAL_SHIP_HANGAR_STOCK = {"tie-fighter": 12, "tie-bomber": 6}
+
+def my_mission(m: Mission) -> Iterator[None]:
+    isd = m.spawn(ENEMY_CAPITAL_SHIP)
+    frigate = m.spawn(ALLIED_FRIGATE)
+    yield from m.wait(5)  # the star destroyer has spawned
+    hangar = isd.pawns()[0].hangars[0]
+    hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
+    squadron = m.launch(hangar, "tie-fighter", 3, target=frigate)
+    m.on(squadron.all_destroyed, lambda: m.hud("TIE squadron destroyed"))
+```
+
+`m.launch(hangar, fighter_type, count=None, target=None, name=None,
+formation="arrowhead", formation_scale_m=Formation.FIGHTER_SCALE_M)` returns a
+`WaveHandle` of the launched fighters (its spec: `fighter_type`, `count`, the
+hangar's team, the formation; named `<hangar>_<type>` by default):
+
+- `count` fighters of `fighter_type` (the hangar's group size by default)
+  leave the bay one at a time, as long as that type's stock lasts, and join
+  the wave as they launch. A type not in the stock raises; an empty type
+  launches nothing.
+- `formation=` and `formation_scale_m=` set the fighters' formation, as for a
+  `WaveSpec`: `"arrowhead"` (30 m slots) by default, `"diamond"`,
+  `"around_diamond"`, or `None` for none. The first fighter out leads; the
+  wave's `formation` is theirs.
+- `target=` works as for `spawn()`: it is resolved as each fighter launches,
+  so fighters leaving the bay later attack whatever is alive then.
+- `all_destroyed()` only reads true once the launch is over (every fighter
+  launched, or what was left cancelled), so never between two launches; it
+  is true at once if nothing could be launched. The wave's `launch_order` is
+  the hangar request behind it.
+- Everything else is a plain wave: a condition, a target, `set_targets`,
+  `follow`, `break_formation`... It has no spawn point, so it cannot be
+  `spawn()`ed: its fighters only come from the hangar.
+- Launches wait while the hangar has its maximum of fighters out, or while
+  the game's actor slots run low. Destroying the hangar, or its ship, cancels
+  what is left to launch.
+
+At a lower level, `hangar.launch(fighter_type, count=None, on_launched=None,
+primary_target_ids=(), formation="arrowhead", formation_scale_m=...)` queues
+the same request and returns its `LaunchOrder`
+(the launched pawn `ids`, `done`, `cancelled`): `m.launch` wraps it
+(`WaveHandle.launch_from(hangar, target)`).
 
 ## Sequencing
 

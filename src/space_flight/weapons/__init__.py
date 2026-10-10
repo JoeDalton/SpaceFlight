@@ -30,8 +30,8 @@ from panda3d.core import LVector3, NodePath, Point3, TransparencyAttrib
 from space_flight import DEBUG_DELETION
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.turret import Turret
     from space_flight.actors.fighter import Fighter
+    from space_flight.actors.major_ship.turret import Turret
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
@@ -205,9 +205,11 @@ class Munition:
         self.power = power
         self.origin_ship_id = origin_ship_id
         self.origin_ship = origin_ship
-        # World-space velocity, read by munition_into_shield to tell an inward
-        # crossing (blocked) from an outward one (passes through).
+        # World-space velocity
         self.speed = np.asarray(speed, dtype=float)
+        # Where it was fired from: munition_into_shield lets a shot fired from
+        # inside a shield bubble through it
+        self.launch_position = np.array(start_position, dtype=float)
 
         # Visual node (built by the subclass), placed and set coasting here.
         self.shot = self._build_visual(start_position)

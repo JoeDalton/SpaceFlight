@@ -116,8 +116,10 @@ class Ordnance(Ship):
         :param ini_speed: Its launch velocity, kept for its whole life
         :param team: Its team (the launching ship's)
         """
+        # Where it was fired from: munition_into_shield lets an ordnance fired
+        # from inside a shield bubble through it
+        self.launch_position = np.array(ini_position, dtype=float)
         # Set before the Ship init, which already computes the first derivatives
-        self._ordnance_conf = ordnance_conf
         self._launch_speed_mps = float(magnitude(ini_speed))
         r00, r01, r02, r10, r11, r12, r20, r21, r22 = rotation_matrix_coefficients(
             *ini_orientation
@@ -134,6 +136,7 @@ class Ordnance(Ship):
             ini_speed=ini_speed,
             is_cockpit=False,
             team=team,
+            conf={**ORDNANCE_SHIP_DEFAULTS, **ordnance_conf},
         )
 
         self.category = self.conf["type"]
@@ -154,11 +157,6 @@ class Ordnance(Ship):
             parent_node=self.node,
             parent_object=self,
         )
-
-    def _load_configuration(self, ship_type: str) -> dict:
-        conf = dict(ORDNANCE_SHIP_DEFAULTS)
-        conf.update(self._ordnance_conf)
-        return conf
 
     def _compute_max_speed_mps(self) -> float:
         # Constant speed: the launch speed

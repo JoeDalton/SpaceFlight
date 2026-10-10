@@ -12,7 +12,9 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from space_flight.actors.major_ship.hangar import LaunchOrder
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
+from space_flight.ai.formation import Formation
 
 
 class FakeGameTime:
@@ -127,6 +129,87 @@ class MockBot:
             mounted_bot.set_team(team)
 
 
+class FakeHangar:
+    """
+    Stand-in for a Hangar, with its request rules (stock per type, a type not
+    in the stock raises, an empty type launches nothing), but launching only
+    when a test calls :meth:`launch_next` / :meth:`launch_pending`.
+    """
+
+    def __init__(self, game, team, name="hangar_0", group_size=3):
+        self.game = game
+        self.team = team
+        self.name = name
+        self.group_size = group_size
+        self.stock = {}
+        self.is_operational = True
+        self.orders = []
+        #: Every bot it launched, in launch order
+        self.launched = []
+
+    def set_stock(self, stock):
+        self.stock = dict(stock)
+
+    def launch(
+        self,
+        fighter_type,
+        count=None,
+        on_launched=None,
+        primary_target_ids=(),
+        formation="arrowhead",
+        formation_scale_m=Formation.FIGHTER_SCALE_M,
+    ):
+        if fighter_type not in self.stock:
+            raise KeyError(fighter_type)
+        order = LaunchOrder(
+            fighter_type=fighter_type,
+            count=self.group_size if count is None else count,
+            on_launched=on_launched,
+            primary_target_ids=list(primary_target_ids),
+            formation_shape=formation,
+            formation_scale_m=formation_scale_m,
+        )
+        if self.stock[fighter_type] <= 0 or not self.is_operational:
+            order.cancelled = True
+        else:
+            self.orders.append(order)
+        return order
+
+    def launch_next(self):
+        """Launch the next queued fighter, as the real hangar does every
+        launch interval (cancelling a request whose type ran out)."""
+        self.orders = [order for order in self.orders if not order.done]
+        if not self.orders:
+            return
+        order = self.orders[0]
+        if self.stock[order.fighter_type] <= 0:
+            order.cancelled = True
+            return
+        bot = MockBot(
+            f"launched_{len(self.launched)}",
+            [0, 0, 0],
+            self.team,
+            pawn_model=order.fighter_type,
+        )
+        self.game.interactions.add(bot.pawn)
+        self.stock[order.fighter_type] -= 1
+        order.ids.append(bot.pawn.id)
+        if order.formation_shape is not None:
+            if order.formation is None:
+                order.formation = Formation(
+                    scale_m=order.formation_scale_m, shape=order.formation_shape
+                )
+            order.formation.add_ship(ship=bot.pawn)
+        self.launched.append(bot)
+        if order.on_launched is not None:
+            order.on_launched(bot)
+
+    def launch_pending(self):
+        """Launch every queued fighter now, as far as the stock lasts."""
+        while self.orders:
+            self.launch_next()
+
+
 class MockHud:
     def __init__(self):
         self.messages = []
@@ -187,6 +270,9 @@ def patch_engine(monkeypatch):
             pawn_model=kwargs["pawn_model"],
             orientation=kwargs.get("ini_orientation"),
         )
+        if kwargs.get("bot_type") == "major_ship":
+            # A major ship with one hangar bay
+            bot.pawn.hangars = [FakeHangar(game, team=kwargs["team"])]
         game.interactions.add(bot.pawn)
         spawned.append(bot)
         return bot

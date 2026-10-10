@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add hangar subsystem for carriers / bases #83
+
 ## [0.2.0] - 2026-10-09
 
 Second alpha release: play with any input device at any time, navigate the menus

@@ -1,7 +1,7 @@
 """
-Unit tests for CapitalShipTactician space_flight.ai.capital_ship.capital_ship_tactician
+Unit tests for MajorShipTactician space_flight.ai.major_ship.major_ship_tactician
 
-CapitalShipTactician can be instantiated directly since its __init__ only
+MajorShipTactician can be instantiated directly since its __init__ only
 delegates to GenericTactician and adds a scripted_prey_dict attribute.
 """
 
@@ -12,31 +12,31 @@ import numpy as np
 import pytest
 
 from space_flight.ai import Intent, Personality
-from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTactician
 from space_flight.ai.formation import Formation
+from space_flight.ai.major_ship.major_ship_tactician import MajorShipTactician
 
 
-def make_capital_ship_tactician(
+def make_major_ship_tactician(
     mock_game,
     health: float = 1.0,
     shield_level=None,
-) -> CapitalShipTactician:
+) -> MajorShipTactician:
     """
-    Build a CapitalShipTactician with the given pawn state.
+    Build a MajorShipTactician with the given pawn state.
 
     :param mock_game: the mocked game object
     :param health: pawn health
     :param shield_level: the shield's reported level, or None for an unshielded
                          ship (reports 0)
-    :return: a CapitalShipTactician ready for testing
+    :return: a MajorShipTactician ready for testing
     """
     pawn = MagicMock()
     pawn.health = health
     pawn.team = 1
     pawn.formation = None
     pawn.shield_level = 0.0 if shield_level is None else shield_level
-    return CapitalShipTactician(
-        game=mock_game, pawn=pawn, personality=Personality.CAPITAL_SHIP_DEFAULT
+    return MajorShipTactician(
+        game=mock_game, pawn=pawn, personality=Personality.ESCORT_SHIP_DEFAULT
     )
 
 
@@ -51,7 +51,7 @@ def test_evaluate_fighting_shape_without_shield():
     return 0.5 * health.
     """
     mock_game = MagicMock()
-    tactician = make_capital_ship_tactician(mock_game, health=1.0, shield_level=None)
+    tactician = make_major_ship_tactician(mock_game, health=1.0, shield_level=None)
 
     result = tactician.evaluate_fighting_shape()
 
@@ -66,7 +66,7 @@ def test_evaluate_fighting_shape_with_shield():
     mock_game = MagicMock()
     health = 0.8
     shield_level = 0.6
-    tactician = make_capital_ship_tactician(
+    tactician = make_major_ship_tactician(
         mock_game, health=health, shield_level=shield_level
     )
 
@@ -81,7 +81,7 @@ def test_evaluate_fighting_shape_fully_depleted():
     be 0.0.
     """
     mock_game = MagicMock()
-    tactician = make_capital_ship_tactician(mock_game, health=0.0, shield_level=0.0)
+    tactician = make_major_ship_tactician(mock_game, health=0.0, shield_level=0.0)
 
     result = tactician.evaluate_fighting_shape()
 
@@ -98,7 +98,7 @@ def test_scripted_prey_dict_is_inactive_by_default():
     After construction, scripted_prey_dict must have 'active': False.
     """
     mock_game = MagicMock()
-    tactician = make_capital_ship_tactician(mock_game)
+    tactician = make_major_ship_tactician(mock_game)
 
     assert tactician.scripted_prey_dict == {"active": False}
 
@@ -118,7 +118,7 @@ def test_update_intent_scripted_prey_returns_engage():
     """
     mock_game = MagicMock()
     health = 10.0  # 0.5 * 10 = 5.0 > min_fighting_shape (2.0)
-    tactician = make_capital_ship_tactician(mock_game, health=health, shield_level=None)
+    tactician = make_major_ship_tactician(mock_game, health=health, shield_level=None)
     tactician.scripted_prey_dict = {"active": True, "target_id": "mock_target"}
 
     intent, target_dict = tactician.update_intent()
@@ -139,7 +139,7 @@ def test_update_intent_poor_fighting_shape_returns_disengage():
     """
     mock_game = MagicMock()
     health = 0.0  # fighting shape = 0.0 < min_fighting_shape
-    tactician = make_capital_ship_tactician(mock_game, health=health, shield_level=None)
+    tactician = make_major_ship_tactician(mock_game, health=health, shield_level=None)
     tactician.scripted_prey_dict = {"active": True, "target_id": "mock_target"}
 
     mock_game.interactions.live_actors = []
@@ -161,7 +161,7 @@ def test_update_intent_wingman_with_waypoints_holds_formation():
     leader patrols.
     """
     mock_game = MagicMock()
-    tactician = make_capital_ship_tactician(mock_game, health=10.0)
+    tactician = make_major_ship_tactician(mock_game, health=10.0)
     tactician.pawn.parent.navigator.waypoints = [np.array([0.0, 1000.0, 0.0])]
     leader = MagicMock()
     leader.id = uuid.uuid4()

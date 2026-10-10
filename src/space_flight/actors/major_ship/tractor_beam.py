@@ -8,7 +8,7 @@ import numpy as np
 import yaml
 
 from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
-from space_flight.actors.capital_ship.tracking_mount import TrackingMount
+from space_flight.actors.major_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine

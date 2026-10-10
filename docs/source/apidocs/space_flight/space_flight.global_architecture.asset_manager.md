@@ -85,7 +85,7 @@
 
 ````
 
-````{py:method} load_assets_task(app_state: space_flight.menus.splash_state.SplashState, task: direct.task.Task.Task) -> int
+````{py:method} load_assets_task(app_state: space_flight.menus.splash_state.SplashState, task: direct.task.Task) -> int
 :canonical: space_flight.global_architecture.asset_manager.AssetManager.load_assets_task
 
 ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.AssetManager.load_assets_task

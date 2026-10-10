@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from space_flight.actors.capital_ship.sub_system import SubSystem
+from space_flight.actors.major_ship.sub_system import SubSystem
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship import CapitalShip
+    from space_flight.actors.major_ship.major_ship import MajorShip
     from space_flight.game.flight_state import FlightState
 
 
@@ -15,8 +15,8 @@ class ShieldGenerator(SubSystem):
     """
     An external shield generator subsystem.
 
-    A capital ship's generators together project a **single shared**
-    :class:`~space_flight.actors.capital_ship.shield.Shield`, built and owned by
+    A major ship's generators together project a **single shared**
+    :class:`~space_flight.actors.major_ship.shield.Shield`, built and owned by
     the ship, which polls their alive state to scale its perks pro rata. The
     generators know nothing of the shield, so a generator is just a plain
     destructible :class:`SubSystem`.
@@ -33,7 +33,7 @@ class ShieldGenerator(SubSystem):
     def __init__(
         self,
         game: FlightState,
-        parent: CapitalShip,
+        parent: MajorShip,
         relative_position: np.ndarray = np.zeros(3),
         hit_box_radius_m: float = 5.0,
         health: float = 1000.0,

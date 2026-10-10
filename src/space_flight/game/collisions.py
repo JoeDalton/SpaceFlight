@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, TypeAlias
 import numpy as np
 from panda3d.core import (
     BitMask32,
+    CollisionBox,
     CollisionEntry,
     CollisionHandlerEvent,
     CollisionHandlerQueue,
@@ -28,8 +29,8 @@ from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.shield import Shield
-    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.major_ship.shield import Shield
+    from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.ship import Ship
     from space_flight.ai.collision_sensor import CollisionSensor
     from space_flight.game.flight_state import FlightState
@@ -116,7 +117,7 @@ class CollisionLayers:
     # A shield bubble is a barrier only munitions interact with: ships, sensors and
     # other destructibles fly straight through it (their from-masks lack SHIELD),
     # and it never initiates collisions itself. Whether a munition is blocked or
-    # passes is decided in munition_into_shield by the crossing direction.
+    # passes is decided in munition_into_shield, from its launch point.
     SHIELD_FROM = BitMask32.allOff()
     SHIELD_INTO = SHIELD
 
@@ -326,16 +327,26 @@ class CollisionSystem:
 
         # Apply damage to the destructible object
         normal = entry.getSurfaceNormal(self.game.root_node)
+        if normal.almostEqual(Vec3(0, 0, 0)) and isinstance(
+            entry.getInto(), CollisionBox
+        ):
+            normal = self._box_face_normal(entry)
         # Normalize the normal vector because it can have a non-unit length if a parent
         # object was scaled. It's dumb, but it is what it is...
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
 
         # Was the target's shield still up when the shot landed? Fighters carry a
-        # scalar shield (capital ships instead stop hits at their bubble, handled
-        # in munition_into_shield). Read it BEFORE take_hit spends the shield, so a
-        # shielded hit sparks blue (ICE) rather than the hull's metal sparks.
-        target_shield_up = getattr(destructible, "shield_level", 0.0) > 0.0
+        # scalar shield. Read it BEFORE take_hit spends the shield, so a shielded
+        # hit sparks blue (ICE) rather than the hull's metal sparks. A major ship's
+        # shield is its bubble instead (its shield_level is the bubble's strength),
+        # stopping hits in munition_into_shield: a shot reaching its hull got past
+        # the bubble (fired from inside, or the bubble is down), so it strikes
+        # bare metal.
+        target_shield_up = (
+            getattr(destructible, "category", None) != "capital_ship"
+            and getattr(destructible, "shield_level", 0.0) > 0.0
+        )
 
         destructible.take_hit(damage=munition.power, normal_world_vector=normal)
 
@@ -457,19 +468,45 @@ class CollisionSystem:
         ordnance.on_impact()
         flare.on_impact()
 
+    def _box_face_normal(self, entry: CollisionEntry) -> Vec3:
+        """
+        The outward normal of the box face a collision point lies on, in world
+        space. Panda3d reports a zero normal for a segment (a laser) struck on
+        some faces of a box, its hit point lying a float rounding off the face.
+
+        :param entry: Panda3d's description of a collision into a CollisionBox
+        :return: The world-space face normal
+        """
+        box = entry.getInto()
+        into_np = entry.getIntoNodePath()
+        # The hit point in box units: the face it lies on is the axis where it
+        # reaches out furthest (|coordinate| close to 1)
+        offset = entry.getSurfacePoint(into_np) - box.getCenter()
+        half_extents = (box.getMax() - box.getMin()) * 0.5
+        scaled = [
+            offset[i] / half_extents[i] if half_extents[i] > 0 else 0.0
+            for i in range(3)
+        ]
+        axis = max(range(3), key=lambda i: abs(scaled[i]))
+        local_normal = Vec3(0, 0, 0)
+        local_normal[axis] = 1.0 if scaled[axis] >= 0.0 else -1.0
+        return self.game.root_node.getRelativeVector(into_np, local_normal)
+
     def munition_into_shield(self, entry: CollisionEntry):
         """
         Handle a munition crossing a shield bubble.
 
         A munition fired from *outside* the shield impacts it (and is absorbed); a
         munition fired from *inside* passes straight through, so a ship sheltering
-        in its own bubble can still shoot out. The two are told apart by the sign
-        of the munition's velocity dotted with the shield's outward surface normal:
+        in the bubble can still shoot out (and at the hull).
 
-        - crossing inward (dot < 0) -> the munition came from outside -> blocked,
-        - anything else (dot >= 0): a munition exiting, a grazing contact, or the
-          degenerate zero normal panda3d returns for a segment that started
-          inside the solid -> it passes through.
+        The two are told apart by the munition's launch point: inside the bubble
+        (as it is now) -> it passes through. Panda3d also reports a munition
+        lying wholly inside the bubble, every frame, with a normal that tells
+        nothing about where it came from, and the event is handled a frame
+        late, once the munition has moved on: the launch point is the one thing
+        that does not move. The bubble's ship is slow next to a munition, so it
+        has barely moved since the launch.
 
         :param entry: Panda3d's description of the collision
         """
@@ -489,7 +526,7 @@ class CollisionSystem:
             return
 
         # A turret sitting inside its ship's bubble must not hit that bubble: the
-        # crossing-direction rule below already lets a shot fired from inside pass,
+        # launch-point rule below already lets a shot fired from inside pass,
         # but skip the emitter's own vehicle outright to be unambiguous.
         if owners_share_vehicle(munition.origin_ship, shield):
             return
@@ -498,13 +535,14 @@ class CollisionSystem:
         if not shield.is_enabled:
             return
 
-        # Block only munitions crossing inward (see docstring)
+        # A munition fired from inside the bubble passes through (see docstring)
+        if shield.contains(munition.launch_position):
+            return
+
         normal = entry.getSurfaceNormal(self.game.root_node)
         # Normalize: a scaled parent can give a non-unit normal.
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
-        if np.dot(munition.speed, normal) >= 0.0:
-            return  # exiting or originating inside => pass through
 
         if DEBUG_COLLISION:
             LOGGER.info("munition into shield")
@@ -1110,6 +1148,60 @@ def attach_collision_tube(
             point_b[1],
             point_b[2],
             radius,
+        )
+    )
+    # Define masks
+    cnode.setFromCollideMask(from_mask_bit)
+    cnode.setIntoCollideMask(into_mask_bit)
+    # Attach to parent node and object
+    node_path = parent_node.attachNewNode(cnode)
+    node_path.setPythonTag("owner", parent_object)
+    # Register in collision handler
+    if add_to_collision_handler:
+        game.collision_system.traverser.addCollider(
+            node_path, game.collision_system.handler
+        )
+
+    if DEBUG_COLLISION:
+        node_path.show()
+    return node_path
+
+
+def attach_collision_box(
+    game: FlightState,
+    name: str,
+    center: list[float],
+    half_extents: list[float],
+    collider_type: str,
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
+) -> NodePath:
+    """
+    Attach an axis-aligned collision box (in the parent node's frame) to an
+    existing node.
+
+    :param game: The game stage
+    :param name: The name of the collision box
+    :param center: The box centre (x, y, z), in the parent node's frame
+    :param half_extents: The box half-sizes along x, y and z
+    :param collider_type: The nature of the collider, defines from and into bitmasks
+    :param parent_node: Its parent_node
+    :param parent_object: Its parent_object
+    :return: The node path to the collision box
+    """
+    (
+        from_mask_bit,
+        into_mask_bit,
+        add_to_collision_handler,
+    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
+
+    cnode = CollisionNode(name)
+    cnode.addSolid(
+        CollisionBox(
+            LPoint3(center[0], center[1], center[2]),
+            half_extents[0],
+            half_extents[1],
+            half_extents[2],
         )
     )
     # Define masks

@@ -7,12 +7,14 @@ manually-set MagicMock attributes.  This keeps the suite fully headless.
 """
 
 import math
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from space_flight.actors.bot import Bot
+from space_flight.actors.major_ship import CapitalShip, EscortShip
+from space_flight.ai import Intent, Personality
 from space_flight.ai.think_scheduler import ThinkScheduler
 from space_flight.utils.state_machine import DyingPhase
 
@@ -162,9 +164,9 @@ def test_set_team_reassigns_bot_and_pawn():
     assert bot.pawn.team == 9
 
 
-def test_set_team_cascades_to_capital_ship_dependents():
+def test_set_team_cascades_to_major_ship_dependents():
     """
-    A capital ship's dependents cache team at construction time and never
+    A major ship's dependents cache team at construction time and never
     re-read it: each sub_system (including shield generators), the shared
     shield, and each mounted bot (turret / tractor beam -- itself a Bot with
     its own pawn.team) must all be walked.
@@ -176,7 +178,7 @@ def test_set_team_cascades_to_capital_ship_dependents():
 
     sub_system = MagicMock(team=2)
     shield = MagicMock(team=2)
-    frigate = make_bot_without_init(bot_type="capital_ship")
+    frigate = make_bot_without_init(bot_type="major_ship")
     frigate.pawn.sub_systems = [sub_system]
     frigate.pawn.shield = shield
     frigate.pawn.mounted_bots = [turret]
@@ -349,11 +351,11 @@ def test_move_bot_task_calls_pawn_move_for_turret():
     bot.pawn.move.assert_called_once_with(yaw_rate=0.3, pitch_rate=-0.2)
 
 
-def test_move_bot_task_calls_pawn_move_for_capital_ship():
+def test_move_bot_task_calls_pawn_move_for_major_ship():
     """
-    move_bot_task() uses the same fighter code-path for capital_ship bots.
+    move_bot_task() uses the same fighter code-path for major_ship bots.
     """
-    bot = make_bot_without_init(bot_type="capital_ship")
+    bot = make_bot_without_init(bot_type="major_ship")
     bot.tactician.think.return_value = ("patrol", {})
     bot.navigator.navigate.return_value = (np.array([0.0, 1.0, 0.0]), 50.0)
     bot.pilot.pilot.return_value = (0.5, 0.0, 0.0, 0.0)
@@ -608,3 +610,121 @@ def test_think_waits_a_frame_when_the_sensor_missed_the_traversal():
     bot.game.game_time.get_current_time.return_value = 1.0 / 60.0
     bot.move_bot_task()
     bot.navigator.navigate.assert_called_once()
+
+
+# ---------------------------
+# Major ships: escort ships vs scripted capital ships
+# ---------------------------
+
+
+def _build_major_ship_bot(pawn_class):
+    """
+    Run Bot.__init__ for a major_ship whose config picks pawn_class, with the
+    pawn and every AI component patched out (headless).
+
+    :param pawn_class: The MajorShip subclass make_major_ship returns
+    :return: the bot, and the dict of patched constructors
+    """
+    pawn = MagicMock(spec=pawn_class)
+    pawn.personality = pawn_class.personality
+    pawn.has_tactician = pawn_class.has_tactician
+    pawn.collision_avoidance = pawn_class.collision_avoidance
+    with (
+        patch("space_flight.actors.bot.make_major_ship", return_value=pawn),
+        patch("space_flight.actors.bot.MajorShipPilot") as pilot_cls,
+        patch("space_flight.actors.bot.MajorShipNavigator") as navigator_cls,
+        patch("space_flight.actors.bot.MajorShipTactician") as tactician_cls,
+    ):
+        bot = Bot(
+            game=MagicMock(),
+            name="big_ship",
+            bot_type="major_ship",
+            pawn_model="whatever",
+            team=2,
+        )
+    return bot, {
+        "pilot": pilot_cls,
+        "navigator": navigator_cls,
+        "tactician": tactician_cls,
+    }
+
+
+def test_escort_ship_bot_has_the_full_ai_stack():
+    """
+    An escort ship gets a tactician, a navigator with collision avoidance and a
+    pilot, all tuned with the escort ship personality.
+    """
+    bot, mocks = _build_major_ship_bot(EscortShip)
+
+    assert bot.tactician is mocks["tactician"].return_value
+    assert bot.navigator is mocks["navigator"].return_value
+    assert bot.pilot is mocks["pilot"].return_value
+    assert mocks["navigator"].call_args.kwargs["collision_avoidance"] is True
+    for cls in mocks.values():
+        assert cls.call_args.kwargs["personality"] is Personality.ESCORT_SHIP_DEFAULT
+
+
+def test_capital_ship_bot_has_no_tactician_nor_collision_avoidance():
+    """
+    A capital ship is scripted: no tactician, a navigator without collision
+    avoidance, both it and the pilot tuned with the capital ship personality.
+    """
+    bot, mocks = _build_major_ship_bot(CapitalShip)
+
+    assert bot.tactician is None
+    mocks["tactician"].assert_not_called()
+    assert bot.navigator is mocks["navigator"].return_value
+    assert mocks["navigator"].call_args.kwargs["collision_avoidance"] is False
+    for key in ("navigator", "pilot"):
+        assert (
+            mocks[key].call_args.kwargs["personality"]
+            is Personality.CAPITAL_SHIP_DEFAULT
+        )
+
+
+def test_move_bot_task_patrols_without_a_tactician():
+    """
+    A bot without a tactician (a scripted capital ship) always navigates with
+    the PATROL intent and no target.
+    """
+    bot = make_bot_without_init(bot_type="major_ship")
+    bot.tactician = None
+    bot.navigator.collision_sensor = None
+    bot.navigator.navigate.return_value = (np.array([0.0, 1.0, 0.0]), 30.0)
+    bot.pilot.pilot.return_value = (0.5, 0.0, 0.0, 0.0)
+
+    bot.move_bot_task()
+
+    bot.navigator.navigate.assert_called_once_with(intent=Intent.PATROL, target_dict={})
+    bot.pawn.move.assert_called_once_with(
+        throttle=0.5, yaw_rate=0.0, pitch_rate=0.0, roll_rate=0.0
+    )
+
+
+def test_set_personality_tolerates_a_missing_tactician():
+    """
+    set_personality() still reaches the navigator and pilot of a bot without a
+    tactician.
+    """
+    bot = make_bot_without_init(bot_type="major_ship")
+    bot.tactician = None
+    personality = {"pilot": {}, "navigator": {}}
+
+    bot.set_personality(personality)
+
+    assert bot.navigator.personality is personality
+    assert bot.pilot.personality is personality
+
+
+def test_clean_tolerates_a_missing_tactician():
+    """
+    clean() cleans the navigator and pilot of a bot without a tactician.
+    """
+    bot = make_bot_without_init(bot_type="major_ship")
+    bot.tactician = None
+    navigator = bot.navigator
+
+    bot.clean()
+
+    navigator.clean.assert_called_once()
+    assert bot.tactician is None

@@ -1,7 +1,7 @@
 """
-Unit tests for CapitalShipPilot (space_flight.ai.capital_ship.capital_ship_pilot).
+Unit tests for MajorShipPilot (space_flight.ai.major_ship.major_ship_pilot).
 
-CapitalShipPilot can be instantiated directly since it only needs
+MajorShipPilot can be instantiated directly since it only needs
 game.game_time.get_current_time() during PID initialisation.
 """
 
@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from space_flight.ai import Personality
-from space_flight.ai.capital_ship.capital_ship_pilot import CapitalShipPilot
+from space_flight.ai.major_ship.major_ship_pilot import MajorShipPilot
 
 
 @pytest.fixture
@@ -25,28 +25,28 @@ def mock_game():
     return game
 
 
-def make_capital_ship_pilot(
+def make_major_ship_pilot(
     mock_game,
     right: np.ndarray = None,
     forward: np.ndarray = None,
     up: np.ndarray = None,
-) -> CapitalShipPilot:
+) -> MajorShipPilot:
     """
-    Build a CapitalShipPilot whose pawn axes are set to the provided vectors.
+    Build a MajorShipPilot whose pawn axes are set to the provided vectors.
 
     :param mock_game: the mocked game object
     :param right: ship right axis; defaults to world X
     :param forward: ship forward axis; defaults to world Y
     :param up: ship up axis; defaults to world Z
-    :return: a CapitalShipPilot ready for testing
+    :return: a MajorShipPilot ready for testing
     """
     pawn = MagicMock()
     pawn.right = np.array([1.0, 0.0, 0.0]) if right is None else right
     pawn.forward = np.array([0.0, 1.0, 0.0]) if forward is None else forward
     pawn.up = np.array([0.0, 0.0, 1.0]) if up is None else up
     pawn.speed = np.zeros(3)
-    return CapitalShipPilot(
-        game=mock_game, pawn=pawn, personality=Personality.CAPITAL_SHIP_DEFAULT
+    return MajorShipPilot(
+        game=mock_game, pawn=pawn, personality=Personality.ESCORT_SHIP_DEFAULT
     )
 
 
@@ -55,12 +55,12 @@ def make_capital_ship_pilot(
 # ---------------------------------------------------------------------------
 
 
-def test_capital_ship_pilot_zero_direction_returns_zero_errors(mock_game):
+def test_major_ship_pilot_zero_direction_returns_zero_errors(mock_game):
     """
     A zero target_direction must yield yaw, pitch, and roll errors all equal
     to 0.0 and cos_angle equal to 1.0.
     """
-    pilot = make_capital_ship_pilot(mock_game)
+    pilot = make_major_ship_pilot(mock_game)
 
     yaw, pitch, roll, cos_angle = pilot.compute_angular_error(np.zeros(3))
 
@@ -75,12 +75,12 @@ def test_capital_ship_pilot_zero_direction_returns_zero_errors(mock_game):
 # ---------------------------------------------------------------------------
 
 
-def test_capital_ship_pilot_target_straight_ahead_has_zero_yaw_and_pitch(mock_game):
+def test_major_ship_pilot_target_straight_ahead_has_zero_yaw_and_pitch(mock_game):
     """
     When the target is in the ship's forward direction, yaw and pitch errors
     must be (near) zero.
     """
-    pilot = make_capital_ship_pilot(mock_game)
+    pilot = make_major_ship_pilot(mock_game)
 
     yaw, pitch, _, _ = pilot.compute_angular_error(np.array([0.0, 1.0, 0.0]))
 
@@ -88,11 +88,11 @@ def test_capital_ship_pilot_target_straight_ahead_has_zero_yaw_and_pitch(mock_ga
     assert pitch == pytest.approx(0.0, abs=1e-6)
 
 
-def test_capital_ship_pilot_forward_target_cos_angle_is_one(mock_game):
+def test_major_ship_pilot_forward_target_cos_angle_is_one(mock_game):
     """
     With a forward target the alignment (cos) must equal 1.0.
     """
-    pilot = make_capital_ship_pilot(mock_game)
+    pilot = make_major_ship_pilot(mock_game)
 
     _, _, _, cos_angle = pilot.compute_angular_error(np.array([0.0, 1.0, 0.0]))
 
@@ -104,25 +104,25 @@ def test_capital_ship_pilot_forward_target_cos_angle_is_one(mock_game):
 # ---------------------------------------------------------------------------
 
 
-def test_capital_ship_pilot_target_to_right_has_positive_yaw(mock_game):
+def test_major_ship_pilot_target_to_right_has_positive_yaw(mock_game):
     """
     A target to the right (along the ship X axis) must produce a positive yaw
     error.
     """
-    pilot = make_capital_ship_pilot(mock_game)
+    pilot = make_major_ship_pilot(mock_game)
 
     yaw, _, _, _ = pilot.compute_angular_error(np.array([1.0, 0.0, 0.0]))
 
     assert yaw > 0.0
 
 
-def test_capital_ship_pilot_roll_error_only_uses_scene_orientation(mock_game):
+def test_major_ship_pilot_roll_error_only_uses_scene_orientation(mock_game):
     """
-    Unlike FighterPilot, CapitalShipPilot does not add a target-based roll
+    Unlike FighterPilot, MajorShipPilot does not add a target-based roll
     contribution: the roll error depends only on the scene orientation, not on
     the target direction.
     """
-    pilot = make_capital_ship_pilot(mock_game)
+    pilot = make_major_ship_pilot(mock_game)
 
     _, _, roll_forward, _ = pilot.compute_angular_error(np.array([0.0, 1.0, 0.0]))
     _, _, roll_side, _ = pilot.compute_angular_error(np.array([1.0, 0.0, 0.0]))

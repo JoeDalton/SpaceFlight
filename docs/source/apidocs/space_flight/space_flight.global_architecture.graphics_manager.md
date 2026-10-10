@@ -162,7 +162,7 @@
 
 ````
 
-````{py:method} _update_pipeline_uniforms(task: direct.task.Task.Task) -> int
+````{py:method} _update_pipeline_uniforms(task: direct.task.Task) -> int
 :canonical: space_flight.global_architecture.graphics_manager.GraphicsManager._update_pipeline_uniforms
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_manager.GraphicsManager._update_pipeline_uniforms

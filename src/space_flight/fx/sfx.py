@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from direct.showbase import Audio3DManager
-from direct.task.Task import Task
+from direct.task import Task
 from panda3d.core import AudioSound, NodePath, VBase3
 
 from space_flight import DATAFILES_PATH
@@ -16,7 +16,7 @@ from space_flight.global_architecture.asset_pools import SoundPool
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.pawn import Pawn
     from space_flight.game.flight_state import FlightState
     from space_flight.global_architecture.simulator import SpaceFlightSimulator

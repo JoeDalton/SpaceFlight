@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 from panda3d.core import NodePath
 
-from space_flight.actors.capital_ship import CapitalShip
+from space_flight.actors.major_ship import MajorShip
 from space_flight.actors.ship import Ship
 from space_flight.fx.sfx import SFX
 from space_flight.game.flight_state import FlightState
@@ -149,8 +149,8 @@ def test_engine_sound_stays_silent_once_the_ship_is_cleaned():
 @pytest.mark.skip("Headless tests fail on github's CI due to not found assets")
 def test_level_exit_leaves_no_sound_in_use(spaceflight_app):
     """
-    Each capital ship takes a single engine sound, and none of the level's
-    pooled sounds stays in use once it exits ("Dev" spawns 3 capital ships
+    Each major ship takes a single engine sound, and none of the level's
+    pooled sounds stays in use once it exits ("Dev" spawns 2 major ships
     after 2s; their engine sounds start 0.5s later).
     """
     harness = HeadlessHarness(app=spaceflight_app)
@@ -159,7 +159,7 @@ def test_level_exit_leaves_no_sound_in_use(spaceflight_app):
         capital_ships = [
             actor
             for actor in flight_state.interactions.live_actors
-            if isinstance(actor, CapitalShip)
+            if isinstance(actor, MajorShip)
         ]
         assert capital_ships
         engine_pool = capital_ships[0].sound_pool

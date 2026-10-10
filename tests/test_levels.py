@@ -48,7 +48,31 @@ def test_every_level_has_an_upfront_and_a_mission():
 def test_dev_mission_spawns_the_frigate(game, spawned):
     m = start(game, dev_mission)
     advance(game, m, 3)
-    assert len(live(game, spawned, "enemy_frigate")) == 1
+    assert len(live(game, spawned, "allied_frigate")) == 1
+
+
+def test_dev_mission_launches_fighters_from_the_star_destroyer(game, spawned):
+    """
+    The dev mission stocks the star destroyer's hangar from the level's stock
+    and launches TIE fighters at the frigate, then TIE bombers.
+    """
+    from space_flight.game.levels.dev_level import ENEMY_CAPITAL_SHIP_HANGAR_STOCK
+
+    m = start(game, dev_mission)
+    advance(game, m, 8)
+    (isd,) = live(game, spawned, "enemy_isd")
+    hangar = isd.hangars[0]
+    assert set(hangar.stock) == set(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
+    hangar.launch_pending()
+    assert [bot.pawn_model for bot in hangar.launched] == ["tie-fighter"] * 3
+    (frigate,) = live(game, spawned, "allied_frigate")
+    assert all(
+        bot.tactician.primary_target_ids == [frigate.id] for bot in hangar.launched
+    )
+
+    advance(game, m, 20)
+    hangar.launch_pending()
+    assert [bot.pawn_model for bot in hangar.launched[3:]] == ["tie-bomber"] * 6
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ enemy bots, capital ships and their turrets, laser shots — is built from a
 small set of composable base classes. This page is the guided tour; the
 per-class API is in the [code reference](apidocs/index.rst). The
 capital-ship family (turrets, shields, tractor beams, ...) is detailed in
-[Capital-ship subsystems](subsystems.md).
+[Major-ship subsystems](subsystems.md).
 
 ## Mental model
 
@@ -66,8 +66,11 @@ Key responsibilities:
 - Owns its engine sound (interior loop for the player's cockpit, 3D-attached
   exterior loop for everyone else; none if its config has none) and its
   `ShipModel`.
+- **Configuration.** Read from `models/ships/<ship_type>/configuration.yaml`
+  (`load_ship_configuration`), unless given through the `conf` argument (as
+  ordnance does).
 - **Hooks for pawns that fly like ships but are not quite ships** (ordnance):
-  `_load_configuration`, `_compute_max_speed_mps`, `_build_model`,
+  `_compute_max_speed_mps`, `_build_model`,
   `_build_damage_fx`, `_turn_rate_scale`, and `_compute_attitude_derivative`
   (the orientation derivative and body axes, shared by `compute_derivatives`).
 
@@ -76,7 +79,9 @@ Key responsibilities:
 | Class | File | Role |
 |-------|------|------|
 | `Fighter` | [`fighter.py`](../../src/space_flight/actors/fighter.py) | Quick, manoeuvrable — forward cannons, auto-aim, its own regenerating shield |
-| `CapitalShip` | [`capital_ship/__init__.py`](../../src/space_flight/actors/capital_ship/__init__.py) | Slow, heavy — built from mounted subsystems instead of built-in weapons |
+| `MajorShip` | [`major_ship/major_ship.py`](../../src/space_flight/actors/major_ship/major_ship.py) | Slow, heavy — built from mounted subsystems instead of built-in weapons. Base of the two below; the ship config's `ship_class` picks one |
+| `EscortShip` | [`major_ship/escort_ship.py`](../../src/space_flight/actors/major_ship/escort_ship.py) | Manoeuvrable major ship (transport, frigate, corvette), with the full AI stack |
+| `CapitalShip` | [`major_ship/capital_ship.py`](../../src/space_flight/actors/major_ship/capital_ship.py) | Scripted star destroyer: no tactician, no collision avoidance, always patrols |
 
 ### `Fighter`
 
@@ -130,17 +135,25 @@ A balanced fighter regenerates its shield at its configured
 Every tuning value is a module-level constant in `energy.py`, except the
 per-bolt laser cost, `laser_shot_energy_cost` in each fighter's configuration.
 
-### `CapitalShip`
+### `MajorShip` (`EscortShip`, `CapitalShip`)
 
 Has **no built-in weapons or shield of its own**; it assembles itself from
 the `sub_systems` declared in its config:
 - **Shield generators**, owned directly, feeding a single shared `Shield`
   (no generators means no shield; see [subsystems.md](subsystems.md)).
 - **Targeting systems**, likewise owned directly.
+- **Hangars** (`_build_hangars`), owned directly, launching fighter bots on
+  request (see [subsystems.md](subsystems.md#hangar)).
 - **Turrets and tractor beams**, spawned as their own `Bot`s
   (`_spawn_mounted_bots`) whose pawn is mounted on this ship. They die on
   their own once the ship dies (`mounted_on.is_dead`), so
-  `CapitalShip.clean()` only drops its references to them.
+  `MajorShip.clean()` only drops its references to them.
+
+The config's `ship_class` picks the subclass (`make_major_ship`): an
+`EscortShip` (`escort`, the default) or a `CapitalShip` (`capital`). The two
+differ only in how their bot flies them, which each declares: its
+`personality`, whether it `has_tactician`, and whether its navigator does
+`collision_avoidance`.
 
 Damage goes straight to hull health; the shared shield, if any, absorbs hits
 separately via the collision system.
@@ -286,7 +299,8 @@ pawn class and the matching AI trio:
 | `bot_type` | Pawn | AI trio |
 |------------|------|---------|
 | `"fighter"` | `Fighter` | `FighterTactician` / `FighterNavigator` / `FighterPilot` |
-| `"capital_ship"` | `CapitalShip` | `CapitalShipTactician` / `CapitalShipNavigator` / `CapitalShipPilot` |
+| `"major_ship"`, config `ship_class: escort` | `EscortShip` | `MajorShipTactician` / `MajorShipNavigator` / `MajorShipPilot` |
+| `"major_ship"`, config `ship_class: capital` | `CapitalShip` | No tactician (always patrols) / `PatrolNavigator` (no collision avoidance) / `MajorShipPilot` with `Personality.CAPITAL_SHIP_DEFAULT` |
 | `"turret"` | `Turret` (subsystem, mounted via `parent_object`) | `TrackingMountTactician` / `...Navigator` / `...Pilot` |
 | `"tractor_beam"` | `TractorBeamProjector` (subsystem) | Same tracking-mount trio, with `Personality.TRACTOR_BEAM_DEFAULT` |
 
@@ -349,5 +363,5 @@ and `Trihedron` live under
 under [`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
 `Ordnance` pawn and its controller in `actors/ordnance.py`);
 `CapitalShip` and everything it is built from under
-[`actors/capital_ship/`](../../src/space_flight/actors/capital_ship/) (see
-[Capital-ship subsystems](subsystems.md)).
+[`actors/major_ship/`](../../src/space_flight/actors/major_ship/) (see
+[Major-ship subsystems](subsystems.md)).

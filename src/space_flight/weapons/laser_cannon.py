@@ -30,9 +30,9 @@ from space_flight.utils import (
 from space_flight.weapons import Munition, Weapon
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.turret import Turret
     from space_flight.actors.energy import EnergySystem
     from space_flight.actors.fighter import Fighter
+    from space_flight.actors.major_ship.turret import Turret
     from space_flight.game.flight_state import FlightState
 
 LASER_SPEED_MPS = 2000.0

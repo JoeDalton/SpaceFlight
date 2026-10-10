@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.capital_ship.turret import Turret
+from space_flight.actors.major_ship.turret import Turret
 from space_flight.actors.player import (
     HEAD_DAMPING_RATIO,
     HEAD_SPRING_COEFFICIENT_NPM,

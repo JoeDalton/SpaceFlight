@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Callable
 import numpy as np
 
 from space_flight import RECORD_GAME
-from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.fighter import Fighter
+from space_flight.actors.major_ship.turret import Turret
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
@@ -19,7 +19,7 @@ from space_flight.utils.state_machine import DyingPhase
 if TYPE_CHECKING:
     from panda3d.core import Vec3
 
-    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.pawn import Pawn
     from space_flight.game.flight_state import FlightState
 

@@ -11,9 +11,10 @@ regeneration.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 
-from space_flight.actors.capital_ship.shield import (
+from space_flight.actors.major_ship.shield import (
     _APPEARING,
     _DEATH_DURATION_S,
     _DOWN,
@@ -476,7 +477,7 @@ def test_get_health_positive_while_alive():
 
 def test_build_geometry_rejects_unknown_shape():
     """An unrecognised primitive shape type is rejected before any build work."""
-    from space_flight.actors.capital_ship.shield_model import ShieldModel
+    from space_flight.actors.major_ship.shield_model import ShieldModel
 
     with pytest.raises(ValueError):
         ShieldModel(
@@ -485,3 +486,129 @@ def test_build_geometry_rejects_unknown_shape():
             color=(1.0, 1.0, 1.0, 1.0),
             shape={"type": "pyramid"},
         )
+
+
+# ---------------------------
+# impact flash size
+# ---------------------------
+
+
+@pytest.mark.parametrize("radius_m", [50.0, 480.0], ids=["frigate", "star_destroyer"])
+def test_impact_flash_keeps_one_world_size_on_any_tube(radius_m):
+    """
+    The impact flash radius is a fixed size in world metres, whatever the
+    bubble's size: a star destroyer's mark matches a frigate's.
+    """
+    from panda3d.core import NodePath
+
+    from space_flight.actors.major_ship.shield_model import (
+        _IMPACT_RADIUS_M,
+        ShieldModel,
+    )
+
+    model = ShieldModel(
+        loader=MagicMock(),
+        parent=NodePath("ship"),
+        shape={
+            "type": "tube",
+            "point_a": [0.0, -radius_m, 0.0],
+            "point_b": [0.0, radius_m, 0.0],
+            "radius_m": radius_m,
+        },
+    )
+
+    world_radius = model.impact_radius_local * model._geom_scale()
+    assert world_radius == pytest.approx(_IMPACT_RADIUS_M)
+
+
+def test_impact_flash_radius_is_converted_to_a_scaled_geometry():
+    """
+    On a scaled geometry (e.g. the stock unit sphere scaled to the shield
+    radius), the flash radius is given in geometry units, so it still spans the
+    same world size.
+    """
+    from panda3d.core import NodePath
+
+    from space_flight.actors.major_ship.shield_model import ShieldModel
+
+    model = object.__new__(ShieldModel)
+    ship = NodePath("ship")
+    model.visual = ship.attachNewNode("sphere")
+    model.visual.setScale(300.0)
+    model.geom_np = model.visual
+
+    assert model._geom_scale() == pytest.approx(300.0)
+
+
+# ---------------------------
+# contains (munitions fired from inside pass through)
+# ---------------------------
+
+
+def make_shield_for_contains(shape_type, ship_pos=(0, 0, 0), ship_heading=0.0, **dims):
+    """
+    A Shield (bypassing __init__) whose node rides a ship placed in a world
+    root, with just the geometry contains() reads.
+    """
+    from panda3d.core import NodePath
+
+    root = NodePath("root")
+    ship = root.attachNewNode("ship")
+    ship.setPos(*ship_pos)
+    ship.setH(ship_heading)
+    shield = object.__new__(Shield)
+    shield.game = SimpleNamespace(root_node=root)
+    shield.node = ship.attachNewNode("shield_node")
+    shield.model = SimpleNamespace(shape_type=shape_type, **dims)
+    return shield
+
+
+@pytest.mark.parametrize(
+    "point, inside",
+    [
+        ((0, 0, 0), True),  # centre
+        ((0, 440, 470), True),  # near the wall, along the cylinder
+        ((0, 0, 490), False),  # just out of the cylinder
+        ((0, 600, 0), True),  # in the front cap
+        ((0, 950, 0), False),  # past the front cap
+        ((0, -1000, 100), True),  # in the rear cap
+    ],
+)
+def test_contains_a_tube(point, inside):
+    """A tube bubble contains the points within its radius of its axis segment."""
+    shield = make_shield_for_contains(
+        "tube", point_a=(0.0, -550.0, 0.0), point_b=(0.0, 450.0, 0.0), radius_m=480.0
+    )
+
+    assert shield.contains(np.array(point, dtype=float)) is inside
+
+
+def test_contains_follows_the_ship():
+    """contains() reads world points relative to the moved, turned ship."""
+    shield = make_shield_for_contains(
+        "tube",
+        ship_pos=(5000, 0, 0),
+        ship_heading=90.0,  # the ship's +y axis now points to world -x
+        point_a=(0.0, -550.0, 0.0),
+        point_b=(0.0, 450.0, 0.0),
+        radius_m=480.0,
+    )
+
+    assert shield.contains(np.array([5000.0 - 900.0, 0.0, 0.0]))  # front cap
+    assert not shield.contains(np.array([5000.0, 900.0, 0.0]))  # abeam, outside
+    assert not shield.contains(np.zeros(3))
+
+
+def test_contains_a_sphere():
+    """A sphere bubble contains the points within its radius of the ship."""
+    shield = make_shield_for_contains("sphere", radius_m=100.0)
+
+    assert shield.contains(np.array([0.0, 99.0, 0.0]))
+    assert not shield.contains(np.array([0.0, 101.0, 0.0]))
+
+
+def test_contains_nothing_in_a_model_bubble():
+    """A shared model has no analytic shape: nothing is inside it."""
+    shield = make_shield_for_contains("model")
+
+    assert not shield.contains(np.zeros(3))

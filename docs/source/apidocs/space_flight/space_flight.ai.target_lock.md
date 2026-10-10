@@ -73,7 +73,7 @@
 
 ````
 
-`````{py:class} TargetLock(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.capital_ship.turret.Turret, lock_delay_s: float = 1.0, cone_angle_deg: float = 30.0)
+`````{py:class} TargetLock(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.major_ship.turret.Turret, lock_delay_s: float = 1.0, cone_angle_deg: float = 30.0)
 :canonical: space_flight.ai.target_lock.TargetLock
 
 ```{autodoc2-docstring} space_flight.ai.target_lock.TargetLock

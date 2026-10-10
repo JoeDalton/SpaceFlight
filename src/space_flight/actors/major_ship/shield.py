@@ -7,18 +7,19 @@ from typing import TYPE_CHECKING
 import numpy as np
 from panda3d.core import Point3, Vec3
 
-from space_flight.actors.capital_ship.shield_model import ShieldModel
 from space_flight.actors.destructibles import Destructible
+from space_flight.actors.major_ship.shield_model import ShieldModel
 from space_flight.game.collisions import (
     CollisionLayers,
     attach_collision_sphere,
     attach_collision_tube,
 )
+from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship import CapitalShip
-    from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
+    from space_flight.actors.major_ship.major_ship import MajorShip
+    from space_flight.actors.major_ship.shield_generator import ShieldGenerator
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
@@ -43,7 +44,7 @@ class Shield(Destructible):
     """
     A protective bubble projected by a *group* of :class:`ShieldGenerator`\\ s.
 
-    One shield is shared by all of a capital ship's shield generators; the
+    One shield is shared by all of a major ship's shield generators; the
     fraction alive / initial generators scales its maximum strength and
     regeneration rate (**pro rata** perks).
 
@@ -82,7 +83,7 @@ class Shield(Destructible):
     def __init__(
         self,
         game: FlightState,
-        ship: CapitalShip,
+        ship: MajorShip,
         generators: Iterable[ShieldGenerator],
         health: float = 4000.0,
         regen_rate: float = 0.0,
@@ -197,6 +198,37 @@ class Shield(Destructible):
                 parent_node=self.node,
                 parent_object=self,
             )
+
+    def contains(self, world_point: np.ndarray) -> bool:
+        """
+        Whether a world point lies inside the bubble, as it is now.
+
+        A shared 3D model has no analytic shape: nothing is ever inside it (its
+        baked one-sided polygons are only ever hit from outside anyway).
+        TODO verify munition collisions against a model (mesh) bubble: no ship
+        uses one yet, so shots from inside/outside it are untested in game.
+
+        :param world_point: The point, in world space
+        :return: True if the point is inside a sphere or tube bubble
+        """
+        shape_type = self.model.shape_type
+        if shape_type not in ("sphere", "tube") or self.node is None:
+            return False
+        local = np.array(
+            self.node.getRelativePoint(self.game.root_node, Point3(*world_point))
+        )
+        if shape_type == "sphere":
+            return magnitude(local) <= self.model.radius_m
+        # Tube: distance to the axis segment
+        point_a = np.asarray(self.model.point_a, dtype=float)
+        axis = np.asarray(self.model.point_b, dtype=float) - point_a
+        axis_length_sq = float(np.dot(axis, axis))
+        t = 0.0
+        if axis_length_sq > 0.0:
+            t = min(
+                max(float(np.dot(local - point_a, axis)) / axis_length_sq, 0.0), 1.0
+            )
+        return magnitude(local - (point_a + t * axis)) <= self.model.radius_m
 
     # ------------------------------------------------------------------
     # Damage

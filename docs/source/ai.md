@@ -60,7 +60,7 @@ the schedule. The player's AI mode (`has_ai`) is not scheduled.
 [`ai/__init__.py`](../../src/space_flight/ai/__init__.py) defines the shared
 `Intent` and `AttackMode` (`PURSUIT`, `STRAFE`, `ORBIT`, `BOMB`) enums and
 `Personality`, whose dictionaries — `FIGHTER_DEFAULT`, `TURRET_DEFAULT`,
-`TRACTOR_BEAM_DEFAULT`, `CAPITAL_SHIP_DEFAULT`, and `MISSILE_DEFAULT` (pilot
+`TRACTOR_BEAM_DEFAULT`, `ESCORT_SHIP_DEFAULT`, and `MISSILE_DEFAULT` (pilot
 only) — hold, per
 `tactician`/`navigator`/`pilot` section (plus `tractor_beam` for tractor
 beams), most tunables: commitment times, engagement thresholds, PID gains,
@@ -107,7 +107,7 @@ and [`GenericShipPilot`](../../src/space_flight/ai/generic/generic_ship_pilot.py
 | Family | Tactician | Navigator | Pilot |
 |--------|-----------|-----------|-------|
 | Fighter | [`fighter_tactician.py`](../../src/space_flight/ai/fighter/fighter_tactician.py) | [`fighter_navigator.py`](../../src/space_flight/ai/fighter/fighter_navigator.py) | [`fighter_pilot.py`](../../src/space_flight/ai/fighter/fighter_pilot.py) |
-| Capital ship | [`capital_ship_tactician.py`](../../src/space_flight/ai/capital_ship/capital_ship_tactician.py) | [`capital_ship_navigator.py`](../../src/space_flight/ai/capital_ship/capital_ship_navigator.py) | [`capital_ship_pilot.py`](../../src/space_flight/ai/capital_ship/capital_ship_pilot.py) |
+| Major ship | [`major_ship_tactician.py`](../../src/space_flight/ai/major_ship/major_ship_tactician.py) | [`major_ship_navigator.py`](../../src/space_flight/ai/major_ship/major_ship_navigator.py) | [`major_ship_pilot.py`](../../src/space_flight/ai/major_ship/major_ship_pilot.py) |
 
 **`FighterTactician`** falls through a priority list (not a weighted blend):
 defend against a missile close to impact (see below), evade an overwhelming
@@ -181,12 +181,12 @@ heading. A fighter carrying flares also drops one per missile, at the think
 the missile is within `flare_range_fraction` of its `decoy_range_m`
 (`navigator.countermeasures`), where a flare may lure it.
 
-**`CapitalShipTactician`** is the fighter's list without threat evasion or
+**`MajorShipTactician`** is the fighter's list without threat evasion or
 prey scoring: it engages a scripted prey (`scripted_prey_dict`) tagged
-`AttackMode.ORBIT`. **`CapitalShipNavigator`** orbits it: a constant standoff
+`AttackMode.ORBIT`. **`MajorShipNavigator`** orbits it: a constant standoff
 off the nearest point of the target's oriented bounding box, driven
 tangentially so the target stays abeam on the turret flank (a circle round a
-compact target, a racetrack round a long one). **`CapitalShipPilot`** only
+compact target, a racetrack round a long one). **`MajorShipPilot`** only
 yaws/pitches toward the target and rolls to stay level with the scene (no
 roll-to-target).
 
@@ -195,7 +195,7 @@ roll-to-target).
 [`tracking_mount/`](../../src/space_flight/ai/tracking_mount/) is the AI for
 anything that swivels in place — `Turret` and `TractorBeamProjector`, both
 mounted subsystems of a capital ship (see
-[Capital-ship subsystems](subsystems.md)):
+[Major-ship subsystems](subsystems.md)):
 
 - **`TrackingMountTactician`**: engage the best prey above
   `min_engagement_score`, otherwise `IDLE`. No evade/disengage/regroup — a
@@ -307,7 +307,9 @@ distance, unit direction, relative velocity and forward alignment, and flags in
 `interact` the pairs that can fight: different non-neutral teams within
 `INTERACT_MAX_DISTANCE_M` (10 km). The diagonal is always zero. Actors occupy
 stable pre-allocated slots (`add_actor`/`remove_actor`, `MAX_ACTORS = 64` by
-default), so indices never shift and nothing is allocated per frame.
+default), so indices never shift and nothing is allocated per frame. Adding
+to a full set raises: a hangar never launches a fighter into the last
+`HANGAR_ACTOR_SLOT_RESERVE` free slots.
 `update_interactions()` computes all live pairs at once with numpy and writes
 them into the matrices in place (callers keep views), so cost scales with live
 actors, not capacity. Gotcha: `live_actors` (and masks over it, or rows sliced
@@ -317,7 +319,7 @@ with `alive`) are compacted, so their positions are not the slot indices from
 ## Where things live
 
 [`ai/`](../../src/space_flight/ai/): `generic/` holds the
-tactician/navigator/pilot base classes, `fighter/`, `capital_ship/` and
+tactician/navigator/pilot base classes, `fighter/`, `major_ship/` and
 `tracking_mount/` each family's subclasses, `missile/` the missile navigator
 and the incoming-missile message (`incoming_missile.py`),
 and `__init__.py` the shared

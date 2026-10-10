@@ -243,7 +243,7 @@
 
 ````
 
-````{py:function} _velocity_of(source_ref: weakref.ref[space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem] | None) -> panda3d.core.VBase3
+````{py:function} _velocity_of(source_ref: weakref.ref[space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem] | None) -> panda3d.core.VBase3
 :canonical: space_flight.fx.sfx._velocity_of
 
 ```{autodoc2-docstring} space_flight.fx.sfx._velocity_of
@@ -264,7 +264,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.__init__
 ```
 
-````{py:method} set_sound_velocity_source(sound: panda3d.core.AudioSound, source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None)
+````{py:method} set_sound_velocity_source(sound: panda3d.core.AudioSound, source: space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem | None)
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_sound_velocity_source
@@ -272,7 +272,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} set_listener_velocity_source(source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None)
+````{py:method} set_listener_velocity_source(source: space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem | None)
 :canonical: space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.PhysicsAudio3DManager.set_listener_velocity_source
@@ -309,7 +309,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.__init__
 ```
 
-````{py:method} attach_sound(sound: panda3d.core.AudioSound, node: panda3d.core.NodePath, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None = None)
+````{py:method} attach_sound(sound: panda3d.core.AudioSound, node: panda3d.core.NodePath, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem | None = None)
 :canonical: space_flight.fx.sfx.SFX.attach_sound
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.attach_sound
@@ -317,7 +317,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} set_listener_velocity_source(source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None)
+````{py:method} set_listener_velocity_source(source: space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem | None)
 :canonical: space_flight.fx.sfx.SFX.set_listener_velocity_source
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.set_listener_velocity_source
@@ -413,7 +413,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} cannon_fire(game: space_flight.game.flight_state.FlightState, sound_pool: space_flight.global_architecture.asset_pools.SoundPool, node: panda3d.core.NodePath, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.capital_ship.sub_system.SubSystem | None = None, is_player: bool = False)
+````{py:method} cannon_fire(game: space_flight.game.flight_state.FlightState, sound_pool: space_flight.global_architecture.asset_pools.SoundPool, node: panda3d.core.NodePath, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem | None = None, is_player: bool = False)
 :canonical: space_flight.fx.sfx.SFX.cannon_fire
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.cannon_fire
@@ -421,7 +421,7 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} update_task(task: direct.task.Task.Task) -> int
+````{py:method} update_task(task: direct.task.Task) -> int
 :canonical: space_flight.fx.sfx.SFX.update_task
 
 ```{autodoc2-docstring} space_flight.fx.sfx.SFX.update_task

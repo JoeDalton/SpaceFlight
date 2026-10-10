@@ -7,8 +7,8 @@ import numpy as np
 import yaml
 
 from space_flight import DATAFILES_PATH
-from space_flight.actors.capital_ship.targeting_system import TargetingSystem
-from space_flight.actors.capital_ship.tracking_mount import TrackingMount
+from space_flight.actors.major_ship.targeting_system import TargetingSystem
+from space_flight.actors.major_ship.tracking_mount import TrackingMount
 from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.global_architecture.gameplay_settings import (

@@ -1,6 +1,6 @@
 """
 Unit tests for the TractorBeamProjector
-(space_flight.actors.capital_ship.tractor_beam).
+(space_flight.actors.major_ship.tractor_beam).
 
 Instances are built with object.__new__ so the grab state machine and force
 model can be exercised without Panda3D assets or a running game.
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from space_flight.actors.capital_ship.tractor_beam import (
+from space_flight.actors.major_ship.tractor_beam import (
     _GRABBING,
     _SEARCHING,
     TractorBeamProjector,

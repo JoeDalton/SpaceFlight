@@ -325,7 +325,7 @@ class Personality:
         },
     }
 
-    CAPITAL_SHIP_DEFAULT = {
+    ESCORT_SHIP_DEFAULT = {
         "tactician": {
             "min_fighting_shape": 2,
             "intent_update_delay": 5,
@@ -354,7 +354,7 @@ class Personality:
                 "speed_distance_slope": 0.01,
                 "collision_avoidance_contribution_factor": 0.015,
             },
-            # Orbit (see CapitalShipNavigator.orbit_target)
+            # Orbit (see MajorShipNavigator.orbit_target)
             "orbit": {
                 "standoff_clearance_m": 300.0,  # added to the target half-width
                 "orbit_speed_mps": 40.0,
@@ -369,6 +369,39 @@ class Personality:
         },
         "pilot": {
             "sample_time_s": 0.2,
+            "minimum_throttle": 0.2,
+            "yaw_kp": 1.0,
+            "yaw_ki": 0.0,
+            "yaw_kd": 0.0,
+            "pitch_kp": -1.0,
+            "pitch_ki": 0.0,
+            "pitch_kd": 0.0,
+            "roll_kp": -1.0,
+            "roll_ki": 0.0,
+            "roll_kd": 0.0,
+            "throttle_kp": 2.0,
+            "throttle_ki": 0.1,
+            "throttle_kd": 0.0,
+        },
+    }
+
+    # A scripted capital ship (e.g. a star destroyer) has no tactician (it always
+    # patrols, see CapitalShip) and no collision avoidance, so only its patrol
+    # and its pilot are tuned. Its turn radius is over a kilometre: waypoints are
+    # met loosely, and it slows down early when it orbits one.
+    CAPITAL_SHIP_DEFAULT = {
+        "navigator": {
+            "patrol": {
+                "speed_mps": 30.0,
+                "waypoint_meeting_tolerance_m": 300.0,
+                "stall_time_s": 20.0,
+                "stall_deceleration_factor": 0.5,
+                "min_speed_factor": 0.2,
+                "progress_epsilon_m": 5.0,
+            },
+        },
+        "pilot": {
+            "sample_time_s": 0.5,
             "minimum_throttle": 0.2,
             "yaw_kp": 1.0,
             "yaw_ki": 0.0,

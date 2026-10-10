@@ -34,6 +34,7 @@ class GenericShipNavigator(GenericNavigator):
         pawn: Pawn,
         personality: dict,
         debug: bool = False,
+        collision_avoidance: bool = True,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
         self.waypoints = []
@@ -59,7 +60,11 @@ class GenericShipNavigator(GenericNavigator):
         # Speed floor of the current intent, reset by each navigate() and raised
         # by the intents that must keep their speed up (pursuit)
         self.minimum_speed_mps = 0.0
-        self.collision_sensor = CollisionSensor(game=game, ship=self.pawn)
+        # Obstacle sensing, unless the ship doesn't steer around obstacles at all
+        # (e.g. a scripted capital ship): no sensor then, and no avoidance
+        self.collision_sensor = (
+            CollisionSensor(game=game, ship=self.pawn) if collision_avoidance else None
+        )
 
     def navigate(self, intent: Intent, target_dict: dict) -> tuple[np.ndarray, float]:
         """
@@ -80,7 +85,8 @@ class GenericShipNavigator(GenericNavigator):
         self.avoidance_weight_factor = 1.0
         # Reset the sensor reach to full; a bomb run may shorten it (drop the outer
         # sphere) so it can overfly a big target without being pushed off it.
-        self.collision_sensor.active_range = self.collision_sensor.n_spheres
+        if self.collision_sensor is not None:
+            self.collision_sensor.active_range = self.collision_sensor.n_spheres
         # Reset the pilot up-reference; a bomb run sets it to aim the belly.
         self.up_reference = None
         # Reset the speed floor; a pursuit raises it.
@@ -147,6 +153,8 @@ class GenericShipNavigator(GenericNavigator):
 
         :return: The direction to point to, the desired speed and the avoidance weight
         """
+        if self.collision_sensor is None:
+            return np.zeros(3), 0.0, 0.0
         (
             avoidance_direction,
             avoidance_weight,
@@ -490,5 +498,6 @@ class GenericShipNavigator(GenericNavigator):
 
     def clean(self):
         super().clean()
-        self.collision_sensor.clean()
+        if self.collision_sensor is not None:
+            self.collision_sensor.clean()
         self.collision_sensor = None

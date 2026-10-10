@@ -8,7 +8,7 @@ from panda3d.core import NodePath, Vec3
 
 from space_flight.actors.destructibles import Destructible
 from space_flight.fx.damage_fx import DamageFX
-from space_flight.game.collisions import attach_collision_sphere
+from space_flight.game.collisions import attach_collision_box, attach_collision_sphere
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
@@ -49,6 +49,8 @@ class SubSystem(Destructible):
         generators); a turret passes the ship explicitly since its parent is a Bot
     :param relative_position: Mounting position relative to the ship node
     :param hit_box_radius_m: Radius of the subsystem's spherical collider
+    :param half_extents_m: Half-sizes (x, y, z, ship axes) of a box collider
+        instead of the sphere; hit_box_radius_m is then the box's bounding radius
     :param health: Initial (and maximum) health of the subsystem
     :param explosion_scale: Size of the subsystem's death explosion
     :param name: Node and display name of the subsystem
@@ -64,6 +66,7 @@ class SubSystem(Destructible):
         health: float = 1000.0,
         explosion_scale: float = 10.0,
         name: str = "subsystem",
+        half_extents_m: np.ndarray | None = None,
     ):
         super().__init__(game=game)
         self.parent = parent
@@ -87,16 +90,31 @@ class SubSystem(Destructible):
         self.node.set_pos(*relative_position)
         self.position = np.array(self.node.getPos(self.game.root_node))
 
-        # Into-only collision geometry (see class docstring)
-        self.hit_box_radius_m = hit_box_radius_m
-        self.collision_sphere_np = attach_collision_sphere(
-            game=self.game,
-            name="subsystem",
-            radius=self.hit_box_radius_m,
-            collider_type="subsystem",
-            parent_node=self.node,
-            parent_object=self,
-        )
+        # Into-only collision geometry (see class docstring): a sphere, or a box
+        # (whose bounding radius stands for its size wherever a radius is read)
+        if half_extents_m is not None:
+            self.half_extents_m = np.asarray(half_extents_m, dtype=float)
+            self.hit_box_radius_m = float(np.linalg.norm(self.half_extents_m))
+            self.collision_np = attach_collision_box(
+                game=self.game,
+                name="subsystem",
+                center=[0.0, 0.0, 0.0],
+                half_extents=self.half_extents_m,
+                collider_type="subsystem",
+                parent_node=self.node,
+                parent_object=self,
+            )
+        else:
+            self.half_extents_m = None
+            self.hit_box_radius_m = hit_box_radius_m
+            self.collision_np = attach_collision_sphere(
+                game=self.game,
+                name="subsystem",
+                radius=self.hit_box_radius_m,
+                collider_type="subsystem",
+                parent_node=self.node,
+                parent_object=self,
+            )
 
         # Set explosion size for the death animation
         self.explosion_scale = explosion_scale
@@ -213,9 +231,9 @@ class SubSystem(Destructible):
             except (KeyError, AttributeError):
                 pass
             # Remove collision node
-            self.collision_sphere_np.setPythonTag("owner", None)
-            self.collision_sphere_np.remove_node()
-            self.collision_sphere_np = None
+            self.collision_np.setPythonTag("owner", None)
+            self.collision_np.remove_node()
+            self.collision_np = None
             # Drop the damage/death trail (owns no scene nodes)
             if getattr(self, "damage_fx", None) is not None:
                 self.damage_fx.clean()
