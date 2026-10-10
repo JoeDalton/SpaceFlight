@@ -335,6 +335,16 @@ Bases: {py:obj}`enum.Enum`
 
 ````
 
+````{py:attribute} ESCORT_SHIP_DEFAULT
+:canonical: space_flight.ai.Personality.ESCORT_SHIP_DEFAULT
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.ai.Personality.ESCORT_SHIP_DEFAULT
+```
+
+````
+
 ````{py:attribute} CAPITAL_SHIP_DEFAULT
 :canonical: space_flight.ai.Personality.CAPITAL_SHIP_DEFAULT
 :value: >

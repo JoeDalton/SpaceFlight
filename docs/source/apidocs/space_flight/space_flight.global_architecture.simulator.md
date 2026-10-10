@@ -237,7 +237,7 @@ Bases: {py:obj}`direct.showbase.ShowBase.ShowBase`
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.SpaceFlightSimulator.__init__
 ```
 
-````{py:method} input_task(task: direct.task.Task.Task) -> int
+````{py:method} input_task(task: direct.task.Task) -> int
 :canonical: space_flight.global_architecture.simulator.SpaceFlightSimulator.input_task
 
 ```{autodoc2-docstring} space_flight.global_architecture.simulator.SpaceFlightSimulator.input_task
