@@ -150,7 +150,6 @@ class MajorShip(Ship):
                     ),
                     launch_speed_mps=hangar_conf.get("launch_speed_mps", 30.0),
                     launch_margin_m=hangar_conf.get("launch_margin_m", 5.0),
-                    formation=hangar_conf.get("formation", "arrowhead"),
                     name=f"hangar_{i}",
                 )
             )

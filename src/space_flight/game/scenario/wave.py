@@ -18,6 +18,7 @@ from space_flight.game.scenario.conditions import pawns_of
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
+    from space_flight.actors.major_ship.hangar import Hangar, LaunchOrder
     from space_flight.game.scenario.mission import Mission
 
 
@@ -81,9 +82,10 @@ class WaveHandle:
 
     Created (not yet spawned) by :meth:`Mission.wave`, so rules can refer to
     a wave before it exists; :meth:`spawn` then creates its ships, one per
-    frame. Its state methods (:meth:`alive`, :meth:`all_destroyed`,
-    :meth:`any_destroyed`) return bools and can be passed uncalled as
-    conditions.
+    frame. A wave of fighters launched from a hangar (:meth:`Mission.launch`,
+    :meth:`launch_from`) fills as they leave the bay instead. Its state
+    methods (:meth:`alive`, :meth:`all_destroyed`, :meth:`any_destroyed`)
+    return bools and can be passed uncalled as conditions.
 
     :param mission: The owning mission
     :param spec: What to spawn
@@ -97,6 +99,8 @@ class WaveHandle:
         self.ids: list = []
         #: The wave's formation, once spawned (None if it has none).
         self.formation: Optional[Formation] = None
+        #: The hangar request launching the wave, if launched (see launch_from)
+        self.launch_order: Optional[LaunchOrder] = None
 
     @property
     def name(self) -> str:
@@ -117,7 +121,15 @@ class WaveHandle:
         return bool(self.pawns())
 
     def all_destroyed(self) -> bool:
-        """The wave has spawned and every member is dead (False before spawn)."""
+        """
+        The wave has spawned and every member is dead (False before spawn).
+
+        A launched wave reads True only once its launch is over (every fighter
+        launched, or what was left cancelled), so never between two launches;
+        then also if nothing could be launched.
+        """
+        if self.launch_order is not None:
+            return self.launch_order.done and not self.pawns()
         return bool(self.ids) and not self.pawns()
 
     def any_destroyed(self) -> bool:
@@ -208,6 +220,36 @@ class WaveHandle:
             if target is not None:
                 _add_targets(bot, target)
             yield  # only one ship per frame
+
+    def launch_from(self, hangar: Hangar, target: Any = None) -> WaveHandle:
+        """
+        Launch the wave's fighters from a hangar: spec.size fighters of
+        spec.ship_model, leaving the bay one at a time as long as the hangar's
+        stock of that type lasts (see :meth:`Hangar.launch`), in the spec's
+        formation. Each joins the wave as it launches.
+
+        :param hangar: The hangar to launch from
+        :param target: Who the fighters attack (see :func:`pawns_of`),
+            resolved as each one launches
+        :return: self
+        :raises KeyError: if the hangar's stock has no spec.ship_model
+        """
+
+        def on_launched(bot: Bot):
+            self.ids.append(bot.pawn.id)
+            if self.launch_order.formation is not None:
+                self.formation = self.launch_order.formation
+            if target is not None:
+                _add_targets(bot, target)
+
+        self.launch_order = hangar.launch(
+            self.spec.ship_model,
+            self.spec.size,
+            on_launched=on_launched,
+            formation=self.spec.formation,
+            formation_scale_m=self.spec.formation_scale_m,
+        )
+        return self
 
     # ------------------------------------------------------------------
     # Mutating every live member

@@ -325,7 +325,6 @@ def test_build_hangars_passes_the_config_through():
         "launch_direction": [0.0, 0.0, -1.0],
         "launch_speed_mps": 30.0,
         "launch_margin_m": 5.0,
-        "formation": "arrowhead",
     }
 
     with patch("space_flight.actors.major_ship.major_ship.Hangar") as hangar_cls:

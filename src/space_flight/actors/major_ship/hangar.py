@@ -33,12 +33,17 @@ class LaunchOrder:
     :param count: How many fighters to launch
     :param on_launched: Called with each launched fighter's Bot
     :param primary_target_ids: Primary targets given to each launched fighter
+    :param formation_shape: The launched fighters' formation shape (None for
+        none)
+    :param formation_scale_m: Spacing of its slots
     """
 
     fighter_type: str
     count: int
     on_launched: Callable[[Bot], None] | None = None
     primary_target_ids: list = field(default_factory=list)
+    formation_shape: str | None = "arrowhead"
+    formation_scale_m: float = Formation.FIGHTER_SCALE_M
     #: Pawn ids of the fighters launched so far, in launch order
     ids: list = field(default_factory=list)
     #: The launched fighters' formation (the first one out leads)
@@ -87,7 +92,6 @@ class Hangar(SubSystem):
         the ship
     :param launch_margin_m: Clearance between the bay box and a launched
         fighter's collision sphere
-    :param formation: The launched groups' formation shape (None for none)
     :param name: Node and display name
     """
 
@@ -105,7 +109,6 @@ class Hangar(SubSystem):
         launch_direction: Sequence[float] = (0.0, 0.0, -1.0),
         launch_speed_mps: float = 30.0,
         launch_margin_m: float = 5.0,
-        formation: str | None = "arrowhead",
         name: str = "hangar",
     ):
         super().__init__(
@@ -130,7 +133,6 @@ class Hangar(SubSystem):
         self.launch_direction = direction / np.linalg.norm(direction)
         self.launch_speed_mps = launch_speed_mps
         self.launch_margin_m = launch_margin_m
-        self.formation_shape = formation
 
         self.orders: list[LaunchOrder] = []
         self._launched_ids: list = []
@@ -178,6 +180,8 @@ class Hangar(SubSystem):
         count: int | None = None,
         on_launched: Callable[[Bot], None] | None = None,
         primary_target_ids: Sequence = (),
+        formation: str | None = "arrowhead",
+        formation_scale_m: float = Formation.FIGHTER_SCALE_M,
     ) -> LaunchOrder:
         """
         Queue a launch of count fighters of fighter_type (group_size by
@@ -188,6 +192,9 @@ class Hangar(SubSystem):
         :param count: How many fighters to launch
         :param on_launched: Called with each launched fighter's Bot
         :param primary_target_ids: Primary targets given to each fighter
+        :param formation: The launched fighters' formation shape:
+            "arrowhead", "diamond", "around_diamond", or None for none
+        :param formation_scale_m: Spacing of its slots
         :return: The order, filled as the fighters launch (already cancelled,
             launching nothing, if that type's stock is empty or the hangar
             cannot launch)
@@ -202,6 +209,8 @@ class Hangar(SubSystem):
             count=self.group_size if count is None else count,
             on_launched=on_launched,
             primary_target_ids=list(primary_target_ids),
+            formation_shape=formation,
+            formation_scale_m=formation_scale_m,
         )
         if self.stock[fighter_type] <= 0 or not self.is_operational:
             order.cancelled = True
@@ -350,12 +359,14 @@ class Hangar(SubSystem):
         order.ids.append(pawn.id)
         self._launched_ids.append(pawn.id)
 
-        if self.formation_shape is not None:
+        if order.formation_shape is not None:
             if order.formation is None or len(order.formation.ship_ids) >= len(
                 order.formation.relative_positions
             ):
                 # The first fighter out leads; a full formation starts a new one
-                order.formation = Formation(shape=self.formation_shape)
+                order.formation = Formation(
+                    scale_m=order.formation_scale_m, shape=order.formation_shape
+                )
             order.formation.add_ship(ship=pawn)
         bot.tactician.primary_target_ids.extend(order.primary_target_ids)
         if order.on_launched is not None:

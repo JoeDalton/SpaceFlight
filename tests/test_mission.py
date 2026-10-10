@@ -1,15 +1,17 @@
 """
 Tests for the mission scripting framework (:mod:`space_flight.game.scenario`):
 Mission (running, sequencing, rules, clock conditions, actions), WaveSpec,
-WaveHandle (spawning, state, mutations), the conditions and scanning.
+WaveHandle (spawning, launching from a hangar, state, mutations), the
+conditions and scanning.
 """
 
 import uuid
 
 import numpy as np
 import pytest
-from mission_fakes import FakeGame, advance, kill_all, patch_engine
+from mission_fakes import FakeGame, FakeHangar, advance, kill_all, patch_engine
 
+from space_flight.ai.formation import Formation
 from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
@@ -745,3 +747,159 @@ def test_damaged(game, mission, spawned):
     pawn.shield_level = 0.0
     pawn.health -= 1
     assert cond()
+
+
+# ---------------------------------------------------------------------------
+# Mission.launch: fighters launched from a hangar, as a wave
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def hangar(game):
+    """A stocked (fake) hangar of team 2."""
+    hangar = FakeHangar(game, team=2, name="hangar_0", group_size=3)
+    hangar.set_stock({"tie-fighter": 4, "tie-bomber": 0})
+    return hangar
+
+
+def test_launch_returns_a_wave_of_the_requested_fighters(mission, hangar):
+    squadron = mission.launch(hangar, "tie-fighter", 2)
+
+    assert squadron.spec.ship_model == "tie-fighter"
+    assert squadron.spec.size == 2
+    assert squadron.spec.team == 2
+    assert squadron.name == "hangar_0_tie-fighter"
+    assert squadron.ids == []  # nothing has left the bay yet
+
+
+def test_launch_defaults_to_the_hangars_group_and_takes_a_name(mission, hangar):
+    squadron = mission.launch(hangar, "tie-fighter", name="red")
+
+    assert squadron.spec.size == hangar.group_size
+    assert squadron.name == "red"
+
+
+def test_launched_fighters_join_the_wave_as_they_leave_the_bay(mission, hangar):
+    squadron = mission.launch(hangar, "tie-fighter", 2)
+
+    hangar.launch_next()
+    assert squadron.ids == [hangar.launched[0].pawn.id]
+    hangar.launch_next()
+    assert [pawn.id for pawn in squadron.pawns()] == [
+        bot.pawn.id for bot in hangar.launched
+    ]
+    assert squadron.alive()
+
+
+def test_launched_wave_flies_in_an_arrowhead_by_default(mission, hangar):
+    squadron = mission.launch(hangar, "tie-fighter", 2)
+    hangar.launch_pending()
+
+    assert squadron.spec.formation == "arrowhead"
+    assert squadron.launch_order.formation_shape == "arrowhead"
+    assert squadron.formation is squadron.launch_order.formation
+    assert squadron.formation.ship_ids == squadron.ids
+
+
+def test_launch_sets_the_waves_formation(mission, hangar):
+    """The formation shape and spacing go to the wave's spec and the request."""
+    squadron = mission.launch(
+        hangar, "tie-fighter", 2, formation="diamond", formation_scale_m=80.0
+    )
+    hangar.launch_pending()
+
+    assert squadron.spec.formation == "diamond"
+    assert squadron.spec.formation_scale_m == 80.0
+    expected = Formation(scale_m=80.0, shape="diamond").relative_positions
+    np.testing.assert_allclose(squadron.formation.relative_positions, expected)
+
+
+def test_launch_without_formation(mission, hangar):
+    squadron = mission.launch(hangar, "tie-fighter", 2, formation=None)
+    hangar.launch_pending()
+
+    assert squadron.formation is None
+    assert squadron.launch_order.formation is None
+
+
+def test_each_launched_fighter_attacks_the_target(mission, spawned, hangar):
+    """
+    The target is resolved as each fighter launches: fighters leaving the bay
+    after a new prey appeared attack it too.
+    """
+    prey = mission.spawn(
+        WaveSpec(name="prey", ship_model="x-wing", size=1, spawn_point=[0, 0, 0])
+    )
+    run_jobs(mission)
+    squadron = mission.launch(hangar, "tie-fighter", 2, target=prey)
+
+    hangar.launch_next()
+    prey.spawn()  # a second prey joins the wave
+    run_jobs(mission)
+    hangar.launch_next()
+
+    first, second = (bot.tactician.primary_target_ids for bot in hangar.launched)
+    prey_ids = [pawn.id for pawn in prey.pawns()]
+    assert first == prey_ids[:1]
+    assert second == prey_ids
+    assert len(squadron.ids) == 2
+
+
+def test_launched_wave_is_destroyed_only_once_the_launch_is_over(game, mission, hangar):
+    """
+    all_destroyed never reads True between two launches: the first fighter
+    dying before the second leaves the bay does not wipe the wave.
+    """
+    squadron = mission.launch(hangar, "tie-fighter", 2)
+    assert not squadron.all_destroyed()  # nothing launched yet
+
+    hangar.launch_next()
+    kill_all(game, squadron.pawns())
+    assert not squadron.all_destroyed()  # one more to come
+    assert squadron.any_destroyed()
+
+    hangar.launch_next()
+    kill_all(game, squadron.pawns())
+    assert squadron.all_destroyed()
+
+
+def test_launched_wave_is_destroyed_when_its_type_runs_out(game, mission, hangar):
+    """A launch cut short by the stock is over once the stock is spent."""
+    squadron = mission.launch(hangar, "tie-fighter", 6)  # only 4 in stock
+
+    hangar.launch_pending()
+    assert len(squadron.ids) == 4
+    assert squadron.launch_order.cancelled
+    kill_all(game, squadron.pawns())
+    assert squadron.all_destroyed()
+
+
+def test_launching_an_empty_type_gives_a_wave_already_over(mission, hangar):
+    """An empty type launches nothing: the wave reads destroyed at once."""
+    squadron = mission.launch(hangar, "tie-bomber", 3)
+
+    assert squadron.ids == []
+    assert squadron.all_destroyed()
+    assert not squadron.any_destroyed()
+
+
+def test_launching_a_type_not_in_the_stock_raises(mission, hangar):
+    with pytest.raises(KeyError):
+        mission.launch(hangar, "tie-interceptor")
+
+
+def test_launched_wave_is_a_who(mission, hangar):
+    """A launched wave designates its live fighters, e.g. as a target."""
+    squadron = mission.launch(hangar, "tie-fighter", 2)
+    hangar.launch_pending()
+
+    assert pawns_of(squadron) == squadron.pawns()
+    assert near(squadron, [0, 0, 0], 10)()
+
+
+def test_a_launched_wave_cannot_be_spawned(mission, hangar):
+    """It has no spawn point: its fighters come from the hangar."""
+    squadron = mission.launch(hangar, "tie-fighter", 2)
+
+    with pytest.raises(ValueError):
+        squadron.spawn()

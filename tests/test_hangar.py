@@ -17,6 +17,7 @@ from panda3d.core import CollisionBox, NodePath
 from space_flight.actors.major_ship.hangar import HANGAR_ACTOR_SLOT_RESERVE, Hangar
 from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.ship import load_ship_configuration
+from space_flight.ai.formation import Formation
 from space_flight.utils import rotation_matrix_coefficients
 
 # The star destroyer's ventral bay and hull sphere (see isd/configuration.yaml)
@@ -375,11 +376,12 @@ def test_fighters_leave_the_bay_nose_first(launch_direction, expected_up):
 
 def test_launched_group_flies_in_formation_with_its_targets(spawned):
     """
-    A launched group forms up on its first fighter, gets the order's primary
-    targets, and each fighter is reported to on_launched.
+    A launched group forms up (an arrowhead by default) on its first fighter,
+    gets the order's primary targets, and each fighter is reported to
+    on_launched.
     """
     game, ship = make_game_and_ship()
-    hangar = make_hangar(game, ship, formation="arrowhead")
+    hangar = make_hangar(game, ship)
     launched = []
 
     order = hangar.launch(
@@ -390,8 +392,36 @@ def test_launched_group_flies_in_formation_with_its_targets(spawned):
     pawns = hangar.launched_pawns()
     assert order.formation.ship_ids == [pawn.id for pawn in pawns]
     assert all(pawn.formation is order.formation for pawn in pawns)
+    expected = Formation(scale_m=Formation.FIGHTER_SCALE_M, shape="arrowhead")
+    np.testing.assert_allclose(
+        order.formation.relative_positions, expected.relative_positions
+    )
     assert [bot.pawn for bot in launched] == pawns
     assert all(bot.tactician.primary_target_ids == ["prey"] for bot in launched)
+
+
+def test_launch_request_sets_the_formation(spawned):
+    """A request may pick its formation's shape and spacing."""
+    game, ship = make_game_and_ship()
+    hangar = make_hangar(game, ship)
+
+    order = hangar.launch("tie-fighter", 2, formation="diamond", formation_scale_m=80.0)
+    run(game, hangar, until_s=10.0)
+
+    expected = Formation(scale_m=80.0, shape="diamond").relative_positions
+    np.testing.assert_allclose(order.formation.relative_positions, expected)
+
+
+def test_launch_request_without_formation(spawned):
+    """With formation=None, the launched fighters fly on their own."""
+    game, ship = make_game_and_ship()
+    hangar = make_hangar(game, ship)
+
+    order = hangar.launch("tie-fighter", 2, formation=None)
+    run(game, hangar, until_s=10.0)
+
+    assert order.formation is None
+    assert all(pawn.formation is None for pawn in hangar.launched_pawns())
 
 
 def test_orders_are_filled_in_turn(spawned):

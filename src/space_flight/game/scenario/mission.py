@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Sequence
 
+from space_flight.ai.formation import Formation
 from space_flight.game.scenario.conditions import Condition, _After, _Delay, _Sustained
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
@@ -31,6 +32,7 @@ from space_flight.ui.player_waypoints import PlayerWaypoints
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from space_flight.actors.major_ship.hangar import Hangar
     from space_flight.actors.scan import ScanHandle
     from space_flight.game.flight_state import FlightState
 
@@ -132,6 +134,44 @@ class Mission:
     def spawn(self, spec: WaveSpec, **kwargs: Any) -> WaveHandle:
         """Spawn a wave now; kwargs as :meth:`WaveHandle.spawn`."""
         return self.wave(spec).spawn(**kwargs)
+
+    def launch(
+        self,
+        hangar: Hangar,
+        fighter_type: str,
+        count: Optional[int] = None,
+        target: Any = None,
+        name: Optional[str] = None,
+        formation: Optional[str] = "arrowhead",
+        formation_scale_m: float = Formation.FIGHTER_SCALE_M,
+    ) -> WaveHandle:
+        """
+        Launch fighters from a hangar as a wave, filled as they leave the bay
+        (see :meth:`WaveHandle.launch_from`).
+
+        :param hangar: The hangar to launch from (e.g.
+            ``isd.pawns()[0].hangars[0]``), stocked by the level
+        :param fighter_type: The fighter model, one of the hangar's stock
+        :param count: How many fighters (the hangar's group size by default)
+        :param target: Who the fighters attack (see :func:`pawns_of`),
+            resolved as each one launches
+        :param name: The wave's name (by default the hangar's and the type's)
+        :param formation: The fighters' formation shape: "arrowhead",
+            "diamond", "around_diamond", or None for none (the first fighter
+            out leads)
+        :param formation_scale_m: Spacing of its slots
+        :return: The fighters' wave
+        :raises KeyError: if the hangar's stock has no fighter_type
+        """
+        spec = WaveSpec(
+            name=name or f"{hangar.name}_{fighter_type}",
+            ship_model=fighter_type,
+            size=hangar.group_size if count is None else count,
+            team=hangar.team,
+            formation=formation,
+            formation_scale_m=formation_scale_m,
+        )
+        return self.wave(spec).launch_from(hangar, target=target)
 
     # ------------------------------------------------------------------
     # Scanning

@@ -148,11 +148,11 @@ def dev_mission(m: Mission) -> Iterator[None]:
     yield from m.wait(5)
     hangar = capital_ship.pawns()[0].hangars[0]
     hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
-    targets = [pawn.id for pawn in frigate.pawns()]
     m.hud("TIEs launching")
-    hangar.launch("tie-fighter", 3, primary_target_ids=targets)
+    squadron = m.launch(hangar, "tie-fighter", 3, target=frigate)
+    m.on(squadron.all_destroyed, lambda: m.hud("TIE squadron destroyed"))
     yield from m.wait(20)
-    hangar.launch("tie-bomber", 6, primary_target_ids=targets)
+    m.launch(hangar, "tie-bomber", 6, target=frigate)
     # m.spawn(ENEMY_FIGHTER_SQUADRON)
     # Targets are resolved as each Y-wing spawns: let the big ships spawn first
     # yield from m.wait(1)

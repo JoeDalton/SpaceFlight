@@ -88,7 +88,9 @@ and capital ships alike may carry them; the star destroyer has one ventral bay.
   ship types and negative counts are refused. A hangar holds nothing until
   stocked.
 - **Requests.** `launch(fighter_type, count=None, on_launched=None,
-  primary_target_ids=())` queues a `LaunchOrder` of `count` fighters
+  primary_target_ids=(), formation="arrowhead",
+  formation_scale_m=Formation.FIGHTER_SCALE_M)` queues a `LaunchOrder` of
+  `count` fighters
   (`group_size` by default) of `fighter_type`, filled one launch at a time
   behind any earlier request; the order records the launched pawn ids and is
   `done` once filled or cancelled. A type not in the stock raises
@@ -103,8 +105,9 @@ and capital ships alike may carry them; the star destroyer has one ventral bay.
   thrust then carries it away from the bay rather than along it), with the
   ship's velocity plus `launch_speed_mps` along `launch_direction`. The ship's own
   hull sphere must leave that point outside (the star destroyer's is kept
-  small for that). Each order's fighters fly in a `formation` (the first one
-  out leads; a full formation starts a new one) and get its primary targets.
+  small for that). Each order's fighters fly in the request's formation, if
+  any (the first one out leads; a full formation starts a new one), and get
+  its primary targets.
 - **Limits.** A launch waits while `max_active` of the hangar's fighters are
   alive, or while no more than `HANGAR_ACTOR_SLOT_RESERVE` interaction slots
   are free (see [ai.md](ai.md)). Each launch spends one fighter of its type's
@@ -115,6 +118,8 @@ and capital ships alike may carry them; the star destroyer has one ventral bay.
   out fight on.
 - Launched fighters are independent bots: a later `set_team` on the ship does
   not reach them.
+- Missions launch fighters as a wave with `Mission.launch(hangar, ...)` (see
+  [scenario_scripting.md](scenario_scripting.md#capital-ships-and-hangars)).
 
 ## Shield generator & shield
 

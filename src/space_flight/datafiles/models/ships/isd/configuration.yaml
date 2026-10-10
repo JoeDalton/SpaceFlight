@@ -89,7 +89,6 @@ sub_systems:
       launch_direction: [0.0, 0.0, -1.0]  # out of the bay's floor
       launch_speed_mps: 30.0
       launch_margin_m: 5.0
-      formation: arrowhead
 
   # Bot-controlled turrets in the side trenches (placeholder model and
   # positions); base_position/orientation are ship-local.
