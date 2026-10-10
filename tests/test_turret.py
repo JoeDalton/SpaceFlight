@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 from panda3d.core import NodePath
 
-from space_flight.actors.capital_ship.sub_system import SubSystem
-from space_flight.actors.capital_ship.targeting_system import TargetingSystem
-from space_flight.actors.capital_ship.turret import Turret
+from space_flight.actors.major_ship.sub_system import SubSystem
+from space_flight.actors.major_ship.targeting_system import TargetingSystem
+from space_flight.actors.major_ship.turret import Turret
 from space_flight.ai import Personality
 from space_flight.global_architecture.gameplay_settings import auto_aim_params
 
@@ -163,9 +163,9 @@ def test_turret_is_a_subsystem_of_its_ship():
 
     with (
         patch(
-            "space_flight.actors.capital_ship.tracking_mount.TurretModel"
+            "space_flight.actors.major_ship.tracking_mount.TurretModel"
         ) as mock_model_cls,
-        patch("space_flight.actors.capital_ship.turret.LaserCannon"),
+        patch("space_flight.actors.major_ship.turret.LaserCannon"),
     ):
         mock_model_cls.return_value.set_yaw = MagicMock()
         mock_model_cls.return_value.set_pitch = MagicMock()

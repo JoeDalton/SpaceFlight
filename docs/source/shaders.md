@@ -138,7 +138,7 @@ Driven by [`scenes/ocean.py`](../../src/space_flight/scenes/ocean.py) (see
 ## Shield shaders
 
 Driven by
-[`actors/capital_ship/shield_model.py`](../../src/space_flight/actors/capital_ship/shield_model.py)
+[`actors/major_ship/shield_model.py`](../../src/space_flight/actors/major_ship/shield_model.py)
 (see [subsystems.md](subsystems.md)):
 
 - **[`shield.vert`](../../src/space_flight/datafiles/shaders/shield.vert)**

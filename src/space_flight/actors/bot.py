@@ -9,18 +9,18 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION, RECORD_GAME
-from space_flight.actors.capital_ship import CapitalShip
-from space_flight.actors.capital_ship.tractor_beam import TractorBeamProjector
-from space_flight.actors.capital_ship.turret import Turret
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
+from space_flight.actors.major_ship import make_major_ship
+from space_flight.actors.major_ship.tractor_beam import TractorBeamProjector
+from space_flight.actors.major_ship.turret import Turret
 from space_flight.ai import Intent, Personality
-from space_flight.ai.capital_ship.capital_ship_navigator import CapitalShipNavigator
-from space_flight.ai.capital_ship.capital_ship_pilot import CapitalShipPilot
-from space_flight.ai.capital_ship.capital_ship_tactician import CapitalShipTactician
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
+from space_flight.ai.major_ship.major_ship_navigator import MajorShipNavigator
+from space_flight.ai.major_ship.major_ship_pilot import MajorShipPilot
+from space_flight.ai.major_ship.major_ship_tactician import MajorShipTactician
 from space_flight.ai.tracking_mount.tracking_mount_navigator import (
     TrackingMountNavigator,
 )
@@ -131,8 +131,9 @@ class Bot(Destructible):
                 personality=Personality.TRACTOR_BEAM_DEFAULT,
                 debug=debug_decisions,
             )
-        elif self.bot_type == "capital_ship":
-            self.pawn = CapitalShip(
+        elif self.bot_type == "major_ship":
+            # The ship config picks the class: an escort ship or a capital ship
+            self.pawn = make_major_ship(
                 game=self.game,
                 parent=self,
                 ship_type=pawn_model,
@@ -145,12 +146,29 @@ class Bot(Destructible):
                 team=team,
             )
 
-            self.pilot = CapitalShipPilot(game=self.game, pawn=self.pawn)
-            self.navigator = CapitalShipNavigator(
-                game=self.game, pawn=self.pawn, debug=debug_decisions
+            # The ship class says how its bot flies it (see EscortShip and
+            # CapitalShip): a scripted capital ship has no tactician (it always
+            # patrols) and no collision avoidance
+            personality = self.pawn.personality
+            self.pilot = MajorShipPilot(
+                game=self.game, pawn=self.pawn, personality=personality
             )
-            self.tactician = CapitalShipTactician(
-                game=self.game, pawn=self.pawn, debug=debug_decisions
+            self.navigator = MajorShipNavigator(
+                game=self.game,
+                pawn=self.pawn,
+                personality=personality,
+                debug=debug_decisions,
+                collision_avoidance=self.pawn.collision_avoidance,
+            )
+            self.tactician = (
+                MajorShipTactician(
+                    game=self.game,
+                    pawn=self.pawn,
+                    personality=personality,
+                    debug=debug_decisions,
+                )
+                if self.pawn.has_tactician
+                else None
             )
         else:
             raise NotImplementedError(f"Unknown bot type {self.bot_type}")
@@ -195,8 +213,12 @@ class Bot(Destructible):
             if hasattr(self.pawn, "tumble_step"):
                 self.pawn.tumble_step(elapsed_s=self.death_elapsed_s())
             return
-        if self.bot_type == "fighter" or self.bot_type == "capital_ship":
-            intent, target_dict = self.tactician.think()
+        if self.bot_type == "fighter" or self.bot_type == "major_ship":
+            if self.tactician is not None:
+                intent, target_dict = self.tactician.think()
+            else:
+                # No tactician (a scripted capital ship): always patrol
+                intent, target_dict = Intent.PATROL, {}
 
             if self._think_is_due():
                 target_direction, desired_speed_mps = self.navigator.navigate(
@@ -269,9 +291,12 @@ class Bot(Destructible):
         before the bots update, so decide one frame ahead (assuming the next
         frame lasts as long as this one).
         """
+        sensor = getattr(self.navigator, "collision_sensor", None)
+        if sensor is None:
+            return
         game_time = self.game.game_time
         next_frame_s = game_time.get_current_time() + game_time.get_time_step()
-        self.navigator.collision_sensor.set_active(next_frame_s >= self._next_think_s)
+        sensor.set_active(next_frame_s >= self._next_think_s)
 
     def _release_think_slot(self):
         """Give the bot's think slot back to the scheduler (once)."""
@@ -381,7 +406,8 @@ class Bot(Destructible):
 
         :param personality: A personality dictionary
         """
-        self.tactician.personality = personality
+        if self.tactician is not None:
+            self.tactician.personality = personality
         self.navigator.personality = personality
         self.pilot.personality = personality
 
@@ -476,7 +502,8 @@ class Bot(Destructible):
         self.pilot = None
         self.navigator.clean()
         self.navigator = None
-        self.tactician.clean()
+        if self.tactician is not None:
+            self.tactician.clean()
         self.tactician = None
         self.pawn.clean()
         self.pawn = None

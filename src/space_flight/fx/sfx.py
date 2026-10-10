@@ -16,7 +16,7 @@ from space_flight.global_architecture.asset_pools import SoundPool
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.pawn import Pawn
     from space_flight.game.flight_state import FlightState
     from space_flight.global_architecture.simulator import SpaceFlightSimulator

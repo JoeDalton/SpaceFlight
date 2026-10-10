@@ -24,8 +24,8 @@ from space_flight.game.collisions import (
 )
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.shield import Shield
-    from space_flight.actors.capital_ship.sub_system import SubSystem
+    from space_flight.actors.major_ship.shield import Shield
+    from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.ship import Ship
     from space_flight.weapons.laser_cannon import LaserShot
 

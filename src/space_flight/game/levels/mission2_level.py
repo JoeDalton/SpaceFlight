@@ -108,7 +108,7 @@ def _transport(name: str) -> WaveSpec:
         name=name,
         ship_model="gr-75",
         size=1,
-        bot_type="capital_ship",
+        bot_type="major_ship",
         team=0,
         spawn_point=CONVOY_SPAWN_POINT,
         spawn_orientation=yaw_towards(CONVOY_SPAWN_POINT, CONVOY_ROUTE[0]),
@@ -121,7 +121,7 @@ CONVOY = [_transport("Aurek"), _transport("Besh"), _transport("Cresh")]
 
 # Spawn point, orientation and route depend on the player, given at spawn time.
 SMUGGLER = WaveSpec(
-    name="Dorn", ship_model="gr-75", size=1, bot_type="capital_ship", team=0
+    name="Dorn", ship_model="gr-75", size=1, bot_type="major_ship", team=0
 )
 
 TIE_FLIGHT = WaveSpec(

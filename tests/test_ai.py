@@ -107,9 +107,9 @@ def test_intent_engage_is_different_from_idle():
     [
         Personality.FIGHTER_DEFAULT,
         Personality.TURRET_DEFAULT,
-        Personality.CAPITAL_SHIP_DEFAULT,
+        Personality.ESCORT_SHIP_DEFAULT,
     ],
-    ids=["fighter", "turret", "capital_ship"],
+    ids=["fighter", "turret", "escort_ship"],
 )
 def test_personality_has_all_three_sub_dicts(personality_dict):
     """
@@ -150,11 +150,25 @@ def test_turret_personality_tactician_has_intent_update_delay():
     assert "intent_update_delay" in Personality.TURRET_DEFAULT["tactician"]
 
 
-def test_capital_ship_personality_pilot_has_throttle_gains():
+@pytest.mark.parametrize(
+    "personality_dict",
+    [Personality.ESCORT_SHIP_DEFAULT, Personality.CAPITAL_SHIP_DEFAULT],
+    ids=["escort_ship", "capital_ship"],
+)
+def test_major_ship_personality_pilot_has_throttle_gains(personality_dict):
     """
-    The capital ship pilot sub-dict must include throttle PID gains.
+    The major ship pilot sub-dicts must include throttle PID gains.
     """
-    pilot = Personality.CAPITAL_SHIP_DEFAULT["pilot"]
+    pilot = personality_dict["pilot"]
 
     assert "throttle_kp" in pilot
     assert "throttle_ki" in pilot
+
+
+def test_capital_ship_personality_has_no_tactician():
+    """
+    A scripted capital ship has no tactician: its personality tunes only its
+    patrol and its pilot.
+    """
+    assert "tactician" not in Personality.CAPITAL_SHIP_DEFAULT
+    assert "patrol" in Personality.CAPITAL_SHIP_DEFAULT["navigator"]

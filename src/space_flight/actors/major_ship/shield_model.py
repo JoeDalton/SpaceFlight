@@ -2,7 +2,7 @@
 Shield presentation: the visible bubble mesh + its animated GLSL shader.
 
 This module owns everything *visual* about a shield, kept separate from the
-game-logic :class:`~space_flight.actors.capital_ship.shield.Shield` (health,
+game-logic :class:`~space_flight.actors.major_ship.shield.Shield` (health,
 collision, lifecycle). It bundles two things:
 
 - :func:`make_capsule` -- the procedural capsule mesh used by tube shields

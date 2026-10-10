@@ -1,4 +1,8 @@
 # CR-90
+
+# A manoeuverable major ship, with the full AI stack (see EscortShip)
+ship_class: escort
+
 mass_kg: 800
 inputs_filter_time_s: 1.0
 max_thrust_n: 12500

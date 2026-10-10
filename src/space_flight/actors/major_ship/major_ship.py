@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.actors.capital_ship.shield import Shield
-from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
-from space_flight.actors.capital_ship.targeting_system import TargetingSystem
+from space_flight.actors.major_ship.shield import Shield
+from space_flight.actors.major_ship.shield_generator import ShieldGenerator
+from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 from space_flight.game.collisions import attach_collision_sphere
 
@@ -20,9 +20,12 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger()
 
 
-class CapitalShip(Ship):
+class MajorShip(Ship):
     """
-    A class for capital ships, heavy bombers, big freighter, etc.
+    Base class for the big ships carrying subsystems (shield generators, turrets,
+    hangars, ...): escort ships (transports, frigates, corvettes) and capital
+    ships (star destroyers). Each ship config picks its subclass (see
+    :func:`make_major_ship`).
     (Slow and not very manoeuverable, attacks from their side or bottom)
     """
 
@@ -48,7 +51,8 @@ class CapitalShip(Ship):
             team=team,
         )
 
-        # Actor category, so target filters can single capital ships out.
+        # Actor category, so target filters can single major ships out (the HUD
+        # "Capital ships" filter covers escort and capital ships alike).
         self.category = "capital_ship"
 
         # Subsystems declared in the ship config (possibly none)
@@ -127,7 +131,7 @@ class CapitalShip(Ship):
         :param model_key: The config field naming each mount's model/config
         :return: The spawned mount bots
         """
-        # Deferred import: bot imports CapitalShip, so importing spawn_bot at the
+        # Deferred import: bot imports MajorShip, so importing spawn_bot at the
         # top would be circular.
         from space_flight.actors.bot import spawn_bot
 
@@ -207,7 +211,7 @@ class CapitalShip(Ship):
     @property
     def shield_level(self) -> float:
         """
-        A capital ship's shield is a :class:`Shield` object (or None when the
+        A major ship's shield is a :class:`Shield` object (or None when the
         ship has no shield generators); expose its strength as a plain scalar.
 
         :return: The current shield strength, or 0 when unshielded
