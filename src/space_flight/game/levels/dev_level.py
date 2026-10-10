@@ -36,14 +36,14 @@ PATROL_ROUTE = [
     [0, 0, 500],
 ]
 
-# A lone enemy CR-90 frigate. It carries a bot-controlled turret on its hull
+# A lone allied CR-90 frigate. It carries a bot-controlled turret on its hull
 # (declared in the ship config), which spawns and fights along with it.
-ENEMY_FRIGATE = WaveSpec(
-    name="enemy_frigate",
+ALLIED_FRIGATE = WaveSpec(
+    name="allied_frigate",
     ship_model="cr-90",
     size=1,
     bot_type="major_ship",
-    team=2,
+    team=1,
     spawn_point=[0, -1500, 500],
     spawn_orientation=[1, 0, 0, 0],
     record=True,
@@ -59,7 +59,7 @@ ENEMY_CAPITAL_SHIP = WaveSpec(
     size=1,
     bot_type="major_ship",
     team=2,
-    spawn_point=[3000, 1000, 900],
+    spawn_point=[0, 1000, 900],
     spawn_orientation=[1, 0, 0, 0],
     record=True,
     waypoints=[
@@ -127,18 +127,16 @@ def build_dev_upfront(game: FlightState):
 
 def dev_mission(m: Mission) -> Iterator[None]:
     """
-    The dev sandbox's mission body: after 2s, an enemy frigate, an enemy star
-    destroyer, 17 enemy fighters and 10 allied Y-wings (29 ships, for CPU load
-    testing), the frigate and the star destroyer being the Y-wings' primary
-    targets. No win/lose condition.
+    The dev sandbox's mission body
 
     :param m: The level's :class:`Mission`
     """
     yield from m.wait(2)
     m.hud("Enemy forces inbound")
-    frigate = m.spawn(ENEMY_FRIGATE)
     capital_ship = m.spawn(ENEMY_CAPITAL_SHIP)
-    m.spawn(ENEMY_FIGHTER_SQUADRON)
+    frigate = m.spawn(ALLIED_FRIGATE, target=[capital_ship])
+    print(frigate)
+    # m.spawn(ENEMY_FIGHTER_SQUADRON)
     # Targets are resolved as each Y-wing spawns: let the big ships spawn first
-    yield from m.wait(1)
-    m.spawn(ALLIED_PATROL, target=[frigate, capital_ship])
+    # yield from m.wait(1)
+    # m.spawn(ALLIED_PATROL, target=[frigate, capital_ship])
