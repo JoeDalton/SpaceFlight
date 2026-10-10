@@ -28,7 +28,7 @@ from space_flight.ui.input_reader import (
 )
 
 if TYPE_CHECKING:
-    from direct.task.Task import Task
+    from direct.task import Task
 
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 

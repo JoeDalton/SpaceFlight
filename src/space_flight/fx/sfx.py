@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from direct.showbase import Audio3DManager
-from direct.task.Task import Task
+from direct.task import Task
 from panda3d.core import AudioSound, NodePath, VBase3
 
 from space_flight import DATAFILES_PATH

@@ -31,7 +31,7 @@ from space_flight.ui.input_context import (
 )
 
 if TYPE_CHECKING:
-    from direct.task.Task import Task
+    from direct.task import Task
 
     from space_flight.game.levels import LevelEntry
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
