@@ -337,10 +337,16 @@ class CollisionSystem:
             normal.normalize()
 
         # Was the target's shield still up when the shot landed? Fighters carry a
-        # scalar shield (capital ships instead stop hits at their bubble, handled
-        # in munition_into_shield). Read it BEFORE take_hit spends the shield, so a
-        # shielded hit sparks blue (ICE) rather than the hull's metal sparks.
-        target_shield_up = getattr(destructible, "shield_level", 0.0) > 0.0
+        # scalar shield. Read it BEFORE take_hit spends the shield, so a shielded
+        # hit sparks blue (ICE) rather than the hull's metal sparks. A major ship's
+        # shield is its bubble instead (its shield_level is the bubble's strength),
+        # stopping hits in munition_into_shield: a shot reaching its hull got past
+        # the bubble (fired from inside, or the bubble is down), so it strikes
+        # bare metal.
+        target_shield_up = (
+            getattr(destructible, "category", None) != "capital_ship"
+            and getattr(destructible, "shield_level", 0.0) > 0.0
+        )
 
         destructible.take_hit(damage=munition.power, normal_world_vector=normal)
 

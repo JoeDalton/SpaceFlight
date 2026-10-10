@@ -900,6 +900,24 @@ def test_hit_on_shielded_fighter_sparks_ice():
     assert spawned_spark_preset(system) is spark_fx.ICE
 
 
+def test_hull_hit_on_a_shielded_major_ship_sparks_metal():
+    """
+    A laser reaching a major ship's hull throws metal sparks even while its
+    bubble is up: its shield_level is the bubble's strength, which the shot got
+    past (regression: shots fired inside a star destroyer's bubble at its hull,
+    or at a hangar the hull collider overlaps, sparked blue).
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    major_ship = make_target_fighter(shield_level=40000.0)
+    major_ship.category = "capital_ship"
+    entry = make_destructible_entry(make_enemy_laser(), major_ship)
+
+    system.munition_into_destructible(entry)
+
+    assert spawned_spark_preset(system) is spark_fx.METAL
+
+
 def test_hit_on_bare_hull_sparks_metal():
     """
     A laser hitting an enemy fighter with no shield left throws metal sparks.
