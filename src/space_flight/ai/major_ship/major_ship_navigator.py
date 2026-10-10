@@ -19,19 +19,29 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger()
 
 
-class CapitalShipNavigator(GenericShipNavigator):
+class MajorShipNavigator(GenericShipNavigator):
     """
-    Capital ship navigator: engages by orbiting the target (see orbit_target)
+    Major ship navigator: engages by orbiting the target (see orbit_target).
+
+    A scripted capital ship uses it too, without collision avoidance: having
+    no tactician, it is only ever given the PATROL intent.
     """
 
     def __init__(
         self,
         game: FlightState,
         pawn: Pawn,
-        personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
+        personality: dict = Personality.ESCORT_SHIP_DEFAULT,
         debug: bool = False,
+        collision_avoidance: bool = True,
     ):
-        super().__init__(game=game, pawn=pawn, personality=personality, debug=debug)
+        super().__init__(
+            game=game,
+            pawn=pawn,
+            personality=personality,
+            debug=debug,
+            collision_avoidance=collision_avoidance,
+        )
 
     def navigate_intent(
         self, intent: Intent, target_dict: dict

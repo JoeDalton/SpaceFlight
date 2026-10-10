@@ -38,7 +38,7 @@ TRANSPORTS = WaveSpec(
     name="transports",
     ship_model="cr-90",
     size=3,
-    bot_type="capital_ship",
+    bot_type="major_ship",
     team=1,
     spawn_point=[0, -2000, 200],
     formation="arrowhead",
@@ -110,7 +110,7 @@ unknown field raises `TypeError`; a missing `size` for a single model, or a
 | `ship_model` | required | A pawn model, or `(model, count)` pairs for a mixed wave |
 | `size` | `None` | Number of ships; required for a single model, inferred for a mixed wave |
 | `spawn_point` | `None` | Leader's world position; may instead be given at spawn time |
-| `bot_type` | `"fighter"` | `"fighter"` or `"capital_ship"` |
+| `bot_type` | `"fighter"` | `"fighter"` or `"major_ship"` (the ship config picks an escort ship or a scripted capital ship) |
 | `team` | `2` | |
 | `spawn_orientation` | `(0, 0, 0, 1)` | Quaternion `(w, x, y, z)`, passed straight to Panda3D — the default is a 180° turn about z, **not** the identity |
 | `formation` | `None` | `"arrowhead"`, `"diamond"`, `"around_diamond"`; `None` spawns in a centred line |

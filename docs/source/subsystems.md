@@ -8,7 +8,7 @@ kill the targeting system and the turrets lose their aim assist and fire-rate
 boost; destroy the turrets and the ship stops shooting back.
 
 All of the subsystem code lives in
-[`src/space_flight/actors/capital_ship/`](../../src/space_flight/actors/capital_ship/).
+[`src/space_flight/actors/major_ship/`](../../src/space_flight/actors/major_ship/).
 This page is the guided tour; the per-class API is in the
 [code reference](apidocs/index.rst).
 
@@ -28,7 +28,7 @@ This page is the guided tour; the per-class API is in the
 
 ## The `SubSystem` base
 
-[`sub_system.py`](../../src/space_flight/actors/capital_ship/sub_system.py) defines
+[`sub_system.py`](../../src/space_flight/actors/major_ship/sub_system.py) defines
 the behaviour every subsystem shares:
 
 - **Destructible.** It owns a strength pool (`health` / `max_health`) and
@@ -62,8 +62,8 @@ the behaviour every subsystem shares:
 
 ## Passive modules: engine, hangar
 
-[`Engine`](../../src/space_flight/actors/capital_ship/engine.py) and
-[`Hangar`](../../src/space_flight/actors/capital_ship/hangar.py) are unused
+[`Engine`](../../src/space_flight/actors/major_ship/engine.py) and
+[`Hangar`](../../src/space_flight/actors/major_ship/hangar.py) are unused
 stubs: bare `SubSystem`s with no behaviour or visual, taking only
 `(game, parent)`. `CapitalShip` never spawns them — it reads only the
 `shield_generators`, `shield`, `targeting_systems`, `turrets` and
@@ -72,9 +72,9 @@ stubs: bare `SubSystem`s with no behaviour or visual, taking only
 ## Shield generator & shield
 
 A ship may mount **several**
-[`ShieldGenerator`](../../src/space_flight/actors/capital_ship/shield_generator.py)s
+[`ShieldGenerator`](../../src/space_flight/actors/major_ship/shield_generator.py)s
 (or **none**), and they all project **one shared**
-[`Shield`](../../src/space_flight/actors/capital_ship/shield.py), built and
+[`Shield`](../../src/space_flight/actors/major_ship/shield.py), built and
 owned by the ship. The generators are the *hardware*, the shield the *effect*:
 a ship with no generators gets no shield (a stray `shield` spec on it is
 ignored, with a warning).
@@ -117,7 +117,7 @@ Key behaviours:
 The **visuals are separated from the logic**: the mesh (sphere / capsule /
 shared model), the animated shader and its uniforms, the impact flashes and the
 fluid retraction live in
-[`ShieldModel`](../../src/space_flight/actors/capital_ship/shield_model.py)
+[`ShieldModel`](../../src/space_flight/actors/major_ship/shield_model.py)
 (which also carries the `make_capsule` mesh builder for tube shields). `Shield`
 keeps the game logic (strength, collision, lifecycle, the death/appearance
 state machine) and drives the model each frame. The collider is built from the
@@ -135,7 +135,7 @@ to the world root so it can play out.
 
 ## Targeting system
 
-The [`TargetingSystem`](../../src/space_flight/actors/capital_ship/targeting_system.py)
+The [`TargetingSystem`](../../src/space_flight/actors/major_ship/targeting_system.py)
 is fire control: while alive it grants **every turret on the same ship**
 auto-aim (shots lead the target, tuned by its `auto_aim` config over the bots'
 [gameplay settings](global_architecture.md#gameplay_settingspy--difficulty),
@@ -146,7 +146,7 @@ turrets revert to unassisted fire at their base rate.
 
 ## Tracking mounts: turrets & the tractor beam
 
-A [`TrackingMount`](../../src/space_flight/actors/capital_ship/tracking_mount.py) is a
+A [`TrackingMount`](../../src/space_flight/actors/major_ship/tracking_mount.py) is a
 subsystem that **swivels in yaw and pitch to track a target**: the shared base
 of the laser turret and the tractor beam. Everything about *aiming* lives in the
 mount — the mounting frame, the yaw/pitch state and rate limits, the swivelling
@@ -157,13 +157,13 @@ A tracking mount is driven by a **Bot**: the Bot is its `parent` while
 `mounted_on` is the ship it sits on. Its AI picks a prey and steers the barrel,
 publishing a lead solution (`aim_direction`, `target_distance_m`) that
 `_operate()` acts on. Its swivelling geometry is the
-[`TurretModel`](../../src/space_flight/actors/capital_ship/turret_model.py).
+[`TurretModel`](../../src/space_flight/actors/major_ship/turret_model.py).
 
-- **[`Turret`](../../src/space_flight/actors/capital_ship/turret.py)** adds laser
+- **[`Turret`](../../src/space_flight/actors/major_ship/turret.py)** adds laser
   cannons and the fire decision: it fires when its barrel is aligned with where
   the prey is heading and the prey is in range, boosted by a living targeting
   system.
-- **[`TractorBeamProjector`](../../src/space_flight/actors/capital_ship/tractor_beam.py)**
+- **[`TractorBeamProjector`](../../src/space_flight/actors/major_ship/tractor_beam.py)**
   grabs a prey and reels it in. When a prey enters its grab cone within range it
   locks on and applies two forces each frame: a drag opposing the prey's
   velocity relative to the projector's ship, and a light attraction. The **cone
@@ -173,8 +173,8 @@ publishing a lead solution (`aim_direction`, `target_distance_m`) that
   come from its config, grab timing from `Personality.TRACTOR_BEAM_DEFAULT`.
 
 > **Two `TractorBeamProjector`s.** Besides the functional tracking mount
-> ([`tractor_beam.py`](../../src/space_flight/actors/capital_ship/tractor_beam.py)),
-> [`tractor_beam_projector.py`](../../src/space_flight/actors/capital_ship/tractor_beam_projector.py)
+> ([`tractor_beam.py`](../../src/space_flight/actors/major_ship/tractor_beam.py)),
+> [`tractor_beam_projector.py`](../../src/space_flight/actors/major_ship/tractor_beam_projector.py)
 > holds a bare, unused `SubSystem` stub of the same name. Use the
 > tracking-mount version.
 
@@ -182,4 +182,4 @@ publishing a lead solution (`aim_direction`, `target_distance_m`) that
 
 Every subsystem module, including the turret and tractor-beam mounts and their
 `TurretModel`, sits under
-[`src/space_flight/actors/capital_ship/`](../../src/space_flight/actors/capital_ship/).
+[`src/space_flight/actors/major_ship/`](../../src/space_flight/actors/major_ship/).

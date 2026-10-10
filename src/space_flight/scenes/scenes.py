@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 from panda3d.core import LVecBase3f, Vec3
 
-from space_flight import DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.cloud import Clouds
@@ -302,26 +301,10 @@ class SceneLavaPlanet(Scene):
         self.planet = Planet2D(game=self.game, type="lava")
         yield "planet"
 
-        # Star destroyer
-        self.isd = self.game.root_node.attachNewNode("isd_instance")
-        isd_path = (
-            DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
-        )
-        self.game.app.asset_manager.instantiate_3d_model_to_node(
-            path=isd_path,
-            parent_node=self.isd,
-        )
-        self.isd.reparent_to(self.game.root_node)
-        self.isd.set_pos(0, 1000, 50)
-        self.isd.setP(90)
-        self.isd.set_scale(1)
-        yield "ISD"
-
     def clean(self):
         """
         Cleans the SceneLavaPlanet
         """
-        self.isd.removeNode()
         self.rotating_asteroid_field.clean()
         self.rotating_asteroid_field = None
         self.big_rotating_asteroid_field.clean()

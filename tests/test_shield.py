@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from space_flight.actors.capital_ship.shield import (
+from space_flight.actors.major_ship.shield import (
     _APPEARING,
     _DEATH_DURATION_S,
     _DOWN,
@@ -476,7 +476,7 @@ def test_get_health_positive_while_alive():
 
 def test_build_geometry_rejects_unknown_shape():
     """An unrecognised primitive shape type is rejected before any build work."""
-    from space_flight.actors.capital_ship.shield_model import ShieldModel
+    from space_flight.actors.major_ship.shield_model import ShieldModel
 
     with pytest.raises(ValueError):
         ShieldModel(

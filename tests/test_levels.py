@@ -48,7 +48,7 @@ def test_every_level_has_an_upfront_and_a_mission():
 def test_dev_mission_spawns_the_frigate(game, spawned):
     m = start(game, dev_mission)
     advance(game, m, 3)
-    assert len(live(game, spawned, "enemy_frigate")) == 1
+    assert len(live(game, spawned, "allied_frigate")) == 1
 
 
 # ---------------------------------------------------------------------------

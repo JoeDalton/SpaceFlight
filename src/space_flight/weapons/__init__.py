@@ -30,8 +30,8 @@ from panda3d.core import LVector3, NodePath, Point3, TransparencyAttrib
 from space_flight import DEBUG_DELETION
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.turret import Turret
     from space_flight.actors.fighter import Fighter
+    from space_flight.actors.major_ship.turret import Turret
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()

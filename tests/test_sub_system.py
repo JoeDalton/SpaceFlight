@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from panda3d.core import NodePath
 
-from space_flight.actors.capital_ship.sub_system import SubSystem
+from space_flight.actors.major_ship.sub_system import SubSystem
 
 
 def make_game_and_parent(team: int = 2):

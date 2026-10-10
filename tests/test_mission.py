@@ -491,6 +491,37 @@ def test_follow_creates_a_formation_if_the_wave_has_none(game, mission, spawned)
     assert len(wave.formation.ship_ids) == WAVE.size + 1
 
 
+def test_set_targets_skips_scripted_capital_ships(mission, spawned):
+    capital_ships = mission.spawn(
+        WaveSpec(name="isd", ship_model="isd", size=1, spawn_point=[0, 0, 0])
+    )
+    defenders = mission.spawn(
+        WaveSpec(name="def", ship_model="x", size=1, spawn_point=[0, 0, 0])
+    )
+    run_jobs(mission)
+    capital_ships.pawns()[0].parent.tactician = None  # as a scripted capital ship
+    capital_ships.set_targets(defenders)  # must not raise
+    assert capital_ships.pawns()[0].parent.tactician is None
+
+
+def test_follow_leaves_scripted_capital_ships_out(game, mission, spawned):
+    spec = WaveSpec(
+        name="group",
+        ship_model="x",
+        size=2,
+        spawn_point=[0, 0, 0],
+        waypoints=[[0, 100, 0]],
+    )
+    wave = mission.spawn(spec)
+    run_jobs(mission)
+    capital_ship, fighter = wave.pawns()
+    capital_ship.parent.tactician = None  # as a scripted capital ship
+    wave.follow(game.player)
+    assert wave.formation.ship_ids == [game.player.pawn.id, fighter.id]
+    assert capital_ship.parent.navigator.waypoints != []
+    assert fighter.parent.navigator.waypoints == []
+
+
 def test_set_team(mission, spawned):
     wave = mission.spawn(WAVE)
     run_jobs(mission)

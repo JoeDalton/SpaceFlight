@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 
-class CapitalShipPilot(GenericShipPilot):
+class MajorShipPilot(GenericShipPilot):
     """
     A class to hold the autopilot of capital ships
     """
@@ -22,7 +22,7 @@ class CapitalShipPilot(GenericShipPilot):
         self,
         game: FlightState,
         pawn: Pawn,
-        personality: dict = Personality.CAPITAL_SHIP_DEFAULT,
+        personality: dict = Personality.ESCORT_SHIP_DEFAULT,
     ):
         super().__init__(game=game, pawn=pawn, personality=personality)
 

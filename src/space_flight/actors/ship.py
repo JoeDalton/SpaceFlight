@@ -87,6 +87,18 @@ def turn_rate_scale(throttle: float) -> float:
     )
 
 
+def load_ship_configuration(ship_type: str) -> dict:
+    """
+    Load a ship type's configuration file.
+
+    :param ship_type: The ship type, i.e. its configuration directory name
+    :return: The configuration dictionary
+    """
+    filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
+    with open(filepath, "r") as f:
+        return yaml.safe_load(f)
+
+
 class Ship(Pawn):
     """
     A Ship has 10 state variables
@@ -111,11 +123,13 @@ class Ship(Pawn):
         ini_speed: np.ndarray = np.zeros(3),
         is_cockpit: bool = True,
         team: int = 0,
+        conf: dict | None = None,
     ):
         super().__init__(game=game, parent=parent, team=team)
 
-        # Load configuration
-        self.conf = self._load_configuration(ship_type)
+        # Configuration: the ship type's file, unless given (e.g. by ordnance,
+        # configured elsewhere)
+        self.conf = conf if conf is not None else load_ship_configuration(ship_type)
         # Set a low-pass filter time to emulate physical delay in
         # thrust and rotational rates
         self.inputs_filter_time_s = self.conf["inputs_filter_time_s"]
@@ -267,18 +281,6 @@ class Ship(Pawn):
         """
         if self.sound is not None:
             self.sound.play()
-
-    def _load_configuration(self, ship_type: str) -> dict:
-        """
-        Load the ship type's configuration. Overridden by pawns configured
-        elsewhere (e.g. ordnance).
-
-        :param ship_type: The ship type, i.e. its configuration directory name
-        :return: The configuration dictionary
-        """
-        filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
-        with open(filepath, "r") as f:
-            return yaml.safe_load(f)
 
     def _compute_max_speed_mps(self) -> float:
         """

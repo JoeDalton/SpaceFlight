@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from panda3d.core import Point3, Vec3
 
-from space_flight.actors.capital_ship.shield_model import ShieldModel
 from space_flight.actors.destructibles import Destructible
+from space_flight.actors.major_ship.shield_model import ShieldModel
 from space_flight.game.collisions import (
     CollisionLayers,
     attach_collision_sphere,
@@ -17,8 +17,8 @@ from space_flight.game.collisions import (
 from space_flight.utils.state_machine import Cooldown, StateMachine
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship import CapitalShip
-    from space_flight.actors.capital_ship.shield_generator import ShieldGenerator
+    from space_flight.actors.major_ship.major_ship import MajorShip
+    from space_flight.actors.major_ship.shield_generator import ShieldGenerator
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
@@ -43,7 +43,7 @@ class Shield(Destructible):
     """
     A protective bubble projected by a *group* of :class:`ShieldGenerator`\\ s.
 
-    One shield is shared by all of a capital ship's shield generators; the
+    One shield is shared by all of a major ship's shield generators; the
     fraction alive / initial generators scales its maximum strength and
     regeneration rate (**pro rata** perks).
 
@@ -82,7 +82,7 @@ class Shield(Destructible):
     def __init__(
         self,
         game: FlightState,
-        ship: CapitalShip,
+        ship: MajorShip,
         generators: Iterable[ShieldGenerator],
         health: float = 4000.0,
         regen_rate: float = 0.0,

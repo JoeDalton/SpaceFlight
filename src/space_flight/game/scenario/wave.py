@@ -33,7 +33,8 @@ class WaveSpec:
         the counts for a mixed wave
     :param spawn_point: World position of the leader; may instead be given
         at spawn time (e.g. when it depends on the player's position)
-    :param bot_type: "fighter" or "capital_ship"
+    :param bot_type: "fighter" or "major_ship" (the ship config then picks an
+        escort ship or a scripted capital ship)
     :param team: The bots' team
     :param spawn_orientation: Quaternion (w, x, y, z), passed straight to
         Panda3D; the default is a 180 degree turn about z, not the identity
@@ -235,7 +236,8 @@ class WaveHandle:
         former leader and wingmen shift down one slot each.
 
         Members drop their routes, so none patrols a stale one if it ever
-        takes the lead.
+        takes the lead. Scripted capital ships (no tactician) cannot fly in
+        formation: they are left out and keep their routes.
 
         :param leader: See :func:`pawns_of` (typically ``game.player``); its
             first live pawn leads
@@ -249,6 +251,8 @@ class WaveHandle:
                 shape=self.spec.formation or "arrowhead",
             )
         for pawn in self.pawns():
+            if pawn.parent.tactician is None:
+                continue
             self.formation.add_ship(ship=pawn)
             pawn.parent.navigator.clear_waypoints()
         self.formation.add_ship(ship=leader_pawns[0], leader=True)
@@ -269,7 +273,10 @@ class WaveHandle:
 
 
 def _add_targets(bot: Bot, who: Any):
-    """Make every live pawn of who a primary target of bot."""
+    """Make every live pawn of who a primary target of bot (a no-op for a
+    scripted capital ship: it has no tactician to pick targets)."""
+    if bot.tactician is None:
+        return
     bot.tactician.primary_target_ids.extend(pawn.id for pawn in pawns_of(who))
 
 

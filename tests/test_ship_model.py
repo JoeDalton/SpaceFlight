@@ -68,6 +68,7 @@ def make_ship_model(mock_game, ship_type: str, is_cockpit: bool) -> ShipModel:
         ("tie-fighter", False, np.array([3.7, 0.0, 6.5])),
         ("gr-75", False, np.array([0.0, 0.0, 0.0])),
         ("cr-90", False, np.array([0.0, 0.0, 0.0])),
+        ("isd", False, np.array([0.0, -700.0, 0.0])),
     ],
 )
 def test_ship_model_offset_per_type(mock_game, ship_type, is_cockpit, expected_offset):
@@ -113,10 +114,10 @@ def test_ship_model_unknown_type_raises(mock_game):
         make_ship_model(mock_game, ship_type="unknown-ship", is_cockpit=False)
 
 
-@pytest.mark.parametrize("capital_ship_type", ["gr-75", "cr-90"])
+@pytest.mark.parametrize("capital_ship_type", ["gr-75", "cr-90", "isd"])
 def test_ship_model_capital_ship_cockpit_raises(mock_game, capital_ship_type):
     """
-    Capital-ship types do not support a cockpit view and raise
+    Major-ship types do not support a cockpit view and raise
     NotImplementedError when is_cockpit=True.
     """
     with pytest.raises(NotImplementedError):

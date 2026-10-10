@@ -66,8 +66,11 @@ Key responsibilities:
 - Owns its engine sound (interior loop for the player's cockpit, 3D-attached
   exterior loop for everyone else; none if its config has none) and its
   `ShipModel`.
+- **Configuration.** Read from `models/ships/<ship_type>/configuration.yaml`
+  (`load_ship_configuration`), unless given through the `conf` argument (as
+  ordnance does).
 - **Hooks for pawns that fly like ships but are not quite ships** (ordnance):
-  `_load_configuration`, `_compute_max_speed_mps`, `_build_model`,
+  `_compute_max_speed_mps`, `_build_model`,
   `_build_damage_fx`, `_turn_rate_scale`, and `_compute_attitude_derivative`
   (the orientation derivative and body axes, shared by `compute_derivatives`).
 
@@ -76,7 +79,9 @@ Key responsibilities:
 | Class | File | Role |
 |-------|------|------|
 | `Fighter` | [`fighter.py`](../../src/space_flight/actors/fighter.py) | Quick, manoeuvrable — forward cannons, auto-aim, its own regenerating shield |
-| `CapitalShip` | [`capital_ship/__init__.py`](../../src/space_flight/actors/capital_ship/__init__.py) | Slow, heavy — built from mounted subsystems instead of built-in weapons |
+| `MajorShip` | [`major_ship/major_ship.py`](../../src/space_flight/actors/major_ship/major_ship.py) | Slow, heavy — built from mounted subsystems instead of built-in weapons. Base of the two below; the ship config's `ship_class` picks one |
+| `EscortShip` | [`major_ship/escort_ship.py`](../../src/space_flight/actors/major_ship/escort_ship.py) | Manoeuvrable major ship (transport, frigate, corvette), with the full AI stack |
+| `CapitalShip` | [`major_ship/capital_ship.py`](../../src/space_flight/actors/major_ship/capital_ship.py) | Scripted star destroyer: no tactician, no collision avoidance, always patrols |
 
 ### `Fighter`
 
@@ -286,7 +291,8 @@ pawn class and the matching AI trio:
 | `bot_type` | Pawn | AI trio |
 |------------|------|---------|
 | `"fighter"` | `Fighter` | `FighterTactician` / `FighterNavigator` / `FighterPilot` |
-| `"capital_ship"` | `CapitalShip` | `CapitalShipTactician` / `CapitalShipNavigator` / `CapitalShipPilot` |
+| `"major_ship"`, config `ship_class: escort` | `EscortShip` | `MajorShipTactician` / `MajorShipNavigator` / `MajorShipPilot` |
+| `"major_ship"`, config `ship_class: capital` | `CapitalShip` | No tactician (always patrols) / `PatrolNavigator` (no collision avoidance) / `MajorShipPilot` with `Personality.CAPITAL_SHIP_DEFAULT` |
 | `"turret"` | `Turret` (subsystem, mounted via `parent_object`) | `TrackingMountTactician` / `...Navigator` / `...Pilot` |
 | `"tractor_beam"` | `TractorBeamProjector` (subsystem) | Same tracking-mount trio, with `Personality.TRACTOR_BEAM_DEFAULT` |
 
@@ -349,5 +355,5 @@ and `Trihedron` live under
 under [`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
 `Ordnance` pawn and its controller in `actors/ordnance.py`);
 `CapitalShip` and everything it is built from under
-[`actors/capital_ship/`](../../src/space_flight/actors/capital_ship/) (see
+[`actors/major_ship/`](../../src/space_flight/actors/major_ship/) (see
 [Capital-ship subsystems](subsystems.md)).

@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import numpy as np
 from panda3d.core import NodePath
 
-from space_flight.actors.capital_ship.sub_system import SubSystem
-from space_flight.actors.capital_ship.targeting_system import TargetingSystem
+from space_flight.actors.major_ship.sub_system import SubSystem
+from space_flight.actors.major_ship.targeting_system import TargetingSystem
 
 
 def make_game_and_ship(team: int = 2):

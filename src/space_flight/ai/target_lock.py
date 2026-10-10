@@ -9,8 +9,8 @@ from space_flight import DEBUG_DELETION
 from space_flight.utils.state_machine import StateMachine
 
 if TYPE_CHECKING:
-    from space_flight.actors.capital_ship.turret import Turret
     from space_flight.actors.fighter import Fighter
+    from space_flight.actors.major_ship.turret import Turret
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
