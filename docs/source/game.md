@@ -185,9 +185,15 @@ entry into game effects.
   - **Munition hits** (`munition_into_destructible`, `munition_into_terrain`,
     `munition_into_shield`, shared by lasers and ordnance) apply damage, spend
     the munition (`on_impact()`), and trigger sparks and sound. A shield only blocks a
-    munition crossing *inward* — one fired from inside passes through —
-    decided by the sign of the munition's velocity dotted with the shield's
-    surface normal.
+    munition fired from *outside* it — one fired from inside passes through —
+    decided by whether the munition's launch point (`launch_position`, carried
+    by lasers and ordnance) lies inside the bubble at the time of the hit
+    (`Shield.contains`). Neither the hit's surface normal nor the munition's
+    current position can tell: panda3d reports a munition lying wholly inside
+    a bubble as a collision too, every frame, with an outward normal, and
+    collision events are handled on the next frame, once the munition has
+    moved on. The launch point does not move, and a shielded ship is slow next
+    to a munition, so its bubble has barely moved since the launch.
   - **Flares** (`ordnance_into_flare`): ordnance hitting a flare of another
     team is spent, and so is the flare.
   - **Ship physical hits** (`ship_into_*` / `ship_again_*` pairs, against

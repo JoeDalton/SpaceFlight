@@ -109,10 +109,22 @@ Key behaviours:
 - **Regeneration cooldown.** Regeneration starts 10 s after the last absorbed
   hit, **doubled** (20 s) while the shield is down.
 - **Direction-dependent absorption.** A munition fired from *outside* is
-  absorbed; one fired from *inside* passes through, so a ship sheltering in its
-  own bubble can still shoot out.
+  absorbed; one fired from *inside* passes through, so a ship sheltering in the
+  bubble can still shoot out (and at the hull). It is decided on the munition's
+  launch point: `Shield.contains(point)` tells whether a world point lies
+  inside the bubble as it is now. The point is first expressed in the shield's
+  own frame (so the test follows the ship as it moves and turns), then:
+  - **sphere**: within `radius_m` of the ship's origin;
+  - **tube** (capsule): within `radius_m` of its axis segment, the nearest axis
+    point being the point's projection on the axis, clamped between `point_a`
+    and `point_b` (so past either end the test becomes the end cap's sphere);
+  - **shared model**: never inside (no analytic shape; its baked one-sided
+    polygons are only hit from outside anyway). Munition hits against a model
+    bubble are still to be verified in game: no ship uses one yet.
 - **Health-driven look.** The tint goes from light blue at full strength,
-  through violet, to pink when empty; hits leave a localised flash.
+  through violet, to pink when empty; hits leave a localised flash of the same
+  world size (`_IMPACT_RADIUS_M`, 20 m) on any bubble, a frigate's or a star
+  destroyer's.
 
 The **visuals are separated from the logic**: the mesh (sphere / capsule /
 shared model), the animated shader and its uniforms, the impact flashes and the

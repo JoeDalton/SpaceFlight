@@ -153,7 +153,10 @@ Driven by
     morphing, domain-warped `smoothField`, plus a fresnel rim, a health colour
     ramp (blue → violet → pink as `uHealth` drops) and per-impact flashes
     (`impactGlow`, one radial falloff per hit in `uImpacts`, dropped after
-    `uImpactLife`).
+    `uImpactLife`). The flash radius `uImpactRadius` is a fixed world size
+    (`_IMPACT_RADIUS_M`) converted to the geometry's local units, so a hit
+    leaves the same mark on any bubble; the pattern and death scales instead
+    follow the bubble's size.
   - **Death/appearance animation** — "fluid retracting into random points" —
     is a per-fragment mask over the living look, driven by `uDeath`, which
     Python ramps 0 → 1 to die or 1 → 0 to reappear (no mesh changes). Material

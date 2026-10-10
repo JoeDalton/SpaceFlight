@@ -463,13 +463,15 @@ class CollisionSystem:
 
         A munition fired from *outside* the shield impacts it (and is absorbed); a
         munition fired from *inside* passes straight through, so a ship sheltering
-        in its own bubble can still shoot out. The two are told apart by the sign
-        of the munition's velocity dotted with the shield's outward surface normal:
+        in the bubble can still shoot out (and at the hull).
 
-        - crossing inward (dot < 0) -> the munition came from outside -> blocked,
-        - anything else (dot >= 0): a munition exiting, a grazing contact, or the
-          degenerate zero normal panda3d returns for a segment that started
-          inside the solid -> it passes through.
+        The two are told apart by the munition's launch point: inside the bubble
+        (as it is now) -> it passes through. Panda3d also reports a munition
+        lying wholly inside the bubble, every frame, with a normal that tells
+        nothing about where it came from, and the event is handled a frame
+        late, once the munition has moved on: the launch point is the one thing
+        that does not move. The bubble's ship is slow next to a munition, so it
+        has barely moved since the launch.
 
         :param entry: Panda3d's description of the collision
         """
@@ -489,7 +491,7 @@ class CollisionSystem:
             return
 
         # A turret sitting inside its ship's bubble must not hit that bubble: the
-        # crossing-direction rule below already lets a shot fired from inside pass,
+        # launch-point rule below already lets a shot fired from inside pass,
         # but skip the emitter's own vehicle outright to be unambiguous.
         if owners_share_vehicle(munition.origin_ship, shield):
             return
@@ -498,13 +500,14 @@ class CollisionSystem:
         if not shield.is_enabled:
             return
 
-        # Block only munitions crossing inward (see docstring)
+        # A munition fired from inside the bubble passes through (see docstring)
+        if shield.contains(munition.launch_position):
+            return
+
         normal = entry.getSurfaceNormal(self.game.root_node)
         # Normalize: a scaled parent can give a non-unit normal.
         if not normal.almostEqual(Vec3(0, 0, 0)):
             normal.normalize()
-        if np.dot(munition.speed, normal) >= 0.0:
-            return  # exiting or originating inside => pass through
 
         if DEBUG_COLLISION:
             LOGGER.info("munition into shield")
