@@ -209,14 +209,14 @@ def test_clean_removes_nodes_and_marks_dead():
     sub_system.game = MagicMock()
     sub_system.game.method_lists = {}
     collision_np = MagicMock()
-    sub_system.collision_sphere_np = collision_np
+    sub_system.collision_np = collision_np
     sub_system.model = MagicMock()
     sub_system.node = MagicMock()
 
     sub_system.clean()
 
     collision_np.remove_node.assert_called_once()
-    assert sub_system.collision_sphere_np is None
+    assert sub_system.collision_np is None
     assert sub_system.model is None
     assert sub_system.node is None
     assert sub_system.is_dead is True
@@ -259,3 +259,43 @@ def test_clean_deregisters_from_interactions():
 
     interactions.remove_actor.assert_called_once()
     assert sub_system.is_clean is True
+
+
+# ---------------------------
+# Box collider
+# ---------------------------
+
+
+def test_sub_system_collides_as_a_sphere_by_default():
+    """Without half-extents, the collider is a sphere of hit_box_radius_m."""
+    from panda3d.core import CollisionSphere
+
+    game, parent = make_game_and_parent()
+
+    sub_system = SubSystem(game=game, parent=parent, hit_box_radius_m=6.0)
+
+    solid = sub_system.collision_np.node().getSolid(0)
+    assert isinstance(solid, CollisionSphere)
+    assert solid.getRadius() == pytest.approx(6.0)
+    assert sub_system.half_extents_m is None
+
+
+def test_sub_system_can_collide_as_a_box():
+    """
+    Given half-extents, the collider is a box of that size centred on the
+    mounting point, and hit_box_radius_m becomes its bounding radius.
+    """
+    from panda3d.core import CollisionBox
+
+    game, parent = make_game_and_parent()
+
+    sub_system = SubSystem(
+        game=game, parent=parent, hit_box_radius_m=6.0, half_extents_m=[3.0, 4.0, 12.0]
+    )
+
+    solid = sub_system.collision_np.node().getSolid(0)
+    assert isinstance(solid, CollisionBox)
+    np.testing.assert_allclose(solid.getMin(), [-3.0, -4.0, -12.0])
+    np.testing.assert_allclose(solid.getMax(), [3.0, 4.0, 12.0])
+    assert sub_system.hit_box_radius_m == pytest.approx(13.0)
+    assert sub_system.collision_np.getPythonTag("owner") is sub_system

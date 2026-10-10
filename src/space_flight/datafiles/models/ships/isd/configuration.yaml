@@ -23,7 +23,7 @@ lift_inefficiency: 0.0  # = 1/(pi * AR * e)
 health: 60000.0
 # Placeholder hull sphere, centred on the ship origin: it only covers the
 # mid-hull (bow and stern are not collidable), and is deliberately small enough
-# for the ventral hangar's launch point (~145 m from the origin) to lie outside
+# for the ventral hangar's launch point (~150 m from the origin) to lie outside
 # it. TODO proper hull collider (capsule/mesh)
 hit_box_radius_m: 120.0
 
@@ -72,6 +72,24 @@ sub_systems:
         acquisition_cone_angle_deg: 30.0
         max_assist_angle_deg: 8.0
         max_assist_distance_m: 2000.0
+
+  # Hangars: bays launching fighter bots on request (launch only, no recovery).
+  # The bay is a box (relative_position = its centre, half_extents_m along the
+  # ship axes); fighters leave it through the face launch_direction points out
+  # of, at launch_speed_mps relative to the ship, launch_interval_s apart.
+  # What a hangar holds (its stock of each fighter type) is up to the level.
+  hangars:
+    - relative_position: [0.0, 131.0, -30.0]  # the ventral bay
+      half_extents_m: [90.0, 169.0, 30.0]
+      health: 5000.0
+      explosion_scale: 80.0
+      group_size: 3  # fighters per launch request, by default
+      launch_interval_s: 1.5
+      max_active: 6  # of its fighters alive at once
+      launch_direction: [0.0, 0.0, -1.0]  # out of the bay's floor
+      launch_speed_mps: 30.0
+      launch_margin_m: 5.0
+      formation: arrowhead
 
   # Bot-controlled turrets in the side trenches (placeholder model and
   # positions); base_position/orientation are ship-local.

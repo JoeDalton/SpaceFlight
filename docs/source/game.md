@@ -202,7 +202,10 @@ entry into game effects.
     forces, which are too stiff. In `ship_into_subsystem_pushback` the hit
     subsystem is rigid and never itself pushed: momentum is exchanged between
     the incoming ship and the subsystem's **parent ship** (split by mass),
-    while the collision *damage* goes to the subsystem alone.
+    while the collision *damage* goes to the subsystem alone. A box subsystem
+    (a hangar bay) works the same, its normal read from the box face; for a
+    laser struck on some faces of a box panda3d reports a zero normal, which
+    `munition_into_destructible` replaces with the face's (`_box_face_normal`).
     Collision damage is `COLLISION_DAMAGE_FACTOR` times the squared impact
     speed along the contact normal (`collision_damage`). The player's ship
     alone has it scaled by its `collision_damage_multiplier`
@@ -212,7 +215,7 @@ entry into game effects.
   - **`sensor_into_obstacle`** records the hit (normal + point) onto the
     sensor for `CollisionSensor.compute_repulsion` (see [docs/ai.md](ai.md))
     to consume later in the same frame.
-- **`attach_collision_sphere` / `_tube` / `_segment` / `_plane`** are the
+- **`attach_collision_sphere` / `_tube` / `_box` / `_segment` / `_plane`** are the
   factory functions every actor uses to build a collider: they resolve the
   from/into masks for a collider type, attach the Panda3D collision solid,
   tag it with an `owner` python-tag (read back by every handler above), and

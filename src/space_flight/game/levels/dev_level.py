@@ -71,6 +71,13 @@ ENEMY_CAPITAL_SHIP = WaveSpec(
 )
 
 # A squadron of fighters, for CPU load profiling.
+# What the star destroyer's hangar holds: fighters of each type
+ENEMY_CAPITAL_SHIP_HANGAR_STOCK = {
+    "tie-fighter": 12,
+    "tie-interceptor": 6,
+    "tie-bomber": 6,
+}
+
 ENEMY_FIGHTER_SQUADRON = WaveSpec(
     name="enemy_fighter_squadron",
     ship_model="tie-fighter",
@@ -136,6 +143,16 @@ def dev_mission(m: Mission) -> Iterator[None]:
     capital_ship = m.spawn(ENEMY_CAPITAL_SHIP)
     frigate = m.spawn(ALLIED_FRIGATE, target=[capital_ship])
     print(frigate)
+    # TEMPORARY (#83 phase 2): launch fighters straight from the star
+    # destroyer's hangar, until the wave scripting API (phase 3) replaces this
+    yield from m.wait(5)
+    hangar = capital_ship.pawns()[0].hangars[0]
+    hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
+    targets = [pawn.id for pawn in frigate.pawns()]
+    m.hud("TIEs launching")
+    hangar.launch("tie-fighter", 3, primary_target_ids=targets)
+    yield from m.wait(20)
+    hangar.launch("tie-bomber", 6, primary_target_ids=targets)
     # m.spawn(ENEMY_FIGHTER_SQUADRON)
     # Targets are resolved as each Y-wing spawns: let the big ships spawn first
     # yield from m.wait(1)

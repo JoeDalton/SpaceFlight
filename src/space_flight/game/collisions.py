@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, TypeAlias
 import numpy as np
 from panda3d.core import (
     BitMask32,
+    CollisionBox,
     CollisionEntry,
     CollisionHandlerEvent,
     CollisionHandlerQueue,
@@ -116,7 +117,7 @@ class CollisionLayers:
     # A shield bubble is a barrier only munitions interact with: ships, sensors and
     # other destructibles fly straight through it (their from-masks lack SHIELD),
     # and it never initiates collisions itself. Whether a munition is blocked or
-    # passes is decided in munition_into_shield by the crossing direction.
+    # passes is decided in munition_into_shield, from its launch point.
     SHIELD_FROM = BitMask32.allOff()
     SHIELD_INTO = SHIELD
 
@@ -326,6 +327,10 @@ class CollisionSystem:
 
         # Apply damage to the destructible object
         normal = entry.getSurfaceNormal(self.game.root_node)
+        if normal.almostEqual(Vec3(0, 0, 0)) and isinstance(
+            entry.getInto(), CollisionBox
+        ):
+            normal = self._box_face_normal(entry)
         # Normalize the normal vector because it can have a non-unit length if a parent
         # object was scaled. It's dumb, but it is what it is...
         if not normal.almostEqual(Vec3(0, 0, 0)):
@@ -456,6 +461,30 @@ class CollisionSystem:
             LOGGER.info("ordnance into flare")
         ordnance.on_impact()
         flare.on_impact()
+
+    def _box_face_normal(self, entry: CollisionEntry) -> Vec3:
+        """
+        The outward normal of the box face a collision point lies on, in world
+        space. Panda3d reports a zero normal for a segment (a laser) struck on
+        some faces of a box, its hit point lying a float rounding off the face.
+
+        :param entry: Panda3d's description of a collision into a CollisionBox
+        :return: The world-space face normal
+        """
+        box = entry.getInto()
+        into_np = entry.getIntoNodePath()
+        # The hit point in box units: the face it lies on is the axis where it
+        # reaches out furthest (|coordinate| close to 1)
+        offset = entry.getSurfacePoint(into_np) - box.getCenter()
+        half_extents = (box.getMax() - box.getMin()) * 0.5
+        scaled = [
+            offset[i] / half_extents[i] if half_extents[i] > 0 else 0.0
+            for i in range(3)
+        ]
+        axis = max(range(3), key=lambda i: abs(scaled[i]))
+        local_normal = Vec3(0, 0, 0)
+        local_normal[axis] = 1.0 if scaled[axis] >= 0.0 else -1.0
+        return self.game.root_node.getRelativeVector(into_np, local_normal)
 
     def munition_into_shield(self, entry: CollisionEntry):
         """
@@ -1113,6 +1142,60 @@ def attach_collision_tube(
             point_b[1],
             point_b[2],
             radius,
+        )
+    )
+    # Define masks
+    cnode.setFromCollideMask(from_mask_bit)
+    cnode.setIntoCollideMask(into_mask_bit)
+    # Attach to parent node and object
+    node_path = parent_node.attachNewNode(cnode)
+    node_path.setPythonTag("owner", parent_object)
+    # Register in collision handler
+    if add_to_collision_handler:
+        game.collision_system.traverser.addCollider(
+            node_path, game.collision_system.handler
+        )
+
+    if DEBUG_COLLISION:
+        node_path.show()
+    return node_path
+
+
+def attach_collision_box(
+    game: FlightState,
+    name: str,
+    center: list[float],
+    half_extents: list[float],
+    collider_type: str,
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
+) -> NodePath:
+    """
+    Attach an axis-aligned collision box (in the parent node's frame) to an
+    existing node.
+
+    :param game: The game stage
+    :param name: The name of the collision box
+    :param center: The box centre (x, y, z), in the parent node's frame
+    :param half_extents: The box half-sizes along x, y and z
+    :param collider_type: The nature of the collider, defines from and into bitmasks
+    :param parent_node: Its parent_node
+    :param parent_object: Its parent_object
+    :return: The node path to the collision box
+    """
+    (
+        from_mask_bit,
+        into_mask_bit,
+        add_to_collision_handler,
+    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
+
+    cnode = CollisionNode(name)
+    cnode.addSolid(
+        CollisionBox(
+            LPoint3(center[0], center[1], center[2]),
+            half_extents[0],
+            half_extents[1],
+            half_extents[2],
         )
     )
     # Define masks

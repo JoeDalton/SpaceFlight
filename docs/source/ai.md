@@ -195,7 +195,7 @@ roll-to-target).
 [`tracking_mount/`](../../src/space_flight/ai/tracking_mount/) is the AI for
 anything that swivels in place — `Turret` and `TractorBeamProjector`, both
 mounted subsystems of a capital ship (see
-[Capital-ship subsystems](subsystems.md)):
+[Major-ship subsystems](subsystems.md)):
 
 - **`TrackingMountTactician`**: engage the best prey above
   `min_engagement_score`, otherwise `IDLE`. No evade/disengage/regroup — a
@@ -307,7 +307,9 @@ distance, unit direction, relative velocity and forward alignment, and flags in
 `interact` the pairs that can fight: different non-neutral teams within
 `INTERACT_MAX_DISTANCE_M` (10 km). The diagonal is always zero. Actors occupy
 stable pre-allocated slots (`add_actor`/`remove_actor`, `MAX_ACTORS = 64` by
-default), so indices never shift and nothing is allocated per frame.
+default), so indices never shift and nothing is allocated per frame. Adding
+to a full set raises: a hangar never launches a fighter into the last
+`HANGAR_ACTOR_SLOT_RESERVE` free slots.
 `update_interactions()` computes all live pairs at once with numpy and writes
 them into the matrices in place (callers keep views), so cost scales with live
 actors, not capacity. Gotcha: `live_actors` (and masks over it, or rows sliced

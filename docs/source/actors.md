@@ -5,7 +5,7 @@ enemy bots, capital ships and their turrets, laser shots — is built from a
 small set of composable base classes. This page is the guided tour; the
 per-class API is in the [code reference](apidocs/index.rst). The
 capital-ship family (turrets, shields, tractor beams, ...) is detailed in
-[Capital-ship subsystems](subsystems.md).
+[Major-ship subsystems](subsystems.md).
 
 ## Mental model
 
@@ -135,17 +135,25 @@ A balanced fighter regenerates its shield at its configured
 Every tuning value is a module-level constant in `energy.py`, except the
 per-bolt laser cost, `laser_shot_energy_cost` in each fighter's configuration.
 
-### `CapitalShip`
+### `MajorShip` (`EscortShip`, `CapitalShip`)
 
 Has **no built-in weapons or shield of its own**; it assembles itself from
 the `sub_systems` declared in its config:
 - **Shield generators**, owned directly, feeding a single shared `Shield`
   (no generators means no shield; see [subsystems.md](subsystems.md)).
 - **Targeting systems**, likewise owned directly.
+- **Hangars** (`_build_hangars`), owned directly, launching fighter bots on
+  request (see [subsystems.md](subsystems.md#hangar)).
 - **Turrets and tractor beams**, spawned as their own `Bot`s
   (`_spawn_mounted_bots`) whose pawn is mounted on this ship. They die on
   their own once the ship dies (`mounted_on.is_dead`), so
-  `CapitalShip.clean()` only drops its references to them.
+  `MajorShip.clean()` only drops its references to them.
+
+The config's `ship_class` picks the subclass (`make_major_ship`): an
+`EscortShip` (`escort`, the default) or a `CapitalShip` (`capital`). The two
+differ only in how their bot flies them, which each declares: its
+`personality`, whether it `has_tactician`, and whether its navigator does
+`collision_avoidance`.
 
 Damage goes straight to hull health; the shared shield, if any, absorbs hits
 separately via the collision system.
@@ -356,4 +364,4 @@ under [`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
 `Ordnance` pawn and its controller in `actors/ordnance.py`);
 `CapitalShip` and everything it is built from under
 [`actors/major_ship/`](../../src/space_flight/actors/major_ship/) (see
-[Capital-ship subsystems](subsystems.md)).
+[Major-ship subsystems](subsystems.md)).

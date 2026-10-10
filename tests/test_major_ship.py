@@ -301,3 +301,50 @@ def test_escort_and_capital_ships_are_major_ships(ship_class):
     Both kinds share the MajorShip machinery (subsystems, shield, ...).
     """
     assert issubclass(ship_class, MajorShip)
+
+
+# ---------------------------
+# _build_hangars
+# ---------------------------
+
+
+def test_build_hangars_passes_the_config_through():
+    """
+    _build_hangars builds one Hangar per configured entry, passing every
+    setting through, ship-local vectors as arrays.
+    """
+    major_ship = make_major_ship_with_sub_systems({})
+    hangar_conf = {
+        "relative_position": [0.0, 131.0, -30.0],
+        "half_extents_m": [90.0, 169.0, 30.0],
+        "health": 5000.0,
+        "explosion_scale": 80.0,
+        "group_size": 3,
+        "launch_interval_s": 1.5,
+        "max_active": 6,
+        "launch_direction": [0.0, 0.0, -1.0],
+        "launch_speed_mps": 30.0,
+        "launch_margin_m": 5.0,
+        "formation": "arrowhead",
+    }
+
+    with patch("space_flight.actors.major_ship.major_ship.Hangar") as hangar_cls:
+        hangars = major_ship._build_hangars({"hangars": [hangar_conf]})
+
+    assert hangars == [hangar_cls.return_value]
+    kwargs = hangar_cls.call_args.kwargs
+    assert kwargs["parent"] is major_ship
+    assert kwargs["name"] == "hangar_0"
+    np.testing.assert_allclose(kwargs["relative_position"], [0.0, 131.0, -30.0])
+    for key, value in hangar_conf.items():
+        if key != "relative_position":
+            assert kwargs[key] == value, key
+
+
+def test_build_hangars_without_any_declared():
+    """A ship without a hangars entry has no hangar."""
+    major_ship = make_major_ship_with_sub_systems({})
+
+    with patch("space_flight.actors.major_ship.major_ship.Hangar") as hangar_cls:
+        assert major_ship._build_hangars({}) == []
+    hangar_cls.assert_not_called()

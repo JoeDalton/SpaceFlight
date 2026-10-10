@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 from panda3d.core import (
     BitMask32,
+    CollisionBox,
     CollisionHandlerQueue,
     CollisionNode,
     CollisionSegment,
@@ -22,6 +23,7 @@ from panda3d.core import (
     CollisionTraverser,
     CollisionTube,
     NodePath,
+    Point3,
     Vec3,
 )
 
@@ -1061,3 +1063,113 @@ def test_inactive_sensor_is_left_out_of_the_traverse():
     sensor.set_active(True)
     system.update_collisions()
     assert system.sensor_into_obstacle.call_count == 3
+
+
+# ---------------------------
+# attach_collision_box
+# ---------------------------
+
+
+def test_attach_collision_box_builds_a_tagged_box():
+    """
+    attach_collision_box attaches a box of the given centre and half-extents,
+    masked as its collider type and tagged with its owner.
+    """
+    from space_flight.game.collisions import attach_collision_box
+
+    game = MagicMock()
+    parent = NodePath("ship")
+    owner = object()
+
+    box_np = attach_collision_box(
+        game=game,
+        name="subsystem",
+        center=[1.0, 2.0, 3.0],
+        half_extents=[10.0, 20.0, 30.0],
+        collider_type="subsystem",
+        parent_node=parent,
+        parent_object=owner,
+    )
+
+    solid = box_np.node().getSolid(0)
+    assert isinstance(solid, CollisionBox)
+    np.testing.assert_allclose(solid.getMin(), [-9.0, -18.0, -27.0])
+    np.testing.assert_allclose(solid.getMax(), [11.0, 22.0, 33.0])
+    _, into_mask, _ = CollisionLayers.define_collision_masks("subsystem")
+    assert box_np.node().getIntoCollideMask() == into_mask
+    assert box_np.getPythonTag("owner") is owner
+    assert box_np.getParent() == parent
+
+
+@pytest.mark.parametrize(
+    "from_solid",
+    [
+        CollisionSphere(0, 0, -34, 6.0),  # a ship ramming the bay floor
+        CollisionSegment(0, 0, -60, 0, 0, -10),  # a laser shot into the bay
+        CollisionSphere(0, 0, -30.5, 1.0),  # an ordnance at the floor
+    ],
+    ids=["ship", "laser", "ordnance"],
+)
+def test_box_colliders_are_hit_by_ships_lasers_and_ordnance(from_solid):
+    """
+    Panda3d reports the game's from-solids (ship and ordnance spheres, laser
+    segments) against a box subsystem collider, with the outward normal of the
+    face hit: panda3d's own (for the ship pushback), or, when it reports a zero
+    one (a laser on some faces), the face the hit point lies on.
+    """
+    root = NodePath("root")
+    box = CollisionNode("bay")
+    box.addSolid(CollisionBox((0.0, 0.0, 0.0), 90.0, 169.0, 30.0))
+    box.setIntoCollideMask(BitMask32.bit(1))
+    box.setFromCollideMask(BitMask32.allOff())
+    root.attachNewNode(box)
+    from_node = CollisionNode("from")
+    from_node.addSolid(from_solid)
+    from_node.setFromCollideMask(BitMask32.bit(1))
+    from_node.setIntoCollideMask(BitMask32.allOff())
+    from_np = root.attachNewNode(from_node)
+    traverser = CollisionTraverser()
+    queue = CollisionHandlerQueue()
+    traverser.addCollider(from_np, queue)
+
+    traverser.traverse(root)
+
+    assert queue.getNumEntries() == 1
+    entry = queue.getEntry(0)
+    normal = entry.getSurfaceNormal(root)
+    if normal.almostEqual(Vec3(0, 0, 0)):
+        system = make_collision_system_without_init()
+        system.game.root_node = root
+        normal = system._box_face_normal(entry)
+    np.testing.assert_allclose(normal, [0, 0, -1], atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "point, expected",
+    [
+        ((0.0, 6.0, -30.0), (0, 0, -1)),  # floor
+        ((89.99, 0.0, 0.0), (1, 0, 0)),  # side
+        ((0.0, -169.0, 10.0), (0, -1, 0)),  # aft wall
+    ],
+)
+def test_box_face_normal_picks_the_face_of_the_hit_point(point, expected):
+    """The fallback normal is the outward normal of the face hit, in world space."""
+    root = NodePath("root")
+    ship = root.attachNewNode("ship")
+    ship.setH(90.0)  # turned: ship +x is world +y
+    box = CollisionBox((0.0, 0.0, 0.0), 90.0, 169.0, 30.0)
+    box_node = CollisionNode("bay")
+    box_node.addSolid(box)
+    box_np = ship.attachNewNode(box_node)
+    entry = MagicMock()
+    entry.getInto.return_value = box
+    entry.getIntoNodePath.return_value = box_np
+    entry.getSurfacePoint.return_value = Point3(*point)
+    system = make_collision_system_without_init()
+    system.game.root_node = root
+
+    normal = system._box_face_normal(entry)
+
+    np.testing.assert_allclose(
+        normal, root.getRelativeVector(box_np, Vec3(*expected)), atol=1e-6
+    )
