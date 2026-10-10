@@ -161,14 +161,55 @@ and after the wave exists:
 | `pawns()` | the live members, in spawn order (the formation leader first) |
 | `formation` | the wave's `Formation`, once spawned (or `None`) |
 | `set_targets(who)` | every live member attacks every live pawn of `who` |
-| `set_team(team)` | reassigns every live member, cascading a capital ship's cached team to its sub-systems, shield and mounted turrets/tractor beams |
+| `set_team(team)` | reassigns every live member, cascading a major ship's cached team to its sub-systems, shield and mounted turrets/tractor beams (not to fighters it already launched) |
 | `set_waypoints(points, loop=True)` | gives every live member a new route; only the formation leader flies it, wingmen hold formation |
-| `follow(leader)` | every live member forms up on `leader` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, so none patrols a stale one if it takes the lead |
+| `follow(leader)` | every live member forms up on `leader` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, so none patrols a stale one if it takes the lead. Scripted capital ships are left out and keep their routes |
 | `break_formation()` | every live member leaves the formation and flies its own route (e.g. before a race) |
 
 `alive`, `all_destroyed` and `any_destroyed` are plain methods. Call one to
 get a bool; pass it **uncalled** to use it as a condition:
 `m.on(wave.all_destroyed, ...)`.
+
+### Capital ships and hangars
+
+A `WaveSpec` with `bot_type="major_ship"` spawns the ship type's class, picked
+by its config's `ship_class`: an **escort ship** (frigate, corvette, transport)
+fights on its own like any bot; a **capital ship** (star destroyer) is
+scripted. It has no tactician: it always patrols the `waypoints` it is given
+(`WaveSpec.waypoints`, `set_waypoints`, `reached_waypoint` work as for any
+ship), without avoiding obstacles, and ignores targets; its turrets still
+fight on their own. With no route left, it holds its heading. Its turn radius
+is over a kilometre: give it widely spaced waypoints.
+
+A major ship whose config declares `hangars` launches fighters on request,
+through its `Hangar` subsystems (see [subsystems.md](subsystems.md#hangar)).
+What a hangar holds is up to the level: declare the stock in the level module,
+as fighters per type, and hand it to the hangar once the ship has spawned:
+
+```python
+ENEMY_CAPITAL_SHIP_HANGAR_STOCK = {"tie-fighter": 12, "tie-bomber": 6}
+
+def my_mission(m: Mission) -> Iterator[None]:
+    isd = m.spawn(ENEMY_CAPITAL_SHIP)
+    frigate = m.spawn(ALLIED_FRIGATE)
+    yield from m.wait(5)  # the star destroyer has spawned
+    hangar = isd.pawns()[0].hangars[0]
+    hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
+    targets = [pawn.id for pawn in frigate.pawns()]
+    hangar.launch("tie-fighter", 3, primary_target_ids=targets)
+```
+
+- `launch(fighter_type, count=None, on_launched=None, primary_target_ids=())`
+  queues `count` fighters of `fighter_type` (the hangar's group size by
+  default); they leave the bay one at a time, as long as that type's stock
+  lasts, flying in formation and attacking the given primary targets. A type
+  not in the stock raises; an empty type launches nothing.
+- It returns the request's `LaunchOrder`: its launched pawn `ids`, filled as
+  they launch, `done` once filled or `cancelled`. `on_launched` is called
+  with each launched fighter's bot.
+- Launches wait while the hangar has its maximum of fighters out, or while
+  the game's actor slots run low. Destroying the hangar, or its ship, cancels
+  what is left to launch.
 
 ## Sequencing
 
