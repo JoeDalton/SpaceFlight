@@ -14,6 +14,7 @@ from mission_fakes import FakeGame, advance, kill_all, live, patch_engine
 from space_flight.game.kills import DamageSource
 from space_flight.game.scenario import Mission
 from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
+from space_flight.ui.hud import CHATTER_DISPLAY_S
 
 EXAMPLE = Path(__file__).parent.parent / "docs/source/examples/all_features_example.py"
 
@@ -132,7 +133,7 @@ def test_homeguard_wiped_defeat(game, mission, spawned):
     advance(game, mission, 1)
     kill_all(game, live(game, spawned, "homeguard"))
     advance(game, mission, 1)
-    assert ("Ops: We're taking losses!", 6.0) in game.hud.chatter
+    assert ("Ops: We're taking losses!", CHATTER_DISPLAY_S) in game.hud.chatter
     assert game.end_level_calls == []
     advance(game, mission, 3 + LEVEL_END_DELAY_S)
     assert game.end_level_calls[0] == ("defeat", "The home guard was destroyed.")

@@ -34,6 +34,7 @@ from space_flight.game.scenario.conditions import (
     reached_waypoint,
 )
 from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
+from space_flight.ui.hud import CHATTER_DISPLAY_S, EVENT_DISPLAY_S, HINT_DISPLAY_S
 
 WAVE = WaveSpec(
     name="wave", ship_model="tie-bomber", size=3, spawn_point=[100, 200, 300]
@@ -213,11 +214,11 @@ def test_hud_hint_and_speech(game, mission):
     mission.hint("Press [1].")
     mission.speech("Standing by.", speaker="Red Leader")
     mission.speech("Narration.")
-    assert game.hud.messages == [("First wave", 5.0)]
-    assert game.hud.hints == [("Press [1].", 8.0)]
+    assert game.hud.messages == [("First wave", EVENT_DISPLAY_S)]
+    assert game.hud.hints == [("Press [1].", HINT_DISPLAY_S)]
     assert game.hud.chatter == [
-        ("Red Leader: Standing by.", 6.0),
-        ("Narration.", 6.0),
+        ("Red Leader: Standing by.", CHATTER_DISPLAY_S),
+        ("Narration.", CHATTER_DISPLAY_S),
     ]
 
 

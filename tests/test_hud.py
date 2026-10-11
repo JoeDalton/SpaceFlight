@@ -23,6 +23,7 @@ from space_flight.ui.hud import (
     EDGE_HORIZONTAL,
     EDGE_VERTICAL,
     EVENT,
+    EVENT_DISPLAY_S,
     FAVOURED_GAUGE_BRIGHTNESS,
     FAVOURED_GAUGE_SCALE,
     GAUGE_BRIGHTNESS,
@@ -864,79 +865,97 @@ def shown(scenario_text: ScenarioText) -> dict:
     }
 
 
-def test_a_message_shows_for_its_time():
+# Each kind's up time, as the HUD posts them
+DISPLAY_S = {
+    CHATTER: CHATTER_DISPLAY_S,
+    HINT: HINT_DISPLAY_S,
+    EVENT: EVENT_DISPLAY_S,
+}
+
+
+def post(scenario_text: ScenarioText, kind: str, text: str):
+    """Post text for its kind's up time."""
+    scenario_text.post(kind, text, DISPLAY_S[kind])
+
+
+def show_at(scenario_text: ScenarioText, clock: FakeClock, time_s: float) -> dict:
+    """What is on screen at time_s."""
+    clock.time_s = time_s
+    scenario_text.update()
+    return shown(scenario_text)
+
+
+@pytest.mark.parametrize("kind", [CHATTER, HINT, EVENT])
+def test_a_message_shows_for_its_time(kind):
     scenario_text, clock = make_scenario_text()
-    scenario_text.post(HINT, "Press [1].", 8.0)
-    assert shown(scenario_text) == {HINT: "Press [1]."}
+    post(scenario_text, kind, "Press [1].")
+    assert shown(scenario_text) == {kind: "Press [1]."}
 
-    clock.time_s = 7.9
-    scenario_text.update()
-    assert shown(scenario_text) == {HINT: "Press [1]."}
-    clock.time_s = 8.0
-    scenario_text.update()
-    assert shown(scenario_text) == {}
+    assert show_at(scenario_text, clock, DISPLAY_S[kind] - 0.1) == {kind: "Press [1]."}
+    assert show_at(scenario_text, clock, DISPLAY_S[kind]) == {}
 
 
-@pytest.mark.parametrize("first, second", [(CHATTER, CHATTER), (HINT, EVENT)])
+@pytest.mark.parametrize(
+    "first, second", [(CHATTER, CHATTER), (HINT, EVENT), (EVENT, HINT)]
+)
 def test_a_message_replaces_one_of_its_side_at_once(first, second):
     scenario_text, clock = make_scenario_text()
-    scenario_text.post(first, "one", 6.0)
-    clock.time_s = 1.0
-    scenario_text.post(second, "two", 6.0)
-
-    assert shown(scenario_text) == {second: "two"}
-    clock.time_s = 6.5  # the replacement got its full time
-    scenario_text.update()
+    post(scenario_text, first, "one")
+    replaced_at_s = 1.0
+    clock.time_s = replaced_at_s
+    post(scenario_text, second, "two")
     assert shown(scenario_text) == {second: "two"}
 
+    # The replacement gets its full time, from when it was posted
+    ends_s = replaced_at_s + DISPLAY_S[second]
+    assert show_at(scenario_text, clock, ends_s - 0.1) == {second: "two"}
+    assert show_at(scenario_text, clock, ends_s) == {}
 
-@pytest.mark.parametrize("first, second", [(CHATTER, HINT), (EVENT, CHATTER)])
+
+@pytest.mark.parametrize(
+    "first, second",
+    [(CHATTER, HINT), (CHATTER, EVENT), (HINT, CHATTER), (EVENT, CHATTER)],
+)
 def test_chatter_and_hints_or_events_take_turns(first, second):
     scenario_text, clock = make_scenario_text()
-    scenario_text.post(first, "one", 6.0)
+    post(scenario_text, first, "one")
     clock.time_s = 1.0
-    scenario_text.post(second, "two", 5.0)
+    post(scenario_text, second, "two")
     assert shown(scenario_text) == {first: "one"}
 
-    clock.time_s = 6.0
-    scenario_text.update()
-    assert shown(scenario_text) == {second: "two"}
-    clock.time_s = 10.9
-    scenario_text.update()
-    assert shown(scenario_text) == {second: "two"}
-    clock.time_s = 11.0
-    scenario_text.update()
-    assert shown(scenario_text) == {}
+    # The second waits for the first to time out, then gets its full time
+    first_ends_s = DISPLAY_S[first]
+    second_ends_s = first_ends_s + DISPLAY_S[second]
+    assert show_at(scenario_text, clock, first_ends_s - 0.1) == {first: "one"}
+    assert show_at(scenario_text, clock, first_ends_s) == {second: "two"}
+    assert show_at(scenario_text, clock, second_ends_s - 0.1) == {second: "two"}
+    assert show_at(scenario_text, clock, second_ends_s) == {}
 
 
 def test_waiting_messages_keep_their_order():
     """A line of chatter posted behind a waiting hint doesn't jump ahead of it,
     even though chatter is on screen."""
     scenario_text, clock = make_scenario_text()
-    scenario_text.post(CHATTER, "one", 6.0)
-    scenario_text.post(HINT, "two", 6.0)
-    scenario_text.post(CHATTER, "three", 6.0)
-    seen = []
-    for time_s in range(20):
-        clock.time_s = float(time_s)
-        scenario_text.update()
-        seen.append(next(iter(shown(scenario_text).values()), None))
+    post(scenario_text, CHATTER, "one")
+    post(scenario_text, HINT, "two")
+    post(scenario_text, CHATTER, "three")
 
-    assert [text for i, text in enumerate(seen) if i == 0 or text != seen[i - 1]] == [
-        "one",
-        "two",
-        "three",
-        None,
-    ]
+    hint_s = CHATTER_DISPLAY_S
+    second_chatter_s = hint_s + HINT_DISPLAY_S
+    over_s = second_chatter_s + CHATTER_DISPLAY_S
+    assert show_at(scenario_text, clock, hint_s - 0.1) == {CHATTER: "one"}
+    assert show_at(scenario_text, clock, hint_s) == {HINT: "two"}
+    assert show_at(scenario_text, clock, second_chatter_s) == {CHATTER: "three"}
+    assert show_at(scenario_text, clock, over_s) == {}
 
 
 def test_a_repeated_waiting_message_queues_once():
     scenario_text, _ = make_scenario_text()
-    scenario_text.post(CHATTER, "radio", 6.0)
+    post(scenario_text, CHATTER, "radio")
     for _ in range(100):  # a rule firing every frame
-        scenario_text.post(EVENT, "Danger close!", 5.0)
+        post(scenario_text, EVENT, "Danger close!")
 
-    assert list(scenario_text.pending) == [(EVENT, "Danger close!", 5.0)]
+    assert list(scenario_text.pending) == [(EVENT, "Danger close!", EVENT_DISPLAY_S)]
 
 
 def test_hud_shows_hints_smaller_and_never_with_chatter(spaceflight_app):

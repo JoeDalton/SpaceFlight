@@ -426,7 +426,7 @@ def test_mission1_comments_on_who_leads_the_race(game, spawned, player_leads):
         speaker, line = player_line
     else:
         speaker = mission1.BLUE_NAMES[2]
-    assert (f"{speaker}: {line}", 6.0) in game.hud.chatter
+    assert any(text == f"{speaker}: {line}" for text, _ in game.hud.chatter)
 
 
 # ---------------------------------------------------------------------------
