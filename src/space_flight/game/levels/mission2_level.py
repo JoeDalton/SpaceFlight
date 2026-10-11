@@ -192,6 +192,9 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # ended, so there is only ever one ending.
     endings = []
     ended = []
+    # Objectives that hold until the end (rules of engagement, ...): ticked
+    # by a victory
+    standing_orders = []
 
     def end(outcome: str, text: str):
         if ended:
@@ -199,6 +202,9 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         ended.append(outcome)
         for rule in endings:
             rule.cancel()
+        if outcome == "victory":
+            for objective in standing_orders:
+                objective.complete()
         m.end_level(outcome, text)
 
     def lose_later(condition: Condition, speaker: str, line: str, text: str):
@@ -232,12 +238,16 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             ),
         )
     )
-    for transport, scan in zip(convoy, convoy_scans):
+    unscanned_exits = [
+        all_of(
+            near(transport, EXIT_GATE, EXIT_GATE_RADIUS_M),
+            lambda s=scan: not s.complete(),
+        )
+        for transport, scan in zip(convoy, convoy_scans)
+    ]
+    for unscanned_exit in unscanned_exits:
         lose_later(
-            all_of(
-                near(transport, EXIT_GATE, EXIT_GATE_RADIUS_M),
-                lambda s=scan: not s.complete(),
-            ),
+            unscanned_exit,
             "Blue Leader",
             "It's leaving the field unscanned!",
             "An unscanned transport slipped through the patrol.",
@@ -302,6 +312,18 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     yield from m.wait(INTRO_DELAY_S - 16)
     convoy[0].spawn()
+    m.objective(
+        "Scan the transports",
+        progress=lambda: len(cleared),
+        goal=len(convoy),
+        failed=any_of(*unscanned_exits),
+    )
+    standing_orders.append(
+        m.objective("Hold fire on civilians", failed=civilian_destroyed)
+    )
+    standing_orders.append(
+        m.objective("Keep Blue flight alive", failed=blue.all_destroyed)
+    )
     m.speech(
         "Contact! GR-75 transports coming in from the far side of the field.",
         speaker="Blue Two",
@@ -359,8 +381,12 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         loop=False,
     )
     smuggler_scan = m.scan(smuggler, contraband=True)
+    smuggler_leaving = near(smuggler, smuggler_exit, EXIT_GATE_RADIUS_M)
+    m.objective(
+        "Scan the straggler", done=smuggler_scan.complete, failed=smuggler_leaving
+    )
     smuggler_unscanned_exit = m.on(
-        near(smuggler, smuggler_exit, EXIT_GATE_RADIUS_M),
+        smuggler_leaving,
         lambda: end("defeat", "An unscanned transport slipped through the patrol."),
     )
     endings.append(smuggler_unscanned_exit)
@@ -398,18 +424,21 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             "It's spinning up its hyperdrive! Hurry, Three!", speaker="Blue Leader"
         ),
     )
+    jumped = near(smuggler, jump_point, JUMP_POINT_RADIUS_M)
     lose_later(
-        near(smuggler, jump_point, JUMP_POINT_RADIUS_M),
+        jumped,
         "Blue Two",
         "It jumped to lightspeed...",
         "The gun-runner escaped with its cargo.",
     )
+    m.objective("Stop the gun-runner", done=smuggler.all_destroyed, failed=jumped)
 
     ties.spawn(
         spawn_point=player_pawn.position - player_pawn.forward * TIES_BEHIND_M,
         orientation=player_pawn.orientation,
         target=blue,
     )
+    m.objective("Destroy the TIEs", progress=ties.destroyed_count, goal=TIE_FLIGHT.size)
 
     m.on(
         smuggler.all_destroyed,

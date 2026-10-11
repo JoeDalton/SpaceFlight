@@ -532,6 +532,24 @@ def test_removed_objective_leaves_the_list_and_its_rules(mission):
     assert all(trigger.cancelled for trigger in mission.triggers)
 
 
+def test_ending_the_level_settles_objectives_due_this_frame(game, mission):
+    """
+    A rule ending the level that fires before an objective's rule (same
+    condition, registered first) still sees the objective settled in the
+    level's tally.
+    """
+    wiped = []
+    states_at_end = []
+    game.end_level = lambda outcome, text="": states_at_end.append(objective.state)
+    mission.on(lambda: bool(wiped), lambda: mission.defeat("Wiped out."))
+    objective = mission.objective("Keep them alive", failed=lambda: bool(wiped))
+
+    wiped.append(True)
+    mission.update()
+
+    assert states_at_end == ["failed"]
+
+
 def test_objectives_work_headless(game, mission):
     game.headless = True
     objective = mission.objective("Reach the nav point", done=lambda: True)

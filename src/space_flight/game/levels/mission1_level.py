@@ -139,6 +139,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     )
 
     m.player_waypoints([WAYPOINT_1], arrival_radius_m=WAYPOINT_1_ARRIVAL_RADIUS_M)
+    nav_point = m.objective("Reach the nav point")
     yield from m.wait(0.5)
     m.speech(
         "Morning, rookie. Blue squadron's running drills out past the rocks.\n"
@@ -162,6 +163,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # The waypoint marker detects arrival itself but exposes no event for
     # it, so poll the same radius.
     yield from m.wait_until(near(game.player, WAYPOINT_1, WAYPOINT_1_ARRIVAL_RADIUS_M))
+    nav_point.complete()
     dawdling.cancel()
     m.clear_player_waypoints()
 
@@ -175,6 +177,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         - player_pawn.right * FORMATION_LEFT_M
     )
     blue = m.spawn(BLUE_SQUADRON, spawn_point=spawn_point)
+    form_up = m.objective("Form up with Blue squadron")
 
     m.hud(
         f"Allied formation inbound! Hold [{radial_key}],\n"
@@ -227,8 +230,11 @@ def mission1_mission(m: Mission) -> Iterator[None]:
 
     caught_up = yield from m.wait_until(close_to_blue, timeout=CATCH_UP_DEADLINE_S)
     if not caught_up:
+        form_up.fail()
         m.defeat("You failed to catch up with the formation in time. Mission failed.")
         return
+    form_up.complete()
+    circuit = m.objective("Fly the circuit with Blue squadron")
 
     # Registered only now, so the initial catch-up isn't double-punished by
     # the same radius.
@@ -238,11 +244,13 @@ def mission1_mission(m: Mission) -> Iterator[None]:
             "Come on, rookie, you're falling behind! Catch up!", speaker="Blue Leader"
         ),
     )
+
+    def on_lost_contact():
+        circuit.fail()
+        m.defeat("You fell too far behind the formation for too long. Mission failed.")
+
     lost_contact = m.on(
-        m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S),
-        lambda: m.defeat(
-            "You fell too far behind the formation for too long. Mission failed."
-        ),
+        m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S), on_lost_contact
     )
 
     # ==================================================================
@@ -251,6 +259,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     yield from m.wait_until(reached_waypoint(leader, len(CIRCUIT_WAYPOINTS) - 1))
     losing_contact.cancel()
     lost_contact.cancel()
+    circuit.complete()
     race_started.append(True)
 
     m.speech(
@@ -259,6 +268,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         speaker="Blue Leader",
     )
     m.player_waypoints(RACE_WAYPOINTS)
+    race = m.objective("Race to the finish marker")
     # Every man for himself: wingmen would otherwise hold formation.
     blue.break_formation()
     blue.set_waypoints(RACE_WAYPOINTS, loop=False)
@@ -300,13 +310,21 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         lambda: bool(finish_order) and finish_order[0] is not game.player,
         wingman_won,
     )
+    m.objective(
+        "Bonus: cross the line first",
+        done=lambda: bool(finish_order) and finish_order[0] is game.player,
+        failed=lambda: bool(finish_order) and finish_order[0] is not game.player,
+    )
 
     player_finished = yield from m.wait_until(
         lambda: game.player in finish_order, timeout=RACE_TIMEOUT_S
     )
     if not player_finished:
+        race.fail()
         m.defeat("You didn't reach the finish line in time. Mission failed.")
-    elif finish_order[0] is game.player:
+        return
+    race.complete()
+    if finish_order[0] is game.player:
         m.victory("First across the line! Outstanding flying, rookie!")
     elif len(finish_order) == len(racers):
         m.victory(

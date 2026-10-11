@@ -255,6 +255,10 @@ class FakeGame:
 
     def end_level(self, outcome, text=""):
         self.end_level_calls.append((outcome, text))
+        # What the level-end tally sees: each objective's state, by its text
+        mission = getattr(self, "mission", None)
+        if mission is not None:
+            self.objectives_at_end = {o.text: o.state for o in mission.objectives}
 
 
 def patch_engine(monkeypatch):

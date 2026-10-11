@@ -29,8 +29,14 @@ def spawned(monkeypatch):
 
 def start(game, body):
     mission = Mission(game)
+    game.mission = mission
     mission.run(body)
     return mission
+
+
+def objective_states(m):
+    """Each objective's state, by its text."""
+    return {objective.text: objective.state for objective in m.objectives}
 
 
 def test_every_level_has_an_upfront_and_a_mission():
@@ -107,6 +113,21 @@ def test_mission3_victory(game, spawned):
     assert game.end_level_calls == []
     advance(game, m, 3)
     assert game.end_level_calls[-1][0] == "victory"
+    assert game.objectives_at_end == {
+        "Escort the convoy to the fleet": "complete",
+        "Bonus: lose no transport": "complete",
+        "Shoot down the bombers": "complete",
+        "Clear the TIE-Fighters": "complete",
+        "Stop the second bomber wave": "active",
+    }
+
+
+def test_mission3_objectives_count_the_waves_down(game, spawned):
+    m = start(game, mission3_mission)
+    advance(game, m, 12)
+    kill_all(game, live(game, spawned, "first_wave")[:2])
+    labels = [objective.label() for objective in m.objectives]
+    assert "Shoot down the bombers (2/5)" in labels
 
 
 def test_mission3_defeat(game, spawned):
@@ -117,6 +138,8 @@ def test_mission3_defeat(game, spawned):
     assert any("All transports" in text for text, _ in game.hud.chatter)
     advance(game, m, 3)
     assert game.end_level_calls[-1] == ("defeat", "The convoy has been destroyed.")
+    assert game.objectives_at_end["Escort the convoy to the fleet"] == "failed"
+    assert game.objectives_at_end["Bonus: lose no transport"] == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +186,10 @@ def test_mission1_waypoint_to_formation_handoff(game, spawned):
     assert np.allclose(blue[0].position, expected)
     assert intro_route.cleaned is True
     assert any("[R]" in text and "[,]" in text for text, _ in game.hud.messages)
+    assert objective_states(m) == {
+        "Reach the nav point": "complete",
+        "Form up with Blue squadron": "active",
+    }
 
 
 def test_mission1_catch_up_deadline_defeat(game, spawned):
@@ -171,6 +198,7 @@ def test_mission1_catch_up_deadline_defeat(game, spawned):
     advance(game, m, mission1.CATCH_UP_DEADLINE_S + 2)
     assert game.end_level_calls[-1][0] == "defeat"
     assert "catch up" in game.end_level_calls[-1][1]
+    assert game.objectives_at_end["Form up with Blue squadron"] == "failed"
 
 
 def test_mission1_sustained_separation_defeat(game, spawned):
@@ -186,6 +214,7 @@ def test_mission1_sustained_separation_defeat(game, spawned):
     advance(game, m, mission1.SUSTAINED_SEPARATION_S + 1)
     assert game.end_level_calls[-1][0] == "defeat"
     assert "fell too far behind" in game.end_level_calls[-1][1]
+    assert game.objectives_at_end["Fly the circuit with Blue squadron"] == "failed"
 
 
 def test_mission1_any_formation_member_counts(game, spawned):
@@ -223,6 +252,7 @@ def test_mission1_first_place_is_special(game, spawned):
         "victory",
         "First across the line! Outstanding flying, rookie!",
     )
+    assert set(game.objectives_at_end.values()) == {"complete"}
 
 
 def test_mission1_middle_place_is_a_plain_victory(game, spawned):
@@ -238,6 +268,8 @@ def test_mission1_middle_place_is_a_plain_victory(game, spawned):
     advance(game, m, 1)
     assert game.end_level_calls[-1][0] == "victory"
     assert "First" not in game.end_level_calls[-1][1]
+    assert game.objectives_at_end["Race to the finish marker"] == "complete"
+    assert game.objectives_at_end["Bonus: cross the line first"] == "failed"
 
 
 def test_mission1_last_place_is_still_a_victory(game, spawned):
@@ -267,6 +299,7 @@ def test_mission1_race_timeout_is_defeat(game, spawned):
         "defeat",
         "You didn't reach the finish line in time. Mission failed.",
     )
+    assert game.objectives_at_end["Race to the finish marker"] == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +388,14 @@ def test_mission2_victory_without_losses(game, spawned):
     assert len(game.end_level_calls) == 1
     outcome, text = game.end_level_calls[0]
     assert outcome == "victory" and "no losses" in text
+    assert game.objectives_at_end == {
+        "Scan the transports": "complete",
+        "Hold fire on civilians": "complete",
+        "Keep Blue flight alive": "complete",
+        "Scan the straggler": "complete",
+        "Stop the gun-runner": "complete",
+        "Destroy the TIEs": "complete",
+    }
 
 
 def test_mission2_victory_with_one_ally_lost(game, spawned):
@@ -374,6 +415,8 @@ def test_mission2_defeat_when_blue_flight_is_wiped(game, spawned):
     kill_all(game, live(game, spawned, "blue"))
     advance(game, m, 1)
     assert game.end_level_calls == [("defeat", "Blue flight has been wiped out.")]
+    # Failed in the tally, though its rule comes after the ending's
+    assert game.objectives_at_end["Keep Blue flight alive"] == "failed"
 
 
 def test_mission2_defeat_when_a_civilian_is_destroyed(game, spawned):
@@ -383,6 +426,7 @@ def test_mission2_defeat_when_a_civilian_is_destroyed(game, spawned):
     advance(game, m, 1)
     assert [c[0] for c in game.end_level_calls] == ["defeat"]
     assert "civilian" in game.end_level_calls[0][1]
+    assert game.objectives_at_end["Hold fire on civilians"] == "failed"
 
 
 def test_mission2_warns_when_a_civilian_is_hit(game, spawned):
@@ -402,6 +446,7 @@ def test_mission2_defeat_when_an_unscanned_transport_exits(game, spawned):
     assert game.end_level_calls == [
         ("defeat", "An unscanned transport slipped through the patrol.")
     ]
+    assert game.objectives_at_end["Scan the transports"] == "failed"
 
 
 def test_mission2_scanned_transport_may_exit(game, spawned):
@@ -422,6 +467,7 @@ def test_mission2_defeat_when_the_smuggler_jumps_out(game, spawned):
     assert game.end_level_calls == [
         ("defeat", "The gun-runner escaped with its cargo.")
     ]
+    assert game.objectives_at_end["Stop the gun-runner"] == "failed"
 
 
 def test_mission2_killing_the_revealed_smuggler_is_not_a_civilian_loss(game, spawned):

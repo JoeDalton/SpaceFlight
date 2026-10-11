@@ -357,6 +357,11 @@ class Mission:
 
     def end_level(self, outcome: str, text: str = ""):
         """End the level ("victory", "defeat" or "death")."""
+        # Settle the objectives this very frame settles before the level's
+        # tally: their rules may come after the one ending the level.
+        for objective in list(self.objectives):
+            for rule in list(objective.rules):
+                rule.maybe_fire()
         self.game.end_level(outcome=outcome, text=text)
 
     def victory(self, text: str = ""):

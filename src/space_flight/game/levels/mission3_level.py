@@ -155,6 +155,11 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         )
         third_wave.spawn(target=transports)
         fourth_wave.spawn(target=[escort, m.game.player])
+        m.objective(
+            "Stop the second bomber wave",
+            progress=third_wave.destroyed_count,
+            goal=THIRD_WAVE.size,
+        )
 
     m.on(any_of(m.after(200), m.delay(first_wave.all_destroyed, 3)), spawn_third_wave)
 
@@ -170,6 +175,18 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         )
 
     m.on(blockade_past, on_blockade_past)
+
+    convoy_arrived = reached_waypoint(transports, CONVOY_LAST_WAYPOINT)
+    m.objective(
+        "Escort the convoy to the fleet",
+        done=convoy_arrived,
+        failed=transports.all_destroyed,
+    )
+    m.objective(
+        "Bonus: lose no transport",
+        done=convoy_arrived,
+        failed=transports.any_destroyed,
+    )
     m.on(
         m.delay(blockade_past, 3),
         lambda: m.victory("The convoy reached the fleet. Mission accomplished."),
@@ -263,6 +280,11 @@ def mission3_mission(m: Mission) -> Iterator[None]:
 
     yield from m.wait(4)  # total: 10s
     first_wave.spawn(target=transports)
+    m.objective(
+        "Shoot down the bombers",
+        progress=first_wave.destroyed_count,
+        goal=FIRST_WAVE.size,
+    )
     m.speech(
         "Bombers, dead ahead and coming in low! They're after the transports.\n"
         "Red Seven, break and engage!",
@@ -272,6 +294,11 @@ def mission3_mission(m: Mission) -> Iterator[None]:
     yield from m.wait(20)  # total: 30s
     # Interceptors hunt fighters: the escort and the player's A-wing.
     second_wave.spawn(target=[escort, m.game.player])
+    m.objective(
+        "Clear the TIE-Fighters",
+        progress=second_wave.destroyed_count,
+        goal=SECOND_WAVE.size,
+    )
     m.speech("TIE-Fighters! They're coming for us this time!", speaker="Red Two")
     yield from m.wait(3)
     m.speech(
