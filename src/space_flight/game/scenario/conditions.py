@@ -42,6 +42,22 @@ def pawns_of(who: Any) -> list:
     return [pawn]
 
 
+def ids_of(who: Any) -> list:
+    """
+    The pawn ids designated by who, dead or alive.
+
+    :param who: As :func:`pawns_of`; a :class:`WaveHandle` gives every member
+        spawned so far
+    :return: Their pawn ids
+    """
+    if isinstance(who, (list, tuple)):
+        return [pawn_id for one in who for pawn_id in ids_of(one)]
+    if hasattr(who, "ids"):
+        return list(who.ids)
+    pawn = getattr(who, "pawn", who)
+    return [] if pawn is None else [pawn.id]
+
+
 # ---------------------------------------------------------------------------
 # Spatial conditions
 # ---------------------------------------------------------------------------

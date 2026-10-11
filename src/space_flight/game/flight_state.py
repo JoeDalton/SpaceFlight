@@ -14,6 +14,7 @@ from space_flight.fx.fire_smoke_fx import FireSmokePool
 from space_flight.fx.spark_fx import SparkPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
+from space_flight.game.kills import KillLog
 from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
 from space_flight.game.scenario import Mission
@@ -277,8 +278,9 @@ class FlightState(BaseState):
         self.fire_smoke_pool = FireSmokePool(game=self)
         self.spark_fx_pool = SparkPool(game=self)
 
-        # Initialize Collision system and Destructibles
-        self.destructibles = Destructibles()
+        # Initialize the kill log, Collision system and Destructibles
+        self.kill_log = KillLog(game=self)
+        self.destructibles = Destructibles(on_death=self.kill_log.record)
         self.collision_system = CollisionSystem(game=self)
 
         # Initialize interaction compute between ships
@@ -338,6 +340,7 @@ class FlightState(BaseState):
         if self.player.pawn.health <= 0:
             if not self.player.is_dying:
                 self.player.begin_death()
+                self.kill_log.record(self.player.pawn)
             elif self.player.death_spin_finished():
                 self.end_level(outcome="death", text="Your ship was destroyed.")
         return task.cont
@@ -481,6 +484,7 @@ class FlightState(BaseState):
         self.collision_system = None
         self.destructibles.clean()
         self.destructibles = None
+        self.kill_log = None
         self.fire_smoke_pool.clean()
         self.fire_smoke_pool = None
         self.spark_fx_pool.clean()

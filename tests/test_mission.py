@@ -12,11 +12,13 @@ import pytest
 from mission_fakes import FakeGame, FakeHangar, advance, kill_all, patch_engine
 
 from space_flight.ai.formation import Formation
+from space_flight.game.kills import DamageSource
 from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
     any_of,
     damaged,
+    ids_of,
     near,
     near_actor,
     not_,
@@ -418,6 +420,48 @@ def test_wave_state_methods_are_conditions(game, mission, spawned):
     kill_all(game, wave.pawns())
     mission.update()
     assert calls == [1]
+
+
+def test_wave_destroyed_count(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    assert wave.destroyed_count() == 0
+    run_jobs(mission)
+
+    kill_all(game, wave.pawns()[:2])
+
+    assert wave.destroyed_count() == 2
+
+
+# ---------------------------------------------------------------------------
+# Kills
+# ---------------------------------------------------------------------------
+
+
+def test_ids_of_keeps_the_dead(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    ids = [pawn.id for pawn in wave.pawns()]
+    kill_all(game, wave.pawns())
+
+    assert ids_of(wave) == ids
+    assert ids_of(game.player) == [game.player.pawn.id]
+    assert ids_of([wave, game.player.pawn]) == [*ids, game.player.pawn.id]
+
+
+def test_kills_counts_a_waves_deaths_and_the_players_share(game, mission, spawned):
+    wave = mission.wave(WAVE)
+    everyone = mission.kills()
+    wave_kills = mission.kills(wave)
+    player_kills = mission.kills(wave, by_player=True)
+    wave.spawn()
+    run_jobs(mission)
+    pawns = wave.pawns()
+    player = DamageSource.of(game.player.pawn, game)
+
+    kill_all(game, pawns[:2], by=player)
+    kill_all(game, pawns[2:])
+
+    assert (everyone(), wave_kills(), player_kills()) == (3, 3, 2)
 
 
 # ---------------------------------------------------------------------------

@@ -25,6 +25,7 @@ from panda3d.core import (
 
 from space_flight import DEBUG_COLLISION
 from space_flight.fx import spark_fx
+from space_flight.game.kills import DamageSource, credit_hit
 from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.utils import magnitude
 
@@ -348,6 +349,7 @@ class CollisionSystem:
             and getattr(destructible, "shield_level", 0.0) > 0.0
         )
 
+        credit_hit(destructible, munition.source)
         destructible.take_hit(damage=munition.power, normal_world_vector=normal)
 
         # Spend the munition
@@ -660,11 +662,17 @@ class CollisionSystem:
         # => Rely only on elastic impact to push back
 
         # Apply damage to the ship
+        was_alive = ship_from.health > 0.0
         ship_from.push(
             damage=self.collision_damage(ship_from, normal_relative_velocity),
             velocity_correction=velocity_correction,
             position_correction=np.zeros(3),
         )
+        # A crash that kills is its own death: no one gets the kill. One that
+        # doesn't leaves the last hitter's credit alone.
+        if was_alive and ship_from.health <= 0.0:
+            ship_from.last_hit_by = None
+            ship_from.last_hit_cause = "crash"
 
     def ship_into_ship(self, entry: CollisionEntry):
         """
@@ -776,6 +784,7 @@ class CollisionSystem:
         )
 
         # Apply damage to the destructible objects
+        credit_hit(ship_into, DamageSource.of(ship_from, self.game), cause="ram")
         ship_into.push(
             damage=self.collision_damage(ship_into, normal_relative_velocity),
             velocity_correction=velocity_correction,
@@ -986,6 +995,7 @@ class CollisionSystem:
         )
         # The subsystem itself takes the collision damage (never the player's,
         # so unscaled)
+        credit_hit(subsystem_into, DamageSource.of(ship_from, self.game), cause="ram")
         subsystem_into.apply_damage(
             damage=COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2,
             damage_type="physical",

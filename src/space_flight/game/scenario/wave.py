@@ -137,6 +137,10 @@ class WaveHandle:
         total wipe)."""
         return bool(self.ids) and len(self.pawns()) < len(self.ids)
 
+    def destroyed_count(self) -> int:
+        """How many members have died so far."""
+        return len(self.ids) - len(self.pawns())
+
     # ------------------------------------------------------------------
     # Spawning
     # ------------------------------------------------------------------

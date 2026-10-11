@@ -25,7 +25,13 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Sequence
 
 from space_flight.ai.formation import Formation
-from space_flight.game.scenario.conditions import Condition, _After, _Delay, _Sustained
+from space_flight.game.scenario.conditions import (
+    Condition,
+    _After,
+    _Delay,
+    _Sustained,
+    ids_of,
+)
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
@@ -232,6 +238,27 @@ class Mission:
     def sustained(self, condition: Condition, seconds: float) -> Condition:
         """True once condition has held for an unbroken run of seconds."""
         return _Sustained(self.now, condition, seconds)
+
+    # ------------------------------------------------------------------
+    # Kills
+    # ------------------------------------------------------------------
+
+    def kills(self, victims: Any = None, by_player: bool = False) -> Callable[[], int]:
+        """
+        A live kill counter, e.g. an objective's progress.
+
+        :param victims: Whose deaths count (see
+            :func:`~space_flight.game.scenario.conditions.ids_of`), read on each
+            call so a wave still spawning is counted in full; everyone by default
+        :param by_player: Only count the player's kills
+        :return: A zero-argument callable giving the count
+        """
+
+        def count() -> int:
+            victim_ids = None if victims is None else ids_of(victims)
+            return self.game.kill_log.count(victim_ids=victim_ids, by_player=by_player)
+
+        return count
 
     # ------------------------------------------------------------------
     # Reactive rules

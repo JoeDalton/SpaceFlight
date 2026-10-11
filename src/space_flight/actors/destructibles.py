@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Callable, List
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 from space_flight import DEBUG_DELETION
 from space_flight.utils.state_machine import DyingPhase
@@ -126,9 +126,13 @@ class Destructible:
 class Destructibles:
     """
     A class to account for all destructible objects, and handle their deaths
+
+    :param on_death: Called with each object as it enters its dying phase
+        (e.g. the kill log's record)
     """
 
-    def __init__(self):
+    def __init__(self, on_death: Optional[Callable[[Destructible], None]] = None):
+        self.on_death = on_death
         self.alive_objects: List[Destructible] = []
         # Objects at zero health playing out their death (spin-out, smoke, ...):
         # no longer "alive" but not yet reaped, so they keep integrating and
@@ -146,6 +150,8 @@ class Destructibles:
         for destructible in self.alive_objects:
             if destructible.get_health() <= 0.0:
                 destructible.begin_death()
+                if self.on_death is not None:
+                    self.on_death(destructible)
                 self.dying_objects.append(destructible)
             else:
                 still_alive_objects.append(destructible)

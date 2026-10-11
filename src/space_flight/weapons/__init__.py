@@ -28,6 +28,7 @@ from direct.interval.IntervalGlobal import LerpPosInterval
 from panda3d.core import LVector3, NodePath, Point3, TransparencyAttrib
 
 from space_flight import DEBUG_DELETION
+from space_flight.game.kills import DamageSource
 
 if TYPE_CHECKING:
     from space_flight.actors.fighter import Fighter
@@ -205,6 +206,9 @@ class Munition:
         self.power = power
         self.origin_ship_id = origin_ship_id
         self.origin_ship = origin_ship
+        # Who gets the credit if it kills, captured now: the shooter may be
+        # gone by the time it lands
+        self.source = DamageSource.of(origin_ship, game)
         # World-space velocity
         self.speed = np.asarray(speed, dtype=float)
         # Where it was fired from: munition_into_shield lets a shot fired from
