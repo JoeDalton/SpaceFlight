@@ -84,8 +84,10 @@ class MockNavigator:
         self.is_loop = False
 
     def set_waypoints(self, waypoints, is_loop=False):
+        """Mirrors the real navigators: a new route starts at its first point."""
         self.waypoints = waypoints
         self.is_loop = is_loop
+        self.next_waypoint_idx = 0
 
     def clear_waypoints(self):
         self.waypoints = []

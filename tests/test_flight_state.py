@@ -133,3 +133,13 @@ def test_recenter_render_origin_keeps_world_coordinates_relative_to_root():
     before = np.array(ship.getPos(fs.root_node))
     fs.recenter_render_origin()
     np.testing.assert_array_equal(np.array(ship.getPos(fs.root_node)), before)
+
+
+def test_only_the_first_ending_counts():
+    """A later ending (e.g. dying after a victory) changes nothing."""
+    fs = _make_flight_state(headless=False)
+    fs.end_level(outcome="victory", text="You won.")
+    fs.end_level(outcome="death", text="Your ship was destroyed.")
+
+    assert fs.outcome == "victory"
+    fs.app.state_manager.push.assert_called_once()

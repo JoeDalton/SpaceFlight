@@ -5,22 +5,74 @@ enemy blockade.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 import numpy as np
 
 from space_flight.actors.player import Player
 from space_flight.game.scenario import WaveSpec
-from space_flight.game.scenario.conditions import all_of, any_of, reached_waypoint
+from space_flight.game.scenario.conditions import (
+    all_of,
+    any_of,
+    damaged,
+    reached_waypoint,
+)
 from space_flight.scenes.scenes import scene_factory
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from space_flight.game.flight_state import FlightState
-    from space_flight.game.scenario import Mission
+    from space_flight.game.scenario import Mission, WaveHandle
 
 # Orientations are quaternions (w, x, y, z).
+# The escort's call signs, in spawn order (the player flies as Red Seven).
+RED_NAMES = [
+    "Red Leader",
+    "Red Two",
+    "Red Three",
+    "Red Four",
+    "Red Five",
+    "Red Six",
+    "Red Eight",
+    "Red Nine",
+]
+
+# Said by the escort as it loses its pilots, one line per loss in order (the
+# last one repeats); {name} is the pilot lost.
+ESCORT_LOSS_LINES = [
+    "{name} is down! Close up the gaps, Red squadron.",
+    "We lost {name}! They're picking us off one by one!",
+    "{name}'s gone... Stay with your wingman, everyone.",
+    "{name}, no! Half the squadron's gone. Hold the line!",
+    "Another one... {name} is gone. Seven, we need you!",
+]
+
+# What is said as a wave is cleared, by what is left of its kind: more of
+# them still flying, more to come (a wave not spawned yet), or the last.
+BOMBER_CLEAR_LINES = {
+    "more_flying": (
+        "Red Leader",
+        "One bomber group down, but more are still going for the convoy!",
+    ),
+    "more_to_come": (
+        "Red Leader",
+        "That's the last of the first wave. Nice shooting, Red squadron.",
+    ),
+    "last": ("Red Leader", "Bombers cleared! Convoy, you're free to run."),
+}
+FIGHTER_CLEAR_LINES = {
+    "more_flying": (
+        "Red Three",
+        "Scratch one TIE-Fighter flight, but there's another still on us!",
+    ),
+    "more_to_come": ("Red Three", "TIE-Fighters are down! They're off our backs."),
+    "last": ("Red Two", "Last of those TIE-Fighters is down. Our six is clear!"),
+}
+
+# After every enemy wave is down: the closing chatter, then the victory.
+ALL_CLEAR_VICTORY_DELAY_S = 7
+
 FACING_NORTH = [1, 0, 0, 0]
 FACING_SOUTH = [0, 0, 0, 1]
 
@@ -176,20 +228,36 @@ def mission3_mission(m: Mission) -> Iterator[None]:
 
     m.on(blockade_past, on_blockade_past)
 
+    # Also won once every enemy wave is down: the convoy is safe from there,
+    # no need to wait for it to reach the fleet.
+    every_wave_down = all_of(
+        first_wave.all_destroyed,
+        second_wave.all_destroyed,
+        third_wave.all_destroyed,
+        fourth_wave.all_destroyed,
+    )
+    convoy_safe = all_of(every_wave_down, transports.alive)
+
     convoy_arrived = reached_waypoint(transports, CONVOY_LAST_WAYPOINT)
     m.objective(
         "Escort the convoy to the fleet",
-        done=convoy_arrived,
+        done=any_of(convoy_arrived, convoy_safe),
         failed=transports.all_destroyed,
     )
     m.objective(
         "Bonus: lose no transport",
-        done=convoy_arrived,
+        done=any_of(convoy_arrived, convoy_safe),
         failed=transports.any_destroyed,
     )
     m.on(
         m.delay(blockade_past, 3),
         lambda: m.victory("The convoy reached the fleet. Mission accomplished."),
+    )
+    m.on(
+        m.delay(convoy_safe, ALL_CLEAR_VICTORY_DELAY_S),
+        lambda: m.victory(
+            "Every enemy wave destroyed. The convoy is safe. Mission accomplished."
+        ),
     )
 
     m.on(
@@ -204,6 +272,19 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         m.delay(transports.any_destroyed, 3),
         lambda: m.speech(
             "We just lost a transport, crew and all. Don't let it happen again!",
+            speaker="Convoy Lead",
+        ),
+    )
+    m.on(
+        damaged(transports),
+        lambda: m.speech(
+            "We're taking hits! Get those bombers off us!", speaker="Convoy Lead"
+        ),
+    )
+    m.on(
+        lambda: transports.destroyed_count() == 2,
+        lambda: m.speech(
+            "Another transport gone! Last ship, stick to the escort like glue!",
             speaker="Convoy Lead",
         ),
     )
@@ -226,29 +307,84 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         lambda: m.speech("Scratch one bomber!", speaker="Red Two"),
     )
     m.on(
-        first_wave.all_destroyed,
+        second_wave.any_destroyed,
+        lambda: m.speech("Splash one TIE!", speaker="Red Three"),
+    )
+
+    # A wave cleared, commented on by what is left of its kind: more of them
+    # still flying, more to come, or the last of them.
+    def comment_on_the_clear(
+        wave: WaveHandle,
+        kind: list,
+        lines: dict,
+        after_the_last: Optional[Callable[[], Iterator[None]]] = None,
+    ):
+        def comment():
+            others = [other for other in kind if other is not wave]
+            if any(other.alive() for other in others):
+                speaker, line = lines["more_flying"]
+            elif not all(other.ids for other in others):
+                speaker, line = lines["more_to_come"]
+            else:
+                speaker, line = lines["last"]
+                if after_the_last is not None:
+                    m.schedule(after_the_last())
+            m.speech(line, speaker=speaker)
+
+        m.on(wave.all_destroyed, comment)
+
+    def convoy_runs_for_it() -> Iterator[None]:
+        yield from m.wait(4)
+        if not every_wave_down():
+            m.speech(
+                "Copy, Red Leader. Pushing our engines past the red line.",
+                speaker="Convoy Lead",
+            )
+
+    bombers = [first_wave, third_wave]
+    fighters = [second_wave, fourth_wave]
+    for wave in bombers:
+        comment_on_the_clear(wave, bombers, BOMBER_CLEAR_LINES, convoy_runs_for_it)
+    for wave in fighters:
+        comment_on_the_clear(wave, fighters, FIGHTER_CLEAR_LINES)
+
+    # Registered after the waves' comments, so it has the last word.
+    m.on(
+        every_wave_down,
         lambda: m.speech(
-            "That's the last of the first wave. Nice shooting, Red squadron.",
+            "That's every last one of them! Nothing left up here but us.",
             speaker="Red Leader",
         ),
     )
     m.on(
-        second_wave.all_destroyed,
+        m.delay(every_wave_down, 4),
         lambda: m.speech(
-            "TIE-Fighters are down! They're off our backs.", speaker="Red Three"
+            "Red squadron, the drinks are on us when we land.", speaker="Convoy Lead"
         ),
     )
+
+    # Each pilot lost, mourned by the first survivor in the chain of command.
+    mourned = set()
+
+    def mourn_the_escort():
+        alive_ids = {pawn.id for pawn in escort.pawns()}
+        survivors = [
+            name for pawn_id, name in zip(escort.ids, RED_NAMES) if pawn_id in alive_ids
+        ]
+        for pawn_id, name in zip(escort.ids, RED_NAMES):
+            if pawn_id in alive_ids or pawn_id in mourned:
+                continue
+            mourned.add(pawn_id)
+            if survivors:
+                line = ESCORT_LOSS_LINES[min(len(mourned), len(ESCORT_LOSS_LINES)) - 1]
+                m.speech(line.format(name=name), speaker=survivors[0])
+
+    m.on(lambda: escort.destroyed_count() > len(mourned), mourn_the_escort, once=False)
     m.on(
-        third_wave.all_destroyed,
+        escort.all_destroyed,
         lambda: m.speech(
-            "Bombers cleared! Convoy, you're free to run.", speaker="Red Leader"
-        ),
-    )
-    m.on(
-        escort.any_destroyed,
-        lambda: m.speech(
-            "We've lost one of ours! Close up the gaps, Red squadron.",
-            speaker="Red Leader",
+            "Red squadron's gone... It's all on you now, Red Seven.",
+            speaker="Convoy Lead",
         ),
     )
     m.on(

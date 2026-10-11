@@ -155,6 +155,37 @@ def damaged(who: Any) -> Condition:
     return cond
 
 
+def being_hit(who: Any, by_player: bool = False) -> Condition:
+    """
+    True on a frame where any live pawn of who has lost health or shield
+    since the previous check: a hit, wherever its regenerating shield was.
+
+    Keeps the last reading per pawn, so it is stateful: build it once, when
+    the rule is declared. Its first check only takes the readings.
+
+    :param who: See :func:`pawns_of`
+    :param by_player: Only count the player's hits (the pawn's last hitter,
+        see :func:`~space_flight.game.kills.credit_hit`)
+    :return: The condition
+    """
+    readings: dict = {}
+
+    def cond() -> bool:
+        was_hit = False
+        for pawn in pawns_of(who):
+            integrity = pawn.health + pawn.shield_level
+            previous = readings.get(pawn.id)
+            readings[pawn.id] = integrity
+            if previous is None or integrity >= previous:
+                continue
+            hitter = getattr(pawn, "last_hit_by", None)
+            if not by_player or (hitter is not None and hitter.is_player):
+                was_hit = True
+        return was_hit
+
+    return cond
+
+
 # ---------------------------------------------------------------------------
 # Combinators
 # ---------------------------------------------------------------------------

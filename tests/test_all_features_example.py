@@ -13,6 +13,7 @@ from mission_fakes import FakeGame, advance, kill_all, live, patch_engine
 
 from space_flight.game.kills import DamageSource
 from space_flight.game.scenario import Mission
+from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
 
 EXAMPLE = Path(__file__).parent.parent / "docs/source/examples/all_features_example.py"
 
@@ -54,7 +55,7 @@ def test_happy_path(game, mission, spawned):
     play_to_the_shadowing_phase(game, mission, spawned)
     boarding = live(game, spawned, "boarding")
     game.player.pawn.position = boarding[0].position.copy()
-    advance(game, mission, 1)
+    advance(game, mission, 1 + LEVEL_END_DELAY_S)
 
     assert game.end_level_calls == [
         ("victory", "Mission complete: every feature exercised.")
@@ -133,7 +134,7 @@ def test_homeguard_wiped_defeat(game, mission, spawned):
     advance(game, mission, 1)
     assert ("Ops: We're taking losses!", 6.0) in game.hud.chatter
     assert game.end_level_calls == []
-    advance(game, mission, 3)
+    advance(game, mission, 3 + LEVEL_END_DELAY_S)
     assert game.end_level_calls[0] == ("defeat", "The home guard was destroyed.")
     assert game.objectives_at_end["Keep the home guard alive"] == "failed"
 

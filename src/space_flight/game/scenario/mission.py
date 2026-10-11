@@ -48,6 +48,10 @@ LOGGER = logging.getLogger()
 #: An action: called once when a rule fires.
 Action = Callable[[], None]
 
+#: Seconds between a mission ending the level and the level-end screen, so the
+#: player sees the objectives' final state.
+LEVEL_END_DELAY_S = 2.0
+
 
 class Trigger:
     """
@@ -97,6 +101,8 @@ class Mission:
         self.jobs: list[Iterator] = []
         #: The objectives shown on the HUD, in the order they were given
         self.objectives: list[Objective] = []
+        #: The outcome the mission is ending on, once it is (see end_level)
+        self.ending: Optional[str] = None
 
     def now(self) -> float:
         """The game clock, in seconds."""
@@ -356,13 +362,22 @@ class Mission:
             self.game.player_waypoints = None
 
     def end_level(self, outcome: str, text: str = ""):
-        """End the level ("victory", "defeat" or "death")."""
-        # Settle the objectives this very frame settles before the level's
-        # tally: their rules may come after the one ending the level.
+        """
+        End the level ("victory", "defeat" or "death"): the objectives take
+        their final state at once, and the level-end screen follows
+        LEVEL_END_DELAY_S later. Only the first ending counts.
+        """
+        if self.ending is not None:
+            return
+        self.ending = outcome
         for objective in list(self.objectives):
-            for rule in list(objective.rules):
-                rule.maybe_fire()
-        self.game.end_level(outcome=outcome, text=text)
+            objective.finalize()
+
+        def show_the_end() -> Iterator[None]:
+            yield from self.wait(LEVEL_END_DELAY_S)
+            self.game.end_level(outcome=outcome, text=text)
+
+        self.schedule(show_the_end())
 
     def victory(self, text: str = ""):
         self.end_level("victory", text)

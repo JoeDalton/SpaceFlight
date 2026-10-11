@@ -9,7 +9,14 @@ import uuid
 
 import numpy as np
 import pytest
-from mission_fakes import FakeGame, FakeHangar, advance, kill_all, patch_engine
+from mission_fakes import (
+    FakeGame,
+    FakeHangar,
+    MockBot,
+    advance,
+    kill_all,
+    patch_engine,
+)
 
 from space_flight.ai.formation import Formation
 from space_flight.game.kills import DamageSource
@@ -17,6 +24,7 @@ from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
     any_of,
+    being_hit,
     damaged,
     ids_of,
     near,
@@ -25,6 +33,7 @@ from space_flight.game.scenario.conditions import (
     pawns_of,
     reached_waypoint,
 )
+from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
 
 WAVE = WaveSpec(
     name="wave", ship_model="tie-bomber", size=3, spawn_point=[100, 200, 300]
@@ -217,15 +226,41 @@ def test_hud_and_speech_are_skipped_headless(game, mission):
     assert game.hud.messages == [] and game.hud.chatter == []
 
 
-def test_end_level_victory_defeat(game, mission):
+@pytest.mark.parametrize(
+    "end, outcome",
+    [
+        (lambda m: m.victory("why"), "victory"),
+        (lambda m: m.defeat("why"), "defeat"),
+        (lambda m: m.end_level("death", "why"), "death"),
+    ],
+)
+def test_the_level_ends_after_a_delay(game, mission, end, outcome):
+    end(mission)
+    advance(game, mission, LEVEL_END_DELAY_S - 0.1)
+    assert game.end_level_calls == []
+
+    advance(game, mission, 0.2)
+    assert game.end_level_calls == [(outcome, "why")]
+
+
+def test_only_the_first_ending_counts(game, mission):
     mission.victory("won")
     mission.defeat("lost")
-    mission.end_level("death", "dead")
-    assert game.end_level_calls == [
-        ("victory", "won"),
-        ("defeat", "lost"),
-        ("death", "dead"),
-    ]
+    advance(game, mission, LEVEL_END_DELAY_S + 1)
+
+    assert mission.ending == "victory"
+    assert game.end_level_calls == [("victory", "won")]
+
+
+def test_objectives_are_frozen_once_the_level_ends(game, mission):
+    lost = []
+    objective = mission.objective("Keep them alive", failed=lambda: bool(lost))
+    mission.victory("won")
+
+    lost.append(True)
+    advance(game, mission, LEVEL_END_DELAY_S + 1)
+
+    assert objective.active()
 
 
 def test_player_waypoints_replaces_the_previous_route(game, mission, spawned):
@@ -432,6 +467,39 @@ def test_wave_destroyed_count(game, mission, spawned):
     assert wave.destroyed_count() == 2
 
 
+def test_being_hit_is_true_on_the_frames_integrity_drops(game):
+    pawn = game.player.pawn
+    pawn.shield_level = 50.0
+    hit = being_hit(game.player)
+    assert not hit()  # takes the readings
+
+    pawn.shield_level = 40.0
+    assert hit()
+    assert not hit()  # nothing new
+
+    # A regenerating shield never hides the next hit
+    pawn.shield_level = 60.0
+    assert not hit()
+    pawn.health -= 1.0
+    assert hit()
+
+
+def test_being_hit_by_the_player_reads_the_last_hitter(game):
+    pawn = game.player.pawn
+    target = MockBot("tie", [0, 0, 0], team=2).pawn
+    game.interactions.add(target)
+    hit = being_hit(target, by_player=True)
+    hit()
+
+    target.last_hit_by = DamageSource.of(MockBot("x", [0, 0, 0], team=2).pawn, game)
+    target.health -= 1.0
+    assert not hit()
+
+    target.last_hit_by = DamageSource.of(pawn, game)
+    target.health -= 1.0
+    assert hit()
+
+
 # ---------------------------------------------------------------------------
 # Objectives
 # ---------------------------------------------------------------------------
@@ -545,7 +613,7 @@ def test_ending_the_level_settles_objectives_due_this_frame(game, mission):
     objective = mission.objective("Keep them alive", failed=lambda: bool(wiped))
 
     wiped.append(True)
-    mission.update()
+    advance(game, mission, LEVEL_END_DELAY_S + 0.1)
 
     assert states_at_end == ["failed"]
 

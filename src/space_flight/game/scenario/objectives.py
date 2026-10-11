@@ -105,6 +105,15 @@ class Objective:
         """Fail it (a no-op once settled)."""
         self._settle(FAILED)
 
+    def finalize(self):
+        """
+        Fix its final state, as the level ends: its rules due this very frame
+        still fire (they may come after the one ending the level), then retire.
+        """
+        for rule in list(self.rules):
+            rule.maybe_fire()
+        self._retire_rules()
+
     def remove(self):
         """Take it off the list, settled or not."""
         self._retire_rules()

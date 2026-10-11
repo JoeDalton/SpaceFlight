@@ -374,6 +374,9 @@ class FlightState(BaseState):
         :param text: explanatory text shown beneath the outcome title
             (ignored headless)
         """
+        # Only the first ending counts
+        if self.outcome is not None:
+            return
         self.outcome = outcome
         self.level_stats = self.compute_level_stats()
         if not self.headless:

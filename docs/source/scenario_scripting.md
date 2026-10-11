@@ -280,6 +280,7 @@ Every condition or method taking a `who` accepts:
 | `near_actor(a, b, radius)` | the nearest pair of live pawns between `a` and `b` is within `radius` (two moving targets) |
 | `reached_waypoint(who, index)` | any live bot of `who` has reached its waypoint `index` (0-based) |
 | `damaged(who)` | any live pawn of `who` has lost health or shield since the condition first saw it (stateful: build it once) |
+| `being_hit(who, by_player=False)` | any live pawn of `who` lost health or shield since the previous frame — a fresh hit, even on a regenerating shield; only the player's hits if `by_player` (stateful: build it once) |
 | `scan.complete` / `scan.started` / `scan.progress_at_least(x)` | see [Scanning](#scanning) |
 | `wave.alive` / `wave.all_destroyed` / `wave.any_destroyed` | see [`WaveHandle`](#wavehandle) |
 | `objective.done` / `objective.failed` / `objective.active` | see [Objectives](#objectives) |
@@ -353,7 +354,9 @@ conditions. The level-end screen counts the objectives completed, so an
 objective that holds until the end (a rule of engagement, "keep X alive")
 needs ticking by the body before a victory. Ending the level first settles
 any objective whose condition holds that very frame, so a defeat rule
-declared before the objective on the same condition still counts it failed.
+declared before the objective on the same condition still counts it failed;
+the objectives are then frozen, and the level-end screen follows 2 seconds
+later (`LEVEL_END_DELAY_S`), so the player sees their final state.
 
 A "bonus" objective is just one whose failure doesn't end the level, e.g.
 `m.objective("Bonus: lose no transport", done=arrived, failed=transports.any_destroyed)`.
@@ -387,7 +390,7 @@ friendly fire.
 | `m.speech(text, speaker=None, display_time_s=6.0)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
 | `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
 | `m.clear_player_waypoints()` | removes it |
-| `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`), showing the level-end screen with the player's kills and objectives |
+| `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`): freezes the objectives, then shows the level-end screen, with the player's kills and objectives, 2 seconds later. Only the first ending counts |
 
 HUD text and speech are skipped headless.
 
@@ -420,9 +423,10 @@ comes. Its state methods are simply false until then.
 ### Only one ending
 
 The body and a rule can each end the level, e.g. a rule-driven defeat while
-the body later reaches a victory. When both are possible, cancel the rule
-once it no longer applies (`rule.cancel()`), or make the body check the
-same condition.
+the body later reaches a victory. Only the first ending counts: later calls
+are ignored. Still, cancel a rule once it no longer applies
+(`rule.cancel()`), so its other actions (a speech line...) don't play
+during the ending.
 
 ### Extending
 

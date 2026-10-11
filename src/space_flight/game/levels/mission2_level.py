@@ -17,9 +17,17 @@ from typing import TYPE_CHECKING, Iterator, Sequence
 
 import numpy as np
 
+from space_flight.actors.energy import LASERS
 from space_flight.actors.player import Player
+from space_flight.game.levels.hints import power_hint
 from space_flight.game.scenario import WaveSpec
-from space_flight.game.scenario.conditions import all_of, any_of, damaged, near
+from space_flight.game.scenario.conditions import (
+    all_of,
+    any_of,
+    being_hit,
+    damaged,
+    near,
+)
 from space_flight.scenes.scenes import scene_factory
 from space_flight.ui.input_context import InputContext
 
@@ -72,6 +80,9 @@ TIES_BEHIND_M = 1000
 INTRO_DELAY_S = 40  # patrol chatter before the convoy shows up
 CONVOY_INTERVAL_S = 20  # between two convoy transports
 DEFEAT_DELAY_S = 3
+# After Blue Leader's cease fire order, shots already on their way: any hit
+# on a civilian after this is defiance
+CEASE_FIRE_GRACE_S = 3
 VICTORY_DELAY_S = 3
 
 
@@ -214,20 +225,43 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             m.on(m.delay(condition, DEFEAT_DELAY_S), lambda: end("defeat", text))
         )
 
-    # --- rules of engagement, live until the reveal --------------------------
+    # --- rules of engagement: a warning, then grounded --------------------------
     civilians = _Civilians([*convoy, smuggler])
-    m.on(
-        damaged(civilians),
-        lambda: m.speech(
-            "Blue Three, cease fire! Those are civilians!", speaker="Blue Leader"
-        ),
-    )
+    fired_again = []
+
+    def on_fired_again():
+        fired_again.append(True)
+        m.speech(
+            "Three, I said cease fire! That's it, you're grounded.",
+            speaker="Blue Leader",
+        )
+        end(
+            "defeat",
+            "You kept firing on civilians after Blue Leader's order.\n"
+            "Your wings are grounded.",
+        )
+
+    def warn_civilian_fire():
+        m.speech("Blue Three, cease fire! Those are civilians!", speaker="Blue Leader")
+        endings.append(
+            m.on(
+                all_of(
+                    m.after(CEASE_FIRE_GRACE_S), being_hit(civilians, by_player=True)
+                ),
+                on_fired_again,
+            )
+        )
+
+    m.on(damaged(civilians), warn_civilian_fire)
     revealed = []
 
     def civilian_destroyed() -> bool:
         return any(t.all_destroyed() for t in convoy) or (
             smuggler.all_destroyed() and not revealed
         )
+
+    def fired_on_civilians() -> bool:
+        return bool(fired_again) or civilian_destroyed()
 
     endings.append(
         m.on(
@@ -305,13 +339,14 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         speaker="Blue Leader",
     )
     yield from m.wait(6)
-    m.hud("Stay with Blue Leader on patrol.")
+    patrol = m.objective("Stay with Blue Leader on patrol")
 
     # ==================================================================
     # 2. The convoy: three clean transports to scan
     # ==================================================================
     yield from m.wait(INTRO_DELAY_S - 16)
     convoy[0].spawn()
+    patrol.complete()
     m.objective(
         "Scan the transports",
         progress=lambda: len(cleared),
@@ -319,7 +354,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         failed=any_of(*unscanned_exits),
     )
     standing_orders.append(
-        m.objective("Hold fire on civilians", failed=civilian_destroyed)
+        m.objective("Hold fire on civilians", failed=fired_on_civilians)
     )
     standing_orders.append(
         m.objective("Keep Blue flight alive", failed=blue.all_destroyed)
@@ -411,6 +446,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     revealed.append(True)
     smuggler_unscanned_exit.cancel()
     m.speech("Weapons crates! It's a gun-runner!", speaker="Blue Leader")
+    m.hud(f"{power_hint(game.app, LASERS)}\nYou'll need the firepower.")
     smuggler.set_team(2)
 
     dorn = smuggler.pawns()[0]
