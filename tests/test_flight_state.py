@@ -7,12 +7,15 @@ object.__new__() and set only the attributes each method reads. The
 recentering tests use real (window-less) NodePaths, which need no ShowBase.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 from panda3d.core import NodePath
 
 from space_flight.game.flight_state import FlightState
+from space_flight.game.kills import DamageSource, KillLog, credit_hit
+from space_flight.game.scenario import Mission
 
 
 def _make_flight_state(headless: bool) -> FlightState:
@@ -20,6 +23,10 @@ def _make_flight_state(headless: bool) -> FlightState:
     fs.headless = headless
     fs.outcome = None
     fs.app = MagicMock()
+    fs.game_time = SimpleNamespace(get_current_time=lambda: 0.0)
+    fs.player = SimpleNamespace(pawn=SimpleNamespace(id="player-id", team=1))
+    fs.kill_log = KillLog(fs)
+    fs.mission = Mission(fs)
     return fs
 
 
@@ -36,6 +43,7 @@ def test_end_level_pushes_level_end_state_when_not_headless():
         state_class=fs.app.state_manager.LEVEL_END_STATE,
         outcome="defeat",
         text="You lost.",
+        stats=fs.level_stats,
     )
 
 
@@ -44,6 +52,28 @@ def test_end_level_does_not_push_any_state_when_headless():
     fs.end_level(outcome="death", text="Your ship was destroyed.")
     assert fs.outcome == "death"
     fs.app.state_manager.push.assert_not_called()
+
+
+def test_end_level_tallies_the_players_kills_and_the_objectives():
+    fs = _make_flight_state(headless=True)
+    tie = SimpleNamespace(
+        id="tie-id", parent=SimpleNamespace(name="tie"), team=2, category="fighter"
+    )
+    tie.health = 100.0
+    credit_hit(tie, DamageSource.of(fs.player.pawn, fs))
+    fs.kill_log.record(tie)
+    fs.mission.objective("Shoot it down").complete()
+    fs.mission.objective("Keep it secret").fail()
+    fs.mission.objective("Get home")
+
+    fs.end_level(outcome="victory")
+
+    assert fs.level_stats == {
+        "kills": 1,
+        "by_category": {"fighter": 1},
+        "friendly": 0,
+        "objectives": {"total": 3, "complete": 1, "failed": 1},
+    }
 
 
 # Far enough from the origin that float32 steps are ~8 mm

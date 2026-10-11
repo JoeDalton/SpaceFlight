@@ -18,6 +18,7 @@ from space_flight.game.kills import KillLog
 from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
 from space_flight.game.scenario import Mission
+from space_flight.game.scenario.objectives import summarize as summarize_objectives
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -59,6 +60,9 @@ class FlightState(BaseState):
         # ("victory", "defeat" or "death"); read by headless callers to know
         # when to stop stepping the simulation.
         self.outcome: str | None = None
+        # The level's tally (kills, objectives), set with the outcome (see
+        # compute_level_stats)
+        self.level_stats: dict | None = None
 
     def enter(self):
         """
@@ -371,12 +375,27 @@ class FlightState(BaseState):
             (ignored headless)
         """
         self.outcome = outcome
+        self.level_stats = self.compute_level_stats()
         if not self.headless:
             self.app.state_manager.push(
                 state_class=self.app.state_manager.LEVEL_END_STATE,
                 outcome=outcome,
                 text=text,
+                stats=self.level_stats,
             )
+
+    def compute_level_stats(self) -> dict:
+        """
+        The level's tally, for the level-end screen: the player's kills (see
+        :meth:`KillLog.player_summary`) and how the objectives went.
+
+        :return: The player's kill summary, plus ``"objectives"`` (see
+            :func:`~space_flight.game.scenario.objectives.summarize`)
+        """
+        return {
+            **self.kill_log.player_summary(),
+            "objectives": summarize_objectives(self.mission.objectives),
+        }
 
     def update_mission_task(self, task: Task) -> int:
         """

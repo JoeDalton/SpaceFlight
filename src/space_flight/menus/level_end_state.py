@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from direct.showbase.ShowBase import ShowBase
 
 # TODO: Overlay transparent-grey image between game and menu buttons
-# TODO: Stats of the level
 
 # Title shown for each level-ending outcome, plus a tint for the title text.
 _OUTCOMES = {
@@ -28,23 +27,69 @@ _OUTCOMES = {
 }
 _DEFAULT_COLOR = (1.0, 1.0, 1.0, 1.0)
 
+# How each kill category reads in the stats, singular and plural.
+_CATEGORY_NAMES = {
+    "fighter": ("fighter", "fighters"),
+    "capital_ship": ("capital ship", "capital ships"),
+    "sub_system": ("subsystem", "subsystems"),
+}
+
+
+def stats_lines(stats: dict | None) -> list[str]:
+    """
+    The level's tally, as the level-end screen shows it.
+
+    :param stats: The level's stats (see FlightState.compute_level_stats), or
+        None for none
+    :return: Its lines: the player's kills by category, friendly fire if
+        any, and the objectives completed if the level had any
+    """
+    if not stats:
+        return []
+    by_category = []
+    for category, count in stats["by_category"].items():
+        singular, plural = _CATEGORY_NAMES.get(category, (category, category))
+        by_category.append(f"{count} {singular if count == 1 else plural}")
+    kills = f"Kills: {stats['kills']}"
+    if by_category:
+        kills += f" ({', '.join(by_category)})"
+    lines = [kills]
+    if stats["friendly"]:
+        lines.append(f"Friendly fire: {stats['friendly']}")
+    objectives = stats["objectives"]
+    if objectives["total"]:
+        line = f"Objectives: {objectives['complete']}/{objectives['total']}"
+        if objectives["failed"]:
+            line += f", {objectives['failed']} failed"
+        lines.append(line)
+    return lines
+
 
 class LevelEndState(BaseState):
     """
     Terminal screen shown when a level ends, for any outcome.
 
     The outcome (victory, defeat or death) selects the title and its
-    tint; an optional text gives the level-specific explanation beneath it.
+    tint; an optional text gives the level-specific explanation beneath it,
+    and the level's stats (kills, objectives) come under that.
 
     :param app: The ShowBase application
     :param outcome: One of victory, defeat or death
     :param text: Explanatory text shown beneath the title
+    :param stats: The level's stats (see FlightState.compute_level_stats)
     """
 
-    def __init__(self, app: ShowBase, outcome: str = "victory", text: str = ""):
+    def __init__(
+        self,
+        app: ShowBase,
+        outcome: str = "victory",
+        text: str = "",
+        stats: dict | None = None,
+    ):
         super().__init__(app)
         self.outcome = outcome
         self.text = text
+        self.stats = stats
 
     def enter(self):
         """
@@ -79,6 +124,15 @@ class LevelEndState(BaseState):
             text_shadow=(0, 0, 0, 0.75),
             text_shadowOffset=(0.05, 0.05),
         )
+        self.stats_label = DirectLabel(
+            text="\n".join(stats_lines(self.stats)),
+            scale=0.05,
+            pos=(0.0, 0.0, 0.02),
+            frameColor=(0, 0, 0, 0),
+            text_fg=(0.85, 0.85, 0.85, 1),
+            text_shadow=(0, 0, 0, 0.75),
+            text_shadowOffset=(0.05, 0.05),
+        )
         button_scale = 0.5
         text_scale = 0.15
         self.return_button = CustomButton(
@@ -87,7 +141,7 @@ class LevelEndState(BaseState):
             scale=button_scale,
             text_scale=text_scale,
             command=self.return_to_main,
-            pos=(0.0, 0.0, -0.1),
+            pos=(0.0, 0.0, -0.3),
             layout="center",
         )
         self.quit_button = CustomButton(
@@ -96,7 +150,7 @@ class LevelEndState(BaseState):
             scale=button_scale,
             text_scale=text_scale,
             command=self.quit_game,
-            pos=(0.0, 0.0, -0.4),
+            pos=(0.0, 0.0, -0.55),
             layout="center",
         )
         # Also blocks the flight inputs below
@@ -130,6 +184,7 @@ class LevelEndState(BaseState):
         self.menu_navigator.remove()
         self.text_label.destroy()
         self.subtitle_label.destroy()
+        self.stats_label.destroy()
         self.return_button.destroy()
         self.quit_button.destroy()
         self.frame.destroy()

@@ -25,6 +25,18 @@ def reaches(progress: Callable[[], int], goal: int) -> Callable[[], bool]:
     return lambda: progress() >= goal
 
 
+def summarize(objectives: list[Objective]) -> dict:
+    """
+    :param objectives: A mission's objectives
+    :return: ``{"total": n, "complete": n, "failed": n}``
+    """
+    return {
+        "total": len(objectives),
+        "complete": sum(1 for objective in objectives if objective.done()),
+        "failed": sum(1 for objective in objectives if objective.failed()),
+    }
+
+
 class Objective:
     """
     One line of the mission's objectives, made by :meth:`Mission.objective
