@@ -4,6 +4,8 @@ from enum import Enum, auto
 import numpy as np
 
 TARGET_DISTANCE_TOLERANCE_M = 1.0
+# Below this norm a blended direction is treated as null (unit-less)
+DIRECTION_NORM_TOLERANCE = 1e-4
 INTERACT_MAX_DISTANCE_M = 10000.0
 REFERENCE_ERROR_VELOCITY_MPS = 100
 ROLL_TOLERANCE = 1e-2

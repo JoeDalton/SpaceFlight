@@ -294,9 +294,10 @@ class MajorShip(Ship):
             self.hangars = []
             self.shield = None
             self.mounted_bots = []
+            app = self.game.app  # Ship.clean drops self.game
             super().clean()
             if DEBUG_DELETION:
                 LOGGER.info("Cleaned ship")
                 LOGGER.info(f"ship nref = {sys.getrefcount(self)}")
                 LOGGER.info(f"ship references {gc.get_referrers(self)}")
-                LOGGER.info(self.game.app.taskMgr.getAllTasks)
+                LOGGER.info(app.taskMgr.getAllTasks())

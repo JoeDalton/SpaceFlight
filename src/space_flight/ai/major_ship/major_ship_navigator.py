@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING, Any, Tuple
 import numpy as np
 
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
+from space_flight.ai import (
+    DIRECTION_NORM_TOLERANCE,
+    TARGET_DISTANCE_TOLERANCE_M,
+    Intent,
+    Personality,
+)
 from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
@@ -69,7 +74,7 @@ class MajorShipNavigator(GenericShipNavigator):
             self.engage_phase = ""
             return self.formation(target_dict)
         else:
-            return ValueError(f"Unknown intent: {intent}")
+            raise ValueError(f"Unknown intent: {intent}")
 
         # %% ==== ENGAGE ====
 
@@ -168,7 +173,7 @@ class MajorShipNavigator(GenericShipNavigator):
         )
 
         desired_norm = magnitude(desired_direction)
-        if desired_norm < TARGET_DISTANCE_TOLERANCE_M:
+        if desired_norm < DIRECTION_NORM_TOLERANCE:
             return NO_DIRECTION
         return desired_direction / desired_norm, orbit["orbit_speed_mps"]
 

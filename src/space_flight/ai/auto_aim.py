@@ -263,7 +263,7 @@ class AutoAim:
         """
         self.target_lock.clean()
         self.game = None
-        self.ship = None
+        self.parent = None
         if DEBUG_DELETION:
             LOGGER.info("Cleaned auto-aim")
 

@@ -286,39 +286,37 @@ def build_axis_billboard_quat(
 ) -> quaternion:
     """
     Builds a quaternion that rotates the +Y axis onto `forward`.
-    The up_hint is used to pin the `up` direction. It defaults to world Z+,
-    with a fallback to world +X if `forward` is nearly vertical.
-
-    #TODO test the crap out of this !
+    The up_hint is used to pin the `up` direction. It defaults to world Z+
+    (also used when the hint is null or (anti-)parallel to `forward`), with a
+    fallback to world +X if `forward` is nearly vertical.
 
     :param forward: The axis of the billboard
-    :param up_hint: The up hint vector, defaults to None
+    :param up_hint: The up hint vector (any length, e.g. a Vec3), defaults to None
     :return: A quaternion object for axis billboards
     """
     # Normalize forward vector
     forward_norm = magnitude(forward)
     if forward_norm < 1e-4:
-        forward_axis = np.array([0, 1, 0])
+        forward_axis = np.array([0.0, 1.0, 0.0])
     else:
-        forward_axis = forward / forward_norm
+        forward_axis = np.array([forward[0], forward[1], forward[2]]) / forward_norm
 
     # Normalize up_hint
+    up_hint_axis = None
     if up_hint is not None:
         up_hint_norm = magnitude(up_hint)
-        if forward_norm < 1e-4:
-            up_hint_axis = np.array([0, 0, 1])
-        else:
-            up_hint_axis = up_hint / up_hint_norm
+        if up_hint_norm >= 1e-4:
+            up_hint_axis = np.array([up_hint[0], up_hint[1], up_hint[2]]) / up_hint_norm
 
-    # Default up direction and fallback for forward/up alignment
-    if (up_hint is None) or (np.dot(forward_axis, up_hint_axis) > 0.99):
-        up_hint_axis = np.array([0, 0, 1])
-    # Second fallback in the case where up_hint was None and forward was world +Z
-    if np.dot(forward, up_hint) > 0.99:
-        up_hint_axis = np.array([1, 0, 0])
+    # Default up direction and fallback for forward/up (anti-)alignment
+    if up_hint_axis is None or abs(np.dot(forward_axis, up_hint_axis)) > 0.99:
+        up_hint_axis = np.array([0.0, 0.0, 1.0])
+    # Second fallback when forward itself is nearly vertical
+    if abs(np.dot(forward_axis, up_hint_axis)) > 0.99:
+        up_hint_axis = np.array([1.0, 0.0, 0.0])
 
-    # Build orthogonal basis
-    right_axis = cross3(forward_axis, up_hint_axis)
+    # Build orthonormal basis
+    right_axis = normalize(cross3(forward_axis, up_hint_axis))
     up_axis = cross3(right_axis, forward_axis)
 
     quat = quaternion.from_rotation_matrix(

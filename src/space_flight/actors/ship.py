@@ -974,5 +974,5 @@ class Ship(Pawn):
             # somewhere but I can't find them. Bot deletes fine, though. Children,
             # including panda3d objects are properly deleted, I believe, so this
             # should not have too much of a memory impact. It's still enraging, though..
-            LOGGER.info(self.game.app.taskMgr.getAllTasks)
+            # (self.game is already None here: clean() has run)
             LOGGER.info("Deleted ship")

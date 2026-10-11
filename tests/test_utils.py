@@ -565,6 +565,43 @@ def test_build_axis_billboard_quat_various_directions():
         assert isinstance(quat, np.quaternion)
 
 
+def _billboard_axes(quat):
+    """Columns of the billboard rotation: the images of +X, +Y and +Z."""
+    matrix = quaternion.as_rotation_matrix(quat)
+    return matrix[:, 0], matrix[:, 1], matrix[:, 2]
+
+
+@pytest.mark.parametrize(
+    "forward, up_hint",
+    [
+        ([1.0, 0.0, 0.0], None),  # default up hint
+        ([0.0, 0.0, 1.0], None),  # vertical forward: +X fallback
+        ([0.0, 0.0, -1.0], None),  # vertical (downwards) forward
+        ([300.0, 0.0, 0.0], [-50.0, 0.0, 0.0]),  # hint anti-parallel to forward
+        ([300.0, 0.0, 0.0], [50.0, 0.0, 0.0]),  # hint parallel to forward
+        ([300.0, 10.0, 0.0], [0.0, 0.0, 0.0]),  # null hint
+        ([300.0, 0.0, 0.0], [2.0, 50.0, 0.0]),  # long, slightly ahead hint
+    ],
+)
+def test_build_axis_billboard_quat_maps_y_onto_forward(forward, up_hint):
+    forward = np.array(forward)
+    up_hint = None if up_hint is None else np.array(up_hint)
+    quat = build_axis_billboard_quat(forward, up_hint=up_hint)
+    right, image_of_y, up = _billboard_axes(quat)
+    np.testing.assert_allclose(image_of_y, forward / np.linalg.norm(forward), atol=1e-9)
+    np.testing.assert_allclose(np.linalg.norm(right), 1.0, atol=1e-9)
+    np.testing.assert_allclose(np.dot(right, image_of_y), 0.0, atol=1e-9)
+
+
+def test_build_axis_billboard_quat_up_follows_a_long_hint():
+    """The hint's length is irrelevant: up leans towards it, not towards a
+    fallback axis (lasers pass a speed and a camera offset, both far from unit)."""
+    forward = np.array([300.0, 0.0, 0.0])
+    up_hint = np.array([2.0, 50.0, 0.0])
+    _, _, up = _billboard_axes(build_axis_billboard_quat(forward, up_hint=up_hint))
+    np.testing.assert_allclose(up, [0.0, 1.0, 0.0], atol=1e-9)
+
+
 # ---------------------------
 # compute_next_power_of_2
 # ---------------------------
