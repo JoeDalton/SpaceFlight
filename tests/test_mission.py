@@ -9,20 +9,32 @@ import uuid
 
 import numpy as np
 import pytest
-from mission_fakes import FakeGame, FakeHangar, advance, kill_all, patch_engine
+from mission_fakes import (
+    FakeGame,
+    FakeHangar,
+    MockBot,
+    advance,
+    kill_all,
+    patch_engine,
+)
 
 from space_flight.ai.formation import Formation
+from space_flight.game.kills import DamageSource
 from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
     any_of,
+    being_hit,
     damaged,
+    ids_of,
     near,
     near_actor,
     not_,
     pawns_of,
     reached_waypoint,
 )
+from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
+from space_flight.ui.hud import CHATTER_DISPLAY_S, EVENT_DISPLAY_S, HINT_DISPLAY_S
 
 WAVE = WaveSpec(
     name="wave", ship_model="tie-bomber", size=3, spawn_point=[100, 200, 300]
@@ -197,33 +209,63 @@ def test_sustained_needs_an_unbroken_run(game, mission):
 # ---------------------------------------------------------------------------
 
 
-def test_hud_and_speech(game, mission):
+def test_hud_hint_and_speech(game, mission):
     mission.hud("First wave")
+    mission.hint("Press [1].")
     mission.speech("Standing by.", speaker="Red Leader")
     mission.speech("Narration.")
-    assert game.hud.messages == [("First wave", 5.0)]
+    assert game.hud.messages == [("First wave", EVENT_DISPLAY_S)]
+    assert game.hud.hints == [("Press [1].", HINT_DISPLAY_S)]
     assert game.hud.chatter == [
-        ("Red Leader: Standing by.", 6.0),
-        ("Narration.", 6.0),
+        ("Red Leader: Standing by.", CHATTER_DISPLAY_S),
+        ("Narration.", CHATTER_DISPLAY_S),
     ]
 
 
 def test_hud_and_speech_are_skipped_headless(game, mission):
     game.headless = True
     mission.hud("x")
+    mission.hint("z")
     mission.speech("y")
     assert game.hud.messages == [] and game.hud.chatter == []
+    assert game.hud.hints == []
 
 
-def test_end_level_victory_defeat(game, mission):
+@pytest.mark.parametrize(
+    "end, outcome",
+    [
+        (lambda m: m.victory("why"), "victory"),
+        (lambda m: m.defeat("why"), "defeat"),
+        (lambda m: m.end_level("death", "why"), "death"),
+    ],
+)
+def test_the_level_ends_after_a_delay(game, mission, end, outcome):
+    end(mission)
+    advance(game, mission, LEVEL_END_DELAY_S - 0.1)
+    assert game.end_level_calls == []
+
+    advance(game, mission, 0.2)
+    assert game.end_level_calls == [(outcome, "why")]
+
+
+def test_only_the_first_ending_counts(game, mission):
     mission.victory("won")
     mission.defeat("lost")
-    mission.end_level("death", "dead")
-    assert game.end_level_calls == [
-        ("victory", "won"),
-        ("defeat", "lost"),
-        ("death", "dead"),
-    ]
+    advance(game, mission, LEVEL_END_DELAY_S + 1)
+
+    assert mission.ending == "victory"
+    assert game.end_level_calls == [("victory", "won")]
+
+
+def test_objectives_are_frozen_once_the_level_ends(game, mission):
+    lost = []
+    objective = mission.objective("Keep them alive", failed=lambda: bool(lost))
+    mission.victory("won")
+
+    lost.append(True)
+    advance(game, mission, LEVEL_END_DELAY_S + 1)
+
+    assert objective.active()
 
 
 def test_player_waypoints_replaces_the_previous_route(game, mission, spawned):
@@ -418,6 +460,209 @@ def test_wave_state_methods_are_conditions(game, mission, spawned):
     kill_all(game, wave.pawns())
     mission.update()
     assert calls == [1]
+
+
+def test_wave_destroyed_count(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    assert wave.destroyed_count() == 0
+    run_jobs(mission)
+
+    kill_all(game, wave.pawns()[:2])
+
+    assert wave.destroyed_count() == 2
+
+
+def test_being_hit_is_true_on_the_frames_integrity_drops(game):
+    pawn = game.player.pawn
+    pawn.shield_level = 50.0
+    hit = being_hit(game.player)
+    assert not hit()  # takes the readings
+
+    pawn.shield_level = 40.0
+    assert hit()
+    assert not hit()  # nothing new
+
+    # A regenerating shield never hides the next hit
+    pawn.shield_level = 60.0
+    assert not hit()
+    pawn.health -= 1.0
+    assert hit()
+
+
+def test_being_hit_by_the_player_reads_the_last_hitter(game):
+    pawn = game.player.pawn
+    target = MockBot("tie", [0, 0, 0], team=2).pawn
+    game.interactions.add(target)
+    hit = being_hit(target, by_player=True)
+    hit()
+
+    target.last_hit_by = DamageSource.of(MockBot("x", [0, 0, 0], team=2).pawn, game)
+    target.health -= 1.0
+    assert not hit()
+
+    target.last_hit_by = DamageSource.of(pawn, game)
+    target.health -= 1.0
+    assert hit()
+
+
+# ---------------------------------------------------------------------------
+# Objectives
+# ---------------------------------------------------------------------------
+
+
+def test_objective_starts_active_and_listed(game, mission):
+    game.game_time.t = 3.0
+    objective = mission.objective("Reach the nav point")
+
+    assert mission.objectives == [objective]
+    assert objective.active() and not objective.done() and not objective.failed()
+    assert objective.label() == "Reach the nav point"
+    assert objective.changed_at_s == 3.0
+
+
+def test_objective_is_ticked_by_its_done_condition(game, mission):
+    flag = []
+    objective = mission.objective("Reach the nav point", done=lambda: bool(flag))
+    mission.update()
+    assert objective.active()
+
+    flag.append(True)
+    game.game_time.t = 5.0
+    mission.update()
+
+    assert objective.done()
+    assert objective.changed_at_s == 5.0
+
+
+def test_objective_is_failed_by_its_failed_condition(mission):
+    lost = []
+    objective = mission.objective(
+        "Stay with the formation", done=lambda: False, failed=lambda: bool(lost)
+    )
+    lost.append(True)
+    mission.update()
+
+    assert objective.failed()
+    assert mission.triggers == []  # both rules retired
+
+
+def test_a_settled_objective_stays_settled(mission):
+    both = mission.objective("Scan it", done=lambda: True, failed=lambda: True)
+    mission.update()
+    assert both.done()  # its done rule came first
+
+    both.fail()
+    assert both.done()
+
+
+def test_objective_progress_completes_it_at_the_goal(mission):
+    count = [0]
+    objective = mission.objective("Destroy the TIEs", progress=lambda: count[0], goal=3)
+    assert objective.label() == "Destroy the TIEs (0/3)"
+
+    count[0] = 3
+    mission.update()
+
+    assert objective.done()
+    assert objective.label() == "Destroy the TIEs (3/3)"
+
+
+def test_objective_progress_freezes_once_settled(mission):
+    count = [1]
+    objective = mission.objective(
+        "Keep the transports alive", progress=lambda: count[0], goal=3, done=None
+    )
+    objective.fail()
+
+    count[0] = 0
+    assert objective.label() == "Keep the transports alive (1/3)"
+
+
+def test_objective_counts_kills(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    objective = mission.objective(
+        "Shoot down two bombers", progress=mission.kills(wave, by_player=True), goal=2
+    )
+    run_jobs(mission)
+    player = DamageSource.of(game.player.pawn, game)
+
+    kill_all(game, wave.pawns()[:1], by=player)
+    kill_all(game, wave.pawns()[1:2])
+    mission.update()
+    assert objective.label() == "Shoot down two bombers (1/2)"
+
+    kill_all(game, wave.pawns(), by=player)
+    mission.update()
+    assert objective.done()
+
+
+def test_removed_objective_leaves_the_list_and_its_rules(mission):
+    objective = mission.objective("Scan it", done=lambda: False)
+
+    objective.remove()
+
+    assert mission.objectives == []
+    assert all(trigger.cancelled for trigger in mission.triggers)
+
+
+def test_ending_the_level_settles_objectives_due_this_frame(game, mission):
+    """
+    A rule ending the level that fires before an objective's rule (same
+    condition, registered first) still sees the objective settled in the
+    level's tally.
+    """
+    wiped = []
+    states_at_end = []
+    game.end_level = lambda outcome, text="": states_at_end.append(objective.state)
+    mission.on(lambda: bool(wiped), lambda: mission.defeat("Wiped out."))
+    objective = mission.objective("Keep them alive", failed=lambda: bool(wiped))
+
+    wiped.append(True)
+    advance(game, mission, LEVEL_END_DELAY_S + 0.1)
+
+    assert states_at_end == ["failed"]
+
+
+def test_objectives_work_headless(game, mission):
+    game.headless = True
+    objective = mission.objective("Reach the nav point", done=lambda: True)
+
+    mission.update()
+
+    assert objective.done()
+    assert game.hud.messages == []
+
+
+# ---------------------------------------------------------------------------
+# Kills
+# ---------------------------------------------------------------------------
+
+
+def test_ids_of_keeps_the_dead(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    ids = [pawn.id for pawn in wave.pawns()]
+    kill_all(game, wave.pawns())
+
+    assert ids_of(wave) == ids
+    assert ids_of(game.player) == [game.player.pawn.id]
+    assert ids_of([wave, game.player.pawn]) == [*ids, game.player.pawn.id]
+
+
+def test_kills_counts_a_waves_deaths_and_the_players_share(game, mission, spawned):
+    wave = mission.wave(WAVE)
+    everyone = mission.kills()
+    wave_kills = mission.kills(wave)
+    player_kills = mission.kills(wave, by_player=True)
+    wave.spawn()
+    run_jobs(mission)
+    pawns = wave.pawns()
+    player = DamageSource.of(game.player.pawn, game)
+
+    kill_all(game, pawns[:2], by=player)
+    kill_all(game, pawns[2:])
+
+    assert (everyone(), wave_kills(), player_kills()) == (3, 3, 2)
 
 
 # ---------------------------------------------------------------------------

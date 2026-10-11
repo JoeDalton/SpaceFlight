@@ -11,7 +11,10 @@ import numpy as np
 import pytest
 from mission_fakes import FakeGame, advance, kill_all, live, patch_engine
 
+from space_flight.game.kills import DamageSource
 from space_flight.game.scenario import Mission
+from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
+from space_flight.ui.hud import CHATTER_DISPLAY_S
 
 EXAMPLE = Path(__file__).parent.parent / "docs/source/examples/all_features_example.py"
 
@@ -37,6 +40,7 @@ def spawned(monkeypatch):
 @pytest.fixture
 def mission(game):
     mission = Mission(game)
+    game.mission = mission
     mission.run(load_example().all_features_mission)
     return mission
 
@@ -52,7 +56,7 @@ def test_happy_path(game, mission, spawned):
     play_to_the_shadowing_phase(game, mission, spawned)
     boarding = live(game, spawned, "boarding")
     game.player.pawn.position = boarding[0].position.copy()
-    advance(game, mission, 1)
+    advance(game, mission, 1 + LEVEL_END_DELAY_S)
 
     assert game.end_level_calls == [
         ("victory", "Mission complete: every feature exercised.")
@@ -93,9 +97,30 @@ def test_happy_path(game, mission, spawned):
     ]
 
     # Repeating rule seen, cancelled rule never seen, route cleared.
-    assert ("Engagement in progress.", 1) in game.hud.messages
+    assert any(text == "Engagement in progress." for text, _ in game.hud.messages)
     assert not any(text == "Too late." for text, _ in game.hud.messages)
     assert game.player_waypoints is None
+
+    # Nothing shot down: only the guard was ticked, by the body.
+    assert game.objectives_at_end == {
+        "Keep the home guard alive": "complete",
+        "Thin out the strike wave": "active",
+        "Bonus: shoot down a TIE yourself": "active",
+    }
+
+
+def test_objectives_count_the_strike_waves_losses(game, mission, spawned):
+    advance(game, mission, 3)
+    strike = live(game, spawned, "strike")
+    kill_all(game, strike[:1], by=DamageSource.of(game.player.pawn, game))
+    kill_all(game, strike[1:2])
+    mission.update()
+
+    assert {o.label(): o.state for o in mission.objectives} == {
+        "Keep the home guard alive": "active",
+        "Thin out the strike wave (2/2)": "complete",
+        "Bonus: shoot down a TIE yourself (1/1)": "complete",
+    }
 
 
 def test_timeout_ending(game, mission, spawned):
@@ -108,10 +133,11 @@ def test_homeguard_wiped_defeat(game, mission, spawned):
     advance(game, mission, 1)
     kill_all(game, live(game, spawned, "homeguard"))
     advance(game, mission, 1)
-    assert ("Ops: We're taking losses!", 6.0) in game.hud.chatter
+    assert ("Ops: We're taking losses!", CHATTER_DISPLAY_S) in game.hud.chatter
     assert game.end_level_calls == []
-    advance(game, mission, 3)
+    advance(game, mission, 3 + LEVEL_END_DELAY_S)
     assert game.end_level_calls[0] == ("defeat", "The home guard was destroyed.")
+    assert game.objectives_at_end["Keep the home guard alive"] == "failed"
 
 
 def test_proximity_warning_repeats(game, mission, spawned):

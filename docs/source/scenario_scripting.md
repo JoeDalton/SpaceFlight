@@ -161,6 +161,7 @@ and after the wave exists:
 | `all_destroyed()` | spawned, and every member is dead (false before spawning); for a [launched wave](#capital-ships-and-hangars), once the launch is over |
 | `any_destroyed()` | spawned, and at least one member has died (stays true after a total wipe) |
 | `pawns()` | the live members, in spawn order (the formation leader first) |
+| `destroyed_count()` | how many members have died so far (e.g. an [objective](#objectives)'s progress) |
 | `formation` | the wave's `Formation`, once spawned (or `None`) |
 | `set_targets(who)` | every live member attacks every live pawn of `who` |
 | `set_team(team)` | reassigns every live member, cascading a major ship's cached team to its sub-systems, shield and mounted turrets/tractor beams (not to fighters it already launched) |
@@ -279,8 +280,10 @@ Every condition or method taking a `who` accepts:
 | `near_actor(a, b, radius)` | the nearest pair of live pawns between `a` and `b` is within `radius` (two moving targets) |
 | `reached_waypoint(who, index)` | any live bot of `who` has reached its waypoint `index` (0-based) |
 | `damaged(who)` | any live pawn of `who` has lost health or shield since the condition first saw it (stateful: build it once) |
+| `being_hit(who, by_player=False)` | any live pawn of `who` lost health or shield since the previous frame — a fresh hit, even on a regenerating shield; only the player's hits if `by_player` (stateful: build it once) |
 | `scan.complete` / `scan.started` / `scan.progress_at_least(x)` | see [Scanning](#scanning) |
 | `wave.alive` / `wave.all_destroyed` / `wave.any_destroyed` | see [`WaveHandle`](#wavehandle) |
+| `objective.done` / `objective.failed` / `objective.active` | see [Objectives](#objectives) |
 | `all_of(*conds)` / `any_of(*conds)` / `not_(cond)` | combinations |
 | any `lambda: ...` | whatever it returns |
 
@@ -322,17 +325,81 @@ the targeting HUD reads to draw its progress bar (see
 pawn of `who` scanned), `started()` (some progress) and
 `progress_at_least(x)` are conditions.
 
+## Objectives
+
+```python
+escort = m.objective("Escort the convoy to the fleet",
+                     done=reached_waypoint(transports, LAST_WAYPOINT),
+                     failed=transports.all_destroyed)
+m.objective("Shoot down the bombers", progress=bombers.destroyed_count, goal=5)
+```
+
+`m.objective(text, done=None, failed=None, progress=None, goal=None)` adds a
+line to the HUD's objectives checklist (top left), in the order they are
+given. It is ticked once `done` holds and crossed out once `failed` holds,
+whichever comes first; it then stays as it is. With `progress` (a callable
+counting up, e.g. `wave.destroyed_count` or `m.kills(...)`) and `goal`, the
+line shows `"(n/goal)"` and, by default, is ticked when the count reaches
+the goal; the count freezes once the objective is settled. A line blinks
+for a moment when it is added, ticked or failed. Keep the text short: the
+checklist is a reminder, while `m.hud` / `m.speech` explain.
+
+The returned `Objective` can also be settled by the body, `complete()` or
+`fail()` (no-ops once settled), or taken off the list, `remove()`. Its
+`done()`, `failed()` and `active()` are conditions.
+
+**Objectives never end the level**: they only show the player what to do.
+End it as before, with `m.victory` / `m.defeat`, usually on the same
+conditions. The level-end screen counts the objectives completed, so an
+objective that holds until the end (a rule of engagement, "keep X alive")
+needs ticking by the body before a victory. Ending the level first settles
+any objective whose condition holds that very frame, so a defeat rule
+declared before the objective on the same condition still counts it failed;
+the objectives are then frozen, and the level-end screen follows 2 seconds
+later (`LEVEL_END_DELAY_S`), so the player sees their final state.
+
+A "bonus" objective is just one whose failure doesn't end the level, e.g.
+`m.objective("Bonus: lose no transport", done=arrived, failed=transports.any_destroyed)`.
+
+## Kills
+
+The game logs who killed whom (`game.kill_log`, see
+[`kills.py`](../../src/space_flight/game/kills.py)): the last ship to hit a
+pawn or subsystem before it died gets the kill, whether by weapon or by
+ramming it. A fatal crash into terrain credits no one; a subsystem brought
+down with its ship credits that ship's killer.
+
+`m.kills(victims=None, by_player=False)` is a live counter of the logged
+kills of `victims` (a `who`, read on each call so a wave still spawning is
+counted in full, including members already dead), only the player's if
+`by_player`. It suits an objective's progress:
+
+```python
+m.objective("Shoot down 2 TIEs yourself",
+            progress=m.kills([squadron, bombers], by_player=True), goal=2)
+```
+
+The level-end screen shows the player's kills, by category, and their
+friendly fire.
+
 ## Actions
 
 | Method | Effect |
 |---|---|
-| `m.hud(text, display_time_s=5.0)` | HUD banner message |
-| `m.speech(text, speaker=None, display_time_s=6.0)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
+| `m.hud(text)` | HUD banner message |
+| `m.hint(text)` | tutorial hint, in place of the banner but smaller and wrapped; the texts, with the player's key bindings, come from [`game/levels/hints.py`](../../src/space_flight/game/levels/hints.py) |
+| `m.speech(text, speaker=None)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
 | `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
 | `m.clear_player_waypoints()` | removes it |
-| `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`) |
+| `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`): freezes the objectives, then shows the level-end screen, with the player's kills and objectives, 2 seconds later. Only the first ending counts |
 
-HUD text and speech are skipped headless.
+How long each stays up is set in [`ui/hud.py`](../../src/space_flight/ui/hud.py)
+(`CHATTER_DISPLAY_S`, `HINT_DISPLAY_S`, `EVENT_DISPLAY_S`). Chatter and
+hints/banners take turns, never on screen together: a subtitle waits for a
+hint or banner to time out, and the other way round, while a new subtitle
+cuts the previous one short (as does a new hint or banner). Messages
+waiting their turn are shown in order. HUD text, hints and speech are
+skipped headless.
 
 ## Patterns and pitfalls
 
@@ -363,9 +430,10 @@ comes. Its state methods are simply false until then.
 ### Only one ending
 
 The body and a rule can each end the level, e.g. a rule-driven defeat while
-the body later reaches a victory. When both are possible, cancel the rule
-once it no longer applies (`rule.cancel()`), or make the body check the
-same condition.
+the body later reaches a victory. Only the first ending counts: later calls
+are ignored. Still, cancel a rule once it no longer applies
+(`rule.cancel()`), so its other actions (a speech line...) don't play
+during the ending.
 
 ### Extending
 

@@ -120,7 +120,7 @@ def all_features_mission(m: Mission) -> Iterator[None]:
     # player close to a fixed point.
     m.on(
         near(game.player, HOMEGUARD_POINT, 500),
-        lambda: m.hud("Danger close to the home guard!", display_time_s=1),
+        lambda: m.hud("Danger close to the home guard!"),
         once=False,
     )
 
@@ -132,13 +132,27 @@ def all_features_mission(m: Mission) -> Iterator[None]:
             not_(strike.all_destroyed),
             any_of(m.after(20), strike.alive),
         ),
-        lambda: m.hud("Engagement in progress.", display_time_s=1),
+        lambda: m.hud("Engagement in progress."),
         once=False,
     )
 
     # A rule can be retired: this one never gets the chance to fire.
     never = m.on(m.after(9999), lambda: m.hud("Too late."))
     never.cancel()
+
+    # --- objectives: the HUD checklist -------------------------------------------
+
+    # Failed by its condition; it never ends the level by itself, so the
+    # defeat rule above still does. Ticked by the body, at the victory.
+    guard = m.objective("Keep the home guard alive", failed=homeguard.all_destroyed)
+    # A counted objective, ticked once its progress reaches its goal.
+    m.objective("Thin out the strike wave", progress=strike.destroyed_count, goal=2)
+    # Counting the kill log: only the player's kills of the strike wave.
+    m.objective(
+        "Bonus: shoot down a TIE yourself",
+        progress=m.kills(strike, by_player=True),
+        goal=1,
+    )
 
     # --- the sequential story ---------------------------------------------------
 
@@ -191,4 +205,5 @@ def all_features_mission(m: Mission) -> Iterator[None]:
     elif hit.fired or not homeguard.alive():
         m.victory("Mission complete, with losses.")
     else:
+        guard.complete()
         m.victory("Mission complete: every feature exercised.")

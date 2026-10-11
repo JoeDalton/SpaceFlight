@@ -26,6 +26,7 @@ import yaml
 from direct.showbase.DirectObject import DirectObject
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
+    ButtonHandle,
     ButtonRegistry,
     ButtonThrower,
     GamepadButton,
@@ -212,6 +213,32 @@ MENU_BUTTONS: dict[str, dict[str, tuple[str, ...]]] = {
         "back": ("gamepad_face_b",),
     },
 }
+
+
+def layout_only_keys(app: SpaceFlightSimulator) -> dict[str, str]:
+    """
+    The keys of the current keyboard layout that Panda3D only reports as raw
+    (physical) buttons: those typing a non-ASCII character, such as é, è, ç, à
+    or ù on a French keyboard. Panda3D throws no button event for them, and
+    the MouseWatcher does not track them; only their raw events fire, named
+    after the key's place on a US keyboard ("raw-2" for é on a French one).
+
+    :param app: The Panda3D application instance
+    :return: The raw button name of each such key, by the character it types
+        (lowercase); empty without a window
+    """
+    window = getattr(app, "win", None)
+    keyboard_map = window.getKeyboardMap() if window is not None else None
+    if keyboard_map is None:
+        return {}
+    keys: dict[str, str] = {}
+    for index in range(keyboard_map.getNumButtons()):
+        if keyboard_map.getMappedButton(index) != ButtonHandle.none():
+            continue
+        label = keyboard_map.getMappedButtonLabel(index).lower()
+        if label:
+            keys.setdefault(label, keyboard_map.getRawButton(index).getName())
+    return keys
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +491,10 @@ class KeyboardReader(InputReader):
     """
     Reads keyboard state via Panda3D's MouseWatcher (polling) plus
     accept() events as a safety net.
+
+    Keys typing a non-ASCII character (see :func:`layout_only_keys`) are bound
+    by that character, but the MouseWatcher never sees them: their state comes
+    from their raw events instead.
     """
 
     device_type = "keyboard"
@@ -483,19 +514,48 @@ class KeyboardReader(InputReader):
         self.button_names = self.collect_button_names(frozenset())
         self.registry = ButtonRegistry.ptr()
 
+        # Bound keys only reported as raw buttons: their raw button names, and
+        # whether each is down, from its raw events
+        layout_keys = layout_only_keys(app)
+        self.raw_keys: dict[str, str] = {
+            key: layout_keys[key.lower()]
+            for key in self.button_names
+            if key.lower() in layout_keys
+        }
+        self.raw_down: dict[str, bool] = {}
+
         for key in self.button_names:
-            self.accept(key, lambda k=key: self.ev_pressed.add(k))
-            self.accept(key + "-up", lambda k=key: self.ev_released.add(k))
+            if key in self.raw_keys:
+                event = "raw-" + self.raw_keys[key]
+                self.accept(event, self.on_raw_key, [key, True])
+                self.accept(event + "-up", self.on_raw_key, [key, False])
+            else:
+                self.accept(key, lambda k=key: self.ev_pressed.add(k))
+                self.accept(key + "-up", lambda k=key: self.ev_released.add(k))
+
+    def on_raw_key(self, key: str, is_down: bool):
+        """
+        Tracks a key only reported as a raw button.
+
+        :param key: The key's binding name
+        :param is_down: Whether the event is its press (else its release)
+        """
+        self.raw_down[key] = is_down
+        (self.ev_pressed if is_down else self.ev_released).add(key)
 
     def read_all_buttons(self) -> dict[str, bool]:
         """
-        Polls every bound key via the MouseWatcher.
+        Polls every bound key via the MouseWatcher, or, for keys only
+        reported as raw buttons, from their raw events.
 
         :return: Dict mapping hardware name → True if the key is
             currently held down.
         """
         result: dict[str, bool] = {}
         for key in self.button_names:
+            if key in self.raw_keys:
+                result[key] = self.raw_down.get(key, False)
+                continue
             handle = self.registry.getButton(key)
             result[key] = self.app.mouseWatcherNode.isButtonDown(handle)
         return result

@@ -1,7 +1,8 @@
 from unittest.mock import MagicMock
 
 import pytest
-from panda3d.core import InputDevice
+from direct.showbase.MessengerGlobal import messenger
+from panda3d.core import ButtonHandle, ButtonRegistry, InputDevice
 
 from space_flight.ui.input_reader import (
     MENU_BUTTONS,
@@ -10,6 +11,8 @@ from space_flight.ui.input_reader import (
     InputReader,
     InputState,
     JoystickReader,
+    KeyboardReader,
+    layout_only_keys,
 )
 
 # ---------------------------------------------------------------------------
@@ -454,6 +457,91 @@ def test_collect_button_names_polls_menu_keys_without_bindings():
     reader.app.bindings = {"contexts": {}}
     names = reader.collect_button_names(frozenset())
     assert {"arrow_left", "arrow_right", "enter", "escape"} <= names
+
+
+# ---------------------------------------------------------------------------
+# KeyboardReader — keys only reported as raw buttons
+# ---------------------------------------------------------------------------
+
+
+def make_keyboard_map(keys: list[tuple[str, str, str]]) -> MagicMock:
+    """
+    A fake window keyboard map.
+
+    :param keys: (raw button name, mapped button name or "" for none, label)
+        of each key
+    """
+    registry = ButtonRegistry.ptr()
+    keyboard_map = MagicMock()
+    keyboard_map.getNumButtons.return_value = len(keys)
+    keyboard_map.getRawButton.side_effect = lambda i: registry.getButton(keys[i][0])
+    keyboard_map.getMappedButton.side_effect = lambda i: (
+        registry.getButton(keys[i][1]) if keys[i][1] else ButtonHandle.none()
+    )
+    keyboard_map.getMappedButtonLabel.side_effect = lambda i: keys[i][2]
+    return keyboard_map
+
+
+# A French keyboard's top row: & types an ASCII character Panda3D has a button
+# for, é and É (a label in capitals, as Windows gives) do not
+FRENCH_KEYS = [("1", "&", "&"), ("2", "", "é"), ("3", "", ""), ("0", "", "À")]
+
+
+def test_layout_only_keys_lists_keys_without_a_button():
+    """
+    Only the keys with no Panda3D button but a label are listed, by their
+    lowercase label.
+    """
+    app = MagicMock()
+    app.win.getKeyboardMap.return_value = make_keyboard_map(FRENCH_KEYS)
+    assert layout_only_keys(app) == {"é": "2", "à": "0"}
+
+
+def test_layout_only_keys_is_empty_without_a_window():
+    app = MagicMock()
+    app.win = None
+    assert layout_only_keys(app) == {}
+
+
+def make_keyboard_reader(binding: str) -> KeyboardReader:
+    """A keyboard reader on a French keyboard, with fire bound to a key."""
+    app = MagicMock()
+    app.bindings = {"contexts": {"flight": {"keyboard": {"fire": binding}}}}
+    app.win.getKeyboardMap.return_value = make_keyboard_map(FRENCH_KEYS)
+    app.mouseWatcherNode.isButtonDown.return_value = False
+    return KeyboardReader(app)
+
+
+@pytest.mark.parametrize("binding", ["é", "É"])
+def test_keyboard_reader_tracks_layout_only_keys_from_raw_events(binding):
+    """
+    A key typing a non-ASCII character is read from its raw events: pressed,
+    held, then released.
+    """
+    reader = make_keyboard_reader(binding)
+    assert reader.raw_keys == {binding: "2"}
+
+    messenger.send("raw-2")
+    assert reader.poll().buttons == {binding: True}
+    assert reader.poll().repeats == {binding: True}
+
+    messenger.send("raw-2-up")
+    assert reader.poll().releases == {binding: True}
+    assert binding not in reader.poll().repeats
+    reader.clean()
+
+
+def test_keyboard_reader_polls_ascii_keys_from_the_mouse_watcher():
+    """
+    A key Panda3D has a button for is polled as usual, not from raw events.
+    """
+    reader = make_keyboard_reader("&")
+    assert reader.raw_keys == {}
+    reader.app.mouseWatcherNode.isButtonDown.side_effect = lambda handle: (
+        handle.getName() == "&"
+    )
+    assert reader.poll().buttons == {"&": True}
+    reader.clean()
 
 
 # ---------------------------------------------------------------------------

@@ -42,6 +42,22 @@ def pawns_of(who: Any) -> list:
     return [pawn]
 
 
+def ids_of(who: Any) -> list:
+    """
+    The pawn ids designated by who, dead or alive.
+
+    :param who: As :func:`pawns_of`; a :class:`WaveHandle` gives every member
+        spawned so far
+    :return: Their pawn ids
+    """
+    if isinstance(who, (list, tuple)):
+        return [pawn_id for one in who for pawn_id in ids_of(one)]
+    if hasattr(who, "ids"):
+        return list(who.ids)
+    pawn = getattr(who, "pawn", who)
+    return [] if pawn is None else [pawn.id]
+
+
 # ---------------------------------------------------------------------------
 # Spatial conditions
 # ---------------------------------------------------------------------------
@@ -135,6 +151,37 @@ def damaged(who: Any) -> Condition:
             if integrity < baseline:
                 return True
         return False
+
+    return cond
+
+
+def being_hit(who: Any, by_player: bool = False) -> Condition:
+    """
+    True on a frame where any live pawn of who has lost health or shield
+    since the previous check: a hit, wherever its regenerating shield was.
+
+    Keeps the last reading per pawn, so it is stateful: build it once, when
+    the rule is declared. Its first check only takes the readings.
+
+    :param who: See :func:`pawns_of`
+    :param by_player: Only count the player's hits (the pawn's last hitter,
+        see :func:`~space_flight.game.kills.credit_hit`)
+    :return: The condition
+    """
+    readings: dict = {}
+
+    def cond() -> bool:
+        was_hit = False
+        for pawn in pawns_of(who):
+            integrity = pawn.health + pawn.shield_level
+            previous = readings.get(pawn.id)
+            readings[pawn.id] = integrity
+            if previous is None or integrity >= previous:
+                continue
+            hitter = getattr(pawn, "last_hit_by", None)
+            if not by_player or (hitter is not None and hitter.is_player):
+                was_hit = True
+        return was_hit
 
     return cond
 

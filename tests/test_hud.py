@@ -14,21 +14,36 @@ from panda3d.core import NodePath, PerspectiveLens, Point3, Vec3
 
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS, EnergySystem
 from space_flight.ai.missile.incoming_missile import IncomingMissile
+from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
+    CHATTER,
+    CHATTER_DISPLAY_S,
     CROSSHAIR_COLOR,
     CROSSHAIR_LOCKED_COLOR,
     EDGE_HORIZONTAL,
     EDGE_VERTICAL,
+    EVENT,
+    EVENT_DISPLAY_S,
     FAVOURED_GAUGE_BRIGHTNESS,
+    FAVOURED_GAUGE_SCALE,
     GAUGE_BRIGHTNESS,
+    HINT,
+    HINT_DISPLAY_S,
+    HUD,
     MIN_PROJECTION_DEPTH,
     MISSILE_WARNING_MAX_BLINK_PERIOD_S,
     MISSILE_WARNING_MIN_BLINK_PERIOD_S,
+    OBJECTIVE_COLORS,
+    OBJECTIVE_FLASH_DIM_ALPHA,
+    OBJECTIVE_FLASH_PERIOD_S,
+    OBJECTIVE_FLASH_S,
     TARGET_BOX_COLOR,
     TARGET_BOX_MISSILE_LOCKED_COLOR,
     AimHUD,
     EnergyHUD,
+    ObjectivesHUD,
     OrdnanceHUD,
+    ScenarioText,
     gauge_brightness,
     is_on_screen,
     missile_warning_blink_period_s,
@@ -644,8 +659,8 @@ def test_energy_hud_is_hidden_until_its_first_update():
 
 def test_energy_hud_shows_hp_speed_and_shield():
     """
-    The half-ring gauges show the health left, the speed and the shield
-    strength, filled to their share of the maximum.
+    The half-ring gauges show the health left, the laser charge, the speed and
+    the shield strength, filled to their share of the maximum.
     """
     energy_hud, pawn = make_energy_hud()
     pawn.energy.engines = 0.5
@@ -659,7 +674,8 @@ def test_energy_hud_shows_hp_speed_and_shield():
     assert energy_hud.engine_gauge.fill_steps == energy_hud.engine_gauge.n_segments // 2
     assert energy_hud.shield_gauge.text.node().getText() == "200"
     assert energy_hud.shield_gauge.fill_steps == energy_hud.shield_gauge.n_segments // 4
-    assert energy_hud.laser_gauge.level == pytest.approx(0.25)
+    assert energy_hud.laser_gauge.text.node().getText() == "25%"
+    assert energy_hud.laser_gauge.fill_steps == energy_hud.laser_gauge.n_segments // 4
 
 
 def test_energy_hud_hides_the_shield_gauge_without_shields():
@@ -673,6 +689,38 @@ def test_energy_hud_hides_the_shield_gauge_without_shields():
 
     assert energy_hud.shield_gauge.root.isHidden()
     assert not energy_hud.engine_gauge.root.isHidden()
+
+
+def test_energy_hud_gauge_order():
+    """
+    Left to right: HP, shields, engines, lasers, evenly spaced.
+    """
+    energy_hud, _ = make_energy_hud()
+    xs = [
+        gauge.root.getX()
+        for gauge in (
+            energy_hud.hp_gauge,
+            energy_hud.shield_gauge,
+            energy_hud.engine_gauge,
+            energy_hud.laser_gauge,
+        )
+    ]
+    assert xs == sorted(xs)
+    assert np.diff(xs) == pytest.approx([xs[1] - xs[0]] * 3)
+
+
+def test_energy_hud_closes_the_shield_gauge_gap_without_shields():
+    """
+    Without shields, the engine and laser gauges follow the HP gauge directly.
+    """
+    shielded_hud, _ = make_energy_hud()
+    unshielded_hud, _ = make_energy_hud(has_shields=False)
+    assert unshielded_hud.engine_gauge.root.getX() == pytest.approx(
+        shielded_hud.shield_gauge.root.getX()
+    )
+    assert unshielded_hud.laser_gauge.root.getX() == pytest.approx(
+        shielded_hud.engine_gauge.root.getX()
+    )
 
 
 def test_energy_hud_clamps_negative_health():
@@ -689,9 +737,10 @@ def test_energy_hud_clamps_negative_health():
 
 
 @pytest.mark.parametrize("favoured", [ENGINES, LASERS, SHIELDS])
-def test_favoured_system_gauge_is_brighter(favoured):
+def test_favoured_system_gauge_is_brighter_and_highlighted(favoured):
     """
-    The gauge of the system power is redirected to is brighter than the others.
+    The gauge of the system power is redirected to is brighter and bigger than
+    the others, and its outline highlighted.
     """
     energy_hud, pawn = make_energy_hud()
     pawn.energy.set_mode(favoured)
@@ -706,6 +755,10 @@ def test_favoured_system_gauge_is_brighter(favoured):
     for system, gauge in gauges.items():
         expected = FAVOURED_GAUGE_BRIGHTNESS if system == favoured else GAUGE_BRIGHTNESS
         assert gauge.brightness == expected
+        assert gauge.highlighted == (system == favoured)
+        expected_scale = FAVOURED_GAUGE_SCALE if system == favoured else 1.0
+        assert gauge.root.getScale()[0] == pytest.approx(expected_scale)
+    assert not energy_hud.hp_gauge.highlighted
 
 
 def test_balanced_power_brightens_no_gauge():
@@ -715,3 +768,258 @@ def test_balanced_power_brightens_no_gauge():
     energy = EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
     for system in (ENGINES, LASERS, SHIELDS):
         assert gauge_brightness(energy, system) == GAUGE_BRIGHTNESS
+
+
+# ---------------------------
+# Objectives HUD
+# ---------------------------
+
+
+def make_objectives_hud() -> tuple[ObjectivesHUD, Mission, FakeClock]:
+    """An objectives HUD on a real mission, its clock driven by the test."""
+    clock = FakeClock()
+    game = SimpleNamespace(game_time=clock)
+    mission = Mission(game)
+    game.mission = mission
+    return ObjectivesHUD(game=game, parent_node=NodePath("corner")), mission, clock
+
+
+def visible_lines(objectives_hud: ObjectivesHUD) -> list:
+    return [line for line in objectives_hud.lines if not line.root.isHidden()]
+
+
+def test_objectives_hud_is_hidden_without_objectives():
+    objectives_hud, _, _ = make_objectives_hud()
+
+    objectives_hud.update()
+
+    assert objectives_hud.root.isHidden()
+
+
+def test_objectives_hud_lists_the_objectives_in_order():
+    objectives_hud, mission, _ = make_objectives_hud()
+    mission.objective("Reach the nav point")
+    mission.objective("Destroy the TIEs", progress=lambda: 2, goal=4)
+
+    objectives_hud.update()
+
+    assert not objectives_hud.root.isHidden()
+    assert [line.text.node().getText() for line in visible_lines(objectives_hud)] == [
+        "Reach the nav point",
+        "Destroy the TIEs (2/4)",
+    ]
+
+
+@pytest.mark.parametrize(
+    "settle, state, tick, cross",
+    [
+        (None, "active", False, False),
+        ("complete", "complete", True, False),
+        ("fail", "failed", False, True),
+    ],
+)
+def test_objective_checkbox_shows_its_state(settle, state, tick, cross):
+    objectives_hud, mission, _ = make_objectives_hud()
+    objective = mission.objective("Scan the convoy")
+    if settle is not None:
+        getattr(objective, settle)()
+
+    objectives_hud.update()
+
+    line = objectives_hud.lines[0]
+    assert line.tick.isHidden() is not tick
+    assert line.cross.isHidden() is not cross
+    assert tuple(line.root.getColorScale()) == pytest.approx(
+        OBJECTIVE_COLORS[state], abs=1e-3
+    )
+
+
+def test_a_removed_objective_hides_its_line():
+    objectives_hud, mission, _ = make_objectives_hud()
+    first = mission.objective("First")
+    mission.objective("Second")
+    objectives_hud.update()
+
+    first.remove()
+    objectives_hud.update()
+
+    assert [line.text.node().getText() for line in visible_lines(objectives_hud)] == [
+        "Second"
+    ]
+
+
+def test_a_changed_objective_blinks_then_holds_steady():
+    objectives_hud, mission, clock = make_objectives_hud()
+    objective = mission.objective("Scan the convoy")
+    clock.time_s = 10.0
+    objective.complete()
+    line = objectives_hud.lines
+
+    clock.time_s = 10.0 + 1.5 * OBJECTIVE_FLASH_PERIOD_S
+    objectives_hud.update()
+    assert line[0].root.getColorScale()[3] == pytest.approx(
+        OBJECTIVE_FLASH_DIM_ALPHA, abs=1e-3
+    )
+
+    clock.time_s = 10.0 + OBJECTIVE_FLASH_S
+    objectives_hud.update()
+    assert line[0].root.getColorScale()[3] == pytest.approx(1.0)
+
+
+def test_objectives_hud_cleans_up():
+    objectives_hud, mission, _ = make_objectives_hud()
+    mission.objective("Reach the nav point")
+    objectives_hud.update()
+    corner = objectives_hud.root.getParent()
+
+    objectives_hud.clean()
+
+    assert corner.getNumChildren() == 0
+    assert objectives_hud.game is None
+
+
+# ---------------------------
+# Scenario text: chatter, hints and events taking turns
+# ---------------------------
+
+
+def make_scenario_text() -> tuple[ScenarioText, FakeClock]:
+    clock = FakeClock()
+    return ScenarioText(clock=clock.get_current_time), clock
+
+
+def shown(scenario_text: ScenarioText) -> dict:
+    """The texts on screen, by kind."""
+    return {
+        kind: scenario_text.text(kind)
+        for kind in (CHATTER, HINT, EVENT)
+        if scenario_text.text(kind)
+    }
+
+
+# Each kind's up time, as the HUD posts them
+DISPLAY_S = {
+    CHATTER: CHATTER_DISPLAY_S,
+    HINT: HINT_DISPLAY_S,
+    EVENT: EVENT_DISPLAY_S,
+}
+
+
+def post(scenario_text: ScenarioText, kind: str, text: str):
+    """Post text for its kind's up time."""
+    scenario_text.post(kind, text, DISPLAY_S[kind])
+
+
+def show_at(scenario_text: ScenarioText, clock: FakeClock, time_s: float) -> dict:
+    """What is on screen at time_s."""
+    clock.time_s = time_s
+    scenario_text.update()
+    return shown(scenario_text)
+
+
+@pytest.mark.parametrize("kind", [CHATTER, HINT, EVENT])
+def test_a_message_shows_for_its_time(kind):
+    scenario_text, clock = make_scenario_text()
+    post(scenario_text, kind, "Press [1].")
+    assert shown(scenario_text) == {kind: "Press [1]."}
+
+    assert show_at(scenario_text, clock, DISPLAY_S[kind] - 0.1) == {kind: "Press [1]."}
+    assert show_at(scenario_text, clock, DISPLAY_S[kind]) == {}
+
+
+@pytest.mark.parametrize(
+    "first, second", [(CHATTER, CHATTER), (HINT, EVENT), (EVENT, HINT)]
+)
+def test_a_message_replaces_one_of_its_side_at_once(first, second):
+    scenario_text, clock = make_scenario_text()
+    post(scenario_text, first, "one")
+    replaced_at_s = 1.0
+    clock.time_s = replaced_at_s
+    post(scenario_text, second, "two")
+    assert shown(scenario_text) == {second: "two"}
+
+    # The replacement gets its full time, from when it was posted
+    ends_s = replaced_at_s + DISPLAY_S[second]
+    assert show_at(scenario_text, clock, ends_s - 0.1) == {second: "two"}
+    assert show_at(scenario_text, clock, ends_s) == {}
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [(CHATTER, HINT), (CHATTER, EVENT), (HINT, CHATTER), (EVENT, CHATTER)],
+)
+def test_chatter_and_hints_or_events_take_turns(first, second):
+    scenario_text, clock = make_scenario_text()
+    post(scenario_text, first, "one")
+    clock.time_s = 1.0
+    post(scenario_text, second, "two")
+    assert shown(scenario_text) == {first: "one"}
+
+    # The second waits for the first to time out, then gets its full time
+    first_ends_s = DISPLAY_S[first]
+    second_ends_s = first_ends_s + DISPLAY_S[second]
+    assert show_at(scenario_text, clock, first_ends_s - 0.1) == {first: "one"}
+    assert show_at(scenario_text, clock, first_ends_s) == {second: "two"}
+    assert show_at(scenario_text, clock, second_ends_s - 0.1) == {second: "two"}
+    assert show_at(scenario_text, clock, second_ends_s) == {}
+
+
+def test_waiting_messages_keep_their_order():
+    """A line of chatter posted behind a waiting hint doesn't jump ahead of it,
+    even though chatter is on screen."""
+    scenario_text, clock = make_scenario_text()
+    post(scenario_text, CHATTER, "one")
+    post(scenario_text, HINT, "two")
+    post(scenario_text, CHATTER, "three")
+
+    hint_s = CHATTER_DISPLAY_S
+    second_chatter_s = hint_s + HINT_DISPLAY_S
+    over_s = second_chatter_s + CHATTER_DISPLAY_S
+    assert show_at(scenario_text, clock, hint_s - 0.1) == {CHATTER: "one"}
+    assert show_at(scenario_text, clock, hint_s) == {HINT: "two"}
+    assert show_at(scenario_text, clock, second_chatter_s) == {CHATTER: "three"}
+    assert show_at(scenario_text, clock, over_s) == {}
+
+
+def test_a_repeated_waiting_message_queues_once():
+    scenario_text, _ = make_scenario_text()
+    post(scenario_text, CHATTER, "radio")
+    for _ in range(100):  # a rule firing every frame
+        post(scenario_text, EVENT, "Danger close!")
+
+    assert list(scenario_text.pending) == [(EVENT, "Danger close!", EVENT_DISPLAY_S)]
+
+
+def test_hud_shows_hints_smaller_and_never_with_chatter(spaceflight_app):
+    clock = FakeClock()
+    game = SimpleNamespace(
+        app=spaceflight_app,
+        game_time=clock,
+        method_lists={},
+        mission=Mission(SimpleNamespace(game_time=clock)),
+        player=SimpleNamespace(
+            pawn=SimpleNamespace(
+                energy=EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
+            )
+        ),
+    )
+    hud = HUD(game=game)
+    try:
+        hud.set_chatter_text("Blue Leader: Form up.")
+        hud.set_hint_text("Press [1] to divert power to your engines.")
+        assert hud.chatter.getText() == "Blue Leader: Form up."
+        assert hud.hints.getText() == ""
+
+        clock.time_s = CHATTER_DISPLAY_S
+        hud.update_scenario_text()
+        assert hud.chatter.getText() == ""
+        assert hud.hints.getText() == "Press [1] to divert power to your engines."
+        assert (
+            hud.hints_textNodePath.getScale()[0] < hud.events_textNodePath.getScale()[0]
+        )
+
+        clock.time_s += HINT_DISPLAY_S
+        hud.update_scenario_text()
+        assert hud.hints.getText() == ""
+    finally:
+        hud.clean()

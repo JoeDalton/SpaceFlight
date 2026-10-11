@@ -15,6 +15,12 @@ from typing import TYPE_CHECKING, Iterator
 import numpy as np
 
 from space_flight.actors.player import Player
+from space_flight.game.levels.hints import (
+    engine_power_hint,
+    formation_hint,
+    stay_close_hint,
+    waypoint_hint,
+)
 from space_flight.game.scenario import WaveSpec
 from space_flight.game.scenario.conditions import (
     near,
@@ -23,7 +29,6 @@ from space_flight.game.scenario.conditions import (
     reached_waypoint,
 )
 from space_flight.scenes.scenes import scene_factory
-from space_flight.ui.input_context import InputContext
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -76,6 +81,8 @@ RACE_WAYPOINTS = [
     [2500, 4000, 500],
 ]
 FINISH_RADIUS_M = 300
+# How close the player passes a race waypoint (the route's arrival radius)
+RACE_GATE_RADIUS_M = 350
 RACE_TIMEOUT_S = 300  # defeat if the player hasn't finished by then
 RACE_NAG_S = RACE_TIMEOUT_S - 60  # "where are you?" before the timeout
 WAYPOINT_NAG_S = 45  # "any time today" if the first waypoint takes this long
@@ -92,6 +99,31 @@ CIRCUIT_CHATTER = [
     (12, "Blue Three", "Almost around. Lead, you thinking what I'm thinking?"),
     (4, "Blue Leader", "Always, Three."),
 ]
+
+# (delay after the previous line, speaker, line) through the race.
+RACE_CHATTER = [
+    (4, "Blue Two", "Loser buys the first round!"),
+    (4, "Blue Four", "Eat my ion trail, rookie!"),
+    (6, "Blue Three", "Hey, no cutting through the rocks, Four!"),
+    (5, "Blue Four", "Rocks are fair game, Three. Read the rulebook."),
+    (8, "Blue Leader", "Push it, Five. Every bit of power to those engines."),
+    (10, "Blue Two", "My astromech says I'm already winning."),
+    (5, "Blue Three", "Your astromech's been lying to you since flight school, Two."),
+    (12, "Blue Leader", "Tight turn coming up. Nobody scratch my paint."),
+]
+
+# Race waypoint index -> the line if the player gets there first, and the
+# one if a wingman does (spoken by that wingman when its speaker is None).
+RACE_GATE_LINES = {
+    1: (
+        ("Blue Two", "What?! Where did the rookie learn to fly like that?"),
+        (None, "Keep up, Five! You're eating my exhaust!"),
+    ),
+    3: (
+        ("Blue Four", "Five's out in front! Somebody catch that kid!"),
+        (None, "Last stretch! Nobody's catching me now!"),
+    ),
+}
 
 # The line of whichever wingman crosses the finish line first, if not the player.
 WINNER_LINES = {
@@ -131,14 +163,8 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     # 1. A single waypoint, teaching the Waypoints filter + loop.
     # ==================================================================
-    radial_key = InputContext.key_label(
-        game.app, "flight", "radial_menu", "the target-menu key"
-    )
-    loop_key = InputContext.key_label(
-        game.app, "flight", "loop_target", "the cycle-target key"
-    )
-
     m.player_waypoints([WAYPOINT_1], arrival_radius_m=WAYPOINT_1_ARRIVAL_RADIUS_M)
+    nav_point = m.objective("Reach the nav point")
     yield from m.wait(0.5)
     m.speech(
         "Morning, rookie. Blue squadron's running drills out past the rocks.\n"
@@ -153,15 +179,12 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         ),
     )
     yield from m.wait(2.5)
-    m.hud(
-        f"Hold [{radial_key}] to open the target menu,\n"
-        f"point at Waypoints, then press [{loop_key}]\n"
-        "to lock onto your next waypoint."
-    )
+    m.hint(waypoint_hint(game.app))
 
     # The waypoint marker detects arrival itself but exposes no event for
     # it, so poll the same radius.
     yield from m.wait_until(near(game.player, WAYPOINT_1, WAYPOINT_1_ARRIVAL_RADIUS_M))
+    nav_point.complete()
     dawdling.cancel()
     m.clear_player_waypoints()
 
@@ -175,12 +198,9 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         - player_pawn.right * FORMATION_LEFT_M
     )
     blue = m.spawn(BLUE_SQUADRON, spawn_point=spawn_point)
+    form_up = m.objective("Form up with Blue squadron")
 
-    m.hud(
-        f"Allied formation inbound! Hold [{radial_key}],\n"
-        f"point at Fighters, then press [{loop_key}]\n"
-        "to lock onto the formation leader."
-    )
+    m.hint(formation_hint(game.app))
 
     # ==================================================================
     # 3. Follow the formation: a catch-up deadline, then a sustained-
@@ -213,7 +233,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
             "Cut the chatter, Two. Five, stay close to any of us and keep up.",
             speaker="Blue Leader",
         )
-        m.hud(f"Stay within {FOLLOW_RADIUS_M}m of any Blue squadron ship.")
+        m.hint(stay_close_hint(FOLLOW_RADIUS_M, "Blue squadron"))
         yield from m.wait_until(close_to_blue)
         yield from m.wait(4)
         m.speech("Good, you're with us. Now hold it there.", speaker="Blue Leader")
@@ -227,8 +247,11 @@ def mission1_mission(m: Mission) -> Iterator[None]:
 
     caught_up = yield from m.wait_until(close_to_blue, timeout=CATCH_UP_DEADLINE_S)
     if not caught_up:
+        form_up.fail()
         m.defeat("You failed to catch up with the formation in time. Mission failed.")
         return
+    form_up.complete()
+    circuit = m.objective("Fly the circuit with Blue squadron")
 
     # Registered only now, so the initial catch-up isn't double-punished by
     # the same radius.
@@ -238,11 +261,13 @@ def mission1_mission(m: Mission) -> Iterator[None]:
             "Come on, rookie, you're falling behind! Catch up!", speaker="Blue Leader"
         ),
     )
+
+    def on_lost_contact():
+        circuit.fail()
+        m.defeat("You fell too far behind the formation for too long. Mission failed.")
+
     lost_contact = m.on(
-        m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S),
-        lambda: m.defeat(
-            "You fell too far behind the formation for too long. Mission failed."
-        ),
+        m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S), on_lost_contact
     )
 
     # ==================================================================
@@ -251,6 +276,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     yield from m.wait_until(reached_waypoint(leader, len(CIRCUIT_WAYPOINTS) - 1))
     losing_contact.cancel()
     lost_contact.cancel()
+    circuit.complete()
     race_started.append(True)
 
     m.speech(
@@ -259,17 +285,46 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         speaker="Blue Leader",
     )
     m.player_waypoints(RACE_WAYPOINTS)
+    race = m.objective("Race to the finish marker")
+    m.hint(engine_power_hint(game.app))
     # Every man for himself: wingmen would otherwise hold formation.
     blue.break_formation()
     blue.set_waypoints(RACE_WAYPOINTS, loop=False)
+    wingmen = blue.pawns()
+    finish_order: list = []
 
     def race_chatter() -> Iterator[None]:
-        yield from m.wait(4)
-        m.speech("Loser buys the first round!", speaker="Blue Two")
-        yield from m.wait(4)
-        m.speech("Eat my ion trail, rookie!", speaker="Blue Four")
+        for delay, speaker, line in RACE_CHATTER:
+            yield from m.wait(delay)
+            if finish_order:
+                return
+            m.speech(line, speaker=speaker)
 
     m.schedule(race_chatter())
+
+    def comment_on_the_lead(index: int, player_line: tuple, wingman_line: tuple):
+        """Comment on whoever reaches race waypoint index first."""
+        # The player (None) or a wingman's name, in order of arrival
+        arrivals: list = []
+        m.on(
+            near(game.player, RACE_WAYPOINTS[index], RACE_GATE_RADIUS_M),
+            lambda: arrivals.append(None),
+        )
+        for pawn, name in zip(wingmen, BLUE_NAMES):
+            m.on(reached_waypoint(pawn, index), lambda name=name: arrivals.append(name))
+
+        def comment():
+            if arrivals[0] is None:
+                speaker, line = player_line
+            else:
+                speaker, line = wingman_line[0] or arrivals[0], wingman_line[1]
+            m.speech(line, speaker=speaker)
+
+        m.on(lambda: bool(arrivals), comment)
+
+    for index, (player_line, wingman_line) in RACE_GATE_LINES.items():
+        comment_on_the_lead(index, player_line, wingman_line)
+
     m.on(
         m.after(RACE_NAG_S),
         lambda: m.speech(
@@ -284,8 +339,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     #    never finishes within the timeout.
     # ==================================================================
     finish_point = RACE_WAYPOINTS[-1]
-    racers = [game.player, *blue.pawns()]
-    finish_order: list = []
+    racers = [game.player, *wingmen]
     for racer in racers:
         m.on(
             near(racer, finish_point, FINISH_RADIUS_M),
@@ -300,13 +354,21 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         lambda: bool(finish_order) and finish_order[0] is not game.player,
         wingman_won,
     )
+    m.objective(
+        "Bonus: cross the line first",
+        done=lambda: bool(finish_order) and finish_order[0] is game.player,
+        failed=lambda: bool(finish_order) and finish_order[0] is not game.player,
+    )
 
     player_finished = yield from m.wait_until(
         lambda: game.player in finish_order, timeout=RACE_TIMEOUT_S
     )
     if not player_finished:
+        race.fail()
         m.defeat("You didn't reach the finish line in time. Mission failed.")
-    elif finish_order[0] is game.player:
+        return
+    race.complete()
+    if finish_order[0] is game.player:
         m.victory("First across the line! Outstanding flying, rookie!")
     elif len(finish_order) == len(racers):
         m.victory(

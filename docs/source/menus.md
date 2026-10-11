@@ -226,8 +226,11 @@ level end).
     events, so any keyboard/gamepad/joystick button is captured by raw
     hardware name, and polls every device's axes each frame against a baseline
     snapshot (`watchControls`), so a deliberate axis movement is captured as
-    an axis binding while resting drift is ignored. The throwers are restored
-    on close (OK or Cancel).
+    an axis binding while resting drift is ignored. It also listens to the
+    keyboard throwers' raw events, so a key Panda3D has no button for (é on
+    a French keyboard, see `layout_only_keys()` in
+    [docs/ui.md](ui.md)) is captured as the character it types. The throwers
+    are restored on close (OK or Cancel).
   - **`format_binding()`** turns a stored hardware name into a display label
     such as "Axis: Left X" or "Button: Space".
 

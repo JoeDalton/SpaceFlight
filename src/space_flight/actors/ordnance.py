@@ -25,6 +25,7 @@ from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.ai.missile.missile_navigator import MissileNavigator
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.game.kills import DamageSource
 from space_flight.utils import magnitude, rotation_matrix_coefficients
 from space_flight.weapons import build_ordnance_sphere
 
@@ -146,6 +147,9 @@ class Ordnance(Ship):
         self.color = Vec3(*self.conf["color"][:3])
         self.origin_ship = origin_ship
         self.origin_ship_id = origin_ship.id
+        # Who gets the credit if it kills, captured now: the shooter may be
+        # gone by the time it lands
+        self.source = DamageSource.of(origin_ship, game)
 
         # Flares only stop other ordnance, which hits them (see CollisionLayers)
         collider_type = "flare" if self.category == "flare" else "ordnance"

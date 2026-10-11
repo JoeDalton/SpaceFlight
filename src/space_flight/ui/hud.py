@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from collections import deque
+from typing import TYPE_CHECKING, Callable, NamedTuple, Optional
 
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
@@ -9,6 +10,7 @@ from direct.showbase.ShowBaseGlobal import aspect2d, render2d
 from panda3d.core import (
     CardMaker,
     Lens,
+    LineSegs,
     NodePath,
     Point2,
     Point3,
@@ -21,10 +23,11 @@ from panda3d.core import (
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
 from space_flight.ai.missile.incoming_missile import nearest_incoming
+from space_flight.game.scenario.objectives import ACTIVE, COMPLETE, FAILED
 from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.ui.utils import (
+    TEXT_CENTER_OFFSET,
     ArcGauge,
-    ColumnGauge,
     RollingDrum,
     make_text_line,
 )
@@ -56,24 +59,58 @@ FLARE_LINE_Z = 0.08
 # Chatter text height: at the top of the screen, above the rear-view mirror
 CHATTER_Z = 0.88
 
+# How long each scenario text stays up, in seconds of game time: radio
+# chatter, tutorial hints and event banners (see ScenarioText)
+CHATTER_DISPLAY_S = 3.0
+HINT_DISPLAY_S = 5.0
+EVENT_DISPLAY_S = 5.0
+
+# Event banner: centred above the crosshair
+EVENT_Z = 0.2
+EVENT_TEXT_SCALE = 0.1
+# Tutorial hints: in place of the event banner, smaller and wrapped narrower
+HINT_TEXT_SCALE = 0.06
+HINT_WRAP_WIDTH = 1.6
+
+# Objectives checklist (see ObjectivesHUD), in the top-left corner's
+# coordinates: one line per objective, its checkbox on the left. Lower with
+# the debug text, which takes that corner.
+OBJECTIVES_LEFT_X = 0.06
+OBJECTIVES_TOP_Z = -0.9 if DEBUG_HUD else -0.08
+OBJECTIVES_TEXT_SCALE = 0.045
+OBJECTIVES_LINE_SPACING = 0.06
+OBJECTIVE_BOX_HALF_SIZE = 0.014
+OBJECTIVE_TEXT_X = 0.04
+OBJECTIVE_COLORS = {
+    ACTIVE: (1.0, 1.0, 1.0, 1.0),
+    COMPLETE: (0.45, 1.0, 0.45, 1.0),
+    FAILED: (1.0, 0.35, 0.3, 1.0),
+}
+# A line blinks for a while once added, ticked or failed
+OBJECTIVE_FLASH_S = 1.5
+OBJECTIVE_FLASH_PERIOD_S = 0.25
+OBJECTIVE_FLASH_DIM_ALPHA = 0.3
+
 # Energy HUD (see EnergyHUD), in the bottom-left corner's coordinates: the HP,
-# laser, engine and shield gauges, left to right
+# shield, engine and laser gauges, left to right
 ENERGY_HUD_LEFT_X = 0.06
 ENERGY_HUD_BOTTOM_Z = 0.06
 GAUGE_SPACING = 0.04
-ARC_GAUGE_RADIUS = 0.13
-ARC_GAUGE_THICKNESS = 0.03
+ARC_GAUGE_RADIUS = 0.15
+ARC_GAUGE_THICKNESS = 0.035
+ARC_GAUGE_OUTLINE_WIDTH = 0.006
 ARC_GAUGE_SEGMENTS = 60
-GAUGE_TEXT_SCALE = 0.055
-COLUMN_GAUGE_WIDTH = 0.04
-COLUMN_GAUGE_HEIGHT = ARC_GAUGE_RADIUS
+GAUGE_TEXT_SCALE = 0.06
 HP_GAUGE_COLOR = (1.0, 0.45, 0.75)
 LASER_GAUGE_COLOR = (1.0, 0.15, 0.1)
 ENGINE_GAUGE_COLOR = (0.15, 1.0, 0.25)
 SHIELD_GAUGE_COLOR = (0.2, 0.55, 1.0)
-# Gauge brightness, raised for the system power is redirected to
+# Gauge brightness, raised for the system power is redirected to (its outline
+# is also highlighted, and the gauge grown about its base by the scale below,
+# which the spacing leaves room for)
 GAUGE_BRIGHTNESS = 0.6
 FAVOURED_GAUGE_BRIGHTNESS = 1.0
+FAVOURED_GAUGE_SCALE = 1.1
 
 # Target box tint, by missile lock: locked (a missile launched now would be
 # guided to the target) or not.
@@ -200,6 +237,76 @@ def make_hud_card(
     return card
 
 
+CHATTER = "chatter"
+HINT = "hint"
+EVENT = "event"
+
+
+class ScenarioMessage(NamedTuple):
+    kind: str  # CHATTER, HINT or EVENT
+    text: str
+    display_time_s: float
+
+
+class ScenarioText:
+    """
+    Who has the screen among the scenario texts: radio chatter on one side,
+    tutorial hints and event banners on the other (they share a spot), never
+    both at once.
+
+    A message replaces one of its own side straight away (a new line of
+    chatter cuts the previous one short), but waits for one of the other
+    side to time out. Waiting messages are shown in order, each for its full
+    time, and a new message queues behind them, unless it repeats the last
+    one waiting (a rule posting every frame queues it once).
+
+    :param clock: The game clock, in seconds
+    """
+
+    def __init__(self, clock: Callable[[], float]):
+        self.clock = clock
+        #: The message on screen, if any, and when it comes down
+        self.current: Optional[ScenarioMessage] = None
+        self.current_end_s = 0.0
+        self.pending: deque[ScenarioMessage] = deque()
+
+    @staticmethod
+    def same_side(kind: str, other: str) -> bool:
+        return (kind == CHATTER) == (other == CHATTER)
+
+    def post(self, kind: str, text: str, display_time_s: float):
+        """
+        :param kind: CHATTER, HINT or EVENT
+        :param text: The message
+        :param display_time_s: How long it stays up once shown
+        """
+        message = ScenarioMessage(kind, text, display_time_s)
+        self.update()
+        if not self.pending and (
+            self.current is None or self.same_side(self.current.kind, kind)
+        ):
+            self._show(message)
+        elif not self.pending or self.pending[-1] != message:
+            self.pending.append(message)
+
+    def update(self):
+        """Take down the message whose time is up, and show the next one."""
+        if self.current is not None and self.clock() >= self.current_end_s:
+            self.current = None
+        if self.current is None and self.pending:
+            self._show(self.pending.popleft())
+
+    def text(self, kind: str) -> str:
+        """What a kind's line shows now (empty if it isn't on screen)."""
+        if self.current is None or self.current.kind != kind:
+            return ""
+        return self.current.text
+
+    def _show(self, message: ScenarioMessage):
+        self.current = message
+        self.current_end_s = self.clock() + message.display_time_s
+
+
 class HUD:
     """
     Creates an overlay of text displaying important
@@ -235,19 +342,33 @@ class HUD:
             self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
             self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
+        # Scenario texts: chatter, hints and events, taking turns
+        self.scenario_text = ScenarioText(clock=self.game.game_time.get_current_time)
+
         # Event text
-        self.event_text_endtime = 0.0
         self.events = TextNode("Events")
+        self.events.setAlign(TextNode.ACenter)
         self.events.setSmallCaps(True)
         self.events.setShadow(0.05, 0.05)
         self.events.setShadowColor(0, 0, 0, 1)
         self.events_textNodePath = aspect2d.attachNewNode(self.events)
-        self.events_textNodePath.setScale(0.1)
-        self.events_textNodePath.setPos(0.0, 0.0, 0.2)
+        self.events_textNodePath.setScale(EVENT_TEXT_SCALE)
+        self.events_textNodePath.setPos(0.0, 0.0, EVENT_Z)
+
+        # Tutorial hint text
+        self.hints = TextNode("Hints")
+        self.hints.setSmallCaps(True)
+        self.hints.setShadow(0.05, 0.05)
+        self.hints.setShadowColor(0, 0, 0, 1)
+        self.hints.setAlign(TextNode.ACenter)
+        self.hints.setWordwrap(HINT_WRAP_WIDTH / HINT_TEXT_SCALE)
+        self.hints_textNodePath = aspect2d.attachNewNode(self.hints)
+        self.hints_textNodePath.setScale(HINT_TEXT_SCALE)
+        self.hints_textNodePath.setPos(0.0, 0.0, EVENT_Z)
 
         # Chatter text
-        self.chatter_text_endtime = 0.0
         self.chatter = TextNode("Chatter")
+        self.chatter.setAlign(TextNode.ACenter)
         self.chatter.setSmallCaps(True)
         self.chatter.setTextColor(252 / 255, 212 / 255, 10 / 255, 1)
         self.chatter.setShadow(0.05, 0.05)
@@ -266,6 +387,11 @@ class HUD:
             game=self.game, parent_node=self.game.app.a2dBottomLeft
         )
 
+        # The mission's objectives checklist
+        self.objectives_hud = ObjectivesHUD(
+            game=self.game, parent_node=self.game.app.a2dTopLeft
+        )
+
         # Wrap long lines before they run off the edges of the screen.
         text_wrap_width = 3.5 * EDGE_HORIZONTAL / self.events_textNodePath.getScale()[0]
         self.events.setWordwrap(text_wrap_width)
@@ -281,37 +407,44 @@ class HUD:
         self.update_debug_hud()
         self.ordnance_hud.update()
         self.energy_hud.update()
-        self.clear_scenario_hud()
+        self.objectives_hud.update()
+        self.update_scenario_text()
 
-    def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
+    def set_event_text(self, text: str, display_time_s: float = EVENT_DISPLAY_S):
         """
-        Sets an event text and its display time
+        Shows an event banner, once no chatter is on screen (see ScenarioText)
         """
-        self.events.set_text(text)
-        self.event_text_endtime = (
-            self.game.game_time.get_current_time() + display_time_s
-        )
-        self.events.setAlign(TextNode.ACenter)
+        self.scenario_text.post(EVENT, text, display_time_s)
+        self.update_scenario_text()
 
-    def set_chatter_text(self, text: str, display_time_s: float = 2.5) -> None:
+    def set_hint_text(self, text: str, display_time_s: float = HINT_DISPLAY_S):
         """
-        Sets a chatter text and its display time
+        Shows a tutorial hint, once no chatter is on screen (see ScenarioText)
         """
-        self.chatter.set_text(text)
-        self.chatter_text_endtime = (
-            self.game.game_time.get_current_time() + display_time_s
-        )
-        self.chatter.setAlign(TextNode.ACenter)
+        self.scenario_text.post(HINT, text, display_time_s)
+        self.update_scenario_text()
 
-    def clear_scenario_hud(self) -> None:
+    def set_chatter_text(self, text: str, display_time_s: float = CHATTER_DISPLAY_S):
         """
-        A method to clear the scenario text on screen if the display time is spent
+        Shows a line of chatter, once no hint or event is on screen (see
+        ScenarioText)
         """
-        current_time = self.game.game_time.get_current_time()
-        if current_time > self.event_text_endtime:
-            self.events.set_text("")
-        if current_time > self.chatter_text_endtime:
-            self.chatter.set_text("")
+        self.scenario_text.post(CHATTER, text, display_time_s)
+        self.update_scenario_text()
+
+    def update_scenario_text(self) -> None:
+        """
+        Show whichever scenario text has the screen, and clear the others
+        """
+        self.scenario_text.update()
+        for kind, node in (
+            (EVENT, self.events),
+            (HINT, self.hints),
+            (CHATTER, self.chatter),
+        ):
+            text = self.scenario_text.text(kind)
+            if node.getText() != text:
+                node.setText(text)
 
     def update_debug_hud(self) -> None:
         """
@@ -403,12 +536,16 @@ class HUD:
             self.fps_counter = None
         self.events_textNodePath.removeNode()
         self.events = None
+        self.hints_textNodePath.removeNode()
+        self.hints = None
         self.chatter_textNodePath.removeNode()
         self.chatter = None
         self.ordnance_hud.clean()
         self.ordnance_hud = None
         self.energy_hud.clean()
         self.energy_hud = None
+        self.objectives_hud.clean()
+        self.objectives_hud = None
         self.game = None
 
 
@@ -483,6 +620,143 @@ class OrdnanceHUD:
         self.game = None
 
 
+def make_checkbox_mark(parent_node: NodePath, name: str, points: list) -> NodePath:
+    """
+    A checkbox stroke: line strips in the box's coordinates (its half size 1).
+
+    :param parent_node: The checkbox's node
+    :param name: The stroke's node name
+    :param points: The strips, each a list of (x, z) points
+    :return: The stroke's node path
+    """
+    segs = LineSegs(name)
+    segs.setThickness(2.0)
+    for strip in points:
+        segs.moveTo(strip[0][0], 0, strip[0][1])
+        for x, z in strip[1:]:
+            segs.drawTo(x, 0, z)
+    return parent_node.attachNewNode(segs.create())
+
+
+class ObjectiveLine:
+    """
+    One line of the objectives checklist: a checkbox (empty, ticked or
+    crossed) and the objective's text on its right.
+
+    :param parent_node: The checklist's node
+    :param number: The line's number, top to bottom
+    """
+
+    def __init__(self, parent_node: NodePath, number: int) -> None:
+        self.root = parent_node.attachNewNode(f"objective{number}")
+        self.root.setZ(-number * OBJECTIVES_LINE_SPACING)
+        self.root.setTransparency(TransparencyAttrib.MAlpha)
+
+        self.box = self.root.attachNewNode("checkbox")
+        self.box.setScale(OBJECTIVE_BOX_HALF_SIZE)
+        self.box.setPos(
+            OBJECTIVE_BOX_HALF_SIZE, 0, TEXT_CENTER_OFFSET * OBJECTIVES_TEXT_SCALE
+        )
+        make_checkbox_mark(
+            self.box, "frame", [[(-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1)]]
+        )
+        self.tick = make_checkbox_mark(
+            self.box, "tick", [[(-0.6, 0.0), (-0.15, -0.55), (0.65, 0.6)]]
+        )
+        self.cross = make_checkbox_mark(
+            self.box, "cross", [[(-0.6, -0.6), (0.6, 0.6)], [(-0.6, 0.6), (0.6, -0.6)]]
+        )
+
+        self.text = make_text_line(self.root, "text", align=TextNode.ALeft)
+        self.text.setPos(OBJECTIVE_TEXT_X, 0, 0)
+        self.text.setScale(OBJECTIVES_TEXT_SCALE)
+
+        self.state = None
+
+    def show(self, label: str, state: str, alpha: float) -> None:
+        """
+        :param label: The objective's text
+        :param state: ACTIVE, COMPLETE or FAILED
+        :param alpha: The line's opacity (it blinks after a change)
+        """
+        if self.text.node().getText() != label:
+            self.text.node().setText(label)
+        if state != self.state:
+            self.state = state
+            self.root.setColorScale(*OBJECTIVE_COLORS[state])
+            for mark, shown in ((self.tick, COMPLETE), (self.cross, FAILED)):
+                if state == shown:
+                    mark.show()
+                else:
+                    mark.hide()
+        self.root.setAlphaScale(alpha)
+        self.root.show()
+
+
+class ObjectivesHUD:
+    """
+    The mission's objectives, top left: a checklist read from
+    ``game.mission.objectives``, a line per objective, ticked when complete,
+    crossed when failed. A line blinks for a moment when it is added or
+    settled. Hidden while the mission has no objectives.
+    """
+
+    def __init__(self, game: FlightState, parent_node: NodePath) -> None:
+        """
+        :param game: The flight state
+        :param parent_node: The node the checklist is anchored to (top-left
+            corner of the screen)
+        """
+        self.game = game
+        self.root = parent_node.attachNewNode("objectivesHud")
+        self.root.setPos(OBJECTIVES_LEFT_X, 0, OBJECTIVES_TOP_Z)
+        self.lines: list[ObjectiveLine] = []
+        self.root.hide()
+
+    def update(self) -> None:
+        """
+        Refresh the lines from the mission's objectives.
+        """
+        objectives = self.game.mission.objectives
+        if not objectives:
+            self.root.hide()
+            return
+        self.root.show()
+
+        now = self.game.game_time.get_current_time()
+        for number, objective in enumerate(objectives):
+            while len(self.lines) <= number:
+                self.lines.append(ObjectiveLine(self.root, len(self.lines)))
+            self.lines[number].show(
+                objective.label(),
+                objective.state,
+                self.flash_alpha(now - objective.changed_at_s),
+            )
+        for line in self.lines[len(objectives) :]:
+            line.root.hide()
+
+    @staticmethod
+    def flash_alpha(since_change_s: float) -> float:
+        """
+        :param since_change_s: Time since the objective last changed
+        :return: Its line's opacity: blinking for a while, then steady
+        """
+        if since_change_s >= OBJECTIVE_FLASH_S:
+            return 1.0
+        if int(since_change_s / OBJECTIVE_FLASH_PERIOD_S) % 2:
+            return OBJECTIVE_FLASH_DIM_ALPHA
+        return 1.0
+
+    def clean(self) -> None:
+        """
+        Cleans the ObjectivesHUD object
+        """
+        self.root.removeNode()
+        self.root = None
+        self.lines = []
+        self.game = None
+
+
 def gauge_brightness(energy: EnergySystem, system: str) -> float:
     """
     :param energy: The ship's energy system
@@ -499,12 +773,13 @@ class EnergyHUD:
     The player's gauges, bottom left. Left to right:
 
     - HP: a pink half-ring, the health left written at its centre
-    - lasers: a red column
-    - engines: a green half-ring, the ship's speed written at its centre
     - shields: a blue half-ring, the shield strength written at its centre
-      (only for shielded ships)
+      (only for shielded ships; the next gauges move left to take its place)
+    - engines: a green half-ring, the ship's speed written at its centre
+    - lasers: a red half-ring, the laser charge written at its centre
 
-    The energy gauges of the system power is redirected to are brighter.
+    The gauges are outlined in black; the energy gauge of the system power is
+    redirected to is bigger, brighter, and outlined in white.
     """
 
     def __init__(self, game: FlightState, parent_node: NodePath) -> None:
@@ -519,32 +794,27 @@ class EnergyHUD:
         # Shown by the first update
         self.root.hide()
 
-        x = ARC_GAUGE_RADIUS
-        self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, x)
+        has_shields = self.game.player.pawn.energy.has_shields
+        self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, 0)
         self.hp_gauge.set_brightness(GAUGE_BRIGHTNESS)
-        x += ARC_GAUGE_RADIUS + GAUGE_SPACING + 0.5 * COLUMN_GAUGE_WIDTH
-        self.laser_gauge = ColumnGauge(
-            parent_node=self.root,
-            name="laserGauge",
-            color=LASER_GAUGE_COLOR,
-            width=COLUMN_GAUGE_WIDTH,
-            height=COLUMN_GAUGE_HEIGHT,
-        )
-        self.laser_gauge.root.setX(x)
-        x += 0.5 * COLUMN_GAUGE_WIDTH + GAUGE_SPACING + ARC_GAUGE_RADIUS
-        self.engine_gauge = self._make_arc_gauge("engineGauge", ENGINE_GAUGE_COLOR, x)
-        x += 2.0 * ARC_GAUGE_RADIUS + GAUGE_SPACING
-        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, x)
-        if not self.game.player.pawn.energy.has_shields:
+        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, 1)
+        if not has_shields:
             self.shield_gauge.root.hide()
+        slot = 2 if has_shields else 1
+        self.engine_gauge = self._make_arc_gauge(
+            "engineGauge", ENGINE_GAUGE_COLOR, slot
+        )
+        self.laser_gauge = self._make_arc_gauge(
+            "laserGauge", LASER_GAUGE_COLOR, slot + 1
+        )
 
     def _make_arc_gauge(
-        self, name: str, color: tuple[float, float, float], x: float
+        self, name: str, color: tuple[float, float, float], slot: int
     ) -> ArcGauge:
         """
         :param name: The gauge's node name
         :param color: The gauge's colour
-        :param x: The gauge's centre's position along the row
+        :param slot: The gauge's place in the row, from the left
         :return: A half-ring gauge in the row
         """
         gauge = ArcGauge(
@@ -555,13 +825,16 @@ class EnergyHUD:
             thickness=ARC_GAUGE_THICKNESS,
             n_segments=ARC_GAUGE_SEGMENTS,
             text_scale=GAUGE_TEXT_SCALE,
+            outline_width=ARC_GAUGE_OUTLINE_WIDTH,
         )
-        gauge.root.setX(x)
+        gauge.root.setX(
+            ARC_GAUGE_RADIUS + slot * (2.0 * ARC_GAUGE_RADIUS + GAUGE_SPACING)
+        )
         return gauge
 
     def update(self) -> None:
         """
-        Refresh the gauges' levels, texts and brightness.
+        Refresh the gauges' levels, texts, brightness, highlights and sizes.
         """
         if self.root.isHidden():
             self.root.show()
@@ -573,16 +846,32 @@ class EnergyHUD:
         self.hp_gauge.set_text(f"{health:.0f}")
 
         self.laser_gauge.set_level(energy.lasers)
-        self.laser_gauge.set_brightness(gauge_brightness(energy, LASERS))
+        self.laser_gauge.set_text(f"{100.0 * max(energy.lasers, 0.0):.0f}%")
+        self._show_power(self.laser_gauge, energy, LASERS)
 
         self.engine_gauge.set_level(energy.engines)
         self.engine_gauge.set_text(f"{magnitude(pawn.speed):.0f} m/s")
-        self.engine_gauge.set_brightness(gauge_brightness(energy, ENGINES))
+        self._show_power(self.engine_gauge, energy, ENGINES)
 
         if energy.has_shields:
             self.shield_gauge.set_level(pawn.shield / pawn.max_shield)
             self.shield_gauge.set_text(f"{pawn.shield:.0f}")
-            self.shield_gauge.set_brightness(gauge_brightness(energy, SHIELDS))
+            self._show_power(self.shield_gauge, energy, SHIELDS)
+
+    @staticmethod
+    def _show_power(gauge: ArcGauge, energy: EnergySystem, system: str) -> None:
+        """
+        Brighten, highlight and grow a gauge if power is redirected to its
+        system.
+
+        :param gauge: The system's gauge
+        :param energy: The ship's energy system
+        :param system: The system (ENGINES, LASERS or SHIELDS)
+        """
+        favoured = energy.is_favoured(system)
+        gauge.set_brightness(gauge_brightness(energy, system))
+        gauge.set_highlighted(favoured)
+        gauge.root.setScale(FAVOURED_GAUGE_SCALE if favoured else 1.0)
 
     def clean(self) -> None:
         """

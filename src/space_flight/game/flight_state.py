@@ -14,9 +14,11 @@ from space_flight.fx.fire_smoke_fx import FireSmokePool
 from space_flight.fx.spark_fx import SparkPool
 from space_flight.game.collisions import CollisionSystem
 from space_flight.game.integrator import Integrator
+from space_flight.game.kills import KillLog
 from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
 from space_flight.game.scenario import Mission
+from space_flight.game.scenario.objectives import summarize as summarize_objectives
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
     GameTimeManager,
@@ -58,6 +60,9 @@ class FlightState(BaseState):
         # ("victory", "defeat" or "death"); read by headless callers to know
         # when to stop stepping the simulation.
         self.outcome: str | None = None
+        # The level's tally (kills, objectives), set with the outcome (see
+        # compute_level_stats)
+        self.level_stats: dict | None = None
 
     def enter(self):
         """
@@ -277,8 +282,9 @@ class FlightState(BaseState):
         self.fire_smoke_pool = FireSmokePool(game=self)
         self.spark_fx_pool = SparkPool(game=self)
 
-        # Initialize Collision system and Destructibles
-        self.destructibles = Destructibles()
+        # Initialize the kill log, Collision system and Destructibles
+        self.kill_log = KillLog(game=self)
+        self.destructibles = Destructibles(on_death=self.kill_log.record)
         self.collision_system = CollisionSystem(game=self)
 
         # Initialize interaction compute between ships
@@ -338,6 +344,7 @@ class FlightState(BaseState):
         if self.player.pawn.health <= 0:
             if not self.player.is_dying:
                 self.player.begin_death()
+                self.kill_log.record(self.player.pawn)
             elif self.player.death_spin_finished():
                 self.end_level(outcome="death", text="Your ship was destroyed.")
         return task.cont
@@ -367,13 +374,31 @@ class FlightState(BaseState):
         :param text: explanatory text shown beneath the outcome title
             (ignored headless)
         """
+        # Only the first ending counts
+        if self.outcome is not None:
+            return
         self.outcome = outcome
+        self.level_stats = self.compute_level_stats()
         if not self.headless:
             self.app.state_manager.push(
                 state_class=self.app.state_manager.LEVEL_END_STATE,
                 outcome=outcome,
                 text=text,
+                stats=self.level_stats,
             )
+
+    def compute_level_stats(self) -> dict:
+        """
+        The level's tally, for the level-end screen: the player's kills (see
+        :meth:`KillLog.player_summary`) and how the objectives went.
+
+        :return: The player's kill summary, plus ``"objectives"`` (see
+            :func:`~space_flight.game.scenario.objectives.summarize`)
+        """
+        return {
+            **self.kill_log.player_summary(),
+            "objectives": summarize_objectives(self.mission.objectives),
+        }
 
     def update_mission_task(self, task: Task) -> int:
         """
@@ -481,6 +506,7 @@ class FlightState(BaseState):
         self.collision_system = None
         self.destructibles.clean()
         self.destructibles = None
+        self.kill_log = None
         self.fire_smoke_pool.clean()
         self.fire_smoke_pool = None
         self.spark_fx_pool.clean()

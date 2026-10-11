@@ -8,6 +8,7 @@ dead_zones:
 # Hardware-level button/axis names used in context bindings below:
 #
 #   keyboard  — Panda3D key strings: space, arrow_up, lshift, a, escape, …
+#               or the character a key types on the keyboard layout (é, ç, …)
 #   gamepad   — buttons: gamepad_lshoulder, gamepad_rshoulder, gamepad_start,
 #                        gamepad_back, gamepad_face_a/b/x/y,
 #                        gamepad_dpad_up/down/left/right,
@@ -56,10 +57,10 @@ contexts:
       toggle_mirror:       alt
       radial_menu:         r
       # Energy distribution
-      energy_engines:      "1"
-      energy_lasers:       "2"
-      energy_shields:      "3"
-      energy_balanced:     "4"
+      energy_engines:      '"'
+      energy_lasers:       "'"
+      energy_shields:      "é"
+      energy_balanced:     "&"
 
     gamepad:
       # Flight axes

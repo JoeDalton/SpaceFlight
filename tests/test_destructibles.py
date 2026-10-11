@@ -179,3 +179,24 @@ def test_handle_deaths_parametrized(
             assert obj.played_death is False
             assert obj.cleaned is False
             obj.clear_tasks.assert_not_called()
+
+
+def test_handle_deaths_reports_each_new_death_once(mock_game):
+    """
+    on_death hears of each object once, as it enters its dying phase, and not
+    again while it plays out its death.
+    """
+    mock_game.game_time.get_current_time.return_value = 0.0
+    deaths = []
+    destructibles = Destructibles(on_death=deaths.append)
+    alive = DummyDestructible(mock_game)
+    alive.health = 10.0
+    dying = DummyDestructible(mock_game)
+    dying.health = 0.0
+    dying.death_duration_s = 5.0
+    destructibles.alive_objects = [alive, dying]
+
+    destructibles.handle_deaths()
+    destructibles.handle_deaths()
+
+    assert deaths == [dying]

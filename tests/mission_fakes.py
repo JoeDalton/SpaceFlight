@@ -15,6 +15,8 @@ import numpy as np
 from space_flight.actors.major_ship.hangar import LaunchOrder
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
 from space_flight.ai.formation import Formation
+from space_flight.game.kills import KillLog
+from space_flight.ui.hud import CHATTER_DISPLAY_S, EVENT_DISPLAY_S, HINT_DISPLAY_S
 
 
 class FakeGameTime:
@@ -83,8 +85,10 @@ class MockNavigator:
         self.is_loop = False
 
     def set_waypoints(self, waypoints, is_loop=False):
+        """Mirrors the real navigators: a new route starts at its first point."""
         self.waypoints = waypoints
         self.is_loop = is_loop
+        self.next_waypoint_idx = 0
 
     def clear_waypoints(self):
         self.waypoints = []
@@ -104,6 +108,7 @@ class MockPawn:
         self.target = None
         self.health = 100.0
         self.shield_level = 0.0
+        self.category = "fighter"
 
 
 class MockBot:
@@ -214,11 +219,15 @@ class MockHud:
     def __init__(self):
         self.messages = []
         self.chatter = []
+        self.hints = []
 
-    def set_event_text(self, text, display_time_s):
+    def set_hint_text(self, text, display_time_s=HINT_DISPLAY_S):
+        self.hints.append((text, display_time_s))
+
+    def set_event_text(self, text, display_time_s=EVENT_DISPLAY_S):
         self.messages.append((text, display_time_s))
 
-    def set_chatter_text(self, text, display_time_s):
+    def set_chatter_text(self, text, display_time_s=CHATTER_DISPLAY_S):
         self.chatter.append((text, display_time_s))
 
 
@@ -239,6 +248,7 @@ class FakeGame:
         self.hud = MockHud()
         self.headless = False
         self.end_level_calls = []
+        self.kill_log = KillLog(self)
         self.player = MockBot("player", [0, 0, 0], team=1)
         self.interactions.add(self.player.pawn)
         self.player_waypoints = None
@@ -252,6 +262,10 @@ class FakeGame:
 
     def end_level(self, outcome, text=""):
         self.end_level_calls.append((outcome, text))
+        # What the level-end tally sees: each objective's state, by its text
+        mission = getattr(self, "mission", None)
+        if mission is not None:
+            self.objectives_at_end = {o.text: o.state for o in mission.objectives}
 
 
 def patch_engine(monkeypatch):
@@ -301,6 +315,14 @@ def live(game, spawned, name):
     ]
 
 
-def kill_all(game, pawns):
+def kill_all(game, pawns, by=None):
+    """
+    Kill pawns, logging each death in the kill log.
+
+    :param by: The killer's DamageSource (None for no one)
+    """
     for pawn in list(pawns):
+        pawn.last_hit_by = by
+        pawn.last_hit_cause = None if by is None else "weapon"
         game.interactions.kill(pawn)
+        game.kill_log.record(pawn)

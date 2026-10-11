@@ -18,10 +18,20 @@ from typing import TYPE_CHECKING, Iterator, Sequence
 import numpy as np
 
 from space_flight.actors.player import Player
+from space_flight.game.levels.hints import (
+    laser_power_hint,
+    scan_hint,
+    subsystem_hint,
+)
 from space_flight.game.scenario import WaveSpec
-from space_flight.game.scenario.conditions import all_of, any_of, damaged, near
+from space_flight.game.scenario.conditions import (
+    all_of,
+    any_of,
+    being_hit,
+    damaged,
+    near,
+)
 from space_flight.scenes.scenes import scene_factory
-from space_flight.ui.input_context import InputContext
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -72,6 +82,9 @@ TIES_BEHIND_M = 1000
 INTRO_DELAY_S = 40  # patrol chatter before the convoy shows up
 CONVOY_INTERVAL_S = 20  # between two convoy transports
 DEFEAT_DELAY_S = 3
+# After Blue Leader's cease fire order, shots already on their way: any hit
+# on a civilian after this is defiance
+CEASE_FIRE_GRACE_S = 3
 VICTORY_DELAY_S = 3
 
 
@@ -174,12 +187,6 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     :param m: The level's :class:`Mission`
     """
     game = m.game
-    radial_key = InputContext.key_label(
-        game.app, "flight", "radial_menu", "the target-menu key"
-    )
-    loop_key = InputContext.key_label(
-        game.app, "flight", "loop_target", "the cycle-target key"
-    )
 
     # Handles first, so the rules below can refer to waves not spawned yet.
     blue = m.wave(BLUE_FLIGHT)
@@ -192,6 +199,9 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # ended, so there is only ever one ending.
     endings = []
     ended = []
+    # Objectives that hold until the end (rules of engagement, ...): ticked
+    # by a victory
+    standing_orders = []
 
     def end(outcome: str, text: str):
         if ended:
@@ -199,6 +209,9 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         ended.append(outcome)
         for rule in endings:
             rule.cancel()
+        if outcome == "victory":
+            for objective in standing_orders:
+                objective.complete()
         m.end_level(outcome, text)
 
     def lose_later(condition: Condition, speaker: str, line: str, text: str):
@@ -208,20 +221,43 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             m.on(m.delay(condition, DEFEAT_DELAY_S), lambda: end("defeat", text))
         )
 
-    # --- rules of engagement, live until the reveal --------------------------
+    # --- rules of engagement: a warning, then grounded --------------------------
     civilians = _Civilians([*convoy, smuggler])
-    m.on(
-        damaged(civilians),
-        lambda: m.speech(
-            "Blue Three, cease fire! Those are civilians!", speaker="Blue Leader"
-        ),
-    )
+    fired_again = []
+
+    def on_fired_again():
+        fired_again.append(True)
+        m.speech(
+            "Three, I said cease fire! That's it, you're grounded.",
+            speaker="Blue Leader",
+        )
+        end(
+            "defeat",
+            "You kept firing on civilians after Blue Leader's order.\n"
+            "Your wings are grounded.",
+        )
+
+    def warn_civilian_fire():
+        m.speech("Blue Three, cease fire! Those are civilians!", speaker="Blue Leader")
+        endings.append(
+            m.on(
+                all_of(
+                    m.after(CEASE_FIRE_GRACE_S), being_hit(civilians, by_player=True)
+                ),
+                on_fired_again,
+            )
+        )
+
+    m.on(damaged(civilians), warn_civilian_fire)
     revealed = []
 
     def civilian_destroyed() -> bool:
         return any(t.all_destroyed() for t in convoy) or (
             smuggler.all_destroyed() and not revealed
         )
+
+    def fired_on_civilians() -> bool:
+        return bool(fired_again) or civilian_destroyed()
 
     endings.append(
         m.on(
@@ -232,12 +268,16 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             ),
         )
     )
-    for transport, scan in zip(convoy, convoy_scans):
+    unscanned_exits = [
+        all_of(
+            near(transport, EXIT_GATE, EXIT_GATE_RADIUS_M),
+            lambda s=scan: not s.complete(),
+        )
+        for transport, scan in zip(convoy, convoy_scans)
+    ]
+    for unscanned_exit in unscanned_exits:
         lose_later(
-            all_of(
-                near(transport, EXIT_GATE, EXIT_GATE_RADIUS_M),
-                lambda s=scan: not s.complete(),
-            ),
+            unscanned_exit,
             "Blue Leader",
             "It's leaving the field unscanned!",
             "An unscanned transport slipped through the patrol.",
@@ -295,13 +335,26 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         speaker="Blue Leader",
     )
     yield from m.wait(6)
-    m.hud("Stay with Blue Leader on patrol.")
+    patrol = m.objective("Stay with Blue Leader on patrol")
 
     # ==================================================================
     # 2. The convoy: three clean transports to scan
     # ==================================================================
     yield from m.wait(INTRO_DELAY_S - 16)
     convoy[0].spawn()
+    patrol.complete()
+    m.objective(
+        "Scan the transports",
+        progress=lambda: len(cleared),
+        goal=len(convoy),
+        failed=any_of(*unscanned_exits),
+    )
+    standing_orders.append(
+        m.objective("Hold fire on civilians", failed=fired_on_civilians)
+    )
+    standing_orders.append(
+        m.objective("Keep Blue flight alive", failed=blue.all_destroyed)
+    )
     m.speech(
         "Contact! GR-75 transports coming in from the far side of the field.",
         speaker="Blue Two",
@@ -314,13 +367,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     )
     blue.follow(game.player)
     yield from m.wait(4)
-    m.hud(
-        "You have the lead: Blue flight now follows you.\n"
-        f"Hold [{radial_key}], point at Capital ships, then press [{loop_key}]\n"
-        "to lock a transport. Close to 1000m and keep it\n"
-        "ahead of you for 15 seconds to scan it.",
-        display_time_s=10,
-    )
+    m.hint("You have the lead: Blue flight now follows you. " + scan_hint(game.app))
     yield from m.wait(CONVOY_INTERVAL_S - 8)
     convoy[1].spawn()
     yield from m.wait(CONVOY_INTERVAL_S)
@@ -359,8 +406,12 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         loop=False,
     )
     smuggler_scan = m.scan(smuggler, contraband=True)
+    smuggler_leaving = near(smuggler, smuggler_exit, EXIT_GATE_RADIUS_M)
+    m.objective(
+        "Scan the straggler", done=smuggler_scan.complete, failed=smuggler_leaving
+    )
     smuggler_unscanned_exit = m.on(
-        near(smuggler, smuggler_exit, EXIT_GATE_RADIUS_M),
+        smuggler_leaving,
         lambda: end("defeat", "An unscanned transport slipped through the patrol."),
     )
     endings.append(smuggler_unscanned_exit)
@@ -385,6 +436,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     revealed.append(True)
     smuggler_unscanned_exit.cancel()
     m.speech("Weapons crates! It's a gun-runner!", speaker="Blue Leader")
+    m.hint(laser_power_hint(game.app))
     smuggler.set_team(2)
 
     dorn = smuggler.pawns()[0]
@@ -398,18 +450,21 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             "It's spinning up its hyperdrive! Hurry, Three!", speaker="Blue Leader"
         ),
     )
+    jumped = near(smuggler, jump_point, JUMP_POINT_RADIUS_M)
     lose_later(
-        near(smuggler, jump_point, JUMP_POINT_RADIUS_M),
+        jumped,
         "Blue Two",
         "It jumped to lightspeed...",
         "The gun-runner escaped with its cargo.",
     )
+    m.objective("Stop the gun-runner", done=smuggler.all_destroyed, failed=jumped)
 
     ties.spawn(
         spawn_point=player_pawn.position - player_pawn.forward * TIES_BEHIND_M,
         orientation=player_pawn.orientation,
         target=blue,
     )
+    m.objective("Destroy the TIEs", progress=ties.destroyed_count, goal=TIE_FLIGHT.size)
 
     m.on(
         smuggler.all_destroyed,
@@ -434,10 +489,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             speaker="Blue Leader",
         )
         yield from m.wait(4)
-        m.hud(
-            f"Hold [{radial_key}], point at Subsystems, then press [{loop_key}]\n"
-            "to target the shield generators."
-        )
+        m.hint(subsystem_hint(game.app, "target the shield generators"))
 
     m.schedule(reveal_chatter())
 

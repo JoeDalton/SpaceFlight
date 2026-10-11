@@ -25,7 +25,14 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Sequence
 
 from space_flight.ai.formation import Formation
-from space_flight.game.scenario.conditions import Condition, _After, _Delay, _Sustained
+from space_flight.game.scenario.conditions import (
+    Condition,
+    _After,
+    _Delay,
+    _Sustained,
+    ids_of,
+)
+from space_flight.game.scenario.objectives import Objective, reaches
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
@@ -40,6 +47,10 @@ LOGGER = logging.getLogger()
 
 #: An action: called once when a rule fires.
 Action = Callable[[], None]
+
+#: Seconds between a mission ending the level and the level-end screen, so the
+#: player sees the objectives' final state.
+LEVEL_END_DELAY_S = 2.0
 
 
 class Trigger:
@@ -88,6 +99,10 @@ class Mission:
         self.game = game
         self.triggers: list[Trigger] = []
         self.jobs: list[Iterator] = []
+        #: The objectives shown on the HUD, in the order they were given
+        self.objectives: list[Objective] = []
+        #: The outcome the mission is ending on, once it is (see end_level)
+        self.ending: Optional[str] = None
 
     def now(self) -> float:
         """The game clock, in seconds."""
@@ -234,6 +249,63 @@ class Mission:
         return _Sustained(self.now, condition, seconds)
 
     # ------------------------------------------------------------------
+    # Objectives
+    # ------------------------------------------------------------------
+
+    def objective(
+        self,
+        text: str,
+        done: Optional[Condition] = None,
+        failed: Optional[Condition] = None,
+        progress: Optional[Callable[[], int]] = None,
+        goal: Optional[int] = None,
+    ) -> Objective:
+        """
+        Add an objective to the HUD checklist, from now.
+
+        It only shows the player what to do: ending the level is still the
+        mission's call (:meth:`victory`, :meth:`defeat`).
+
+        :param text: What to do, kept short
+        :param done: Ticks it once true (by default, progress reaching goal)
+        :param failed: Fails it once true, unless already ticked
+        :param progress: A live count towards goal, shown as "(n/goal)", e.g.
+            ``wave.destroyed_count`` or :meth:`kills`
+        :param goal: The count that completes it
+        :return: The objective (call its complete(), fail() or remove())
+        """
+        objective = Objective(self, text, progress=progress, goal=goal)
+        if done is None and progress is not None and goal is not None:
+            done = reaches(progress, goal)
+        if done is not None:
+            objective.rules.append(self.on(done, objective.complete))
+        if failed is not None:
+            objective.rules.append(self.on(failed, objective.fail))
+        self.objectives.append(objective)
+        return objective
+
+    # ------------------------------------------------------------------
+    # Kills
+    # ------------------------------------------------------------------
+
+    def kills(self, victims: Any = None, by_player: bool = False) -> Callable[[], int]:
+        """
+        A live kill counter, e.g. an objective's progress.
+
+        :param victims: Whose deaths count (see
+            :func:`~space_flight.game.scenario.conditions.ids_of`), read on each
+            call so a wave still spawning is counted in full; everyone by default
+        :param by_player: Only count the player's kills
+        :return: A zero-argument callable giving the count
+        """
+
+        def count() -> int:
+            victim_ids = None if victims is None else ids_of(victims)
+            return self.game.kill_log.count(victim_ids=victim_ids, by_player=by_player)
+
+        return count
+
+    # ------------------------------------------------------------------
     # Reactive rules
     # ------------------------------------------------------------------
 
@@ -251,20 +323,27 @@ class Mission:
     # Actions
     # ------------------------------------------------------------------
 
-    def hud(self, text: str, display_time_s: float = 5.0):
+    # The HUD shows chatter and hints/events in turn, each for its time (see
+    # space_flight.ui.hud.ScenarioText): a message may wait for its turn.
+
+    def hud(self, text: str):
         """Show a message in the HUD event banner."""
         # There is no HUD headless, and no one to read it.
         if not self.game.headless:
-            self.game.hud.set_event_text(text=text, display_time_s=display_time_s)
+            self.game.hud.set_event_text(text=text)
 
-    def speech(
-        self, text: str, speaker: Optional[str] = None, display_time_s: float = 6.0
-    ):
+    def hint(self, text: str):
+        """Show a tutorial hint (see space_flight.game.levels.hints), smaller
+        than the banner's messages and wrapped."""
+        if not self.game.headless:
+            self.game.hud.set_hint_text(text=text)
+
+    def speech(self, text: str, speaker: Optional[str] = None):
         """Play a line of speech (audio stubbed), shown as a subtitle."""
         LOGGER.info("speech [%s]: %s", speaker or "narrator", text)
         if not self.game.headless:
             subtitle = f"{speaker}: {text}" if speaker else text
-            self.game.hud.set_chatter_text(text=subtitle, display_time_s=display_time_s)
+            self.game.hud.set_chatter_text(text=subtitle)
 
     def player_waypoints(
         self,
@@ -290,8 +369,22 @@ class Mission:
             self.game.player_waypoints = None
 
     def end_level(self, outcome: str, text: str = ""):
-        """End the level ("victory", "defeat" or "death")."""
-        self.game.end_level(outcome=outcome, text=text)
+        """
+        End the level ("victory", "defeat" or "death"): the objectives take
+        their final state at once, and the level-end screen follows
+        LEVEL_END_DELAY_S later. Only the first ending counts.
+        """
+        if self.ending is not None:
+            return
+        self.ending = outcome
+        for objective in list(self.objectives):
+            objective.finalize()
+
+        def show_the_end() -> Iterator[None]:
+            yield from self.wait(LEVEL_END_DELAY_S)
+            self.game.end_level(outcome=outcome, text=text)
+
+        self.schedule(show_the_end())
 
     def victory(self, text: str = ""):
         self.end_level("victory", text)

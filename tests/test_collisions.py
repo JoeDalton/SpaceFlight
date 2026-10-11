@@ -201,7 +201,7 @@ def test_ship_into_subsystem_pushes_parent_not_subsystem():
     host.mass_kg = 800.0
     host.mounted_on = None
 
-    subsystem = MagicMock()
+    subsystem = MagicMock(health=100.0)
     subsystem.mounted_on = host
 
     ship = MagicMock()
@@ -270,7 +270,7 @@ def test_ship_into_subsystem_no_pushback_when_separating():
     host.mass_kg = 800.0
     host.mounted_on = None
 
-    subsystem = MagicMock()
+    subsystem = MagicMock(health=100.0)
     subsystem.mounted_on = host
 
     ship = MagicMock()
@@ -342,7 +342,7 @@ def test_player_ramming_a_subsystem_scales_only_the_players_damage():
     system.player_collision_damage_multiplier = 2.0
 
     host = MagicMock(speed=np.zeros(3), mass_kg=800.0, mounted_on=None)
-    subsystem = MagicMock(mounted_on=host)
+    subsystem = MagicMock(mounted_on=host, health=100.0)
     ship = MagicMock(speed=np.array([-10.0, 0.0, 0.0]), mass_kg=100.0)
     ship.mounted_on = None
     system.game.player.pawn = ship
@@ -863,6 +863,7 @@ def make_target_fighter(shield_level: float) -> SimpleNamespace:
         mounted_on=None,
         speed=np.zeros(3),
         shield_level=shield_level,
+        health=100.0,
     )
     fighter.take_hit = lambda damage, normal_world_vector: setattr(
         fighter, "shield_level", max(0.0, fighter.shield_level - damage)
@@ -1191,3 +1192,123 @@ def test_box_face_normal_picks_the_face_of_the_hit_point(point, expected):
     np.testing.assert_allclose(
         normal, root.getRelativeVector(box_np, Vec3(*expected)), atol=1e-6
     )
+
+
+# ---------------------------
+# Kill credit: who hit whom
+# ---------------------------
+
+
+def test_a_munition_hit_credits_its_shooter():
+    """The target is stamped with the shot's source before taking the hit."""
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    fighter = make_target_fighter(shield_level=0.0)
+    laser = make_enemy_laser()
+    entry = make_destructible_entry(laser, fighter)
+
+    system.munition_into_destructible(entry)
+
+    assert fighter.last_hit_by is laser.source
+    assert fighter.last_hit_cause == "weapon"
+
+
+def test_ramming_a_subsystem_credits_the_rammer():
+    system = make_collision_system_without_init()
+    host = MagicMock(speed=np.zeros(3), mass_kg=800.0, mounted_on=None)
+    subsystem = MagicMock(mounted_on=host, health=100.0)
+    ship = MagicMock(speed=np.array([-10.0, 0.0, 0.0]), mass_kg=100.0)
+    ship.mounted_on = None
+    entry = make_pushback_entry(ship, subsystem, Vec3(1.0, 0.0, 0.0))
+
+    system.ship_into_subsystem_pushback(entry)
+
+    assert subsystem.last_hit_by.actor_id is ship.id
+    assert subsystem.last_hit_cause == "ram"
+
+
+def make_ship_at(position, speed, health=100.0) -> SimpleNamespace:
+    """A ship for ship-into-ship pushback, recording the damage it takes."""
+    ship = SimpleNamespace(
+        id=object(),
+        parent=SimpleNamespace(name="ship"),
+        team=1,
+        category="fighter",
+        position=np.array(position, dtype=float),
+        speed=np.array(speed, dtype=float),
+        hit_box_radius_m=5.0,
+        mass_kg=100.0,
+        health=health,
+    )
+    ship.push = MagicMock()
+    return ship
+
+
+def make_ship_entry(ship_from, ship_into) -> MagicMock:
+    entry = MagicMock()
+    entry.from_node_path.python_tags = {"owner": ship_from}
+    entry.into_node_path.python_tags = {"owner": ship_into}
+    return entry
+
+
+def test_ramming_a_ship_credits_the_rammer():
+    system = make_collision_system_without_init()
+    rammer = make_ship_at([8.0, 0.0, 0.0], [-10.0, 0.0, 0.0])
+    victim = make_ship_at([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+
+    system.ship_into_ship_pushback(make_ship_entry(rammer, victim))
+
+    victim.push.assert_called_once()
+    assert victim.last_hit_by.actor_id is rammer.id
+    assert victim.last_hit_cause == "ram"
+
+
+def test_ramming_a_wreck_leaves_its_killer():
+    system = make_collision_system_without_init()
+    rammer = make_ship_at([8.0, 0.0, 0.0], [-10.0, 0.0, 0.0])
+    wreck = make_ship_at([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], health=0.0)
+    wreck.last_hit_by = "the killer"
+
+    system.ship_into_ship_pushback(make_ship_entry(rammer, wreck))
+
+    assert wreck.last_hit_by == "the killer"
+
+
+def make_terrain_entry(ship) -> MagicMock:
+    entry = MagicMock()
+    entry.from_node_path.python_tags = {"owner": ship}
+    entry.into_node_path.python_tags = {"owner": MagicMock()}
+    entry.getSurfaceNormal.return_value = Vec3(1.0, 0.0, 0.0)
+    return entry
+
+
+def take_damage(ship) -> None:
+    """Make ship.push spend its damage from its health."""
+    ship.push.side_effect = lambda damage, **kwargs: setattr(
+        ship, "health", ship.health - damage
+    )
+
+
+def test_a_fatal_crash_credits_no_one():
+    system = make_collision_system_without_init()
+    ship = make_ship_at([0.0, 0.0, 0.0], [-100.0, 0.0, 0.0], health=10.0)
+    ship.last_hit_by = "the player"
+    take_damage(ship)
+
+    system.ship_into_terrain_pushback(make_terrain_entry(ship))
+
+    assert ship.health <= 0.0
+    assert ship.last_hit_by is None
+    assert ship.last_hit_cause == "crash"
+
+
+def test_a_survived_crash_keeps_the_last_hitter():
+    system = make_collision_system_without_init()
+    ship = make_ship_at([0.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
+    ship.last_hit_by = "the player"
+    take_damage(ship)
+
+    system.ship_into_terrain_pushback(make_terrain_entry(ship))
+
+    assert ship.health > 0.0
+    assert ship.last_hit_by == "the player"

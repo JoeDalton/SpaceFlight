@@ -23,6 +23,7 @@ from space_flight.menus.menu_utils import (
 from space_flight.ui.input_reader import (
     GAMEPAD_AXIS_NAMES,
     JOYSTICK_AXIS_NAMES,
+    layout_only_keys,
     load_bindings,
     reader_factory,
 )
@@ -84,7 +85,11 @@ class ChangeBindingDialog(object):
     While the dialog is open, all Panda3D button throwers are redirected to two
     generic events ("keyListenEvent" / "deviceListenEvent") so that any
     hardware input can be captured as a raw string.  Throwers are restored to
-    their original state in :meth:`onClose`.
+    their original state in :meth:`onClose`.  Keys typing a non-ASCII
+    character (é, ç, ... see
+    :func:`~space_flight.ui.input_reader.layout_only_keys`) throw no button
+    event, so the keyboard throwers' raw events are listened to as well, and
+    such a key is captured as the character it types.
 
     Axes are polled every frame via the :meth:`watchControls` task.  A baseline
     snapshot of each axis value taken at construction time prevents resting-
@@ -173,11 +178,18 @@ class ChangeBindingDialog(object):
         for bt in app.buttonThrowers:
             bt.node().setSpecificFlag(False)
             bt.node().setButtonDownEvent("keyListenEvent")
+            bt.node().setRawButtonDownEvent("rawKeyListenEvent")
         for bt in app.deviceButtonThrowers:
             bt.node().setSpecificFlag(False)
             bt.node().setButtonDownEvent("deviceListenEvent")
 
         app.accept("keyListenEvent", self.buttonPressed)
+        # The character typed by each key only reported as a raw button, by
+        # its raw button name
+        self.layoutOnlyKeys = {
+            raw_name: label for label, raw_name in layout_only_keys(app).items()
+        }
+        app.accept("rawKeyListenEvent", self.rawButtonPressed)
         app.accept(
             "deviceListenEvent", lambda btn: self.buttonPressed(btn, from_device=True)
         )
@@ -207,16 +219,39 @@ class ChangeBindingDialog(object):
             for keyboard events via "keyListenEvent".  Controls whether the
             "gamepad_" prefix is prepended.
         """
+        btn_str = str(button)
+        # Prefix device buttons to match the YAML convention (e.g. "gamepad_lshoulder").
+        if from_device and self.input_type == "gamepad":
+            self.recordButton("gamepad_" + btn_str)
+        else:
+            self.recordButton(btn_str)
+
+    def rawButtonPressed(self, button: str):
+        """
+        Handle a raw key press, captured as the character the key types if it
+        throws no button event (see
+        :func:`~space_flight.ui.input_reader.layout_only_keys`). Other keys are
+        left to :meth:`buttonPressed`.
+
+        :param button: The raw button's name (the event's parameter), after the
+            key's place on a US keyboard.
+        """
+        label = self.layoutOnlyKeys.get(str(button))
+        if label:
+            self.recordButton(label)
+
+    def recordButton(self, name: str):
+        """
+        Record a pressed button as the pending binding, unless the dialog's own
+        OK / Cancel buttons are active.
+
+        :param name: The button's hardware name, as stored in the YAML.
+        """
         if any(btn.guiItem.getState() == 1 for btn in self.dialog.buttonList):
             # Ignore events while dialog OK/Cancel buttons are active (mouse clicks).
             return
 
-        btn_str = str(button)
-        # Prefix device buttons to match the YAML convention (e.g. "gamepad_lshoulder").
-        if from_device and self.input_type == "gamepad":
-            self.newInput = "gamepad_" + btn_str
-        else:
-            self.newInput = btn_str
+        self.newInput = name
         self.newInputType = "button"
         text = self.newInput.replace("_", " ").title()
         self.dialog["text"] = "New event will be:\n\nButton: " + text
@@ -293,10 +328,12 @@ class ChangeBindingDialog(object):
         for bt in self.app.buttonThrowers:
             bt.node().setSpecificFlag(True)
             bt.node().setButtonDownEvent("")
+            bt.node().setRawButtonDownEvent("")
         for bt in self.app.deviceButtonThrowers:
             bt.node().setSpecificFlag(True)
             bt.node().setButtonDownEvent("")
         self.app.ignore("keyListenEvent")
+        self.app.ignore("rawKeyListenEvent")
         self.app.ignore("deviceListenEvent")
         self.app.taskMgr.remove("checkControls")
         # Devices are not detached here — they are managed by InputReader,

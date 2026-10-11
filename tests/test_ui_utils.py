@@ -6,12 +6,15 @@ import pytest
 from panda3d.core import GeomVertexReader, NodePath
 
 from space_flight.ui.utils import (
+    GAUGE_HIGHLIGHTED_OUTLINE_COLOR,
+    GAUGE_OUTLINE_COLOR,
     GAUGE_TRACK_ALPHA,
     ArcGauge,
     ColumnGauge,
     RollingDrum,
     gauge_color,
     make_arc_geom,
+    make_arc_outline_geom,
 )
 
 ROLL_TIME_S = 0.2
@@ -196,6 +199,7 @@ def make_arc_gauge(n_segments: int = 10) -> ArcGauge:
         thickness=0.2,
         n_segments=n_segments,
         text_scale=0.05,
+        outline_width=0.02,
     )
 
 
@@ -263,6 +267,43 @@ def test_arc_gauge_text_and_brightness():
     assert gauge.track.getColor()[3] == pytest.approx(GAUGE_TRACK_ALPHA, abs=1 / 255)
 
 
+def test_arc_gauge_outline_is_black_or_white_when_highlighted():
+    """
+    The outline is black, and white while the gauge is highlighted.
+    """
+    gauge = make_arc_gauge()
+    assert tuple(gauge.outline.getColor()) == pytest.approx(GAUGE_OUTLINE_COLOR)
+
+    gauge.set_highlighted(True)
+    assert tuple(gauge.outline.getColor()) == pytest.approx(
+        GAUGE_HIGHLIGHTED_OUTLINE_COLOR
+    )
+
+    gauge.set_highlighted(False)
+    assert tuple(gauge.outline.getColor()) == pytest.approx(GAUGE_OUTLINE_COLOR)
+
+
+def test_arc_outline_surrounds_the_half_ring():
+    """
+    The outline lies outside the half-ring: its bands beyond the edges, its
+    caps under the base line.
+    """
+    geom = make_arc_outline_geom(
+        inner_radius=0.8, outer_radius=1.0, width=0.1, n_segments=4
+    )
+    reader = GeomVertexReader(geom.getVertexData(), "vertex")
+    vertices = []
+    while not reader.isAtEnd():
+        vertices.append(tuple(reader.getData3()))
+    assert len(vertices) == 4 * 5 + 8
+    for x, _, z in vertices:
+        radius = (x**2 + z**2) ** 0.5
+        inside = 0.8 + 1e-6 < radius < 1.0 - 1e-6 and z > 1e-6
+        assert not inside
+    assert min(z for _, _, z in vertices) == pytest.approx(-0.1)
+    assert max(abs(x) for x, _, _ in vertices) == pytest.approx(1.1)
+
+
 def test_column_gauge_fill_scales_with_level_and_hides_when_empty():
     """
     The column's fill rises with the level, and is hidden when empty.
@@ -295,6 +336,7 @@ def test_gauges_clean_removes_their_nodes():
         thickness=0.2,
         n_segments=4,
         text_scale=0.05,
+        outline_width=0.02,
     )
     gauge.clean()
     assert corner.getNumChildren() == 0

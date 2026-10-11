@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add hangar subsystem for carriers / bases #83
+- Add mission objectives HUD #152
 
 ## [0.2.0] - 2026-10-09
 
