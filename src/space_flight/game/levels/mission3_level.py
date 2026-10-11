@@ -96,6 +96,7 @@ TRANSPORTS = WaveSpec(
         [6500, 4000, 200],
         [7000, 3000, 200],
     ],
+    hyperspace=True,
 )
 # The convoy is past the blockade once it reaches its last waypoint.
 CONVOY_LAST_WAYPOINT = len(TRANSPORTS.waypoints) - 1
@@ -112,6 +113,7 @@ ESCORT = WaveSpec(
     formation="arrowhead",
     # Flies alongside the convoy: 200m to its right, 100m above.
     waypoints=[[x + 200, y, z + 100] for x, y, z in TRANSPORTS.waypoints],
+    hyperspace=True,
 )
 
 FIRST_WAVE = WaveSpec(
@@ -394,10 +396,10 @@ def mission3_mission(m: Mission) -> Iterator[None]:
     )
 
     # --- the timed waves ------------------------------------------------------
-    yield from m.wait(0.1)
+    yield from m.wait(1)
     transports.spawn()
 
-    yield from m.wait(0.9)  # total: 1s
+    yield from m.wait(2)
     escort.spawn()
     m.speech(
         "Red squadron standing by. Red Seven, that A-wing's the fastest\n"
@@ -405,14 +407,14 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         speaker="Red Leader",
     )
 
-    yield from m.wait(5)  # total: 6s
+    yield from m.wait(10)
     m.speech(
         "Convoy Lead to escort: we're slow, fat and full of medical supplies.\n"
         "We're counting on you.",
         speaker="Convoy Lead",
     )
 
-    yield from m.wait(4)  # total: 10s
+    yield from m.wait(4)
     first_wave.spawn(target=transports)
     m.objective(
         "Shoot down the bombers",
@@ -425,7 +427,7 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         speaker="Red Leader",
     )
 
-    yield from m.wait(20)  # total: 30s
+    yield from m.wait(20)
     # Interceptors hunt fighters: the escort and the player's A-wing.
     second_wave.spawn(target=[escort, m.game.player])
     m.objective(

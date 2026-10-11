@@ -773,6 +773,47 @@ class Ship(Pawn):
         self.node.setPos(*self.position)
         self.node.setQuat(Quat(*self.orientation))
 
+    def hold_step(
+        self,
+        position: np.ndarray,
+        orientation: np.ndarray,
+        speed: np.ndarray,
+        offset_m: float,
+    ):
+        """
+        Hold the ship at a pose for one frame, drawing its render node offset
+        along its heading (a hyperspace transit, see HyperspaceTransit).
+
+        The pinned state is re-registered with the integrator, with zero
+        derivatives so that it does not drift, keeping the ship's integrator
+        slot valid for when it flies again. It keeps the given velocity without
+        moving, so the ship flies off at that velocity once released.
+
+        :param position: The pinned position
+        :param orientation: The pinned orientation quaternion (w, x, y, z)
+        :param speed: The pinned velocity
+        :param offset_m: How far ahead (behind if negative) to draw the ship
+        """
+        self.scalar_thrust_n = 0.0
+        self.pqr = np.zeros(3)
+        self.position_correction = np.zeros(3)
+        self.velocity_correction = np.zeros(3)
+        self.state = np.concatenate((position, orientation, speed))
+        self.position = self.state[:3]
+        self.orientation = self.state[3:7]
+        self.speed = self.state[7:10]
+        # Refreshes the body axes (and consumes the external forces)
+        self.compute_derivatives()
+        self.state_dot = np.zeros(10)
+        self.state_dot_previous = np.zeros(10)
+        self.integrator_idx = self.game.integrator.set_state_variables(
+            partial_x=self.state,
+            partial_x_dot=self.state_dot,
+            partial_x_dot_previous=self.state_dot_previous,
+        )
+        self.node.setPos(*(self.position + offset_m * self.forward))
+        self.node.setQuat(Quat(*self.orientation))
+
     def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
         """
         Take damage from hits and jolt from the impact

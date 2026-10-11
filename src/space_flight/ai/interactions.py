@@ -155,6 +155,10 @@ class Interactions:
             [getattr(a, "forward", _ZERO3) for a in actors], dtype=float
         )
         teams = np.array([a.team for a in actors])
+        # An actor in a hyperspace transit is out of every interaction
+        in_hyperspace = np.array(
+            [getattr(a, "in_hyperspace", False) for a in actors], dtype=bool
+        )
 
         # Explicit sums rather than einsum/linalg.norm: as fast, and
         # bit-identical to the scalar per-pair formulas.
@@ -174,6 +178,8 @@ class Interactions:
             & (teams[:, None] != 0)
             & (teams[None, :] != 0)
             & (distances < INTERACT_MAX_DISTANCE_M)
+            & ~in_hyperspace[:, None]
+            & ~in_hyperspace[None, :]
         )
         alignments = (
             directions[..., 0] * forwards[:, None, 0]

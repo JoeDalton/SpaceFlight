@@ -112,6 +112,7 @@ BLUE_FLIGHT = WaveSpec(
     formation="arrowhead",
     waypoints=PATROL_WAYPOINTS,
     loop=True,
+    hyperspace=False,  # already on patrol when the level starts
 )
 
 

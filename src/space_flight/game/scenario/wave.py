@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional, Sequence, Union
 import numpy as np
 
 from space_flight.actors.bot import spawn_bot
+from space_flight.actors.hyperspace import ARRIVAL_STAGGER_S
 from space_flight.ai.formation import Formation
 from space_flight.game.scenario.conditions import pawns_of
+from space_flight.utils import rotation_matrix_coefficients
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
@@ -45,6 +47,10 @@ class WaveSpec:
     :param waypoints: Patrol route given to every ship
     :param loop: Whether the route loops back to its first waypoint
     :param record: Step-by-step-record every bot of the wave (game.record)
+    :param hyperspace: Whether the ships drop in from hyperspace (else they
+        simply appear, e.g. ships already on stage when the level starts)
+    :param spawn_speed_mps: The ships' initial speed, along their heading; a
+        hyperspace drop lands at this speed
     """
 
     name: str
@@ -59,6 +65,8 @@ class WaveSpec:
     waypoints: Sequence[Sequence[float]] = ()
     loop: bool = True
     record: bool = False
+    hyperspace: bool = True
+    spawn_speed_mps: float = 50.0
 
     def __post_init__(self):
         single = isinstance(self.ship_model, str)
@@ -151,6 +159,7 @@ class WaveHandle:
         target: Any = None,
         join: Optional[Formation] = None,
         orientation: Optional[Sequence[float]] = None,
+        hyperspace: Optional[bool] = None,
     ) -> WaveHandle:
         """
         Spawn the wave's ships, one per frame.
@@ -164,6 +173,7 @@ class WaveHandle:
             free slot, instead of creating the spec's own formation
         :param orientation: Overrides the spec's spawn orientation (e.g. to
             face the way the player is flying)
+        :param hyperspace: Overrides the spec's hyperspace flag
         :return: self
         """
         point = spawn_point if spawn_point is not None else self.spec.spawn_point
@@ -171,12 +181,15 @@ class WaveHandle:
             raise ValueError(f"wave '{self.name}': no spawn point")
         if orientation is None:
             orientation = self.spec.spawn_orientation
+        if hyperspace is None:
+            hyperspace = self.spec.hyperspace
         self.mission.schedule(
             self._spawn_job(
                 np.array(point, dtype=float),
                 np.array(orientation, dtype=float),
                 target,
                 join,
+                hyperspace,
             )
         )
         return self
@@ -187,6 +200,7 @@ class WaveHandle:
         orientation: np.ndarray,
         target: Any,
         join: Optional[Formation],
+        hyperspace: bool,
     ) -> Iterator[None]:
         spec = self.spec
         models = spec.ship_models()
@@ -199,6 +213,10 @@ class WaveHandle:
         if formation is not None:
             self.formation = formation
         offsets = formation.relative_positions if formation is not None else None
+        # Every ship flies off along the spawn heading (the body Y axis)
+        _, r01, _, _, r11, _, _, r21, _ = rotation_matrix_coefficients(*orientation)
+        heading = np.array([r01, r11, r21])
+        ini_speed = spec.spawn_speed_mps * heading / np.linalg.norm(heading)
 
         for i, model in enumerate(models):
             # Each ship takes the formation's next free slot at the moment it
@@ -212,6 +230,7 @@ class WaveHandle:
                 pawn_model=model,
                 ini_position=spawn_point + _wave_offset(offsets, slot, size),
                 ini_orientation=orientation,
+                ini_speed=ini_speed,
                 team=spec.team,
                 debug_decisions=False,
                 record=spec.record,
@@ -223,6 +242,10 @@ class WaveHandle:
                 bot.navigator.set_waypoints(waypoints=waypoints, is_loop=spec.loop)
             if target is not None:
                 _add_targets(bot, target)
+            if hyperspace:
+                bot.begin_hyperspace_arrival(
+                    delay_s=np.random.uniform(0.0, ARRIVAL_STAGGER_S)
+                )
             yield  # only one ship per frame
 
     def launch_from(self, hangar: Hangar, target: Any = None) -> WaveHandle:

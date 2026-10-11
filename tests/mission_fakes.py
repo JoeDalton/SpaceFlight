@@ -120,6 +120,11 @@ class MockBot:
         self.pawn = MockPawn(self, position, team)
         self.navigator = MockNavigator()
         self.tactician = SimpleNamespace(primary_target_ids=[])
+        #: The delay of each hyperspace arrival begun, in order
+        self.hyperspace_arrivals = []
+
+    def begin_hyperspace_arrival(self, delay_s=0.0):
+        self.hyperspace_arrivals.append(delay_s)
 
     def set_team(self, team):
         """Mirrors Bot.set_team's cascade, for waves that reassign teams."""

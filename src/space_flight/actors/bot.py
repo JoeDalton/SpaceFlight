@@ -11,6 +11,11 @@ import numpy as np
 from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
+from space_flight.actors.hyperspace import (
+    TRANSIT_DISTANCE_M,
+    TRANSIT_DURATION_S,
+    HyperspaceTransit,
+)
 from space_flight.actors.major_ship import make_major_ship
 from space_flight.actors.major_ship.tractor_beam import TractorBeamProjector
 from space_flight.actors.major_ship.turret import Turret
@@ -186,6 +191,10 @@ class Bot(Destructible):
         self._next_think_s = -math.inf
         self._commands = None
 
+        # The ship's hyperspace transit while it drops in (see
+        # begin_hyperspace_arrival), None otherwise
+        self.hyperspace_transit = None
+
         self.add_task(method=self.move_bot_task)
 
         # Add the pawn to the interacting actors. A subsystem pawn (e.g. a
@@ -212,6 +221,11 @@ class Bot(Destructible):
         if self.is_dying:
             if hasattr(self.pawn, "tumble_step"):
                 self.pawn.tumble_step(elapsed_s=self.death_elapsed_s())
+            return
+        # While in a hyperspace transit, the AI waits and the ship is held
+        if self.hyperspace_transit is not None:
+            if self.hyperspace_transit.step():
+                self._end_hyperspace_arrival()
             return
         if self.bot_type == "fighter" or self.bot_type == "major_ship":
             if self.tactician is not None:
@@ -263,6 +277,31 @@ class Bot(Destructible):
             )
         else:
             raise NotImplementedError(f"Unknown bot type {self.bot_type}")
+
+    def begin_hyperspace_arrival(self, delay_s: float = 0.0):
+        """
+        Drop the ship in from hyperspace: drawn from far behind, it rushes along
+        its heading and snaps to a stop at its current pose, where the AI then
+        takes over. Until then, it collides with nothing and interacts with
+        nobody (see HyperspaceTransit).
+
+        :param delay_s: Time to wait, hidden, before the drop starts
+        """
+        self.hyperspace_transit = HyperspaceTransit(
+            ship=self.pawn,
+            arriving=True,
+            distance_m=TRANSIT_DISTANCE_M[self.bot_type],
+            duration_s=TRANSIT_DURATION_S[self.bot_type],
+            clock=self.game.game_time.get_current_time,
+            delay_s=delay_s,
+        )
+        self.hyperspace_transit.begin()
+
+    def _end_hyperspace_arrival(self):
+        """The ship has arrived: back in the fight, it thinks on its next frame."""
+        self.hyperspace_transit.end()
+        self.hyperspace_transit = None
+        self._next_think_s = -math.inf
 
     def _think_is_due(self) -> bool:
         """

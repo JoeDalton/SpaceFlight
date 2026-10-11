@@ -148,6 +148,18 @@ class SubSystem(Destructible):
             return np.zeros(3)
         return np.asarray(getattr(self.mounted_on, "speed", np.zeros(3)), dtype=float)
 
+    @property
+    def in_hyperspace(self) -> bool:
+        """
+        Whether the subsystem's ship is in a hyperspace transit: it then rides
+        along, out of every interaction too.
+
+        :return: The host ship's flag, or False once detached (cleaned)
+        """
+        if getattr(self, "mounted_on", None) is None:
+            return False
+        return getattr(self.mounted_on, "in_hyperspace", False)
+
     def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
         """
         Takes damage from a hit.
