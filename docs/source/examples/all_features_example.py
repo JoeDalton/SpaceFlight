@@ -120,7 +120,7 @@ def all_features_mission(m: Mission) -> Iterator[None]:
     # player close to a fixed point.
     m.on(
         near(game.player, HOMEGUARD_POINT, 500),
-        lambda: m.hud("Danger close to the home guard!", display_time_s=1),
+        lambda: m.hud("Danger close to the home guard!"),
         once=False,
     )
 
@@ -132,7 +132,7 @@ def all_features_mission(m: Mission) -> Iterator[None]:
             not_(strike.all_destroyed),
             any_of(m.after(20), strike.alive),
         ),
-        lambda: m.hud("Engagement in progress.", display_time_s=1),
+        lambda: m.hud("Engagement in progress."),
         once=False,
     )
 

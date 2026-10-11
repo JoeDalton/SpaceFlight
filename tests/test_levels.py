@@ -278,7 +278,7 @@ def test_mission1_waypoint_to_formation_handoff(game, spawned):
     )
     assert np.allclose(blue[0].position, expected)
     assert intro_route.cleaned is True
-    assert any("[R]" in text and "[,]" in text for text, _ in game.hud.messages)
+    assert any("[R]" in text and "[,]" in text for text, _ in game.hud.hints)
     assert objective_states(m) == {
         "Reach the nav point": "complete",
         "Form up with Blue squadron": "active",
@@ -398,7 +398,7 @@ def test_mission1_race_timeout_is_defeat(game, spawned):
 def test_mission1_race_starts_with_the_engine_power_hint(game, spawned):
     m = start(game, mission1.mission1_mission)
     finish_circuit(game, m, spawned)
-    assert any("engines" in text for text, _ in game.hud.messages)
+    assert any("engines" in text for text, _ in game.hud.hints)
 
 
 def test_mission1_race_banter_runs_while_racing(game, spawned):
@@ -587,7 +587,7 @@ def test_mission2_patrol_is_an_objective_until_contact(game, spawned):
     m = start(game, mission2.mission2_mission)
     advance(game, m, 17)
     assert objective_states(m) == {"Stay with Blue Leader on patrol": "active"}
-    assert not any("patrol" in text for text, _ in game.hud.messages)
+    assert not any("patrol" in text for text, _ in game.hud.messages + game.hud.hints)
 
     advance(game, m, mission2.INTRO_DELAY_S - 17 + 0.1)
     assert objective_states(m)["Stay with Blue Leader on patrol"] == "complete"
@@ -631,7 +631,7 @@ def test_mission2_someone_elses_hit_on_a_civilian_is_not_the_players(game, spawn
 def test_mission2_reveal_hints_at_laser_power(game, spawned):
     m = start(game, mission2.mission2_mission)
     reach_the_reveal(game, m, spawned)
-    assert any("lasers" in text for text, _ in game.hud.messages)
+    assert any("lasers" in text for text, _ in game.hud.hints)
 
 
 def test_mission2_scanned_transport_may_exit(game, spawned):

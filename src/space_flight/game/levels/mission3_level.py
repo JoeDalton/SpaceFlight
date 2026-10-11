@@ -265,7 +265,6 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         lambda: m.speech(
             "A transport has been destroyed! Focus fire on the bombers!",
             speaker="Red Leader",
-            display_time_s=5,
         ),
     )
     m.on(
@@ -293,7 +292,6 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         lambda: m.speech(
             "All transports have been destroyed. Let's retreat!",
             speaker="Red Leader",
-            display_time_s=5,
         ),
     )
     m.on(

@@ -16,6 +16,7 @@ from space_flight.actors.major_ship.hangar import LaunchOrder
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M
 from space_flight.ai.formation import Formation
 from space_flight.game.kills import KillLog
+from space_flight.ui.hud import CHATTER_DISPLAY_S, EVENT_DISPLAY_S, HINT_DISPLAY_S
 
 
 class FakeGameTime:
@@ -218,11 +219,15 @@ class MockHud:
     def __init__(self):
         self.messages = []
         self.chatter = []
+        self.hints = []
 
-    def set_event_text(self, text, display_time_s):
+    def set_hint_text(self, text, display_time_s=HINT_DISPLAY_S):
+        self.hints.append((text, display_time_s))
+
+    def set_event_text(self, text, display_time_s=EVENT_DISPLAY_S):
         self.messages.append((text, display_time_s))
 
-    def set_chatter_text(self, text, display_time_s):
+    def set_chatter_text(self, text, display_time_s=CHATTER_DISPLAY_S):
         self.chatter.append((text, display_time_s))
 
 

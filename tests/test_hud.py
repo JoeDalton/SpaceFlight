@@ -16,12 +16,18 @@ from space_flight.actors.energy import ENGINES, LASERS, SHIELDS, EnergySystem
 from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
+    CHATTER,
+    CHATTER_DISPLAY_S,
     CROSSHAIR_COLOR,
     CROSSHAIR_LOCKED_COLOR,
     EDGE_HORIZONTAL,
     EDGE_VERTICAL,
+    EVENT,
     FAVOURED_GAUGE_BRIGHTNESS,
     GAUGE_BRIGHTNESS,
+    HINT,
+    HINT_DISPLAY_S,
+    HUD,
     MIN_PROJECTION_DEPTH,
     MISSILE_WARNING_MAX_BLINK_PERIOD_S,
     MISSILE_WARNING_MIN_BLINK_PERIOD_S,
@@ -35,6 +41,7 @@ from space_flight.ui.hud import (
     EnergyHUD,
     ObjectivesHUD,
     OrdnanceHUD,
+    ScenarioText,
     gauge_brightness,
     is_on_screen,
     missile_warning_blink_period_s,
@@ -829,3 +836,132 @@ def test_objectives_hud_cleans_up():
 
     assert corner.getNumChildren() == 0
     assert objectives_hud.game is None
+
+
+# ---------------------------
+# Scenario text: chatter, hints and events taking turns
+# ---------------------------
+
+
+def make_scenario_text() -> tuple[ScenarioText, FakeClock]:
+    clock = FakeClock()
+    return ScenarioText(clock=clock.get_current_time), clock
+
+
+def shown(scenario_text: ScenarioText) -> dict:
+    """The texts on screen, by kind."""
+    return {
+        kind: scenario_text.text(kind)
+        for kind in (CHATTER, HINT, EVENT)
+        if scenario_text.text(kind)
+    }
+
+
+def test_a_message_shows_for_its_time():
+    scenario_text, clock = make_scenario_text()
+    scenario_text.post(HINT, "Press [1].", 8.0)
+    assert shown(scenario_text) == {HINT: "Press [1]."}
+
+    clock.time_s = 7.9
+    scenario_text.update()
+    assert shown(scenario_text) == {HINT: "Press [1]."}
+    clock.time_s = 8.0
+    scenario_text.update()
+    assert shown(scenario_text) == {}
+
+
+@pytest.mark.parametrize("first, second", [(CHATTER, CHATTER), (HINT, EVENT)])
+def test_a_message_replaces_one_of_its_side_at_once(first, second):
+    scenario_text, clock = make_scenario_text()
+    scenario_text.post(first, "one", 6.0)
+    clock.time_s = 1.0
+    scenario_text.post(second, "two", 6.0)
+
+    assert shown(scenario_text) == {second: "two"}
+    clock.time_s = 6.5  # the replacement got its full time
+    scenario_text.update()
+    assert shown(scenario_text) == {second: "two"}
+
+
+@pytest.mark.parametrize("first, second", [(CHATTER, HINT), (EVENT, CHATTER)])
+def test_chatter_and_hints_or_events_take_turns(first, second):
+    scenario_text, clock = make_scenario_text()
+    scenario_text.post(first, "one", 6.0)
+    clock.time_s = 1.0
+    scenario_text.post(second, "two", 5.0)
+    assert shown(scenario_text) == {first: "one"}
+
+    clock.time_s = 6.0
+    scenario_text.update()
+    assert shown(scenario_text) == {second: "two"}
+    clock.time_s = 10.9
+    scenario_text.update()
+    assert shown(scenario_text) == {second: "two"}
+    clock.time_s = 11.0
+    scenario_text.update()
+    assert shown(scenario_text) == {}
+
+
+def test_waiting_messages_keep_their_order():
+    """A line of chatter posted behind a waiting hint doesn't jump ahead of it,
+    even though chatter is on screen."""
+    scenario_text, clock = make_scenario_text()
+    scenario_text.post(CHATTER, "one", 6.0)
+    scenario_text.post(HINT, "two", 6.0)
+    scenario_text.post(CHATTER, "three", 6.0)
+    seen = []
+    for time_s in range(20):
+        clock.time_s = float(time_s)
+        scenario_text.update()
+        seen.append(next(iter(shown(scenario_text).values()), None))
+
+    assert [text for i, text in enumerate(seen) if i == 0 or text != seen[i - 1]] == [
+        "one",
+        "two",
+        "three",
+        None,
+    ]
+
+
+def test_a_repeated_waiting_message_queues_once():
+    scenario_text, _ = make_scenario_text()
+    scenario_text.post(CHATTER, "radio", 6.0)
+    for _ in range(100):  # a rule firing every frame
+        scenario_text.post(EVENT, "Danger close!", 5.0)
+
+    assert list(scenario_text.pending) == [(EVENT, "Danger close!", 5.0)]
+
+
+def test_hud_shows_hints_smaller_and_never_with_chatter(spaceflight_app):
+    clock = FakeClock()
+    game = SimpleNamespace(
+        app=spaceflight_app,
+        game_time=clock,
+        method_lists={},
+        mission=Mission(SimpleNamespace(game_time=clock)),
+        player=SimpleNamespace(
+            pawn=SimpleNamespace(
+                energy=EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
+            )
+        ),
+    )
+    hud = HUD(game=game)
+    try:
+        hud.set_chatter_text("Blue Leader: Form up.")
+        hud.set_hint_text("Press [1] to divert power to your engines.")
+        assert hud.chatter.getText() == "Blue Leader: Form up."
+        assert hud.hints.getText() == ""
+
+        clock.time_s = CHATTER_DISPLAY_S
+        hud.update_scenario_text()
+        assert hud.chatter.getText() == ""
+        assert hud.hints.getText() == "Press [1] to divert power to your engines."
+        assert (
+            hud.hints_textNodePath.getScale()[0] < hud.events_textNodePath.getScale()[0]
+        )
+
+        clock.time_s += HINT_DISPLAY_S
+        hud.update_scenario_text()
+        assert hud.hints.getText() == ""
+    finally:
+        hud.clean()

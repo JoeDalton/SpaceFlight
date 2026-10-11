@@ -323,20 +323,27 @@ class Mission:
     # Actions
     # ------------------------------------------------------------------
 
-    def hud(self, text: str, display_time_s: float = 5.0):
+    # The HUD shows chatter and hints/events in turn, each for its time (see
+    # space_flight.ui.hud.ScenarioText): a message may wait for its turn.
+
+    def hud(self, text: str):
         """Show a message in the HUD event banner."""
         # There is no HUD headless, and no one to read it.
         if not self.game.headless:
-            self.game.hud.set_event_text(text=text, display_time_s=display_time_s)
+            self.game.hud.set_event_text(text=text)
 
-    def speech(
-        self, text: str, speaker: Optional[str] = None, display_time_s: float = 6.0
-    ):
+    def hint(self, text: str):
+        """Show a tutorial hint (see space_flight.game.levels.hints), smaller
+        than the banner's messages and wrapped."""
+        if not self.game.headless:
+            self.game.hud.set_hint_text(text=text)
+
+    def speech(self, text: str, speaker: Optional[str] = None):
         """Play a line of speech (audio stubbed), shown as a subtitle."""
         LOGGER.info("speech [%s]: %s", speaker or "narrator", text)
         if not self.game.headless:
             subtitle = f"{speaker}: {text}" if speaker else text
-            self.game.hud.set_chatter_text(text=subtitle, display_time_s=display_time_s)
+            self.game.hud.set_chatter_text(text=subtitle)
 
     def player_waypoints(
         self,

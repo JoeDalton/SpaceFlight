@@ -17,9 +17,12 @@ from typing import TYPE_CHECKING, Iterator, Sequence
 
 import numpy as np
 
-from space_flight.actors.energy import LASERS
 from space_flight.actors.player import Player
-from space_flight.game.levels.hints import power_hint
+from space_flight.game.levels.hints import (
+    laser_power_hint,
+    scan_hint,
+    subsystem_hint,
+)
 from space_flight.game.scenario import WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
@@ -29,7 +32,6 @@ from space_flight.game.scenario.conditions import (
     near,
 )
 from space_flight.scenes.scenes import scene_factory
-from space_flight.ui.input_context import InputContext
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -185,12 +187,6 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     :param m: The level's :class:`Mission`
     """
     game = m.game
-    radial_key = InputContext.key_label(
-        game.app, "flight", "radial_menu", "the target-menu key"
-    )
-    loop_key = InputContext.key_label(
-        game.app, "flight", "loop_target", "the cycle-target key"
-    )
 
     # Handles first, so the rules below can refer to waves not spawned yet.
     blue = m.wave(BLUE_FLIGHT)
@@ -371,13 +367,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     )
     blue.follow(game.player)
     yield from m.wait(4)
-    m.hud(
-        "You have the lead: Blue flight now follows you.\n"
-        f"Hold [{radial_key}], point at Capital ships, then press [{loop_key}]\n"
-        "to lock a transport. Close to 1000m and keep it\n"
-        "ahead of you for 15 seconds to scan it.",
-        display_time_s=10,
-    )
+    m.hint("You have the lead: Blue flight now follows you. " + scan_hint(game.app))
     yield from m.wait(CONVOY_INTERVAL_S - 8)
     convoy[1].spawn()
     yield from m.wait(CONVOY_INTERVAL_S)
@@ -446,7 +436,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     revealed.append(True)
     smuggler_unscanned_exit.cancel()
     m.speech("Weapons crates! It's a gun-runner!", speaker="Blue Leader")
-    m.hud(f"{power_hint(game.app, LASERS)}\nYou'll need the firepower.")
+    m.hint(laser_power_hint(game.app))
     smuggler.set_team(2)
 
     dorn = smuggler.pawns()[0]
@@ -499,10 +489,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             speaker="Blue Leader",
         )
         yield from m.wait(4)
-        m.hud(
-            f"Hold [{radial_key}], point at Subsystems, then press [{loop_key}]\n"
-            "to target the shield generators."
-        )
+        m.hint(subsystem_hint(game.app, "target the shield generators"))
 
     m.schedule(reveal_chatter())
 

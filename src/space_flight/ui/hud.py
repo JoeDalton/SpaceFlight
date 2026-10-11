@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from collections import deque
+from typing import TYPE_CHECKING, Callable, NamedTuple, Optional
 
 import numpy as np
 from direct.gui.DirectGui import DirectLabel
@@ -58,6 +59,19 @@ FLARE_LINE_Z = 0.08
 
 # Chatter text height: at the top of the screen, above the rear-view mirror
 CHATTER_Z = 0.88
+
+# How long each scenario text stays up, in seconds of game time: radio
+# chatter, tutorial hints and event banners (see ScenarioText)
+CHATTER_DISPLAY_S = 3.0
+HINT_DISPLAY_S = 5.0
+EVENT_DISPLAY_S = 5.0
+
+# Event banner: centred above the crosshair
+EVENT_Z = 0.2
+EVENT_TEXT_SCALE = 0.1
+# Tutorial hints: in place of the event banner, smaller and wrapped narrower
+HINT_TEXT_SCALE = 0.06
+HINT_WRAP_WIDTH = 1.6
 
 # Objectives checklist (see ObjectivesHUD), in the top-left corner's
 # coordinates: one line per objective, its checkbox on the left. Lower with
@@ -222,6 +236,76 @@ def make_hud_card(
     return card
 
 
+CHATTER = "chatter"
+HINT = "hint"
+EVENT = "event"
+
+
+class ScenarioMessage(NamedTuple):
+    kind: str  # CHATTER, HINT or EVENT
+    text: str
+    display_time_s: float
+
+
+class ScenarioText:
+    """
+    Who has the screen among the scenario texts: radio chatter on one side,
+    tutorial hints and event banners on the other (they share a spot), never
+    both at once.
+
+    A message replaces one of its own side straight away (a new line of
+    chatter cuts the previous one short), but waits for one of the other
+    side to time out. Waiting messages are shown in order, each for its full
+    time, and a new message queues behind them, unless it repeats the last
+    one waiting (a rule posting every frame queues it once).
+
+    :param clock: The game clock, in seconds
+    """
+
+    def __init__(self, clock: Callable[[], float]):
+        self.clock = clock
+        #: The message on screen, if any, and when it comes down
+        self.current: Optional[ScenarioMessage] = None
+        self.current_end_s = 0.0
+        self.pending: deque[ScenarioMessage] = deque()
+
+    @staticmethod
+    def same_side(kind: str, other: str) -> bool:
+        return (kind == CHATTER) == (other == CHATTER)
+
+    def post(self, kind: str, text: str, display_time_s: float):
+        """
+        :param kind: CHATTER, HINT or EVENT
+        :param text: The message
+        :param display_time_s: How long it stays up once shown
+        """
+        message = ScenarioMessage(kind, text, display_time_s)
+        self.update()
+        if not self.pending and (
+            self.current is None or self.same_side(self.current.kind, kind)
+        ):
+            self._show(message)
+        elif not self.pending or self.pending[-1] != message:
+            self.pending.append(message)
+
+    def update(self):
+        """Take down the message whose time is up, and show the next one."""
+        if self.current is not None and self.clock() >= self.current_end_s:
+            self.current = None
+        if self.current is None and self.pending:
+            self._show(self.pending.popleft())
+
+    def text(self, kind: str) -> str:
+        """What a kind's line shows now (empty if it isn't on screen)."""
+        if self.current is None or self.current.kind != kind:
+            return ""
+        return self.current.text
+
+    def _show(self, message: ScenarioMessage):
+        self.current = message
+        self.current_end_s = self.clock() + message.display_time_s
+
+
 class HUD:
     """
     Creates an overlay of text displaying important
@@ -257,19 +341,33 @@ class HUD:
             self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
             self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
+        # Scenario texts: chatter, hints and events, taking turns
+        self.scenario_text = ScenarioText(clock=self.game.game_time.get_current_time)
+
         # Event text
-        self.event_text_endtime = 0.0
         self.events = TextNode("Events")
+        self.events.setAlign(TextNode.ACenter)
         self.events.setSmallCaps(True)
         self.events.setShadow(0.05, 0.05)
         self.events.setShadowColor(0, 0, 0, 1)
         self.events_textNodePath = aspect2d.attachNewNode(self.events)
-        self.events_textNodePath.setScale(0.1)
-        self.events_textNodePath.setPos(0.0, 0.0, 0.2)
+        self.events_textNodePath.setScale(EVENT_TEXT_SCALE)
+        self.events_textNodePath.setPos(0.0, 0.0, EVENT_Z)
+
+        # Tutorial hint text
+        self.hints = TextNode("Hints")
+        self.hints.setSmallCaps(True)
+        self.hints.setShadow(0.05, 0.05)
+        self.hints.setShadowColor(0, 0, 0, 1)
+        self.hints.setAlign(TextNode.ACenter)
+        self.hints.setWordwrap(HINT_WRAP_WIDTH / HINT_TEXT_SCALE)
+        self.hints_textNodePath = aspect2d.attachNewNode(self.hints)
+        self.hints_textNodePath.setScale(HINT_TEXT_SCALE)
+        self.hints_textNodePath.setPos(0.0, 0.0, EVENT_Z)
 
         # Chatter text
-        self.chatter_text_endtime = 0.0
         self.chatter = TextNode("Chatter")
+        self.chatter.setAlign(TextNode.ACenter)
         self.chatter.setSmallCaps(True)
         self.chatter.setTextColor(252 / 255, 212 / 255, 10 / 255, 1)
         self.chatter.setShadow(0.05, 0.05)
@@ -309,37 +407,43 @@ class HUD:
         self.ordnance_hud.update()
         self.energy_hud.update()
         self.objectives_hud.update()
-        self.clear_scenario_hud()
+        self.update_scenario_text()
 
-    def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
+    def set_event_text(self, text: str, display_time_s: float = EVENT_DISPLAY_S):
         """
-        Sets an event text and its display time
+        Shows an event banner, once no chatter is on screen (see ScenarioText)
         """
-        self.events.set_text(text)
-        self.event_text_endtime = (
-            self.game.game_time.get_current_time() + display_time_s
-        )
-        self.events.setAlign(TextNode.ACenter)
+        self.scenario_text.post(EVENT, text, display_time_s)
+        self.update_scenario_text()
 
-    def set_chatter_text(self, text: str, display_time_s: float = 2.5) -> None:
+    def set_hint_text(self, text: str, display_time_s: float = HINT_DISPLAY_S):
         """
-        Sets a chatter text and its display time
+        Shows a tutorial hint, once no chatter is on screen (see ScenarioText)
         """
-        self.chatter.set_text(text)
-        self.chatter_text_endtime = (
-            self.game.game_time.get_current_time() + display_time_s
-        )
-        self.chatter.setAlign(TextNode.ACenter)
+        self.scenario_text.post(HINT, text, display_time_s)
+        self.update_scenario_text()
 
-    def clear_scenario_hud(self) -> None:
+    def set_chatter_text(self, text: str, display_time_s: float = CHATTER_DISPLAY_S):
         """
-        A method to clear the scenario text on screen if the display time is spent
+        Shows a line of chatter, once no hint or event is on screen (see
+        ScenarioText)
         """
-        current_time = self.game.game_time.get_current_time()
-        if current_time > self.event_text_endtime:
-            self.events.set_text("")
-        if current_time > self.chatter_text_endtime:
-            self.chatter.set_text("")
+        self.scenario_text.post(CHATTER, text, display_time_s)
+        self.update_scenario_text()
+
+    def update_scenario_text(self) -> None:
+        """
+        Show whichever scenario text has the screen, and clear the others
+        """
+        self.scenario_text.update()
+        for kind, node in (
+            (EVENT, self.events),
+            (HINT, self.hints),
+            (CHATTER, self.chatter),
+        ):
+            text = self.scenario_text.text(kind)
+            if node.getText() != text:
+                node.setText(text)
 
     def update_debug_hud(self) -> None:
         """
@@ -431,6 +535,8 @@ class HUD:
             self.fps_counter = None
         self.events_textNodePath.removeNode()
         self.events = None
+        self.hints_textNodePath.removeNode()
+        self.hints = None
         self.chatter_textNodePath.removeNode()
         self.chatter = None
         self.ordnance_hud.clean()

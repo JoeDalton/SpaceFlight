@@ -208,11 +208,13 @@ def test_sustained_needs_an_unbroken_run(game, mission):
 # ---------------------------------------------------------------------------
 
 
-def test_hud_and_speech(game, mission):
+def test_hud_hint_and_speech(game, mission):
     mission.hud("First wave")
+    mission.hint("Press [1].")
     mission.speech("Standing by.", speaker="Red Leader")
     mission.speech("Narration.")
     assert game.hud.messages == [("First wave", 5.0)]
+    assert game.hud.hints == [("Press [1].", 8.0)]
     assert game.hud.chatter == [
         ("Red Leader: Standing by.", 6.0),
         ("Narration.", 6.0),
@@ -222,8 +224,10 @@ def test_hud_and_speech(game, mission):
 def test_hud_and_speech_are_skipped_headless(game, mission):
     game.headless = True
     mission.hud("x")
+    mission.hint("z")
     mission.speech("y")
     assert game.hud.messages == [] and game.hud.chatter == []
+    assert game.hud.hints == []
 
 
 @pytest.mark.parametrize(

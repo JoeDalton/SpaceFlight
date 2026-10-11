@@ -386,13 +386,20 @@ friendly fire.
 
 | Method | Effect |
 |---|---|
-| `m.hud(text, display_time_s=5.0)` | HUD banner message |
-| `m.speech(text, speaker=None, display_time_s=6.0)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
+| `m.hud(text)` | HUD banner message |
+| `m.hint(text)` | tutorial hint, in place of the banner but smaller and wrapped; the texts, with the player's key bindings, come from [`game/levels/hints.py`](../../src/space_flight/game/levels/hints.py) |
+| `m.speech(text, speaker=None)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
 | `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
 | `m.clear_player_waypoints()` | removes it |
 | `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`): freezes the objectives, then shows the level-end screen, with the player's kills and objectives, 2 seconds later. Only the first ending counts |
 
-HUD text and speech are skipped headless.
+How long each stays up is set in [`ui/hud.py`](../../src/space_flight/ui/hud.py)
+(`CHATTER_DISPLAY_S`, `HINT_DISPLAY_S`, `EVENT_DISPLAY_S`). Chatter and
+hints/banners take turns, never on screen together: a subtitle waits for a
+hint or banner to time out, and the other way round, while a new subtitle
+cuts the previous one short (as does a new hint or banner). Messages
+waiting their turn are shown in order. HUD text, hints and speech are
+skipped headless.
 
 ## Patterns and pitfalls
 

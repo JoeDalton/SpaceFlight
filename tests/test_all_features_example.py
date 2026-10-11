@@ -96,7 +96,7 @@ def test_happy_path(game, mission, spawned):
     ]
 
     # Repeating rule seen, cancelled rule never seen, route cleared.
-    assert ("Engagement in progress.", 1) in game.hud.messages
+    assert any(text == "Engagement in progress." for text, _ in game.hud.messages)
     assert not any(text == "Too late." for text, _ in game.hud.messages)
     assert game.player_waypoints is None
 

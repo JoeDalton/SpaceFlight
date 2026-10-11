@@ -14,9 +14,13 @@ from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
-from space_flight.actors.energy import ENGINES
 from space_flight.actors.player import Player
-from space_flight.game.levels.hints import power_hint
+from space_flight.game.levels.hints import (
+    engine_power_hint,
+    formation_hint,
+    stay_close_hint,
+    waypoint_hint,
+)
 from space_flight.game.scenario import WaveSpec
 from space_flight.game.scenario.conditions import (
     near,
@@ -25,7 +29,6 @@ from space_flight.game.scenario.conditions import (
     reached_waypoint,
 )
 from space_flight.scenes.scenes import scene_factory
-from space_flight.ui.input_context import InputContext
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -160,13 +163,6 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     # 1. A single waypoint, teaching the Waypoints filter + loop.
     # ==================================================================
-    radial_key = InputContext.key_label(
-        game.app, "flight", "radial_menu", "the target-menu key"
-    )
-    loop_key = InputContext.key_label(
-        game.app, "flight", "loop_target", "the cycle-target key"
-    )
-
     m.player_waypoints([WAYPOINT_1], arrival_radius_m=WAYPOINT_1_ARRIVAL_RADIUS_M)
     nav_point = m.objective("Reach the nav point")
     yield from m.wait(0.5)
@@ -183,11 +179,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         ),
     )
     yield from m.wait(2.5)
-    m.hud(
-        f"Hold [{radial_key}] to open the target menu,\n"
-        f"point at Waypoints, then press [{loop_key}]\n"
-        "to lock onto your next waypoint."
-    )
+    m.hint(waypoint_hint(game.app))
 
     # The waypoint marker detects arrival itself but exposes no event for
     # it, so poll the same radius.
@@ -208,11 +200,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     blue = m.spawn(BLUE_SQUADRON, spawn_point=spawn_point)
     form_up = m.objective("Form up with Blue squadron")
 
-    m.hud(
-        f"Allied formation inbound! Hold [{radial_key}],\n"
-        f"point at Fighters, then press [{loop_key}]\n"
-        "to lock onto the formation leader."
-    )
+    m.hint(formation_hint(game.app))
 
     # ==================================================================
     # 3. Follow the formation: a catch-up deadline, then a sustained-
@@ -245,7 +233,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
             "Cut the chatter, Two. Five, stay close to any of us and keep up.",
             speaker="Blue Leader",
         )
-        m.hud(f"Stay within {FOLLOW_RADIUS_M}m of any Blue squadron ship.")
+        m.hint(stay_close_hint(FOLLOW_RADIUS_M, "Blue squadron"))
         yield from m.wait_until(close_to_blue)
         yield from m.wait(4)
         m.speech("Good, you're with us. Now hold it there.", speaker="Blue Leader")
@@ -298,7 +286,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     )
     m.player_waypoints(RACE_WAYPOINTS)
     race = m.objective("Race to the finish marker")
-    m.hud(f"{power_hint(game.app, ENGINES)}\nMore power, more speed.", display_time_s=8)
+    m.hint(engine_power_hint(game.app))
     # Every man for himself: wingmen would otherwise hold formation.
     blue.break_formation()
     blue.set_waypoints(RACE_WAYPOINTS, loop=False)
