@@ -171,11 +171,12 @@ missile as the pause menu resumes the flight. Concrete contexts:
   (`Fighter.secondary_cycle`) with their stock, spent ones at x0, on a
   [`RollingDrum`](#utilspy--generic-ui-items), the selected one facing the
   player. Under it, a line always shows the flares left. Bottom left, an
-  `EnergyHUD` shows the player's gauges, left to right: HP (pink half-ring,
-  health at its centre), lasers (red column), engines (green half-ring, speed
-  at its centre) and shields (blue half-ring, shield strength at its centre,
-  hidden on unshielded ships). The gauge of the system power is redirected to
-  is brighter. Its layout, colours and brightness are module constants.
+  `EnergyHUD` shows the player's gauges, left to right, all half-rings
+  outlined in black: HP (pink, health at its centre), lasers (red, laser
+  charge at its centre), engines (green, speed at its centre) and shields
+  (blue, shield strength at its centre, hidden on unshielded ships). The gauge
+  of the system power is redirected to is bigger, brighter and outlined in
+  white. Its layout, colours, brightness and scale are module constants.
 - **`AimHUD`** — the aiming cues, placed each frame by projecting world
   points into screen space (`project_to_screen`: `cam.getRelativePoint` +
   `lens.project`):
@@ -248,6 +249,7 @@ Backs the mission's `player_waypoints` action (see
 - **`ArcGauge`** — a half-ring gauge read by the angle filled, sweeping from
   its left end over the top, with a line of text at its centre. The fill is
   quantised to the ring's segments and only rebuilt when that step changes.
+  An outline runs round it, black, or white once `set_highlighted(True)`.
 - **`ColumnGauge`** — a vertical bar gauge filling up from its base.
 - **`RollingDrum`** — a looping list of text lines written round a cylinder
   seen from the side: the selected item faces the viewer, the previous and

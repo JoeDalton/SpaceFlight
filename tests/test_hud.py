@@ -24,6 +24,7 @@ from space_flight.ui.hud import (
     EDGE_VERTICAL,
     EVENT,
     FAVOURED_GAUGE_BRIGHTNESS,
+    FAVOURED_GAUGE_SCALE,
     GAUGE_BRIGHTNESS,
     HINT,
     HINT_DISPLAY_S,
@@ -657,8 +658,8 @@ def test_energy_hud_is_hidden_until_its_first_update():
 
 def test_energy_hud_shows_hp_speed_and_shield():
     """
-    The half-ring gauges show the health left, the speed and the shield
-    strength, filled to their share of the maximum.
+    The half-ring gauges show the health left, the laser charge, the speed and
+    the shield strength, filled to their share of the maximum.
     """
     energy_hud, pawn = make_energy_hud()
     pawn.energy.engines = 0.5
@@ -672,7 +673,8 @@ def test_energy_hud_shows_hp_speed_and_shield():
     assert energy_hud.engine_gauge.fill_steps == energy_hud.engine_gauge.n_segments // 2
     assert energy_hud.shield_gauge.text.node().getText() == "200"
     assert energy_hud.shield_gauge.fill_steps == energy_hud.shield_gauge.n_segments // 4
-    assert energy_hud.laser_gauge.level == pytest.approx(0.25)
+    assert energy_hud.laser_gauge.text.node().getText() == "25%"
+    assert energy_hud.laser_gauge.fill_steps == energy_hud.laser_gauge.n_segments // 4
 
 
 def test_energy_hud_hides_the_shield_gauge_without_shields():
@@ -702,9 +704,10 @@ def test_energy_hud_clamps_negative_health():
 
 
 @pytest.mark.parametrize("favoured", [ENGINES, LASERS, SHIELDS])
-def test_favoured_system_gauge_is_brighter(favoured):
+def test_favoured_system_gauge_is_brighter_and_highlighted(favoured):
     """
-    The gauge of the system power is redirected to is brighter than the others.
+    The gauge of the system power is redirected to is brighter and bigger than
+    the others, and its outline highlighted.
     """
     energy_hud, pawn = make_energy_hud()
     pawn.energy.set_mode(favoured)
@@ -719,6 +722,10 @@ def test_favoured_system_gauge_is_brighter(favoured):
     for system, gauge in gauges.items():
         expected = FAVOURED_GAUGE_BRIGHTNESS if system == favoured else GAUGE_BRIGHTNESS
         assert gauge.brightness == expected
+        assert gauge.highlighted == (system == favoured)
+        expected_scale = FAVOURED_GAUGE_SCALE if system == favoured else 1.0
+        assert gauge.root.getScale()[0] == pytest.approx(expected_scale)
+    assert not energy_hud.hp_gauge.highlighted
 
 
 def test_balanced_power_brightens_no_gauge():

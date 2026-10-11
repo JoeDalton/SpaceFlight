@@ -28,7 +28,6 @@ from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.ui.utils import (
     TEXT_CENTER_OFFSET,
     ArcGauge,
-    ColumnGauge,
     RollingDrum,
     make_text_line,
 )
@@ -97,19 +96,21 @@ OBJECTIVE_FLASH_DIM_ALPHA = 0.3
 ENERGY_HUD_LEFT_X = 0.06
 ENERGY_HUD_BOTTOM_Z = 0.06
 GAUGE_SPACING = 0.04
-ARC_GAUGE_RADIUS = 0.13
-ARC_GAUGE_THICKNESS = 0.03
+ARC_GAUGE_RADIUS = 0.15
+ARC_GAUGE_THICKNESS = 0.035
+ARC_GAUGE_OUTLINE_WIDTH = 0.006
 ARC_GAUGE_SEGMENTS = 60
-GAUGE_TEXT_SCALE = 0.055
-COLUMN_GAUGE_WIDTH = 0.04
-COLUMN_GAUGE_HEIGHT = ARC_GAUGE_RADIUS
+GAUGE_TEXT_SCALE = 0.06
 HP_GAUGE_COLOR = (1.0, 0.45, 0.75)
 LASER_GAUGE_COLOR = (1.0, 0.15, 0.1)
 ENGINE_GAUGE_COLOR = (0.15, 1.0, 0.25)
 SHIELD_GAUGE_COLOR = (0.2, 0.55, 1.0)
-# Gauge brightness, raised for the system power is redirected to
+# Gauge brightness, raised for the system power is redirected to (its outline
+# is also highlighted, and the gauge grown about its base by the scale below,
+# which the spacing leaves room for)
 GAUGE_BRIGHTNESS = 0.6
 FAVOURED_GAUGE_BRIGHTNESS = 1.0
+FAVOURED_GAUGE_SCALE = 1.1
 
 # Target box tint, by missile lock: locked (a missile launched now would be
 # guided to the target) or not.
@@ -772,12 +773,13 @@ class EnergyHUD:
     The player's gauges, bottom left. Left to right:
 
     - HP: a pink half-ring, the health left written at its centre
-    - lasers: a red column
+    - lasers: a red half-ring, the laser charge written at its centre
     - engines: a green half-ring, the ship's speed written at its centre
     - shields: a blue half-ring, the shield strength written at its centre
       (only for shielded ships)
 
-    The energy gauges of the system power is redirected to are brighter.
+    The gauges are outlined in black; the energy gauge of the system power is
+    redirected to is bigger, brighter, and outlined in white.
     """
 
     def __init__(self, game: FlightState, parent_node: NodePath) -> None:
@@ -792,32 +794,21 @@ class EnergyHUD:
         # Shown by the first update
         self.root.hide()
 
-        x = ARC_GAUGE_RADIUS
-        self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, x)
+        self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, 0)
         self.hp_gauge.set_brightness(GAUGE_BRIGHTNESS)
-        x += ARC_GAUGE_RADIUS + GAUGE_SPACING + 0.5 * COLUMN_GAUGE_WIDTH
-        self.laser_gauge = ColumnGauge(
-            parent_node=self.root,
-            name="laserGauge",
-            color=LASER_GAUGE_COLOR,
-            width=COLUMN_GAUGE_WIDTH,
-            height=COLUMN_GAUGE_HEIGHT,
-        )
-        self.laser_gauge.root.setX(x)
-        x += 0.5 * COLUMN_GAUGE_WIDTH + GAUGE_SPACING + ARC_GAUGE_RADIUS
-        self.engine_gauge = self._make_arc_gauge("engineGauge", ENGINE_GAUGE_COLOR, x)
-        x += 2.0 * ARC_GAUGE_RADIUS + GAUGE_SPACING
-        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, x)
+        self.laser_gauge = self._make_arc_gauge("laserGauge", LASER_GAUGE_COLOR, 1)
+        self.engine_gauge = self._make_arc_gauge("engineGauge", ENGINE_GAUGE_COLOR, 2)
+        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, 3)
         if not self.game.player.pawn.energy.has_shields:
             self.shield_gauge.root.hide()
 
     def _make_arc_gauge(
-        self, name: str, color: tuple[float, float, float], x: float
+        self, name: str, color: tuple[float, float, float], slot: int
     ) -> ArcGauge:
         """
         :param name: The gauge's node name
         :param color: The gauge's colour
-        :param x: The gauge's centre's position along the row
+        :param slot: The gauge's place in the row, from the left
         :return: A half-ring gauge in the row
         """
         gauge = ArcGauge(
@@ -828,13 +819,16 @@ class EnergyHUD:
             thickness=ARC_GAUGE_THICKNESS,
             n_segments=ARC_GAUGE_SEGMENTS,
             text_scale=GAUGE_TEXT_SCALE,
+            outline_width=ARC_GAUGE_OUTLINE_WIDTH,
         )
-        gauge.root.setX(x)
+        gauge.root.setX(
+            ARC_GAUGE_RADIUS + slot * (2.0 * ARC_GAUGE_RADIUS + GAUGE_SPACING)
+        )
         return gauge
 
     def update(self) -> None:
         """
-        Refresh the gauges' levels, texts and brightness.
+        Refresh the gauges' levels, texts, brightness, highlights and sizes.
         """
         if self.root.isHidden():
             self.root.show()
@@ -846,16 +840,32 @@ class EnergyHUD:
         self.hp_gauge.set_text(f"{health:.0f}")
 
         self.laser_gauge.set_level(energy.lasers)
-        self.laser_gauge.set_brightness(gauge_brightness(energy, LASERS))
+        self.laser_gauge.set_text(f"{100.0 * max(energy.lasers, 0.0):.0f}%")
+        self._show_power(self.laser_gauge, energy, LASERS)
 
         self.engine_gauge.set_level(energy.engines)
         self.engine_gauge.set_text(f"{magnitude(pawn.speed):.0f} m/s")
-        self.engine_gauge.set_brightness(gauge_brightness(energy, ENGINES))
+        self._show_power(self.engine_gauge, energy, ENGINES)
 
         if energy.has_shields:
             self.shield_gauge.set_level(pawn.shield / pawn.max_shield)
             self.shield_gauge.set_text(f"{pawn.shield:.0f}")
-            self.shield_gauge.set_brightness(gauge_brightness(energy, SHIELDS))
+            self._show_power(self.shield_gauge, energy, SHIELDS)
+
+    @staticmethod
+    def _show_power(gauge: ArcGauge, energy: EnergySystem, system: str) -> None:
+        """
+        Brighten, highlight and grow a gauge if power is redirected to its
+        system.
+
+        :param gauge: The system's gauge
+        :param energy: The ship's energy system
+        :param system: The system (ENGINES, LASERS or SHIELDS)
+        """
+        favoured = energy.is_favoured(system)
+        gauge.set_brightness(gauge_brightness(energy, system))
+        gauge.set_highlighted(favoured)
+        gauge.root.setScale(FAVOURED_GAUGE_SCALE if favoured else 1.0)
 
     def clean(self) -> None:
         """

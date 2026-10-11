@@ -23,10 +23,13 @@ from panda3d.core import (
 # Height of a line's glyph centre above its baseline, in text scale units
 TEXT_CENTER_OFFSET = 0.35
 
-# Gauges (see ArcGauge, ColumnGauge): opacity of the empty part's track, and
-# brightness of the track relative to the fill
+# Gauges (see ArcGauge, ColumnGauge): opacity of the empty part's track,
+# brightness of the track relative to the fill, and the arc gauge's outline
+# colour, normal and highlighted
 GAUGE_TRACK_ALPHA = 0.45
 GAUGE_TRACK_BRIGHTNESS = 0.5
+GAUGE_OUTLINE_COLOR = (0.0, 0.0, 0.0, 1.0)
+GAUGE_HIGHLIGHTED_OUTLINE_COLOR = (1.0, 1.0, 1.0, 1.0)
 
 
 def make_text_line(
@@ -271,6 +274,50 @@ def make_arc_geom(
     return geom
 
 
+def make_arc_outline_geom(
+    inner_radius: float, outer_radius: float, width: float, n_segments: int
+) -> Geom:
+    """
+    The outline round a half-ring (see make_arc_geom): a band along its outer
+    edge, one along its inner edge, and a cap under each of its ends, all
+    outside the half-ring.
+
+    :param inner_radius: The half-ring's inner radius
+    :param outer_radius: The half-ring's outer radius
+    :param width: The outline's width
+    :param n_segments: The number of segments along the bands
+    :return: The geometry, four triangle strips
+    """
+    vertex_data = GeomVertexData("arc_outline", GeomVertexFormat.getV3(), Geom.UHStatic)
+    vertex_data.setNumRows(4 * (n_segments + 1) + 8)
+    vertex = GeomVertexWriter(vertex_data, "vertex")
+    strip = GeomTristrips(Geom.UHStatic)
+    row = 0
+    for band_outer, band_inner in (
+        (outer_radius + width, outer_radius),
+        (inner_radius, inner_radius - width),
+    ):
+        for step in range(n_segments + 1):
+            angle_rad = np.pi * (1.0 - step / n_segments)
+            cos, sin = np.cos(angle_rad), np.sin(angle_rad)
+            vertex.addData3(band_outer * cos, 0.0, band_outer * sin)
+            vertex.addData3(band_inner * cos, 0.0, band_inner * sin)
+            strip.addVertices(row, row + 1)
+            row += 2
+        strip.closePrimitive()
+    # The caps close the outline under the ends, which lie on the base line
+    for side in (-1.0, 1.0):
+        near_x, far_x = side * (inner_radius - width), side * (outer_radius + width)
+        for x, z in ((near_x, 0.0), (near_x, -width), (far_x, 0.0), (far_x, -width)):
+            vertex.addData3(x, 0.0, z)
+        strip.addVertices(row, row + 1, row + 2, row + 3)
+        row += 4
+        strip.closePrimitive()
+    geom = Geom(vertex_data)
+    geom.addPrimitive(strip)
+    return geom
+
+
 def make_ring_sector_geom(
     inner_radius: float,
     outer_radius: float,
@@ -310,7 +357,8 @@ def make_ring_sector_geom(
 class ArcGauge:
     """
     A half-ring gauge, read by the angular portion filled, sweeping from its
-    left end over the top. A line of text sits at its centre.
+    left end over the top. A line of text sits at its centre, and an outline
+    runs round it: black, or white when highlighted.
 
     The fill is quantised to the ring's segments, and only rebuilt when that
     quantised level changes.
@@ -325,6 +373,7 @@ class ArcGauge:
         thickness: float,
         n_segments: int,
         text_scale: float,
+        outline_width: float,
     ):
         """
         :param parent_node: The node to attach the gauge to; the gauge's centre
@@ -336,6 +385,7 @@ class ArcGauge:
         :param n_segments: The number of segments in the half-ring (the fill's
             resolution)
         :param text_scale: The scale of the text at the centre
+        :param outline_width: The width of the outline round the ring
         """
         self.color = color
         self.inner_radius = radius - thickness
@@ -353,12 +403,22 @@ class ArcGauge:
         self.fill = self.root.attachNewNode(GeomNode(f"{name}_fill"))
         self.fill_steps = 0
 
+        outline = GeomNode(f"{name}_outline")
+        outline.addGeom(
+            make_arc_outline_geom(
+                self.inner_radius, self.outer_radius, outline_width, n_segments
+            )
+        )
+        self.outline = self.root.attachNewNode(outline)
+
         self.text = make_text_line(self.root, f"{name}_text", align=TextNode.ACenter)
         self.text.setScale(text_scale)
         self.text.setZ(TEXT_CENTER_OFFSET * text_scale)
 
         self.brightness = None
         self.set_brightness(1.0)
+        self.highlighted = None
+        self.set_highlighted(False)
 
     def set_level(self, level: float):
         """
@@ -401,6 +461,17 @@ class ArcGauge:
             )
         )
 
+    def set_highlighted(self, highlighted: bool):
+        """
+        :param highlighted: Whether the outline is white rather than black
+        """
+        if highlighted == self.highlighted:
+            return
+        self.highlighted = highlighted
+        self.outline.setColor(
+            *(GAUGE_HIGHLIGHTED_OUTLINE_COLOR if highlighted else GAUGE_OUTLINE_COLOR)
+        )
+
     def clean(self):
         """
         Cleans the ArcGauge object
@@ -409,6 +480,7 @@ class ArcGauge:
         self.root = None
         self.track = None
         self.fill = None
+        self.outline = None
         self.text = None
 
 
