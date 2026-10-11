@@ -289,6 +289,8 @@ class FlightState(BaseState):
 
         # Initialize interaction compute between ships
         self.interactions = Interactions()
+        # Ids of the pawns that left the level alive (jumped out to hyperspace)
+        self.departed_ids = set()
         # Spreads the bots' thinking evenly over frames
         self.think_scheduler = ThinkScheduler()
 

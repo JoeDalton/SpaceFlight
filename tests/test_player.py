@@ -239,6 +239,7 @@ def test_update_target_mask_subsystems_filter_includes_turrets():
     """
     turret = MagicMock(spec=Turret)
     turret.category = "sub_system"
+    turret.in_hyperspace = False
     player = make_player_for_target_mask(n_actors=3, target_filter="Subsystems")
     player.game.interactions.live_actors = [
         SimpleNamespace(category=None),  # the player: no category
@@ -258,6 +259,7 @@ def test_update_target_mask_turrets_filter_selects_turret_instances():
     """
     turret = MagicMock(spec=Turret)
     turret.category = "sub_system"
+    turret.in_hyperspace = False
     player = make_player_for_target_mask(n_actors=3, target_filter="Turrets")
     player.game.interactions.live_actors = [
         SimpleNamespace(category=None),  # the player: no category

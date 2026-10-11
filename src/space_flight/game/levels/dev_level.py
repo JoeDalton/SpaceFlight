@@ -48,6 +48,7 @@ ALLIED_FRIGATE = WaveSpec(
     spawn_orientation=[1, 0, 0, 0],
     record=True,
     waypoints=PATROL_ROUTE,
+    hyperspace=False,  # already on stage when the level starts
 )
 
 # An enemy Imperial Star Destroyer: a scripted capital ship that only patrols
@@ -68,6 +69,7 @@ ENEMY_CAPITAL_SHIP = WaveSpec(
         [1000, -3000, 900],
         [3000, -3000, 900],
     ],
+    hyperspace=False,  # already on stage when the level starts
 )
 
 # A squadron of fighters, for CPU load profiling.

@@ -7,7 +7,7 @@ into the fake world directly.
 
 import numpy as np
 import pytest
-from mission_fakes import FakeGame, advance, kill_all, live, patch_engine
+from mission_fakes import FakeGame, advance, depart_all, kill_all, live, patch_engine
 
 from space_flight.game.kills import DamageSource
 from space_flight.game.levels import LEVELS
@@ -92,8 +92,8 @@ def test_dev_mission_launches_fighters_from_the_star_destroyer(game, spawned):
 def test_mission3_victory(game, spawned):
     m = start(game, mission3_mission)
 
-    # Transports at 0.1s, escort at 1s, first wave at 10s.
-    advance(game, m, 12)
+    # Transports at 1s, escort at 3s, first wave at 17s.
+    advance(game, m, 19)
     assert len(live(game, spawned, "transports")) == 3
     assert len(live(game, spawned, "escort")) == 8
     first_wave = live(game, spawned, "first_wave")
@@ -102,9 +102,9 @@ def test_mission3_victory(game, spawned):
     assert set(first_wave[0].parent.tactician.primary_target_ids) == transport_ids
 
     # Wiping the first wave brings the third wave ~3s later (well before the
-    # 200s fallback); the second wave arrives on its own at 30s.
+    # 200s fallback); the second wave arrives on its own at 37s.
     kill_all(game, first_wave)
-    advance(game, m, 20)  # t ~= 32s
+    advance(game, m, 20)  # t ~= 39s
     assert len(live(game, spawned, "third_wave")) == 8
     assert len(live(game, spawned, "second_wave")) == 5
 
@@ -127,7 +127,7 @@ def test_mission3_victory(game, spawned):
 
 def test_mission3_objectives_count_the_waves_down(game, spawned):
     m = start(game, mission3_mission)
-    advance(game, m, 12)
+    advance(game, m, 19)
     kill_all(game, live(game, spawned, "first_wave")[:2])
     labels = [objective.label() for objective in m.objectives]
     assert "Shoot down the bombers (2/5)" in labels
@@ -135,7 +135,7 @@ def test_mission3_objectives_count_the_waves_down(game, spawned):
 
 def test_mission3_defeat(game, spawned):
     m = start(game, mission3_mission)
-    advance(game, m, 2)  # transports and escort spawned
+    advance(game, m, 4)  # transports and escort spawned
     kill_all(game, live(game, spawned, "transports"))
     advance(game, m, 1)
     assert any("All transports" in text for text, _ in game.hud.chatter)
@@ -147,7 +147,7 @@ def test_mission3_defeat(game, spawned):
 
 def test_mission3_mourns_each_escort_pilot_by_name(game, spawned):
     m = start(game, mission3_mission)
-    advance(game, m, 2)
+    advance(game, m, 4)
     escort = live(game, spawned, "escort")
 
     kill_all(game, escort[:1])  # Red Leader
@@ -170,7 +170,7 @@ def test_mission3_mourns_each_escort_pilot_by_name(game, spawned):
 def play_mission3_to_every_wave(game, m, spawned):
     """Up to every enemy wave flying (the third and fourth ~3s after the first
     is wiped, the second at 30s)."""
-    advance(game, m, 12)
+    advance(game, m, 19)
     kill_all(game, live(game, spawned, "first_wave"))
     advance(game, m, 20)
 
@@ -193,7 +193,7 @@ def test_mission3_wave_cleared_chatter_knows_what_is_left(game, spawned):
 
 def test_mission3_first_bombers_down_announce_no_all_clear(game, spawned):
     m = start(game, mission3_mission)
-    advance(game, m, 12)
+    advance(game, m, 19)
     kill_all(game, live(game, spawned, "first_wave"))
     advance(game, m, 0.1)
     speaker, line = mission3.BOMBER_CLEAR_LINES["more_to_come"]
@@ -221,9 +221,9 @@ def test_mission3_every_wave_down_wins_before_the_convoy_arrives(game, spawned):
 
 def test_mission3_cheers_when_every_wave_is_down(game, spawned):
     m = start(game, mission3_mission)
-    advance(game, m, 12)
+    advance(game, m, 19)
     kill_all(game, live(game, spawned, "first_wave"))
-    advance(game, m, 20)  # the second wave at 30s, the third and fourth ~3s in
+    advance(game, m, 20)  # the second wave at 37s, the third and fourth ~3s in
     for wave in ("second_wave", "third_wave"):
         kill_all(game, live(game, spawned, wave))
     advance(game, m, 0.1)
@@ -550,7 +550,11 @@ def test_mission2_defeat_when_blue_flight_is_wiped(game, spawned):
 def test_mission2_defeat_when_a_civilian_is_destroyed(game, spawned):
     m = start(game, mission2.mission2_mission)
     advance(game, m, mission2.INTRO_DELAY_S + 1)
-    kill_all(game, live(game, spawned, "Aurek"))
+    kill_all(
+        game,
+        live(game, spawned, "Aurek"),
+        by=DamageSource.of(game.player.pawn, game),
+    )
     advance(game, m, 1 + LEVEL_END_DELAY_S)
     assert [c[0] for c in game.end_level_calls] == ["defeat"]
     assert "civilian" in game.end_level_calls[0][1]
@@ -560,9 +564,46 @@ def test_mission2_defeat_when_a_civilian_is_destroyed(game, spawned):
 def test_mission2_warns_when_a_civilian_is_hit(game, spawned):
     m = start(game, mission2.mission2_mission)
     advance(game, m, mission2.INTRO_DELAY_S + 1)
-    live(game, spawned, "Aurek")[0].health -= 10
+    player_hits(game, live(game, spawned, "Aurek")[0])
     advance(game, m, 0.1)
     assert any("cease fire" in text for text, _ in game.hud.chatter)
+    assert game.end_level_calls == []
+
+
+def crashes(pawn, damage=10.0):
+    """pawn scraping an asteroid: no one's hit (see ship_into_terrain_pushback)."""
+    pawn.last_hit_by = None
+    pawn.last_hit_cause = "crash"
+    pawn.health -= damage
+
+
+def test_mission2_a_civilian_crashing_is_no_cease_fire(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    crashes(live(game, spawned, "Aurek")[0])
+    advance(game, m, 1)
+    assert not any("cease fire" in text for text, _ in game.hud.chatter)
+    assert m.ending is None
+
+
+def test_mission2_a_crash_after_the_warning_is_not_firing_again(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    aurek = live(game, spawned, "Aurek")[0]
+    player_hits(game, aurek)
+    advance(game, m, mission2.CEASE_FIRE_GRACE_S + 0.2)
+
+    crashes(aurek)
+    advance(game, m, 1 + LEVEL_END_DELAY_S)
+
+    assert game.end_level_calls == []
+
+
+def test_mission2_a_civilian_crashing_to_death_is_no_defeat(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 1)
+    kill_all(game, live(game, spawned, "Aurek"))  # no one's kill: a crash
+    advance(game, m, 1 + LEVEL_END_DELAY_S)
     assert game.end_level_calls == []
 
 
@@ -648,11 +689,33 @@ def test_mission2_defeat_when_the_smuggler_jumps_out(game, spawned):
     m = start(game, mission2.mission2_mission)
     dorn = reach_the_reveal(game, m, spawned)
     dorn.position = dorn.position + dorn.forward * mission2.ESCAPE_DISTANCE_M
+    advance(game, m, 0.1)
+    # At its jump point, it jumps out...
+    assert dorn.parent.jump_outs == [None]
+    assert game.end_level_calls == []
+    # ...and only its departure loses the mission
+    depart_all(game, [dorn])
     advance(game, m, mission2.DEFEAT_DELAY_S + 1 + LEVEL_END_DELAY_S)
     assert game.end_level_calls == [
         ("defeat", "The gun-runner escaped with its cargo.")
     ]
     assert game.objectives_at_end["Stop the gun-runner"] == "failed"
+
+
+def test_mission2_killing_the_unscanned_smuggler_is_a_civilian_loss(game, spawned):
+    m = start(game, mission2.mission2_mission)
+    advance(game, m, mission2.INTRO_DELAY_S + 2 * mission2.CONVOY_INTERVAL_S + 1)
+    for spec in mission2.CONVOY:
+        scan_now(game, m, live(game, spawned, spec.name)[0])
+    advance(game, m, 15)
+    dorn = live(game, spawned, "Dorn")[0]
+
+    kill_all(game, [dorn], by=DamageSource.of(game.player.pawn, game))
+    advance(game, m, 1 + LEVEL_END_DELAY_S)
+
+    assert game.end_level_calls == [
+        ("defeat", "You destroyed a civilian transport. Your wings are grounded.")
+    ]
 
 
 def test_mission2_killing_the_revealed_smuggler_is_not_a_civilian_loss(game, spawned):

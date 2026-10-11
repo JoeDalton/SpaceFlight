@@ -41,6 +41,10 @@ class Pawn:
         # inherit their host's. Bare pawns/structures keep 0.
         self.mobility = 0.0
 
+        # Whether the actor is dropping in from (or jumping out to) hyperspace:
+        # it then interacts with nobody (see HyperspaceTransit)
+        self.in_hyperspace = False
+
         # Initialize tactician and autoaim targets
         self.target = None
         self.target_id = None

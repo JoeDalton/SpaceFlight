@@ -120,6 +120,17 @@ class MockBot:
         self.pawn = MockPawn(self, position, team)
         self.navigator = MockNavigator()
         self.tactician = SimpleNamespace(primary_target_ids=[])
+        #: The delay of each hyperspace arrival begun, in order
+        self.hyperspace_arrivals = []
+        #: The spool time of each jump out ordered, in order
+        self.jump_outs = []
+
+    def begin_hyperspace_arrival(self, delay_s=0.0):
+        self.hyperspace_arrivals.append(delay_s)
+
+    def jump_out(self, spool_s=None):
+        """Records the order: a test makes the ship leave with depart_all."""
+        self.jump_outs.append(spool_s)
 
     def set_team(self, team):
         """Mirrors Bot.set_team's cascade, for waves that reassign teams."""
@@ -245,6 +256,7 @@ class FakeGame:
     def __init__(self):
         self.game_time = FakeGameTime()
         self.interactions = FakeInteractions()
+        self.departed_ids = set()
         self.hud = MockHud()
         self.headless = False
         self.end_level_calls = []
@@ -326,3 +338,10 @@ def kill_all(game, pawns, by=None):
         pawn.last_hit_cause = None if by is None else "weapon"
         game.interactions.kill(pawn)
         game.kill_log.record(pawn)
+
+
+def depart_all(game, pawns):
+    """The pawns leave the level alive, as at the end of a jump out (no kill)."""
+    for pawn in list(pawns):
+        game.interactions.kill(pawn)
+        game.departed_ids.add(pawn.id)

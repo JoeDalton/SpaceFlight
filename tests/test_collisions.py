@@ -1302,7 +1302,9 @@ def test_a_fatal_crash_credits_no_one():
     assert ship.last_hit_cause == "crash"
 
 
-def test_a_survived_crash_keeps_the_last_hitter():
+def test_a_survived_crash_is_no_ones_hit():
+    """A scrape is not put down to whoever last shot the ship (issue: a
+    civilian grazing an asteroid read as the player firing on it)."""
     system = make_collision_system_without_init()
     ship = make_ship_at([0.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
     ship.last_hit_by = "the player"
@@ -1311,4 +1313,18 @@ def test_a_survived_crash_keeps_the_last_hitter():
     system.ship_into_terrain_pushback(make_terrain_entry(ship))
 
     assert ship.health > 0.0
-    assert ship.last_hit_by == "the player"
+    assert ship.last_hit_by is None
+    assert ship.last_hit_cause == "crash"
+
+
+def test_crashing_a_wreck_leaves_its_killer():
+    system = make_collision_system_without_init()
+    wreck = make_ship_at([0.0, 0.0, 0.0], [-100.0, 0.0, 0.0], health=0.0)
+    wreck.last_hit_by = "the killer"
+    wreck.last_hit_cause = "weapon"
+    take_damage(wreck)
+
+    system.ship_into_terrain_pushback(make_terrain_entry(wreck))
+
+    assert wreck.last_hit_by == "the killer"
+    assert wreck.last_hit_cause == "weapon"

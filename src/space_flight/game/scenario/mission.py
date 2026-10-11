@@ -31,6 +31,7 @@ from space_flight.game.scenario.conditions import (
     _Delay,
     _Sustained,
     ids_of,
+    pawns_of,
 )
 from space_flight.game.scenario.objectives import Objective, reaches
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
@@ -367,6 +368,25 @@ class Mission:
         if route is not None:
             route.clean()
             self.game.player_waypoints = None
+
+    def jump_out(self, who: Any, spool_s: Optional[float] = None):
+        """
+        Every live bot of who leaves the level through hyperspace: it flies
+        straight on for spool_s, still a target, then jumps out (see
+        :meth:`WaveHandle.jump_out`). The player cannot jump out.
+
+        :param who: See :func:`~space_flight.game.scenario.conditions.pawns_of`
+        :param spool_s: How long the ships spool up before they jump (the
+            default spool time if None)
+        """
+        for pawn in pawns_of(who):
+            bot = pawn.parent
+            if bot is self.game.player or not hasattr(bot, "jump_out"):
+                continue
+            if spool_s is None:
+                bot.jump_out()
+            else:
+                bot.jump_out(spool_s=spool_s)
 
     def end_level(self, outcome: str, text: str = ""):
         """

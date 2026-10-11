@@ -118,6 +118,8 @@ unknown field raises `TypeError`; a missing `size` for a single model, or a
 | `waypoints` | `()` | Route given to every ship |
 | `loop` | `True` | Whether the route loops |
 | `record` | `False` | Step-by-step-record every bot of the wave |
+| `hyperspace` | `True` | Whether the ships drop in from hyperspace (see [Hyperspace](#hyperspace)); `False` for ships already on stage when the level starts |
+| `spawn_speed_mps` | `50` | Initial speed, along the spawn heading; a hyperspace drop lands at this speed |
 
 Turrets and tractor beams are not waves: they are spawned from their host
 capital ship's config (see [docs/subsystems.md](subsystems.md)).
@@ -126,7 +128,8 @@ capital ship's config (see [docs/subsystems.md](subsystems.md)).
 
 ```python
 wave = m.wave(SPEC)                       # a handle, not spawned yet
-wave.spawn(spawn_point=None, target=None, join=None, orientation=None)
+wave.spawn(spawn_point=None, target=None, join=None, orientation=None,
+           hyperspace=None)
 wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
 ```
 
@@ -145,6 +148,7 @@ wave = m.spawn(SPEC, spawn_point=..., target=..., join=...)   # both at once
   `escort.formation`) instead of creating the spec's own. Each ship takes
   the formation's next free slot as it spawns, so a wave can join another
   that is still spawning.
+- `hyperspace=` overrides the spec's `hyperspace` flag.
 - Calling `spawn()` again on the same handle spawns the same composition
   again into the same wave.
 - Fighters launched from a carrier's hangar make a wave too, with
@@ -158,20 +162,50 @@ and after the wave exists:
 | Member | Meaning |
 |---|---|
 | `alive()` | at least one member is alive |
-| `all_destroyed()` | spawned, and every member is dead (false before spawning); for a [launched wave](#capital-ships-and-hangars), once the launch is over |
+| `all_destroyed()` | spawned, and every member is dead (false before spawning, and if any member [jumped out](#hyperspace) instead); for a [launched wave](#capital-ships-and-hangars), once the launch is over |
 | `any_destroyed()` | spawned, and at least one member has died (stays true after a total wipe) |
+| `any_jumped_out()` / `all_jumped_out()` | at least one / every member left the level through [hyperspace](#hyperspace) |
 | `pawns()` | the live members, in spawn order (the formation leader first) |
-| `destroyed_count()` | how many members have died so far (e.g. an [objective](#objectives)'s progress) |
+| `destroyed_count()` | how many members have died so far (e.g. an [objective](#objectives)'s progress); an escape is not a kill |
+| `jumped_out_count()` | how many members jumped out so far |
 | `formation` | the wave's `Formation`, once spawned (or `None`) |
 | `set_targets(who)` | every live member attacks every live pawn of `who` |
+| `jump_out(spool_s=None)` | every live member leaves the level through [hyperspace](#hyperspace) |
 | `set_team(team)` | reassigns every live member, cascading a major ship's cached team to its sub-systems, shield and mounted turrets/tractor beams (not to fighters it already launched) |
 | `set_waypoints(points, loop=True)` | gives every live member a new route; only the formation leader flies it, wingmen hold formation |
 | `follow(leader)` | every live member forms up on `leader` (e.g. `game.player`), which takes the formation's lead slot; members drop their routes, so none patrols a stale one if it takes the lead. Scripted capital ships are left out and keep their routes |
 | `break_formation()` | every live member leaves the formation and flies its own route (e.g. before a race) |
 
-`alive`, `all_destroyed` and `any_destroyed` are plain methods. Call one to
+`alive`, `all_destroyed`, `any_destroyed`, `any_jumped_out` and
+`all_jumped_out` are plain methods. Call one to
 get a bool; pass it **uncalled** to use it as a condition:
 `m.on(wave.all_destroyed, ...)`.
+
+### Hyperspace
+
+Wave ships drop in from hyperspace: each is drawn rushing in from far behind
+along its heading, then brakes hard onto its spawn point, landing at its
+`spawn_speed_mps`. The members of a wave start a fraction of a second apart.
+The drop is cosmetic: meanwhile the ship collides with nothing, nothing can
+target it and it targets nothing, and its AI waits. It counts as alive
+throughout (`wave.alive()` is true from its first frame).
+
+`wave.jump_out()` (or `m.jump_out(who)`) is the way out: the AI is silenced
+and the ship flies straight on for `spool_s` (2 s by default), spooling up
+its hyperdrive — still a target, so the player can still destroy it. Then it
+jumps, the drop played backwards, and leaves the level alive: it explodes
+nowhere, counts as no kill, and its turrets, subsystems and shield leave with
+it. `wave.any_jumped_out` tells an escape from a kill:
+
+```python
+m.on(near(smuggler, jump_point, 400), smuggler.jump_out)
+m.on(smuggler.any_jumped_out, lambda: m.defeat("The gun-runner escaped."))
+```
+
+The transit's distances, durations and sharpness are set in
+[`actors/hyperspace.py`](../../src/space_flight/actors/hyperspace.py).
+Fighters launched from a hangar do not drop in, and the player cannot jump
+out.
 
 ### Capital ships and hangars
 
@@ -282,7 +316,7 @@ Every condition or method taking a `who` accepts:
 | `damaged(who)` | any live pawn of `who` has lost health or shield since the condition first saw it (stateful: build it once) |
 | `being_hit(who, by_player=False)` | any live pawn of `who` lost health or shield since the previous frame — a fresh hit, even on a regenerating shield; only the player's hits if `by_player` (stateful: build it once) |
 | `scan.complete` / `scan.started` / `scan.progress_at_least(x)` | see [Scanning](#scanning) |
-| `wave.alive` / `wave.all_destroyed` / `wave.any_destroyed` | see [`WaveHandle`](#wavehandle) |
+| `wave.alive` / `wave.all_destroyed` / `wave.any_destroyed` / `wave.any_jumped_out` / `wave.all_jumped_out` | see [`WaveHandle`](#wavehandle) |
 | `objective.done` / `objective.failed` / `objective.active` | see [Objectives](#objectives) |
 | `all_of(*conds)` / `any_of(*conds)` / `not_(cond)` | combinations |
 | any `lambda: ...` | whatever it returns |
@@ -391,6 +425,7 @@ friendly fire.
 | `m.speech(text, speaker=None)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
 | `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
 | `m.clear_player_waypoints()` | removes it |
+| `m.jump_out(who, spool_s=None)` | every live bot of `who` leaves the level through [hyperspace](#hyperspace) |
 | `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`): freezes the objectives, then shows the level-end screen, with the player's kills and objectives, 2 seconds later. Only the first ending counts |
 
 How long each stays up is set in [`ui/hud.py`](../../src/space_flight/ui/hud.py)

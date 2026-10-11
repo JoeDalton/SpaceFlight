@@ -46,6 +46,9 @@ def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     bot._think_slot = ThinkScheduler().register(period_s=0.1)
     bot._next_think_s = -math.inf
     bot._commands = None
+    bot.hyperspace_transit = None
+    bot._jump_at_s = None
+    bot.has_departed = False
     return bot
 
 

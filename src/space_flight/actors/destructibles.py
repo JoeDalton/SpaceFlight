@@ -138,12 +138,41 @@ class Destructibles:
         # no longer "alive" but not yet reaped, so they keep integrating and
         # colliding until their dying phase completes.
         self.dying_objects: List[Destructible] = []
+        # Objects leaving the level without a death (a ship jumping out to
+        # hyperspace), torn down on the next handle_deaths
+        self.departing_objects: List[Destructible] = []
+
+    def depart(self, destructible: Destructible):
+        """
+        Take an object off the level without a death: no dying phase, no blast
+        and no kill. It leaves the living at once and is torn down at the start
+        of the next :meth:`handle_deaths`, so that none of its tasks still due
+        this frame runs on a cleaned object.
+
+        :param destructible: The object leaving the level
+        """
+        if destructible in self.alive_objects:
+            self.alive_objects.remove(destructible)
+        if destructible in self.dying_objects:
+            self.dying_objects.remove(destructible)
+        if destructible not in self.departing_objects:
+            self.departing_objects.append(destructible)
 
     def handle_deaths(self):
         """
-        Move newly-dead destructibles into their dying phase, advance the ones
-        already dying, and reap those whose death animation has finished.
+        Tear down the departed destructibles, move newly-dead ones into their
+        dying phase, advance the ones already dying, and reap those whose death
+        animation has finished.
         """
+        # 0. Tear down the objects that left the level (see depart). A turret
+        #    is a Destructible both as its Bot and as its pawn: whichever is
+        #    reached second may already be clean.
+        departing_objects, self.departing_objects = self.departing_objects, []
+        for destructible in departing_objects:
+            destructible.clear_tasks()
+            if not getattr(destructible, "is_clean", False):
+                destructible.clean()
+
         # 1. Split the living from the newly dead. A newly-dead object enters its
         #    dying phase and moves to dying_objects (it is not reaped this frame).
         still_alive_objects: List[Destructible] = []
@@ -178,9 +207,12 @@ class Destructibles:
         """
         Cleans the Destructibles object
         """
-        # Clean all remaining destructible objects, alive or mid-death
-        for destructible in self.alive_objects + self.dying_objects:
+        # Clean all remaining destructible objects, alive, mid-death or leaving
+        for destructible in (
+            self.alive_objects + self.dying_objects + self.departing_objects
+        ):
             if destructible is not None:
                 destructible.clean()
         self.alive_objects = None
         self.dying_objects = None
+        self.departing_objects = None

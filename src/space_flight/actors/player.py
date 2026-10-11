@@ -513,6 +513,15 @@ class Player:
         else:
             # Fail safe for unrecognised filters
             self.target_mask = np.zeros(len(self.game.interactions.live_actors))
+        # Whatever the filter, an actor in a hyperspace transit cannot be targeted
+        in_hyperspace = np.array(
+            [
+                getattr(actor, "in_hyperspace", False)
+                for actor in self.game.interactions.live_actors
+            ],
+            dtype=bool,
+        )
+        self.target_mask = np.where(in_hyperspace, 0, self.target_mask)
         # The mask is indexed by position in live_actors, not by grid slot:
         # translate the player's slot so it can never target itself.
         player_live_position = np.count_nonzero(
