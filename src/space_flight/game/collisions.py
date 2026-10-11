@@ -661,18 +661,18 @@ class CollisionSystem:
         # Position correction is too complicated to compute with arbitrary mesh
         # => Rely only on elastic impact to push back
 
-        # Apply damage to the ship
-        was_alive = ship_from.health > 0.0
+        # Apply damage to the ship. A damaging crash is no one's hit: it is
+        # stamped as such, so neither a crash death nor a mere scrape is put down
+        # to whoever last shot the ship (a wreck keeps its killer, see
+        # credit_hit).
+        damage = self.collision_damage(ship_from, normal_relative_velocity)
+        if damage > 0.0:
+            credit_hit(ship_from, source=None, cause="crash")
         ship_from.push(
-            damage=self.collision_damage(ship_from, normal_relative_velocity),
+            damage=damage,
             velocity_correction=velocity_correction,
             position_correction=np.zeros(3),
         )
-        # A crash that kills is its own death: no one gets the kill. One that
-        # doesn't leaves the last hitter's credit alone.
-        if was_alive and ship_from.health <= 0.0:
-            ship_from.last_hit_by = None
-            ship_from.last_hit_cause = "crash"
 
     def ship_into_ship(self, entry: CollisionEntry):
         """

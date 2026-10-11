@@ -28,7 +28,6 @@ from space_flight.game.scenario.conditions import (
     all_of,
     any_of,
     being_hit,
-    damaged,
     near,
 )
 from space_flight.scenes.scenes import scene_factory
@@ -249,12 +248,16 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             )
         )
 
-    m.on(damaged(civilians), warn_civilian_fire)
+    # Only the player's fire counts: a civilian grazing an asteroid is no one's
+    # fault
+    m.on(being_hit(civilians, by_player=True), warn_civilian_fire)
     revealed = []
+    convoy_killed_by_player = m.kills(convoy, by_player=True)
+    smuggler_killed_by_player = m.kills(smuggler, by_player=True)
 
     def civilian_destroyed() -> bool:
-        return any(t.all_destroyed() for t in convoy) or (
-            smuggler.all_destroyed() and not revealed
+        return convoy_killed_by_player() > 0 or (
+            smuggler_killed_by_player() > 0 and not revealed
         )
 
     def fired_on_civilians() -> bool:
