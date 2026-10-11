@@ -28,13 +28,14 @@ LASERS = "lasers"
 SHIELDS = "shields"
 BALANCED = "balanced"
 
-# Share of the power plant's output each system receives, per distribution mode.
-# Redirected modes add up to less than 1: redirecting power loses some of it.
+# Share of the power plant's output each system receives, per distribution mode,
+# in cycling order. Redirected modes add up to less than 1: redirecting power
+# loses some of it.
 ENERGY_SHARES_SHIELDED = {
     BALANCED: {ENGINES: 1.0 / 3.0, LASERS: 1.0 / 3.0, SHIELDS: 1.0 / 3.0},
+    SHIELDS: {ENGINES: 0.07, LASERS: 0.07, SHIELDS: 0.75},
     ENGINES: {ENGINES: 0.75, LASERS: 0.07, SHIELDS: 0.07},
     LASERS: {ENGINES: 0.07, LASERS: 0.75, SHIELDS: 0.07},
-    SHIELDS: {ENGINES: 0.07, LASERS: 0.07, SHIELDS: 0.75},
 }
 ENERGY_SHARES_UNSHIELDED = {
     BALANCED: {ENGINES: 0.5, LASERS: 0.5, SHIELDS: 0.0},
@@ -150,8 +151,8 @@ class EnergySystem:
 
     def cycle_mode(self):
         """
-        Select the next power distribution: balanced, engines, lasers, shields
-        (if any), then back to balanced.
+        Select the next power distribution: balanced, shields (if any),
+        engines, lasers, then back to balanced.
         """
         modes = self.modes
         self.mode = modes[(modes.index(self.mode) + 1) % len(modes)]

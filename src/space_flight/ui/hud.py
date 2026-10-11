@@ -92,7 +92,7 @@ OBJECTIVE_FLASH_PERIOD_S = 0.25
 OBJECTIVE_FLASH_DIM_ALPHA = 0.3
 
 # Energy HUD (see EnergyHUD), in the bottom-left corner's coordinates: the HP,
-# laser, engine and shield gauges, left to right
+# shield, engine and laser gauges, left to right
 ENERGY_HUD_LEFT_X = 0.06
 ENERGY_HUD_BOTTOM_Z = 0.06
 GAUGE_SPACING = 0.04
@@ -773,10 +773,10 @@ class EnergyHUD:
     The player's gauges, bottom left. Left to right:
 
     - HP: a pink half-ring, the health left written at its centre
-    - lasers: a red half-ring, the laser charge written at its centre
-    - engines: a green half-ring, the ship's speed written at its centre
     - shields: a blue half-ring, the shield strength written at its centre
-      (only for shielded ships)
+      (only for shielded ships; the next gauges move left to take its place)
+    - engines: a green half-ring, the ship's speed written at its centre
+    - lasers: a red half-ring, the laser charge written at its centre
 
     The gauges are outlined in black; the energy gauge of the system power is
     redirected to is bigger, brighter, and outlined in white.
@@ -794,13 +794,19 @@ class EnergyHUD:
         # Shown by the first update
         self.root.hide()
 
+        has_shields = self.game.player.pawn.energy.has_shields
         self.hp_gauge = self._make_arc_gauge("hpGauge", HP_GAUGE_COLOR, 0)
         self.hp_gauge.set_brightness(GAUGE_BRIGHTNESS)
-        self.laser_gauge = self._make_arc_gauge("laserGauge", LASER_GAUGE_COLOR, 1)
-        self.engine_gauge = self._make_arc_gauge("engineGauge", ENGINE_GAUGE_COLOR, 2)
-        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, 3)
-        if not self.game.player.pawn.energy.has_shields:
+        self.shield_gauge = self._make_arc_gauge("shieldGauge", SHIELD_GAUGE_COLOR, 1)
+        if not has_shields:
             self.shield_gauge.root.hide()
+        slot = 2 if has_shields else 1
+        self.engine_gauge = self._make_arc_gauge(
+            "engineGauge", ENGINE_GAUGE_COLOR, slot
+        )
+        self.laser_gauge = self._make_arc_gauge(
+            "laserGauge", LASER_GAUGE_COLOR, slot + 1
+        )
 
     def _make_arc_gauge(
         self, name: str, color: tuple[float, float, float], slot: int

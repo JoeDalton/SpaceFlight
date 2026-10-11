@@ -12,6 +12,7 @@ from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 from space_flight.menus.input_settings_menu_state import (
     _BINDINGS_FILE,
     _DEFAULT_BINDINGS_FILE,
+    ChangeBindingDialog,
     InputSettingsMenuState,
     format_binding,
 )
@@ -361,3 +362,28 @@ class TestOnConfirmed:
         state.on_confirmed(path, "axis", "right_trigger")
         _, value = lbl.__setitem__.call_args[0]
         assert "Axis" in value
+
+
+# ---------------------------------------------------------------------------
+# ChangeBindingDialog — keys only reported as raw buttons
+# ---------------------------------------------------------------------------
+
+
+def test_binding_dialog_captures_layout_only_keys_by_character():
+    """
+    A raw press of a key with no Panda3D button (é on a French keyboard) is
+    captured as the character it types; other raw presses are left to the
+    regular button events.
+    """
+    dialog = ChangeBindingDialog.__new__(ChangeBindingDialog)
+    dialog.dialog = MagicMock(buttonList=[])
+    dialog.newInput = ""
+    dialog.newInputType = ""
+    dialog.layoutOnlyKeys = {"2": "é"}
+
+    # The general raw event's parameter is the button's name
+    dialog.rawButtonPressed("1")
+    assert dialog.newInput == ""
+
+    dialog.rawButtonPressed("2")
+    assert (dialog.newInputType, dialog.newInput) == ("button", "é")

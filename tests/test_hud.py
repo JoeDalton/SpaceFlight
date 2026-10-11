@@ -691,6 +691,38 @@ def test_energy_hud_hides_the_shield_gauge_without_shields():
     assert not energy_hud.engine_gauge.root.isHidden()
 
 
+def test_energy_hud_gauge_order():
+    """
+    Left to right: HP, shields, engines, lasers, evenly spaced.
+    """
+    energy_hud, _ = make_energy_hud()
+    xs = [
+        gauge.root.getX()
+        for gauge in (
+            energy_hud.hp_gauge,
+            energy_hud.shield_gauge,
+            energy_hud.engine_gauge,
+            energy_hud.laser_gauge,
+        )
+    ]
+    assert xs == sorted(xs)
+    assert np.diff(xs) == pytest.approx([xs[1] - xs[0]] * 3)
+
+
+def test_energy_hud_closes_the_shield_gauge_gap_without_shields():
+    """
+    Without shields, the engine and laser gauges follow the HP gauge directly.
+    """
+    shielded_hud, _ = make_energy_hud()
+    unshielded_hud, _ = make_energy_hud(has_shields=False)
+    assert unshielded_hud.engine_gauge.root.getX() == pytest.approx(
+        shielded_hud.shield_gauge.root.getX()
+    )
+    assert unshielded_hud.laser_gauge.root.getX() == pytest.approx(
+        shielded_hud.engine_gauge.root.getX()
+    )
+
+
 def test_energy_hud_clamps_negative_health():
     """
     A dead ship's negative health reads as 0.

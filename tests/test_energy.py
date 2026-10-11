@@ -83,13 +83,13 @@ def test_unshielded_shares():
 @pytest.mark.parametrize(
     "has_shields, expected",
     [
-        (True, [ENGINES, LASERS, SHIELDS, BALANCED]),
+        (True, [SHIELDS, ENGINES, LASERS, BALANCED]),
         (False, [ENGINES, LASERS, BALANCED]),
     ],
 )
 def test_cycle_mode(has_shields, expected):
     """
-    Cycling goes balanced, engines, lasers, shields (if any), then back.
+    Cycling goes balanced, shields (if any), engines, lasers, then back.
     """
     energy = EnergySystem(
         has_shields=has_shields, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST

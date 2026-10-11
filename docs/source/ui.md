@@ -44,7 +44,12 @@ hardcoded menu keys (`MENU_BUTTONS`):
   between two polls, which polling alone would miss. `event-repeat` is
   deliberately unused — held state comes from polling only.
 - **`KeyboardReader`** polls Panda3D's `MouseWatcher` for every bound key and
-  menu key.
+  menu key. Panda3D has no button for a key typing a non-ASCII character (é,
+  è, ç, à, ù on a French keyboard), so the `MouseWatcher` never sees it, and
+  it throws only raw events, named after the key's place on a US keyboard
+  (`raw-2` for é). `layout_only_keys()` finds those keys in the window's
+  keyboard map, by the character they type: a key bound by such a character
+  is tracked from its raw events instead.
   Keyboards have no analogue axes, so `read_axes` is a no-op and flight axes
   are synthesised in `FlightInputContext`.
 - **`GamepadReader`** and **`JoystickReader`** poll their device, apply dead
@@ -103,7 +108,8 @@ missile as the pause menu resumes the flight. Concrete contexts:
   reloads before it can fire. Energy distribution (see
   [docs/actors.md](actors.md#energy-management)) is set on press by
   `energy_engines`, `energy_lasers`, `energy_shields` and `energy_balanced`
-  (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick). Its
+  (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick): balanced,
+  shields (if any), engines, lasers, then back to balanced. Its
   `pressed`/`held`/`active`/`released` helpers are true when the action's key
   on any device is. `flight_axes` combines the devices:
   - yaw/pitch/roll add up, clamped to `[-1, 1]`: the keyboard's are synthesised
@@ -172,9 +178,9 @@ missile as the pause menu resumes the flight. Concrete contexts:
   [`RollingDrum`](#utilspy--generic-ui-items), the selected one facing the
   player. Under it, a line always shows the flares left. Bottom left, an
   `EnergyHUD` shows the player's gauges, left to right, all half-rings
-  outlined in black: HP (pink, health at its centre), lasers (red, laser
-  charge at its centre), engines (green, speed at its centre) and shields
-  (blue, shield strength at its centre, hidden on unshielded ships). The gauge
+  outlined in black: HP (pink, health at its centre), shields (blue, shield
+  strength at its centre, absent on unshielded ships), engines (green, speed
+  at its centre) and lasers (red, laser charge at its centre). The gauge
   of the system power is redirected to is bigger, brighter and outlined in
   white. Its layout, colours, brightness and scale are module constants.
 - **`AimHUD`** — the aiming cues, placed each frame by projecting world
