@@ -142,7 +142,7 @@ def dev_mission(m: Mission) -> Iterator[None]:
     m.hud("Enemy forces inbound")
     capital_ship = m.spawn(ENEMY_CAPITAL_SHIP)
     frigate = m.spawn(ALLIED_FRIGATE, target=[capital_ship])
-    print(frigate)
+    m.objective("Keep the frigate alive", failed=frigate.all_destroyed)
     # TEMPORARY (#83 phase 2): launch fighters straight from the star
     # destroyer's hangar, until the wave scripting API (phase 3) replaces this
     yield from m.wait(5)
@@ -150,9 +150,15 @@ def dev_mission(m: Mission) -> Iterator[None]:
     hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
     m.hud("TIEs launching")
     squadron = m.launch(hangar, "tie-fighter", 3, target=frigate)
+    m.objective("Destroy the TIE squadron", progress=squadron.destroyed_count, goal=3)
     m.on(squadron.all_destroyed, lambda: m.hud("TIE squadron destroyed"))
     yield from m.wait(20)
-    m.launch(hangar, "tie-bomber", 6, target=frigate)
+    bombers = m.launch(hangar, "tie-bomber", 6, target=frigate)
+    m.objective(
+        "Shoot down 2 TIEs yourself",
+        progress=m.kills([squadron, bombers], by_player=True),
+        goal=2,
+    )
     # m.spawn(ENEMY_FIGHTER_SQUADRON)
     # Targets are resolved as each Y-wing spawns: let the big ships spawn first
     # yield from m.wait(1)

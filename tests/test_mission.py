@@ -433,6 +433,116 @@ def test_wave_destroyed_count(game, mission, spawned):
 
 
 # ---------------------------------------------------------------------------
+# Objectives
+# ---------------------------------------------------------------------------
+
+
+def test_objective_starts_active_and_listed(game, mission):
+    game.game_time.t = 3.0
+    objective = mission.objective("Reach the nav point")
+
+    assert mission.objectives == [objective]
+    assert objective.active() and not objective.done() and not objective.failed()
+    assert objective.label() == "Reach the nav point"
+    assert objective.changed_at_s == 3.0
+
+
+def test_objective_is_ticked_by_its_done_condition(game, mission):
+    flag = []
+    objective = mission.objective("Reach the nav point", done=lambda: bool(flag))
+    mission.update()
+    assert objective.active()
+
+    flag.append(True)
+    game.game_time.t = 5.0
+    mission.update()
+
+    assert objective.done()
+    assert objective.changed_at_s == 5.0
+
+
+def test_objective_is_failed_by_its_failed_condition(mission):
+    lost = []
+    objective = mission.objective(
+        "Stay with the formation", done=lambda: False, failed=lambda: bool(lost)
+    )
+    lost.append(True)
+    mission.update()
+
+    assert objective.failed()
+    assert mission.triggers == []  # both rules retired
+
+
+def test_a_settled_objective_stays_settled(mission):
+    both = mission.objective("Scan it", done=lambda: True, failed=lambda: True)
+    mission.update()
+    assert both.done()  # its done rule came first
+
+    both.fail()
+    assert both.done()
+
+
+def test_objective_progress_completes_it_at_the_goal(mission):
+    count = [0]
+    objective = mission.objective("Destroy the TIEs", progress=lambda: count[0], goal=3)
+    assert objective.label() == "Destroy the TIEs (0/3)"
+
+    count[0] = 3
+    mission.update()
+
+    assert objective.done()
+    assert objective.label() == "Destroy the TIEs (3/3)"
+
+
+def test_objective_progress_freezes_once_settled(mission):
+    count = [1]
+    objective = mission.objective(
+        "Keep the transports alive", progress=lambda: count[0], goal=3, done=None
+    )
+    objective.fail()
+
+    count[0] = 0
+    assert objective.label() == "Keep the transports alive (1/3)"
+
+
+def test_objective_counts_kills(game, mission, spawned):
+    wave = mission.spawn(WAVE)
+    objective = mission.objective(
+        "Shoot down two bombers", progress=mission.kills(wave, by_player=True), goal=2
+    )
+    run_jobs(mission)
+    player = DamageSource.of(game.player.pawn, game)
+
+    kill_all(game, wave.pawns()[:1], by=player)
+    kill_all(game, wave.pawns()[1:2])
+    mission.update()
+    assert objective.label() == "Shoot down two bombers (1/2)"
+
+    kill_all(game, wave.pawns(), by=player)
+    mission.update()
+    assert objective.done()
+
+
+def test_removed_objective_leaves_the_list_and_its_rules(mission):
+    objective = mission.objective("Scan it", done=lambda: False)
+
+    objective.remove()
+
+    assert mission.objectives == []
+    assert all(trigger.cancelled for trigger in mission.triggers)
+
+
+def test_objectives_work_headless(game, mission):
+    game.headless = True
+    objective = mission.objective("Reach the nav point", done=lambda: True)
+
+    mission.update()
+
+    assert objective.done()
+    assert game.hud.messages == []
+
+
+# ---------------------------------------------------------------------------
 # Kills
 # ---------------------------------------------------------------------------
 

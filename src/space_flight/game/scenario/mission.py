@@ -32,6 +32,7 @@ from space_flight.game.scenario.conditions import (
     _Sustained,
     ids_of,
 )
+from space_flight.game.scenario.objectives import Objective, reaches
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
@@ -94,6 +95,8 @@ class Mission:
         self.game = game
         self.triggers: list[Trigger] = []
         self.jobs: list[Iterator] = []
+        #: The objectives shown on the HUD, in the order they were given
+        self.objectives: list[Objective] = []
 
     def now(self) -> float:
         """The game clock, in seconds."""
@@ -238,6 +241,42 @@ class Mission:
     def sustained(self, condition: Condition, seconds: float) -> Condition:
         """True once condition has held for an unbroken run of seconds."""
         return _Sustained(self.now, condition, seconds)
+
+    # ------------------------------------------------------------------
+    # Objectives
+    # ------------------------------------------------------------------
+
+    def objective(
+        self,
+        text: str,
+        done: Optional[Condition] = None,
+        failed: Optional[Condition] = None,
+        progress: Optional[Callable[[], int]] = None,
+        goal: Optional[int] = None,
+    ) -> Objective:
+        """
+        Add an objective to the HUD checklist, from now.
+
+        It only shows the player what to do: ending the level is still the
+        mission's call (:meth:`victory`, :meth:`defeat`).
+
+        :param text: What to do, kept short
+        :param done: Ticks it once true (by default, progress reaching goal)
+        :param failed: Fails it once true, unless already ticked
+        :param progress: A live count towards goal, shown as "(n/goal)", e.g.
+            ``wave.destroyed_count`` or :meth:`kills`
+        :param goal: The count that completes it
+        :return: The objective (call its complete(), fail() or remove())
+        """
+        objective = Objective(self, text, progress=progress, goal=goal)
+        if done is None and progress is not None and goal is not None:
+            done = reaches(progress, goal)
+        if done is not None:
+            objective.rules.append(self.on(done, objective.complete))
+        if failed is not None:
+            objective.rules.append(self.on(failed, objective.fail))
+        self.objectives.append(objective)
+        return objective
 
     # ------------------------------------------------------------------
     # Kills

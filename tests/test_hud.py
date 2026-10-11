@@ -14,6 +14,7 @@ from panda3d.core import NodePath, PerspectiveLens, Point3, Vec3
 
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS, EnergySystem
 from space_flight.ai.missile.incoming_missile import IncomingMissile
+from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
     CROSSHAIR_COLOR,
     CROSSHAIR_LOCKED_COLOR,
@@ -24,10 +25,15 @@ from space_flight.ui.hud import (
     MIN_PROJECTION_DEPTH,
     MISSILE_WARNING_MAX_BLINK_PERIOD_S,
     MISSILE_WARNING_MIN_BLINK_PERIOD_S,
+    OBJECTIVE_COLORS,
+    OBJECTIVE_FLASH_DIM_ALPHA,
+    OBJECTIVE_FLASH_PERIOD_S,
+    OBJECTIVE_FLASH_S,
     TARGET_BOX_COLOR,
     TARGET_BOX_MISSILE_LOCKED_COLOR,
     AimHUD,
     EnergyHUD,
+    ObjectivesHUD,
     OrdnanceHUD,
     gauge_brightness,
     is_on_screen,
@@ -715,3 +721,111 @@ def test_balanced_power_brightens_no_gauge():
     energy = EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
     for system in (ENGINES, LASERS, SHIELDS):
         assert gauge_brightness(energy, system) == GAUGE_BRIGHTNESS
+
+
+# ---------------------------
+# Objectives HUD
+# ---------------------------
+
+
+def make_objectives_hud() -> tuple[ObjectivesHUD, Mission, FakeClock]:
+    """An objectives HUD on a real mission, its clock driven by the test."""
+    clock = FakeClock()
+    game = SimpleNamespace(game_time=clock)
+    mission = Mission(game)
+    game.mission = mission
+    return ObjectivesHUD(game=game, parent_node=NodePath("corner")), mission, clock
+
+
+def visible_lines(objectives_hud: ObjectivesHUD) -> list:
+    return [line for line in objectives_hud.lines if not line.root.isHidden()]
+
+
+def test_objectives_hud_is_hidden_without_objectives():
+    objectives_hud, _, _ = make_objectives_hud()
+
+    objectives_hud.update()
+
+    assert objectives_hud.root.isHidden()
+
+
+def test_objectives_hud_lists_the_objectives_in_order():
+    objectives_hud, mission, _ = make_objectives_hud()
+    mission.objective("Reach the nav point")
+    mission.objective("Destroy the TIEs", progress=lambda: 2, goal=4)
+
+    objectives_hud.update()
+
+    assert not objectives_hud.root.isHidden()
+    assert [line.text.node().getText() for line in visible_lines(objectives_hud)] == [
+        "Reach the nav point",
+        "Destroy the TIEs (2/4)",
+    ]
+
+
+@pytest.mark.parametrize(
+    "settle, state, tick, cross",
+    [
+        (None, "active", False, False),
+        ("complete", "complete", True, False),
+        ("fail", "failed", False, True),
+    ],
+)
+def test_objective_checkbox_shows_its_state(settle, state, tick, cross):
+    objectives_hud, mission, _ = make_objectives_hud()
+    objective = mission.objective("Scan the convoy")
+    if settle is not None:
+        getattr(objective, settle)()
+
+    objectives_hud.update()
+
+    line = objectives_hud.lines[0]
+    assert line.tick.isHidden() is not tick
+    assert line.cross.isHidden() is not cross
+    assert tuple(line.root.getColorScale()) == pytest.approx(
+        OBJECTIVE_COLORS[state], abs=1e-3
+    )
+
+
+def test_a_removed_objective_hides_its_line():
+    objectives_hud, mission, _ = make_objectives_hud()
+    first = mission.objective("First")
+    mission.objective("Second")
+    objectives_hud.update()
+
+    first.remove()
+    objectives_hud.update()
+
+    assert [line.text.node().getText() for line in visible_lines(objectives_hud)] == [
+        "Second"
+    ]
+
+
+def test_a_changed_objective_blinks_then_holds_steady():
+    objectives_hud, mission, clock = make_objectives_hud()
+    objective = mission.objective("Scan the convoy")
+    clock.time_s = 10.0
+    objective.complete()
+    line = objectives_hud.lines
+
+    clock.time_s = 10.0 + 1.5 * OBJECTIVE_FLASH_PERIOD_S
+    objectives_hud.update()
+    assert line[0].root.getColorScale()[3] == pytest.approx(
+        OBJECTIVE_FLASH_DIM_ALPHA, abs=1e-3
+    )
+
+    clock.time_s = 10.0 + OBJECTIVE_FLASH_S
+    objectives_hud.update()
+    assert line[0].root.getColorScale()[3] == pytest.approx(1.0)
+
+
+def test_objectives_hud_cleans_up():
+    objectives_hud, mission, _ = make_objectives_hud()
+    mission.objective("Reach the nav point")
+    objectives_hud.update()
+    corner = objectives_hud.root.getParent()
+
+    objectives_hud.clean()
+
+    assert corner.getNumChildren() == 0
+    assert objectives_hud.game is None

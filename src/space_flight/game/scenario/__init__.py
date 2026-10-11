@@ -7,6 +7,7 @@ Scanning lives in :mod:`space_flight.actors.scan`.
 """
 
 from space_flight.game.scenario.mission import Mission, Trigger
+from space_flight.game.scenario.objectives import Objective
 from space_flight.game.scenario.wave import WaveHandle, WaveSpec
 
-__all__ = ["Mission", "Trigger", "WaveHandle", "WaveSpec"]
+__all__ = ["Mission", "Objective", "Trigger", "WaveHandle", "WaveSpec"]

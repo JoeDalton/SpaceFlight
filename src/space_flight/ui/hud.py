@@ -9,6 +9,7 @@ from direct.showbase.ShowBaseGlobal import aspect2d, render2d
 from panda3d.core import (
     CardMaker,
     Lens,
+    LineSegs,
     NodePath,
     Point2,
     Point3,
@@ -21,8 +22,10 @@ from panda3d.core import (
 from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
 from space_flight.ai.missile.incoming_missile import nearest_incoming
+from space_flight.game.scenario.objectives import ACTIVE, COMPLETE, FAILED
 from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.ui.utils import (
+    TEXT_CENTER_OFFSET,
     ArcGauge,
     ColumnGauge,
     RollingDrum,
@@ -55,6 +58,25 @@ FLARE_LINE_Z = 0.08
 
 # Chatter text height: at the top of the screen, above the rear-view mirror
 CHATTER_Z = 0.88
+
+# Objectives checklist (see ObjectivesHUD), in the top-left corner's
+# coordinates: one line per objective, its checkbox on the left. Lower with
+# the debug text, which takes that corner.
+OBJECTIVES_LEFT_X = 0.06
+OBJECTIVES_TOP_Z = -0.9 if DEBUG_HUD else -0.08
+OBJECTIVES_TEXT_SCALE = 0.045
+OBJECTIVES_LINE_SPACING = 0.06
+OBJECTIVE_BOX_HALF_SIZE = 0.014
+OBJECTIVE_TEXT_X = 0.04
+OBJECTIVE_COLORS = {
+    ACTIVE: (1.0, 1.0, 1.0, 1.0),
+    COMPLETE: (0.45, 1.0, 0.45, 1.0),
+    FAILED: (1.0, 0.35, 0.3, 1.0),
+}
+# A line blinks for a while once added, ticked or failed
+OBJECTIVE_FLASH_S = 1.5
+OBJECTIVE_FLASH_PERIOD_S = 0.25
+OBJECTIVE_FLASH_DIM_ALPHA = 0.3
 
 # Energy HUD (see EnergyHUD), in the bottom-left corner's coordinates: the HP,
 # laser, engine and shield gauges, left to right
@@ -266,6 +288,11 @@ class HUD:
             game=self.game, parent_node=self.game.app.a2dBottomLeft
         )
 
+        # The mission's objectives checklist
+        self.objectives_hud = ObjectivesHUD(
+            game=self.game, parent_node=self.game.app.a2dTopLeft
+        )
+
         # Wrap long lines before they run off the edges of the screen.
         text_wrap_width = 3.5 * EDGE_HORIZONTAL / self.events_textNodePath.getScale()[0]
         self.events.setWordwrap(text_wrap_width)
@@ -281,6 +308,7 @@ class HUD:
         self.update_debug_hud()
         self.ordnance_hud.update()
         self.energy_hud.update()
+        self.objectives_hud.update()
         self.clear_scenario_hud()
 
     def set_event_text(self, text: str, display_time_s: float = 2.5) -> None:
@@ -409,6 +437,8 @@ class HUD:
         self.ordnance_hud = None
         self.energy_hud.clean()
         self.energy_hud = None
+        self.objectives_hud.clean()
+        self.objectives_hud = None
         self.game = None
 
 
@@ -480,6 +510,143 @@ class OrdnanceHUD:
         self.root.removeNode()
         self.root = None
         self.flare_line = None
+        self.game = None
+
+
+def make_checkbox_mark(parent_node: NodePath, name: str, points: list) -> NodePath:
+    """
+    A checkbox stroke: line strips in the box's coordinates (its half size 1).
+
+    :param parent_node: The checkbox's node
+    :param name: The stroke's node name
+    :param points: The strips, each a list of (x, z) points
+    :return: The stroke's node path
+    """
+    segs = LineSegs(name)
+    segs.setThickness(2.0)
+    for strip in points:
+        segs.moveTo(strip[0][0], 0, strip[0][1])
+        for x, z in strip[1:]:
+            segs.drawTo(x, 0, z)
+    return parent_node.attachNewNode(segs.create())
+
+
+class ObjectiveLine:
+    """
+    One line of the objectives checklist: a checkbox (empty, ticked or
+    crossed) and the objective's text on its right.
+
+    :param parent_node: The checklist's node
+    :param number: The line's number, top to bottom
+    """
+
+    def __init__(self, parent_node: NodePath, number: int) -> None:
+        self.root = parent_node.attachNewNode(f"objective{number}")
+        self.root.setZ(-number * OBJECTIVES_LINE_SPACING)
+        self.root.setTransparency(TransparencyAttrib.MAlpha)
+
+        self.box = self.root.attachNewNode("checkbox")
+        self.box.setScale(OBJECTIVE_BOX_HALF_SIZE)
+        self.box.setPos(
+            OBJECTIVE_BOX_HALF_SIZE, 0, TEXT_CENTER_OFFSET * OBJECTIVES_TEXT_SCALE
+        )
+        make_checkbox_mark(
+            self.box, "frame", [[(-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1)]]
+        )
+        self.tick = make_checkbox_mark(
+            self.box, "tick", [[(-0.6, 0.0), (-0.15, -0.55), (0.65, 0.6)]]
+        )
+        self.cross = make_checkbox_mark(
+            self.box, "cross", [[(-0.6, -0.6), (0.6, 0.6)], [(-0.6, 0.6), (0.6, -0.6)]]
+        )
+
+        self.text = make_text_line(self.root, "text", align=TextNode.ALeft)
+        self.text.setPos(OBJECTIVE_TEXT_X, 0, 0)
+        self.text.setScale(OBJECTIVES_TEXT_SCALE)
+
+        self.state = None
+
+    def show(self, label: str, state: str, alpha: float) -> None:
+        """
+        :param label: The objective's text
+        :param state: ACTIVE, COMPLETE or FAILED
+        :param alpha: The line's opacity (it blinks after a change)
+        """
+        if self.text.node().getText() != label:
+            self.text.node().setText(label)
+        if state != self.state:
+            self.state = state
+            self.root.setColorScale(*OBJECTIVE_COLORS[state])
+            for mark, shown in ((self.tick, COMPLETE), (self.cross, FAILED)):
+                if state == shown:
+                    mark.show()
+                else:
+                    mark.hide()
+        self.root.setAlphaScale(alpha)
+        self.root.show()
+
+
+class ObjectivesHUD:
+    """
+    The mission's objectives, top left: a checklist read from
+    ``game.mission.objectives``, a line per objective, ticked when complete,
+    crossed when failed. A line blinks for a moment when it is added or
+    settled. Hidden while the mission has no objectives.
+    """
+
+    def __init__(self, game: FlightState, parent_node: NodePath) -> None:
+        """
+        :param game: The flight state
+        :param parent_node: The node the checklist is anchored to (top-left
+            corner of the screen)
+        """
+        self.game = game
+        self.root = parent_node.attachNewNode("objectivesHud")
+        self.root.setPos(OBJECTIVES_LEFT_X, 0, OBJECTIVES_TOP_Z)
+        self.lines: list[ObjectiveLine] = []
+        self.root.hide()
+
+    def update(self) -> None:
+        """
+        Refresh the lines from the mission's objectives.
+        """
+        objectives = self.game.mission.objectives
+        if not objectives:
+            self.root.hide()
+            return
+        self.root.show()
+
+        now = self.game.game_time.get_current_time()
+        for number, objective in enumerate(objectives):
+            while len(self.lines) <= number:
+                self.lines.append(ObjectiveLine(self.root, len(self.lines)))
+            self.lines[number].show(
+                objective.label(),
+                objective.state,
+                self.flash_alpha(now - objective.changed_at_s),
+            )
+        for line in self.lines[len(objectives) :]:
+            line.root.hide()
+
+    @staticmethod
+    def flash_alpha(since_change_s: float) -> float:
+        """
+        :param since_change_s: Time since the objective last changed
+        :return: Its line's opacity: blinking for a while, then steady
+        """
+        if since_change_s >= OBJECTIVE_FLASH_S:
+            return 1.0
+        if int(since_change_s / OBJECTIVE_FLASH_PERIOD_S) % 2:
+            return OBJECTIVE_FLASH_DIM_ALPHA
+        return 1.0
+
+    def clean(self) -> None:
+        """
+        Cleans the ObjectivesHUD object
+        """
+        self.root.removeNode()
+        self.root = None
+        self.lines = []
         self.game = None
 
 
