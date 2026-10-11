@@ -451,7 +451,10 @@ def mission2_mission(m: Mission) -> Iterator[None]:
             "It's spinning up its hyperdrive! Hurry, Three!", speaker="Blue Leader"
         ),
     )
-    jumped = near(smuggler, jump_point, JUMP_POINT_RADIUS_M)
+    # At its jump point, the gun-runner spools up its hyperdrive and jumps
+    # out: Blue Three's last chance
+    m.on(near(smuggler, jump_point, JUMP_POINT_RADIUS_M), smuggler.jump_out)
+    jumped = smuggler.any_jumped_out
     lose_later(
         jumped,
         "Blue Two",

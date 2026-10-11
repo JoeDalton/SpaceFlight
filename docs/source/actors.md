@@ -273,6 +273,13 @@ generic "has health, dies, gets cleaned up" contract, independent of the
   spin out of control for a few seconds — still collidable — before it
   explodes and is removed. Objects already cleaned out-of-band (e.g. a turret
   pawn whose `Bot` cleaned it first) are skipped.
+- An object can also leave **without a death**: `Destructibles.depart(obj)`
+  takes it out of the living at once and tears it down (tasks cleared, then
+  `clean`, with no `finish_death` and no kill) at the start of the next
+  frame's pass, so none of its tasks still due this frame runs on a cleaned
+  object. `Bot.depart()` uses it for a ship jumping out to hyperspace (see
+  [scenario scripting](scenario_scripting.md#hyperspace)), with everything
+  mounted on it, and records the pawn's id in `game.departed_ids`.
 
 The dying-phase *timer* is **`DyingPhase`** in
 [`utils/state_machine.py`](../../src/space_flight/utils/state_machine.py):

@@ -12,6 +12,7 @@ from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.hyperspace import (
+    JUMP_SPOOL_S,
     TRANSIT_DISTANCE_M,
     TRANSIT_DURATION_S,
     HyperspaceTransit,
@@ -191,9 +192,13 @@ class Bot(Destructible):
         self._next_think_s = -math.inf
         self._commands = None
 
-        # The ship's hyperspace transit while it drops in (see
-        # begin_hyperspace_arrival), None otherwise
+        # The ship's hyperspace transit while it drops in or jumps out (see
+        # begin_hyperspace_arrival and jump_out), None otherwise
         self.hyperspace_transit = None
+        # When a ship spooling up its hyperdrive jumps out (see jump_out)
+        self._jump_at_s = None
+        # Whether the ship left the level alive (see depart)
+        self.has_departed = False
 
         self.add_task(method=self.move_bot_task)
 
@@ -222,10 +227,20 @@ class Bot(Destructible):
             if hasattr(self.pawn, "tumble_step"):
                 self.pawn.tumble_step(elapsed_s=self.death_elapsed_s())
             return
+        # Gone, waiting to be torn down (see depart)
+        if self.has_departed:
+            return
         # While in a hyperspace transit, the AI waits and the ship is held
         if self.hyperspace_transit is not None:
             if self.hyperspace_transit.step():
-                self._end_hyperspace_arrival()
+                if self.hyperspace_transit.arriving:
+                    self._end_hyperspace_arrival()
+                else:
+                    self.depart()
+            return
+        # Spooling up the hyperdrive: fly straight until the jump
+        if self._jump_at_s is not None:
+            self._spool_hyperdrive()
             return
         if self.bot_type == "fighter" or self.bot_type == "major_ship":
             if self.tactician is not None:
@@ -281,8 +296,8 @@ class Bot(Destructible):
     def begin_hyperspace_arrival(self, delay_s: float = 0.0):
         """
         Drop the ship in from hyperspace: drawn from far behind, it rushes along
-        its heading and snaps to a stop at its current pose, where the AI then
-        takes over. Until then, it collides with nothing and interacts with
+        its heading and brakes hard onto its current pose and velocity, where the
+        AI then takes over. Until then, it collides with nothing and interacts with
         nobody (see HyperspaceTransit).
 
         :param delay_s: Time to wait, hidden, before the drop starts
@@ -302,6 +317,110 @@ class Bot(Destructible):
         self.hyperspace_transit.end()
         self.hyperspace_transit = None
         self._next_think_s = -math.inf
+
+    def jump_out(self, spool_s: float = JUMP_SPOOL_S):
+        """
+        Leave the level through hyperspace, alive.
+
+        The AI is silenced and the ship flies straight on, spooling up its
+        hyperdrive for spool_s: it can still be shot (and destroyed) meanwhile.
+        Then it jumps (see HyperspaceTransit): it speeds up from its own speed
+        and streaks away, colliding with nothing and interacting with nobody,
+        and finally departs (see :meth:`depart`).
+
+        A no-op for a dying ship, a ship already jumping out, or a mounted bot
+        (a turret leaves with its ship). A ship still dropping in lands at once.
+
+        :param spool_s: How long the ship spools up before it jumps
+        """
+        if self.bot_type not in TRANSIT_DISTANCE_M:
+            return
+        if self.is_dying or self.has_departed or self._jump_at_s is not None:
+            return
+        if self.hyperspace_transit is not None:
+            if not self.hyperspace_transit.arriving:
+                return
+            self._end_hyperspace_arrival()
+        # The AI is silenced: the ship no longer thinks
+        self._release_think_slot()
+        sensor = getattr(self.navigator, "collision_sensor", None)
+        if sensor is not None:
+            sensor.set_active(False)
+        self._jump_at_s = self.game.game_time.get_current_time() + spool_s
+
+    def _spool_hyperdrive(self):
+        """
+        Fly straight on at the last throttle while the hyperdrive spools up,
+        then jump: nothing can lock onto the ship anymore.
+        """
+        if self.game.game_time.get_current_time() < self._jump_at_s:
+            throttle = self._commands[0] if self._commands is not None else 1.0
+            self.pawn.move(
+                throttle=throttle, yaw_rate=0.0, pitch_rate=0.0, roll_rate=0.0
+            )
+            return
+        self._jump_at_s = None
+        self._drop_as_players_target(self.pawn)
+        for actor in self._mounted_actors():
+            # A turret or tractor beam bot is targeted through its pawn
+            self._drop_as_players_target(getattr(actor, "pawn", actor))
+        self.hyperspace_transit = HyperspaceTransit(
+            ship=self.pawn,
+            arriving=False,
+            distance_m=TRANSIT_DISTANCE_M[self.bot_type],
+            duration_s=TRANSIT_DURATION_S[self.bot_type],
+            clock=self.game.game_time.get_current_time,
+        )
+        self.hyperspace_transit.begin()
+        self.hyperspace_transit.step()
+
+    def depart(self):
+        """
+        Leave the level for good, alive: no explosion and no kill.
+
+        The pawn is hidden and out of the interacting actors at once, its id
+        recorded in game.departed_ids (so waves tell an escape from a kill).
+        The bot and everything mounted on its ship (subsystems, shield, turret
+        bots) are then torn down by Destructibles.depart, without a death.
+        """
+        if self.has_departed:
+            return
+        self.has_departed = True
+        self.hyperspace_transit = None
+        self._jump_at_s = None
+        self.pawn.node.hide()
+        self.game.departed_ids.add(self.pawn.id)
+        self._drop_as_players_target(self.pawn)
+        try:
+            self.game.interactions.remove_actor(self.pawn)
+        except (KeyError, AttributeError):
+            pass
+        # Mounted parts first: they are bolted onto the ship's node
+        for destructible in [*self._mounted_actors(), self]:
+            self.game.destructibles.depart(destructible)
+
+    def _mounted_actors(self) -> list:
+        """
+        Every live Destructible mounted on the bot's ship: its subsystems and
+        shield, and the bots of its turrets and tractor beams (with their pawns).
+        """
+        pawn = self.pawn
+
+        def is_mounted(destructible) -> bool:
+            if getattr(destructible, "mounted_on", None) is pawn:
+                return True
+            mounted_pawn = getattr(destructible, "pawn", None)
+            return getattr(mounted_pawn, "mounted_on", None) is pawn
+
+        return [d for d in self.game.destructibles.alive_objects if is_mounted(d)]
+
+    def _drop_as_players_target(self, actor):
+        """Clear the player's target if it is actor."""
+        try:
+            self.game.player.remove_target(target_to_remove=actor)
+        except AttributeError:
+            # The player may be gone (level cleanup)
+            pass
 
     def _think_is_due(self) -> bool:
         """

@@ -11,12 +11,14 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from mission_fakes import FakeGame, patch_engine
+from mission_fakes import FakeGame, depart_all, patch_engine
 from panda3d.core import BitMask32, CollisionNode, CollisionSphere, NodePath
 
 from space_flight.actors.bot import Bot
+from space_flight.actors.destructibles import Destructible, Destructibles
 from space_flight.actors.hyperspace import (
     ARRIVAL_STAGGER_S,
+    JUMP_SPOOL_S,
     TRANSIT_DISTANCE_M,
     TRANSIT_DURATION_S,
     HyperspaceTransit,
@@ -353,6 +355,8 @@ def make_bot(bot_type="fighter"):
     bot._dying = DyingPhase(clock=lambda: 0.0)
     bot._next_think_s = 5.0
     bot.hyperspace_transit = None
+    bot._jump_at_s = None
+    bot.has_departed = False
     return bot
 
 
@@ -467,3 +471,234 @@ def test_a_dropping_wave_is_alive(mission, spawned):
 
     assert wave.alive()
     assert not wave.all_destroyed()
+
+
+# ---------------------------------------------------------------------------
+# Jumping out
+# ---------------------------------------------------------------------------
+
+
+class Part(Destructible):
+    """A destructible standing for a ship, a subsystem or a mounted bot."""
+
+    def __init__(self, game, mounted_on=None):
+        super().__init__(game)
+        self.mounted_on = mounted_on
+        self.is_clean = False
+        self.played_death = False
+
+    def clean(self):
+        self.is_clean = True
+
+    def get_health(self):
+        return 100.0
+
+    def play_death(self):
+        self.played_death = True
+
+
+@pytest.fixture
+def parts_game():
+    game = MagicMock()
+    game.destructibles = Destructibles(on_death=MagicMock())
+    game.method_lists = {}
+    return game
+
+
+def test_a_departed_object_is_torn_down_next_frame_without_a_death(parts_game):
+    part = Part(parts_game)
+    part.add_task(lambda: None)
+
+    parts_game.destructibles.depart(part)
+    assert part not in parts_game.destructibles.alive_objects
+    assert not part.is_clean  # its tasks may still be due this frame
+
+    parts_game.destructibles.handle_deaths()
+    assert part.is_clean
+    assert part.id not in parts_game.method_lists
+    assert not part.played_death
+    parts_game.destructibles.on_death.assert_not_called()
+    assert parts_game.destructibles.departing_objects == []
+
+
+def test_an_already_clean_departed_object_only_drops_its_tasks(parts_game):
+    """A turret pawn, cleaned by its Bot before the teardown reaches it."""
+    part = Part(parts_game)
+    part.add_task(lambda: None)
+    part.is_clean = True
+    part.clean = MagicMock()
+
+    parts_game.destructibles.depart(part)
+    parts_game.destructibles.handle_deaths()
+
+    part.clean.assert_not_called()
+    assert part.id not in parts_game.method_lists
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def make_jumping_bot(bot_type="fighter"):
+    bot = make_bot(bot_type)
+    bot.clock = Clock()
+    bot.game.game_time.get_current_time.side_effect = bot.clock
+    bot._think_slot = MagicMock()
+    bot.navigator = MagicMock()
+    bot._commands = (0.7, 0.3, -0.2, 0.1)
+    bot.game.departed_ids = set()
+    bot.game.destructibles.alive_objects = []
+    return bot
+
+
+def test_jump_out_silences_the_ai_and_flies_straight_while_spooling():
+    bot = make_jumping_bot()
+    slot = bot._think_slot
+
+    bot.jump_out(spool_s=2.0)
+    slot.scheduler.unregister.assert_called_once_with(slot)
+    bot.navigator.collision_sensor.set_active.assert_called_with(False)
+
+    bot.clock.t = 1.0
+    bot.move_bot_task()
+    bot.tactician.think.assert_not_called()
+    bot.pawn.move.assert_called_once_with(
+        throttle=0.7, yaw_rate=0.0, pitch_rate=0.0, roll_rate=0.0
+    )
+    assert bot.hyperspace_transit is None
+
+
+def test_after_the_spool_the_ship_jumps_then_departs(monkeypatch):
+    created = []
+
+    def fake_transit(**kwargs):
+        transit = MagicMock(arriving=kwargs["arriving"])
+        transit.step.return_value = False
+        created.append((kwargs, transit))
+        return transit
+
+    monkeypatch.setattr("space_flight.actors.bot.HyperspaceTransit", fake_transit)
+    bot = make_jumping_bot("major_ship")
+    turret_bot = SimpleNamespace(pawn=SimpleNamespace(mounted_on=bot.pawn))
+    generator = SimpleNamespace(mounted_on=bot.pawn)
+    stranger = SimpleNamespace(mounted_on=MagicMock())
+    bot.game.destructibles.alive_objects = [turret_bot, generator, stranger]
+
+    bot.jump_out()
+    bot.clock.t = JUMP_SPOOL_S
+    bot.move_bot_task()
+
+    kwargs, transit = created[0]
+    assert kwargs["arriving"] is False
+    assert kwargs["distance_m"] == TRANSIT_DISTANCE_M["major_ship"]
+    transit.begin.assert_called_once()
+    # Nothing can stay locked onto the ship or its parts
+    dropped = [
+        c.kwargs["target_to_remove"]
+        for c in bot.game.player.remove_target.call_args_list
+    ]
+    assert bot.pawn in dropped and turret_bot.pawn in dropped and generator in dropped
+
+    transit.step.return_value = True
+    bot.move_bot_task()
+    assert bot.has_departed
+    assert bot.hyperspace_transit is None
+    bot.pawn.node.hide.assert_called_once()
+    assert bot.pawn.id in bot.game.departed_ids
+    bot.game.interactions.remove_actor.assert_called_with(bot.pawn)
+    departed = [c.args[0] for c in bot.game.destructibles.depart.call_args_list]
+    assert departed == [turret_bot, generator, bot]
+
+    # Gone: nothing more happens until the teardown
+    bot.move_bot_task()
+    assert transit.step.call_count == 2
+
+
+def test_a_ship_still_dropping_in_lands_before_spooling():
+    bot = make_jumping_bot()
+    bot.hyperspace_transit = arrival = MagicMock(arriving=True)
+
+    bot.jump_out()
+
+    arrival.end.assert_called_once()
+    assert bot.hyperspace_transit is None
+    assert bot._jump_at_s == pytest.approx(JUMP_SPOOL_S)
+
+
+@pytest.mark.parametrize("case", ["dying", "turret", "twice"])
+def test_jump_out_is_a_no_op(case):
+    bot = make_jumping_bot("turret" if case == "turret" else "fighter")
+    if case == "dying":
+        bot._dying.begin()
+    if case == "twice":
+        bot.jump_out(spool_s=1.0)
+        bot.clock.t = 0.5
+    bot.jump_out(spool_s=5.0)
+    expected = 1.0 if case == "twice" else None
+    assert bot._jump_at_s == expected
+
+
+def test_depart_is_done_once():
+    bot = make_jumping_bot()
+    bot.depart()
+    bot.depart()
+    assert bot.game.destructibles.depart.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Waves and missions
+# ---------------------------------------------------------------------------
+
+
+def test_a_wave_jumps_out_its_live_members(mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+
+    wave.jump_out()
+    wave.jump_out(spool_s=0.5)
+
+    assert all(bot.jump_outs == [None, 0.5] for bot in spawned)
+
+
+def test_an_escape_is_not_a_kill(mission, spawned):
+    game = mission.game
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    pawns = wave.pawns()
+
+    depart_all(game, pawns[:1])
+    assert wave.any_jumped_out() and not wave.all_jumped_out()
+    assert wave.jumped_out_count() == 1
+    assert wave.destroyed_count() == 0 and not wave.any_destroyed()
+
+    game.interactions.kill(pawns[1])
+    assert wave.destroyed_count() == 1
+    depart_all(game, pawns[2:])
+    assert not wave.alive()
+    assert not wave.all_destroyed()
+    assert not wave.all_jumped_out()
+
+
+def test_a_wave_that_all_jumped_out(mission, spawned):
+    wave = mission.spawn(WAVE)
+    assert not wave.all_jumped_out()  # not spawned yet
+    run_jobs(mission)
+
+    depart_all(mission.game, wave.pawns())
+    assert wave.all_jumped_out()
+    assert not wave.all_destroyed()
+
+
+def test_mission_jump_out_skips_the_player(mission, spawned):
+    wave = mission.spawn(WAVE)
+    run_jobs(mission)
+    mission.game.player.jump_out = MagicMock()
+
+    mission.jump_out([wave, mission.game.player], spool_s=1.5)
+
+    assert all(bot.jump_outs == [1.5] for bot in spawned)
+    mission.game.player.jump_out.assert_not_called()

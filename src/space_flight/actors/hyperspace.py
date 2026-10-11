@@ -24,10 +24,13 @@ if TYPE_CHECKING:
 
 #: How sharply an arrival decelerates: the ship covers most of the distance
 #: in the first instants of the transit, then brakes hard to its own speed
-TRANSIT_SHARPNESS = 10.0
+TRANSIT_SHARPNESS = 15.0
 #: Distance (m) the transit covers and its duration (s), per bot type
 TRANSIT_DISTANCE_M = {"fighter": 4000.0, "major_ship": 15000.0}
 TRANSIT_DURATION_S = {"fighter": 0.5, "major_ship": 1.0}
+#: How long (s) a ship flies straight, spooling up its hyperdrive, before it
+#: jumps out
+JUMP_SPOOL_S = 2.0
 #: Up to this random delay (s) before each wave member drops in, so a
 #: formation does not land in lockstep
 ARRIVAL_STAGGER_S = 0.8

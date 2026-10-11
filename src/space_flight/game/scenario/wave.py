@@ -130,12 +130,15 @@ class WaveHandle:
 
     def all_destroyed(self) -> bool:
         """
-        The wave has spawned and every member is dead (False before spawn).
+        The wave has spawned and every member is dead (False before spawn, and
+        if any member jumped out instead).
 
         A launched wave reads True only once its launch is over (every fighter
         launched, or what was left cancelled), so never between two launches;
         then also if nothing could be launched.
         """
+        if self.jumped_out_count():
+            return False
         if self.launch_order is not None:
             return self.launch_order.done and not self.pawns()
         return bool(self.ids) and not self.pawns()
@@ -143,11 +146,26 @@ class WaveHandle:
     def any_destroyed(self) -> bool:
         """The wave has spawned and lost at least one member (stays True after a
         total wipe)."""
-        return bool(self.ids) and len(self.pawns()) < len(self.ids)
+        return self.destroyed_count() > 0
 
     def destroyed_count(self) -> int:
-        """How many members have died so far."""
-        return len(self.ids) - len(self.pawns())
+        """How many members have died so far (not counting those that jumped
+        out)."""
+        return len(self.ids) - len(self.pawns()) - self.jumped_out_count()
+
+    def jumped_out_count(self) -> int:
+        """How many members left the level through hyperspace so far."""
+        departed_ids = self.mission.game.departed_ids
+        return sum(1 for i in self.ids if i in departed_ids)
+
+    def any_jumped_out(self) -> bool:
+        """At least one member left the level through hyperspace."""
+        return self.jumped_out_count() > 0
+
+    def all_jumped_out(self) -> bool:
+        """The wave has spawned and every member left the level through
+        hyperspace (none was destroyed)."""
+        return bool(self.ids) and self.jumped_out_count() == len(self.ids)
 
     # ------------------------------------------------------------------
     # Spawning
@@ -282,6 +300,18 @@ class WaveHandle:
     # Mutating every live member
     # ------------------------------------------------------------------
 
+    def jump_out(self, spool_s: Optional[float] = None):
+        """
+        Every live member leaves the level through hyperspace (see
+        :meth:`Bot.jump_out`): it flies straight on for spool_s, still a
+        target, then jumps out.
+
+        :param spool_s: How long the ships spool up before they jump (the
+            default spool time if None)
+        """
+        for pawn in self.pawns():
+            _jump_out(pawn.parent, spool_s)
+
     def set_targets(self, who: Any):
         """Every live member attacks every live pawn of who."""
         for pawn in self.pawns():
@@ -347,6 +377,14 @@ def _add_targets(bot: Bot, who: Any):
     if bot.tactician is None:
         return
     bot.tactician.primary_target_ids.extend(pawn.id for pawn in pawns_of(who))
+
+
+def _jump_out(bot: Bot, spool_s: Optional[float]):
+    """Make bot jump out, with its default spool time if spool_s is None."""
+    if spool_s is None:
+        bot.jump_out()
+    else:
+        bot.jump_out(spool_s=spool_s)
 
 
 def _wave_offset(offsets: Optional[list[np.ndarray]], i: int, size: int) -> np.ndarray:
