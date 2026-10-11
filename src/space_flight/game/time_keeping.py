@@ -184,16 +184,18 @@ class DelayedMethodManager:
         """
         if not self.game.is_paused:
             dt = self.game.game_time.get_time_step()
-            methods_to_pop = []
-            for name in self.methods_to_run_dict.keys():
-                self.methods_to_run_dict[name]["delay_s"] -= dt
-                if self.methods_to_run_dict[name]["delay_s"] <= 0.0:
-                    methods_to_pop.append(name)
-                    method = self.methods_to_run_dict[name]["method"]
-                    extra_args = self.methods_to_run_dict[name]["extra_args"]
-                    method(*extra_args)
-            for name in methods_to_pop:
-                self.methods_to_run_dict.pop(name)
+            due = []
+            for name, entry in self.methods_to_run_dict.items():
+                entry["delay_s"] -= dt
+                if entry["delay_s"] <= 0.0:
+                    due.append(name)
+            # Unregister before calling: a callback may schedule new methods or
+            # clean this manager, neither of which may happen mid-iteration
+            due_entries = [self.methods_to_run_dict.pop(name) for name in due]
+            for entry in due_entries:
+                entry["method"](*entry["extra_args"])
+                if self.methods_to_run_dict is None:
+                    break
 
     def clean(self):
         """

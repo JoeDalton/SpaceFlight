@@ -497,14 +497,12 @@ def test_clean_sets_game_to_none():
     assert target_lock.game is None
 
 
-def test_clean_sets_ship_to_none():
+def test_clean_releases_parent():
     """
-    clean() must release the 'ship' reference (the attribute written by
-    clean(), not 'parent').
+    clean() must release the 'parent' reference (the ship it aims for).
     """
     auto_aim = make_auto_aim()
-    auto_aim.ship = MagicMock()
 
     auto_aim.clean()
 
-    assert auto_aim.ship is None
+    assert auto_aim.parent is None

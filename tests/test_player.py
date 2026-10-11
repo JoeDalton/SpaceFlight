@@ -413,6 +413,26 @@ def test_loop_target_keeps_current_target_selected_on_repeated_calls_with_one_ta
     assert player.pawn.target.name == "only"
 
 
+def test_loop_target_with_no_target_left_clears_the_target_id():
+    """When the last target is gone, looping clears target_id too (as
+    point_target does), so nothing keeps tracking the lost target."""
+    interactions = Interactions()
+    pawn = MockTargetableActor("player")
+    actor_a = MockTargetableActor("a")
+    interactions.add_actor(pawn)
+    interactions.add_actor(actor_a)
+    player = make_player_for_loop_target(pawn=pawn, interactions=interactions)
+    player.loop_target(increment=1)
+    assert pawn.target_id == actor_a.id
+
+    interactions.remove_actor(actor_a)
+    player.loop_target(increment=1)
+
+    assert pawn.target is None
+    assert pawn.target_id is None
+    assert pawn.target_idx is None
+
+
 @pytest.mark.parametrize("select", ["loop_target", "point_target"])
 def test_player_never_targets_itself_after_a_slot_gap(select):
     """

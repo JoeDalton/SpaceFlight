@@ -99,6 +99,17 @@ def test_navigate_intent_idle_returns_no_direction():
     assert result_speed == pytest.approx(no_dir_speed)
 
 
+def test_navigate_intent_unknown_intent_raises():
+    """
+    An intent the navigator does not handle must raise, not return the
+    ValueError as if it were a (direction, speed) result.
+    """
+    nav = make_major_ship_navigator()
+
+    with pytest.raises(ValueError, match="Unknown intent"):
+        nav.navigate_intent(intent=Intent.DEFEND_MISSILE, target_dict={})
+
+
 # ---------------------------------------------------------------------------
 # engage_target / orbit
 # ---------------------------------------------------------------------------

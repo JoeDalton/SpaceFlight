@@ -362,6 +362,7 @@ class Player:
         # Case of no available targets
         if np.sum(self.target_mask) == 0:
             self.pawn.target = None
+            self.pawn.target_id = None
             self.pawn.target_idx = None
             return
 

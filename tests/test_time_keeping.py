@@ -163,6 +163,31 @@ def test_update_multiple_methods_fire_in_same_frame(manager):
     assert len(manager.methods_to_run_dict) == 0
 
 
+def test_update_callback_may_schedule_another_method(manager):
+    """A fired callback scheduling a new delayed call must not break iteration;
+    the new call waits for the next update."""
+    follow_up = MagicMock()
+    manager.do_method_later(
+        0.05, "first", lambda: manager.do_method_later(0.05, "next", follow_up)
+    )
+    manager.update()
+    follow_up.assert_not_called()
+    assert len(manager.methods_to_run_dict) == 1
+    manager.update()
+    follow_up.assert_called_once()
+
+
+def test_update_callback_may_clean_the_manager(manager):
+    """A fired callback that cleans the manager (e.g. leaving the level) stops
+    the batch instead of crashing on the dropped dict."""
+    later = MagicMock()
+    manager.do_method_later(0.05, "end", manager.clean)
+    manager.do_method_later(0.05, "later", later)
+    manager.update()
+    assert manager.methods_to_run_dict is None
+    later.assert_not_called()
+
+
 # ---------------------------
 # clean
 # ---------------------------

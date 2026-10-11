@@ -7,7 +7,13 @@ import numpy as np
 
 from space_flight import RECORD_GAME
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, AttackMode, Intent, Personality
+from space_flight.ai import (
+    DIRECTION_NORM_TOLERANCE,
+    TARGET_DISTANCE_TOLERANCE_M,
+    AttackMode,
+    Intent,
+    Personality,
+)
 from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
@@ -84,7 +90,7 @@ class FighterNavigator(GenericShipNavigator):
             self.engage_phase = ""
             return self.formation(target_dict)
         else:
-            return ValueError(f"Unknown intent: {intent}")
+            raise ValueError(f"Unknown intent: {intent}")
 
         # %% ==== ENGAGE ====
 
@@ -269,7 +275,7 @@ class FighterNavigator(GenericShipNavigator):
             * lag_weight
         )
         aim_vector_norm = magnitude(aim_vector)
-        if aim_vector_norm < TARGET_DISTANCE_TOLERANCE_M:
+        if aim_vector_norm < DIRECTION_NORM_TOLERANCE:
             aim_vector = np.zeros(3)
         else:
             aim_vector /= aim_vector_norm
