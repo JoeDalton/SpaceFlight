@@ -120,6 +120,7 @@ unknown field raises `TypeError`; a missing `size` for a single model, or a
 | `record` | `False` | Step-by-step-record every bot of the wave |
 | `hyperspace` | `True` | Whether the ships drop in from hyperspace (see [Hyperspace](#hyperspace)); `False` for ships already on stage when the level starts |
 | `spawn_speed_mps` | `50` | Initial speed, along the spawn heading; a hyperspace drop lands at this speed |
+| `loadouts` | `{}` | Fighters' weapons by ship model, e.g. `{"x-wing": ION_X_WING}` (see [loadouts](actors.md#loadouts)); models missing keep their default loadout |
 
 Turrets and tractor beams are not waves: they are spawned from their host
 capital ship's config (see [docs/subsystems.md](subsystems.md)).
@@ -238,9 +239,10 @@ def my_mission(m: Mission) -> Iterator[None]:
 ```
 
 `m.launch(hangar, fighter_type, count=None, target=None, name=None,
-formation="arrowhead", formation_scale_m=Formation.FIGHTER_SCALE_M)` returns a
-`WaveHandle` of the launched fighters (its spec: `fighter_type`, `count`, the
-hangar's team, the formation; named `<hangar>_<type>` by default):
+formation="arrowhead", formation_scale_m=Formation.FIGHTER_SCALE_M,
+loadout=None)` returns a `WaveHandle` of the launched fighters (its spec:
+`fighter_type`, `count`, the hangar's team, the formation, the loadout; named
+`<hangar>_<type>` by default):
 
 - `count` fighters of `fighter_type` (the hangar's group size by default)
   leave the bay one at a time, as long as that type's stock lasts, and join
@@ -252,6 +254,8 @@ hangar's team, the formation; named `<hangar>_<type>` by default):
   wave's `formation` is theirs.
 - `target=` works as for `spawn()`: it is resolved as each fighter launches,
   so fighters leaving the bay later attack whatever is alive then.
+- `loadout=` arms the fighters otherwise than their default (see
+  [loadouts](actors.md#loadouts)).
 - `all_destroyed()` only reads true once the launch is over (every fighter
   launched, or what was left cancelled), so never between two launches; it
   is true at once if nothing could be launched. The wave's `launch_order` is
@@ -264,7 +268,8 @@ hangar's team, the formation; named `<hangar>_<type>` by default):
   what is left to launch.
 
 At a lower level, `hangar.launch(fighter_type, count=None, on_launched=None,
-primary_target_ids=(), formation="arrowhead", formation_scale_m=...)` queues
+primary_target_ids=(), formation="arrowhead", formation_scale_m=...,
+loadout=None)` queues
 the same request and returns its `LaunchOrder`
 (the launched pawn `ids`, `done`, `cancelled`): `m.launch` wraps it
 (`WaveHandle.launch_from(hangar, target)`).

@@ -75,6 +75,10 @@
   - ```{autodoc2-docstring} space_flight.fx.spark_fx.ICE
     :summary:
     ```
+* - {py:obj}`ION <space_flight.fx.spark_fx.ION>`
+  - ```{autodoc2-docstring} space_flight.fx.spark_fx.ION
+    :summary:
+    ```
 * - {py:obj}`MAGIC <space_flight.fx.spark_fx.MAGIC>`
   - ```{autodoc2-docstring} space_flight.fx.spark_fx.MAGIC
     :summary:
@@ -266,6 +270,16 @@
    'SparkPreset(...)'
 
 ```{autodoc2-docstring} space_flight.fx.spark_fx.ICE
+```
+
+````
+
+````{py:data} ION
+:canonical: space_flight.fx.spark_fx.ION
+:value: >
+   'SparkPreset(...)'
+
+```{autodoc2-docstring} space_flight.fx.spark_fx.ION
 ```
 
 ````

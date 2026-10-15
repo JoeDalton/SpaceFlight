@@ -17,6 +17,7 @@ from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.generic.generic_ship_navigator import NO_DIRECTION
 from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.utils.state_machine import StateMachine
+from space_flight.weapons import ION, PHYSICAL
 
 
 class _Clock:
@@ -1023,6 +1024,35 @@ def test_guns_hold_fire_once_the_decision_no_longer_applies(change):
     nav.update_triggers(intent, target_dict)
 
     nav.pawn.laser_cannon.fire.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "lasers, gauges, fires",
+    [(PHYSICAL, 0.0, True), (ION, 0.5, True), (ION, 0.0, False)],
+)
+def test_ion_guns_hold_fire_on_a_drained_target(lasers, gauges, fires):
+    """
+    Ion lasers are wasted on a target ion hits no longer affect (a fighter
+    with every gauge empty): they hold their fire. Physical ones fire anyway.
+    """
+    nav = make_fighter_navigator()
+    target_dict = _held_on_target(nav)
+    nav.pawn.laser_cannon.damage_type = lasers
+    prey = SimpleNamespace(
+        category="fighter",
+        shield_level=gauges,
+        energy=SimpleNamespace(engines=gauges, lasers=gauges),
+    )
+    nav.game.interactions.get_actor_index_from_id.return_value = 0
+    nav.game.interactions.actors = [prey]
+
+    nav._arm_trigger(
+        target_dict,
+        weapon="guns",
+        min_cos_angle=nav.personality["navigator"]["fire"]["minimum_cos_angle"],
+    )
+
+    assert nav.pawn.laser_cannon.fire.called is fires
 
 
 def test_bomb_released_between_thinks_once_the_solution_is_met():

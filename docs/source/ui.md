@@ -180,7 +180,9 @@ missile as the pause menu resumes the flight. Concrete contexts:
   `EnergyHUD` shows the player's gauges, left to right, all half-rings
   outlined in black: HP (pink, health at its centre), shields (blue, shield
   strength at its centre, absent on unshielded ships), engines (green, speed
-  at its centre) and lasers (red, laser charge at its centre). The gauge
+  at its centre, or `OFFLINE` while the engines are dead, see
+  [energy management](actors.md#energy-management)) and lasers (red, laser
+  charge at its centre). The gauge
   of the system power is redirected to is bigger, brighter and outlined in
   white. Its layout, colours, brightness and scale are module constants.
 - **`AimHUD`** — the aiming cues, placed each frame by projecting world
@@ -213,7 +215,9 @@ missile as the pause menu resumes the flight. Concrete contexts:
     while scanning, then green (clear) or red (contraband) — and its status
     ("SCANNING 42%", "CLEAR", "CONTRABAND") is appended to the name. Only
     that attribute is read, so any pawn a mission makes scannable gets the
-    bar.
+    bar. Otherwise, a subsystem disabled by ion hits (`is_disabled`, see
+    [subsystems.md](subsystems.md#ion-hits-disabling-subsystems)) gets
+    "DISABLED" appended.
   - an **incoming missile warning**, while guided missiles home on the player
     (`nearest_incoming`, see [docs/ai.md](ai.md#guided-missiles-a-navigator-and-a-pilot-no-tactician)):
     a red line below the screen centre with the nearest missile's distance (and

@@ -63,6 +63,10 @@ space_flight.ai.target_lock
   - ```{autodoc2-docstring} space_flight.ai.TARGET_DISTANCE_TOLERANCE_M
     :summary:
     ```
+* - {py:obj}`DIRECTION_NORM_TOLERANCE <space_flight.ai.DIRECTION_NORM_TOLERANCE>`
+  - ```{autodoc2-docstring} space_flight.ai.DIRECTION_NORM_TOLERANCE
+    :summary:
+    ```
 * - {py:obj}`INTERACT_MAX_DISTANCE_M <space_flight.ai.INTERACT_MAX_DISTANCE_M>`
   - ```{autodoc2-docstring} space_flight.ai.INTERACT_MAX_DISTANCE_M
     :summary:
@@ -93,6 +97,16 @@ space_flight.ai.target_lock
    1.0
 
 ```{autodoc2-docstring} space_flight.ai.TARGET_DISTANCE_TOLERANCE_M
+```
+
+````
+
+````{py:data} DIRECTION_NORM_TOLERANCE
+:canonical: space_flight.ai.DIRECTION_NORM_TOLERANCE
+:value: >
+   0.0001
+
+```{autodoc2-docstring} space_flight.ai.DIRECTION_NORM_TOLERANCE
 ```
 
 ````

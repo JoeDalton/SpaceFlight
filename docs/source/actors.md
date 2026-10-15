@@ -62,10 +62,18 @@ Key responsibilities:
   a tractor beam's pull, added via `apply_external_force` every frame it
   should act and zeroed by `compute_derivatives`).
 - **Damage is ship-type dependent.** `apply_damage` and `ship_handle_health`
-  are `NotImplementedError` stubs overridden by each concrete ship type.
+  are `NotImplementedError` stubs overridden by each concrete ship type. A hit
+  (`take_hit`) carries its [damage type](#damage-types-physical-and-ion); only
+  a physical one jolts the ship.
+- **Offline engines.** `engines_online()` (always True, but a fighter's
+  engines die on an empty engine gauge) gates the brakes and the rotation:
+  with its engines offline a ship cannot brake, and keeps its current
+  rotation rates whatever the commands — it drifts, spinning as it was.
 - Owns its engine sound (interior loop for the player's cockpit, 3D-attached
   exterior loop for everyone else; none if its config has none) and its
-  `ShipModel`.
+  `ShipModel`. While the engines are offline the loop is slowed down and
+  muffled (`_on_engines_online_changed`, the place to swap in a dedicated
+  sound).
 - **Configuration.** Read from `models/ships/<ship_type>/configuration.yaml`
   (`load_ship_configuration`), unless given through the `conf` argument (as
   ordnance does).
@@ -85,11 +93,17 @@ Key responsibilities:
 
 ### `Fighter`
 
-Adds a self-contained regenerating shield (damage drains the shield before
-health), a `LaserCannon`, `AutoAim` for target leading, and one
-`OrdnanceLauncher` per entry of its config's `loadout`
-(`{ordnance_name: count}`, see [ordnance](#ordnance-bombs-rockets-missiles-flares)).
-Its collision sphere is sized from `hit_box_radius_m` in its config.
+Adds a self-contained regenerating shield (physical damage drains the shield
+before health), a `LaserCannon`, `AutoAim` for target leading, and one
+`OrdnanceLauncher` per ordnance entry of its [loadout](#loadouts) (its
+config's default, unless one is given to the constructor). Its collision
+sphere is sized from `hit_box_radius_m` in its config.
+
+Ion damage (see [damage types](#damage-types-physical-and-ion)) never touches
+health: `ION_DAMAGE_FACTOR` times the hit's damage is split equally between
+the gauges that are not empty yet — the shield (in hit points), the engines
+and the lasers (in energy units, see below). A gauge holding less than its
+share just empties.
 
 Its guns are tuned by the [gameplay settings](global_architecture.md#gameplay_settingspy--difficulty)
 of its side — the player's for the fighter with the cockpit (`is_cockpit`),
@@ -118,12 +132,16 @@ Each fighter owns an `EnergySystem`
 
 | Gauge | Spent by | Bonus over half full |
 |-------|----------|----------------------|
-| Engines (`energy.engines`, 0–1) | boost, hard manoeuvres (pitch/yaw command above 90% of the current max rate) | more thrust and turn rate |
-| Lasers (`energy.lasers`, 0–1) | each bolt; no firing below one bolt's cost | more bolt damage |
+| Engines (`energy.engines`, 0–1) | boost, hard manoeuvres (pitch/yaw command above 90% of the current max rate), ion hits | more thrust and turn rate |
+| Lasers (`energy.lasers`, 0–1) | each bolt (no firing below one bolt's cost), ion hits | more bolt damage |
 | Shields (the fighter's `shield`) | hits | none (it is the shield strength) |
 
 Bonuses ramp linearly from a half-full gauge to a full one. An empty engine
-gauge locks boost out (until it refills a little) and cuts thrust and turn rate.
+gauge kills the engines (`is_engine_dead`): no thrust, and
+[offline engines](#ship--flight-physics-and-state) neither brake nor change
+the rotation, until the gauge refills to `ENGINE_RESTART_LEVEL`; boost stays
+locked out until `BOOST_REENABLE_ENGINE_LEVEL`. Dead engines spend nothing, so
+they always come back. The HUD's engine gauge then reads `OFFLINE`.
 
 The power plant refills the gauges at each system's share of its output. With
 balanced power (the default, and the only mode bots use for now) the share is
@@ -132,8 +150,24 @@ it to one system (75/7/7, or 80/10 without shields), at a loss of efficiency.
 A balanced fighter regenerates its shield at its configured
 `shield_regen_rate`; any hit holds regeneration off for `SHIELD_REGEN_DELAY_S`.
 
-Every tuning value is a module-level constant in `energy.py`, except the
-per-bolt laser cost, `laser_shot_energy_cost` in each fighter's configuration.
+Each fighter's configuration sizes its engine and laser gauges and sets their
+rates and costs in its `energy` block, in energy units (the scale of damage,
+which ion hits drain them by):
+
+```yaml
+energy:
+  engine_capacity: 400.0  # energy held by a full gauge
+  laser_capacity: 400.0
+  engine_regen_rate: 60.0  # per second, at full plant power
+  laser_regen_rate: 60.0
+  boost_drain_rate: 48.0  # per second
+  hard_maneuver_drain_rate: 32.0
+  laser_shot_cost: 8.0  # per bolt
+```
+
+The gauges themselves stay fractions of their capacity. The other tuning
+values (shares, bonuses, thresholds) are module-level constants in
+`energy.py`.
 
 ### `MajorShip` (`EscortShip`, `CapitalShip`)
 
@@ -155,8 +189,10 @@ differ only in how their bot flies them, which each declares: its
 `personality`, whether it `has_tactician`, and whether its navigator does
 `collision_avoidance`.
 
-Damage goes straight to hull health; the shared shield, if any, absorbs hits
-separately via the collision system.
+Physical damage goes straight to hull health; ion damage cannot harm the hull.
+The shared shield, if any, absorbs hits separately via the collision system
+(ion hits drain it `ION_DAMAGE_FACTOR` times harder), and ion hits disable the
+subsystems for a while (see [subsystems.md](subsystems.md#ion-hits-disabling-subsystems)).
 
 ## `ShipModel` — the presentation half
 
@@ -167,8 +203,8 @@ about physics or health: `Ship` moves that node each frame.
 
 ## Weapons and munitions
 
-[`weapons/__init__.py`](../../src/space_flight/weapons/__init__.py) holds two
-base classes the concrete weapons share:
+[`weapons/__init__.py`](../../src/space_flight/weapons/__init__.py) holds the
+damage types and two base classes the concrete weapons share:
 
 - **`Weapon`** — the emitter (`parent`/`parent_node`), a reload gate
   (`fire_delay` + `_ready_to_fire`, an atomic check-and-consume so a weapon
@@ -180,8 +216,8 @@ base classes the concrete weapons share:
   damage, emitter, world velocity, a straight-line coast for its lifetime,
   registration in `game.game_objects`, and a timed self-clean. It exposes the
   interface the collision handlers read (`origin_ship`/`origin_ship_id`/
-  `power`/`speed`, `on_impact()`/`impact_position()`), which ordnance exposes
-  too. Subclasses fill in only `_build_visual` and `_attach_collider`, plus an
+  `power`/`damage_type`/`speed`, `on_impact()`/`impact_position()`), which
+  ordnance exposes too. Subclasses fill in only `_build_visual` and `_attach_collider`, plus an
   optional `_clean_extra`.
 
 **`LaserCannon` / `LaserShot`**
@@ -192,7 +228,10 @@ fires a ship's configured cannon positions in round-robin, rate-limited by
 That direction is then deviated at random within the cannon's
 `deviation_cone_deg` (a gameplay setting, 0 for exact shots), and the parent's
 velocity is added last, so the deviation turns only the bolt's own velocity.
-Every laser shot deviates, auto-aimed or not, fighter or turret. Each `LaserShot` renders as an analytic capsule impostor (see
+Every laser shot deviates, auto-aimed or not, fighter or turret. A cannon
+fires bolts of its `damage_type` (a fighter's loadout's `lasers`): ion
+cannons fire ion-blue bolts (`ION_LASER_COLOR`) whatever the ship's
+`laser_color`. Each `LaserShot` renders as an analytic capsule impostor (see
 [shaders.md](shaders.md)), with a collision segment long enough to bridge
 one frame's travel and an optional point light behind the global
 `EMIT_LASER_LIGHT` toggle.
@@ -202,7 +241,9 @@ one frame's travel and an optional point light behind the global
 All four share the same code; they differ only by their configuration,
 [`datafiles/models/ordnance/<name>/configuration.yaml`](../../src/space_flight/datafiles/models/ordnance/):
 `type` (`bomb`/`rocket`/`missile`/`flare`), `life_time_s`, `damage` and
-`damage_type` (`physical` only for now), `reload_s`, the launch
+`damage_type` (`physical` or `ion`: `ion_missile`, `ion_torpedo` and
+`ion_bomb` are the blue ion versions of the concussion missile, proton
+torpedo and proton bomb), `reload_s`, the launch
 (`launch_direction` — `forward`, `down` or `backward` — `speed_mps` relative to
 the launching ship, `launch_offset_m`), the placeholder look and collision
 (`visual_radius_m`, `collision_radius_m`, RGBA `color`), for missiles and
@@ -248,6 +289,59 @@ with probability `decoy_chance`. A lured missile withdraws its target's
 warning and homes on the flare, then flies straight on once the flare is
 spent. Flares also stop other ordnance hitting them (both are spent), never
 each other, and never their own team's ordnance (see [Game](game.md)).
+
+### Damage types: physical and ion
+
+Every hit carries a damage type (`PHYSICAL` or `ION`, from the munition's
+`damage_type`), passed by the collision handlers to `take_hit` and on to
+`apply_damage`. Ion weapons never harm health or hulls; they drain shields
+and energy instead, `ION_DAMAGE_FACTOR` times harder than their damage:
+
+| Target | Ion hit |
+|--------|---------|
+| Fighter | split between its non-empty shield, engine and laser gauges |
+| Capital ship shield bubble | drained |
+| Capital ship hull | nothing |
+| Subsystem | loaded up, then disabled for a while ([subsystems.md](subsystems.md#ion-hits-disabling-subsystems)) |
+| Ordnance | nothing |
+
+`is_ion_vulnerable(target)` tells whether an ion hit would still do
+something (the AI uses it, see [ai.md](ai.md)). Ion hits throw electric blue
+sparks (`spark_fx.ION`), never the occasional small explosion. The ion
+tuning values (`ION_DAMAGE_FACTOR`, and the subsystem ones) are globals of
+`weapons/__init__.py`.
+
+### Loadouts
+
+A fighter's weapons are a `Loadout`
+([`weapons/loadout.py`](../../src/space_flight/weapons/loadout.py)): the
+damage type of its cannons (`lasers`) and its ordnance stocks, in secondary
+cycling order. Its configuration holds the default:
+
+```yaml
+loadout:
+  lasers: physical  # or ion
+  ordnance:
+    proton_torpedo: 4
+    concussion_missile: 4
+    flare: 10
+```
+
+A level can arm a fighter otherwise, from its default
+(`default_loadout(ship_type)`) through `dataclasses.replace` and
+`with_ordnance` (which replaces a stock in place, adds new ordnance last, and
+removes it for a 0 stock):
+
+```python
+ion_x_wing = replace(default_loadout("x-wing"), lasers=ION).with_ordnance(
+    proton_torpedo=0, ion_torpedo=4
+)
+```
+
+and hands it to `Player(loadout=...)`, `spawn_bot(loadout=...)`,
+`WaveSpec(loadouts={"x-wing": ion_x_wing})` (by ship model, so mixed waves
+work), `Mission.launch(..., loadout=...)` or `Hangar.launch(..., loadout=...)`.
+The dev level has an example (`ION_A_WING`).
 
 ## `Destructible` and `Destructibles` — central death handling
 
@@ -366,8 +460,9 @@ on top. Not part of the gameplay hierarchy.
 and `Trihedron` live under
 [`src/space_flight/actors/`](../../src/space_flight/actors/) (beside
 `scan.py`, the mission scan state, see [Game](game.md));
-`Weapon`/`Munition`, `LaserCannon`/`LaserShot` and `OrdnanceLauncher`
-under [`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
+`Weapon`/`Munition` and the damage types, `LaserCannon`/`LaserShot`,
+`OrdnanceLauncher` and `Loadout` under
+[`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
 `Ordnance` pawn and its controller in `actors/ordnance.py`);
 `CapitalShip` and everything it is built from under
 [`actors/major_ship/`](../../src/space_flight/actors/major_ship/) (see

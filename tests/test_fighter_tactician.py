@@ -17,6 +17,7 @@ from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.ai.formation import Formation
 from space_flight.ai.missile.incoming_missile import IncomingMissile
+from space_flight.weapons import ION, PHYSICAL
 
 
 @pytest.fixture
@@ -176,12 +177,13 @@ def test_plan_attack_missing_target_defaults_to_a_gun_chase(mock_game):
 # ---------------------------------------------------------------------------
 
 
-def _launcher(category, stock=4, target_mobility="agile"):
+def _launcher(category, stock=4, target_mobility="agile", damage_type=PHYSICAL):
     """A stand-in secondary weapon launcher, meant for targets of that mobility."""
     return SimpleNamespace(
         category=category,
         stock=stock,
         conf={"target_mobility": target_mobility},
+        damage_type=damage_type,
     )
 
 
@@ -559,3 +561,83 @@ def test_update_intent_wingman_with_waypoints_holds_formation(mock_game):
     intent, _ = tactician.update_intent()
 
     assert intent == Intent.PATROL
+
+
+# ---------------------------------------------------------------------------
+# _choose_weapon — ion ordnance
+# ---------------------------------------------------------------------------
+
+
+def _ion_fighter_prey(gauges: float) -> SimpleNamespace:
+    """
+    An agile fighter prey, its id "t", with every gauge (shield, engines,
+    lasers) at that level.
+    """
+    return SimpleNamespace(
+        id="t",
+        category="fighter",
+        mobility=1.0,
+        health=500.0,
+        shield_level=gauges,
+        energy=SimpleNamespace(engines=gauges, lasers=gauges),
+    )
+
+
+@pytest.mark.parametrize("gauges, expected", [(0.5, "ion"), (0.0, "physical")])
+def test_ion_missiles_only_while_ion_hits_still_work(mock_game, gauges, expected):
+    """
+    Ion missiles are fired at a fighter with energy left to drain; a drained
+    one gets the next missile in the loadout.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    launchers = {
+        "ion": _launcher("missile", damage_type=ION),
+        "physical": _launcher("missile"),
+    }
+    _arm(tactician, *launchers.values())
+    tactician.primary_target_ids = ["t"]
+
+    assert tactician._choose_weapon(_ion_fighter_prey(gauges)) == (
+        "missile",
+        launchers[expected],
+    )
+
+
+def test_no_ion_ordnance_for_a_drained_target_means_guns(mock_game):
+    """
+    With only ion ordnance, a target ion hits no longer affect gets the guns.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    _arm(
+        tactician,
+        _launcher("missile", damage_type=ION),
+        _launcher("rocket", damage_type=ION),
+    )
+    tactician.primary_target_ids = ["t"]
+
+    assert tactician._choose_weapon(_ion_fighter_prey(0.0)) == ("guns", None)
+
+
+@pytest.mark.parametrize(
+    "health, shield_level, beats_guns",
+    [(TOUGH_HEALTH, 0.0, False), (0.0, TOUGH_HEALTH, True)],
+)
+def test_ion_heavy_ordnance_only_counts_the_shield_as_toughness(
+    mock_game, health, shield_level, beats_guns
+):
+    """
+    An ion bomb cannot harm a hull: a tough hull is no reason to use one, a
+    tough shield is.
+    """
+    tactician = make_fighter_tactician(mock_game)
+    tactician.primary_target_ids = ["t"]
+    target = SimpleNamespace(
+        id="t", mobility=0.0, health=health, shield_level=shield_level
+    )
+
+    assert (
+        tactician._heavy_ordnance_beats_guns(
+            target, _launcher("bomb", stock=6, damage_type=ION)
+        )
+        is beats_guns
+    )

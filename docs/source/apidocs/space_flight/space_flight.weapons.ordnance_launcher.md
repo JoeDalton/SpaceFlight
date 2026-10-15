@@ -63,10 +63,6 @@
   - ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.LAUNCH_DIRECTIONS
     :summary:
     ```
-* - {py:obj}`DAMAGE_TYPES <space_flight.weapons.ordnance_launcher.DAMAGE_TYPES>`
-  - ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.DAMAGE_TYPES
-    :summary:
-    ```
 * - {py:obj}`MISSILE_DECOY_KEYS <space_flight.weapons.ordnance_launcher.MISSILE_DECOY_KEYS>`
   - ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.MISSILE_DECOY_KEYS
     :summary:
@@ -125,16 +121,6 @@
    ('forward', 'down', 'backward')
 
 ```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.LAUNCH_DIRECTIONS
-```
-
-````
-
-````{py:data} DAMAGE_TYPES
-:canonical: space_flight.weapons.ordnance_launcher.DAMAGE_TYPES
-:value: >
-   ('physical',)
-
-```{autodoc2-docstring} space_flight.weapons.ordnance_launcher.DAMAGE_TYPES
 ```
 
 ````

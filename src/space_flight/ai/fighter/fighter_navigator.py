@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Any, Tuple
 
 import numpy as np
 
@@ -23,6 +23,7 @@ from space_flight.ai.missile.incoming_missile import (
     nearest_incoming,
 )
 from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
+from space_flight.weapons import ION, is_ion_vulnerable
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -453,7 +454,9 @@ class FighterNavigator(GenericShipNavigator):
         Fire the armed weapon if its solution is met.
 
         Guns: the lead solution is in range and within the armed cone of the
-        nose. Bomb: a bomb dropped now would hit, then the run breaks off.
+        nose, and the guns can do something to the target (ion lasers hold
+        their fire on a target ion hits no longer affect). Bomb: a bomb dropped
+        now would hit, then the run breaks off.
         Missile or rocket: launched if its own solution is met (see
         _fire_missile and _fire_rocket), the guns firing as well.
 
@@ -491,8 +494,10 @@ class FighterNavigator(GenericShipNavigator):
         )
         firing_alignment = np.dot(lead_direction, self.pawn.forward)
         fired = (
-            distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"]
-        ) and (firing_alignment > min_cos_angle)
+            (distance_m < self.personality["navigator"]["fire"]["maximum_distance_m"])
+            and (firing_alignment > min_cos_angle)
+            and self._guns_work_on(target_dict.get("target_id"))
+        )
         if fired:
             self.pawn.laser_cannon.fire()
         self._record_firing(
@@ -534,16 +539,37 @@ class FighterNavigator(GenericShipNavigator):
             return False
         return self.pawn.fire_secondary()
 
+    def _find_actor(self, target_id) -> Any:
+        """
+        :param target_id: An actor's id
+        :return: The live actor, or None if it is gone
+        """
+        try:
+            target_index = self.game.interactions.get_actor_index_from_id(target_id)
+            return self.game.interactions.actors[target_index]
+        except (ValueError, KeyError, IndexError):
+            return None
+
+    def _guns_work_on(self, target_id) -> bool:
+        """
+        :param target_id: The target's id
+        :return: Whether firing the guns at the target is worth it: always with
+            physical lasers; with ion lasers, only while ion hits still affect it
+            (see is_ion_vulnerable)
+        """
+        if self.pawn.laser_cannon.damage_type != ION:
+            return True
+        target = self._find_actor(target_id)
+        return target is not None and is_ion_vulnerable(target)
+
     def _missiles_in_flight(self, target_id) -> int:
         """
         :param target_id: The target's id
         :return: How many of our missiles home on the target (read from its
             "missile incoming" messages; 0 for a target that gets none)
         """
-        try:
-            target_index = self.game.interactions.get_actor_index_from_id(target_id)
-            target = self.game.interactions.actors[target_index]
-        except (ValueError, KeyError, IndexError):
+        target = self._find_actor(target_id)
+        if target is None:
             return 0
         return sum(
             incoming.controller.pawn.origin_ship is self.pawn

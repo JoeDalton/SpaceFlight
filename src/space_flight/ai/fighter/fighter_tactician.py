@@ -7,6 +7,7 @@ from space_flight.ai import AttackMode, Intent, Personality
 from space_flight.ai.generic.generic_tactician import GenericTactician
 from space_flight.ai.missile.incoming_missile import nearest_incoming
 from space_flight.utils import smooth_step_up
+from space_flight.weapons import ION, is_ion_vulnerable
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -159,7 +160,8 @@ class FighterTactician(GenericTactician):
         - a rocket meant for the target's mobility (slow targets only)
         - guns otherwise
 
-        Only launchers with stock left are considered.
+        Only launchers with stock left are considered, and ion ordnance only
+        against a target ion hits still affect (see is_ion_vulnerable).
 
         :param target: The prey actor
         :return: The weapon ("guns", "bomb", "missile" or "rocket") and its
@@ -168,18 +170,27 @@ class FighterTactician(GenericTactician):
         is_slow = self._is_slow(target)
         target_mobility = "slow" if is_slow else "agile"
         is_primary = getattr(target, "id", None) in self.primary_target_ids
+        ion_works = is_ion_vulnerable(target)
+
+        def usable(category: str) -> list[OrdnanceLauncher]:
+            return [
+                launcher
+                for launcher in self._launchers_with_stock(category)
+                if ion_works or launcher.damage_type != ION
+            ]
+
         missile = None
         if is_primary:
             missile = next(
                 (
                     launcher
-                    for launcher in self._launchers_with_stock("missile")
+                    for launcher in usable("missile")
                     if launcher.conf["target_mobility"] == target_mobility
                 ),
                 None,
             )
 
-        bomb = next(iter(self._launchers_with_stock("bomb")), None)
+        bomb = next(iter(usable("bomb")), None)
         heavy_ordnance = [("bomb", bomb)]
         if is_slow:
             torpedo = ("missile", missile)
@@ -195,7 +206,7 @@ class FighterTactician(GenericTactician):
 
         if missile is not None and not is_slow:
             return "missile", missile
-        for rocket in self._launchers_with_stock("rocket"):
+        for rocket in usable("rocket"):
             if rocket.conf["target_mobility"] == target_mobility:
                 return "rocket", rocket
         return "guns", None
@@ -218,8 +229,9 @@ class FighterTactician(GenericTactician):
         """
         Whether limited heavy ordnance (a bomb or a torpedo) beats guns on a
         target, by suitability: only on a target that is stationary, tough AND
-        valuable, with supply to spare. Any non-numeric input (e.g. a mocked
-        target) falls back to guns.
+        valuable, with supply to spare. Ion ordnance cannot harm a hull: only the
+        target's shield counts towards its toughness. Any non-numeric input
+        (e.g. a mocked target) falls back to guns.
 
         :param target: The prey actor
         :param launcher: The ordnance's launcher (with stock left)
@@ -228,9 +240,9 @@ class FighterTactician(GenericTactician):
         scoring = self.personality["tactician"]["heavy_ordnance_scoring"]
         try:
             mobility = float(getattr(target, "mobility", 1.0))
-            hardness_input = float(getattr(target, "health", 0.0)) + float(
-                target.shield_level
-            )
+            hardness_input = float(target.shield_level)
+            if launcher.damage_type != ION:
+                hardness_input += float(getattr(target, "health", 0.0))
             hardness = smooth_step_up(
                 hardness_input, scoring["hardness_step"], scoring["hardness_slope"]
             )

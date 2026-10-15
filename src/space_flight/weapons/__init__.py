@@ -56,6 +56,28 @@ ION_DISABLE_DURATION_S = 8.0
 ION_LOAD_DECAY_RATE_PS = 0.05
 
 
+def is_ion_vulnerable(target: Any) -> bool:
+    """
+    Whether ion weapons still have an effect on a target: a fighter with any of
+    its shield, engine or laser gauges not empty, a capital ship whose shield
+    bubble is up (its hull is immune), or a subsystem not disabled yet. Nothing
+    else (ordnance, unknown actors) is.
+
+    :param target: The target actor
+    :return: True if an ion hit would do something
+    """
+    category = getattr(target, "category", None)
+    if category == "fighter":
+        energy = target.energy
+        return target.shield_level > 0.0 or energy.engines > 0.0 or energy.lasers > 0.0
+    if category == "capital_ship":
+        shield = target.shield
+        return shield is not None and shield.is_enabled
+    if category == "sub_system":
+        return not target.is_disabled
+    return False
+
+
 def build_ordnance_sphere(
     game: FlightState,
     parent_node: NodePath,
