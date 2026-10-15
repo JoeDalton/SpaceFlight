@@ -233,15 +233,9 @@ class TractorBeamProjector(TrackingMount):
         :param prey_id: The prey's actor id
         :return: The prey actor, or None if gone or not grabbable
         """
-        if prey_id is None:
-            return None
-        try:
-            index = self.game.interactions.get_actor_index_from_id(prey_id)
-        except ValueError:
-            return None
-        prey = self.game.interactions.actors[index]
+        prey = self.game.interactions.find_actor(prey_id)
         # Only actors that can take a force (ships) can be tractored.
-        if not hasattr(prey, "apply_external_force"):
+        if prey is None or not hasattr(prey, "apply_external_force"):
             return None
         return prey
 

@@ -105,9 +105,11 @@ of round glowing sparks thrown out of a laser impact.
   zero. On a fraction of physical bot hits (`HIT_EXPLOSION_CHANCE` in
   `collisions.py`, 1/3) `FireSmokePool.hit_burst()` is also spawned at the
   same point, normal and velocity.
-- Subsystems disabled by ion hits also crackle with `ION` bursts, off random
-  points of their surface (see
-  [subsystems.md](subsystems.md#ion-hits-disabling-subsystems)).
+- Subsystems disabled by ion hits, and fighters whose engines are dead, also
+  crackle (`IonCrackle`): `ION` bursts off random points of their surface, at
+  random intervals of up to `ION_CRACKLE_MAX_INTERVAL_S` (see
+  [subsystems.md](subsystems.md#ion-hits-disabling-subsystems)). The player's
+  own fighter does not, seen from its cockpit.
 
 ## `damage_fx.py` — damage & death smoke/fire trail
 

@@ -55,6 +55,12 @@ class FakeInteractions:
                 return index
         raise ValueError(f"Actor {actor_id} is not in the actors' list")
 
+    def find_actor(self, actor_id: uuid.UUID):
+        try:
+            return self.actors[self.get_actor_index_from_id(actor_id)]
+        except ValueError:
+            return None
+
 
 @pytest.fixture
 def game(spaceflight_app):

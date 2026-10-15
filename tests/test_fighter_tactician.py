@@ -132,8 +132,7 @@ def _wire_target_mobility(mock_game, mobility: float):
     """Point the tactician's interactions at a single target of given mobility."""
     target = MagicMock()
     target.mobility = mobility
-    mock_game.interactions.get_actor_index_from_id.return_value = 0
-    mock_game.interactions.actors = [target]
+    mock_game.interactions.find_actor.return_value = target
 
 
 def test_plan_attack_slow_target_strafes(mock_game):
@@ -163,7 +162,7 @@ def test_plan_attack_missing_target_defaults_to_a_gun_chase(mock_game):
     If the target can no longer be resolved, default to a PURSUIT with guns.
     """
     tactician = make_fighter_tactician(mock_game)
-    mock_game.interactions.get_actor_index_from_id.side_effect = ValueError
+    mock_game.interactions.find_actor.return_value = None
 
     assert tactician._plan_attack(target_id="t") == {
         "attack_mode": AttackMode.PURSUIT,
@@ -201,8 +200,7 @@ def _wire_numeric_target(
     target.health = health
     target.shield_level = shield_level
     target.id = target_id
-    mock_game.interactions.get_actor_index_from_id.return_value = 0
-    mock_game.interactions.actors = [target]
+    mock_game.interactions.find_actor.return_value = target
     tactician.primary_target_ids = [target_id] if primary else []
     return target
 

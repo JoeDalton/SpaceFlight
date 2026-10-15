@@ -24,13 +24,13 @@ def make_navigator(*actors):
     game.game_time.get_current_time.return_value = 0.0
     game.interactions.actors = list(actors)
 
-    def get_actor_index_from_id(actor_id):
-        for index, actor in enumerate(game.interactions.actors):
+    def find_actor(actor_id):
+        for actor in game.interactions.actors:
             if actor is not None and actor.id == actor_id:
-                return index
-        raise ValueError(actor_id)
+                return actor
+        return None
 
-    game.interactions.get_actor_index_from_id.side_effect = get_actor_index_from_id
+    game.interactions.find_actor.side_effect = find_actor
     pawn = SimpleNamespace(
         position=np.zeros(3),
         speed=np.array([0.0, 300.0, 0.0]),

@@ -293,6 +293,38 @@ def test_get_actor_index_after_removal_raises(interactions):
 
 
 # ---------------------------------------------------------------------------
+# find_actor
+# ---------------------------------------------------------------------------
+
+
+def test_find_actor_returns_the_registered_actor(interactions):
+    """
+    find_actor looks a live actor up by its id.
+    """
+    a = MockActor(team=1, position=[0, 0, 0])
+    b = MockActor(team=2, position=[100, 0, 0])
+    interactions.add_actor(a)
+    interactions.add_actor(b)
+
+    assert interactions.find_actor(b.id) is b
+
+
+def test_find_actor_finds_nothing_for_an_unknown_removed_or_missing_id(
+    interactions,
+):
+    """
+    An id never registered, an actor removed, or no id at all: None.
+    """
+    a = MockActor(team=1, position=[0, 0, 0])
+    interactions.add_actor(a)
+    interactions.remove_actor(a)
+
+    assert interactions.find_actor(uuid.uuid4()) is None
+    assert interactions.find_actor(a.id) is None
+    assert interactions.find_actor(None) is None
+
+
+# ---------------------------------------------------------------------------
 # update_interactions — interaction flags
 # ---------------------------------------------------------------------------
 

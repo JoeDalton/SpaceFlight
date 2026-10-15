@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import NodePath, Point3, Vec3
+from panda3d.core import NodePath, Vec3
 
 from space_flight.actors.destructibles import Destructible
 from space_flight.fx import spark_fx
@@ -31,10 +31,6 @@ LOGGER = logging.getLogger()
 # cannot tumble. Bot-controlled subsystems (turrets, tractor beams) are reaped by
 # their Bot and die immediately.
 SUBSYSTEM_DEATH_SMOKE_DURATION_S = 0.6
-
-# A disabled subsystem crackles with ion sparks, at random intervals of up to
-# this long
-ION_CRACKLE_MAX_INTERVAL_S = 0.3
 
 
 class SubSystem(Destructible):
@@ -116,7 +112,7 @@ class SubSystem(Destructible):
         )
         self.ion_load = 0.0
         self.disabled_until_s = 0.0
-        self._next_crackle_s = 0.0
+        self.ion_crackle = spark_fx.IonCrackle()
 
         # Create a dummy node mounted on the ship, at the mounting point
         self.node = NodePath(f"{name}_node")
@@ -263,23 +259,11 @@ class SubSystem(Destructible):
             self.is_disabled = False
             self.on_enabled()
             return
-        if now >= self._next_crackle_s:
-            self._crackle()
-            self._next_crackle_s = now + np.random.uniform(
-                0.0, ION_CRACKLE_MAX_INTERVAL_S
-            )
-
-    def _crackle(self):
-        """
-        A burst of ion sparks off a random point of the subsystem's surface.
-        """
-        direction = np.random.normal(size=3)
-        direction /= np.linalg.norm(direction)
-        self.game.spark_fx_pool.spawn(
-            position=Point3(*(self.position + self.hit_box_radius_m * direction)),
-            normal=Vec3(*direction),
-            base_velocity=Vec3(*self.speed),
-            preset=spark_fx.ION,
+        self.ion_crackle.update(
+            game=self.game,
+            position=self.position,
+            radius_m=self.hit_box_radius_m,
+            velocity=self.speed,
         )
 
     def on_disabled(self):

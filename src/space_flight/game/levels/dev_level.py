@@ -83,6 +83,16 @@ ENEMY_CAPITAL_SHIP_HANGAR_STOCK = {
     "tie-bomber": 6,
 }
 
+# A debug ion loadout
+ION_LOADOUT = replace(default_loadout("a-wing"), lasers=ION).with_ordnance(
+    concussion_missile=0,
+    ion_missile=6,
+    rocket=0,
+    ion_torpedo=6,
+    proton_torpedo=0,
+    ion_bomb=6,
+)
+
 ENEMY_FIGHTER_SQUADRON = WaveSpec(
     name="enemy_fighter_squadron",
     ship_model="tie-fighter",
@@ -94,6 +104,7 @@ ENEMY_FIGHTER_SQUADRON = WaveSpec(
     record=True,
     formation="arrowhead",
     waypoints=PATROL_ROUTE,
+    loadouts={"tie-fighter": ION_LOADOUT},
 )
 
 # An allied Y-wing patrol, given the enemy big ships as primary targets (see
@@ -109,13 +120,6 @@ ALLIED_PATROL = WaveSpec(
     record=True,
     formation="arrowhead",
     waypoints=[[0, 50000, 500]] + PATROL_ROUTE[1:],
-)
-
-
-# An ion-armed A-wing: ion lasers, and ion missiles instead of concussion ones
-# (see space_flight.weapons.loadout)
-ION_A_WING = replace(default_loadout("a-wing"), lasers=ION).with_ordnance(
-    concussion_missile=0, ion_missile=6, rocket=0, ion_torpedo=6
 )
 
 
@@ -138,7 +142,7 @@ def build_dev_upfront(game: FlightState):
         is_neutral=True,
         has_ai=False,
         record=True,
-        loadout=ION_A_WING,
+        loadout=ION_LOADOUT,
     )
     # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     game.scene = scene_factory(game=game, scene_name="lava_planet")
@@ -156,23 +160,21 @@ def dev_mission(m: Mission) -> Iterator[None]:
     capital_ship = m.spawn(ENEMY_CAPITAL_SHIP)
     frigate = m.spawn(ALLIED_FRIGATE, target=[capital_ship])
     m.objective("Keep the frigate alive", failed=frigate.all_destroyed)
-    # TEMPORARY (#83 phase 2): launch fighters straight from the star
-    # destroyer's hangar, until the wave scripting API (phase 3) replaces this
     yield from m.wait(5)
     hangar = capital_ship.pawns()[0].hangars[0]
     hangar.set_stock(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
     m.hud("TIEs launching")
-    squadron = m.launch(hangar, "tie-fighter", 3, target=frigate)
+    squadron = m.launch(hangar, "tie-fighter", 3, target=frigate, loadout=ION_LOADOUT)
     m.objective("Destroy the TIE squadron", progress=squadron.destroyed_count, goal=3)
     m.on(squadron.all_destroyed, lambda: m.hud("TIE squadron destroyed"))
     yield from m.wait(20)
-    bombers = m.launch(hangar, "tie-bomber", 6, target=frigate)
+    bombers = m.launch(hangar, "tie-bomber", 6, target=frigate, loadout=ION_LOADOUT)
     m.objective(
         "Shoot down 2 TIEs yourself",
         progress=m.kills([squadron, bombers], by_player=True),
         goal=2,
     )
-    # m.spawn(ENEMY_FIGHTER_SQUADRON)
+    m.spawn(ENEMY_FIGHTER_SQUADRON)
     # Targets are resolved as each Y-wing spawns: let the big ships spawn first
     # yield from m.wait(1)
     # m.spawn(ALLIED_PATROL, target=[frigate, capital_ship])

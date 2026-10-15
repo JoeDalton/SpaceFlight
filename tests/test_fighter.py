@@ -9,6 +9,8 @@ from energy_fakes import ENERGY_CONF, make_energy_system
 from space_flight.actors.energy import ENGINES, SHIELD_REGEN_DELAY_S, SHIELDS
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.ship import Ship
+from space_flight.fx import spark_fx
+from space_flight.fx.spark_fx import IonCrackle
 from space_flight.global_architecture.gameplay_settings import (
     DEFAULT_PRESET,
     auto_aim_params,
@@ -742,6 +744,34 @@ def test_fighter_with_dead_engines_drifts():
 
     assert fighter.thrust_factor() == 0.0
     assert not fighter.engines_online()
+
+
+@pytest.mark.parametrize(
+    "engines_dead, is_cockpit, crackles",
+    [(True, False, True), (False, False, False), (True, True, False)],
+)
+def test_disabled_fighter_crackles(engines_dead, is_cockpit, crackles):
+    """
+    A fighter with dead engines throws ion sparks, like a disabled subsystem;
+    not the player's, seen from its cockpit.
+    """
+    fighter = make_fighter_without_init()
+    fighter.game = MagicMock()
+    fighter.game.game_time.get_current_time.return_value = 10.0
+    fighter.is_cockpit = is_cockpit
+    fighter.ion_crackle = IonCrackle()
+    fighter.position = np.zeros(3)
+    fighter.speed = np.zeros(3)
+    fighter.hit_box_radius_m = 5.0
+    if engines_dead:
+        fighter.energy.drain(ENGINES, 1e6)
+
+    fighter._crackle_if_disabled()
+
+    pool = fighter.game.spark_fx_pool
+    assert pool.spawn.called is crackles
+    if crackles:
+        assert pool.spawn.call_args.kwargs["preset"] is spark_fx.ION
 
 
 # ---------------------------

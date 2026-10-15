@@ -1043,8 +1043,7 @@ def test_ion_guns_hold_fire_on_a_drained_target(lasers, gauges, fires):
         shield_level=gauges,
         energy=SimpleNamespace(engines=gauges, lasers=gauges),
     )
-    nav.game.interactions.get_actor_index_from_id.return_value = 0
-    nav.game.interactions.actors = [prey]
+    nav.game.interactions.find_actor.return_value = prey
 
     nav._arm_trigger(
         target_dict,
@@ -1110,8 +1109,7 @@ def _held_with(nav, weapon: str, launcher, locked: bool = True, in_flight: int =
     missile = SimpleNamespace(pawn=SimpleNamespace(origin_ship=nav.pawn))
     ours = SimpleNamespace(controller=missile)
     target = SimpleNamespace(incoming_missiles=dict(enumerate([ours] * in_flight)))
-    nav.game.interactions.get_actor_index_from_id.return_value = 0
-    nav.game.interactions.actors = [target]
+    nav.game.interactions.find_actor.return_value = target
     return target_dict
 
 

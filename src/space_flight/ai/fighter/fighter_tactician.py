@@ -118,10 +118,8 @@ class FighterTactician(GenericTactician):
             ("guns", "bomb", "missile" or "rocket") and the launcher to select
             for it (None for guns)
         """
-        try:
-            target_index = self.game.interactions.get_actor_index_from_id(target_id)
-            target = self.game.interactions.actors[target_index]
-        except (ValueError, KeyError, TypeError):
+        target = self.game.interactions.find_actor(target_id)
+        if target is None:
             return dict(DEFAULT_ATTACK_PLAN)
 
         weapon, launcher = self._choose_weapon(target)

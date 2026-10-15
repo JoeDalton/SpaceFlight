@@ -17,6 +17,7 @@ from space_flight.actors.energy import (
 )
 from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.ai.auto_aim import AutoAim
+from space_flight.fx.spark_fx import IonCrackle
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.global_architecture.gameplay_settings import (
     auto_aim_params,
@@ -86,6 +87,11 @@ class Fighter(Ship):
         self.shield_regen_cooldown = Cooldown(
             duration_s=SHIELD_REGEN_DELAY_S, clock=self.game.game_time.get_current_time
         )
+
+        # Disabled (dead engines), it crackles with ion sparks, unless it is
+        # the player's (seen from its cockpit)
+        self.is_cockpit = is_cockpit
+        self.ion_crackle = IonCrackle()
 
         # Engine and laser gauges, and the power distribution between systems
         self.energy = EnergySystem(
@@ -159,8 +165,8 @@ class Fighter(Ship):
     ):
         """
         Moves the ship (see :meth:`Ship.move`), boost permitting, spends and
-        refills the engine and laser gauges, then updates auto-aim acquisition
-        and the missile locks
+        refills the engine and laser gauges, crackles while disabled (dead
+        engines), then updates auto-aim acquisition and the missile locks
 
         :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
@@ -181,10 +187,25 @@ class Fighter(Ship):
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,
         )
+        self._crackle_if_disabled()
 
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
         self._update_missile_locks()
+
+    def _crackle_if_disabled(self):
+        """
+        While its engines are dead (it is disabled), the fighter crackles with
+        ion sparks, like a disabled subsystem; not the player's, seen from its
+        cockpit.
+        """
+        if self.energy.is_engine_dead and not self.is_cockpit:
+            self.ion_crackle.update(
+                game=self.game,
+                position=self.position,
+                radius_m=self.hit_box_radius_m,
+                velocity=self.speed,
+            )
 
     def _turn_rate_scale(self, throttle: float) -> float:
         """

@@ -463,8 +463,7 @@ def _wingman_and_leader(leader_waypoints, leader_idx: int, has_navigator=True):
         leader.parent.navigator.next_waypoint_idx = leader_idx
     else:
         leader.parent = MagicMock(spec=[])  # e.g. the player: no navigator
-    nav.game.interactions.get_actor_index_from_id.return_value = 0
-    nav.game.interactions.actors = [leader]
+    nav.game.interactions.find_actor.return_value = leader
     target_dict = {
         "target_id": "leader",
         "target_relative_position": np.array([30.0, -60.0, 0.0]),

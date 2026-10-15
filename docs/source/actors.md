@@ -141,7 +141,9 @@ gauge kills the engines (`is_engine_dead`): no thrust, and
 [offline engines](#ship--flight-physics-and-state) neither brake nor change
 the rotation, until the gauge refills to `ENGINE_RESTART_LEVEL`; boost stays
 locked out until `BOOST_REENABLE_ENGINE_LEVEL`. Dead engines spend nothing, so
-they always come back. The HUD's engine gauge then reads `OFFLINE`.
+they always come back. Meanwhile the fighter is *disabled*: it crackles with
+ion sparks (not the player's, seen from its cockpit), and the HUD's engine
+gauge reads `OFFLINE`.
 
 The power plant refills the gauges at each system's share of its output. With
 balanced power (the default, and the only mode bots use for now) the share is
