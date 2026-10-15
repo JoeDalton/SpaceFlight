@@ -5,7 +5,7 @@ pipeline (hardware polling → contexts that interpret it), the HUD, the
 rear-view mirror, and player waypoint guidance. This page is the guided tour;
 the per-class API is in the [code reference](apidocs/index.rst).
 
-All of it lives in [`src/space_flight/ui/`](../../src/space_flight/ui/).
+All of it lives in [`src/space_flight/ui/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ui/).
 
 ## Mental model
 
@@ -271,5 +271,5 @@ Backs the mission's `player_waypoints` action (see
 ## Where things live
 
 Every module above sits directly under
-[`src/space_flight/ui/`](../../src/space_flight/ui/); the
+[`src/space_flight/ui/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ui/); the
 [code reference](apidocs/index.rst) has the full per-class API.

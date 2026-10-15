@@ -50,7 +50,7 @@ Key responsibilities:
 - **Per-ship-type configuration.** Mass, thrust, turn rates, drag/lift
   coefficients, `lift_inefficiency` (= 1/(π·AR·e), from wing aspect ratio and
   Oswald efficiency) and health come from that ship type's
-  [`configuration.yaml`](../../src/space_flight/datafiles/models/ships/).
+  [`configuration.yaml`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/datafiles/models/ships/).
 - **Throttle-dependent turn rate.** The commanded rates are scaled by
   `turn_rate_scale(throttle)`: a parabola from 50% of the max rates at idle,
   through 100% at 60% throttle (the fitted peak sits at about 56% throttle
@@ -241,7 +241,7 @@ one frame's travel and an optional point light behind the global
 ### Ordnance: bombs, rockets, missiles, flares
 
 All four share the same code; they differ only by their configuration,
-[`datafiles/models/ordnance/<name>/configuration.yaml`](../../src/space_flight/datafiles/models/ordnance/):
+[`datafiles/models/ordnance/<name>/configuration.yaml`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/datafiles/models/ordnance/):
 `type` (`bomb`/`rocket`/`missile`/`flare`), `life_time_s`, `damage` and
 `damage_type` (`physical` or `ion`: `ion_missile`, `ion_torpedo` and
 `ion_bomb` are the blue ion versions of the concussion missile, proton
@@ -460,12 +460,12 @@ on top. Not part of the gameplay hierarchy.
 
 `Pawn`, `Ship`/`ShipModel`, `Fighter`, `Bot`, `Player`, `Destructible(s)`
 and `Trihedron` live under
-[`src/space_flight/actors/`](../../src/space_flight/actors/) (beside
+[`src/space_flight/actors/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/) (beside
 `scan.py`, the mission scan state, see [Game](game.md));
 `Weapon`/`Munition` and the damage types, `LaserCannon`/`LaserShot`,
 `OrdnanceLauncher` and `Loadout` under
-[`src/space_flight/weapons/`](../../src/space_flight/weapons/) (the
+[`src/space_flight/weapons/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/weapons/) (the
 `Ordnance` pawn and its controller in `actors/ordnance.py`);
 `CapitalShip` and everything it is built from under
-[`actors/major_ship/`](../../src/space_flight/actors/major_ship/) (see
+[`actors/major_ship/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/major_ship/) (see
 [Major-ship subsystems](subsystems.md)).

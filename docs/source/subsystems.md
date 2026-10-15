@@ -9,7 +9,7 @@ lose their aim assist and fire-rate boost; destroy the turrets and the ship
 stops shooting back; destroy a hangar and no more fighters launch from it.
 
 All of the subsystem code lives in
-[`src/space_flight/actors/major_ship/`](../../src/space_flight/actors/major_ship/).
+[`src/space_flight/actors/major_ship/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/major_ship/).
 This page is the guided tour; the per-class API is in the
 [code reference](apidocs/index.rst).
 
@@ -275,4 +275,4 @@ publishing a lead solution (`aim_direction`, `target_distance_m`) that
 
 Every subsystem module, including the turret and tractor-beam mounts and their
 `TurretModel`, sits under
-[`src/space_flight/actors/major_ship/`](../../src/space_flight/actors/major_ship/).
+[`src/space_flight/actors/major_ship/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/major_ship/).

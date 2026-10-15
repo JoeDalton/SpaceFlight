@@ -3,8 +3,8 @@
 `scenes` builds the environment a level flies in — skybox, lighting, planets,
 asteroid fields, ocean and volumetric clouds — as independent, game-agnostic
 pieces assembled by a per-level `Scene` subclass. It all lives in
-[`src/space_flight/scenes/`](../../src/space_flight/scenes/), the cloud system
-under [`scenes/cloud/`](../../src/space_flight/scenes/cloud/); the per-class API
+[`src/space_flight/scenes/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/), the cloud system
+under [`scenes/cloud/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/cloud/); the per-class API
 is in the [code reference](apidocs/index.rst).
 
 ## Mental model
@@ -85,7 +85,7 @@ docstring has the overview):
   runtime.
 - **Geometric swell** (`geometric_swell=True`, used by `SceneOcean`; a
   prototype with known artifacts, see the
-  [swell artifact report](../../src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md))
+  [swell artifact report](https://github.com/JoeDalton/SpaceFlight/blob/main/src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md))
   builds `make_swell_grid_mesh` instead: a dense grid that `ocean.vert`
   displaces by the swell, tapered to flat before its edge, ringed by
   geometrically spaced border rings in the same mesh.
@@ -129,7 +129,7 @@ docstring has the overview):
 
 ## `cloud/` — volumetric billboard clouds
 
-[`scenes/cloud/`](../../src/space_flight/scenes/cloud/) is built on two ideas,
+[`scenes/cloud/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/cloud/) is built on two ideas,
 and almost every design decision in it follows from one of them.
 
 **A billboard is a sample of a volume, not a sprite.** Its geometry says only

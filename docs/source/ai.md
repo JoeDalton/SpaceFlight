@@ -200,7 +200,7 @@ roll-to-target).
 
 ## Tracking-mount trio: turrets and tractor beams
 
-[`tracking_mount/`](../../src/space_flight/ai/tracking_mount/) is the AI for
+[`tracking_mount/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ai/tracking_mount/) is the AI for
 anything that swivels in place — `Turret` and `TractorBeamProjector`, both
 mounted subsystems of a capital ship (see
 [Major-ship subsystems](subsystems.md)):
@@ -326,7 +326,7 @@ with `alive`) are compacted, so their positions are not the slot indices from
 
 ## Where things live
 
-[`ai/`](../../src/space_flight/ai/): `generic/` holds the
+[`ai/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ai/): `generic/` holds the
 tactician/navigator/pilot base classes, `fighter/`, `major_ship/` and
 `tracking_mount/` each family's subclasses, `missile/` the missile navigator
 and the incoming-missile message (`incoming_missile.py`),

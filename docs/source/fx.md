@@ -2,7 +2,7 @@
 
 Everything visually or aurally reactive but not core gameplay — explosions,
 sparks, damage trails, cockpit feedback, speed dust, sound — lives in
-[`src/space_flight/fx/`](../../src/space_flight/fx/). This page is the guided
+[`src/space_flight/fx/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/fx/). This page is the guided
 tour; the per-class API is in the [code reference](apidocs/index.rst).
 
 ## Mental model
@@ -242,5 +242,5 @@ sound:
 ## Where things live
 
 One module per section above, all under
-[`src/space_flight/fx/`](../../src/space_flight/fx/); the shaders they drive
+[`src/space_flight/fx/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/fx/); the shaders they drive
 are described in [shaders.md](shaders.md).

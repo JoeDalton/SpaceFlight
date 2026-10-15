@@ -109,6 +109,14 @@
 
 ````
 
+````{py:method} copy_3d_model_to_node(path: pathlib.Path | str, parent_node: panda3d.core.NodePath)
+:canonical: space_flight.global_architecture.asset_manager.AssetManager.copy_3d_model_to_node
+
+```{autodoc2-docstring} space_flight.global_architecture.asset_manager.AssetManager.copy_3d_model_to_node
+```
+
+````
+
 `````
 
 ````{py:function} gltf_model_tilt_quaternion(game: space_flight.game.flight_state.FlightState) -> numpy.quaternion

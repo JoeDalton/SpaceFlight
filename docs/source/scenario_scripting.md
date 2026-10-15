@@ -3,8 +3,8 @@
 A level's scripted events — when enemy waves arrive, what they attack, the
 objectives and how the level ends — are written in plain Python, in the
 level's own module under
-[`game/levels/`](../../src/space_flight/game/levels/), using
-[`game/scenario/`](../../src/space_flight/game/scenario/).
+[`game/levels/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/levels/), using
+[`game/scenario/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/scenario/).
 
 > [`all_features_example.py`](examples/all_features_example.py) exercises
 > the features on this page in one file (all but scanning, `damaged`,
