@@ -35,10 +35,14 @@ energy:
   hard_maneuver_drain_rate: 40.0
   laser_shot_cost: 11.0
 
+# Default weapons (see space_flight.weapons.loadout): the cannons' damage type
+# (physical or ion) and the ordnance stocks, in secondary cycling order
 loadout:
-  proton_bomb: 6
-  proton_torpedo: 4
-  flare: 10
+  lasers: physical
+  ordnance:
+    proton_bomb: 6
+    proton_torpedo: 4
+    flare: 10
 
 explosion_scale: 5.0
 death_spin_duration_s: 2.5

@@ -136,6 +136,19 @@ ICE = SparkPreset(
     size=0.12,
 )
 
+#: Electric blue-white sparks, fast, wide and nearly weightless, used for ion
+#: hits (which leave hulls unharmed).
+ION = SparkPreset(
+    color_inner=(0.85, 0.95, 1.0, 1.0),
+    color_outer=(0.1, 0.45, 1.0, 1.0),
+    count=50,
+    speed=10.0,
+    spread=0.8,
+    gravity=0.2,
+    lifetime=0.4,
+    size=0.1,
+)
+
 #: Violet, focused, low-gravity sparks (kept available; not currently wired).
 MAGIC = SparkPreset(
     color_inner=(0.9, 0.5, 1.0, 1.0),

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.major_ship.major_ship import MajorShip
     from space_flight.game.flight_state import FlightState
+    from space_flight.weapons.loadout import Loadout
 
 LOGGER = logging.getLogger()
 
@@ -36,6 +37,7 @@ class LaunchOrder:
     :param formation_shape: The launched fighters' formation shape (None for
         none)
     :param formation_scale_m: Spacing of its slots
+    :param loadout: The launched fighters' weapons (None for their default)
     """
 
     fighter_type: str
@@ -44,6 +46,7 @@ class LaunchOrder:
     primary_target_ids: list = field(default_factory=list)
     formation_shape: str | None = "arrowhead"
     formation_scale_m: float = Formation.FIGHTER_SCALE_M
+    loadout: Loadout | None = None
     #: Pawn ids of the fighters launched so far, in launch order
     ids: list = field(default_factory=list)
     #: The launched fighters' formation (the first one out leads)
@@ -182,6 +185,7 @@ class Hangar(SubSystem):
         primary_target_ids: Sequence = (),
         formation: str | None = "arrowhead",
         formation_scale_m: float = Formation.FIGHTER_SCALE_M,
+        loadout: Loadout | None = None,
     ) -> LaunchOrder:
         """
         Queue a launch of count fighters of fighter_type (group_size by
@@ -195,6 +199,7 @@ class Hangar(SubSystem):
         :param formation: The launched fighters' formation shape:
             "arrowhead", "diamond", "around_diamond", or None for none
         :param formation_scale_m: Spacing of its slots
+        :param loadout: The fighters' weapons; None for their default loadout
         :return: The order, filled as the fighters launch (already cancelled,
             launching nothing, if that type's stock is empty or the hangar
             cannot launch)
@@ -211,6 +216,7 @@ class Hangar(SubSystem):
             primary_target_ids=list(primary_target_ids),
             formation_shape=formation,
             formation_scale_m=formation_scale_m,
+            loadout=loadout,
         )
         if self.stock[fighter_type] <= 0 or not self.is_operational:
             order.cancelled = True
@@ -352,6 +358,7 @@ class Hangar(SubSystem):
             ini_position=position,
             ini_orientation=self.launch_orientation(body_to_world),
             ini_speed=velocity,
+            loadout=order.loadout,
         )
         self._launch_serial += 1
         self.stock[fighter_type] -= 1

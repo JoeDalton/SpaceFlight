@@ -526,6 +526,7 @@ def make_laser_and_shield(
     laser = MagicMock()
     laser.speed = np.asarray(velocity, dtype=float)
     laser.power = power
+    laser.damage_type = PHYSICAL
     laser.launch_position = np.array([1000.0, 0.0, 0.0])
 
     shield = MagicMock()
@@ -572,6 +573,25 @@ def test_laser_from_outside_is_blocked():
     assert shield.take_hit.call_args.kwargs["damage"] == pytest.approx(60.0)
     assert shield.take_hit.call_args.kwargs["damage_type"] == laser.damage_type
     laser.on_impact.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "damage_type, preset", [(PHYSICAL, spark_fx.ICE), (ION, spark_fx.ION)]
+)
+def test_shield_hit_sparks_by_damage_type(damage_type, preset):
+    """
+    A blocked hit throws ice sparks off the bubble, electric ones for an ion
+    hit, and passes the damage type on.
+    """
+    system = make_collision_system_without_init()
+    laser, shield = make_laser_and_shield(velocity=[-10.0, 0.0, 0.0])
+    laser.damage_type = damage_type
+    entry = make_shield_entry(laser, shield, Vec3(1.0, 0.0, 0.0))
+
+    system.munition_into_shield(entry)
+
+    assert shield.take_hit.call_args.kwargs["damage_type"] == damage_type
+    assert spawned_spark_preset(system) is preset
 
 
 def test_laser_from_inside_passes_through():
@@ -919,6 +939,25 @@ def test_hit_passes_the_munitions_damage_type(damage_type):
     system.munition_into_destructible(make_destructible_entry(laser, fighter))
 
     assert fighter.take_hit.call_args.kwargs["damage_type"] == damage_type
+
+
+@pytest.mark.parametrize("shield_level", [50.0, 0.0])
+def test_ion_hit_sparks_ion_and_never_explodes(monkeypatch, shield_level):
+    """
+    An ion hit throws electric ION sparks, shield up or not, and no secondary
+    explosion (it harms no hull).
+    """
+    monkeypatch.setattr("space_flight.game.collisions.random.random", lambda: 0.0)
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    fighter = make_target_fighter(shield_level=shield_level)
+    laser = make_enemy_laser()
+    laser.damage_type = ION
+
+    system.munition_into_destructible(make_destructible_entry(laser, fighter))
+
+    assert spawned_spark_preset(system) is spark_fx.ION
+    system.game.fire_smoke_pool.hit_burst.assert_not_called()
 
 
 def test_hull_hit_on_a_shielded_major_ship_sparks_metal():

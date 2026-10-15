@@ -5,6 +5,7 @@ features.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -12,6 +13,8 @@ import numpy as np
 from space_flight.actors.player import Player
 from space_flight.game.scenario import WaveSpec
 from space_flight.scenes.scenes import scene_factory
+from space_flight.weapons import ION
+from space_flight.weapons.loadout import default_loadout
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -109,6 +112,13 @@ ALLIED_PATROL = WaveSpec(
 )
 
 
+# An ion-armed A-wing: ion lasers, and ion missiles instead of concussion ones
+# (see space_flight.weapons.loadout)
+ION_A_WING = replace(default_loadout("a-wing"), lasers=ION).with_ordnance(
+    concussion_missile=0, ion_missile=6, rocket=0, ion_torpedo=6
+)
+
+
 def build_dev_upfront(game: FlightState):
     """
     Build the heavy, up-front part of the level — run synchronously on a black
@@ -128,6 +138,7 @@ def build_dev_upfront(game: FlightState):
         is_neutral=True,
         has_ai=False,
         record=True,
+        loadout=ION_A_WING,
     )
     # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
     game.scene = scene_factory(game=game, scene_name="lava_planet")

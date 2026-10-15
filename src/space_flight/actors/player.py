@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.pawn import Pawn
     from space_flight.game.flight_state import FlightState
+    from space_flight.weapons.loadout import Loadout
 
 # Fallback flash tint for a hit with no colour of its own (e.g. a bomb).
 _DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
@@ -63,7 +64,18 @@ class Player:
         is_neutral: bool = False,
         has_ai: bool = False,
         record: bool = False,
+        loadout: Loadout | None = None,
     ):
+        """
+        :param game: The game/flight state
+        :param ship_type: The player's fighter model
+        :param ini_position: Initial world position
+        :param ini_orientation: Initial orientation quaternion (w, x, y, z)
+        :param is_neutral: Team 0 instead of 1
+        :param has_ai: Whether an AI pilot flies the player's ship
+        :param record: Step-by-step-record the player
+        :param loadout: The fighter's weapons; None for its default loadout
+        """
         self.game = game
         self.name = "player"
         self.id = uuid.uuid4()
@@ -85,6 +97,7 @@ class Player:
             ini_orientation=ini_orientation,
             is_cockpit=True,
             team=team,
+            loadout=loadout,
         )
 
         # Flight state written by FlightInputContext (or AI pilot) each frame

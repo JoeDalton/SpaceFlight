@@ -129,6 +129,7 @@ class OrdnanceLauncher(Weapon):
         self.conf["damage"] *= damage_multiplier
         self.name = name
         self.category = self.conf["type"]
+        self.damage_type = self.conf["damage_type"]
         self.stock = stock
         # Launch speed relative to the launching ship, along launch_direction
         self.speed_mps = self.conf["speed_mps"]

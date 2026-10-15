@@ -16,7 +16,7 @@ from space_flight.game.collisions import (
 )
 from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
-from space_flight.weapons import PHYSICAL
+from space_flight.weapons import ION, ION_DAMAGE_FACTOR, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.actors.major_ship.major_ship import MajorShip
@@ -264,10 +264,13 @@ class Shield(Destructible):
         Absorb damage into the shield's strength pool.
 
         :param damage: The amount of damage to apply
-        :param damage_type: The type of damage to apply (PHYSICAL, ION)
+        :param damage_type: The type of damage to apply: PHYSICAL, or ION, which
+            drains it ION_DAMAGE_FACTOR times harder
         """
         if damage_type == PHYSICAL:
             self.health -= damage
+        elif damage_type == ION:
+            self.health -= damage * ION_DAMAGE_FACTOR
         else:
             raise NotImplementedError
 

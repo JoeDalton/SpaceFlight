@@ -19,6 +19,8 @@ from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.ship import load_ship_configuration
 from space_flight.ai.formation import Formation
 from space_flight.utils import rotation_matrix_coefficients
+from space_flight.weapons import ION
+from space_flight.weapons.loadout import Loadout
 
 # The star destroyer's ventral bay and hull sphere (see isd/configuration.yaml)
 ISD_BAY_CENTRE = np.array([0.0, 131.0, -30.0])
@@ -298,6 +300,22 @@ def test_launches_the_requested_type(spawned):
     run(game, hangar, until_s=10.0)
 
     assert [call["pawn_model"] for call in spawned] == ["tie-interceptor"] * 2
+
+
+def test_launched_fighters_get_the_requested_loadout(spawned):
+    """
+    A request's loadout arms every fighter it launches; by default, they keep
+    theirs (None).
+    """
+    game, ship = make_game_and_ship()
+    hangar = make_hangar(game, ship)
+    loadout = Loadout(lasers=ION)
+
+    hangar.launch("tie-fighter", 2, loadout=loadout)
+    hangar.launch("tie-fighter", 1)
+    run(game, hangar, until_s=20.0)
+
+    assert [call["loadout"] for call in spawned] == [loadout, loadout, None]
 
 
 def test_launched_fighters_ride_the_ships_motion(spawned):

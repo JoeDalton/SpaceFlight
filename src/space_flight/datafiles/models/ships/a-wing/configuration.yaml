@@ -35,10 +35,14 @@ energy:
   hard_maneuver_drain_rate: 24.0
   laser_shot_cost: 4.5
 
+# Default weapons (see space_flight.weapons.loadout): the cannons' damage type
+# (physical or ion) and the ordnance stocks, in secondary cycling order
 loadout:
-  concussion_missile: 6
-  rocket: 12
-  flare: 10
+  lasers: physical
+  ordnance:
+    concussion_missile: 6
+    rocket: 12
+    flare: 10
 
 explosion_scale: 5.0
 death_spin_duration_s: 2.5

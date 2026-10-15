@@ -15,6 +15,8 @@ from space_flight.global_architecture.gameplay_settings import (
     load_presets,
 )
 from space_flight.utils.state_machine import Cooldown
+from space_flight.weapons import ION, ION_DAMAGE_FACTOR
+from space_flight.weapons.loadout import Loadout
 
 
 def make_fighter_without_init(
@@ -141,6 +143,68 @@ def test_apply_damage_parametrized(
 
     assert fighter.shield == pytest.approx(expected_shield)
     assert fighter.health == pytest.approx(expected_health)
+
+
+# ---------------------------
+# apply_damage — ion
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "shield, engines, lasers, expected",
+    [
+        # 60 energy drained in all, split between the non-empty gauges
+        (100.0, 1.0, 1.0, (80.0, 0.8, 0.8)),
+        (0.0, 1.0, 1.0, (0.0, 0.7, 0.7)),
+        (100.0, 0.0, 1.0, (70.0, 0.0, 0.7)),
+        (0.0, 0.0, 1.0, (0.0, 0.0, 0.4)),
+        (0.0, 0.0, 0.0, (0.0, 0.0, 0.0)),
+        # A gauge holding less than its share just empties
+        (10.0, 0.1, 1.0, (0.0, 0.0, 0.8)),
+    ],
+)
+def test_ion_damage_drains_the_non_empty_gauges_equally(
+    shield, engines, lasers, expected
+):
+    """
+    An ion hit drains ION_DAMAGE_FACTOR times its damage, split equally between
+    the shield (hit points) and the engine and laser gauges (energy units, of
+    capacity 100 here) that are not empty; health is untouched.
+    """
+    fighter = make_fighter_without_init(current_health=200.0, current_shield=shield)
+    fighter.energy.engines = engines
+    fighter.energy.lasers = lasers
+
+    fighter.apply_damage(damage=60.0 / ION_DAMAGE_FACTOR, damage_type=ION)
+
+    assert (fighter.shield, fighter.energy.engines, fighter.energy.lasers) == (
+        pytest.approx(expected)
+    )
+    assert fighter.health == pytest.approx(200.0)
+
+
+def test_ion_damage_on_an_unshielded_fighter_drains_engines_and_lasers():
+    """
+    A TIE has no shield: the whole ion hit goes to its engines and lasers.
+    """
+    fighter = make_fighter_without_init(max_shield=0.0, current_shield=0.0)
+
+    fighter.apply_damage(damage=40.0, damage_type=ION)
+
+    share = 40.0 * ION_DAMAGE_FACTOR / 2.0 / ENERGY_CONF["engine_capacity"]
+    assert fighter.energy.engines == pytest.approx(1.0 - share)
+    assert fighter.energy.lasers == pytest.approx(1.0 - share)
+
+
+def test_ion_damage_holds_off_shield_regeneration():
+    """
+    Like a physical hit, an ion hit restarts the shield regeneration delay.
+    """
+    fighter = make_fighter_without_init(current_shield=50.0)
+
+    fighter.apply_damage(damage=10.0, damage_type=ION)
+
+    assert not fighter.shield_regen_cooldown.ready()
 
 
 # ---------------------------
@@ -695,7 +759,7 @@ def _fake_ship_init(self, game, **kwargs):
         "energy": ENERGY_CONF,
         "hit_box_radius_m": 5.0,
         "explosion_scale": 1.0,
-        "loadout": {"rocket": 2},
+        "loadout": {"ordnance": {"rocket": 2}},
     }
 
 
@@ -738,3 +802,52 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     damage_multiplier = 2.0 if side == "player" else 0.5
     assert laser_cannon_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
     assert launcher_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
+
+
+def test_init_arms_itself_with_the_given_loadout():
+    """
+    A loadout given at construction replaces the configured one: its lasers'
+    damage type goes to the cannons, its ordnance to the launchers.
+    """
+    game = MagicMock()
+    game.app.gameplay_settings.config = copy.deepcopy(load_presets()[DEFAULT_PRESET])
+    loadout = Loadout(lasers=ION, ordnance={"ion_torpedo": 2, "flare": 4})
+
+    with (
+        patch.object(Ship, "__init__", _fake_ship_init),
+        patch("space_flight.actors.fighter.AutoAim"),
+        patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
+        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
+    ):
+        fighter = Fighter(
+            game=game, parent=MagicMock(), ship_type="test", loadout=loadout
+        )
+
+    assert fighter.loadout is loadout
+    assert laser_cannon_cls.call_args.kwargs["damage_type"] == ION
+    assert [
+        (call.kwargs["name"], call.kwargs["stock"])
+        for call in launcher_cls.call_args_list
+    ] == [("ion_torpedo", 2), ("flare", 4)]
+
+
+def test_init_defaults_to_the_configured_loadout():
+    """
+    Without a loadout, the fighter takes its configuration's.
+    """
+    game = MagicMock()
+    game.app.gameplay_settings.config = copy.deepcopy(load_presets()[DEFAULT_PRESET])
+
+    with (
+        patch.object(Ship, "__init__", _fake_ship_init),
+        patch("space_flight.actors.fighter.AutoAim"),
+        patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
+        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
+    ):
+        fighter = Fighter(game=game, parent=MagicMock(), ship_type="test")
+
+    assert fighter.loadout == Loadout(ordnance={"rocket": 2})
+    assert laser_cannon_cls.call_args.kwargs["damage_type"] == "physical"
+    assert launcher_cls.call_args.kwargs["name"] == "rocket"

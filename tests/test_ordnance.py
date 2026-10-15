@@ -19,6 +19,7 @@ from panda3d.core import NodePath
 from space_flight.actors.destructibles import Destructibles
 from space_flight.actors.ordnance import Ordnance, OrdnanceController
 from space_flight.game.integrator import Integrator
+from space_flight.weapons import ION
 from space_flight.weapons.ordnance_launcher import (
     OrdnanceLauncher,
     load_ordnance_configuration,
@@ -560,3 +561,15 @@ def test_a_decoyed_missile_ignores_further_flares(monkeypatch):
     assert controller.offer_decoy(first) is True
     assert controller.offer_decoy(second) is False
     assert controller.decoy_pawn is first
+
+
+def test_ion_damage_does_not_harm_ordnance():
+    """
+    Ordnance has no shield nor energy gauges: ion hits do nothing to it.
+    """
+    pawn = object.__new__(Ordnance)
+    pawn.health = 100.0
+
+    pawn.apply_damage(damage=50.0, damage_type=ION)
+
+    assert pawn.health == 100.0

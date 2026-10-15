@@ -15,9 +15,15 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 from energy_fakes import LASER_SHOT_COST, make_energy_system
-from panda3d.core import Vec3
+from panda3d.core import NodePath, Vec3
 
-from space_flight.weapons.laser_cannon import LASER_SPEED_MPS, LaserCannon
+from space_flight.weapons import ION, PHYSICAL
+from space_flight.weapons.laser_cannon import (
+    GLOW_TINTS,
+    LASER_SPEED_MPS,
+    LIGHT_COLORS,
+    LaserCannon,
+)
 
 FIRE_DELAY_S = 0.5
 N_CANNONS = 2
@@ -45,6 +51,7 @@ def laser_cannon():
     # Exact shots unless a test sets a deviation cone
     cannon.deviation_cone_rad = 0.0
     cannon.damage_multiplier = 1.0
+    cannon.damage_type = PHYSICAL
 
     # Parent ship stub: no auto_aim so fire() falls back to speed + forward
     cannon.parent = MagicMock()
@@ -429,6 +436,64 @@ def test_fire_deviation_does_not_modify_the_parents_forward(laser_cannon):
 
     assert laser_cannon.parent.forward is forward
     np.testing.assert_array_equal(forward, [0.0, 1.0, 0.0])
+
+
+@pytest.mark.parametrize("damage_type", [PHYSICAL, ION])
+def test_fire_gives_the_bolt_the_cannons_damage_type(laser_cannon, damage_type):
+    """
+    Each bolt carries its cannon's damage type.
+    """
+    laser_cannon.damage_type = damage_type
+    laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
+
+    with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
+        laser_cannon.fire()
+
+    assert mock_laser_shot.call_args.kwargs["damage_type"] == damage_type
+
+
+def make_real_laser_cannon(damage_type: str, laser_color: str) -> LaserCannon:
+    """
+    :return: A LaserCannon built for real on a mock game and ship
+    """
+    parent = MagicMock()
+    parent.conf = {
+        "laser_fire_rate": 5.0,
+        "cannon_positions": [[1.0, 2.0, 0.0]],
+        "shot_power": 10.0,
+        "laser_base_range_m": 1000.0,
+        "laser_color": laser_color,
+        "laser_sound": "sounds/weapons/XWING_BLASTER.wav",
+    }
+    return LaserCannon(
+        game=MagicMock(),
+        parent=parent,
+        parent_node=NodePath("ship"),
+        damage_type=damage_type,
+    )
+
+
+@pytest.mark.parametrize("laser_color", ["red", "green"])
+def test_ion_cannons_fire_blue_ion_bolts_whatever_the_ships_colour(laser_color):
+    """
+    Ion cannons ignore the ship's laser colour: their bolts are ion-blue.
+    """
+    ion_cannon = make_real_laser_cannon(ION, laser_color)
+    cannon = make_real_laser_cannon(PHYSICAL, laser_color)
+
+    assert ion_cannon.damage_type == ION
+    assert ion_cannon.laser_color_rgb == GLOW_TINTS["ion"]
+    assert ion_cannon.light_color == LIGHT_COLORS["ion"]
+    assert cannon.damage_type == PHYSICAL
+    assert cannon.laser_color_rgb == GLOW_TINTS[laser_color]
+
+
+def test_unknown_laser_colour_raises():
+    """
+    A laser colour without a tint is a configuration error.
+    """
+    with pytest.raises(ValueError):
+        make_real_laser_cannon(PHYSICAL, "purple")
 
 
 def test_fire_without_deviation_draws_nothing_random(laser_cannon):

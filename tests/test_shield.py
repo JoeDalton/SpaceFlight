@@ -25,6 +25,7 @@ from space_flight.actors.major_ship.shield import (
     Shield,
 )
 from space_flight.utils.state_machine import Cooldown, StateMachine
+from space_flight.weapons import ION, ION_DAMAGE_FACTOR
 
 
 class _Clock:
@@ -116,6 +117,14 @@ def test_apply_damage_reduces_strength():
     shield.apply_damage(damage=250.0, damage_type="physical")
 
     assert shield.health == pytest.approx(750.0)
+
+
+def test_ion_damage_drains_the_shield_harder():
+    shield = make_shield_without_init(current_health=1000.0)
+
+    shield.apply_damage(damage=100.0, damage_type=ION)
+
+    assert shield.health == pytest.approx(1000.0 - 100.0 * ION_DAMAGE_FACTOR)
 
 
 def test_apply_damage_unknown_type_raises():

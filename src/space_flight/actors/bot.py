@@ -69,6 +69,7 @@ class Bot(Destructible):
                 ini_speed=kwargs.get("ini_speed", np.zeros(3)),
                 is_cockpit=False,
                 team=team,
+                loadout=kwargs.get("loadout"),
             )
 
             self.pilot = FighterPilot(game=self.game, pawn=self.pawn)

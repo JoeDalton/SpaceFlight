@@ -27,7 +27,7 @@ from space_flight.utils import (
     magnitude,
     sample_direction_in_cone,
 )
-from space_flight.weapons import PHYSICAL, Munition, Weapon
+from space_flight.weapons import ION, PHYSICAL, Munition, Weapon
 
 if TYPE_CHECKING:
     from space_flight.actors.energy import EnergySystem
@@ -55,11 +55,21 @@ GLOW_RADIUS = 0.2
 EMIT_LASER_LIGHT = False
 
 #: Halo tint per configured laser colour (a touch off-primary reads better as a
-#: glow than a pure primary).
+#: glow than a pure primary). Ion cannons always fire ion bolts,
+#: whatever the ship's laser_color.
 GLOW_TINTS = {
     "red": Vec3(1.0, 0.05, 0.05),
     "green": Vec3(0.1, 1.0, 0.15),
     "blue": Vec3(0.2, 0.45, 1.0),
+    "ion": Vec3(0.35, 0.75, 1.0),
+}
+#: Colour of each bolt's optional dynamic light (see EMIT_LASER_LIGHT), per
+#: laser colour
+LIGHT_COLORS = {
+    "red": (1.0, 0.0, 0.0, 1.0),
+    "green": (0.0, 1.0, 0.0, 1.0),
+    "blue": (0.0, 0.0, 1.0, 1.0),
+    "ion": (0.3, 0.6, 1.0, 1.0),
 }
 
 #: The laser shader is shared by every bolt; load it once, lazily.
@@ -87,6 +97,9 @@ class LaserCannon(Weapon):
 
     A gun powered by an energy system (a fighter's) spends laser energy on each
     bolt, cannot fire without enough, and hits harder on a well-charged gauge.
+
+    Ion cannons fire blue ion bolts, which drain shields and energy instead of
+    damaging hulls (see :mod:`space_flight.weapons`).
     """
 
     def __init__(
@@ -97,6 +110,7 @@ class LaserCannon(Weapon):
         energy: EnergySystem | None = None,
         deviation_cone_deg: float = 0.0,
         damage_multiplier: float = 1.0,
+        damage_type: str = PHYSICAL,
     ):
         """
         :param game: The game/flight state
@@ -108,6 +122,7 @@ class LaserCannon(Weapon):
         :param deviation_cone_deg: Half-angle of the cone within which each
             shot deviates randomly from its aimed direction (0 = no deviation)
         :param damage_multiplier: Scales the damage of every bolt
+        :param damage_type: The bolts' damage type, PHYSICAL or ION
         """
         fire_delay = 1.0 / parent.conf["laser_fire_rate"]
         super().__init__(
@@ -118,6 +133,7 @@ class LaserCannon(Weapon):
             damage_multiplier=damage_multiplier,
         )
         self.energy = energy
+        self.damage_type = damage_type
         self.deviation_cone_rad = np.deg2rad(deviation_cone_deg)
 
         # Cannon configuration
@@ -135,7 +151,7 @@ class LaserCannon(Weapon):
         self.shot_power = self.parent.conf["shot_power"]
         self.laser_base_range_m = self.parent.conf["laser_base_range_m"]
         self.life_time_s = self.laser_base_range_m / LASER_SPEED_MPS
-        color = self.parent.conf["laser_color"]
+        color = "ion" if damage_type == ION else self.parent.conf["laser_color"]
 
         # Sound initialization
         sound_file = DATAFILES_PATH / self.parent.conf["laser_sound"]
@@ -145,15 +161,9 @@ class LaserCannon(Weapon):
         )
 
         # Prepare laser look
-        laser_intensity = 1.0
-        if color == "red":
-            self.light_color = (laser_intensity, 0, 0, 1)
-        elif color == "green":
-            self.light_color = (0, laser_intensity, 0, 1)
-        elif color == "blue":
-            self.light_color = (0, 0, laser_intensity, 1)
-        else:
-            raise ValueError
+        if color not in LIGHT_COLORS:
+            raise ValueError(f"Unknown laser colour {color!r}")
+        self.light_color = LIGHT_COLORS[color]
         # Halo tint fed to the capsule shader (self-lit; no sprite texture).
         self.laser_color_rgb = GLOW_TINTS[color]
 
@@ -201,6 +211,7 @@ class LaserCannon(Weapon):
             shot_speed,
             shot_power,
             self.life_time_s,
+            damage_type=self.damage_type,
             color=self.laser_color_rgb,
             light_color=self.light_color,
         )

@@ -9,7 +9,7 @@ from panda3d.core import NodePath, Vec3
 from space_flight.actors.destructibles import Destructible
 from space_flight.fx.damage_fx import DamageFX
 from space_flight.game.collisions import attach_collision_box, attach_collision_sphere
-from space_flight.weapons import PHYSICAL
+from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
@@ -188,6 +188,9 @@ class SubSystem(Destructible):
         """
         if damage_type == PHYSICAL:
             self.health -= damage
+        elif damage_type == ION:
+            # TODO #157 phase 3: ion hits disable subsystems for a while
+            return
         else:
             raise NotImplementedError
 
