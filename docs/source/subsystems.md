@@ -9,7 +9,7 @@ lose their aim assist and fire-rate boost; destroy the turrets and the ship
 stops shooting back; destroy a hangar and no more fighters launch from it.
 
 All of the subsystem code lives in
-[`src/space_flight/actors/major_ship/`](../../src/space_flight/actors/major_ship/).
+[`src/space_flight/actors/major_ship/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/major_ship/).
 This page is the guided tour; the per-class API is in the
 [code reference](apidocs/index.rst).
 
@@ -53,6 +53,8 @@ the behaviour every subsystem shares:
   player can lock onto it individually.
 - **Dies with its ship.** If the ship it is mounted on is gone, the subsystem
   zeroes its own health so it is cleaned up on the next frame.
+- **Ion hits disable it** for a while, without harming it (see
+  [below](#ion-hits-disabling-subsystems)).
 
 | Subsystem | Class | Base | Role |
 |-----------|-------|------|------|
@@ -64,6 +66,29 @@ the behaviour every subsystem shares:
 | Tracking mount | `TrackingMount` | `SubSystem` | Base for turrets/tractor beams that swivel to aim |
 | Turret | `Turret` | `TrackingMount` | Aims and fires laser cannons |
 | Tractor beam | `TractorBeamProjector` | `TrackingMount` | Aims, grabs a prey and reels it in |
+
+### Ion hits: disabling subsystems
+
+Ion hits never harm a subsystem's health; they load it up instead
+(`ion_load`, `ION_DAMAGE_FACTOR` times their damage). Once the load reaches
+the subsystem's `ion_capacity` — an `ion_capacity` key in its config, or
+`ION_CAPACITY_HEALTH_FRACTION` (half) of its health by default — it is
+**disabled** (`is_disabled`) for `ION_DISABLE_DURATION_S` (8 s) and the load
+starts over; enough ion damage while disabled keeps it down longer. The load
+bleeds off at `ION_LOAD_DECAY_RATE_PS` (5%) of the capacity per second, so it
+takes sustained fire. These tuning values are globals of
+[`weapons/__init__.py`](../../src/space_flight/weapons/__init__.py).
+
+While disabled, a subsystem crackles with ion sparks, the player's target box
+reads `DISABLED`, and it stops working. Subclasses react in the
+`on_disabled` / `on_enabled` hooks and check `is_disabled`:
+
+| Subsystem | While disabled |
+|-----------|----------------|
+| Turret, tractor beam | frozen: no turning, no firing or grabbing (a tractor beam lets go of its prey); restarts from rest |
+| Targeting system | boosts no turret (a turret falls back to another working one) |
+| Shield generator | stops powering the shield (see [pro-rata perks](#shield-generator--shield)) |
+| Hangar | launches nothing but keeps its requests; resumes a launch interval after coming back |
 
 ## Passive module: engine
 
@@ -89,9 +114,10 @@ and capital ships alike may carry them; the star destroyer has one ventral bay.
   stocked.
 - **Requests.** `launch(fighter_type, count=None, on_launched=None,
   primary_target_ids=(), formation="arrowhead",
-  formation_scale_m=Formation.FIGHTER_SCALE_M)` queues a `LaunchOrder` of
-  `count` fighters
-  (`group_size` by default) of `fighter_type`, filled one launch at a time
+  formation_scale_m=Formation.FIGHTER_SCALE_M, loadout=None)` queues a
+  `LaunchOrder` of `count` fighters
+  (`group_size` by default) of `fighter_type`, armed with `loadout` (their
+  default one if None, see [loadouts](actors.md#loadouts)), filled one launch at a time
   behind any earlier request; the order records the launched pawn ids and is
   `done` once filled or cancelled. A type not in the stock raises
   (`KeyError`); a request for a type whose stock is empty, or to a hangar
@@ -131,9 +157,10 @@ owned by the ship. The generators are the *hardware*, the shield the *effect*:
 a ship with no generators gets no shield (a stray `shield` spec on it is
 ignored, with a warning).
 
-- **Pro-rata perks.** With `initial` generators and `alive` still standing,
-  the fraction `alive / initial` scales both the maximum strength and the
-  regeneration rate, and the current strength is scaled by the same ratio as
+- **Pro-rata perks.** With `initial` generators and `powered` still projecting
+  it (standing, and not [disabled](#ion-hits-disabling-subsystems) by ion
+  hits), the fraction `powered / initial` scales both the maximum strength and
+  the regeneration rate, and the current strength is scaled by the same ratio as
   the maximum (a partly depleted shield loses the same proportion). Shooting
   off one of three generators leaves the shield at two-thirds strength; this
   is recomputed every frame. `get_shield_level()` reads 0 once the shield's
@@ -145,7 +172,9 @@ ignored, with a warning).
 
 The shield has **two distinct failure modes**:
 
-- **Disabled** — its own strength pool is depleted by hits. The bubble
+- **Disabled** — its own strength pool is depleted by hits (ion hits drain it
+  `ION_DAMAGE_FACTOR` times harder), or every generator is disabled by ion
+  hits. The bubble
   collapses (the fluid *death* animation) and stays *down*: not protecting,
   hidden, but still alive. After a regeneration cooldown it strengthens again
   and *reappears* (the death animation played in reverse).
@@ -246,4 +275,4 @@ publishing a lead solution (`aim_direction`, `target_distance_m`) that
 
 Every subsystem module, including the turret and tractor-beam mounts and their
 `TurretModel`, sits under
-[`src/space_flight/actors/major_ship/`](../../src/space_flight/actors/major_ship/).
+[`src/space_flight/actors/major_ship/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/major_ship/).

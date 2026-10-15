@@ -13,8 +13,12 @@ _attach_collider (and optionally _clean_extra) and inherit the whole lifecycle.
 
 Ordnance (bombs, rockets, missiles, flares) are flown pawns instead (see
 :mod:`space_flight.actors.ordnance`), but expose the same interface to the
-collision handlers: origin_ship / origin_ship_id / power / speed / color,
-on_impact() and impact_position().
+collision handlers: origin_ship / origin_ship_id / power / damage_type / speed /
+color, on_impact() and impact_position().
+
+Damage is PHYSICAL (shields first, then health) or ION: ion damage never
+touches health, but drains shields and energy gauges, ION_DAMAGE_FACTOR times
+harder than physical damage would.
 """
 
 from __future__ import annotations
@@ -36,6 +40,42 @@ if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
+
+PHYSICAL = "physical"
+ION = "ion"
+DAMAGE_TYPES = (PHYSICAL, ION)
+# Ion damage drains shields and energy gauges this many times harder than its
+# power
+ION_DAMAGE_FACTOR = 1.5
+# Ion hits load a capital ship's subsystem up (see SubSystem): once the load
+# reaches its ion capacity (by default this fraction of its health), the
+# subsystem is disabled for ION_DISABLE_DURATION_S. The load bleeds off at
+# ION_LOAD_DECAY_RATE_PS of the capacity per second, so it takes sustained fire.
+ION_CAPACITY_HEALTH_FRACTION = 0.5
+ION_DISABLE_DURATION_S = 8.0
+ION_LOAD_DECAY_RATE_PS = 0.05
+
+
+def is_ion_vulnerable(target: Any) -> bool:
+    """
+    Whether ion weapons still have an effect on a target: a fighter with any of
+    its shield, engine or laser gauges not empty, a capital ship whose shield
+    bubble is up (its hull is immune), or a subsystem not disabled yet. Nothing
+    else (ordnance, unknown actors) is.
+
+    :param target: The target actor
+    :return: True if an ion hit would do something
+    """
+    category = getattr(target, "category", None)
+    if category == "fighter":
+        energy = target.energy
+        return target.shield_level > 0.0 or energy.engines > 0.0 or energy.lasers > 0.0
+    if category == "capital_ship":
+        shield = target.shield
+        return shield is not None and shield.is_enabled
+    if category == "sub_system":
+        return not target.is_disabled
+    return False
 
 
 def build_ordnance_sphere(
@@ -130,6 +170,7 @@ class Weapon:
         speed: np.ndarray,
         power: float,
         life_time_s: float,
+        damage_type: str = PHYSICAL,
         **munition_kwargs: Any,
     ):
         """
@@ -141,6 +182,7 @@ class Weapon:
         :param speed: World-space velocity
         :param power: Damage dealt on impact, before the damage multiplier
         :param life_time_s: How long the munition lives
+        :param damage_type: PHYSICAL or ION
         :param munition_kwargs: Extra per-weapon visual parameters (e.g. the laser
             texture / light colour)
         """
@@ -149,6 +191,7 @@ class Weapon:
             origin_ship_id=self.parent.id,
             origin_ship=self.parent,
             power=power * self.damage_multiplier,
+            damage_type=damage_type,
             life_time_s=life_time_s,
             speed=speed,
             start_position=start_position,
@@ -177,7 +220,7 @@ class Munition:
     Owns the whole projectile lifecycle -- identity, damage, emitter, world
     velocity, a straight-line coast for its lifetime, game.game_objects
     registration and a timed self-clean -- and exposes the interface the collision
-    handlers read (origin_ship / origin_ship_id / power / speed /
+    handlers read (origin_ship / origin_ship_id / power / damage_type / speed /
     shot). Subclasses supply only the visual and the collider.
     """
 
@@ -190,6 +233,7 @@ class Munition:
         speed: np.ndarray,
         start_position: Point3,
         origin_ship: Fighter | Turret | None = None,
+        damage_type: str = PHYSICAL,
     ):
         """
         :param game: The game/flight state
@@ -200,10 +244,12 @@ class Munition:
         :param start_position: World-space emission point
         :param origin_ship: The emitter object itself; read by the damage handlers
             (via owners_share_vehicle) to spare the whole firing vehicle
+        :param damage_type: PHYSICAL or ION
         """
         self.game = game
         self.id = uuid.uuid4()
         self.power = power
+        self.damage_type = damage_type
         self.origin_ship_id = origin_ship_id
         self.origin_ship = origin_ship
         # Who gets the credit if it kills, captured now: the shooter may be

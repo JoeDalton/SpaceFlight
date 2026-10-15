@@ -136,6 +136,19 @@ ICE = SparkPreset(
     size=0.12,
 )
 
+#: Electric blue-white sparks, fast, wide and nearly weightless, used for ion
+#: hits (which leave hulls unharmed).
+ION = SparkPreset(
+    color_inner=(0.85, 0.95, 1.0, 1.0),
+    color_outer=(0.1, 0.45, 1.0, 1.0),
+    count=50,
+    speed=10.0,
+    spread=0.8,
+    gravity=0.2,
+    lifetime=0.4,
+    size=0.1,
+)
+
 #: Violet, focused, low-gravity sparks (kept available; not currently wired).
 MAGIC = SparkPreset(
     color_inner=(0.9, 0.5, 1.0, 1.0),
@@ -265,3 +278,51 @@ class SparkPool(ParticleBuffer):
                 gravity=preset.gravity,
                 spark_color=color,
             )
+
+
+# ---------------------------------------------------------------------------
+# Ion crackle
+# ---------------------------------------------------------------------------
+
+#: Something knocked out by ion hits crackles with ION bursts, at random
+#: intervals of up to this long.
+ION_CRACKLE_MAX_INTERVAL_S = 0.3
+
+
+class IonCrackle:
+    """
+    The crackle of a ship or subsystem knocked out by ion hits: ION spark
+    bursts off random points of its surface, at random intervals. Its owner
+    calls :meth:`update` every frame it is disabled.
+    """
+
+    def __init__(self):
+        self.next_crackle_s = 0.0
+
+    def update(
+        self,
+        game: FlightState,
+        position: np.ndarray,
+        radius_m: float,
+        velocity: np.ndarray,
+    ):
+        """
+        Throw a burst once the next one is due.
+
+        :param game: The game, for its clock and spark pool
+        :param position: The owner's world position
+        :param radius_m: The owner's size: bursts start this far from it
+        :param velocity: The owner's world velocity, which the sparks ride
+        """
+        now = game.game_time.get_current_time()
+        if now < self.next_crackle_s:
+            return
+        self.next_crackle_s = now + random.uniform(0.0, ION_CRACKLE_MAX_INTERVAL_S)
+        direction = np.random.normal(size=3)
+        direction /= np.linalg.norm(direction)
+        game.spark_fx_pool.spawn(
+            position=Point3(*(np.asarray(position) + radius_m * direction)),
+            normal=Vec3(*direction),
+            base_velocity=Vec3(*velocity),
+            preset=ION,
+        )

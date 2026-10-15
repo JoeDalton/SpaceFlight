@@ -7,7 +7,8 @@ mission (:class:`WaveHandle`, returned by :meth:`Mission.wave` /
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator, Optional, Sequence, Union
 
 import numpy as np
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.major_ship.hangar import Hangar, LaunchOrder
     from space_flight.game.scenario.mission import Mission
+    from space_flight.weapons.loadout import Loadout
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,9 @@ class WaveSpec:
         simply appear, e.g. ships already on stage when the level starts)
     :param spawn_speed_mps: The ships' initial speed, along their heading; a
         hyperspace drop lands at this speed
+    :param loadouts: Fighters' weapons by fighter model, replacing their
+        default loadout (see :mod:`space_flight.weapons.loadout`); models
+        missing keep theirs
     """
 
     name: str
@@ -67,6 +72,7 @@ class WaveSpec:
     record: bool = False
     hyperspace: bool = True
     spawn_speed_mps: float = 50.0
+    loadouts: Mapping[str, Loadout] = field(default_factory=dict)
 
     def __post_init__(self):
         single = isinstance(self.ship_model, str)
@@ -252,6 +258,7 @@ class WaveHandle:
                 team=spec.team,
                 debug_decisions=False,
                 record=spec.record,
+                loadout=spec.loadouts.get(model),
             )
             self.ids.append(bot.pawn.id)
             if formation is not None:
@@ -293,6 +300,7 @@ class WaveHandle:
             on_launched=on_launched,
             formation=self.spec.formation,
             formation_scale_m=self.spec.formation_scale_m,
+            loadout=self.spec.loadouts.get(self.spec.ship_model),
         )
         return self
 

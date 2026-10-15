@@ -12,6 +12,7 @@ from space_flight.actors.major_ship import (
     major_ship_class,
     make_major_ship,
 )
+from space_flight.weapons import ION
 
 
 def make_major_ship_without_init(
@@ -165,6 +166,18 @@ def test_apply_damage_physical_with_zero_damage_leaves_health_unchanged():
     major_ship.apply_damage(damage=0.0, damage_type="physical")
 
     assert major_ship.health == pytest.approx(1000.0)
+
+
+def test_ion_damage_does_not_harm_the_hull():
+    """
+    Ion hits cannot damage a capital ship's hull.
+    """
+    major_ship = make_major_ship_without_init()
+    health = major_ship.health
+
+    major_ship.apply_damage(damage=500.0, damage_type=ION)
+
+    assert major_ship.health == health
 
 
 def test_apply_damage_unknown_type_raises():

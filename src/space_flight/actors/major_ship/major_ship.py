@@ -14,6 +14,7 @@ from space_flight.actors.major_ship.shield_generator import ShieldGenerator
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -73,6 +74,7 @@ class MajorShip(Ship):
                 hit_box_radius_m=gen_conf.get("hit_box_radius_m", 5.0),
                 health=gen_conf.get("health", 1000.0),
                 explosion_scale=gen_conf.get("explosion_scale", 10.0),
+                ion_capacity=gen_conf.get("ion_capacity"),
             )
             self.sub_systems.append(generator)
             self.shield_generators.append(generator)
@@ -92,6 +94,7 @@ class MajorShip(Ship):
                     explosion_scale=ts_conf.get("explosion_scale", 10.0),
                     fire_rate_multiplier=ts_conf.get("fire_rate_multiplier", 2.0),
                     auto_aim_params=ts_conf.get("auto_aim", {}),
+                    ion_capacity=ts_conf.get("ion_capacity"),
                 )
             )
 
@@ -151,6 +154,7 @@ class MajorShip(Ship):
                     launch_speed_mps=hangar_conf.get("launch_speed_mps", 30.0),
                     launch_margin_m=hangar_conf.get("launch_margin_m", 5.0),
                     name=f"hangar_{i}",
+                    ion_capacity=hangar_conf.get("ion_capacity"),
                 )
             )
         return hangars
@@ -261,14 +265,17 @@ class MajorShip(Ship):
 
     def apply_damage(self, damage: float, damage_type: str):
         """
-        Apply damage straight to hull health (the shared shield absorbs hits
-        separately, through the collision handlers)
+        Apply physical damage straight to hull health (the shared shield absorbs
+        hits separately, through the collision handlers). Ion damage cannot
+        harm the hull.
 
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical, energy)
+        :param damage_type: the type of damage to apply (PHYSICAL, ION)
         """
-        if damage_type == "physical":
+        if damage_type == PHYSICAL:
             self.health -= damage
+        elif damage_type == ION:
+            return
         else:
             raise NotImplementedError
 

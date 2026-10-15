@@ -2,7 +2,7 @@
 
 Everything visually or aurally reactive but not core gameplay — explosions,
 sparks, damage trails, cockpit feedback, speed dust, sound — lives in
-[`src/space_flight/fx/`](../../src/space_flight/fx/). This page is the guided
+[`src/space_flight/fx/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/fx/). This page is the guided
 tour; the per-class API is in the [code reference](apidocs/index.rst).
 
 ## Mental model
@@ -85,7 +85,7 @@ of round glowing sparks thrown out of a laser impact.
   `spawn(position, normal, base_velocity, preset)` emits a cone of sparks
   around the normal, each on a ballistic (gravity-pulled) path, shrinking as
   it ages.
-- **`SparkPreset`** (`METAL`, `ICE`, `ROCK`, `MAGIC`) bundles two colours,
+- **`SparkPreset`** (`METAL`, `ICE`, `ION`, `ROCK`, `MAGIC`) bundles two colours,
   count, speed, cone spread, gravity, lifetime and size. Colour and gravity
   are written **per particle** so bursts of different presets coexist in the
   one buffer; each spark's colour is premixed CPU-side from its random size
@@ -93,17 +93,23 @@ of round glowing sparks thrown out of a laser impact.
   and `SPARK_JET_ANGLE_SCALE` scale every preset at once.
 - Wiring, in the laser handlers of
   [`collisions.py`](../../src/space_flight/game/collisions.py):
-  - bot hits: `ICE` if the target's own (fighter) shield was still up, else
-    `METAL`; a major ship's hull and subsystems always spark `METAL`, as a
-    shot reaching them got past its bubble;
-  - major-ship shield-bubble hits: `ICE`, on top of the shield's own flash;
+  - bot hits: `ION` for an ion hit; else `ICE` if the target's own (fighter)
+    shield was still up, else `METAL`; a major ship's hull and subsystems
+    always spark `METAL`, as a shot reaching them got past its bubble;
+  - major-ship shield-bubble hits: `ICE` (`ION` for an ion hit), on top of the
+    shield's own flash;
   - terrain hits: `_TERRAIN_SPARK_PRESET[terrain.material]` (`"water"` →
     `ICE`, `"rock"` → `ROCK`, `"metal"` → `METAL`; `ROCK` if absent).
 
   Bot and shield bursts inherit the target's velocity; terrain bursts get
-  zero. On a fraction of bot hits (`HIT_EXPLOSION_CHANCE` in `collisions.py`,
-  1/3) `FireSmokePool.hit_burst()` is also spawned at the same point, normal
-  and velocity.
+  zero. On a fraction of physical bot hits (`HIT_EXPLOSION_CHANCE` in
+  `collisions.py`, 1/3) `FireSmokePool.hit_burst()` is also spawned at the
+  same point, normal and velocity.
+- Subsystems disabled by ion hits, and fighters whose engines are dead, also
+  crackle (`IonCrackle`): `ION` bursts off random points of their surface, at
+  random intervals of up to `ION_CRACKLE_MAX_INTERVAL_S` (see
+  [subsystems.md](subsystems.md#ion-hits-disabling-subsystems)). The player's
+  own fighter does not, seen from its cockpit.
 
 ## `damage_fx.py` — damage & death smoke/fire trail
 
@@ -236,5 +242,5 @@ sound:
 ## Where things live
 
 One module per section above, all under
-[`src/space_flight/fx/`](../../src/space_flight/fx/); the shaders they drive
+[`src/space_flight/fx/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/fx/); the shaders they drive
 are described in [shaders.md](shaders.md).

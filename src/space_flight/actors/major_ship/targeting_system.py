@@ -35,6 +35,9 @@ class TargetingSystem(SubSystem):
         (e.g. target_lock_delay_s, max_assist_angle_deg). Empty falls
         back to the auto-aim defaults.
     :param name: Node and display name of the targeting system
+    :param ion_capacity: Ion damage it takes to be disabled (see
+        :class:`SubSystem`); ION_CAPACITY_HEALTH_FRACTION of its
+        health by default
     """
 
     def __init__(
@@ -48,6 +51,7 @@ class TargetingSystem(SubSystem):
         fire_rate_multiplier: float = 2.0,
         auto_aim_params: dict | None = None,
         name: str = "targeting_system",
+        ion_capacity: float | None = None,
     ):
         super().__init__(
             game=game,
@@ -57,6 +61,7 @@ class TargetingSystem(SubSystem):
             health=health,
             explosion_scale=explosion_scale,
             name=name,
+            ion_capacity=ion_capacity,
         )
         self.fire_rate_multiplier = fire_rate_multiplier
         self.auto_aim_params = auto_aim_params or {}

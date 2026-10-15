@@ -333,12 +333,8 @@ class GenericShipNavigator(GenericNavigator):
         ]
 
         # Identify leader in interactions
-        try:
-            leader_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-            leader = self.game.interactions.actors[leader_actor_index]
-        except ValueError:
+        leader = self.game.interactions.find_actor(target_dict["target_id"])
+        if leader is None:
             if self.debug:
                 LOGGER.info(
                     f"Navigator {self.pawn.parent.name}: "

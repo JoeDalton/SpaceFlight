@@ -1,0 +1,15 @@
+# Ion bomb: heavy, slow ordnance dropped from the belly, draining shields and
+# energy of ground and capital targets
+type: bomb
+life_time_s: 6.67  # 500 m at its launch speed
+damage: 4000.0
+damage_type: ion  # no hull damage (see space_flight.weapons)
+reload_s: 0.5
+# Launch: speed relative to the launching ship, kept for its whole life
+launch_direction: down
+speed_mps: 75.0
+launch_offset_m: 0.0
+# Placeholder look and collision
+visual_radius_m: 0.5
+collision_radius_m: 0.5
+color: [0.3, 0.6, 1.0, 1.0]

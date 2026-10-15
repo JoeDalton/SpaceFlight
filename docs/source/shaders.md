@@ -1,6 +1,6 @@
 # Shaders
 
-[`src/space_flight/datafiles/shaders/`](../../src/space_flight/datafiles/shaders/)
+[`src/space_flight/datafiles/shaders/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/datafiles/shaders/)
 holds the GLSL the game loads from disk (as opposed to shaders baked into
 imported models). GLSL isn't covered by the docstring-generated
 [code reference](apidocs/index.rst), so this page says what each shader does
@@ -124,7 +124,7 @@ Driven by [`scenes/ocean.py`](../../src/space_flight/scenes/ocean.py) (see
     would skew the projective divide per triangle once the swell displaces
     vertices. Sampling at that flat footprint still slides against the
     displaced geometry (see the
-    [ocean swell artifact report](../../src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md)).
+    [ocean swell artifact report](https://github.com/JoeDalton/SpaceFlight/blob/main/src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md)).
     The ripple-perturbed UV is clamped to the rendered region
     (`uReflUVScale`) so it never samples the power-of-two padding.
   - **Output.** The fresnel blend of reflection and water colour is
@@ -245,6 +245,6 @@ full-screen wash. The output is alpha-blended over the scene.
 ## Where things live
 
 All shaders sit directly in
-[`src/space_flight/datafiles/shaders/`](../../src/space_flight/datafiles/shaders/),
+[`src/space_flight/datafiles/shaders/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/datafiles/shaders/),
 named after the effect; each is loaded by the Python module named in its
 section.

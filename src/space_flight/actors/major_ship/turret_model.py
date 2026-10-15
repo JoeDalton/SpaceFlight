@@ -17,11 +17,13 @@ class TurretModel:
     ):
         self.game = game
         self.turret_type = turret_type
-        # Instantiate already-loaded models to a new node
+        # Copy the already-loaded model to a new node: a copy, not an instance,
+        # so this mount's swivelling joints are its own (instances would share
+        # them with every other mount of the type)
         self.model = self.game.root_node.attachNewNode("turret_model_instance")
 
         if self.turret_type == "test":
-            self.game.app.asset_manager.instantiate_3d_model_to_node(
+            self.game.app.asset_manager.copy_3d_model_to_node(
                 path=DATAFILES_PATH / "models/turrets/test/turret.glb",
                 parent_node=self.model,
             )

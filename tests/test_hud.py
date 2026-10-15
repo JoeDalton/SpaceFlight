@@ -10,9 +10,10 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from energy_fakes import make_energy_system
 from panda3d.core import NodePath, PerspectiveLens, Point3, Vec3
 
-from space_flight.actors.energy import ENGINES, LASERS, SHIELDS, EnergySystem
+from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
 from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
@@ -20,8 +21,10 @@ from space_flight.ui.hud import (
     CHATTER_DISPLAY_S,
     CROSSHAIR_COLOR,
     CROSSHAIR_LOCKED_COLOR,
+    DISABLED_TEXT,
     EDGE_HORIZONTAL,
     EDGE_VERTICAL,
+    ENGINES_OFFLINE_TEXT,
     EVENT,
     EVENT_DISPLAY_S,
     FAVOURED_GAUGE_BRIGHTNESS,
@@ -208,6 +211,26 @@ def test_target_box_is_hidden_and_target_dropped_without_a_live_target(dead):
     aim_hud.target_anchor.hide.assert_called_once()
     aim_hud.target_anchor.show.assert_not_called()
     assert (pawn.target, pawn.target_id, pawn.target_idx) == (None, None, None)
+
+
+@pytest.mark.parametrize("disabled", [False, True])
+def test_target_box_flags_a_disabled_target(disabled):
+    """
+    A target knocked out by ion hits is labelled as disabled.
+    """
+    aim_hud = make_aim_hud()
+    target = aim_hud.game.player.pawn.target
+    target.position = np.array([0.0, 250.0, 0.0])
+    target.scan = None
+    target.parent = None
+    target.name = "turret_3"
+    target.is_disabled = disabled
+    aim_hud.game.app.camera.getPos.return_value = Point3(0, 0, 0)
+
+    aim_hud.update_target_box()
+
+    expected = f"turret_3 - {DISABLED_TEXT}" if disabled else "turret_3"
+    aim_hud.name_label.__setitem__.assert_called_once_with("text", expected)
 
 
 def test_target_box_sits_on_a_target_ahead():
@@ -638,7 +661,7 @@ def make_energy_hud(has_shields: bool = True) -> tuple[EnergyHUD, SimpleNamespac
         shield=200.0,
         max_shield=800.0 if has_shields else 0.0,
         speed=np.array([0.0, 120.4, 0.0]),
-        energy=EnergySystem(has_shields=has_shields, laser_shot_energy_cost=0.02),
+        energy=make_energy_system(has_shields=has_shields),
     )
     game = SimpleNamespace(player=SimpleNamespace(pawn=pawn))
     return EnergyHUD(game=game, parent_node=NodePath("corner")), pawn
@@ -676,6 +699,18 @@ def test_energy_hud_shows_hp_speed_and_shield():
     assert energy_hud.shield_gauge.fill_steps == energy_hud.shield_gauge.n_segments // 4
     assert energy_hud.laser_gauge.text.node().getText() == "25%"
     assert energy_hud.laser_gauge.fill_steps == energy_hud.laser_gauge.n_segments // 4
+
+
+def test_energy_hud_shows_dead_engines_offline():
+    """
+    While the engines are dead, the engine gauge says so instead of the speed.
+    """
+    energy_hud, pawn = make_energy_hud()
+    pawn.energy.drain(ENGINES, 1e6)
+
+    energy_hud.update()
+
+    assert energy_hud.engine_gauge.text.node().getText() == ENGINES_OFFLINE_TEXT
 
 
 def test_energy_hud_hides_the_shield_gauge_without_shields():
@@ -765,7 +800,7 @@ def test_balanced_power_brightens_no_gauge():
     """
     With balanced power, every gauge has the normal brightness.
     """
-    energy = EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
+    energy = make_energy_system(has_shields=True)
     for system in (ENGINES, LASERS, SHIELDS):
         assert gauge_brightness(energy, system) == GAUGE_BRIGHTNESS
 
@@ -998,9 +1033,7 @@ def test_hud_shows_hints_smaller_and_never_with_chatter(spaceflight_app):
         method_lists={},
         mission=Mission(SimpleNamespace(game_time=clock)),
         player=SimpleNamespace(
-            pawn=SimpleNamespace(
-                energy=EnergySystem(has_shields=True, laser_shot_energy_cost=0.02)
-            )
+            pawn=SimpleNamespace(energy=make_energy_system(has_shields=True))
         ),
     )
     hud = HUD(game=game)

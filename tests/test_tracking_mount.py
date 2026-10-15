@@ -98,6 +98,32 @@ def test_move_runs_the_operate_hook():
     mount._operate.assert_called_once()
 
 
+def test_disabled_mount_is_frozen():
+    """
+    A mount disabled by ion hits neither turns nor operates.
+    """
+    mount = make_tracking_mount_without_init(new_state=np.array([20.0, 40.0]))
+    mount._operate = MagicMock()
+    mount.is_disabled = True
+
+    mount.move(yaw_rate=1.0, pitch_rate=1.0)
+
+    np.testing.assert_allclose(mount.state, [0.0, 30.0])
+    mount._operate.assert_not_called()
+
+
+def test_disabling_stops_the_mount():
+    """
+    Disabling drops the mount's turn rates: it restarts from rest.
+    """
+    mount = make_tracking_mount_without_init()
+    mount.state_derivative = np.array([10.0, -5.0])
+
+    mount.on_disabled()
+
+    np.testing.assert_allclose(mount.state_derivative, [0.0, 0.0])
+
+
 def test_base_operate_is_a_noop():
     """
     The base _operate does nothing (subclasses provide the action).

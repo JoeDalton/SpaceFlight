@@ -118,3 +118,25 @@ def test_mount_pilot_pilot_updates_stored_yaw_and_pitch(mount_pilot):
 
     assert hasattr(mount_pilot, "yaw_rate")
     assert hasattr(mount_pilot, "pitch_rate")
+
+
+@pytest.mark.parametrize(
+    "forward, target",
+    [
+        ([0.0, 1.0000001, 0.0], [0.0, 1.0, 0.0]),  # dead ahead
+        ([0.0, 0.0, 1.0000001], [0.0, 0.0, 1.0]),  # straight up
+    ],
+    ids=["dead_ahead", "straight_up"],
+)
+def test_mount_pilot_survives_float_error_past_unit(mount_pilot, forward, target):
+    """
+    Float error can push the barrel's forward vector a hair past unit length:
+    the angles stay finite instead of turning NaN (arccos/arcsin of 1+eps).
+    """
+    mount_pilot.pawn.forward = np.array(forward)
+
+    with np.errstate(invalid="raise"):
+        yaw_rate, pitch_rate = mount_pilot.pilot(target_direction=np.array(target))
+
+    assert mount_pilot.angle_to_target_deg == pytest.approx(0.0, abs=1e-3)
+    assert np.isfinite(yaw_rate) and np.isfinite(pitch_rate)

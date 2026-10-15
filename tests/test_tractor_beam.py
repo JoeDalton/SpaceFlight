@@ -71,10 +71,9 @@ def make_tractor(prey=None, host_speed=(0.0, 0.0, 0.0)):
     tractor.game = MagicMock()
     tractor.game.game_time.get_current_time.side_effect = clock
     if prey is not None:
-        tractor.game.interactions.get_actor_index_from_id.return_value = 0
-        tractor.game.interactions.actors = [prey]
+        tractor.game.interactions.find_actor.return_value = prey
     else:
-        tractor.game.interactions.get_actor_index_from_id.side_effect = ValueError
+        tractor.game.interactions.find_actor.return_value = None
     # Player is someone else unless a test says otherwise.
     tractor.game.player.pawn.id = "the_player"
     return tractor
@@ -155,6 +154,25 @@ def test_no_acquire_during_regrab_cooldown():
     tractor._try_acquire()
 
     assert tractor.is_grabbing is False
+
+
+@pytest.mark.parametrize("grabbing", [True, False])
+def test_disabling_lets_go_of_the_prey(grabbing):
+    """
+    A projector disabled by ion hits releases what it holds (and freezes).
+    """
+    prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
+    tractor = make_tractor(prey=prey)
+    tractor.state_derivative = np.zeros(2)
+    if grabbing:
+        tractor.grab_sm.request(_GRABBING, force=True)
+        tractor.grabbed_prey_id = prey.id
+
+    tractor.on_disabled()
+
+    assert tractor.is_grabbing is False
+    assert tractor.grabbed_prey_id is None
+    assert tractor.regrab_cooldown.ready() is not grabbing
 
 
 # ---------------------------
@@ -272,7 +290,7 @@ def test_service_grab_releases_when_prey_gone():
     prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
     tractor = _grabbing_tractor(prey)
     # Prey no longer resolvable.
-    tractor.game.interactions.get_actor_index_from_id.side_effect = ValueError
+    tractor.game.interactions.find_actor.return_value = None
 
     tractor._clock.t = 1.0
     tractor._service_grab()
@@ -357,8 +375,6 @@ def test_resolve_prey_rejects_ungrabbable_actor():
     """
     ungrabbable = SimpleNamespace(id="rock", position=np.zeros(3))
     tractor = make_tractor()
-    tractor.game.interactions.get_actor_index_from_id.side_effect = None
-    tractor.game.interactions.get_actor_index_from_id.return_value = 0
-    tractor.game.interactions.actors = [ungrabbable]
+    tractor.game.interactions.find_actor.return_value = ungrabbable
 
     assert tractor._resolve_prey("rock") is None

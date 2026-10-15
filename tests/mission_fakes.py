@@ -174,6 +174,7 @@ class FakeHangar:
         primary_target_ids=(),
         formation="arrowhead",
         formation_scale_m=Formation.FIGHTER_SCALE_M,
+        loadout=None,
     ):
         if fighter_type not in self.stock:
             raise KeyError(fighter_type)
@@ -184,6 +185,7 @@ class FakeHangar:
             primary_target_ids=list(primary_target_ids),
             formation_shape=formation,
             formation_scale_m=formation_scale_m,
+            loadout=loadout,
         )
         if self.stock[fighter_type] <= 0 or not self.is_operational:
             order.cancelled = True
@@ -296,6 +298,7 @@ def patch_engine(monkeypatch):
             pawn_model=kwargs["pawn_model"],
             orientation=kwargs.get("ini_orientation"),
         )
+        bot.spawn_kwargs = kwargs
         if kwargs.get("bot_type") == "major_ship":
             # A major ship with one hangar bay
             bot.pawn.hangars = [FakeHangar(game, team=kwargs["team"])]

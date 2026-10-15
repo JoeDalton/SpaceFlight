@@ -17,6 +17,8 @@ from space_flight.actors.major_ship import CapitalShip, EscortShip
 from space_flight.ai import Intent, Personality
 from space_flight.ai.think_scheduler import ThinkScheduler
 from space_flight.utils.state_machine import DyingPhase
+from space_flight.weapons import ION
+from space_flight.weapons.loadout import Loadout
 
 
 def make_bot_without_init(bot_type: str = "fighter") -> Bot:
@@ -731,3 +733,29 @@ def test_clean_tolerates_a_missing_tactician():
 
     navigator.clean.assert_called_once()
     assert bot.tactician is None
+
+
+def test_fighter_bot_arms_its_fighter_with_the_given_loadout():
+    """
+    A fighter bot passes its loadout (None for the default) to its fighter.
+    """
+    loadout = Loadout(lasers=ION)
+    with (
+        patch("space_flight.actors.bot.Fighter") as fighter_cls,
+        patch("space_flight.actors.bot.FighterPilot"),
+        patch("space_flight.actors.bot.FighterNavigator"),
+        patch("space_flight.actors.bot.FighterTactician"),
+    ):
+        Bot(
+            game=MagicMock(),
+            name="ion_wing",
+            bot_type="fighter",
+            pawn_model="x-wing",
+            loadout=loadout,
+        )
+        Bot(game=MagicMock(), name="wing", bot_type="fighter", pawn_model="x-wing")
+
+    assert [call.kwargs["loadout"] for call in fighter_cls.call_args_list] == [
+        loadout,
+        None,
+    ]

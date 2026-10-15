@@ -87,12 +87,7 @@ class MissileNavigator(GenericNavigator):
         :return: The live target actor, or None if it is no longer an interacting
             actor (destroyed, dying or removed)
         """
-        interactions = self.game.interactions
-        try:
-            target_index = interactions.get_actor_index_from_id(target_id)
-            target = interactions.actors[target_index]
-        except (ValueError, KeyError, IndexError):
-            return None
+        target = self.game.interactions.find_actor(target_id)
         if target is None or getattr(target, "is_dead", False):
             return None
         return target

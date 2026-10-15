@@ -13,7 +13,8 @@ import pytest
 import yaml
 
 from space_flight import DATAFILES_PATH
-from space_flight.weapons import ordnance_launcher
+from space_flight.weapons import DAMAGE_TYPES, ordnance_launcher
+from space_flight.weapons.loadout import Loadout
 from space_flight.weapons.ordnance_launcher import (
     ORDNANCE_PATH,
     OrdnanceLauncher,
@@ -90,12 +91,14 @@ def test_shipped_ordnance_configurations_are_valid(name):
 def test_ship_loadouts_name_shipped_ordnance(path):
     """
     Every ordnance named in a ship's loadout has a configuration, and its count
-    is a positive integer.
+    is a positive integer; its lasers have a known damage type.
     """
     with open(path) as f:
-        loadout = yaml.safe_load(f).get("loadout", {})
+        conf = yaml.safe_load(f).get("loadout", {})
 
-    for name, count in loadout.items():
+    assert set(conf) <= {"lasers", "ordnance"}
+    assert Loadout.from_conf(conf).lasers in DAMAGE_TYPES
+    for name, count in conf.get("ordnance", {}).items():
         assert name in SHIPPED_ORDNANCE
         assert isinstance(count, int) and count > 0
 

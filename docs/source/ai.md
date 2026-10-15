@@ -134,6 +134,13 @@ is for, `target_mobility`):
 - a **rocket** against any slow target;
 - the **guns** otherwise.
 
+Ion ordnance (see [damage types](actors.md#damage-types-physical-and-ion)) is
+only considered against a target ion hits still affect (`is_ion_vulnerable`:
+a fighter with energy left, a capital ship whose bubble is up, a working
+subsystem); otherwise the next weapon in that list goes. Since ion cannot harm
+a hull, only the target's shield counts towards its toughness when scoring
+ion heavy ordnance against guns.
+
 **Missile defense** comes first in that priority list:
 `FighterTactician.evaluate_missile_defense` picks `DEFEND_MISSILE` (like any
 intent change, once the current intent's commitment has elapsed) when the
@@ -166,8 +173,9 @@ controller id.
   secondary weapon (nothing is released if it is not a bomb).
 
 Arming a weapon selects the launcher the tactician chose (while it has stock
-left). Pursuit and strafe runs fire the guns, plus (`navigator.ordnance` in
-the personality):
+left). Pursuit and strafe runs fire the guns — but ion lasers hold their fire
+on a target ion hits no longer affect (`_guns_work_on`) — plus
+(`navigator.ordnance` in the personality):
 - a **missile** once locked (the lock builds while it is selected), within
   `missile_max_range_fraction` of its reach (launch speed × life time), and
   while fewer than `max_missiles_in_flight` of the bot's missiles already home
@@ -192,7 +200,7 @@ roll-to-target).
 
 ## Tracking-mount trio: turrets and tractor beams
 
-[`tracking_mount/`](../../src/space_flight/ai/tracking_mount/) is the AI for
+[`tracking_mount/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ai/tracking_mount/) is the AI for
 anything that swivels in place — `Turret` and `TractorBeamProjector`, both
 mounted subsystems of a capital ship (see
 [Major-ship subsystems](subsystems.md)):
@@ -318,7 +326,7 @@ with `alive`) are compacted, so their positions are not the slot indices from
 
 ## Where things live
 
-[`ai/`](../../src/space_flight/ai/): `generic/` holds the
+[`ai/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ai/): `generic/` holds the
 tactician/navigator/pilot base classes, `fighter/`, `major_ship/` and
 `tracking_mount/` each family's subclasses, `missile/` the missile navigator
 and the incoming-missile message (`incoming_missile.py`),

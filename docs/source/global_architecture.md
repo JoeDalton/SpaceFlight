@@ -5,7 +5,7 @@ stack-based state machine, and the app-lifetime services (assets, graphics
 and gameplay settings) that outlive any single game session — as opposed to
 [`game/`](game.md), which is scoped to one `FlightState` session. Everything
 here lives in
-[`src/space_flight/global_architecture/`](../../src/space_flight/global_architecture/);
+[`src/space_flight/global_architecture/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/global_architecture/);
 the per-class API is in the [code reference](apidocs/index.rst).
 
 ## Mental model

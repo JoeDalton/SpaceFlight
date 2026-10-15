@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from space_flight.actors.major_ship.hangar import Hangar
     from space_flight.actors.scan import ScanHandle
     from space_flight.game.flight_state import FlightState
+    from space_flight.weapons.loadout import Loadout
 
 LOGGER = logging.getLogger()
 
@@ -160,6 +161,7 @@ class Mission:
         name: Optional[str] = None,
         formation: Optional[str] = "arrowhead",
         formation_scale_m: float = Formation.FIGHTER_SCALE_M,
+        loadout: Optional[Loadout] = None,
     ) -> WaveHandle:
         """
         Launch fighters from a hangar as a wave, filled as they leave the bay
@@ -176,6 +178,7 @@ class Mission:
             "diamond", "around_diamond", or None for none (the first fighter
             out leads)
         :param formation_scale_m: Spacing of its slots
+        :param loadout: The fighters' weapons; None for their default loadout
         :return: The fighters' wave
         :raises KeyError: if the hangar's stock has no fighter_type
         """
@@ -186,6 +189,7 @@ class Mission:
             team=hangar.team,
             formation=formation,
             formation_scale_m=formation_scale_m,
+            loadouts={} if loadout is None else {fighter_type: loadout},
         )
         return self.wave(spec).launch_from(hangar, target=target)
 

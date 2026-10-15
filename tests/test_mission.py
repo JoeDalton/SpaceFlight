@@ -35,6 +35,8 @@ from space_flight.game.scenario.conditions import (
 )
 from space_flight.game.scenario.mission import LEVEL_END_DELAY_S
 from space_flight.ui.hud import CHATTER_DISPLAY_S, EVENT_DISPLAY_S, HINT_DISPLAY_S
+from space_flight.weapons import ION
+from space_flight.weapons.loadout import Loadout
 
 WAVE = WaveSpec(
     name="wave", ship_model="tie-bomber", size=3, spawn_point=[100, 200, 300]
@@ -317,6 +319,25 @@ def test_spawn_creates_one_ship_per_frame(mission, spawned):
     assert [b.name for b in spawned] == ["wave_0"]
     run_jobs(mission)
     assert [b.name for b in spawned] == ["wave_0", "wave_1", "wave_2"]
+
+
+def test_spawn_arms_each_model_with_its_loadout(mission, spawned):
+    """
+    A wave's loadouts arm its ships by model; models without one keep their
+    default (None).
+    """
+    loadout = Loadout(lasers=ION)
+    mission.spawn(
+        WaveSpec(
+            name="mixed",
+            ship_model=[("x-wing", 1), ("y-wing", 1)],
+            spawn_point=[0, 0, 0],
+            loadouts={"x-wing": loadout},
+        )
+    )
+    run_jobs(mission)
+
+    assert [bot.spawn_kwargs["loadout"] for bot in spawned] == [loadout, None]
 
 
 def test_spawn_point_can_be_given_at_spawn_time(mission, spawned):
@@ -1057,6 +1078,18 @@ def test_launch_sets_the_waves_formation(mission, hangar):
     assert squadron.spec.formation_scale_m == 80.0
     expected = Formation(scale_m=80.0, shape="diamond").relative_positions
     np.testing.assert_allclose(squadron.formation.relative_positions, expected)
+
+
+def test_launch_passes_the_loadout_to_the_hangar(mission, hangar):
+    """
+    Fighters launched with a loadout are armed with it.
+    """
+    loadout = Loadout(lasers=ION)
+
+    squadron = mission.launch(hangar, "tie-fighter", 2, loadout=loadout)
+
+    assert squadron.launch_order.loadout is loadout
+    assert mission.launch(hangar, "tie-fighter", 1).launch_order.loadout is None
 
 
 def test_launch_without_formation(mission, hangar):

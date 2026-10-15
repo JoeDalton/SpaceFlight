@@ -27,7 +27,7 @@ from space_flight.ai.missile.missile_navigator import MissileNavigator
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.game.kills import DamageSource
 from space_flight.utils import magnitude, rotation_matrix_coefficients
-from space_flight.weapons import build_ordnance_sphere
+from space_flight.weapons import ION, PHYSICAL, build_ordnance_sphere
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -223,9 +223,12 @@ class Ordnance(Ship):
     def apply_damage(self, damage: float, damage_type: str):
         """
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical only for now)
+        :param damage_type: the type of damage to apply: PHYSICAL, or ION, which
+            has no effect on ordnance (it has no shield nor energy gauges)
         """
-        if damage_type != "physical":
+        if damage_type == ION:
+            return
+        if damage_type != PHYSICAL:
             raise NotImplementedError
         self.health -= damage
 

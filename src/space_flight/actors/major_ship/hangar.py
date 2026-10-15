@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.major_ship.major_ship import MajorShip
     from space_flight.game.flight_state import FlightState
+    from space_flight.weapons.loadout import Loadout
 
 LOGGER = logging.getLogger()
 
@@ -36,6 +37,7 @@ class LaunchOrder:
     :param formation_shape: The launched fighters' formation shape (None for
         none)
     :param formation_scale_m: Spacing of its slots
+    :param loadout: The launched fighters' weapons (None for their default)
     """
 
     fighter_type: str
@@ -44,6 +46,7 @@ class LaunchOrder:
     primary_target_ids: list = field(default_factory=list)
     formation_shape: str | None = "arrowhead"
     formation_scale_m: float = Formation.FIGHTER_SCALE_M
+    loadout: Loadout | None = None
     #: Pawn ids of the fighters launched so far, in launch order
     ids: list = field(default_factory=list)
     #: The launched fighters' formation (the first one out leads)
@@ -93,6 +96,9 @@ class Hangar(SubSystem):
     :param launch_margin_m: Clearance between the bay box and a launched
         fighter's collision sphere
     :param name: Node and display name
+    :param ion_capacity: Ion damage it takes to be disabled (see
+        :class:`SubSystem`); ION_CAPACITY_HEALTH_FRACTION of its
+        health by default
     """
 
     def __init__(
@@ -110,6 +116,7 @@ class Hangar(SubSystem):
         launch_speed_mps: float = 30.0,
         launch_margin_m: float = 5.0,
         name: str = "hangar",
+        ion_capacity: float | None = None,
     ):
         super().__init__(
             game=game,
@@ -119,6 +126,7 @@ class Hangar(SubSystem):
             health=health,
             explosion_scale=explosion_scale,
             name=name,
+            ion_capacity=ion_capacity,
         )
         self.relative_position = np.asarray(relative_position, dtype=float)
         #: Fighters it can still launch, per fighter type (see set_stock)
@@ -182,6 +190,7 @@ class Hangar(SubSystem):
         primary_target_ids: Sequence = (),
         formation: str | None = "arrowhead",
         formation_scale_m: float = Formation.FIGHTER_SCALE_M,
+        loadout: Loadout | None = None,
     ) -> LaunchOrder:
         """
         Queue a launch of count fighters of fighter_type (group_size by
@@ -195,6 +204,7 @@ class Hangar(SubSystem):
         :param formation: The launched fighters' formation shape:
             "arrowhead", "diamond", "around_diamond", or None for none
         :param formation_scale_m: Spacing of its slots
+        :param loadout: The fighters' weapons; None for their default loadout
         :return: The order, filled as the fighters launch (already cancelled,
             launching nothing, if that type's stock is empty or the hangar
             cannot launch)
@@ -211,6 +221,7 @@ class Hangar(SubSystem):
             primary_target_ids=list(primary_target_ids),
             formation_shape=formation,
             formation_scale_m=formation_scale_m,
+            loadout=loadout,
         )
         if self.stock[fighter_type] <= 0 or not self.is_operational:
             order.cancelled = True
@@ -297,10 +308,13 @@ class Hangar(SubSystem):
         """
         Launch the next queued fighter when it is due and allowed; cancel a
         request once its type's stock is spent, and every request once the
-        hangar or its ship is destroyed.
+        hangar or its ship is destroyed. A disabled hangar launches nothing, but
+        keeps its requests.
         """
         if not self.is_operational:
             self._cancel_orders()
+            return
+        if self.is_disabled:
             return
         self.orders = [order for order in self.orders if not order.done]
         if not self.orders:
@@ -320,6 +334,14 @@ class Hangar(SubSystem):
             return
         self._launch_one(order)
         self._next_launch_s = now_s + self.launch_interval_s
+
+    def on_enabled(self):
+        """
+        Back online: the next launch waits for a full launch interval.
+        """
+        self._next_launch_s = (
+            self.game.game_time.get_current_time() + self.launch_interval_s
+        )
 
     def _launch_one(self, order: LaunchOrder) -> Bot:
         """
@@ -352,6 +374,7 @@ class Hangar(SubSystem):
             ini_position=position,
             ini_orientation=self.launch_orientation(body_to_world),
             ini_speed=velocity,
+            loadout=order.loadout,
         )
         self._launch_serial += 1
         self.stock[fighter_type] -= 1

@@ -113,6 +113,14 @@
 
 ````
 
+````{py:method} find_actor(actor_id: uuid.UUID | None) -> typing.Any
+:canonical: space_flight.ai.interactions.Interactions.find_actor
+
+```{autodoc2-docstring} space_flight.ai.interactions.Interactions.find_actor
+```
+
+````
+
 ````{py:method} update_interactions()
 :canonical: space_flight.ai.interactions.Interactions.update_interactions
 

@@ -124,6 +124,14 @@ class TractorBeamProjector(TrackingMount):
         else:
             self._try_acquire()
 
+    def on_disabled(self):
+        """
+        Freeze (see TrackingMount.on_disabled), letting go of any prey.
+        """
+        super().on_disabled()
+        if self.is_grabbing:
+            self._release()
+
     def _try_acquire(self):
         """
         Lock onto the tactician's prey if it sits inside the grab cone and within
@@ -225,15 +233,9 @@ class TractorBeamProjector(TrackingMount):
         :param prey_id: The prey's actor id
         :return: The prey actor, or None if gone or not grabbable
         """
-        if prey_id is None:
-            return None
-        try:
-            index = self.game.interactions.get_actor_index_from_id(prey_id)
-        except ValueError:
-            return None
-        prey = self.game.interactions.actors[index]
+        prey = self.game.interactions.find_actor(prey_id)
         # Only actors that can take a force (ships) can be tractored.
-        if not hasattr(prey, "apply_external_force"):
+        if prey is None or not hasattr(prey, "apply_external_force"):
             return None
         return prey
 

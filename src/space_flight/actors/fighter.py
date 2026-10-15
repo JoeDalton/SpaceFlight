@@ -8,16 +8,25 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.actors.energy import SHIELD_REGEN_DELAY_S, EnergySystem
+from space_flight.actors.energy import (
+    ENGINES,
+    LASERS,
+    SHIELD_REGEN_DELAY_S,
+    SHIELDS,
+    EnergySystem,
+)
 from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.ai.auto_aim import AutoAim
+from space_flight.fx.spark_fx import IonCrackle
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.global_architecture.gameplay_settings import (
     auto_aim_params,
     gameplay_config,
 )
 from space_flight.utils.state_machine import Cooldown
+from space_flight.weapons import ION, ION_DAMAGE_FACTOR, PHYSICAL
 from space_flight.weapons.laser_cannon import LaserCannon
+from space_flight.weapons.loadout import Loadout
 from space_flight.weapons.ordnance_launcher import SECONDARY_TYPES, OrdnanceLauncher
 
 if TYPE_CHECKING:
@@ -42,7 +51,19 @@ class Fighter(Ship):
         ini_speed: np.ndarray = np.zeros(3),
         is_cockpit: bool = True,
         team: int = 0,
+        loadout: Loadout | None = None,
     ):
+        """
+        :param game: The game/flight state
+        :param parent: The controlling Player or Bot
+        :param ship_type: The fighter model, i.e. its configuration directory
+        :param ini_position: Initial world position
+        :param ini_orientation: Initial orientation quaternion (w, x, y, z)
+        :param ini_speed: Initial world velocity
+        :param is_cockpit: Whether it is the player's fighter
+        :param team: Its team
+        :param loadout: Its weapons; None for its configuration's default
+        """
         super().__init__(
             game=game,
             parent=parent,
@@ -67,10 +88,20 @@ class Fighter(Ship):
             duration_s=SHIELD_REGEN_DELAY_S, clock=self.game.game_time.get_current_time
         )
 
+        # Disabled (dead engines), it crackles with ion sparks, unless it is
+        # the player's (seen from its cockpit)
+        self.is_cockpit = is_cockpit
+        self.ion_crackle = IonCrackle()
+
         # Engine and laser gauges, and the power distribution between systems
         self.energy = EnergySystem(
-            has_shields=self.max_shield > 0.0,
-            laser_shot_energy_cost=self.conf["laser_shot_energy_cost"],
+            has_shields=self.max_shield > 0.0, **self.conf["energy"]
+        )
+
+        self.loadout = (
+            Loadout.from_conf(self.conf.get("loadout", {}))
+            if loadout is None
+            else loadout
         )
 
         # Initialize cannons, with the player's or the bots' gameplay settings
@@ -86,10 +117,11 @@ class Fighter(Ship):
             energy=self.energy,
             deviation_cone_deg=settings["deviation_deg"],
             damage_multiplier=settings["damage_multiplier"],
+            damage_type=self.loadout.lasers,
         )
 
-        # Ordnance: one launcher per loadout entry, in the configuration's order,
-        # each with its own limited stock
+        # Ordnance: one launcher per loadout entry, in the loadout's order, each
+        # with its own limited stock
         self.ordnance_launchers = [
             OrdnanceLauncher(
                 game=self.game,
@@ -98,7 +130,7 @@ class Fighter(Ship):
                 stock=stock,
                 damage_multiplier=settings["damage_multiplier"],
             )
-            for name, stock in self.conf.get("loadout", {}).items()
+            for name, stock in self.loadout.ordnance.items()
         ]
         # The selected secondary weapon (a bomb, rocket or missile launcher),
         # fired by fire_secondary
@@ -133,8 +165,8 @@ class Fighter(Ship):
     ):
         """
         Moves the ship (see :meth:`Ship.move`), boost permitting, spends and
-        refills the engine and laser gauges, then updates auto-aim acquisition
-        and the missile locks
+        refills the engine and laser gauges, crackles while disabled (dead
+        engines), then updates auto-aim acquisition and the missile locks
 
         :param throttle: Throttle command in [0, 1], above 1 for boost
         :param yaw_rate: Yaw rate command in [-1, 1]
@@ -155,15 +187,30 @@ class Fighter(Ship):
             yaw_rate=yaw_rate,
             pitch_rate=pitch_rate,
         )
+        self._crackle_if_disabled()
 
         # Compute target acquisition
         self.auto_aim.compute_acquisition()
         self._update_missile_locks()
 
+    def _crackle_if_disabled(self):
+        """
+        While its engines are dead (it is disabled), the fighter crackles with
+        ion sparks, like a disabled subsystem; not the player's, seen from its
+        cockpit.
+        """
+        if self.energy.is_engine_dead and not self.is_cockpit:
+            self.ion_crackle.update(
+                game=self.game,
+                position=self.position,
+                radius_m=self.hit_box_radius_m,
+                velocity=self.speed,
+            )
+
     def _turn_rate_scale(self, throttle: float) -> float:
         """
         Fraction of the max turn rates available, given the throttle command
-        (see turn_rate_scale) and the engine gauge's bonus or penalty.
+        (see turn_rate_scale) and the engine gauge's bonus.
 
         :param throttle: Throttle command
         :return: The scale applied to the turn rate commands
@@ -172,9 +219,15 @@ class Fighter(Ship):
 
     def thrust_factor(self) -> float:
         """
-        :return: The engine gauge's bonus or penalty on thrust
+        :return: The engine gauge's bonus on thrust, 0 while the engines are dead
         """
         return self.energy.thrust_factor()
+
+    def engines_online(self) -> bool:
+        """
+        :return: Whether the engines run, i.e. are not dead for lack of energy
+        """
+        return not self.energy.is_engine_dead
 
     @property
     def shield_level(self) -> float:
@@ -314,11 +367,13 @@ class Fighter(Ship):
 
     def apply_damage(self, damage: float, damage_type: str):
         """
-        Apply damage to the shield first, the overflow to health. Any hit holds
-        off shield regeneration for a while.
+        Apply physical damage to the shield first, the overflow to health. Ion
+        damage drains the shield and energy gauges instead (see
+        :meth:`_drain_gauges`). Any hit holds off shield regeneration for a
+        while.
 
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical, energy)
+        :param damage_type: the type of damage to apply (PHYSICAL, ION)
         """
         # A wreck in its death spin takes no further damage (hits cannot
         # re-trigger death), though collision pushes still shove it around.
@@ -327,15 +382,43 @@ class Fighter(Ship):
         if damage > 0.0:
             self.shield_regen_cooldown.trigger()
         # Apply damage to health and shield
-        if damage_type == "physical":
+        if damage_type == PHYSICAL:
             if self.shield - damage >= 0.0:
                 self.shield -= damage
             else:
                 health_damage = damage - self.shield
                 self.health -= health_damage
                 self.shield = 0.0
+        elif damage_type == ION:
+            self._drain_gauges(damage * ION_DAMAGE_FACTOR)
         else:
             raise NotImplementedError
+
+    def _drain_gauges(self, energy_damage: float):
+        """
+        Split an ion hit equally between the gauges that are not empty yet: the
+        shield (in hit points), the engines and the lasers (in energy units).
+        Health is untouched, and a gauge cannot take more than it holds.
+
+        :param energy_damage: The energy the hit drains in all
+        """
+        gauges = [
+            system
+            for system, level in (
+                (SHIELDS, self.shield),
+                (ENGINES, self.energy.engines),
+                (LASERS, self.energy.lasers),
+            )
+            if level > 0.0
+        ]
+        if not gauges:
+            return
+        share = energy_damage / len(gauges)
+        for system in gauges:
+            if system == SHIELDS:
+                self.shield = max(self.shield - share, 0.0)
+            else:
+                self.energy.drain(system, share)
 
     def ship_handle_health(self):
         """

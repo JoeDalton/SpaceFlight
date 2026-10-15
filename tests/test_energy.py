@@ -3,33 +3,32 @@ Unit tests for fighter energy management (space_flight.actors.energy).
 """
 
 import pytest
+from energy_fakes import (
+    BOOST_DRAIN_RATE_PS,
+    ENERGY_CONF,
+    ENGINE_REGEN_RATE_PS,
+    HARD_MANEUVER_DRAIN_RATE_PS,
+    LASER_REGEN_RATE_PS,
+    LASER_SHOT_COST,
+    make_energy_system,
+)
 
 from space_flight.actors.energy import (
     BALANCED,
-    BOOST_ENERGY_DRAIN_RATE_PS,
     BOOST_REENABLE_ENGINE_LEVEL,
     ENERGY_SHARES_SHIELDED,
     ENERGY_SHARES_UNSHIELDED,
     ENGINE_BONUS_MAX_THRUST_FACTOR,
     ENGINE_BONUS_MAX_TURN_RATE_FACTOR,
-    ENGINE_EMPTY_THRUST_FACTOR,
-    ENGINE_EMPTY_TURN_RATE_FACTOR,
-    ENGINE_FULL_POWER_REGEN_RATE_PS,
-    ENGINE_PENALTY_GAUGE_THRESHOLD,
+    ENGINE_RESTART_LEVEL,
     ENGINES,
     HARD_MANEUVER_COMMAND_THRESHOLD,
-    HARD_MANEUVER_ENERGY_DRAIN_RATE_PS,
     LASER_BONUS_MAX_DAMAGE_FACTOR,
-    LASER_FULL_POWER_REGEN_RATE_PS,
     LASERS,
     SHIELDS,
     EnergySystem,
     bonus_factor,
-    engine_factor,
 )
-
-# A fighter's laser_shot_energy_cost, as found in its configuration
-LASER_SHOT_ENERGY_COST = 0.02
 
 # ---------------------------
 # Distribution
@@ -52,9 +51,7 @@ def test_shielded_shares():
     """
     Shielded ships split power three ways, or 75/7/7 when redirected.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     assert energy.share(SHIELDS) == pytest.approx(1.0 / 3.0)
     energy.set_mode(LASERS)
     assert energy.share(LASERS) == pytest.approx(0.75)
@@ -67,9 +64,7 @@ def test_unshielded_shares():
     Unshielded ships split power two ways, or 80/10 when redirected, and have
     no shield mode.
     """
-    energy = EnergySystem(
-        has_shields=False, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=False)
     assert energy.share(ENGINES) == pytest.approx(0.5)
     energy.set_mode(ENGINES)
     assert energy.share(ENGINES) == pytest.approx(0.8)
@@ -91,9 +86,7 @@ def test_cycle_mode(has_shields, expected):
     """
     Cycling goes balanced, shields (if any), engines, lasers, then back.
     """
-    energy = EnergySystem(
-        has_shields=has_shields, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=has_shields)
     visited = []
     for _ in expected:
         energy.cycle_mode()
@@ -105,9 +98,7 @@ def test_is_favoured():
     """
     Only the system power is redirected to is favoured.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     assert not energy.is_favoured(ENGINES)
     energy.set_mode(ENGINES)
     assert energy.is_favoured(ENGINES)
@@ -124,9 +115,7 @@ def test_update_regenerates_by_share(mode):
     """
     Engine and laser gauges refill at their share of the plant's output.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.set_mode(mode)
     energy.engines = 0.2
     energy.lasers = 0.2
@@ -134,10 +123,10 @@ def test_update_regenerates_by_share(mode):
     energy.update(dt=1.0, throttle=0.5, yaw_rate=0.0, pitch_rate=0.0)
 
     assert energy.engines == pytest.approx(
-        0.2 + energy.share(ENGINES) * ENGINE_FULL_POWER_REGEN_RATE_PS
+        0.2 + energy.share(ENGINES) * ENGINE_REGEN_RATE_PS
     )
     assert energy.lasers == pytest.approx(
-        0.2 + energy.share(LASERS) * LASER_FULL_POWER_REGEN_RATE_PS
+        0.2 + energy.share(LASERS) * LASER_REGEN_RATE_PS
     )
 
 
@@ -145,9 +134,7 @@ def test_update_clamps_gauges_to_full():
     """
     Gauges never overfill.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.update(dt=10.0, throttle=0.5, yaw_rate=0.0, pitch_rate=0.0)
     assert energy.engines == 1.0
     assert energy.lasers == 1.0
@@ -157,15 +144,11 @@ def test_boost_drains_engines():
     """
     Boosting drains the engine gauge on top of its regeneration.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.engines = 0.5
     energy.update(dt=1.0, throttle=2.0, yaw_rate=0.0, pitch_rate=0.0)
     assert energy.engines == pytest.approx(
-        0.5
-        + energy.share(ENGINES) * ENGINE_FULL_POWER_REGEN_RATE_PS
-        - BOOST_ENERGY_DRAIN_RATE_PS
+        0.5 + energy.share(ENGINES) * ENGINE_REGEN_RATE_PS - BOOST_DRAIN_RATE_PS
     )
 
 
@@ -183,13 +166,11 @@ def test_hard_maneuvers_drain_engines(yaw, pitch, drains):
     Pitch or yaw commands above the threshold drain the engine gauge (roll is
     free: update does not even take it).
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.engines = 0.5
     energy.update(dt=1.0, throttle=0.5, yaw_rate=yaw, pitch_rate=pitch)
-    regen = energy.share(ENGINES) * ENGINE_FULL_POWER_REGEN_RATE_PS
-    expected = 0.5 + regen - (HARD_MANEUVER_ENERGY_DRAIN_RATE_PS if drains else 0.0)
+    regen = energy.share(ENGINES) * ENGINE_REGEN_RATE_PS
+    expected = 0.5 + regen - (HARD_MANEUVER_DRAIN_RATE_PS if drains else 0.0)
     assert energy.engines == pytest.approx(expected)
 
 
@@ -197,9 +178,7 @@ def test_engines_do_not_go_below_empty():
     """
     The engine gauge bottoms out at zero.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.engines = 0.01
     energy.update(dt=1.0, throttle=2.0, yaw_rate=1.0, pitch_rate=0.0)
     assert energy.engines == 0.0
@@ -215,9 +194,7 @@ def test_boost_locked_out_once_engines_run_dry_until_refilled():
     An empty engine gauge locks boost out until it refills to
     BOOST_REENABLE_ENGINE_LEVEL.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     assert energy.limit_throttle(2.0) == 2.0
 
     energy.engines = 0.01
@@ -253,32 +230,12 @@ def test_bonus_factor_ramps_linearly_over_half_full(level, expected_ramp):
     assert bonus_factor(level, 0.2) == pytest.approx(1.0 + 0.2 * expected_ramp)
 
 
-@pytest.mark.parametrize(
-    "level, expected",
-    [
-        (0.0, 0.8),
-        (0.5 * ENGINE_PENALTY_GAUGE_THRESHOLD, 0.9),
-        (ENGINE_PENALTY_GAUGE_THRESHOLD, 1.0),
-        (0.4, 1.0),
-        (1.0, 1.2),
-    ],
-)
-def test_engine_factor_penalty_and_bonus(level, expected):
-    """
-    The engine factor fades from the empty penalty to 1, then ramps up the bonus.
-    """
-    assert engine_factor(level, max_bonus=0.2, empty_factor=0.8) == pytest.approx(
-        expected
-    )
-
-
 def test_energy_factors_at_full_and_empty():
     """
-    Full gauges grant the max bonuses, an empty engine gauge the penalties.
+    Full gauges grant the max bonuses; an empty laser gauge costs no damage
+    (the lasers just stop firing).
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     assert energy.thrust_factor() == pytest.approx(1 + ENGINE_BONUS_MAX_THRUST_FACTOR)
     assert energy.turn_rate_factor() == pytest.approx(
         1 + ENGINE_BONUS_MAX_TURN_RATE_FACTOR
@@ -287,12 +244,115 @@ def test_energy_factors_at_full_and_empty():
         1 + LASER_BONUS_MAX_DAMAGE_FACTOR
     )
 
-    energy.engines = 0.0
+    energy.engines = 0.3
     energy.lasers = 0.0
-    assert energy.thrust_factor() == pytest.approx(ENGINE_EMPTY_THRUST_FACTOR)
-    assert energy.turn_rate_factor() == pytest.approx(ENGINE_EMPTY_TURN_RATE_FACTOR)
-    # No penalty on lasers: they just stop firing
+    assert energy.thrust_factor() == pytest.approx(1.0)
+    assert energy.turn_rate_factor() == pytest.approx(1.0)
     assert energy.laser_damage_factor() == pytest.approx(1.0)
+
+
+# ---------------------------
+# Dead engines
+# ---------------------------
+
+
+def test_engines_die_once_dry_until_refilled_to_restart_level():
+    """
+    An empty engine gauge kills the engines (no thrust) until it refills to
+    ENGINE_RESTART_LEVEL.
+    """
+    energy = make_energy_system(has_shields=True)
+    energy.engines = 0.01
+    energy.update(dt=1.0, throttle=2.0, yaw_rate=0.0, pitch_rate=0.0)
+    assert energy.is_engine_dead
+    assert energy.thrust_factor() == 0.0
+
+    # Refilling, but not enough yet
+    energy.engines = 0.5 * ENGINE_RESTART_LEVEL
+    energy.update(dt=0.0, throttle=1.0, yaw_rate=0.0, pitch_rate=0.0)
+    assert energy.is_engine_dead
+
+    energy.engines = ENGINE_RESTART_LEVEL
+    energy.update(dt=0.0, throttle=1.0, yaw_rate=0.0, pitch_rate=0.0)
+    assert not energy.is_engine_dead
+    assert energy.thrust_factor() == pytest.approx(1.0)
+    # Boost comes back later
+    assert energy.is_boost_locked
+
+
+def test_dead_engines_spend_nothing():
+    """
+    Boosting or turning hard on dead engines does not keep the gauge empty:
+    it refills at its share of the power.
+    """
+    energy = make_energy_system(has_shields=True)
+    energy.engines = 0.0
+    energy.is_engine_dead = True
+    energy.update(dt=1.0, throttle=2.0, yaw_rate=1.0, pitch_rate=1.0)
+    assert energy.engines == pytest.approx(energy.share(ENGINES) * ENGINE_REGEN_RATE_PS)
+
+
+# ---------------------------
+# Drain (ion hits)
+# ---------------------------
+
+
+@pytest.mark.parametrize("system", [ENGINES, LASERS])
+def test_drain_takes_energy_out_of_a_gauge(system):
+    """
+    Draining takes an amount of energy, so a fraction amount / capacity of
+    the gauge.
+    """
+    energy = make_energy_system(
+        has_shields=True, engine_capacity=200.0, laser_capacity=400.0
+    )
+    energy.drain(system, 40.0)
+    expected = 1.0 - 40.0 / (200.0 if system == ENGINES else 400.0)
+    assert getattr(energy, system) == pytest.approx(expected)
+
+
+def test_drain_stops_at_empty_and_kills_the_engines():
+    """
+    A gauge cannot be drained below empty; emptying the engines kills them at
+    once.
+    """
+    energy = make_energy_system(has_shields=True)
+    energy.drain(ENGINES, 1000.0)
+    energy.drain(LASERS, 1000.0)
+    assert energy.engines == 0.0
+    assert energy.lasers == 0.0
+    assert energy.is_engine_dead
+    assert energy.is_boost_locked
+    assert not energy.can_fire_laser()
+
+
+def test_rates_and_costs_scale_with_capacity():
+    """
+    The configured rates and costs are energy amounts: a bigger gauge refills
+    and empties more slowly, in fraction of the gauge.
+    """
+    small = make_energy_system(has_shields=True)
+    big = make_energy_system(
+        has_shields=True,
+        engine_capacity=2.0 * ENERGY_CONF["engine_capacity"],
+        laser_capacity=2.0 * ENERGY_CONF["laser_capacity"],
+    )
+    for energy in (small, big):
+        energy.engines = 0.5
+        energy.lasers = 0.5
+        energy.update(dt=1.0, throttle=0.5, yaw_rate=0.0, pitch_rate=0.0)
+        energy.consume_laser_shot()
+    assert big.engines - 0.5 == pytest.approx(0.5 * (small.engines - 0.5))
+    assert big.laser_shot_cost == pytest.approx(0.5 * small.laser_shot_cost)
+
+
+@pytest.mark.parametrize("key", ["engine_capacity", "laser_capacity"])
+def test_capacities_must_be_positive(key):
+    """
+    A gauge must hold some energy.
+    """
+    with pytest.raises(ValueError):
+        EnergySystem(has_shields=True, **{**ENERGY_CONF, key: 0.0})
 
 
 # ---------------------------
@@ -302,17 +362,15 @@ def test_energy_factors_at_full_and_empty():
 
 def test_laser_shot_costs_energy_and_needs_enough():
     """
-    Each bolt costs the ship's laser_shot_energy_cost; below that, no firing.
+    Each bolt costs the ship's laser_shot_cost; below that, no firing.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.consume_laser_shot()
-    assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_ENERGY_COST)
+    assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_COST)
 
-    energy.lasers = LASER_SHOT_ENERGY_COST
+    energy.lasers = LASER_SHOT_COST
     assert energy.can_fire_laser()
-    energy.lasers = 0.99 * LASER_SHOT_ENERGY_COST
+    energy.lasers = 0.99 * LASER_SHOT_COST
     assert not energy.can_fire_laser()
 
 
@@ -330,9 +388,7 @@ def test_shield_regen_rate_scales_from_balanced(mode, expected_multiplier):
     Balanced power keeps the ship's configured shield regeneration rate;
     redirecting scales it by the share.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     energy.set_mode(mode)
     assert energy.shield_regen_rate(5.0) == pytest.approx(5.0 * expected_multiplier)
 
@@ -341,7 +397,5 @@ def test_unshielded_ship_has_no_shield_regen():
     """
     An unshielded ship regenerates no shield.
     """
-    energy = EnergySystem(
-        has_shields=False, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=False)
     assert energy.shield_regen_rate(5.0) == 0.0

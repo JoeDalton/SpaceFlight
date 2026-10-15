@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add hangar subsystem for carriers / bases #83
 - Add mission objectives HUD #152
 - Spawned ships must look like they dropped from hyperspace #153
+- Add ion weapons and damage #157
 
 ## [0.2.0] - 2026-10-09
 

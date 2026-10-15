@@ -124,6 +124,17 @@ class Interactions:
         except KeyError:
             raise ValueError(f"Actor {actor_id} is not in the actors' list")
 
+    def find_actor(self, actor_id: UUID | None) -> Any:
+        """
+        Look an actor up by its id.
+
+        :param actor_id: UUID of the actor to look up (None finds nothing)
+        :return: The actor, or None if it is not (or no longer) an interacting
+            actor
+        """
+        index = self.actors_id_dict.get(actor_id)
+        return None if index is None else self.actors[index]
+
     # ------------------------------------------------------------------
     # Per-frame update
     # ------------------------------------------------------------------

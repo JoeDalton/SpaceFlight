@@ -23,6 +23,10 @@
   - ```{autodoc2-docstring} space_flight.fx.spark_fx.SparkPool
     :summary:
     ```
+* - {py:obj}`IonCrackle <space_flight.fx.spark_fx.IonCrackle>`
+  - ```{autodoc2-docstring} space_flight.fx.spark_fx.IonCrackle
+    :summary:
+    ```
 ````
 
 ### Functions
@@ -75,12 +79,20 @@
   - ```{autodoc2-docstring} space_flight.fx.spark_fx.ICE
     :summary:
     ```
+* - {py:obj}`ION <space_flight.fx.spark_fx.ION>`
+  - ```{autodoc2-docstring} space_flight.fx.spark_fx.ION
+    :summary:
+    ```
 * - {py:obj}`MAGIC <space_flight.fx.spark_fx.MAGIC>`
   - ```{autodoc2-docstring} space_flight.fx.spark_fx.MAGIC
     :summary:
     ```
 * - {py:obj}`ROCK <space_flight.fx.spark_fx.ROCK>`
   - ```{autodoc2-docstring} space_flight.fx.spark_fx.ROCK
+    :summary:
+    ```
+* - {py:obj}`ION_CRACKLE_MAX_INTERVAL_S <space_flight.fx.spark_fx.ION_CRACKLE_MAX_INTERVAL_S>`
+  - ```{autodoc2-docstring} space_flight.fx.spark_fx.ION_CRACKLE_MAX_INTERVAL_S
     :summary:
     ```
 ````
@@ -270,6 +282,16 @@
 
 ````
 
+````{py:data} ION
+:canonical: space_flight.fx.spark_fx.ION
+:value: >
+   'SparkPreset(...)'
+
+```{autodoc2-docstring} space_flight.fx.spark_fx.ION
+```
+
+````
+
 ````{py:data} MAGIC
 :canonical: space_flight.fx.spark_fx.MAGIC
 :value: >
@@ -308,6 +330,38 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 :canonical: space_flight.fx.spark_fx.SparkPool.spawn
 
 ```{autodoc2-docstring} space_flight.fx.spark_fx.SparkPool.spawn
+```
+
+````
+
+`````
+
+````{py:data} ION_CRACKLE_MAX_INTERVAL_S
+:canonical: space_flight.fx.spark_fx.ION_CRACKLE_MAX_INTERVAL_S
+:value: >
+   0.3
+
+```{autodoc2-docstring} space_flight.fx.spark_fx.ION_CRACKLE_MAX_INTERVAL_S
+```
+
+````
+
+`````{py:class} IonCrackle()
+:canonical: space_flight.fx.spark_fx.IonCrackle
+
+```{autodoc2-docstring} space_flight.fx.spark_fx.IonCrackle
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} space_flight.fx.spark_fx.IonCrackle.__init__
+```
+
+````{py:method} update(game: space_flight.game.flight_state.FlightState, position: numpy.ndarray, radius_m: float, velocity: numpy.ndarray)
+:canonical: space_flight.fx.spark_fx.IonCrackle.update
+
+```{autodoc2-docstring} space_flight.fx.spark_fx.IonCrackle.update
 ```
 
 ````

@@ -75,6 +75,10 @@
   - ```{autodoc2-docstring} space_flight.weapons.laser_cannon.GLOW_TINTS
     :summary:
     ```
+* - {py:obj}`LIGHT_COLORS <space_flight.weapons.laser_cannon.LIGHT_COLORS>`
+  - ```{autodoc2-docstring} space_flight.weapons.laser_cannon.LIGHT_COLORS
+    :summary:
+    ```
 * - {py:obj}`_LASER_SHADER <space_flight.weapons.laser_cannon._LASER_SHADER>`
   - ```{autodoc2-docstring} space_flight.weapons.laser_cannon._LASER_SHADER
     :summary:
@@ -163,6 +167,16 @@
 
 ````
 
+````{py:data} LIGHT_COLORS
+:canonical: space_flight.weapons.laser_cannon.LIGHT_COLORS
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.weapons.laser_cannon.LIGHT_COLORS
+```
+
+````
+
 ````{py:data} _LASER_SHADER
 :canonical: space_flight.weapons.laser_cannon._LASER_SHADER
 :value: >
@@ -180,7 +194,7 @@
 ```
 ````
 
-`````{py:class} LaserCannon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.major_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, energy: space_flight.actors.energy.EnergySystem | None = None, deviation_cone_deg: float = 0.0, damage_multiplier: float = 1.0)
+`````{py:class} LaserCannon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.major_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, energy: space_flight.actors.energy.EnergySystem | None = None, deviation_cone_deg: float = 0.0, damage_multiplier: float = 1.0, damage_type: str = PHYSICAL)
 :canonical: space_flight.weapons.laser_cannon.LaserCannon
 
 Bases: {py:obj}`space_flight.weapons.Weapon`
@@ -209,7 +223,7 @@ Bases: {py:obj}`space_flight.weapons.Weapon`
 
 `````
 
-`````{py:class} LaserShot(game: space_flight.game.flight_state.FlightState, origin_ship_id: uuid.UUID, color: panda3d.core.Vec3, power: float, life_time_s: float, light_color: typing.Tuple, speed: numpy.ndarray, start_position: panda3d.core.Point3, origin_ship: space_flight.actors.fighter.Fighter | space_flight.actors.major_ship.turret.Turret | None = None)
+`````{py:class} LaserShot(game: space_flight.game.flight_state.FlightState, origin_ship_id: uuid.UUID, color: panda3d.core.Vec3, power: float, life_time_s: float, light_color: typing.Tuple, speed: numpy.ndarray, start_position: panda3d.core.Point3, origin_ship: space_flight.actors.fighter.Fighter | space_flight.actors.major_ship.turret.Turret | None = None, damage_type: str = PHYSICAL)
 :canonical: space_flight.weapons.laser_cannon.LaserShot
 
 Bases: {py:obj}`space_flight.weapons.Munition`

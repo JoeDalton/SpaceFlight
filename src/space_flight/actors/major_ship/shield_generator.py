@@ -28,6 +28,9 @@ class ShieldGenerator(SubSystem):
     :param health: Initial (and maximum) health of the generator
     :param explosion_scale: Size of the generator's death explosion
     :param name: Node and display name of the generator
+    :param ion_capacity: Ion damage it takes to be disabled (see
+        :class:`SubSystem`); ION_CAPACITY_HEALTH_FRACTION of its
+        health by default
     """
 
     def __init__(
@@ -39,6 +42,7 @@ class ShieldGenerator(SubSystem):
         health: float = 1000.0,
         explosion_scale: float = 10.0,
         name: str = "shield_generator",
+        ion_capacity: float | None = None,
     ):
         super().__init__(
             game=game,
@@ -48,6 +52,7 @@ class ShieldGenerator(SubSystem):
             health=health,
             explosion_scale=explosion_scale,
             name=name,
+            ion_capacity=ion_capacity,
         )
         # Visible geometry: a placeholder sphere matching the collider, so the
         # subsystem can be seen and targeted. Flat-shaded like the waypoint

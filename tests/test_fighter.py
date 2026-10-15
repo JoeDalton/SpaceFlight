@@ -4,22 +4,21 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from energy_fakes import ENERGY_CONF, make_energy_system
 
-from space_flight.actors.energy import (
-    SHIELD_REGEN_DELAY_S,
-    SHIELDS,
-    EnergySystem,
-)
+from space_flight.actors.energy import ENGINES, SHIELD_REGEN_DELAY_S, SHIELDS
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.ship import Ship
+from space_flight.fx import spark_fx
+from space_flight.fx.spark_fx import IonCrackle
 from space_flight.global_architecture.gameplay_settings import (
     DEFAULT_PRESET,
     auto_aim_params,
     load_presets,
 )
 from space_flight.utils.state_machine import Cooldown
-
-LASER_SHOT_ENERGY_COST = 0.02
+from space_flight.weapons import ION, ION_DAMAGE_FACTOR
+from space_flight.weapons.loadout import Loadout
 
 
 def make_fighter_without_init(
@@ -46,9 +45,7 @@ def make_fighter_without_init(
         duration_s=SHIELD_REGEN_DELAY_S,
         clock=clock if clock is not None else MagicMock(return_value=0.0),
     )
-    fighter.energy = EnergySystem(
-        has_shields=max_shield > 0.0, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    fighter.energy = make_energy_system(has_shields=max_shield > 0.0)
     # apply_damage reads is_dying -- a property mirroring the controlling
     # Bot/Player -- to make a dying wreck inert; give it a live controller.
     fighter.parent = MagicMock(is_dying=False)
@@ -148,6 +145,68 @@ def test_apply_damage_parametrized(
 
     assert fighter.shield == pytest.approx(expected_shield)
     assert fighter.health == pytest.approx(expected_health)
+
+
+# ---------------------------
+# apply_damage — ion
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "shield, engines, lasers, expected",
+    [
+        # 60 energy drained in all, split between the non-empty gauges
+        (100.0, 1.0, 1.0, (80.0, 0.8, 0.8)),
+        (0.0, 1.0, 1.0, (0.0, 0.7, 0.7)),
+        (100.0, 0.0, 1.0, (70.0, 0.0, 0.7)),
+        (0.0, 0.0, 1.0, (0.0, 0.0, 0.4)),
+        (0.0, 0.0, 0.0, (0.0, 0.0, 0.0)),
+        # A gauge holding less than its share just empties
+        (10.0, 0.1, 1.0, (0.0, 0.0, 0.8)),
+    ],
+)
+def test_ion_damage_drains_the_non_empty_gauges_equally(
+    shield, engines, lasers, expected
+):
+    """
+    An ion hit drains ION_DAMAGE_FACTOR times its damage, split equally between
+    the shield (hit points) and the engine and laser gauges (energy units, of
+    capacity 100 here) that are not empty; health is untouched.
+    """
+    fighter = make_fighter_without_init(current_health=200.0, current_shield=shield)
+    fighter.energy.engines = engines
+    fighter.energy.lasers = lasers
+
+    fighter.apply_damage(damage=60.0 / ION_DAMAGE_FACTOR, damage_type=ION)
+
+    assert (fighter.shield, fighter.energy.engines, fighter.energy.lasers) == (
+        pytest.approx(expected)
+    )
+    assert fighter.health == pytest.approx(200.0)
+
+
+def test_ion_damage_on_an_unshielded_fighter_drains_engines_and_lasers():
+    """
+    A TIE has no shield: the whole ion hit goes to its engines and lasers.
+    """
+    fighter = make_fighter_without_init(max_shield=0.0, current_shield=0.0)
+
+    fighter.apply_damage(damage=40.0, damage_type=ION)
+
+    share = 40.0 * ION_DAMAGE_FACTOR / 2.0 / ENERGY_CONF["engine_capacity"]
+    assert fighter.energy.engines == pytest.approx(1.0 - share)
+    assert fighter.energy.lasers == pytest.approx(1.0 - share)
+
+
+def test_ion_damage_holds_off_shield_regeneration():
+    """
+    Like a physical hit, an ion hit restarts the shield regeneration delay.
+    """
+    fighter = make_fighter_without_init(current_shield=50.0)
+
+    fighter.apply_damage(damage=10.0, damage_type=ION)
+
+    assert not fighter.shield_regen_cooldown.ready()
 
 
 # ---------------------------
@@ -673,6 +732,48 @@ def test_fighter_turn_rate_and_thrust_follow_engine_gauge():
     assert full[1] > half[1] == pytest.approx(1.0)
 
 
+def test_fighter_with_dead_engines_drifts():
+    """
+    Once its engine gauge is empty, a fighter's engines are offline (no
+    brakes, no change of rotation: see Ship.set_inputs) and give no thrust.
+    """
+    fighter = make_fighter_without_init()
+    assert fighter.engines_online()
+
+    fighter.energy.drain(ENGINES, 1e6)
+
+    assert fighter.thrust_factor() == 0.0
+    assert not fighter.engines_online()
+
+
+@pytest.mark.parametrize(
+    "engines_dead, is_cockpit, crackles",
+    [(True, False, True), (False, False, False), (True, True, False)],
+)
+def test_disabled_fighter_crackles(engines_dead, is_cockpit, crackles):
+    """
+    A fighter with dead engines throws ion sparks, like a disabled subsystem;
+    not the player's, seen from its cockpit.
+    """
+    fighter = make_fighter_without_init()
+    fighter.game = MagicMock()
+    fighter.game.game_time.get_current_time.return_value = 10.0
+    fighter.is_cockpit = is_cockpit
+    fighter.ion_crackle = IonCrackle()
+    fighter.position = np.zeros(3)
+    fighter.speed = np.zeros(3)
+    fighter.hit_box_radius_m = 5.0
+    if engines_dead:
+        fighter.energy.drain(ENGINES, 1e6)
+
+    fighter._crackle_if_disabled()
+
+    pool = fighter.game.spark_fx_pool
+    assert pool.spawn.called is crackles
+    if crackles:
+        assert pool.spawn.call_args.kwargs["preset"] is spark_fx.ION
+
+
 # ---------------------------
 # __init__ — auto-aim settings
 # ---------------------------
@@ -685,10 +786,10 @@ def _fake_ship_init(self, game, **kwargs):
     self.conf = {
         "shield": 100.0,
         "shield_regen_rate": 10.0,
-        "laser_shot_energy_cost": LASER_SHOT_ENERGY_COST,
+        "energy": ENERGY_CONF,
         "hit_box_radius_m": 5.0,
         "explosion_scale": 1.0,
-        "loadout": {"rocket": 2},
+        "loadout": {"ordnance": {"rocket": 2}},
     }
 
 
@@ -731,3 +832,52 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     damage_multiplier = 2.0 if side == "player" else 0.5
     assert laser_cannon_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
     assert launcher_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
+
+
+def test_init_arms_itself_with_the_given_loadout():
+    """
+    A loadout given at construction replaces the configured one: its lasers'
+    damage type goes to the cannons, its ordnance to the launchers.
+    """
+    game = MagicMock()
+    game.app.gameplay_settings.config = copy.deepcopy(load_presets()[DEFAULT_PRESET])
+    loadout = Loadout(lasers=ION, ordnance={"ion_torpedo": 2, "flare": 4})
+
+    with (
+        patch.object(Ship, "__init__", _fake_ship_init),
+        patch("space_flight.actors.fighter.AutoAim"),
+        patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
+        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
+    ):
+        fighter = Fighter(
+            game=game, parent=MagicMock(), ship_type="test", loadout=loadout
+        )
+
+    assert fighter.loadout is loadout
+    assert laser_cannon_cls.call_args.kwargs["damage_type"] == ION
+    assert [
+        (call.kwargs["name"], call.kwargs["stock"])
+        for call in launcher_cls.call_args_list
+    ] == [("ion_torpedo", 2), ("flare", 4)]
+
+
+def test_init_defaults_to_the_configured_loadout():
+    """
+    Without a loadout, the fighter takes its configuration's.
+    """
+    game = MagicMock()
+    game.app.gameplay_settings.config = copy.deepcopy(load_presets()[DEFAULT_PRESET])
+
+    with (
+        patch.object(Ship, "__init__", _fake_ship_init),
+        patch("space_flight.actors.fighter.AutoAim"),
+        patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
+        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
+    ):
+        fighter = Fighter(game=game, parent=MagicMock(), ship_type="test")
+
+    assert fighter.loadout == Loadout(ordnance={"rocket": 2})
+    assert laser_cannon_cls.call_args.kwargs["damage_type"] == "physical"
+    assert launcher_cls.call_args.kwargs["name"] == "rocket"

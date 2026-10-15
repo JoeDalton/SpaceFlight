@@ -6,7 +6,7 @@ subclasses pushed onto the app's `StateManager` (see
 [docs/global_architecture.md](global_architecture.md)). This page is the guided
 tour; the per-class API is in the [code reference](apidocs/index.rst).
 
-All of it lives in [`src/space_flight/menus/`](../../src/space_flight/menus/).
+All of it lives in [`src/space_flight/menus/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/menus/).
 
 ## Mental model
 
@@ -237,5 +237,5 @@ level end).
 ## Where things live
 
 Every module above sits directly under
-[`src/space_flight/menus/`](../../src/space_flight/menus/); the
+[`src/space_flight/menus/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/menus/); the
 [code reference](apidocs/index.rst) has the full per-class API.

@@ -26,6 +26,7 @@ from space_flight.utils import (
     magnitude,
     rotation_matrix_coefficients,
 )
+from space_flight.weapons import PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -46,6 +47,10 @@ TUMBLE_RATE_FACTORS = np.array([0.2, 1.0, 0.2])
 # Deepest play-rate cut of the player's interior engine at a full damage stutter
 # (see Ship._engine_sputter_factor, driven by CockpitFX's shared stutter events).
 ENGINE_SPUTTER_MAX_DEPTH = 0.6
+# Engine sound while the engines are offline (see _on_engines_online_changed):
+# the running loop, slowed down and muffled
+ENGINE_OFFLINE_PLAY_RATE = 0.5
+ENGINE_OFFLINE_VOLUME_FACTOR = 0.3
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -243,6 +248,9 @@ class Ship(Pawn):
         # Initialize engine sound (optional: a ship type without one is silent)
         self.sound = None
         self.sound_pool = None
+        # Whether the engine sound is the running one (see
+        # _on_engines_online_changed)
+        self.is_engine_sound_online = True
         if self.parent.name == "player":
             sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
@@ -251,7 +259,8 @@ class Ship(Pawn):
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
-            self.sound.setVolume(0.1)
+            self.engine_sound_volume = 0.1
+            self.sound.setVolume(self.engine_sound_volume)
         elif "exterior_engine_sound" in self.conf:
             sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
@@ -260,7 +269,8 @@ class Ship(Pawn):
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
-            self.sound.setVolume(10.0)
+            self.engine_sound_volume = 10.0
+            self.sound.setVolume(self.engine_sound_volume)
             # Follows the ship node, Doppler-shifted by the ship's velocity
             self.game.app.sfx.attach_sound(self.sound, self.node, velocity_source=self)
 
@@ -333,6 +343,16 @@ class Ship(Pawn):
         """
         return 1.0
 
+    def engines_online(self) -> bool:
+        """
+        Offline engines (a fighter's, once its engine gauge runs dry) neither
+        brake nor change the rotation rates: the ship drifts and keeps spinning
+        as it was (see :meth:`set_inputs`).
+
+        :return: Whether the engines are running
+        """
+        return True
+
     def _compute_mobility(self) -> float:
         """
         Blend the ship's kinematic limits into a manoeuverability score in [0, 1].
@@ -388,6 +408,8 @@ class Ship(Pawn):
         by thrust_factor(); below ZERO_THRUST_POSITION it brakes (airplane
         model) or cuts thrust (space).
         The turn rates are scaled by _turn_rate_scale(throttle).
+        While the engines are offline (see engines_online), the ship cannot
+        brake and keeps its current rotation rates, whatever the commands.
         Both are low-pass filtered to emulate delay in physical systems.
         pqr is stored in Panda3D's pitch-roll-yaw order.
 
@@ -397,6 +419,7 @@ class Ship(Pawn):
         :param roll_rate: Roll rate command in [-1, 1]
         """
         dt = self.game.game_time.get_time_step()
+        engines_online = self.engines_online()
 
         if throttle >= ZERO_THRUST_POSITION:
             # Thrust is positive
@@ -406,7 +429,9 @@ class Ship(Pawn):
                 * self.thrust_factor()
             )
         else:
-            if FLIGHT_MODEL == "airplane":
+            if FLIGHT_MODEL == "airplane" and not engines_online:
+                scalar_thrust_n = 0
+            elif FLIGHT_MODEL == "airplane":
                 # Ship is braking, propotionally to its forward speed
                 brake_intensity = (
                     ZERO_THRUST_POSITION - throttle
@@ -420,13 +445,17 @@ class Ship(Pawn):
             else:
                 raise Exception
 
-        pqr = self._turn_rate_scale(throttle) * np.array(
-            [
-                pitch_rate * self.max_pitch_rate_radps,
-                roll_rate * self.max_roll_rate_radps,
-                yaw_rate * self.max_yaw_rate_radps,
-            ]
-        )
+        if engines_online:
+            pqr = self._turn_rate_scale(throttle) * np.array(
+                [
+                    pitch_rate * self.max_pitch_rate_radps,
+                    roll_rate * self.max_roll_rate_radps,
+                    yaw_rate * self.max_yaw_rate_radps,
+                ]
+            )
+        else:
+            # Nothing to change the rotation: it goes on as it was
+            pqr = np.array(self.pqr)
 
         [
             self.scalar_thrust_n,
@@ -814,16 +843,24 @@ class Ship(Pawn):
         self.node.setPos(*(self.position + offset_m * self.forward))
         self.node.setQuat(Quat(*self.orientation))
 
-    def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
+    def take_hit(
+        self,
+        damage: float,
+        normal_world_vector: Vec3 | np.ndarray,
+        damage_type: str = PHYSICAL,
+    ):
         """
-        Take damage from hits and jolt from the impact
+        Take damage from hits and jolt from a physical impact (ion hits do not
+        push)
         # TODO move force calculations to collisions.py
-        # TODO allow energy (ion) damage when we add energy management
 
         :param damage: The amount of damage to take
         :param normal_world_vector: The collision normal in world coordinates
+        :param damage_type: PHYSICAL or ION
         """
-        self.apply_damage(damage=damage, damage_type="physical")
+        self.apply_damage(damage=damage, damage_type=damage_type)
+        if damage_type != PHYSICAL:
+            return
 
         # Apply momentum change
         hit_force_world_n = (
@@ -857,21 +894,46 @@ class Ship(Pawn):
         :param velocity_correction: The velocity correction to apply
         :param position_correction: The position correction to apply
         """
-        self.apply_damage(damage=damage, damage_type="physical")
+        self.apply_damage(damage=damage, damage_type=PHYSICAL)
         self.velocity_correction = velocity_correction
         self.position_correction = position_correction
 
     def adjust_engine_pitch(self, throttle: float):
         """
-        Updates the pitch of the engine noise
+        Updates the pitch of the engine noise, and switches it between its
+        running and offline versions as the engines stop or restart
 
         :param throttle: The throttle value of the ship [0, 1], above 1 for boost
         """
         if self.sound is None:
             return
+        engines_online = self.engines_online()
+        if engines_online != self.is_engine_sound_online:
+            self.is_engine_sound_online = engines_online
+            self._on_engines_online_changed(engines_online)
+        if not engines_online:
+            # Offline engines do not follow the throttle
+            return
         pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
         pitch_multiplier *= self._engine_sputter_factor()
         self.sound.setPlayRate(pitch_multiplier)
+
+    def _on_engines_online_changed(self, online: bool):
+        """
+        Switch the engine sound as the engines stop or restart.
+
+        For now the offline sound is the running loop, slowed down and muffled.
+        This is the place to swap in a dedicated sound (a power-down whine, an
+        electrical crackle...) and back.
+
+        :param online: Whether the engines just restarted (else they just died)
+        """
+        volume = self.engine_sound_volume
+        if online:
+            self.sound.setVolume(volume)
+        else:
+            self.sound.setVolume(volume * ENGINE_OFFLINE_VOLUME_FACTOR)
+            self.sound.setPlayRate(ENGINE_OFFLINE_PLAY_RATE)
 
     def _engine_sputter_factor(self) -> float:
         """
@@ -897,7 +959,7 @@ class Ship(Pawn):
         Ship-type dependent
 
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical, energy)
+        :param damage_type: the type of damage to apply (PHYSICAL, ION)
         """
         raise NotImplementedError
 

@@ -76,6 +76,7 @@ class TrackingMount(SubSystem):
             health=conf["health"],
             explosion_scale=conf["explosion_scale"],
             name=name,
+            ion_capacity=conf.get("ion_capacity"),
         )
         self.conf = conf
         self.personality = personality
@@ -128,11 +129,14 @@ class TrackingMount(SubSystem):
 
         Runs a low pass filter on the turn rates beforehand to emulate delay in
         physical systems, integrates the aim, refreshes the remarkable directions,
-        then runs the subclass action via :meth:`_operate`.
+        then runs the subclass action via :meth:`_operate`. A disabled mount
+        (see :class:`SubSystem`) is frozen: it neither turns nor operates.
 
         :param yaw_rate: Yaw rate command in [-1, 1]
         :param pitch_rate: Pitch rate command in [-1, 1]
         """
+        if self.is_disabled:
+            return
         dt = self.game.game_time.get_time_step()
 
         # Apply low pass filter on rotation rates
@@ -185,6 +189,12 @@ class TrackingMount(SubSystem):
         No-op in the base; subclasses fire cannons, grab a prey, etc.
         """
         pass
+
+    def on_disabled(self):
+        """
+        Freeze: the mount stops turning at once (it restarts from rest).
+        """
+        self.state_derivative = np.zeros(2)
 
     def clean(self):
         """

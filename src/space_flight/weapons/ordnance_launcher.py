@@ -23,7 +23,7 @@ import yaml
 from space_flight import DATAFILES_PATH
 from space_flight.actors.ordnance import OrdnanceController
 from space_flight.ai.target_lock import TargetLock
-from space_flight.weapons import Weapon
+from space_flight.weapons import DAMAGE_TYPES, Weapon
 
 if TYPE_CHECKING:
     from space_flight.actors.fighter import Fighter
@@ -37,7 +37,6 @@ ORDNANCE_TYPES = ("bomb", "rocket", "missile", "flare")
 # own trigger)
 SECONDARY_TYPES = ("bomb", "rocket", "missile")
 LAUNCH_DIRECTIONS = ("forward", "down", "backward")
-DAMAGE_TYPES = ("physical",)
 # How a missile falls for a flare (see Fighter.drop_flare): the flare must be
 # dropped within decoy_range_m of it and lie within decoy_cone_angle_deg of its
 # nose, and then lures it with probability decoy_chance
@@ -130,6 +129,7 @@ class OrdnanceLauncher(Weapon):
         self.conf["damage"] *= damage_multiplier
         self.name = name
         self.category = self.conf["type"]
+        self.damage_type = self.conf["damage_type"]
         self.stock = stock
         # Launch speed relative to the launching ship, along launch_direction
         self.speed_mps = self.conf["speed_mps"]

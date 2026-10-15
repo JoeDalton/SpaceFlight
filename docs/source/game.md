@@ -6,10 +6,10 @@ keeping, and the mission engine that runs a level's scripted events. This
 page is the guided tour; the per-class API is in the
 [code reference](apidocs/index.rst).
 
-The code lives in [`src/space_flight/game/`](../../src/space_flight/game/),
+The code lives in [`src/space_flight/game/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/),
 with level definitions under
-[`game/levels/`](../../src/space_flight/game/levels/) and the mission engine
-under [`game/scenario/`](../../src/space_flight/game/scenario/).
+[`game/levels/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/levels/) and the mission engine
+under [`game/scenario/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/scenario/).
 
 ## `FlightState` — the session owner
 
@@ -264,10 +264,10 @@ delivers at the start of the *next* frame.
 
 ## Levels
 
-[`game/levels/`](../../src/space_flight/game/levels/) has one module per level
+[`game/levels/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/levels/) has one module per level
 holding everything about it: tunable constants, its waves (`WaveSpec`
 constants), a `build_<name>_upfront(game)` function for the black-screen
-phase (create the player, pick a [scene](../../src/space_flight/scenes/) and
+phase (create the player, pick a [scene](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/) and
 build its heavy objects), and a mission body — the level's scripted events,
 see [scenario_scripting.md](scenario_scripting.md).
 
@@ -287,7 +287,7 @@ animation, then creates the level's `Mission` and starts its body.
 
 ## Mission scripting
 
-[`game/scenario/`](../../src/space_flight/game/scenario/) runs a level's
+[`game/scenario/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/game/scenario/) runs a level's
 mission body — a plain Python generator; see
 [scenario_scripting.md](scenario_scripting.md) for how to write one.
 
