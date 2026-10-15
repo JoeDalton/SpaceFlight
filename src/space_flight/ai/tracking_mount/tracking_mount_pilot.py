@@ -117,11 +117,13 @@ class TrackingMountPilot(GenericPilot):
             yaw_cannon_rad = HALF_PI - np.arctan2(cannon_y, cannon_x)
             yaw_error_rad = yaw_target_rad - yaw_cannon_rad
             # Pitch
-            pitch_target_rad = np.arcsin(target_z)
-            pitch_cannon_rad = np.arcsin(cannon_z)
+            pitch_target_rad = np.arcsin(np.clip(target_z, -1.0, 1.0))
+            pitch_cannon_rad = np.arcsin(np.clip(cannon_z, -1.0, 1.0))
             pitch_error_rad = pitch_target_rad - pitch_cannon_rad
 
-            cos_angle_to_target = np.dot(self.pawn.forward, target_direction)
+            cos_angle_to_target = np.clip(
+                np.dot(self.pawn.forward, target_direction), -1.0, 1.0
+            )
             self.angle_to_target_deg = np.rad2deg(np.arccos(cos_angle_to_target))
 
         # Update PID commands
