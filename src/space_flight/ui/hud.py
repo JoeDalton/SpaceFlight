@@ -105,6 +105,8 @@ HP_GAUGE_COLOR = (1.0, 0.45, 0.75)
 LASER_GAUGE_COLOR = (1.0, 0.15, 0.1)
 ENGINE_GAUGE_COLOR = (0.15, 1.0, 0.25)
 SHIELD_GAUGE_COLOR = (0.2, 0.55, 1.0)
+# Engine gauge text while the engines are dead (instead of the speed)
+ENGINES_OFFLINE_TEXT = "OFFLINE"
 # Gauge brightness, raised for the system power is redirected to (its outline
 # is also highlighted, and the gauge grown about its base by the scale below,
 # which the spacing leaves room for)
@@ -775,7 +777,8 @@ class EnergyHUD:
     - HP: a pink half-ring, the health left written at its centre
     - shields: a blue half-ring, the shield strength written at its centre
       (only for shielded ships; the next gauges move left to take its place)
-    - engines: a green half-ring, the ship's speed written at its centre
+    - engines: a green half-ring, the ship's speed written at its centre (or
+      ENGINES_OFFLINE_TEXT while the engines are dead)
     - lasers: a red half-ring, the laser charge written at its centre
 
     The gauges are outlined in black; the energy gauge of the system power is
@@ -850,7 +853,10 @@ class EnergyHUD:
         self._show_power(self.laser_gauge, energy, LASERS)
 
         self.engine_gauge.set_level(energy.engines)
-        self.engine_gauge.set_text(f"{magnitude(pawn.speed):.0f} m/s")
+        if energy.is_engine_dead:
+            self.engine_gauge.set_text(ENGINES_OFFLINE_TEXT)
+        else:
+            self.engine_gauge.set_text(f"{magnitude(pawn.speed):.0f} m/s")
         self._show_power(self.engine_gauge, energy, ENGINES)
 
         if energy.has_shields:

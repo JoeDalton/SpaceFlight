@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 import quaternion
@@ -5,6 +7,7 @@ import quaternion
 from space_flight import RIGHT_BODY, UP_BODY
 from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.utils import cross3, magnitude, rotate_single_vector
+from space_flight.weapons import ION, PHYSICAL
 
 
 def make_ship_without_init():
@@ -493,6 +496,77 @@ def test_set_inputs_scales_turn_rates_with_throttle():
     ship.set_inputs(throttle=1.0, yaw_rate=1.0, pitch_rate=1.0, roll_rate=1.0)
 
     np.testing.assert_allclose(ship.pqr, [0.7, 0.7, 0.7], atol=1e-3)
+
+
+class BrakingShip(Ship):
+    """A ship whose brakes can be cut, flying straight ahead at 100 m/s."""
+
+    brakes_work = True
+
+    def apply_damage(self, damage, damage_type):
+        pass
+
+    def ship_handle_health(self):
+        pass
+
+    def can_brake(self):
+        return self.brakes_work
+
+
+@pytest.mark.parametrize("brakes_work", [True, False])
+def test_set_inputs_brakes_only_if_the_ship_can(brakes_work):
+    """
+    Below the zero thrust position, an airplane-model ship brakes, unless
+    can_brake() says no (a fighter with dead engines): it then just coasts.
+    """
+
+    class FakeTime:
+        def get_time_step(self):
+            return 1.0
+
+    class FakeGame:
+        game_time = FakeTime()
+
+    ship = object.__new__(BrakingShip)
+    ship.brakes_work = brakes_work
+    ship.game = FakeGame()
+    ship.max_pitch_rate_radps = 1.0
+    ship.max_roll_rate_radps = 1.0
+    ship.max_yaw_rate_radps = 1.0
+    ship.max_thrust_n = 1.0
+    ship.brake_factor_nspm = 10.0
+    ship.speed = np.array([0.0, 100.0, 0.0])
+    ship.forward = np.array([0.0, 1.0, 0.0])
+    ship.inputs_filter_time_s = 1e-6  # effectively no filtering
+    ship.scalar_thrust_n = 0.0
+    ship.pqr = np.zeros(3)
+
+    ship.set_inputs(throttle=0.0, yaw_rate=0.0, pitch_rate=0.0, roll_rate=0.0)
+
+    if brakes_work:
+        assert ship.scalar_thrust_n < 0.0
+    else:
+        assert ship.scalar_thrust_n == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("damage_type, jolts", [(PHYSICAL, True), (ION, False)])
+def test_take_hit_applies_damage_and_jolts_only_physical_hits(damage_type, jolts):
+    """
+    A hit is applied with its damage type; only a physical one pushes the ship.
+    """
+    ship = make_ship_without_init()
+    ship.apply_damage = MagicMock()
+    ship.game = MagicMock()
+
+    ship.take_hit(
+        damage=50.0,
+        normal_world_vector=np.array([1.0, 0.0, 0.0]),
+        damage_type=damage_type,
+    )
+
+    ship.apply_damage.assert_called_once_with(damage=50.0, damage_type=damage_type)
+    assert bool(np.any(ship.impact_force_n)) is jolts
+    assert ship.game.delayed_methods.do_method_later.called is jolts
 
 
 def test_adjust_engine_pitch_without_engine_sound_is_a_no_op():

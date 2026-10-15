@@ -9,6 +9,7 @@ from panda3d.core import NodePath, Vec3
 from space_flight.actors.destructibles import Destructible
 from space_flight.fx.damage_fx import DamageFX
 from space_flight.game.collisions import attach_collision_box, attach_collision_sphere
+from space_flight.weapons import PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
@@ -160,7 +161,12 @@ class SubSystem(Destructible):
             return False
         return getattr(self.mounted_on, "in_hyperspace", False)
 
-    def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
+    def take_hit(
+        self,
+        damage: float,
+        normal_world_vector: Vec3 | np.ndarray,
+        damage_type: str = PHYSICAL,
+    ):
         """
         Takes damage from a hit.
 
@@ -169,17 +175,18 @@ class SubSystem(Destructible):
 
         :param damage: The amount of damage to take
         :param normal_world_vector: The collision normal in world coordinates
+        :param damage_type: PHYSICAL or ION
         """
-        self.apply_damage(damage=damage, damage_type="physical")
+        self.apply_damage(damage=damage, damage_type=damage_type)
 
     def apply_damage(self, damage: float, damage_type: str):
         """
         Applies damage to the subsystem.
 
         :param damage: The amount of damage to apply
-        :param damage_type: The type of damage to apply (physical, energy)
+        :param damage_type: The type of damage to apply (PHYSICAL, ION)
         """
-        if damage_type == "physical":
+        if damage_type == PHYSICAL:
             self.health -= damage
         else:
             raise NotImplementedError

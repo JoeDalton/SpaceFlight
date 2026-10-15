@@ -26,6 +26,7 @@ from space_flight.utils import (
     magnitude,
     rotation_matrix_coefficients,
 )
+from space_flight.weapons import PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -333,6 +334,13 @@ class Ship(Pawn):
         """
         return 1.0
 
+    def can_brake(self) -> bool:
+        """
+        :return: Whether the airplane-model brakes work (not on a fighter whose
+            engines are dead)
+        """
+        return True
+
     def _compute_mobility(self) -> float:
         """
         Blend the ship's kinematic limits into a manoeuverability score in [0, 1].
@@ -386,7 +394,7 @@ class Ship(Pawn):
 
         The throttle is squared so the velocity is easier to modulate, and scaled
         by thrust_factor(); below ZERO_THRUST_POSITION it brakes (airplane
-        model) or cuts thrust (space).
+        model, if can_brake()) or cuts thrust (space).
         The turn rates are scaled by _turn_rate_scale(throttle).
         Both are low-pass filtered to emulate delay in physical systems.
         pqr is stored in Panda3D's pitch-roll-yaw order.
@@ -406,7 +414,9 @@ class Ship(Pawn):
                 * self.thrust_factor()
             )
         else:
-            if FLIGHT_MODEL == "airplane":
+            if FLIGHT_MODEL == "airplane" and not self.can_brake():
+                scalar_thrust_n = 0
+            elif FLIGHT_MODEL == "airplane":
                 # Ship is braking, propotionally to its forward speed
                 brake_intensity = (
                     ZERO_THRUST_POSITION - throttle
@@ -814,16 +824,24 @@ class Ship(Pawn):
         self.node.setPos(*(self.position + offset_m * self.forward))
         self.node.setQuat(Quat(*self.orientation))
 
-    def take_hit(self, damage: float, normal_world_vector: Vec3 | np.ndarray):
+    def take_hit(
+        self,
+        damage: float,
+        normal_world_vector: Vec3 | np.ndarray,
+        damage_type: str = PHYSICAL,
+    ):
         """
-        Take damage from hits and jolt from the impact
+        Take damage from hits and jolt from a physical impact (ion hits do not
+        push)
         # TODO move force calculations to collisions.py
-        # TODO allow energy (ion) damage when we add energy management
 
         :param damage: The amount of damage to take
         :param normal_world_vector: The collision normal in world coordinates
+        :param damage_type: PHYSICAL or ION
         """
-        self.apply_damage(damage=damage, damage_type="physical")
+        self.apply_damage(damage=damage, damage_type=damage_type)
+        if damage_type != PHYSICAL:
+            return
 
         # Apply momentum change
         hit_force_world_n = (
@@ -857,7 +875,7 @@ class Ship(Pawn):
         :param velocity_correction: The velocity correction to apply
         :param position_correction: The position correction to apply
         """
-        self.apply_damage(damage=damage, damage_type="physical")
+        self.apply_damage(damage=damage, damage_type=PHYSICAL)
         self.velocity_correction = velocity_correction
         self.position_correction = position_correction
 
@@ -897,7 +915,7 @@ class Ship(Pawn):
         Ship-type dependent
 
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical, energy)
+        :param damage_type: the type of damage to apply (PHYSICAL, ION)
         """
         raise NotImplementedError
 

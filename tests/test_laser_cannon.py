@@ -14,14 +14,13 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from energy_fakes import LASER_SHOT_COST, make_energy_system
 from panda3d.core import Vec3
 
-from space_flight.actors.energy import EnergySystem
 from space_flight.weapons.laser_cannon import LASER_SPEED_MPS, LaserCannon
 
 FIRE_DELAY_S = 0.5
 N_CANNONS = 2
-LASER_SHOT_ENERGY_COST = 0.02
 
 
 @pytest.fixture
@@ -119,10 +118,8 @@ def test_fire_refuses_without_enough_laser_energy(laser_cannon):
     An energy-powered gun does not fire on a gauge below one bolt's cost, and
     the refused shot does not consume the reload gate.
     """
-    laser_cannon.energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
-    laser_cannon.energy.lasers = 0.5 * LASER_SHOT_ENERGY_COST
+    laser_cannon.energy = make_energy_system(has_shields=True)
+    laser_cannon.energy.lasers = 0.5 * LASER_SHOT_COST
     laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
 
     with patch("space_flight.weapons.laser_cannon.LaserShot") as mock_laser_shot:
@@ -137,9 +134,7 @@ def test_fire_spends_laser_energy_and_applies_damage_bonus(laser_cannon):
     Each bolt costs its energy, and carries the damage bonus of the gauge level
     it was fired at.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     laser_cannon.energy = energy
     laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S
     expected_power = laser_cannon.shot_power * energy.laser_damage_factor()
@@ -149,7 +144,7 @@ def test_fire_spends_laser_energy_and_applies_damage_bonus(laser_cannon):
 
     assert mock_laser_shot.call_args.kwargs["power"] == pytest.approx(expected_power)
     assert expected_power > laser_cannon.shot_power
-    assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_ENERGY_COST)
+    assert energy.lasers == pytest.approx(1.0 - LASER_SHOT_COST)
 
 
 def test_fire_scales_the_bolt_power_by_the_damage_multiplier(laser_cannon):
@@ -157,9 +152,7 @@ def test_fire_scales_the_bolt_power_by_the_damage_multiplier(laser_cannon):
     The damage multiplier scales the bolt's power, on top of the laser gauge's
     damage bonus.
     """
-    energy = EnergySystem(
-        has_shields=True, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    energy = make_energy_system(has_shields=True)
     laser_cannon.energy = energy
     laser_cannon.damage_multiplier = 2.0
     laser_cannon.game.game_time.get_current_time.return_value = FIRE_DELAY_S

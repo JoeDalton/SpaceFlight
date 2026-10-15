@@ -14,6 +14,7 @@ from space_flight.actors.major_ship.shield_generator import ShieldGenerator
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
 from space_flight.game.collisions import attach_collision_sphere
+from space_flight.weapons import PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -265,9 +266,9 @@ class MajorShip(Ship):
         separately, through the collision handlers)
 
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical, energy)
+        :param damage_type: the type of damage to apply (PHYSICAL, ION)
         """
-        if damage_type == "physical":
+        if damage_type == PHYSICAL:
             self.health -= damage
         else:
             raise NotImplementedError

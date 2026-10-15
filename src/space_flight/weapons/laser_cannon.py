@@ -27,7 +27,7 @@ from space_flight.utils import (
     magnitude,
     sample_direction_in_cone,
 )
-from space_flight.weapons import Munition, Weapon
+from space_flight.weapons import PHYSICAL, Munition, Weapon
 
 if TYPE_CHECKING:
     from space_flight.actors.energy import EnergySystem
@@ -254,6 +254,7 @@ class LaserShot(Munition):
         speed: np.ndarray,
         start_position: Point3,
         origin_ship: Fighter | Turret | None = None,
+        damage_type: str = PHYSICAL,
     ):
         # Store the visual parameters before the base __init__ calls _build_visual.
         self.color = color
@@ -266,6 +267,7 @@ class LaserShot(Munition):
             speed=speed,
             start_position=start_position,
             origin_ship=origin_ship,
+            damage_type=damage_type,
         )
 
     def _build_visual(self, start_position: Point3) -> NodePath:

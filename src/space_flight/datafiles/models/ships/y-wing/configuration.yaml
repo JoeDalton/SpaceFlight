@@ -23,7 +23,17 @@ laser_fire_rate: 8
 cannon_positions: [[-3, 5, -1], [3, 5, -1]]
 laser_sound: sounds/weapons/YWING_BLASTER.wav
 shot_power: 70.0
-laser_shot_energy_cost: 0.022  # laser gauge fraction per bolt
+
+# Engine and laser gauges, in energy units (the scale of damage, which ion hits
+# drain them by). Rates are per second, the regen rates at full plant power.
+energy:
+  engine_capacity: 500.0
+  laser_capacity: 500.0
+  engine_regen_rate: 75.0
+  laser_regen_rate: 75.0
+  boost_drain_rate: 60.0
+  hard_maneuver_drain_rate: 40.0
+  laser_shot_cost: 11.0
 
 loadout:
   proton_bomb: 6

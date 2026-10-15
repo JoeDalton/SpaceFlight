@@ -16,6 +16,7 @@ from space_flight.game.collisions import (
 )
 from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
+from space_flight.weapons import PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.actors.major_ship.major_ship import MajorShip
@@ -238,6 +239,7 @@ class Shield(Destructible):
         damage: float,
         normal_world_vector: Vec3 | np.ndarray,
         hit_world_point: Point3 | None = None,
+        damage_type: str = PHYSICAL,
     ):
         """
         Take damage from a laser hit against the shield and flash the impact.
@@ -249,10 +251,11 @@ class Shield(Destructible):
         :param normal_world_vector: The collision normal in world coordinates
         :param hit_world_point: The impact point in world coordinates, used to
             place the shader's impact flash (optional)
+        :param damage_type: PHYSICAL or ION
         """
         now = self.game.game_time.get_current_time()
         self.regen_cooldown.trigger()
-        self.apply_damage(damage=damage, damage_type="physical")
+        self.apply_damage(damage=damage, damage_type=damage_type)
         if hit_world_point is not None:
             self.model.add_impact(hit_world_point, self.game.root_node, now)
 
@@ -261,9 +264,9 @@ class Shield(Destructible):
         Absorb damage into the shield's strength pool.
 
         :param damage: The amount of damage to apply
-        :param damage_type: The type of damage to apply (physical, energy)
+        :param damage_type: The type of damage to apply (PHYSICAL, ION)
         """
-        if damage_type == "physical":
+        if damage_type == PHYSICAL:
             self.health -= damage
         else:
             raise NotImplementedError

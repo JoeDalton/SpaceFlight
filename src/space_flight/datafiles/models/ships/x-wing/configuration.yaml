@@ -23,7 +23,17 @@ laser_fire_rate: 7.5
 cannon_positions: [[5.2, 5, 0.5], [-5.2, 5, -2.5], [-5.2, 5, 0.5], [5.2, 5, -2.5]]
 laser_sound: sounds/weapons/XWING_BLASTER.wav
 shot_power: 60.0
-laser_shot_energy_cost: 0.02  # laser gauge fraction per bolt
+
+# Engine and laser gauges, in energy units (the scale of damage, which ion hits
+# drain them by). Rates are per second, the regen rates at full plant power.
+energy:
+  engine_capacity: 400.0
+  laser_capacity: 400.0
+  engine_regen_rate: 60.0
+  laser_regen_rate: 60.0
+  boost_drain_rate: 48.0
+  hard_maneuver_drain_rate: 32.0
+  laser_shot_cost: 8.0
 
 loadout:
   proton_torpedo: 4

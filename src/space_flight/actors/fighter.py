@@ -17,6 +17,7 @@ from space_flight.global_architecture.gameplay_settings import (
     gameplay_config,
 )
 from space_flight.utils.state_machine import Cooldown
+from space_flight.weapons import PHYSICAL
 from space_flight.weapons.laser_cannon import LaserCannon
 from space_flight.weapons.ordnance_launcher import SECONDARY_TYPES, OrdnanceLauncher
 
@@ -69,8 +70,7 @@ class Fighter(Ship):
 
         # Engine and laser gauges, and the power distribution between systems
         self.energy = EnergySystem(
-            has_shields=self.max_shield > 0.0,
-            laser_shot_energy_cost=self.conf["laser_shot_energy_cost"],
+            has_shields=self.max_shield > 0.0, **self.conf["energy"]
         )
 
         # Initialize cannons, with the player's or the bots' gameplay settings
@@ -163,7 +163,8 @@ class Fighter(Ship):
     def _turn_rate_scale(self, throttle: float) -> float:
         """
         Fraction of the max turn rates available, given the throttle command
-        (see turn_rate_scale) and the engine gauge's bonus or penalty.
+        (see turn_rate_scale) and the engine gauge's bonus (none at all while
+        the engines are dead).
 
         :param throttle: Throttle command
         :return: The scale applied to the turn rate commands
@@ -172,9 +173,15 @@ class Fighter(Ship):
 
     def thrust_factor(self) -> float:
         """
-        :return: The engine gauge's bonus or penalty on thrust
+        :return: The engine gauge's bonus on thrust, 0 while the engines are dead
         """
         return self.energy.thrust_factor()
+
+    def can_brake(self) -> bool:
+        """
+        :return: Whether the engines are alive to brake
+        """
+        return not self.energy.is_engine_dead
 
     @property
     def shield_level(self) -> float:
@@ -318,7 +325,7 @@ class Fighter(Ship):
         off shield regeneration for a while.
 
         :param damage: The amount of damage to apply
-        :param damage_type: the type of damage to apply (physical, energy)
+        :param damage_type: the type of damage to apply (PHYSICAL, ION)
         """
         # A wreck in its death spin takes no further damage (hits cannot
         # re-trigger death), though collision pushes still shove it around.
@@ -327,7 +334,7 @@ class Fighter(Ship):
         if damage > 0.0:
             self.shield_regen_cooldown.trigger()
         # Apply damage to health and shield
-        if damage_type == "physical":
+        if damage_type == PHYSICAL:
             if self.shield - damage >= 0.0:
                 self.shield -= damage
             else:

@@ -23,7 +23,17 @@ laser_fire_rate: 9.1
 cannon_positions: [[-0.5, 5, -1], [0.5, 5, -1]]
 laser_sound: sounds/weapons/TIE_BLASTER.wav
 shot_power: 75.0
-laser_shot_energy_cost: 0.015  # laser gauge fraction per bolt
+
+# Engine and laser gauges, in energy units (the scale of damage, which ion hits
+# drain them by). Rates are per second, the regen rates at full plant power.
+energy:
+  engine_capacity: 300.0
+  laser_capacity: 300.0
+  engine_regen_rate: 45.0
+  laser_regen_rate: 45.0
+  boost_drain_rate: 36.0
+  hard_maneuver_drain_rate: 24.0
+  laser_shot_cost: 4.5
 
 loadout:
   concussion_missile: 6

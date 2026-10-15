@@ -4,12 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from energy_fakes import ENERGY_CONF, make_energy_system
 
-from space_flight.actors.energy import (
-    SHIELD_REGEN_DELAY_S,
-    SHIELDS,
-    EnergySystem,
-)
+from space_flight.actors.energy import ENGINES, SHIELD_REGEN_DELAY_S, SHIELDS
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.ship import Ship
 from space_flight.global_architecture.gameplay_settings import (
@@ -18,8 +15,6 @@ from space_flight.global_architecture.gameplay_settings import (
     load_presets,
 )
 from space_flight.utils.state_machine import Cooldown
-
-LASER_SHOT_ENERGY_COST = 0.02
 
 
 def make_fighter_without_init(
@@ -46,9 +41,7 @@ def make_fighter_without_init(
         duration_s=SHIELD_REGEN_DELAY_S,
         clock=clock if clock is not None else MagicMock(return_value=0.0),
     )
-    fighter.energy = EnergySystem(
-        has_shields=max_shield > 0.0, laser_shot_energy_cost=LASER_SHOT_ENERGY_COST
-    )
+    fighter.energy = make_energy_system(has_shields=max_shield > 0.0)
     # apply_damage reads is_dying -- a property mirroring the controlling
     # Bot/Player -- to make a dying wreck inert; give it a live controller.
     fighter.parent = MagicMock(is_dying=False)
@@ -673,6 +666,21 @@ def test_fighter_turn_rate_and_thrust_follow_engine_gauge():
     assert full[1] > half[1] == pytest.approx(1.0)
 
 
+def test_fighter_with_dead_engines_drifts():
+    """
+    Once its engine gauge is empty, a fighter has no thrust, no turning and no
+    brakes until the gauge refills.
+    """
+    fighter = make_fighter_without_init()
+    assert fighter.can_brake()
+
+    fighter.energy.drain(ENGINES, 1e6)
+
+    assert fighter.thrust_factor() == 0.0
+    assert fighter._turn_rate_scale(0.6) == 0.0
+    assert not fighter.can_brake()
+
+
 # ---------------------------
 # __init__ — auto-aim settings
 # ---------------------------
@@ -685,7 +693,7 @@ def _fake_ship_init(self, game, **kwargs):
     self.conf = {
         "shield": 100.0,
         "shield_regen_rate": 10.0,
-        "laser_shot_energy_cost": LASER_SHOT_ENERGY_COST,
+        "energy": ENERGY_CONF,
         "hit_box_radius_m": 5.0,
         "explosion_scale": 1.0,
         "loadout": {"rocket": 2},

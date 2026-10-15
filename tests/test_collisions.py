@@ -34,6 +34,7 @@ from space_flight.game.collisions import (
     CollisionSystem,
     owners_share_vehicle,
 )
+from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.actors.major_ship.shield import Shield
@@ -569,6 +570,7 @@ def test_laser_from_outside_is_blocked():
 
     shield.take_hit.assert_called_once()
     assert shield.take_hit.call_args.kwargs["damage"] == pytest.approx(60.0)
+    assert shield.take_hit.call_args.kwargs["damage_type"] == laser.damage_type
     laser.on_impact.assert_called_once()
 
 
@@ -865,7 +867,7 @@ def make_target_fighter(shield_level: float) -> SimpleNamespace:
         shield_level=shield_level,
         health=100.0,
     )
-    fighter.take_hit = lambda damage, normal_world_vector: setattr(
+    fighter.take_hit = lambda damage, normal_world_vector, damage_type: setattr(
         fighter, "shield_level", max(0.0, fighter.shield_level - damage)
     )
     return fighter
@@ -877,6 +879,7 @@ def make_enemy_laser() -> MagicMock:
     laser.origin_ship = SimpleNamespace(mounted_on=None)
     laser.origin_ship_id = "shooter-id"
     laser.power = 10.0
+    laser.damage_type = PHYSICAL
     return laser
 
 
@@ -899,6 +902,23 @@ def test_hit_on_shielded_fighter_sparks_ice():
     system.munition_into_destructible(entry)
 
     assert spawned_spark_preset(system) is spark_fx.ICE
+
+
+@pytest.mark.parametrize("damage_type", [PHYSICAL, ION])
+def test_hit_passes_the_munitions_damage_type(damage_type):
+    """
+    The target takes the hit with the munition's damage type.
+    """
+    system = make_collision_system_without_init()
+    system.game.player.pawn.id = "player-id"
+    fighter = make_target_fighter(shield_level=50.0)
+    fighter.take_hit = MagicMock()
+    laser = make_enemy_laser()
+    laser.damage_type = damage_type
+
+    system.munition_into_destructible(make_destructible_entry(laser, fighter))
+
+    assert fighter.take_hit.call_args.kwargs["damage_type"] == damage_type
 
 
 def test_hull_hit_on_a_shielded_major_ship_sparks_metal():

@@ -28,6 +28,7 @@ from space_flight.fx import spark_fx
 from space_flight.game.kills import DamageSource, credit_hit
 from space_flight.global_architecture.gameplay_settings import gameplay_config
 from space_flight.utils import magnitude
+from space_flight.weapons import PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.actors.major_ship.shield import Shield
@@ -350,7 +351,11 @@ class CollisionSystem:
         )
 
         credit_hit(destructible, munition.source)
-        destructible.take_hit(damage=munition.power, normal_world_vector=normal)
+        destructible.take_hit(
+            damage=munition.power,
+            normal_world_vector=normal,
+            damage_type=munition.damage_type,
+        )
 
         # Spend the munition
         munition.on_impact()
@@ -556,6 +561,7 @@ class CollisionSystem:
             damage=munition.power,
             normal_world_vector=normal,
             hit_world_point=hit_point,
+            damage_type=munition.damage_type,
         )
 
         # Ice sparks where the munition struck the bubble, on top of the shield's
@@ -880,7 +886,7 @@ class CollisionSystem:
         # Apply damage to the massive actor (never the player's, so unscaled)
         massive_actor_into.apply_damage(
             damage=COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2,
-            damage_type="physical",
+            damage_type=PHYSICAL,
         )
 
     def ship_into_subsystem(self, entry: CollisionEntry):
@@ -998,7 +1004,7 @@ class CollisionSystem:
         credit_hit(subsystem_into, DamageSource.of(ship_from, self.game), cause="ram")
         subsystem_into.apply_damage(
             damage=COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2,
-            damage_type="physical",
+            damage_type=PHYSICAL,
         )
 
     def sensor_into_obstacle(self, entry: CollisionEntry):

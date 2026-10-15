@@ -11,14 +11,21 @@ damage), ramping linearly up to a full gauge. They are spent by:
 
 - engines: boosting and hard manoeuvres (pitch or yaw commanded above
   HARD_MANEUVER_COMMAND_THRESHOLD of the current max rate). An empty engine
-  gauge locks boost out and penalises thrust and turn rate.
-- lasers: each bolt costs the ship's laser_shot_energy_cost (from its
-  configuration). Below that, the cannons are silent.
+  gauge kills the engines: no thrust, no turning, no braking (the ship drifts)
+  until the gauge refills to ENGINE_RESTART_LEVEL, and boost stays locked out
+  until BOOST_REENABLE_ENGINE_LEVEL.
+- lasers: each bolt costs the ship's laser_shot_cost. Below that, the cannons
+  are silent.
 - shields: taking hits. The shield gauge is the fighter's own shield strength
   (see :class:`~space_flight.actors.fighter.Fighter`); this module only sets
   its regeneration rate.
 
-Engine and laser gauges are fractions in [0, 1].
+Ion hits drain the gauges too (see :meth:`EnergySystem.drain`).
+
+Each ship sizes its engine and laser gauges (their capacity) and sets their
+refill rates and costs in its configuration's ``energy`` block, in energy units
+(the same scale as damage, for the ion hits). The gauges themselves are kept as
+fractions in [0, 1].
 """
 
 from __future__ import annotations
@@ -43,20 +50,15 @@ ENERGY_SHARES_UNSHIELDED = {
     LASERS: {ENGINES: 0.1, LASERS: 0.8, SHIELDS: 0.0},
 }
 
-# Gauge refill rates (fraction of the gauge per second) if the system received
-# all of the plant's output
-ENGINE_FULL_POWER_REGEN_RATE_PS = 0.15
-LASER_FULL_POWER_REGEN_RATE_PS = 0.15
-
-# Engine gauge consumption, in fraction of the gauge per second
-BOOST_ENERGY_DRAIN_RATE_PS = 0.12
-HARD_MANEUVER_ENERGY_DRAIN_RATE_PS = 0.08
 # Pitch or yaw command (fraction of the current max rate) above which a
 # manoeuvre is hard. Roll is free.
 HARD_MANEUVER_COMMAND_THRESHOLD = 0.9
 # Once the engine gauge runs dry, boost stays locked out until it refills to
 # this level (hysteresis, so boost does not stutter on an almost empty gauge)
 BOOST_REENABLE_ENGINE_LEVEL = 0.5
+# Once the engine gauge runs dry, the engines stay dead until it refills to this
+# level
+ENGINE_RESTART_LEVEL = 0.15
 
 # Bonuses ramp linearly from 0 at BONUS_GAUGE_THRESHOLD to their max at a full
 # gauge
@@ -64,14 +66,6 @@ BONUS_GAUGE_THRESHOLD = 0.5
 ENGINE_BONUS_MAX_THRUST_FACTOR = 0.2
 ENGINE_BONUS_MAX_TURN_RATE_FACTOR = 0.2
 LASER_BONUS_MAX_DAMAGE_FACTOR = 0.5
-
-# Empty engine gauge penalty: thrust and turn rates are scaled by the EMPTY
-# factors on an empty gauge, fading out linearly up to
-# ENGINE_PENALTY_GAUGE_THRESHOLD (so a gauge hovering around zero does not
-# flicker between penalised and not)
-ENGINE_PENALTY_GAUGE_THRESHOLD = 0.05
-ENGINE_EMPTY_THRUST_FACTOR = 0.8
-ENGINE_EMPTY_TURN_RATE_FACTOR = 0.8
 
 # Shields do not regenerate for this long after the fighter is hit
 SHIELD_REGEN_DELAY_S = 3.0
@@ -90,23 +84,6 @@ def bonus_factor(level: float, max_bonus: float) -> float:
     return 1.0 + max_bonus * min(max(ramp, 0.0), 1.0)
 
 
-def engine_factor(level: float, max_bonus: float, empty_factor: float) -> float:
-    """
-    Multiplier granted by the engine gauge: the bonus ramp when over half full
-    (see bonus_factor), a penalty fading from empty_factor on an empty gauge to
-    1 at ENGINE_PENALTY_GAUGE_THRESHOLD.
-
-    :param level: The engine gauge level, in [0, 1]
-    :param max_bonus: The bonus at a full gauge
-    :param empty_factor: The multiplier on an empty gauge
-    :return: The multiplier
-    """
-    if level >= ENGINE_PENALTY_GAUGE_THRESHOLD:
-        return bonus_factor(level, max_bonus)
-    ramp = max(level, 0.0) / ENGINE_PENALTY_GAUGE_THRESHOLD
-    return empty_factor + ramp * (1.0 - empty_factor)
-
-
 class EnergySystem:
     """
     A fighter's engine and laser gauges, and the power distribution between
@@ -117,13 +94,42 @@ class EnergySystem:
     regeneration.
     """
 
-    def __init__(self, has_shields: bool, laser_shot_energy_cost: float):
+    def __init__(
+        self,
+        has_shields: bool,
+        engine_capacity: float,
+        laser_capacity: float,
+        engine_regen_rate: float,
+        laser_regen_rate: float,
+        boost_drain_rate: float,
+        hard_maneuver_drain_rate: float,
+        laser_shot_cost: float,
+    ):
         """
+        The energy amounts are in energy units, the rates in energy units per
+        second (a ship's configuration ``energy`` block).
+
         :param has_shields: Whether the ship has shields to power
-        :param laser_shot_energy_cost: Laser gauge fraction spent per bolt
+        :param engine_capacity: Energy held by a full engine gauge
+        :param laser_capacity: Energy held by a full laser gauge
+        :param engine_regen_rate: Engine gauge refill rate if the engines
+            received all of the plant's output
+        :param laser_regen_rate: Laser gauge refill rate if the lasers received
+            all of the plant's output
+        :param boost_drain_rate: Engine energy spent boosting
+        :param hard_maneuver_drain_rate: Engine energy spent in hard manoeuvres
+        :param laser_shot_cost: Laser energy spent per bolt
         """
+        if engine_capacity <= 0.0 or laser_capacity <= 0.0:
+            raise ValueError("Energy capacities must be positive")
         self.has_shields = has_shields
-        self.laser_shot_energy_cost = laser_shot_energy_cost
+        self.capacities = {ENGINES: engine_capacity, LASERS: laser_capacity}
+        # Rates and costs, converted to gauge fractions
+        self.engine_regen_rate = engine_regen_rate / engine_capacity
+        self.laser_regen_rate = laser_regen_rate / laser_capacity
+        self.boost_drain_rate = boost_drain_rate / engine_capacity
+        self.hard_maneuver_drain_rate = hard_maneuver_drain_rate / engine_capacity
+        self.laser_shot_cost = laser_shot_cost / laser_capacity
         self.shares = (
             ENERGY_SHARES_SHIELDED if has_shields else ENERGY_SHARES_UNSHIELDED
         )
@@ -131,6 +137,7 @@ class EnergySystem:
         self.lasers = 1.0
         self.mode = BALANCED
         self.is_boost_locked = False
+        self.is_engine_dead = False
 
     @property
     def modes(self) -> list[str]:
@@ -183,45 +190,70 @@ class EnergySystem:
     def update(self, dt: float, throttle: float, yaw_rate: float, pitch_rate: float):
         """
         Refill the engine and laser gauges at their share of the plant's output,
-        and drain the engine gauge for boosting and hard manoeuvres.
+        and drain the engine gauge for boosting and hard manoeuvres (dead
+        engines spend nothing).
 
         :param dt: Time step, in seconds
         :param throttle: Throttle command actually applied, above 1 for boost
         :param yaw_rate: Yaw rate command, fraction of the current max rate
         :param pitch_rate: Pitch rate command, fraction of the current max rate
         """
-        engines_rate = self.share(ENGINES) * ENGINE_FULL_POWER_REGEN_RATE_PS
-        if throttle > 1.0:
-            engines_rate -= BOOST_ENERGY_DRAIN_RATE_PS
-        if max(abs(yaw_rate), abs(pitch_rate)) > HARD_MANEUVER_COMMAND_THRESHOLD:
-            engines_rate -= HARD_MANEUVER_ENERGY_DRAIN_RATE_PS
+        engines_rate = self.share(ENGINES) * self.engine_regen_rate
+        if not self.is_engine_dead:
+            if throttle > 1.0:
+                engines_rate -= self.boost_drain_rate
+            if max(abs(yaw_rate), abs(pitch_rate)) > HARD_MANEUVER_COMMAND_THRESHOLD:
+                engines_rate -= self.hard_maneuver_drain_rate
         self.engines = min(max(self.engines + dt * engines_rate, 0.0), 1.0)
 
-        laser_rate = self.share(LASERS) * LASER_FULL_POWER_REGEN_RATE_PS
+        laser_rate = self.share(LASERS) * self.laser_regen_rate
         self.lasers = min(max(self.lasers + dt * laser_rate, 0.0), 1.0)
 
+        self._update_engine_state()
+
+    def _update_engine_state(self):
+        """
+        Kill the engines and lock boost out on an empty engine gauge; restart
+        them, then re-enable boost, as it refills.
+        """
         if self.engines <= 0.0:
+            self.is_engine_dead = True
             self.is_boost_locked = True
-        elif self.engines >= BOOST_REENABLE_ENGINE_LEVEL:
-            self.is_boost_locked = False
+        else:
+            if self.engines >= ENGINE_RESTART_LEVEL:
+                self.is_engine_dead = False
+            if self.engines >= BOOST_REENABLE_ENGINE_LEVEL:
+                self.is_boost_locked = False
+
+    def drain(self, system: str, amount: float):
+        """
+        Take energy out of a gauge (an ion hit). Emptying the engine gauge kills
+        the engines at once.
+
+        :param system: ENGINES or LASERS
+        :param amount: The energy taken, in energy units
+        """
+        level = getattr(self, system) - amount / self.capacities[system]
+        setattr(self, system, max(level, 0.0))
+        self._update_engine_state()
 
     def thrust_factor(self) -> float:
         """
-        :return: The multiplier the engine gauge applies to thrust
+        :return: The multiplier the engine gauge applies to thrust: its bonus, or
+            0 while the engines are dead
         """
-        return engine_factor(
-            self.engines, ENGINE_BONUS_MAX_THRUST_FACTOR, ENGINE_EMPTY_THRUST_FACTOR
-        )
+        if self.is_engine_dead:
+            return 0.0
+        return bonus_factor(self.engines, ENGINE_BONUS_MAX_THRUST_FACTOR)
 
     def turn_rate_factor(self) -> float:
         """
-        :return: The multiplier the engine gauge applies to the max turn rates
+        :return: The multiplier the engine gauge applies to the max turn rates:
+            its bonus, or 0 while the engines are dead
         """
-        return engine_factor(
-            self.engines,
-            ENGINE_BONUS_MAX_TURN_RATE_FACTOR,
-            ENGINE_EMPTY_TURN_RATE_FACTOR,
-        )
+        if self.is_engine_dead:
+            return 0.0
+        return bonus_factor(self.engines, ENGINE_BONUS_MAX_TURN_RATE_FACTOR)
 
     def laser_damage_factor(self) -> float:
         """
@@ -233,13 +265,13 @@ class EnergySystem:
         """
         :return: Whether the laser gauge holds enough energy for a bolt
         """
-        return self.lasers >= self.laser_shot_energy_cost
+        return self.lasers >= self.laser_shot_cost
 
     def consume_laser_shot(self):
         """
         Spend one bolt's worth of laser energy.
         """
-        self.lasers = max(self.lasers - self.laser_shot_energy_cost, 0.0)
+        self.lasers = max(self.lasers - self.laser_shot_cost, 0.0)
 
     def shield_regen_rate(self, balanced_rate: float) -> float:
         """
