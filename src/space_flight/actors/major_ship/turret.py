@@ -118,13 +118,18 @@ class Turret(TrackingMount):
 
     def _active_targeting_system(self) -> TargetingSystem | None:
         """
-        Finds a living targeting system on the ship this turret is mounted on.
+        Finds a living, working (not disabled) targeting system on the ship this
+        turret is mounted on.
 
         :return: The active :class:`TargetingSystem` boosting this turret, or
-            None if its ship has none alive
+            None if its ship has none alive and working
         """
         for sub_system in getattr(self.mounted_on, "sub_systems", []):
-            if isinstance(sub_system, TargetingSystem) and not sub_system.is_dead:
+            if (
+                isinstance(sub_system, TargetingSystem)
+                and not sub_system.is_dead
+                and not sub_system.is_disabled
+            ):
                 return sub_system
         return None
 

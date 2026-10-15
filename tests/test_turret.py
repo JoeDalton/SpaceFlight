@@ -231,6 +231,20 @@ def test_active_targeting_system_found_when_alive():
     assert turret._active_targeting_system() is targeting_system
 
 
+def test_active_targeting_system_ignores_disabled_ones():
+    """
+    A targeting system disabled by ion hits boosts nobody; a working one
+    further down the list does.
+    """
+    turret = make_boostable_turret()
+    disabled = make_targeting_system()
+    disabled.is_disabled = True
+    working = make_targeting_system()
+    turret.mounted_on = SimpleNamespace(sub_systems=[disabled, working])
+
+    assert turret._active_targeting_system() is working
+
+
 def test_active_targeting_system_ignores_dead_and_other_subsystems():
     """
     A dead targeting system (or any non-targeting subsystem) does not count.

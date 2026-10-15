@@ -4,12 +4,20 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import NodePath, Vec3
+from panda3d.core import NodePath, Point3, Vec3
 
 from space_flight.actors.destructibles import Destructible
+from space_flight.fx import spark_fx
 from space_flight.fx.damage_fx import DamageFX
 from space_flight.game.collisions import attach_collision_box, attach_collision_sphere
-from space_flight.weapons import ION, PHYSICAL
+from space_flight.weapons import (
+    ION,
+    ION_CAPACITY_HEALTH_FRACTION,
+    ION_DAMAGE_FACTOR,
+    ION_DISABLE_DURATION_S,
+    ION_LOAD_DECAY_RATE_PS,
+    PHYSICAL,
+)
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
@@ -24,6 +32,10 @@ LOGGER = logging.getLogger()
 # their Bot and die immediately.
 SUBSYSTEM_DEATH_SMOKE_DURATION_S = 0.6
 
+# A disabled subsystem crackles with ion sparks, at random intervals of up to
+# this long
+ION_CRACKLE_MAX_INTERVAL_S = 0.3
+
 
 class SubSystem(Destructible):
     """
@@ -31,7 +43,11 @@ class SubSystem(Destructible):
 
     Subsystems are :class:`Destructible` objects in their own right: they own
     their health and their own collision geometry, and they explode when their
-    health is depleted. The into-only "subsystem" collider never initiates
+    health is depleted. Ion hits cannot harm them, but disable them for a while
+    once they have taken enough (see :meth:`apply_damage`): subclasses check
+    :attr:`is_disabled` to stop working, and may react in
+    :meth:`on_disabled` / :meth:`on_enabled`. The into-only "subsystem" collider
+    never initiates
     collisions (a subsystem is a rigid part of its ship), it is only hit. Lasers
     hitting it damage it, and a ship ramming it is handled by
     ship_into_subsystem, which pushes the :attr:`mounted_on` ship (the subsystem
@@ -55,7 +71,13 @@ class SubSystem(Destructible):
     :param health: Initial (and maximum) health of the subsystem
     :param explosion_scale: Size of the subsystem's death explosion
     :param name: Node and display name of the subsystem
+    :param ion_capacity: Ion damage it takes (at once, or faster than it bleeds
+        off) to be disabled; ION_CAPACITY_HEALTH_FRACTION of its health by
+        default
     """
+
+    #: Whether ion hits have knocked it out for now (see apply_damage)
+    is_disabled = False
 
     def __init__(
         self,
@@ -68,6 +90,7 @@ class SubSystem(Destructible):
         explosion_scale: float = 10.0,
         name: str = "subsystem",
         half_extents_m: np.ndarray | None = None,
+        ion_capacity: float | None = None,
     ):
         super().__init__(game=game)
         self.parent = parent
@@ -84,6 +107,16 @@ class SubSystem(Destructible):
         # Setup health
         self.max_health = health
         self.health = self.max_health
+
+        # Ion load and disabling (see apply_damage)
+        self.ion_capacity = (
+            ION_CAPACITY_HEALTH_FRACTION * health
+            if ion_capacity is None
+            else ion_capacity
+        )
+        self.ion_load = 0.0
+        self.disabled_until_s = 0.0
+        self._next_crackle_s = 0.0
 
         # Create a dummy node mounted on the ship, at the mounting point
         self.node = NodePath(f"{name}_node")
@@ -129,6 +162,7 @@ class SubSystem(Destructible):
 
         # We are our own Destructible, so we monitor our own health each frame
         self.add_task(method=self.handle_health)
+        self.add_task(method=self.update_ion)
 
         # Register as a targetable actor, so bots and the player can lock onto us
         self.game.interactions.add_actor(self)
@@ -189,10 +223,75 @@ class SubSystem(Destructible):
         if damage_type == PHYSICAL:
             self.health -= damage
         elif damage_type == ION:
-            # TODO #157 phase 3: ion hits disable subsystems for a while
-            return
+            self._take_ion_load(damage * ION_DAMAGE_FACTOR)
         else:
             raise NotImplementedError
+
+    def _take_ion_load(self, load: float):
+        """
+        Load the subsystem up with ion energy (it cannot harm its health): once
+        the load reaches the ion capacity, the subsystem is disabled for
+        ION_DISABLE_DURATION_S from now (on top of any time left), and the load
+        starts over.
+
+        :param load: The ion energy taken
+        """
+        self.ion_load += load
+        if self.ion_load < self.ion_capacity:
+            return
+        self.ion_load = 0.0
+        self.disabled_until_s = (
+            self.game.game_time.get_current_time() + ION_DISABLE_DURATION_S
+        )
+        if not self.is_disabled:
+            self.is_disabled = True
+            self.on_disabled()
+
+    def update_ion(self):
+        """
+        Per frame: bleed the ion load off, crackle while disabled, and bring the
+        subsystem back online once its disabling is over.
+        """
+        dt = self.game.game_time.get_time_step()
+        now = self.game.game_time.get_current_time()
+        self.ion_load = max(
+            self.ion_load - ION_LOAD_DECAY_RATE_PS * self.ion_capacity * dt, 0.0
+        )
+        if not self.is_disabled:
+            return
+        if now >= self.disabled_until_s:
+            self.is_disabled = False
+            self.on_enabled()
+            return
+        if now >= self._next_crackle_s:
+            self._crackle()
+            self._next_crackle_s = now + np.random.uniform(
+                0.0, ION_CRACKLE_MAX_INTERVAL_S
+            )
+
+    def _crackle(self):
+        """
+        A burst of ion sparks off a random point of the subsystem's surface.
+        """
+        direction = np.random.normal(size=3)
+        direction /= np.linalg.norm(direction)
+        self.game.spark_fx_pool.spawn(
+            position=Point3(*(self.position + self.hit_box_radius_m * direction)),
+            normal=Vec3(*direction),
+            base_velocity=Vec3(*self.speed),
+            preset=spark_fx.ION,
+        )
+
+    def on_disabled(self):
+        """
+        Hook: the subsystem was just disabled by ion hits. Subclasses stop what
+        they were doing; nothing in the base.
+        """
+
+    def on_enabled(self):
+        """
+        Hook: the subsystem just came back online. Nothing in the base.
+        """
 
     def handle_health(self):
         """

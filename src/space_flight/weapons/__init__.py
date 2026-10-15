@@ -47,6 +47,13 @@ DAMAGE_TYPES = (PHYSICAL, ION)
 # Ion damage drains shields and energy gauges this many times harder than its
 # power
 ION_DAMAGE_FACTOR = 1.5
+# Ion hits load a capital ship's subsystem up (see SubSystem): once the load
+# reaches its ion capacity (by default this fraction of its health), the
+# subsystem is disabled for ION_DISABLE_DURATION_S. The load bleeds off at
+# ION_LOAD_DECAY_RATE_PS of the capacity per second, so it takes sustained fire.
+ION_CAPACITY_HEALTH_FRACTION = 0.5
+ION_DISABLE_DURATION_S = 8.0
+ION_LOAD_DECAY_RATE_PS = 0.05
 
 
 def build_ordnance_sphere(

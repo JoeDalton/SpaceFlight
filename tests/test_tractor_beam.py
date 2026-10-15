@@ -157,6 +157,25 @@ def test_no_acquire_during_regrab_cooldown():
     assert tractor.is_grabbing is False
 
 
+@pytest.mark.parametrize("grabbing", [True, False])
+def test_disabling_lets_go_of_the_prey(grabbing):
+    """
+    A projector disabled by ion hits releases what it holds (and freezes).
+    """
+    prey = make_prey(position=[0.0, 100.0, 0.0], speed=[0.0, 0.0, 0.0])
+    tractor = make_tractor(prey=prey)
+    tractor.state_derivative = np.zeros(2)
+    if grabbing:
+        tractor.grab_sm.request(_GRABBING, force=True)
+        tractor.grabbed_prey_id = prey.id
+
+    tractor.on_disabled()
+
+    assert tractor.is_grabbing is False
+    assert tractor.grabbed_prey_id is None
+    assert tractor.regrab_cooldown.ready() is not grabbing
+
+
 # ---------------------------
 # _apply_tractor_forces
 # ---------------------------

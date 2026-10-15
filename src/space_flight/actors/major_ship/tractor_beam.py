@@ -124,6 +124,14 @@ class TractorBeamProjector(TrackingMount):
         else:
             self._try_acquire()
 
+    def on_disabled(self):
+        """
+        Freeze (see TrackingMount.on_disabled), letting go of any prey.
+        """
+        super().on_disabled()
+        if self.is_grabbing:
+            self._release()
+
     def _try_acquire(self):
         """
         Lock onto the tactician's prey if it sits inside the grab cone and within

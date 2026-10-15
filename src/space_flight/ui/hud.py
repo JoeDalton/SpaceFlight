@@ -107,6 +107,8 @@ ENGINE_GAUGE_COLOR = (0.15, 1.0, 0.25)
 SHIELD_GAUGE_COLOR = (0.2, 0.55, 1.0)
 # Engine gauge text while the engines are dead (instead of the speed)
 ENGINES_OFFLINE_TEXT = "OFFLINE"
+# Appended to the target's name while it is disabled by ion hits
+DISABLED_TEXT = "DISABLED"
 # Gauge brightness, raised for the system power is redirected to (its outline
 # is also highlighted, and the gauge grown about its base by the scale below,
 # which the spacing leaves room for)
@@ -1105,6 +1107,9 @@ class AimHUD:
             self.scan_bar.setColor(*SCAN_BAR_COLORS[scan.result])
             self.scan_bar.show()
         else:
+            # A subsystem knocked out by ion hits says so
+            if getattr(target, "is_disabled", False):
+                display_name = f"{display_name} - {DISABLED_TEXT}"
             self.name_label["text"] = display_name
             self.scan_bar.hide()
         self.target_anchor.show()

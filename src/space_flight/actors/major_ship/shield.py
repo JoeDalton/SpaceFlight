@@ -59,9 +59,10 @@ class Shield(Destructible):
     - *Destroyed*: every generator (or the ship) is destroyed. Only this ends the
       shield's life as a Destructible: it plays its fluid *death* animation and
       only then reports zero from :meth:`get_health`, delaying cleanup.
-    - *Disabled*: its strength pool reaches zero. It collapses and stays *down*
-      (hidden, not protecting, but alive) until regeneration brings it back
-      through the *appearance* animation (the death played in reverse).
+    - *Disabled*: its strength pool reaches zero (also when ion hits disable
+      every generator). It collapses and stays *down* (hidden, not protecting,
+      but alive) until regeneration brings it back through the *appearance*
+      animation (the death played in reverse).
 
     While either animation plays the shield is **not functional** (it is skipped
     in munition_into_shield via :attr:`is_enabled`).
@@ -289,6 +290,20 @@ class Shield(Destructible):
                 count += 1
         return count
 
+    def _powered_generator_count(self) -> int:
+        """
+        Number of generators projecting the shield right now: standing and not
+        disabled by ion hits.
+        """
+        return sum(
+            1
+            for g in self.generators
+            if g is not None
+            and not getattr(g, "is_dead", False)
+            and getattr(g, "health", 0.0) > 0.0
+            and not getattr(g, "is_disabled", False)
+        )
+
     def _owner_doomed(self) -> bool:
         """
         Whether the shield's life is over: the ship it protects is gone/about to
@@ -369,10 +384,12 @@ class Shield(Destructible):
 
         if not self._final_death:
             # Pro-rata perks: scale the maximum strength and regeneration by the
-            # fraction of generators still alive. When that fraction changes, the
-            # current strength is scaled by the same ratio as the maximum, so a
-            # partially depleted shield loses the same proportion.
-            fraction = self._alive_generator_count() / self.initial_generator_count
+            # fraction of generators still powering it (alive and not disabled).
+            # When that fraction changes, the current strength is scaled by the
+            # same ratio as the maximum, so a partially depleted shield loses the
+            # same proportion. With every generator disabled, the shield
+            # collapses, and regenerates once they are back.
+            fraction = self._powered_generator_count() / self.initial_generator_count
             if fraction != self._last_fraction:
                 if self._last_fraction > 0.0:
                     self.health *= fraction / self._last_fraction

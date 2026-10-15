@@ -423,6 +423,45 @@ def test_strength_scaling_compounds_over_successive_losses():
     assert shield.health == pytest.approx(200.0)
 
 
+def test_disabled_generator_stops_powering_the_shield():
+    """
+    A generator disabled by ion hits scales the perks down like a destroyed one
+    (it is not projecting), and back up once it is back online.
+    """
+    generators = [make_generator(), make_generator()]
+    shield = make_shield_without_init(
+        generators=generators, max_health=1000.0, current_health=1000.0
+    )
+
+    generators[0].is_disabled = True
+    shield.update()
+    assert shield.max_health == pytest.approx(500.0)
+    assert shield.health == pytest.approx(500.0)
+
+    generators[0].is_disabled = False
+    shield.update()
+    assert shield.max_health == pytest.approx(1000.0)
+    assert shield.health == pytest.approx(1000.0)
+
+
+def test_every_generator_disabled_collapses_the_shield_without_killing_it():
+    """
+    With every generator disabled, the shield collapses (its strength drops to
+    zero) but its life goes on: it is not its final death.
+    """
+    generators = [make_generator(), make_generator()]
+    for generator in generators:
+        generator.is_disabled = True
+    shield = make_shield_without_init(generators=generators, time_step=0.1)
+
+    shield.update()
+
+    assert shield._final_death is False
+    assert shield.health == 0.0
+    assert shield.state == _DYING
+    assert shield.get_health() > 0.0
+
+
 # ---------------------------
 # get_shield_level (fleet-AI facing)
 # ---------------------------

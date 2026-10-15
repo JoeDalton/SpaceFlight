@@ -96,6 +96,9 @@ class Hangar(SubSystem):
     :param launch_margin_m: Clearance between the bay box and a launched
         fighter's collision sphere
     :param name: Node and display name
+    :param ion_capacity: Ion damage it takes to be disabled (see
+        :class:`SubSystem`); ION_CAPACITY_HEALTH_FRACTION of its
+        health by default
     """
 
     def __init__(
@@ -113,6 +116,7 @@ class Hangar(SubSystem):
         launch_speed_mps: float = 30.0,
         launch_margin_m: float = 5.0,
         name: str = "hangar",
+        ion_capacity: float | None = None,
     ):
         super().__init__(
             game=game,
@@ -122,6 +126,7 @@ class Hangar(SubSystem):
             health=health,
             explosion_scale=explosion_scale,
             name=name,
+            ion_capacity=ion_capacity,
         )
         self.relative_position = np.asarray(relative_position, dtype=float)
         #: Fighters it can still launch, per fighter type (see set_stock)
@@ -303,10 +308,13 @@ class Hangar(SubSystem):
         """
         Launch the next queued fighter when it is due and allowed; cancel a
         request once its type's stock is spent, and every request once the
-        hangar or its ship is destroyed.
+        hangar or its ship is destroyed. A disabled hangar launches nothing, but
+        keeps its requests.
         """
         if not self.is_operational:
             self._cancel_orders()
+            return
+        if self.is_disabled:
             return
         self.orders = [order for order in self.orders if not order.done]
         if not self.orders:
@@ -326,6 +334,14 @@ class Hangar(SubSystem):
             return
         self._launch_one(order)
         self._next_launch_s = now_s + self.launch_interval_s
+
+    def on_enabled(self):
+        """
+        Back online: the next launch waits for a full launch interval.
+        """
+        self._next_launch_s = (
+            self.game.game_time.get_current_time() + self.launch_interval_s
+        )
 
     def _launch_one(self, order: LaunchOrder) -> Bot:
         """

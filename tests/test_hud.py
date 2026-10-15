@@ -21,6 +21,7 @@ from space_flight.ui.hud import (
     CHATTER_DISPLAY_S,
     CROSSHAIR_COLOR,
     CROSSHAIR_LOCKED_COLOR,
+    DISABLED_TEXT,
     EDGE_HORIZONTAL,
     EDGE_VERTICAL,
     ENGINES_OFFLINE_TEXT,
@@ -210,6 +211,26 @@ def test_target_box_is_hidden_and_target_dropped_without_a_live_target(dead):
     aim_hud.target_anchor.hide.assert_called_once()
     aim_hud.target_anchor.show.assert_not_called()
     assert (pawn.target, pawn.target_id, pawn.target_idx) == (None, None, None)
+
+
+@pytest.mark.parametrize("disabled", [False, True])
+def test_target_box_flags_a_disabled_target(disabled):
+    """
+    A target knocked out by ion hits is labelled as disabled.
+    """
+    aim_hud = make_aim_hud()
+    target = aim_hud.game.player.pawn.target
+    target.position = np.array([0.0, 250.0, 0.0])
+    target.scan = None
+    target.parent = None
+    target.name = "turret_3"
+    target.is_disabled = disabled
+    aim_hud.game.app.camera.getPos.return_value = Point3(0, 0, 0)
+
+    aim_hud.update_target_box()
+
+    expected = f"turret_3 - {DISABLED_TEXT}" if disabled else "turret_3"
+    aim_hud.name_label.__setitem__.assert_called_once_with("text", expected)
 
 
 def test_target_box_sits_on_a_target_ahead():

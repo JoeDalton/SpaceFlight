@@ -74,6 +74,7 @@ class MajorShip(Ship):
                 hit_box_radius_m=gen_conf.get("hit_box_radius_m", 5.0),
                 health=gen_conf.get("health", 1000.0),
                 explosion_scale=gen_conf.get("explosion_scale", 10.0),
+                ion_capacity=gen_conf.get("ion_capacity"),
             )
             self.sub_systems.append(generator)
             self.shield_generators.append(generator)
@@ -93,6 +94,7 @@ class MajorShip(Ship):
                     explosion_scale=ts_conf.get("explosion_scale", 10.0),
                     fire_rate_multiplier=ts_conf.get("fire_rate_multiplier", 2.0),
                     auto_aim_params=ts_conf.get("auto_aim", {}),
+                    ion_capacity=ts_conf.get("ion_capacity"),
                 )
             )
 
@@ -152,6 +154,7 @@ class MajorShip(Ship):
                     launch_speed_mps=hangar_conf.get("launch_speed_mps", 30.0),
                     launch_margin_m=hangar_conf.get("launch_margin_m", 5.0),
                     name=f"hangar_{i}",
+                    ion_capacity=hangar_conf.get("ion_capacity"),
                 )
             )
         return hangars

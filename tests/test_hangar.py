@@ -19,7 +19,7 @@ from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.ship import load_ship_configuration
 from space_flight.ai.formation import Formation
 from space_flight.utils import rotation_matrix_coefficients
-from space_flight.weapons import ION
+from space_flight.weapons import ION, ION_DISABLE_DURATION_S
 from space_flight.weapons.loadout import Loadout
 
 # The star destroyer's ventral bay and hull sphere (see isd/configuration.yaml)
@@ -34,6 +34,9 @@ class FakeClock:
 
     def get_current_time(self):
         return self.t
+
+    def get_time_step(self):
+        return 0.1
 
 
 class FakeInteractions:
@@ -300,6 +303,30 @@ def test_launches_the_requested_type(spawned):
     run(game, hangar, until_s=10.0)
 
     assert [call["pawn_model"] for call in spawned] == ["tie-interceptor"] * 2
+
+
+def test_a_disabled_hangar_holds_its_launches_until_back_online(spawned):
+    """
+    A hangar disabled by ion hits launches nothing but keeps its requests;
+    back online, it resumes them a launch interval later.
+    """
+    game, ship = make_game_and_ship()
+    hangar = make_hangar(game, ship, launch_interval_s=1.5)
+    order = hangar.launch("tie-fighter", 2)
+    hangar.apply_damage(damage=hangar.ion_capacity, damage_type=ION)
+    assert hangar.is_disabled
+
+    run(game, hangar, until_s=ION_DISABLE_DURATION_S - 0.5)
+    assert spawned == []
+    assert not order.cancelled
+
+    game.game_time.t = ION_DISABLE_DURATION_S
+    hangar.update_ion()
+    assert not hangar.is_disabled
+    run(game, hangar, until_s=ION_DISABLE_DURATION_S + 1.4)
+    assert spawned == []
+    run(game, hangar, until_s=ION_DISABLE_DURATION_S + 1.6)
+    assert len(spawned) == 1
 
 
 def test_launched_fighters_get_the_requested_loadout(spawned):
