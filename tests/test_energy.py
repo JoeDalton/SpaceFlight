@@ -258,15 +258,14 @@ def test_energy_factors_at_full_and_empty():
 
 def test_engines_die_once_dry_until_refilled_to_restart_level():
     """
-    An empty engine gauge kills the engines (no thrust, no turning) until it
-    refills to ENGINE_RESTART_LEVEL.
+    An empty engine gauge kills the engines (no thrust) until it refills to
+    ENGINE_RESTART_LEVEL.
     """
     energy = make_energy_system(has_shields=True)
     energy.engines = 0.01
     energy.update(dt=1.0, throttle=2.0, yaw_rate=0.0, pitch_rate=0.0)
     assert energy.is_engine_dead
     assert energy.thrust_factor() == 0.0
-    assert energy.turn_rate_factor() == 0.0
 
     # Refilling, but not enough yet
     energy.engines = 0.5 * ENGINE_RESTART_LEVEL

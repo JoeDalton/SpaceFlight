@@ -163,8 +163,7 @@ class Fighter(Ship):
     def _turn_rate_scale(self, throttle: float) -> float:
         """
         Fraction of the max turn rates available, given the throttle command
-        (see turn_rate_scale) and the engine gauge's bonus (none at all while
-        the engines are dead).
+        (see turn_rate_scale) and the engine gauge's bonus.
 
         :param throttle: Throttle command
         :return: The scale applied to the turn rate commands
@@ -177,9 +176,9 @@ class Fighter(Ship):
         """
         return self.energy.thrust_factor()
 
-    def can_brake(self) -> bool:
+    def engines_online(self) -> bool:
         """
-        :return: Whether the engines are alive to brake
+        :return: Whether the engines run, i.e. are not dead for lack of energy
         """
         return not self.energy.is_engine_dead
 

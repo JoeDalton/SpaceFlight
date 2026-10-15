@@ -47,6 +47,10 @@ TUMBLE_RATE_FACTORS = np.array([0.2, 1.0, 0.2])
 # Deepest play-rate cut of the player's interior engine at a full damage stutter
 # (see Ship._engine_sputter_factor, driven by CockpitFX's shared stutter events).
 ENGINE_SPUTTER_MAX_DEPTH = 0.6
+# Engine sound while the engines are offline (see _on_engines_online_changed):
+# the running loop, slowed down and muffled
+ENGINE_OFFLINE_PLAY_RATE = 0.5
+ENGINE_OFFLINE_VOLUME_FACTOR = 0.3
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -244,6 +248,9 @@ class Ship(Pawn):
         # Initialize engine sound (optional: a ship type without one is silent)
         self.sound = None
         self.sound_pool = None
+        # Whether the engine sound is the running one (see
+        # _on_engines_online_changed)
+        self.is_engine_sound_online = True
         if self.parent.name == "player":
             sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
@@ -252,7 +259,8 @@ class Ship(Pawn):
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
-            self.sound.setVolume(0.1)
+            self.engine_sound_volume = 0.1
+            self.sound.setVolume(self.engine_sound_volume)
         elif "exterior_engine_sound" in self.conf:
             sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
             self.sound_pool = self.game.app.asset_manager.get_asset(
@@ -261,7 +269,8 @@ class Ship(Pawn):
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
-            self.sound.setVolume(10.0)
+            self.engine_sound_volume = 10.0
+            self.sound.setVolume(self.engine_sound_volume)
             # Follows the ship node, Doppler-shifted by the ship's velocity
             self.game.app.sfx.attach_sound(self.sound, self.node, velocity_source=self)
 
@@ -334,10 +343,13 @@ class Ship(Pawn):
         """
         return 1.0
 
-    def can_brake(self) -> bool:
+    def engines_online(self) -> bool:
         """
-        :return: Whether the airplane-model brakes work (not on a fighter whose
-            engines are dead)
+        Offline engines (a fighter's, once its engine gauge runs dry) neither
+        brake nor change the rotation rates: the ship drifts and keeps spinning
+        as it was (see :meth:`set_inputs`).
+
+        :return: Whether the engines are running
         """
         return True
 
@@ -394,8 +406,10 @@ class Ship(Pawn):
 
         The throttle is squared so the velocity is easier to modulate, and scaled
         by thrust_factor(); below ZERO_THRUST_POSITION it brakes (airplane
-        model, if can_brake()) or cuts thrust (space).
+        model) or cuts thrust (space).
         The turn rates are scaled by _turn_rate_scale(throttle).
+        While the engines are offline (see engines_online), the ship cannot
+        brake and keeps its current rotation rates, whatever the commands.
         Both are low-pass filtered to emulate delay in physical systems.
         pqr is stored in Panda3D's pitch-roll-yaw order.
 
@@ -405,6 +419,7 @@ class Ship(Pawn):
         :param roll_rate: Roll rate command in [-1, 1]
         """
         dt = self.game.game_time.get_time_step()
+        engines_online = self.engines_online()
 
         if throttle >= ZERO_THRUST_POSITION:
             # Thrust is positive
@@ -414,7 +429,7 @@ class Ship(Pawn):
                 * self.thrust_factor()
             )
         else:
-            if FLIGHT_MODEL == "airplane" and not self.can_brake():
+            if FLIGHT_MODEL == "airplane" and not engines_online:
                 scalar_thrust_n = 0
             elif FLIGHT_MODEL == "airplane":
                 # Ship is braking, propotionally to its forward speed
@@ -430,13 +445,17 @@ class Ship(Pawn):
             else:
                 raise Exception
 
-        pqr = self._turn_rate_scale(throttle) * np.array(
-            [
-                pitch_rate * self.max_pitch_rate_radps,
-                roll_rate * self.max_roll_rate_radps,
-                yaw_rate * self.max_yaw_rate_radps,
-            ]
-        )
+        if engines_online:
+            pqr = self._turn_rate_scale(throttle) * np.array(
+                [
+                    pitch_rate * self.max_pitch_rate_radps,
+                    roll_rate * self.max_roll_rate_radps,
+                    yaw_rate * self.max_yaw_rate_radps,
+                ]
+            )
+        else:
+            # Nothing to change the rotation: it goes on as it was
+            pqr = np.array(self.pqr)
 
         [
             self.scalar_thrust_n,
@@ -881,15 +900,40 @@ class Ship(Pawn):
 
     def adjust_engine_pitch(self, throttle: float):
         """
-        Updates the pitch of the engine noise
+        Updates the pitch of the engine noise, and switches it between its
+        running and offline versions as the engines stop or restart
 
         :param throttle: The throttle value of the ship [0, 1], above 1 for boost
         """
         if self.sound is None:
             return
+        engines_online = self.engines_online()
+        if engines_online != self.is_engine_sound_online:
+            self.is_engine_sound_online = engines_online
+            self._on_engines_online_changed(engines_online)
+        if not engines_online:
+            # Offline engines do not follow the throttle
+            return
         pitch_multiplier = 1 + 0.15 * min(throttle - 0.5, 0.8)
         pitch_multiplier *= self._engine_sputter_factor()
         self.sound.setPlayRate(pitch_multiplier)
+
+    def _on_engines_online_changed(self, online: bool):
+        """
+        Switch the engine sound as the engines stop or restart.
+
+        For now the offline sound is the running loop, slowed down and muffled.
+        This is the place to swap in a dedicated sound (a power-down whine, an
+        electrical crackle...) and back.
+
+        :param online: Whether the engines just restarted (else they just died)
+        """
+        volume = self.engine_sound_volume
+        if online:
+            self.sound.setVolume(volume)
+        else:
+            self.sound.setVolume(volume * ENGINE_OFFLINE_VOLUME_FACTOR)
+            self.sound.setPlayRate(ENGINE_OFFLINE_PLAY_RATE)
 
     def _engine_sputter_factor(self) -> float:
         """

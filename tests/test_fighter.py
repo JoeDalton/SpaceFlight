@@ -668,17 +668,16 @@ def test_fighter_turn_rate_and_thrust_follow_engine_gauge():
 
 def test_fighter_with_dead_engines_drifts():
     """
-    Once its engine gauge is empty, a fighter has no thrust, no turning and no
-    brakes until the gauge refills.
+    Once its engine gauge is empty, a fighter's engines are offline (no
+    brakes, no change of rotation: see Ship.set_inputs) and give no thrust.
     """
     fighter = make_fighter_without_init()
-    assert fighter.can_brake()
+    assert fighter.engines_online()
 
     fighter.energy.drain(ENGINES, 1e6)
 
     assert fighter.thrust_factor() == 0.0
-    assert fighter._turn_rate_scale(0.6) == 0.0
-    assert not fighter.can_brake()
+    assert not fighter.engines_online()
 
 
 # ---------------------------

@@ -5,7 +5,12 @@ import pytest
 import quaternion
 
 from space_flight import RIGHT_BODY, UP_BODY
-from space_flight.actors.ship import Ship, turn_rate_scale
+from space_flight.actors.ship import (
+    ENGINE_OFFLINE_PLAY_RATE,
+    ENGINE_OFFLINE_VOLUME_FACTOR,
+    Ship,
+    turn_rate_scale,
+)
 from space_flight.utils import cross3, magnitude, rotate_single_vector
 from space_flight.weapons import ION, PHYSICAL
 
@@ -498,10 +503,10 @@ def test_set_inputs_scales_turn_rates_with_throttle():
     np.testing.assert_allclose(ship.pqr, [0.7, 0.7, 0.7], atol=1e-3)
 
 
-class BrakingShip(Ship):
-    """A ship whose brakes can be cut, flying straight ahead at 100 m/s."""
+class EngineShip(Ship):
+    """A ship whose engines can be cut, flying straight ahead at 100 m/s."""
 
-    brakes_work = True
+    online = True
 
     def apply_damage(self, damage, damage_type):
         pass
@@ -509,15 +514,14 @@ class BrakingShip(Ship):
     def ship_handle_health(self):
         pass
 
-    def can_brake(self):
-        return self.brakes_work
+    def engines_online(self):
+        return self.online
 
 
-@pytest.mark.parametrize("brakes_work", [True, False])
-def test_set_inputs_brakes_only_if_the_ship_can(brakes_work):
+def make_engine_ship(online: bool) -> EngineShip:
     """
-    Below the zero thrust position, an airplane-model ship brakes, unless
-    can_brake() says no (a fighter with dead engines): it then just coasts.
+    :param online: Whether its engines run
+    :return: An EngineShip, rolling at 0.5 rad/s, with unfiltered inputs
     """
 
     class FakeTime:
@@ -527,8 +531,8 @@ def test_set_inputs_brakes_only_if_the_ship_can(brakes_work):
     class FakeGame:
         game_time = FakeTime()
 
-    ship = object.__new__(BrakingShip)
-    ship.brakes_work = brakes_work
+    ship = object.__new__(EngineShip)
+    ship.online = online
     ship.game = FakeGame()
     ship.max_pitch_rate_radps = 1.0
     ship.max_roll_rate_radps = 1.0
@@ -539,14 +543,61 @@ def test_set_inputs_brakes_only_if_the_ship_can(brakes_work):
     ship.forward = np.array([0.0, 1.0, 0.0])
     ship.inputs_filter_time_s = 1e-6  # effectively no filtering
     ship.scalar_thrust_n = 0.0
-    ship.pqr = np.zeros(3)
+    ship.pqr = np.array([0.0, 0.5, 0.0])
+    return ship
+
+
+@pytest.mark.parametrize("online", [True, False])
+def test_set_inputs_brakes_only_with_engines_online(online):
+    """
+    Below the zero thrust position, an airplane-model ship brakes, unless its
+    engines are offline (a fighter out of engine energy): it then just coasts.
+    """
+    ship = make_engine_ship(online)
 
     ship.set_inputs(throttle=0.0, yaw_rate=0.0, pitch_rate=0.0, roll_rate=0.0)
 
-    if brakes_work:
+    if online:
         assert ship.scalar_thrust_n < 0.0
     else:
         assert ship.scalar_thrust_n == pytest.approx(0.0)
+
+
+def test_set_inputs_keeps_the_rotation_with_engines_offline():
+    """
+    Offline engines cannot change the rotation: the ship keeps spinning as it
+    was, whatever the commands.
+    """
+    ship = make_engine_ship(online=False)
+
+    ship.set_inputs(throttle=0.5, yaw_rate=1.0, pitch_rate=-1.0, roll_rate=0.0)
+
+    np.testing.assert_allclose(ship.pqr, [0.0, 0.5, 0.0])
+
+
+def test_engine_sound_switches_as_the_engines_stop_and_restart():
+    """
+    Offline engines muffle and slow down the engine loop, which stops following
+    the throttle; it comes back as the engines restart.
+    """
+    ship = make_engine_ship(online=True)
+    ship.parent = None  # no cockpit: no sputter
+    ship.sound = MagicMock()
+    ship.engine_sound_volume = 10.0
+    ship.is_engine_sound_online = True
+
+    ship.online = False
+    ship.adjust_engine_pitch(throttle=1.0)
+    ship.sound.setVolume.assert_called_once_with(10.0 * ENGINE_OFFLINE_VOLUME_FACTOR)
+    ship.sound.setPlayRate.assert_called_once_with(ENGINE_OFFLINE_PLAY_RATE)
+
+    ship.adjust_engine_pitch(throttle=2.0)
+    ship.sound.setPlayRate.assert_called_once()
+
+    ship.online = True
+    ship.adjust_engine_pitch(throttle=1.0)
+    ship.sound.setVolume.assert_called_with(10.0)
+    assert ship.sound.setPlayRate.call_args.args[0] != ENGINE_OFFLINE_PLAY_RATE
 
 
 @pytest.mark.parametrize("damage_type, jolts", [(PHYSICAL, True), (ION, False)])

@@ -11,9 +11,10 @@ damage), ramping linearly up to a full gauge. They are spent by:
 
 - engines: boosting and hard manoeuvres (pitch or yaw commanded above
   HARD_MANEUVER_COMMAND_THRESHOLD of the current max rate). An empty engine
-  gauge kills the engines: no thrust, no turning, no braking (the ship drifts)
-  until the gauge refills to ENGINE_RESTART_LEVEL, and boost stays locked out
-  until BOOST_REENABLE_ENGINE_LEVEL.
+  gauge kills the engines: no thrust, no braking, no change of rotation (the
+  ship drifts, spinning as it was) until the gauge refills to
+  ENGINE_RESTART_LEVEL, and boost stays locked out until
+  BOOST_REENABLE_ENGINE_LEVEL.
 - lasers: each bolt costs the ship's laser_shot_cost. Below that, the cannons
   are silent.
 - shields: taking hits. The shield gauge is the fighter's own shield strength
@@ -248,11 +249,10 @@ class EnergySystem:
 
     def turn_rate_factor(self) -> float:
         """
-        :return: The multiplier the engine gauge applies to the max turn rates:
-            its bonus, or 0 while the engines are dead
+        :return: The multiplier the engine gauge applies to the max turn rates
+            (dead engines do not turn at all: the ship keeps its rotation, see
+            Ship.engines_online)
         """
-        if self.is_engine_dead:
-            return 0.0
         return bonus_factor(self.engines, ENGINE_BONUS_MAX_TURN_RATE_FACTOR)
 
     def laser_damage_factor(self) -> float:
