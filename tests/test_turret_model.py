@@ -6,10 +6,12 @@ required.  The MagicMock returned by game.root_node.attachNewNode stands
 in for the real NodePath, allowing scene-graph calls to succeed as no-ops.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from panda3d.core import NodePath
 
 from space_flight.actors.major_ship.turret_model import TurretModel
 
@@ -182,3 +184,29 @@ def test_turret_model_clean_calls_remove_node_on_model(mock_game):
     turret_model.clean()
 
     internal_model.removeNode.assert_called_once()
+
+
+# ---------------------------
+# Independent joints (real model)
+# ---------------------------
+
+
+def test_each_turret_swivels_its_own_joints(spaceflight_app):
+    """
+    Two turrets of the same type each get their own copy of the model: turning
+    one leaves the other's barrel where it was (instancing the model would share
+    the swivelling joints between every turret of the type).
+    """
+    game = SimpleNamespace(app=spaceflight_app, root_node=NodePath("root"))
+    first = TurretModel(game=game, parent_node=NodePath("mount_1"))
+    second = TurretModel(game=game, parent_node=NodePath("mount_2"))
+    second.set_yaw(10.0)
+    second.set_pitch(20.0)
+
+    first.set_yaw(45.0)
+    first.set_pitch(60.0)
+
+    assert first.cannon_node.node() is not second.cannon_node.node()
+    assert first.yaw_node.node() is not second.yaw_node.node()
+    assert second.yaw_node.getH() == pytest.approx(10.0)
+    assert second.pitch_node.getP() == pytest.approx(20.0)

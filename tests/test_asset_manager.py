@@ -19,6 +19,7 @@ from panda3d.core import ConfigVariableFilename, loadPrcFileData
 
 from space_flight.global_architecture.asset_manager import (
     COMMON_ASSETS_TO_LOAD,
+    AssetManager,
     gltf_model_tilt_quaternion,
 )
 
@@ -126,3 +127,21 @@ def test_gltf_model_tilt_quaternion_defaults_when_graphics_settings_missing():
     tilt = gltf_model_tilt_quaternion(game)
     expected = np.quaternion(np.sqrt(2) / 2, -np.sqrt(2) / 2, 0.0, 0.0)
     assert tilt == expected
+
+
+def test_copy_3d_model_to_node_copies_rather_than_instances():
+    """
+    copy_3d_model_to_node attaches a copy of the cached model (own nodes, so
+    its parts move independently), where instantiate_3d_model_to_node attaches
+    an instance (shared nodes).
+    """
+    asset_manager = object.__new__(AssetManager)
+    model = MagicMock()
+    asset_manager.assets = {"turret.glb": model}
+    parent = MagicMock()
+
+    asset_manager.copy_3d_model_to_node(path="turret.glb", parent_node=parent)
+    asset_manager.instantiate_3d_model_to_node(path="turret.glb", parent_node=parent)
+
+    model.copyTo.assert_called_once_with(parent)
+    model.instanceTo.assert_called_once_with(parent)

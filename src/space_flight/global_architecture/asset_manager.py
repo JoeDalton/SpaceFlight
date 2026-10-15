@@ -235,6 +235,10 @@ class AssetManager:
         Gets a cached 3D model and attaches an instance of it to the provided
         parent node
 
+        Instances share their nodes: moving a node of one (e.g. a turret's
+        swivelling joint) moves it in every instance. Use
+        :meth:`copy_3d_model_to_node` for models whose parts move per copy.
+
         TODO: egg and bam files don't seem to be instantiable.
         For now they are loaded directly. Do something about it
 
@@ -246,6 +250,22 @@ class AssetManager:
             path=path,
         )
         model.instanceTo(parent_node)
+
+    def copy_3d_model_to_node(self, path: Path | str, parent_node: NodePath):
+        """
+        Gets a cached 3D model and attaches a copy of it to the provided parent
+        node: the copy has nodes of its own (its geometry is still shared), so
+        its parts can be moved independently of other copies (e.g. a turret's
+        swivelling joints).
+
+        :param path: The path of the asset
+        :param parent_node: The node to attach the copy to
+        """
+        model = self.get_asset(
+            asset_type="model",
+            path=path,
+        )
+        model.copyTo(parent_node)
 
 
 def gltf_model_tilt_quaternion(game: FlightState) -> np.quaternion:
