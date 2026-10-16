@@ -336,7 +336,10 @@ def test_aim_hud_reads_the_lead_indicator_setting(enabled):
 
     with (
         # A distinct card each, to tell which one is hidden
-        patch("space_flight.ui.hud.make_hud_card", side_effect=lambda *_: MagicMock()),
+        patch(
+            "space_flight.ui.hud.make_hud_card",
+            side_effect=lambda *_, **__: MagicMock(),
+        ),
         patch("space_flight.ui.hud.DirectLabel"),
     ):
         aim_hud = AimHUD(game=game)

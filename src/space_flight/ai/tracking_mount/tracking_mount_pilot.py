@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from simple_pid import PID
 
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import HALF_PI, Personality
 from space_flight.ai.generic.generic_pilot import GenericPilot
-from space_flight.utils import magnitude, safe_angle_rad
+from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -30,35 +29,11 @@ class TrackingMountPilot(GenericPilot):
     ):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
-        self.pid_yaw = PID(
-            Kp=self.personality["pilot"]["yaw_kp"],
-            Ki=self.personality["pilot"]["yaw_ki"],
-            Kd=self.personality["pilot"]["yaw_kd"],
-            setpoint=0.0,
-            starting_output=0.0,
-            sample_time=self.personality["pilot"]["sample_time_s"],
-            error_map=safe_angle_rad,
-            time_fn=self.game.game_time.get_current_time,
-            output_limits=(-1.0, 1.0),
-        )
-        self.pid_pitch = PID(
-            Kp=self.personality["pilot"]["pitch_kp"],
-            Ki=self.personality["pilot"]["pitch_ki"],
-            Kd=self.personality["pilot"]["pitch_kd"],
-            setpoint=0.0,
-            starting_output=0.0,
-            sample_time=self.personality["pilot"]["sample_time_s"],
-            error_map=safe_angle_rad,
-            time_fn=self.game.game_time.get_current_time,
-            output_limits=(-1.0, 1.0),
-        )
+        self.pid_yaw = self._make_pid("yaw")
+        self.pid_pitch = self._make_pid("pitch")
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.angle_to_target_deg = 0.0
-
-    def sample_externally(self):
-        for pid in (self.pid_yaw, self.pid_pitch):
-            pid.sample_time = None
 
     def set_on(
         self,

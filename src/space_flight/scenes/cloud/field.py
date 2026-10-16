@@ -408,15 +408,15 @@ class CloudField:
             self._layer_specs.append(spec)
             self._layer_cal.append(cal)
             self._layer_pack_args.append(
-                dict(
-                    extinction=extinction,
-                    wrap_radius=0.5 * width,
-                    wrap_fade_band=0.0 if seamless else 0.12 * width,
-                    octave_mean=octave_mean,
-                    aspect=spec.aspect,
-                    fade_in=layer.fade_in,
-                    fade_out=layer.fade_out,
-                )
+                {
+                    "extinction": extinction,
+                    "wrap_radius": 0.5 * width,
+                    "wrap_fade_band": 0.0 if seamless else 0.12 * width,
+                    "octave_mean": octave_mean,
+                    "aspect": spec.aspect,
+                    "fade_in": layer.fade_in,
+                    "fade_out": layer.fade_out,
+                }
             )
             self._repack(index)
 
@@ -426,15 +426,15 @@ class CloudField:
             placed["pop"] = np.diff(placed["cell_start"])
             placements.append(placed)
             self._layer_report.append(
-                dict(
-                    type=layer.cloud_type,
-                    particles=len(placed["local"]),
-                    cells=n_cells,
-                    domain=width,
-                    seamless=seamless,
-                    phi=placed["phi"],
-                    extinction=extinction,
-                )
+                {
+                    "type": layer.cloud_type,
+                    "particles": len(placed["local"]),
+                    "cells": n_cells,
+                    "domain": width,
+                    "seamless": seamless,
+                    "phi": placed["phi"],
+                    "extinction": extinction,
+                }
             )
 
         def cat(key: str) -> np.ndarray:

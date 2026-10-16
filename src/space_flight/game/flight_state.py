@@ -69,34 +69,36 @@ class FlightState(BaseState):
         Enter the flight state: apply this session's graphics settings, build
         the level, and run its reveal animation (skipped headless).
         """
-        if self.headless:
-            self._enter_headless()
-            return
-
-        # Apply the saved render-scale / anti-aliasing settings for this
-        # session (no-op when scale is 1.0 and AA is off). Done before any scene
-        # rendering so the offscreen buffer and reflection sizing are in place.
-        self.app.graphics_manager.begin_scene_render()
+        if not self.headless:
+            # Apply the saved render-scale / anti-aliasing settings for this
+            # session (no-op when scale is 1.0 and AA is off). Done before any
+            # scene rendering so the offscreen buffer and reflection sizing are
+            # in place.
+            self.app.graphics_manager.begin_scene_render()
 
         # Initialize mandatory game elements (cheap; done up front).
         self.initialize_game_structure()
         self.flight_context = None
+        self._jump_context = None
 
         entry = self._level_entry()
+
+        if self.headless:
+            self._enter_headless(entry)
+            return
 
         # Phase 1 — on a black screen, BEFORE the animation: build the heavy
         # objects (player, ocean, cloud field) and force their one-time GPU
         # preparation now. A brief freeze on black is invisible, and it keeps the
         # one-time compile/upload spikes out of the animation.
         self.force_render()
-        self._build_upfront(entry)
+        entry.upfront(game=self)
 
         # Phase 2 — play the hyperspace animation; the rest of the level is built
         # incrementally during its looping "inside" phase. The overlay declares
         # PAUSES_BELOW = False (so we stay alive) and pulls build steps via the
         # callbacks below, then reveals the live scene.
         self._build_generator = self._make_build_generator(entry)
-        self._jump_context = None
         self.app.state_manager.push(
             state_class=self.app.state_manager.HYPERSPACE_LOADING_STATE,
             build_step=self._advance_build,
@@ -107,21 +109,19 @@ class FlightState(BaseState):
         )
         self.loading_overlay = self.app.state_manager.get_current()
 
-    def _enter_headless(self):
+    def _enter_headless(self, entry: LevelEntry):
         """
-        Enter the flight state with no window: build the level synchronously
-        (no per-frame animation) and start the simulation immediately.
+        Finish entering the flight state with no window: build the level
+        synchronously (no per-frame animation) and start the simulation
+        immediately.
 
         Skips the hyperspace overlay and HUD entirely, since both require a
         real window (app.win) that does not exist headless.
-        """
-        self.initialize_game_structure()
-        self.flight_context = None
-        self.loading_overlay = None
-        self._jump_context = None
 
-        entry = self._level_entry()
-        self._build_upfront(entry)
+        :param entry: The selected level's registry entry (see :meth:`_level_entry`)
+        """
+        self.loading_overlay = None
+        entry.upfront(game=self)
         for _ in self._make_build_generator(entry):
             pass
         self._build_generator = None
@@ -153,15 +153,6 @@ class FlightState(BaseState):
         if entry is None:
             raise NotImplementedError(f"Level `{selected_level}` does not exist.")
         return entry
-
-    def _build_upfront(self, entry: LevelEntry):
-        """
-        Run the level's up-front (on-black) build phase, where the heavy objects
-        are created and GPU-prepared before the animation.
-
-        :param entry: The selected level's registry entry (see :meth:`_level_entry`)
-        """
-        return entry.upfront(game=self)
 
     def _make_build_generator(self, entry: LevelEntry) -> Iterator[str]:
         """
@@ -454,20 +445,18 @@ class FlightState(BaseState):
             self.app.graphics_manager.end_scene_render()
 
         # Remove HUD elements (may not exist if exiting before build finished)
-        if getattr(self, "hud", None) is not None:
-            self.hud.clean()
-            self.hud = None
-        if getattr(self, "aim_hud", None) is not None:
-            self.aim_hud.clean()
-            self.aim_hud = None
+        for name in ("hud", "aim_hud"):
+            hud = getattr(self, name, None)
+            if hud is not None:
+                hud.clean()
+                setattr(self, name, None)
 
         # Stop the tasks that update the world (only present once built)
-        if getattr(self, "game_world_task", None) is not None:
-            self.app.taskMgr.remove(self.game_world_task)
-            self.game_world_task = None
-        if getattr(self, "mission_task", None) is not None:
-            self.app.taskMgr.remove(self.mission_task)
-            self.mission_task = None
+        for name in ("game_world_task", "mission_task"):
+            task = getattr(self, name, None)
+            if task is not None:
+                self.app.taskMgr.remove(task)
+                setattr(self, name, None)
         # Drop references to the methods to run
         self.method_lists = None
 

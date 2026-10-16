@@ -51,6 +51,7 @@ class Lighting:
         self.alnp = game.root_node.attach_new_node(self.alight)
         game.app.render.set_light(self.alnp)
 
+        # TODO shadows
         # # Use a 512x512 resolution shadow map
         # dlight.setShadowCaster(True, 512, 512)
         # # Enable the shader generator for the receiving nodes

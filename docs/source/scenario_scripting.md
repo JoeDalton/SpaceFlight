@@ -50,9 +50,13 @@ THIRD_WAVE = WaveSpec(name="third_wave", ship_model="tie-bomber", size=8, ...)
 
 
 def build_mission3_upfront(game):
-    game.player = Player(game=game, ship_type="a-wing", ...)
-    game.scene = scene_factory(game=game, scene_name="ocean_planet")
-    game.scene.build_upfront()
+    # The player, then the scene's up-front objects (game/levels/common.py)
+    build_upfront(
+        game,
+        scene_name="ocean_planet",
+        player_ship_type="a-wing",
+        player_position=[0, -2600, 250],
+    )
 
 
 def mission3_mission(m: Mission) -> Iterator[None]:
@@ -286,6 +290,8 @@ m.schedule(chatter())                                  # run another generator a
 `m.schedule(job)` steps any generator once per frame next to the body, e.g.
 radio chatter that must not hold back the main sequence (see
 [`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py)).
+`m.dialogue(lines, stop=None)` is such a generator: it plays
+`(delay, speaker, line)` tuples in turn, and ends early once `stop` is true.
 
 ## Reactive rules
 
@@ -296,6 +302,8 @@ rule.fired      # whether its action has run
 ```
 
 With `once=False`, the action runs every frame the condition holds.
+`m.say_when(condition, text, speaker=None)` is the rule playing one line of
+speech.
 
 ## Conditions
 

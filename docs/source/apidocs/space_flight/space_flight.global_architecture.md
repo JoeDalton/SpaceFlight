@@ -19,5 +19,6 @@ space_flight.global_architecture.graphics_settings
 space_flight.global_architecture.asset_pools
 space_flight.global_architecture.asset_manager
 space_flight.global_architecture.base_state
+space_flight.global_architecture.yaml_files
 space_flight.global_architecture.simulator
 ```

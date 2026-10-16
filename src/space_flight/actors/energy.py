@@ -31,6 +31,8 @@ fractions in [0, 1].
 
 from __future__ import annotations
 
+from space_flight.utils import clamp
+
 ENGINES = "engines"
 LASERS = "lasers"
 SHIELDS = "shields"
@@ -82,7 +84,7 @@ def bonus_factor(level: float, max_bonus: float) -> float:
     :return: The multiplier
     """
     ramp = (level - BONUS_GAUGE_THRESHOLD) / (1.0 - BONUS_GAUGE_THRESHOLD)
-    return 1.0 + max_bonus * min(max(ramp, 0.0), 1.0)
+    return 1.0 + max_bonus * clamp(ramp, 0.0, 1.0)
 
 
 class EnergySystem:
@@ -205,10 +207,10 @@ class EnergySystem:
                 engines_rate -= self.boost_drain_rate
             if max(abs(yaw_rate), abs(pitch_rate)) > HARD_MANEUVER_COMMAND_THRESHOLD:
                 engines_rate -= self.hard_maneuver_drain_rate
-        self.engines = min(max(self.engines + dt * engines_rate, 0.0), 1.0)
+        self.engines = clamp(self.engines + dt * engines_rate, 0.0, 1.0)
 
         laser_rate = self.share(LASERS) * self.laser_regen_rate
-        self.lasers = min(max(self.lasers + dt * laser_rate, 0.0), 1.0)
+        self.lasers = clamp(self.lasers + dt * laser_rate, 0.0, 1.0)
 
         self._update_engine_state()
 

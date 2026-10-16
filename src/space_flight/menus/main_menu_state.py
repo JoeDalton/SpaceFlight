@@ -1,7 +1,7 @@
 import sys
 
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton, MenuNavigator
+from space_flight.menus.menu_utils import MenuNavigator, make_button_column
 
 # TODO: Background image
 
@@ -18,35 +18,17 @@ class MainMenuState(BaseState):
         """
         Create and display the three main menu buttons.
         """
-        button_scale = 0.5
-        text_scale = 0.15
-        self.play_button = CustomButton(
-            app=self.app,
-            text="Play",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.choose_level,
-            pos=(0.0, 0.0, 0.3),
-            layout="center",
+        self.buttons = make_button_column(
+            self.app,
+            [
+                ("Play", self.choose_level),
+                ("Settings", self.enter_settings),
+                ("Quit Game", self.quit_game),
+            ],
+            top_z=0.3,
+            step=0.3,
         )
-        self.settings_button = CustomButton(
-            app=self.app,
-            text="Settings",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.enter_settings,
-            pos=(0.0, 0.0, 0.0),
-            layout="center",
-        )
-        self.quit_button = CustomButton(
-            app=self.app,
-            text="Quit Game",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.quit_game,
-            pos=(0.0, 0.0, -0.3),
-            layout="center",
-        )
+        self.play_button, self.settings_button, self.quit_button = self.buttons
         self.menu_navigator = MenuNavigator(
             self.app,
             [[self.play_button], [self.settings_button], [self.quit_button]],
@@ -66,14 +48,12 @@ class MainMenuState(BaseState):
         self.app.state_manager.push(self.app.state_manager.SETTINGS_STATE)
 
     def pause(self):
-        self.play_button.hide()
-        self.settings_button.hide()
-        self.quit_button.hide()
+        for button in self.buttons:
+            button.hide()
 
     def resume(self):
-        self.play_button.show()
-        self.settings_button.show()
-        self.quit_button.show()
+        for button in self.buttons:
+            button.show()
 
     def quit_game(self):
         """
@@ -86,7 +66,6 @@ class MainMenuState(BaseState):
         Destroy all menu buttons and force a frame render.
         """
         self.menu_navigator.remove()
-        self.play_button.destroy()
-        self.settings_button.destroy()
-        self.quit_button.destroy()
+        for button in self.buttons:
+            button.destroy()
         self.force_render()

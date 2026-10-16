@@ -67,9 +67,6 @@ class Planet2D:
         Cleans the Planet2D object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         self.planet.removeNode()
         self.game = None

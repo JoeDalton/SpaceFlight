@@ -18,7 +18,6 @@ from space_flight.actors.energy import (
 from space_flight.actors.ship import Ship, turn_rate_scale
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.fx.spark_fx import IonCrackle
-from space_flight.game.collisions import attach_collision_sphere
 from space_flight.global_architecture.gameplay_settings import (
     auto_aim_params,
     gameplay_config,
@@ -147,18 +146,7 @@ class Fighter(Ship):
         )
 
         # Initialize collisions
-        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
-        self.collision_sphere_np = attach_collision_sphere(
-            game=self.game,
-            name="ship",
-            radius=self.hit_box_radius_m,
-            collider_type="destructible",
-            parent_node=self.node,
-            parent_object=self,
-        )
-
-        # Set explosion size for death animation
-        self.explosion_scale = self.conf["explosion_scale"]
+        self._attach_hull_collider()
 
     def move(
         self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
@@ -304,6 +292,17 @@ class Fighter(Ship):
         if launcher is not self.selected_secondary:
             launcher.restart_reload()
         self.selected_secondary = launcher
+
+    def selected_secondary_with_stock(self, category: str) -> OrdnanceLauncher | None:
+        """
+        :param category: The ordnance type ("bomb", "missile", "rocket"...)
+        :return: The selected secondary weapon if it is of that type with stock
+            left, else None
+        """
+        launcher = self.selected_secondary
+        if launcher is None or launcher.category != category or launcher.stock <= 0:
+            return None
+        return launcher
 
     def fire_secondary(self) -> bool:
         """

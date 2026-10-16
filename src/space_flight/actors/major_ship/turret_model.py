@@ -3,15 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import NodePath, Quat
+from panda3d.core import NodePath
 
 from space_flight import DATAFILES_PATH
+from space_flight.actors.ship_model import AnchoredModel
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 
-class TurretModel:
+class TurretModel(AnchoredModel):
     def __init__(
         self, game: FlightState, parent_node: NodePath, turret_type: str = "test"
     ):
@@ -41,26 +42,3 @@ class TurretModel:
             raise NotImplementedError(turret_type)
 
         self.anchor_model(parent_node)
-
-    def anchor_model(self, node: NodePath):
-        """
-        Anchors the 3D model to the mount node
-        """
-        self.model.reparent_to(node)
-        self.model.setPos(*self.offset)
-        self.model.setQuat(
-            Quat(
-                self.orientation.w,
-                self.orientation.x,
-                self.orientation.y,
-                self.orientation.z,
-            )
-        )
-
-    def clean(self):
-        """
-        Cleans the TurretModel object
-        """
-        self.model.removeNode()
-        self.model = None
-        self.game = None

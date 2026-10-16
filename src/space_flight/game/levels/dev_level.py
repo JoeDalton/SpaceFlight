@@ -8,11 +8,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-import numpy as np
-
-from space_flight.actors.player import Player
+from space_flight.game.levels.common import build_upfront
 from space_flight.game.scenario import WaveSpec
-from space_flight.scenes.scenes import scene_factory
 from space_flight.weapons import ION
 from space_flight.weapons.loadout import default_loadout
 
@@ -130,23 +127,21 @@ def build_dev_upfront(game: FlightState):
 
     :param game: The game/flight state
     """
-    game.player = Player(
-        game=game,
-        ship_type="a-wing",
-        # ship_type="x-wing",
-        # ship_type="y-wing",
-        # ship_type="tie-interceptor",
-        # ship_type="tie-fighter",
-        # ship_type="tie-bomber",
-        ini_position=np.array([100, -1500, 505]),
-        is_neutral=True,
-        has_ai=False,
-        record=True,
-        loadout=ION_LOADOUT,
+    build_upfront(
+        game,
+        # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
+        scene_name="lava_planet",
+        player_ship_type="a-wing",
+        # player_ship_type="x-wing",
+        # player_ship_type="y-wing",
+        # player_ship_type="tie-interceptor",
+        # player_ship_type="tie-fighter",
+        # player_ship_type="tie-bomber",
+        player_position=[100, -1500, 505],
+        player_is_neutral=True,
+        player_record=True,
+        player_loadout=ION_LOADOUT,
     )
-    # `asteroids` or `lava_planet` or `ocean_planet` or `debug`
-    game.scene = scene_factory(game=game, scene_name="lava_planet")
-    game.scene.build_upfront()
 
 
 def dev_mission(m: Mission) -> Iterator[None]:

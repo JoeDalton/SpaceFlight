@@ -1,6 +1,5 @@
 """
-Unit tests for the gameplay settings menu, its drop-down widget, and the
-settings hub navigation to it.
+Unit tests for the gameplay settings menu and its drop-down widget.
 
 Only the pure data + callback methods of the menu are exercised (mock app, no
 DirectGui), mirroring tests/test_graphics_settings_menu.py. The drop-down
@@ -16,6 +15,7 @@ import pytest
 from direct.gui import DirectGuiGlobals as DGG
 from direct.showbase.MessengerGlobal import messenger
 from direct.showbase.ShowBaseGlobal import aspect2d
+from menu_fakes import mock_slider
 from panda3d.core import Filename, Loader, NodePath
 
 from space_flight import DATAFILES_PATH
@@ -32,9 +32,7 @@ from space_flight.menus.gameplay_settings_menu_state import (
     GameplaySettingsMenuState,
     _snap,
 )
-from space_flight.menus.graphics_settings_menu_state import _get_by_path
-from space_flight.menus.menu_utils import CustomDropDown
-from space_flight.menus.settings_menu_state import SettingsMenuState
+from space_flight.menus.menu_utils import CustomDropDown, get_by_path
 
 PRESETS = load_presets()
 
@@ -52,13 +50,6 @@ def state():
     s.preset_menu = MagicMock()
     s.rebuild_scroll = MagicMock()
     return s
-
-
-def _mock_slider(value):
-    """A stand-in CustomSlider exposing get_value()."""
-    slider = MagicMock()
-    slider.get_value.return_value = value
-    return slider
 
 
 def _leaf_paths(config: dict, prefix: tuple = ()) -> set[tuple]:
@@ -98,7 +89,7 @@ class TestTables:
             for side in ("player", "bots"):
                 for key, (_label, step, _fmt) in _SLIDERS.items():
                     try:
-                        value = _get_by_path(values[side], key)
+                        value = get_by_path(values[side], key)
                     except KeyError:
                         continue
                     assert _snap(value, step) == pytest.approx(value), (name, key)
@@ -196,7 +187,7 @@ class TestOnSlider:
     PATH = ("bots", "auto_aim", "lock_delay_s")
 
     def test_stores_snapped_value_updates_label_and_switches_to_custom(self, state):
-        state.sliders = {self.PATH: _mock_slider(1.512)}
+        state.sliders = {self.PATH: mock_slider(1.512)}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
         state.on_slider(self.PATH)
@@ -214,8 +205,8 @@ class TestOnSlider:
         switch to Custom.
         """
         path = ("player", "damage_multiplier")
-        stored = _get_by_path(state.working_config, path)
-        state.sliders = {path: _mock_slider(float(np.float32(stored)))}
+        stored = get_by_path(state.working_config, path)
+        state.sliders = {path: mock_slider(float(np.float32(stored)))}
         state.slider_value_labels = {path: MagicMock()}
 
         state.on_slider(path)
@@ -224,7 +215,7 @@ class TestOnSlider:
         state.preset_menu.set_value.assert_not_called()
 
     def test_does_not_write_back_to_slider(self, state):
-        state.sliders = {self.PATH: _mock_slider(1.512)}
+        state.sliders = {self.PATH: mock_slider(1.512)}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
         state.on_slider(self.PATH)
@@ -403,20 +394,3 @@ class TestCustomDropDown:
         drop_down.destroy()
 
         assert popup_root.isEmpty()
-
-
-# ---------------------------------------------------------------------------
-# SettingsMenuState navigation
-# ---------------------------------------------------------------------------
-
-
-class TestSettingsHubNavigation:
-    def test_gameplay_button_pushes_gameplay_state(self):
-        app = MagicMock()
-        hub = SettingsMenuState(app=app)
-
-        hub.enter_gameplay_settings()
-
-        app.state_manager.push.assert_called_once_with(
-            app.state_manager.GAMEPLAY_SETTINGS_STATE
-        )

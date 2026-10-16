@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import contextlib
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.ship import Ship
     from space_flight.game.flight_state import FlightState
-
-LOGGER = logging.getLogger()
 
 # A standalone subsystem (whose parent is the ship it is bolted to, e.g. a shield
 # generator) smokes at full intensity for this long before it explodes, since it
@@ -191,6 +189,36 @@ class SubSystem(Destructible):
             return False
         return getattr(self.mounted_on, "in_hyperspace", False)
 
+    def _attach_placeholder_model(
+        self,
+        model_path: str,
+        color: tuple[float, float, float],
+        scale: tuple[float, ...],
+        position: tuple[float, float, float] | None = None,
+    ):
+        """
+        Visible geometry: a placeholder shape matching the collider, so the
+        subsystem can be seen and targeted. Flat-shaded like the waypoint markers
+        (see ui/player_waypoints.py) to be visible under any lighting. Sets
+        :attr:`model`.
+
+        TODO: swap for proper per-subsystem 3D models.
+
+        :param model_path: The placeholder model
+        :param color: Its flat RGB colour
+        :param scale: Its scale (one factor, or one per axis)
+        :param position: Its position on the subsystem node, if not the origin
+        """
+        self.model = self.game.app.loader.loadModel(model_path)
+        self.model.setTextureOff(1)
+        self.model.setColor(*color, 1.0)
+        self.model.setScale(*scale)
+        if position is not None:
+            self.model.setPos(*position)
+        self.model.reparentTo(self.node)
+        self.model.setShaderOff()
+        self.model.setLightOff()
+
     def take_hit(
         self,
         damage: float,
@@ -331,10 +359,8 @@ class SubSystem(Destructible):
             # Stop our per-frame tasks first, so nothing touches removed nodes
             self.clear_tasks()
             # Remove ourselves from the targetable actors
-            try:
+            with contextlib.suppress(KeyError, AttributeError):
                 self.game.interactions.remove_actor(self)
-            except (KeyError, AttributeError):
-                pass
             # Remove collision node
             self.collision_np.setPythonTag("owner", None)
             self.collision_np.remove_node()

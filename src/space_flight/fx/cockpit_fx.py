@@ -9,16 +9,15 @@ import numpy as np
 import yaml
 from numpy.typing import ArrayLike
 from panda3d.core import (
-    CardMaker,
     LVecBase2f,
     NodePath,
     Point3,
     Shader,
-    TransparencyAttrib,
     Vec3,
 )
 
 from space_flight import DATAFILES_PATH
+from space_flight.fx import make_fullscreen_quad
 from space_flight.fx.damage_fx import (
     DEFAULT_FIRE_HEALTH_FRAC,
     DEFAULT_SMOKE_HEALTH_FRAC,
@@ -238,13 +237,9 @@ class CockpitFX:
     # ------------------------------------------------------------------
     def _make_overlay_quad(self) -> NodePath:
         """Build the fullscreen render2d overlay quad + shader (vignette+flash)."""
-        cm = CardMaker("cockpit_overlay")
-        cm.setFrameFullscreenQuad()
-        quad = self.game.app.render2d.attachNewNode(cm.generate())
-        quad.setDepthWrite(False)
-        quad.setDepthTest(False)
-        quad.setTransparency(TransparencyAttrib.MAlpha)
-        quad.setBin("fixed", _OVERLAY_BIN_SORT)
+        quad = make_fullscreen_quad(
+            self.game.app.render2d, "cockpit_overlay", sort=_OVERLAY_BIN_SORT
+        )
         quad.setShader(
             Shader.load(Shader.SL_GLSL, vertex=_OVERLAY_VERT, fragment=_OVERLAY_FRAG)
         )
@@ -413,10 +408,7 @@ class CockpitFX:
     def clean(self):
         """Drop the per-frame task and overlay quad (sparks use the shared pool)."""
         if self.game is not None and self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         if self._overlay is not None:
             self._overlay.removeNode()
             self._overlay = None

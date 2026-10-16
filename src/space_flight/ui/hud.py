@@ -223,21 +223,44 @@ def pin_to_screen_edge(x: float, z: float, behind: bool) -> tuple[float, float]:
     return x * scale, z * scale
 
 
+def draw_on_top(node_path: NodePath, sort: int = 10):
+    """
+    Draw a node over the scene and the other UI, regardless of depth.
+
+    :param node_path: The node to draw
+    :param sort: Its order in the "fixed" bin (higher draws on top)
+    """
+    node_path.setDepthTest(False)
+    node_path.setDepthWrite(False)
+    node_path.setBin("fixed", sort)
+
+
 def make_hud_card(
-    name: str, half_width: float, half_height: float, texture: Texture | None = None
+    name: str,
+    half_width: float,
+    half_height: float,
+    texture: Texture | None = None,
+    left_aligned: bool = False,
 ) -> NodePath:
     """
-    :return: A card centred on its origin, drawn over the scene and the other UI
+    :param name: The card's name
+    :param half_width: Its half width
+    :param half_height: Its half height
+    :param texture: Its texture, if any
+    :param left_aligned: Whether its origin is on its left edge (e.g. a bar
+        scaled from there), rather than its centre
+    :return: A card drawn over the scene and the other UI
     """
     cm = CardMaker(name)
-    cm.setFrame(-half_width, half_width, -half_height, half_height)
+    if left_aligned:
+        cm.setFrame(0, 2 * half_width, -half_height, half_height)
+    else:
+        cm.setFrame(-half_width, half_width, -half_height, half_height)
     card = NodePath(cm.generate())
     if texture is not None:
         card.setTexture(texture)
     card.setTransparency(TransparencyAttrib.MAlpha)
-    card.setDepthTest(False)
-    card.setDepthWrite(False)
-    card.setBin("fixed", 10)
+    draw_on_top(card)
     return card
 
 
@@ -326,58 +349,48 @@ class HUD:
 
         # Debug info
         if DEBUG_HUD:
-            self.debug = TextNode("Debug")
-            self.debug.setSmallCaps(True)
-            self.debug.setShadow(0.05, 0.05)
-            self.debug.setShadowColor(0, 0, 0, 1)
-            self.debug_textNodePath = aspect2d.attachNewNode(self.debug)
+            self.debug_textNodePath = make_text_line(
+                self.game.app.a2dTopLeft, "Debug", align=TextNode.ALeft
+            )
+            self.debug = self.debug_textNodePath.node()
             self.debug_textNodePath.setScale(0.07)
-            self.debug_textNodePath.reparentTo(self.game.app.a2dTopLeft)
             self.debug_textNodePath.setPos(0.05, 0, -0.1)
 
         # Performance info
         if self.fps_counter_enabled:
-            self.fps_counter = TextNode("FPS")
-            self.fps_counter.setSmallCaps(True)
-            self.fps_counter.setShadow(0.05, 0.05)
-            self.fps_counter.setShadowColor(0, 0, 0, 1)
-            self.fps_textNodePath = aspect2d.attachNewNode(self.fps_counter)
+            self.fps_textNodePath = make_text_line(
+                self.game.app.a2dTopRight, "FPS", align=TextNode.ALeft
+            )
+            self.fps_counter = self.fps_textNodePath.node()
             self.fps_textNodePath.setScale(0.07)
-            self.fps_textNodePath.reparentTo(self.game.app.a2dTopRight)
             self.fps_textNodePath.setPos(-0.4, 0, -0.1)
 
         # Scenario texts: chatter, hints and events, taking turns
         self.scenario_text = ScenarioText(clock=self.game.game_time.get_current_time)
 
         # Event text
-        self.events = TextNode("Events")
-        self.events.setAlign(TextNode.ACenter)
-        self.events.setSmallCaps(True)
-        self.events.setShadow(0.05, 0.05)
-        self.events.setShadowColor(0, 0, 0, 1)
-        self.events_textNodePath = aspect2d.attachNewNode(self.events)
+        self.events_textNodePath = make_text_line(
+            aspect2d, "Events", align=TextNode.ACenter
+        )
+        self.events = self.events_textNodePath.node()
         self.events_textNodePath.setScale(EVENT_TEXT_SCALE)
         self.events_textNodePath.setPos(0.0, 0.0, EVENT_Z)
 
         # Tutorial hint text
-        self.hints = TextNode("Hints")
-        self.hints.setSmallCaps(True)
-        self.hints.setShadow(0.05, 0.05)
-        self.hints.setShadowColor(0, 0, 0, 1)
-        self.hints.setAlign(TextNode.ACenter)
+        self.hints_textNodePath = make_text_line(
+            aspect2d, "Hints", align=TextNode.ACenter
+        )
+        self.hints = self.hints_textNodePath.node()
         self.hints.setWordwrap(HINT_WRAP_WIDTH / HINT_TEXT_SCALE)
-        self.hints_textNodePath = aspect2d.attachNewNode(self.hints)
         self.hints_textNodePath.setScale(HINT_TEXT_SCALE)
         self.hints_textNodePath.setPos(0.0, 0.0, EVENT_Z)
 
         # Chatter text
-        self.chatter = TextNode("Chatter")
-        self.chatter.setAlign(TextNode.ACenter)
-        self.chatter.setSmallCaps(True)
+        self.chatter_textNodePath = make_text_line(
+            aspect2d, "Chatter", align=TextNode.ACenter
+        )
+        self.chatter = self.chatter_textNodePath.node()
         self.chatter.setTextColor(252 / 255, 212 / 255, 10 / 255, 1)
-        self.chatter.setShadow(0.05, 0.05)
-        self.chatter.setShadowColor(0, 0, 0, 1)
-        self.chatter_textNodePath = aspect2d.attachNewNode(self.chatter)
         self.chatter_textNodePath.setScale(0.075)
         self.chatter_textNodePath.setPos(0.0, 0, CHATTER_Z)
 
@@ -494,16 +507,11 @@ class HUD:
                     f"{self.game.lead_bot.navigator.next_waypoint_idx:.1f}\n"
                     "Lead Bot health = "
                     f"{self.game.lead_bot.pawn.health:.1f}\n"
-                    # "Lead Bot shield = "
-                    # f"{self.game.lead_bot.pawn.shield:.1f}\n"
                     "Lead Bot throttle = "
                     f"{self.game.lead_bot.pilot.throttle:.4f}\n"
                     "Lead Bot Speed = "
                     f"{magnitude(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
                     "\n"
-                    # "Lead Bot has target lock = "
-                    # f"{self.game.lead_bot.pawn.auto_aim.is_target_acquired}\n"
-                    # "\n"
                 )
             except AttributeError:
                 bot_text = ""
@@ -528,10 +536,7 @@ class HUD:
         Cleans the HUD object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         if DEBUG_HUD:
             self.debug_textNodePath.removeNode()
             self.debug = None
@@ -972,15 +977,11 @@ class AimHUD:
         # Define scan progress bar: fills the target box from its left edge,
         # scaled horizontally by the target's scan progress (see
         # space_flight.actors.scan)
-        scan_cm = CardMaker("scanBar")
-        scan_cm.setFrame(
-            0,
-            2 * TARGET_BOX_HALF_WIDTH,
-            -TARGET_BOX_HALF_HEIGHT,
-            TARGET_BOX_HALF_HEIGHT,
+        # (drawn under the box)
+        self.scan_bar = make_hud_card(
+            "scanBar", TARGET_BOX_HALF_WIDTH, TARGET_BOX_HALF_HEIGHT, left_aligned=True
         )
-        self.scan_bar = NodePath(scan_cm.generate())
-        self.scan_bar.setTransparency(TransparencyAttrib.MAlpha)
+        draw_on_top(self.scan_bar, sort=9)
         self.scan_bar.reparentTo(self.target_aspect)
         self.scan_bar.setPos(-TARGET_BOX_HALF_WIDTH, 0, 0)
 
@@ -1003,19 +1004,9 @@ class AimHUD:
             text_fg=(1, 1, 1, 1),
         )
 
-        # Draw the scan bar and labels above other UI things (as the cards
-        # are, see make_hud_card), the scan bar under the box
-        self.scan_bar.setDepthTest(False)
-        self.scan_bar.setDepthWrite(False)
-        self.scan_bar.setBin("fixed", 9)
-
-        self.distance_label.setDepthTest(False)
-        self.distance_label.setDepthWrite(False)
-        self.distance_label.setBin("fixed", 10)
-
-        self.name_label.setDepthTest(False)
-        self.name_label.setDepthWrite(False)
-        self.name_label.setBin("fixed", 10)
+        # Draw the labels above other UI things, as the cards are
+        draw_on_top(self.distance_label)
+        draw_on_top(self.name_label)
 
         # Crosshair and lead indicator
         self.crosshair = make_hud_card(
@@ -1115,21 +1106,12 @@ class AimHUD:
         self.target_anchor.show()
         self.update_lock_tint()
 
-        # World position of target
-        world_pos = Point3(*target.position)
-
-        # Convert to camera space, project, and pin to the border if off screen
-        cam_space_pos = self.game.app.cam.getRelativePoint(
-            self.game.root_node, world_pos
-        )
-        indic_x, indic_z = pin_to_screen_edge(
-            *project_to_screen(self.game.app.camLens, cam_space_pos)
-        )
-        self.target_anchor.setPos(indic_x, 0, indic_z)
+        # Project the target, pinned to the border if off screen
+        self._pin_on_screen(self.target_anchor, self._cam_space(target.position))
 
         # Find distance and write it below the box
         distance = (
-            world_pos - self.game.app.camera.getPos(self.game.root_node)
+            Point3(*target.position) - self.game.app.camera.getPos(self.game.root_node)
         ).length()
         self.distance_label["text"] = f"{distance:.0f} m"
 
@@ -1173,10 +1155,7 @@ class AimHUD:
         if lead_position is None:
             self.lead_indicator.hide()
             return
-        cam_space_pos = self.game.app.cam.getRelativePoint(
-            self.game.root_node, Point3(*lead_position)
-        )
-        self._place_on_screen(self.lead_indicator, cam_space_pos)
+        self._place_on_screen(self.lead_indicator, self._cam_space(lead_position))
 
     def update_missile_warning(self) -> None:
         """
@@ -1204,14 +1183,24 @@ class AimHUD:
         else:
             self.missile_warning_line.hide()
 
-        cam_space_pos = self.game.app.cam.getRelativePoint(
-            self.game.root_node, Point3(*incoming.position)
+        self._pin_on_screen(self.missile_marker, self._cam_space(incoming.position))
+        self.missile_marker.show()
+
+    def _cam_space(self, world_position: np.ndarray) -> Point3:
+        """:return: A world position, in camera space"""
+        return self.game.app.cam.getRelativePoint(
+            self.game.root_node, Point3(*world_position)
         )
+
+    def _pin_on_screen(self, node: NodePath, cam_space_pos: Point3) -> None:
+        """
+        Place a node on a camera-space point, pinned to the screen border if
+        that is off screen.
+        """
         x, z = pin_to_screen_edge(
             *project_to_screen(self.game.app.camLens, cam_space_pos)
         )
-        self.missile_marker.setPos(x, 0, z)
-        self.missile_marker.show()
+        node.setPos(x, 0, z)
 
     def _place_on_screen(self, card: NodePath, cam_space_pos: Point3) -> None:
         """
@@ -1229,10 +1218,7 @@ class AimHUD:
         Clean the AimHUD object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         self.name_label.destroy()
         self.distance_label.destroy()
         # The warning line is on aspect2d; the cards go with the root

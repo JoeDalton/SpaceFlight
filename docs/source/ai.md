@@ -323,6 +323,10 @@ them into the matrices in place (callers keep views), so cost scales with live
 actors, not capacity. Gotcha: `live_actors` (and masks over it, or rows sliced
 with `alive`) are compacted, so their positions are not the slot indices from
 `get_actor_index_from_id`; translate via `np.where(alive)[0]`.
+For an actor and its target, `pair_indices(interactions, actor_id, target_id)`
+gives both slots and `pair_geometry(...)` their distance, direction and
+relative velocity: both return None once the target is gone, and raise
+`ValueError` if the actor itself is not interacting.
 
 ## Where things live
 

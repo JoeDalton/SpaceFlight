@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
-import yaml
 
-from space_flight import DATAFILES_PATH
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.major_ship.tracking_mount import TrackingMount
+from space_flight.actors.ship import load_model_configuration
 from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.global_architecture.gameplay_settings import (
@@ -21,8 +19,6 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.ship import Ship
     from space_flight.game.flight_state import FlightState
-
-LOGGER = logging.getLogger()
 
 
 class Turret(TrackingMount):
@@ -61,9 +57,7 @@ class Turret(TrackingMount):
         personality: dict = Personality.TURRET_DEFAULT,
     ):
         # Load configuration first: it feeds the TrackingMount parameters below
-        filepath = DATAFILES_PATH / f"models/turrets/{turret_type}/configuration.yaml"
-        with open(filepath, "r") as f:
-            conf = yaml.safe_load(f)
+        conf = load_model_configuration("turrets", turret_type)
 
         super().__init__(
             game=game,

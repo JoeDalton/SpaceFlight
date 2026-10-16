@@ -87,10 +87,6 @@
   - ```{autodoc2-docstring} space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
     :summary:
     ```
-* - {py:obj}`SOUND_POOL_LENGTH <space_flight.fx.sfx.SOUND_POOL_LENGTH>`
-  - ```{autodoc2-docstring} space_flight.fx.sfx.SOUND_POOL_LENGTH
-    :summary:
-    ```
 * - {py:obj}`DISTANCE_FACTOR <space_flight.fx.sfx.DISTANCE_FACTOR>`
   - ```{autodoc2-docstring} space_flight.fx.sfx.DISTANCE_FACTOR
     :summary:
@@ -209,16 +205,6 @@
    0.2
 
 ```{autodoc2-docstring} space_flight.fx.sfx.NPC_DISTANT_IMPACT_VOLUME
-```
-
-````
-
-````{py:data} SOUND_POOL_LENGTH
-:canonical: space_flight.fx.sfx.SOUND_POOL_LENGTH
-:value: >
-   20
-
-```{autodoc2-docstring} space_flight.fx.sfx.SOUND_POOL_LENGTH
 ```
 
 ````
@@ -349,18 +335,18 @@ Bases: {py:obj}`direct.showbase.Audio3DManager.Audio3DManager`
 
 ````
 
-````{py:method} build_sound_pool(directory: pathlib.Path, pattern: str, is_3d: bool) -> list[panda3d.core.AudioSound]
-:canonical: space_flight.fx.sfx.SFX.build_sound_pool
+````{py:method} _play_pooled(game: space_flight.game.flight_state.FlightState, sound_pool: space_flight.global_architecture.asset_pools.SoundPool, volume: float, release_name: str, randomize_pitch: bool, node: panda3d.core.NodePath | None = None, velocity_source: space_flight.actors.pawn.Pawn | space_flight.actors.major_ship.sub_system.SubSystem | None = None)
+:canonical: space_flight.fx.sfx.SFX._play_pooled
 
-```{autodoc2-docstring} space_flight.fx.sfx.SFX.build_sound_pool
+```{autodoc2-docstring} space_flight.fx.sfx.SFX._play_pooled
 ```
 
 ````
 
-````{py:method} get_3d_sound(sound_file: str | pathlib.Path) -> panda3d.core.AudioSound
-:canonical: space_flight.fx.sfx.SFX.get_3d_sound
+````{py:method} _temp_sound_node(game: space_flight.game.flight_state.FlightState, relative_hit_point: numpy.ndarray) -> panda3d.core.NodePath
+:canonical: space_flight.fx.sfx.SFX._temp_sound_node
 
-```{autodoc2-docstring} space_flight.fx.sfx.SFX.get_3d_sound
+```{autodoc2-docstring} space_flight.fx.sfx.SFX._temp_sound_node
 ```
 
 ````

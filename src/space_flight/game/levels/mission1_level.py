@@ -12,9 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator
 
-import numpy as np
-
-from space_flight.actors.player import Player
+from space_flight.game.levels.common import build_upfront, relative_position
 from space_flight.game.levels.hints import (
     engine_power_hint,
     formation_hint,
@@ -28,7 +26,6 @@ from space_flight.game.scenario.conditions import (
     not_,
     reached_waypoint,
 )
-from space_flight.scenes.scenes import scene_factory
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -141,15 +138,12 @@ def build_mission1_upfront(game: FlightState):
 
     :param game: The game/flight state
     """
-    game.player = Player(
-        game=game,
-        ship_type="x-wing",
-        ini_position=np.array(PLAYER_SPAWN_POINT),
-        is_neutral=False,
-        has_ai=False,
+    build_upfront(
+        game,
+        scene_name="asteroids",
+        player_ship_type="x-wing",
+        player_position=PLAYER_SPAWN_POINT,
     )
-    game.scene = scene_factory(game=game, scene_name="asteroids")
-    game.scene.build_upfront()
 
 
 def mission1_mission(m: Mission) -> Iterator[None]:
@@ -171,12 +165,10 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         "First, show me you can find a nav point.",
         speaker="Blue Leader",
     )
-    dawdling = m.on(
+    dawdling = m.say_when(
         m.after(WAYPOINT_NAG_S),
-        lambda: m.speech(
-            "Any time today, rookie. The rocks aren't going anywhere.",
-            speaker="Blue Leader",
-        ),
+        "Any time today, rookie. The rocks aren't going anywhere.",
+        speaker="Blue Leader",
     )
     yield from m.wait(2.5)
     m.hint(waypoint_hint(game.app))
@@ -191,11 +183,8 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     # 2. Spawn the formation 1km ahead and to the left, teach Fighters + loop.
     # ==================================================================
-    player_pawn = game.player.pawn
-    spawn_point = (
-        player_pawn.position
-        + player_pawn.forward * FORMATION_AHEAD_M
-        - player_pawn.right * FORMATION_LEFT_M
+    spawn_point = relative_position(
+        game.player.pawn, right_m=-FORMATION_LEFT_M, forward_m=FORMATION_AHEAD_M
     )
     blue = m.spawn(BLUE_SQUADRON, spawn_point=spawn_point)
     form_up = m.objective("Form up with Blue squadron")
@@ -237,11 +226,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         yield from m.wait_until(close_to_blue)
         yield from m.wait(4)
         m.speech("Good, you're with us. Now hold it there.", speaker="Blue Leader")
-        for delay, speaker, line in CIRCUIT_CHATTER:
-            yield from m.wait(delay)
-            if race_started:
-                return
-            m.speech(line, speaker=speaker)
+        yield from m.dialogue(CIRCUIT_CHATTER, stop=lambda: bool(race_started))
 
     m.schedule(formation_chatter())
 
@@ -255,11 +240,10 @@ def mission1_mission(m: Mission) -> Iterator[None]:
 
     # Registered only now, so the initial catch-up isn't double-punished by
     # the same radius.
-    losing_contact = m.on(
+    losing_contact = m.say_when(
         m.sustained(not_(close_to_blue), SUSTAINED_SEPARATION_S / 2),
-        lambda: m.speech(
-            "Come on, rookie, you're falling behind! Catch up!", speaker="Blue Leader"
-        ),
+        "Come on, rookie, you're falling behind! Catch up!",
+        speaker="Blue Leader",
     )
 
     def on_lost_contact():
@@ -293,14 +277,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     wingmen = blue.pawns()
     finish_order: list = []
 
-    def race_chatter() -> Iterator[None]:
-        for delay, speaker, line in RACE_CHATTER:
-            yield from m.wait(delay)
-            if finish_order:
-                return
-            m.speech(line, speaker=speaker)
-
-    m.schedule(race_chatter())
+    m.schedule(m.dialogue(RACE_CHATTER, stop=lambda: bool(finish_order)))
 
     def comment_on_the_lead(index: int, player_line: tuple, wingman_line: tuple):
         """Comment on whoever reaches race waypoint index first."""
@@ -325,11 +302,10 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     for index, (player_line, wingman_line) in RACE_GATE_LINES.items():
         comment_on_the_lead(index, player_line, wingman_line)
 
-    m.on(
+    m.say_when(
         m.after(RACE_NAG_S),
-        lambda: m.speech(
-            "Five, we're already at the bar. Where are you?", speaker="Blue Two"
-        ),
+        "Five, we're already at the bar. Where are you?",
+        speaker="Blue Two",
     )
 
     # ==================================================================

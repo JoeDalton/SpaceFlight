@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import TYPE_CHECKING, Tuple
 
@@ -15,11 +16,11 @@ from panda3d.core import (
     Point3,
     PointLight,
     Quat,
-    Shader,
     Vec3,
 )
 
 from space_flight import DATAFILES_PATH
+from space_flight.fx import load_glsl_shader
 from space_flight.game.collisions import attach_collision_segment
 from space_flight.utils import (
     build_axis_billboard_quat,
@@ -71,21 +72,6 @@ LIGHT_COLORS = {
     "blue": (0.0, 0.0, 1.0, 1.0),
     "ion": (0.3, 0.6, 1.0, 1.0),
 }
-
-#: The laser shader is shared by every bolt; load it once, lazily.
-_LASER_SHADER = None
-
-
-def _laser_shader() -> Shader:
-    """Load (once) and return the shared laser capsule-impostor GLSL shader."""
-    global _LASER_SHADER
-    if _LASER_SHADER is None:
-        _LASER_SHADER = Shader.load(
-            Shader.SL_GLSL,
-            vertex=DATAFILES_PATH / "shaders/laser.vert",
-            fragment=DATAFILES_PATH / "shaders/laser.frag",
-        )
-    return _LASER_SHADER
 
 
 class LaserCannon(Weapon):
@@ -308,7 +294,7 @@ class LaserShot(Munition):
 
         # Capsule core: the fixed model-space segment along local Z.
         half_len = LASER_LENGTH * 0.5
-        shot.set_shader(_laser_shader())
+        shot.set_shader(load_glsl_shader("laser.vert", "laser.frag"))
         shot.set_shader_input("uA", Vec3(0.0, 0.0, -half_len))
         shot.set_shader_input("uB", Vec3(0.0, 0.0, half_len))
         shot.set_shader_input("uColor", self.color)
@@ -374,9 +360,7 @@ class LaserShot(Munition):
         # Clear the laser's own light (if any) before the shared teardown removes
         # the node.
         if self.plnp is not None:
-            try:
+            with contextlib.suppress(AttributeError):
                 self.game.app.render.clear_light(self.plnp)
-            except AttributeError:
-                pass
             self.plnp.removeNode()
             self.plnp = None

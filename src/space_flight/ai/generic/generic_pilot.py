@@ -3,9 +3,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from simple_pid import PID
+
 from space_flight import DEBUG_DELETION
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Personality
+from space_flight.utils import safe_angle_rad
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -27,6 +30,32 @@ class GenericPilot:
         self.game = game
         self.pawn: Pawn = pawn
         self.personality: dict = personality
+        # Every PID of the pilot (see _make_pid)
+        self.pids: list[PID] = []
+
+    def _make_pid(self, axis: str, angular: bool = True) -> PID:
+        """
+        Build one of the pilot's PIDs, on the personality's gains for its axis,
+        with a normalised [-1, 1] output.
+
+        :param axis: The axis whose gains to use ("yaw" reads yaw_kp, yaw_ki...)
+        :param angular: Whether its error is an angle, wrapped to [-pi, pi]
+        :return: The PID, also added to :attr:`pids`
+        """
+        pilot = self.personality["pilot"]
+        pid = PID(
+            Kp=pilot[f"{axis}_kp"],
+            Ki=pilot[f"{axis}_ki"],
+            Kd=pilot[f"{axis}_kd"],
+            setpoint=0.0,
+            starting_output=0.0,
+            sample_time=pilot["sample_time_s"],
+            error_map=safe_angle_rad if angular else None,
+            time_fn=self.game.game_time.get_current_time,
+            output_limits=(-1.0, 1.0),
+        )
+        self.pids.append(pid)
+        return pid
 
     @property
     def sample_period_s(self) -> float:
@@ -40,7 +69,8 @@ class GenericPilot:
         the PIDs' own sample time, clock jitter (dt = 0.0999... < 0.1) could make
         them skip a scheduled call and hold their output a whole extra period.
         """
-        raise NotImplementedError
+        for pid in self.pids:
+            pid.sample_time = None
 
     def set_on(
         self,

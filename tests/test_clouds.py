@@ -207,9 +207,13 @@ def test_higher_coverage_places_more_billboards(volume, atlas_rects, resolved):
     holes rather than grow.
     """
     spec = resolved[CloudType.CUMULUS]
-    common = dict(
-        volume=volume, domain=4000.0, cell_size=1000.0, atlas_rects=atlas_rects, seed=3
-    )
+    common = {
+        "volume": volume,
+        "domain": 4000.0,
+        "cell_size": 1000.0,
+        "atlas_rects": atlas_rects,
+        "seed": 3,
+    }
     counts = []
     for coverage in (0.15, 0.30, 0.60):
         field = resolve_field(volume, replace(spec.field, coverage=coverage))
@@ -236,9 +240,13 @@ def test_volume_fraction_is_independent_of_the_billboard_budget(
     opposite directions, leaving what a ray accumulates unchanged. So changing
     the billboard budget is a performance decision, not a look change."""
     spec = resolved[CloudType.CUMULUS]
-    common = dict(
-        volume=volume, domain=4000.0, cell_size=1000.0, atlas_rects=atlas_rects, seed=4
-    )
+    common = {
+        "volume": volume,
+        "domain": 4000.0,
+        "cell_size": 1000.0,
+        "atlas_rects": atlas_rects,
+        "seed": 4,
+    }
     coarse = sample_field_particles(replace(spec, volume_fraction=1.0), **common)
     fine = sample_field_particles(replace(spec, volume_fraction=4.0), **common)
     assert len(fine["local"]) > len(coarse["local"])
@@ -443,9 +451,13 @@ def test_billboard_stretch_is_optically_free(volume, atlas_rects, resolved):
     count nor the volume fraction the extinction is derived from. Only the shape
     of each quad changes — which is why it is safe to tune by eye."""
     spec = resolved[CloudType.CIRRUS]
-    common = dict(
-        volume=volume, domain=4000.0, cell_size=2000.0, atlas_rects=atlas_rects, seed=9
-    )
+    common = {
+        "volume": volume,
+        "domain": 4000.0,
+        "cell_size": 2000.0,
+        "atlas_rects": atlas_rects,
+        "seed": 9,
+    }
     square = sample_field_particles(replace(spec, aspect=1.0), **common)
     stretched = sample_field_particles(replace(spec, aspect=6.0), **common)
     assert len(square["local"]) == len(stretched["local"])

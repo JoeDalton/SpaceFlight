@@ -60,7 +60,6 @@ the behaviour every subsystem shares:
 |-----------|-------|------|------|
 | Engine | `Engine` | `SubSystem` | Unused stub (future engine module) |
 | Hangar | `Hangar` | `SubSystem` | Launches fighter bots on request (box collider) |
-| Tractor beam mount (stub) | `TractorBeamProjector` | `SubSystem` | Placeholder hull module (see note below) |
 | Shield generator | `ShieldGenerator` | `SubSystem` | Projects a protective shield bubble |
 | Targeting system | `TargetingSystem` | `SubSystem` | Grants turrets auto-aim + faster fire |
 | Tracking mount | `TrackingMount` | `SubSystem` | Base for turrets/tractor beams that swivel to aim |
@@ -264,12 +263,6 @@ publishing a lead solution (`aim_direction`, `target_distance_m`) that
   out, the prey wrenches free by exceeding a relative speed, leaves range, or is
   gone — after which a cooldown prevents an instant re-grab. Hardware specs
   come from its config, grab timing from `Personality.TRACTOR_BEAM_DEFAULT`.
-
-> **Two `TractorBeamProjector`s.** Besides the functional tracking mount
-> ([`tractor_beam.py`](../../src/space_flight/actors/major_ship/tractor_beam.py)),
-> [`tractor_beam_projector.py`](../../src/space_flight/actors/major_ship/tractor_beam_projector.py)
-> holds a bare, unused `SubSystem` stub of the same name. Use the
-> tracking-mount version.
 
 ## Where things live
 

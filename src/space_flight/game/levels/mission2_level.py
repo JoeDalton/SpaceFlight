@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterator, Sequence
 
 import numpy as np
 
-from space_flight.actors.player import Player
+from space_flight.game.levels.common import build_upfront, relative_position
 from space_flight.game.levels.hints import (
     laser_power_hint,
     scan_hint,
@@ -30,7 +30,6 @@ from space_flight.game.scenario.conditions import (
     being_hit,
     near,
 )
-from space_flight.scenes.scenes import scene_factory
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -169,15 +168,12 @@ def build_mission2_upfront(game: FlightState):
 
     :param game: The game/flight state
     """
-    game.player = Player(
-        game=game,
-        ship_type="x-wing",
-        ini_position=np.array(PLAYER_SPAWN_POINT),
-        is_neutral=False,
-        has_ai=False,
+    build_upfront(
+        game,
+        scene_name="asteroids",
+        player_ship_type="x-wing",
+        player_position=PLAYER_SPAWN_POINT,
     )
-    game.scene = scene_factory(game=game, scene_name="asteroids")
-    game.scene.build_upfront()
 
 
 def mission2_mission(m: Mission) -> Iterator[None]:
@@ -198,15 +194,13 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # Every rule that can end the level, cancelled together once it has
     # ended, so there is only ever one ending.
     endings = []
-    ended = []
     # Objectives that hold until the end (rules of engagement, ...): ticked
     # by a victory
     standing_orders = []
 
     def end(outcome: str, text: str):
-        if ended:
+        if m.ending is not None:
             return
-        ended.append(outcome)
         for rule in endings:
             rule.cancel()
         if outcome == "victory":
@@ -216,7 +210,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
 
     def lose_later(condition: Condition, speaker: str, line: str, text: str):
         """A defeat DEFEAT_DELAY_S after condition, announced at once."""
-        endings.append(m.on(condition, lambda: m.speech(line, speaker=speaker)))
+        endings.append(m.say_when(condition, line, speaker=speaker))
         endings.append(
             m.on(m.delay(condition, DEFEAT_DELAY_S), lambda: end("defeat", text))
         )
@@ -294,11 +288,10 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     )
 
     # --- scanning chatter ------------------------------------------------------
-    m.on(
+    m.say_when(
         any_of(*(scan.started for scan in convoy_scans)),
-        lambda: m.speech(
-            "That's it, steady... keep it in your sights.", speaker="Blue Leader"
-        ),
+        "That's it, steady... keep it in your sights.",
+        speaker="Blue Leader",
     )
     cleared = []
 
@@ -392,13 +385,10 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     yield from m.wait(6)
 
     player_pawn = game.player.pawn
-    forward = player_pawn.forward
-    spawn_point = (
-        player_pawn.position
-        + forward * SMUGGLER_AHEAD_M
-        - player_pawn.right * SMUGGLER_LEFT_M
+    spawn_point = relative_position(
+        player_pawn, right_m=-SMUGGLER_LEFT_M, forward_m=SMUGGLER_AHEAD_M
     )
-    crossing = player_pawn.position + forward * SMUGGLER_CROSSING_AHEAD_M
+    crossing = relative_position(player_pawn, forward_m=SMUGGLER_CROSSING_AHEAD_M)
     heading = (crossing - spawn_point) / np.linalg.norm(crossing - spawn_point)
     smuggler_exit = crossing + heading * SMUGGLER_EXIT_GATE_M
     smuggler.spawn(
@@ -425,11 +415,10 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     )
     yield from m.wait(4)
     m.speech("Stragglers make me nervous. Scan it, Three.", speaker="Blue Leader")
-    m.on(
+    m.say_when(
         smuggler_scan.progress_at_least(0.5),
-        lambda: m.speech(
-            "It's picking up speed... it knows we're looking.", speaker="Blue Two"
-        ),
+        "It's picking up speed... it knows we're looking.",
+        speaker="Blue Two",
     )
 
     yield from m.wait_until(smuggler_scan.complete)
@@ -444,15 +433,14 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     smuggler.set_team(2)
 
     dorn = smuggler.pawns()[0]
-    jump_point = dorn.position + dorn.forward * ESCAPE_DISTANCE_M
+    jump_point = relative_position(dorn, forward_m=ESCAPE_DISTANCE_M)
     smuggler.set_waypoints(
         [jump_point, jump_point + dorn.forward * SMUGGLER_ROUTE_END_M], loop=False
     )
-    m.on(
+    m.say_when(
         near(smuggler, jump_point, ESCAPE_DISTANCE_M / 2),
-        lambda: m.speech(
-            "It's spinning up its hyperdrive! Hurry, Three!", speaker="Blue Leader"
-        ),
+        "It's spinning up its hyperdrive! Hurry, Three!",
+        speaker="Blue Leader",
     )
     # At its jump point, the gun-runner spools up its hyperdrive and jumps
     # out: Blue Three's last chance
@@ -467,20 +455,18 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     m.objective("Stop the gun-runner", done=smuggler.all_destroyed, failed=jumped)
 
     ties.spawn(
-        spawn_point=player_pawn.position - player_pawn.forward * TIES_BEHIND_M,
+        spawn_point=relative_position(player_pawn, forward_m=-TIES_BEHIND_M),
         orientation=player_pawn.orientation,
         target=blue,
     )
     m.objective("Destroy the TIEs", progress=ties.destroyed_count, goal=TIE_FLIGHT.size)
 
-    m.on(
+    m.say_when(
         smuggler.all_destroyed,
-        lambda: m.speech("Transport's down! Good shooting!", speaker="Blue Leader"),
+        "Transport's down! Good shooting!",
+        speaker="Blue Leader",
     )
-    m.on(
-        ties.all_destroyed,
-        lambda: m.speech("That's the last TIE!", speaker="Blue Two"),
-    )
+    m.say_when(ties.all_destroyed, "That's the last TIE!", speaker="Blue Two")
 
     # The reveal's chatter runs alongside the ending, so a quick kill is not
     # held back by it.
@@ -504,8 +490,8 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # 5. The ending
     # ==================================================================
     won = m.delay(all_of(smuggler.all_destroyed, ties.all_destroyed), VICTORY_DELAY_S)
-    yield from m.wait_until(lambda: bool(ended) or won())
-    if ended:
+    yield from m.wait_until(lambda: m.ending is not None or won())
+    if m.ending is not None:
         return
     if len(blue.pawns()) == BLUE_FLIGHT.size:
         end(

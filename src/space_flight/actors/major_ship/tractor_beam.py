@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import TYPE_CHECKING
 
 import numpy as np
-import yaml
 
-from space_flight import DATAFILES_PATH, EPSILON_TOLERANCE
+from space_flight import EPSILON_TOLERANCE
 from space_flight.actors.major_ship.tracking_mount import TrackingMount
+from space_flight.actors.ship import load_model_configuration
 from space_flight.ai import Personality
 from space_flight.utils import magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
@@ -21,8 +20,6 @@ if TYPE_CHECKING:
 # Grab state machine states.
 _SEARCHING = "searching"
 _GRABBING = "grabbing"
-
-LOGGER = logging.getLogger()
 
 
 class TractorBeamProjector(TrackingMount):
@@ -72,11 +69,7 @@ class TractorBeamProjector(TrackingMount):
         personality: dict = Personality.TRACTOR_BEAM_DEFAULT,
     ):
         # Load configuration first: it feeds the TrackingMount parameters below
-        filepath = (
-            DATAFILES_PATH / f"models/tractor_beams/{projector_type}/configuration.yaml"
-        )
-        with open(filepath, "r") as f:
-            conf = yaml.safe_load(f)
+        conf = load_model_configuration("tractor_beams", projector_type)
 
         super().__init__(
             game=game,

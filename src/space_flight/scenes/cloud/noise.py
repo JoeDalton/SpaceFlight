@@ -21,6 +21,8 @@ import numpy as np
 from numpy.typing import ArrayLike
 from panda3d.core import SamplerState, Texture
 
+from space_flight.utils import clamp
+
 # Volume resolution, and the random lattice it is upsampled from. NOISE_SIZE must be
 # a multiple of NOISE_LATTICE so the result tiles.
 NOISE_SIZE = 64
@@ -162,7 +164,7 @@ def henyey_greenstein(cos_angle: ArrayLike, anisotropy: float) -> np.ndarray | f
 
 def clamped_anisotropy(optics: CloudOptics) -> float:
     """:returns: the forward anisotropy in force, shared by solve, pack and CPU."""
-    return min(max(optics.forward_anisotropy, 0.0), FORWARD_ANISOTROPY_MAX)
+    return clamp(optics.forward_anisotropy, 0.0, FORWARD_ANISOTROPY_MAX)
 
 
 def _basis(g: float, cos_angle: ArrayLike) -> np.ndarray:

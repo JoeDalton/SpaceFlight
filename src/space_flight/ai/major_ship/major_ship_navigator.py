@@ -16,7 +16,8 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
-from space_flight.utils import cross3, magnitude
+from space_flight.ai.interactions import pair_indices
+from space_flight.utils import cross3, magnitude, project_on_plane
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -59,22 +60,21 @@ class MajorShipNavigator(GenericShipNavigator):
         if intent == Intent.IDLE:
             self.engage_phase = ""
             return NO_DIRECTION
-        elif intent == Intent.PATROL:
+        if intent == Intent.PATROL:
             self.engage_phase = ""
             return self.follow_waypoints()
-        elif intent == Intent.ENGAGE:
+        if intent == Intent.ENGAGE:
             return self.engage_target(target_dict)
-        elif intent == Intent.REGROUP:
+        if intent == Intent.REGROUP:
             self.engage_phase = ""
             return self.regroup(target_dict)
-        elif intent == Intent.DISENGAGE:
+        if intent == Intent.DISENGAGE:
             self.engage_phase = ""
             return self.disengage(target_dict)
-        elif intent == Intent.FORMATION:
+        if intent == Intent.FORMATION:
             self.engage_phase = ""
             return self.formation(target_dict)
-        else:
-            raise ValueError(f"Unknown intent: {intent}")
+        raise ValueError(f"Unknown intent: {intent}")
 
         # %% ==== ENGAGE ====
 
@@ -87,26 +87,16 @@ class MajorShipNavigator(GenericShipNavigator):
         :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to engage "
-                "but there's no attached target"
-            )
+        if self._has_no_target(target_dict, "engage"):
             return NO_DIRECTION
 
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
+        indices = pair_indices(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if indices is None:
+            self._log_target_lost()
             return NO_DIRECTION
+        my_actor_index, target_actor_index = indices
 
         distance_m = self.game.interactions.distances[
             my_actor_index, target_actor_index
@@ -140,7 +130,7 @@ class MajorShipNavigator(GenericShipNavigator):
 
         # Outward normal from the hull, kept in the horizontal plane.
         outward = self.pawn.position - nearest_point
-        outward_horizontal = outward - np.dot(outward, world_up) * world_up
+        outward_horizontal = project_on_plane(outward, world_up)
         outward_distance_m = magnitude(outward_horizontal)
         if outward_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             # Degenerate (directly over the hull): fall back to the target's beam.
@@ -185,7 +175,7 @@ class MajorShipNavigator(GenericShipNavigator):
         :param world_up: The world up direction
         :return: The horizontal projection (not normalised)
         """
-        return axis - np.dot(axis, world_up) * world_up
+        return project_on_plane(axis, world_up)
 
     def _nearest_point_on_horizontal_obb(
         self, target: Any, center: np.ndarray, point: np.ndarray

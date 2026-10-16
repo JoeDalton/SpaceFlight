@@ -23,7 +23,7 @@ HUD, and drives the per-frame update.
 - **Two-phase, animated level entry.** `enter()` builds the level around a
   hyperspace-jump animation
   ([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)):
-  1. `_build_upfront()` runs synchronously on a black screen for the
+  1. the level's upfront function runs synchronously on a black screen for the
      GPU-heavy one-time work (player, ocean and its reflection, cloud
      field), so its first-render compile spike is invisible;
   2. the loading overlay then advances `_build_generator` (the rest of the
@@ -196,7 +196,7 @@ entry into game effects.
     to a munition, so its bubble has barely moved since the launch.
   - **Flares** (`ordnance_into_flare`): ordnance hitting a flare of another
     team is spent, and so is the flare.
-  - **Ship physical hits** (`ship_into_*` / `ship_again_*` pairs, against
+  - **Ship physical hits** (`ship-into-*` / `ship-again-*` events, against
     ships, terrain, turrets and subsystems) resolve an impulse collision
     tuned by `SOLID_COLLISION_ELASTICITY`, rather than Panda3D's collision
     forces, which are too stiff. In `ship_into_subsystem_pushback` the hit
@@ -281,7 +281,7 @@ see [scenario_scripting.md](scenario_scripting.md).
 `game/levels/__init__.py`'s `LEVELS` registry maps
 `app.configuration["selected_level"]` to a `LevelEntry(upfront, mission,
 description)`; the level selection menu reads it too. `FlightState` calls
-the level's upfront function in `_build_upfront`; `_make_build_generator`
+the level's upfront function in `enter()`; `_make_build_generator`
 builds the rest of the scene (`scene.build_decomposed()`) during the
 animation, then creates the level's `Mission` and starts its body.
 

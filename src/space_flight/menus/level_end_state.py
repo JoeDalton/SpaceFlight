@@ -5,14 +5,17 @@ death).
 
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import DirectFrame, DirectLabel
 
-from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton, MenuNavigator
+from space_flight.menus.menu_utils import (
+    MenuNavigator,
+    make_button_column,
+    quit_game,
+    return_to_main_menu,
+)
 
 if TYPE_CHECKING:
     from direct.showbase.ShowBase import ShowBase
@@ -133,25 +136,14 @@ class LevelEndState(BaseState):
             text_shadow=(0, 0, 0, 0.75),
             text_shadowOffset=(0.05, 0.05),
         )
-        button_scale = 0.5
-        text_scale = 0.15
-        self.return_button = CustomButton(
-            app=self.app,
-            text="Return to main menu",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.return_to_main,
-            pos=(0.0, 0.0, -0.3),
-            layout="center",
-        )
-        self.quit_button = CustomButton(
-            app=self.app,
-            text="Quit Game",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.quit_game,
-            pos=(0.0, 0.0, -0.55),
-            layout="center",
+        self.return_button, self.quit_button = make_button_column(
+            self.app,
+            [
+                ("Return to main menu", self.return_to_main),
+                ("Quit Game", self.quit_game),
+            ],
+            top_z=-0.3,
+            step=0.25,
         )
         # Also blocks the flight inputs below
         self.menu_navigator = MenuNavigator(
@@ -162,20 +154,13 @@ class LevelEndState(BaseState):
         """
         Clear the state stack and return to the main menu.
         """
-        if RECORD_GAME:
-            # Record game logs
-            self.app.state_manager.stack[-2].record.save()
-        self.app.state_manager.clear()
-        self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
+        return_to_main_menu(self.app)
 
     def quit_game(self):
         """
         Quit the application.
         """
-        if RECORD_GAME:
-            # Record game logs
-            self.app.state_manager.stack[-2].record.save()
-        sys.exit()
+        quit_game(self.app)
 
     def exit(self):
         """

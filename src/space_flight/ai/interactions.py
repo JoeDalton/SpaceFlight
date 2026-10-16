@@ -21,6 +21,49 @@ _ZERO3 = np.zeros(3)
 _ZERO3.flags.writeable = False
 
 
+def pair_indices(
+    interactions: Interactions, actor_id: UUID, target_id: Any
+) -> tuple[int, int] | None:
+    """
+    :param interactions: The game's interactions
+    :param actor_id: An interacting actor's id
+    :param target_id: Its target's id
+    :return: The actor's and its target's slots, or None if the target is not
+        (or no longer) an interacting actor
+    :raises ValueError: If the actor itself is not
+    """
+    my_index = interactions.get_actor_index_from_id(actor_id)
+    try:
+        target_index = interactions.get_actor_index_from_id(target_id)
+    except ValueError:
+        return None
+    return my_index, target_index
+
+
+def pair_geometry(
+    interactions: Interactions, actor_id: UUID, target_id: Any
+) -> tuple[float, np.ndarray, np.ndarray] | None:
+    """
+    :param interactions: The game's interactions
+    :param actor_id: An interacting actor's id
+    :param target_id: Its target's id
+    :return: The distance from the actor to its target, the unit direction to
+        it, and its velocity relative to the actor (views into the
+        interactions); None if the target is not (or no longer) an interacting
+        actor
+    :raises ValueError: If the actor itself is not
+    """
+    indices = pair_indices(interactions, actor_id, target_id)
+    if indices is None:
+        return None
+    my_index, target_index = indices
+    return (
+        interactions.distances[my_index, target_index],
+        interactions.directions[my_index, target_index, :],
+        interactions.rel_velocities[my_index, target_index, :],
+    )
+
+
 class Interactions:
     def __init__(self, max_actors: int = MAX_ACTORS):
         """

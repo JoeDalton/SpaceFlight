@@ -4,13 +4,12 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from simple_pid import PID
 
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship import ZERO_THRUST_POSITION
-from space_flight.ai import REFERENCE_ERROR_VELOCITY_MPS
+from space_flight.ai import HALF_PI, REFERENCE_ERROR_VELOCITY_MPS
 from space_flight.ai.generic.generic_pilot import GenericPilot
-from space_flight.utils import magnitude, safe_angle_rad
+from space_flight.utils import clamp, magnitude
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -24,51 +23,12 @@ class GenericShipPilot(GenericPilot):
     def __init__(self, game: FlightState, pawn: Pawn, personality: dict):
         super().__init__(game=game, pawn=pawn, personality=personality)
 
-        self.pid_yaw = PID(
-            Kp=self.personality["pilot"]["yaw_kp"],
-            Ki=self.personality["pilot"]["yaw_ki"],
-            Kd=self.personality["pilot"]["yaw_kd"],
-            setpoint=0.0,
-            starting_output=0.0,
-            sample_time=self.personality["pilot"]["sample_time_s"],
-            error_map=safe_angle_rad,
-            time_fn=self.game.game_time.get_current_time,
-            output_limits=(-1.0, 1.0),
-        )
-        self.pid_pitch = PID(
-            Kp=self.personality["pilot"]["pitch_kp"],
-            Ki=self.personality["pilot"]["pitch_ki"],
-            Kd=self.personality["pilot"]["pitch_kd"],
-            setpoint=0.0,
-            starting_output=0.0,
-            sample_time=self.personality["pilot"]["sample_time_s"],
-            error_map=safe_angle_rad,
-            time_fn=self.game.game_time.get_current_time,
-            output_limits=(-1.0, 1.0),
-        )
-        self.pid_roll = PID(
-            Kp=self.personality["pilot"]["roll_kp"],
-            Ki=self.personality["pilot"]["roll_ki"],
-            Kd=self.personality["pilot"]["roll_kd"],
-            setpoint=0.0,
-            starting_output=0.0,
-            sample_time=self.personality["pilot"]["sample_time_s"],
-            error_map=safe_angle_rad,
-            time_fn=self.game.game_time.get_current_time,
-            output_limits=(-1.0, 1.0),
-        )
-        self.pid_throttle = PID(
-            Kp=self.personality["pilot"]["throttle_kp"],
-            Ki=self.personality["pilot"]["throttle_ki"],
-            Kd=self.personality["pilot"]["throttle_kd"],
-            setpoint=0.0,
-            starting_output=0.0,
-            sample_time=self.personality["pilot"]["sample_time_s"],
-            time_fn=self.game.game_time.get_current_time,
-            # Signed: it only corrects the feedforward throttle, so it may also
-            # pull the throttle down
-            output_limits=(-1.0, 1.0),
-        )
+        self.pid_yaw = self._make_pid("yaw")
+        self.pid_pitch = self._make_pid("pitch")
+        self.pid_roll = self._make_pid("roll")
+        # Signed: it only corrects the feedforward throttle, so it may also pull
+        # the throttle down
+        self.pid_throttle = self._make_pid("throttle", angular=False)
         self.yaw_rate = 0.0
         self.pitch_rate = 0.0
         self.roll_rate = 0.0
@@ -76,10 +36,6 @@ class GenericShipPilot(GenericPilot):
         self.angle_to_target_deg = 0.0
         # Fraction of the yaw/pitch rate commands kept by energy protection
         self.turn_authority = 1.0
-
-    def sample_externally(self):
-        for pid in (self.pid_yaw, self.pid_pitch, self.pid_roll, self.pid_throttle):
-            pid.sample_time = None
 
     def set_on(
         self,
@@ -149,7 +105,7 @@ class GenericShipPilot(GenericPilot):
             target_direction=target_direction, up_reference=up_reference
         )
         self.angle_to_target_deg = math.degrees(
-            math.acos(min(max(cos_angle_to_target, -1.0), 1.0))
+            math.acos(clamp(cos_angle_to_target, -1.0, 1.0))
         )
 
         # Find velocity error
@@ -197,7 +153,7 @@ class GenericShipPilot(GenericPilot):
         if range_mps <= 0.0:
             return 1.0
         speed_deficit_mps = minimum_speed_mps - magnitude(self.pawn.speed)
-        ramp = min(max(speed_deficit_mps / range_mps, 0.0), 1.0)
+        ramp = clamp(speed_deficit_mps / range_mps, 0.0, 1.0)
         return 1.0 - ramp * (1.0 - min_turn_authority)
 
     def compute_feedforward_throttle(self, desired_speed_mps: float) -> float:
@@ -218,10 +174,47 @@ class GenericShipPilot(GenericPilot):
             self.pawn.drag_factor * desired_speed_mps**2
             + self.pawn.lift_inefficiency * lift_norm_n**2
         )
-        thrust_fraction = min(max(required_thrust_n / available_thrust_n, 0.0), 1.0)
+        thrust_fraction = clamp(required_thrust_n / available_thrust_n, 0.0, 1.0)
         return ZERO_THRUST_POSITION + (1.0 - ZERO_THRUST_POSITION) * math.sqrt(
             thrust_fraction
         )
+
+    def _project_target(
+        self, target_direction: np.ndarray
+    ) -> tuple[float, float, float, float, float] | None:
+        """
+        Project a target direction on the ship's axes.
+
+        :param target_direction: Direction of the target
+        :return: None for a null direction, else the yaw and pitch errors to the
+            target, its components along the ship's right and up axes, and the
+            cosine of the angle to it (its component along the nose)
+        """
+        target_direction_norm = magnitude(target_direction)
+        if target_direction_norm == 0.0:
+            return None
+        # TODO remove normalization since the autonavigator is supposed to give
+        # either a null or a unit direction
+        target_direction = target_direction / target_direction_norm
+        target_x = np.dot(self.pawn.right, target_direction)
+        target_y = np.dot(self.pawn.forward, target_direction)
+        target_z = np.dot(self.pawn.up, target_direction)
+        yaw_error = np.arctan2(target_x, target_y)
+        pitch_error = np.arctan2(target_z, target_y)
+        return yaw_error, pitch_error, target_x, target_z, target_y
+
+    def _level_roll_error(self, level_reference: np.ndarray) -> float:
+        """
+        :param level_reference: The world "up" to level the ship's +Z toward
+        :return: The roll error to level the ship with it
+        """
+        # Clamp before arccos: float error can push the dot of two unit vectors
+        # past ±1, and a NaN would poison the whole state.
+        right_dot_ref = np.dot(self.pawn.right, level_reference)
+        right_dot_ref = clamp(right_dot_ref, -1.0, 1.0)
+        if np.dot(self.pawn.up, level_reference) >= 0:
+            return HALF_PI - np.arccos(right_dot_ref)
+        return HALF_PI + np.arccos(right_dot_ref)
 
     def compute_angular_error(
         self, target_direction: np.ndarray, up_reference: np.ndarray | None = None

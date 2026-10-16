@@ -20,7 +20,9 @@ from space_flight import (
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
 from space_flight.fx.damage_fx import DamageFX
+from space_flight.game.collisions import attach_collision_sphere
 from space_flight.utils import (
+    clamp,
     cross3,
     low_pass_filter_first_order,
     magnitude,
@@ -83,13 +85,28 @@ def turn_rate_scale(throttle: float) -> float:
     :param throttle: Throttle command, in [0, THROTTLE_BOOST_VALUE]
     :return: Scale in [TURN_RATE_BOOST_MAX_FRACTION, 1]
     """
-    throttle = min(max(throttle, 0.0), THROTTLE_BOOST_VALUE)
+    throttle = clamp(throttle, 0.0, THROTTLE_BOOST_VALUE)
     if throttle <= 1.0:
         return min(1.0, float(np.polyval(_TURN_RATE_PARABOLA, throttle)))
     boost_ratio = (throttle - 1.0) / (THROTTLE_BOOST_VALUE - 1.0)
     return TURN_RATE_FULL_THRUST_FRACTION + boost_ratio * (
         TURN_RATE_BOOST_MAX_FRACTION - TURN_RATE_FULL_THRUST_FRACTION
     )
+
+
+def load_model_configuration(kind: str, name: str) -> dict:
+    """
+    Load a model's configuration file, datafiles/models/<kind>/<name>/
+    configuration.yaml.
+
+    :param kind: The kind of model, i.e. its models subdirectory ("ships",
+        "turrets", "tractor_beams")
+    :param name: The model's name, i.e. its configuration directory name
+    :return: The configuration dictionary
+    """
+    filepath = DATAFILES_PATH / f"models/{kind}/{name}/configuration.yaml"
+    with open(filepath, "r") as f:
+        return yaml.safe_load(f)
 
 
 def load_ship_configuration(ship_type: str) -> dict:
@@ -99,9 +116,7 @@ def load_ship_configuration(ship_type: str) -> dict:
     :param ship_type: The ship type, i.e. its configuration directory name
     :return: The configuration dictionary
     """
-    filepath = DATAFILES_PATH / f"models/ships/{ship_type}/configuration.yaml"
-    with open(filepath, "r") as f:
-        return yaml.safe_load(f)
+    return load_model_configuration("ships", ship_type)
 
 
 class Ship(Pawn):
@@ -222,11 +237,7 @@ class Ship(Pawn):
         # Prepare first integration step
         self.compute_derivatives()
         self.state_dot_previous = self.state_dot.copy()
-        self.integrator_idx = self.game.integrator.set_state_variables(
-            partial_x=self.state,
-            partial_x_dot=self.state_dot,
-            partial_x_dot_previous=self.state_dot_previous,
-        )
+        self._register_integrator()
 
         # Collision setup is ship-type dependent
 
@@ -251,30 +262,28 @@ class Ship(Pawn):
         # Whether the engine sound is the running one (see
         # _on_engines_online_changed)
         self.is_engine_sound_online = True
+        # The player hears its interior loop, everyone else the exterior one
         if self.parent.name == "player":
-            sound_file = DATAFILES_PATH / self.conf["interior_engine_sound"]
-            self.sound_pool = self.game.app.asset_manager.get_asset(
-                asset_type="sound",
-                path=sound_file,
-            )
-            self.sound = self.sound_pool.get_sound()
-            self.sound.setLoop(True)
-            self.engine_sound_volume = 0.1
-            self.sound.setVolume(self.engine_sound_volume)
+            sound_key, asset_type, volume = "interior_engine_sound", "sound", 0.1
         elif "exterior_engine_sound" in self.conf:
-            sound_file = DATAFILES_PATH / self.conf["exterior_engine_sound"]
+            sound_key, asset_type, volume = "exterior_engine_sound", "3d_sound", 10.0
+        else:
+            sound_key = None
+        if sound_key is not None:
             self.sound_pool = self.game.app.asset_manager.get_asset(
-                asset_type="3d_sound",
-                path=sound_file,
+                asset_type=asset_type,
+                path=DATAFILES_PATH / self.conf[sound_key],
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
-            self.engine_sound_volume = 10.0
+            self.engine_sound_volume = volume
             self.sound.setVolume(self.engine_sound_volume)
-            # Follows the ship node, Doppler-shifted by the ship's velocity
-            self.game.app.sfx.attach_sound(self.sound, self.node, velocity_source=self)
-
-            # TODO Attach engine sound to a node located at the engine location
+            if asset_type == "3d_sound":
+                # Follows the ship node, Doppler-shifted by the ship's velocity
+                # TODO Attach engine sound to a node located at the engine location
+                self.game.app.sfx.attach_sound(
+                    self.sound, self.node, velocity_source=self
+                )
 
         # Play a bit later to avoid audio artifacts at startup
         if self.sound is not None:
@@ -463,22 +472,8 @@ class Ship(Pawn):
             self.pqr[1],
             self.pqr[2],
         ] = low_pass_filter_first_order(
-            value=np.array(
-                [
-                    scalar_thrust_n,
-                    pqr[0],
-                    pqr[1],
-                    pqr[2],
-                ]
-            ),
-            previous=np.array(
-                [
-                    self.scalar_thrust_n,
-                    self.pqr[0],
-                    self.pqr[1],
-                    self.pqr[2],
-                ]
-            ),
+            value=np.array((scalar_thrust_n, *pqr)),
+            previous=np.array((self.scalar_thrust_n, *self.pqr)),
             dt=dt,
             rise_time=self.inputs_filter_time_s,
             fall_time=self.inputs_filter_time_s,
@@ -536,7 +531,7 @@ class Ship(Pawn):
                 # (a velocity component over the speed norm) but float error can
                 # push it just past ±1, making arcsin return NaN.
                 side_slip_angle_deg = math.degrees(
-                    math.asin(min(max(airflow_x / speed_norm, -1.0), 1.0))
+                    math.asin(clamp(airflow_x / speed_norm, -1.0, 1.0))
                 )
                 self.lift_body_n = speed_norm_squared * (
                     self.lift_factor
@@ -668,11 +663,38 @@ class Ship(Pawn):
 
         # Prepare next integration step
         self.compute_derivatives()
+        self._register_integrator()
+
+    def _register_integrator(self):
+        """Hand the ship's state and derivatives to the integrator."""
         self.integrator_idx = self.game.integrator.set_state_variables(
             partial_x=self.state,
             partial_x_dot=self.state_dot,
             partial_x_dot_previous=self.state_dot_previous,
         )
+
+    def _sync_render_node(self):
+        """Move the render node to the ship's pose."""
+        self.node.setPos(*self.position)
+        self.node.setQuat(Quat(*self.orientation))
+
+    def _attach_hull_collider(self):
+        """
+        Attach the hull's collision sphere (of the config's hit_box_radius_m),
+        and read the size of the ship's death explosion. Called by the ship
+        classes once built.
+        """
+        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
+        self.collision_sphere_np = attach_collision_sphere(
+            game=self.game,
+            name="ship",
+            radius=self.hit_box_radius_m,
+            collider_type="destructible",
+            parent_node=self.node,
+            parent_object=self,
+        )
+        # Set explosion size for death animation
+        self.explosion_scale = self.conf["explosion_scale"]
 
     def _sanitize_state(self):
         """
@@ -740,8 +762,7 @@ class Ship(Pawn):
         self.adjust_engine_pitch(throttle=throttle)
 
         # Update render
-        self.node.setPos(*self.position)
-        self.node.setQuat(Quat(*self.orientation))
+        self._sync_render_node()
 
     @property
     def is_dying(self) -> bool:
@@ -799,8 +820,7 @@ class Ship(Pawn):
 
         # Same physics + render update as move(), without set_inputs.
         self.move_ship_physics()
-        self.node.setPos(*self.position)
-        self.node.setQuat(Quat(*self.orientation))
+        self._sync_render_node()
 
     def hold_step(
         self,
@@ -835,11 +855,7 @@ class Ship(Pawn):
         self.compute_derivatives()
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
-        self.integrator_idx = self.game.integrator.set_state_variables(
-            partial_x=self.state,
-            partial_x_dot=self.state_dot,
-            partial_x_dot_previous=self.state_dot_previous,
-        )
+        self._register_integrator()
         self.node.setPos(*(self.position + offset_m * self.forward))
         self.node.setQuat(Quat(*self.orientation))
 

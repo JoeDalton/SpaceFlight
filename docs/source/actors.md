@@ -458,8 +458,8 @@ on top. Not part of the gameplay hierarchy.
 
 ## Where things live
 
-`Pawn`, `Ship`/`ShipModel`, `Fighter`, `Bot`, `Player`, `Destructible(s)`
-and `Trihedron` live under
+`Pawn`, `Ship`/`ShipModel`, `Fighter`, `Bot`, `Player` and `Destructible(s)`
+live under
 [`src/space_flight/actors/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/actors/) (beside
 `scan.py`, the mission scan state, see [Game](game.md));
 `Weapon`/`Munition` and the damage types, `LaserCannon`/`LaserShot`,

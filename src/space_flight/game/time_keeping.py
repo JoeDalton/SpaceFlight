@@ -63,8 +63,7 @@ class GameTimeManager:
         """
         if self.game.is_paused:
             return 0.0
-        else:
-            return ClockObject.getGlobalClock().getDt()
+        return ClockObject.getGlobalClock().getDt()
 
     def get_average_frame_rate(self) -> float:
         """

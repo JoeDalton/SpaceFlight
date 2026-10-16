@@ -66,6 +66,7 @@ Implementation notes
 
 from __future__ import annotations
 
+import functools
 import json
 import uuid
 from pathlib import Path
@@ -73,6 +74,7 @@ from typing import TYPE_CHECKING
 
 from panda3d.core import (
     BitMask32,
+    CardMaker,
     ColorBlendAttrib,
     CullFaceAttrib,
     Geom,
@@ -92,7 +94,11 @@ from panda3d.core import (
     Vec3,
 )
 
+from space_flight import DATAFILES_PATH
+
 if TYPE_CHECKING:
+    from panda3d.core import NodePath
+
     from space_flight.game.flight_state import FlightState
 
 # ---------------------------------------------------------------------------
@@ -194,9 +200,6 @@ class ParticleBuffer:
     :param additive:  If True, additive blending (src * alpha + dst) for a
                       glow; otherwise standard alpha blending.
     :param bin_order: Sort order within the "transparent" render bin.
-    :param task_name: Descriptive name stored as ``self.task_name``. The update
-                      is not a Panda3D task: :meth:`update` is registered in
-                      ``game.method_lists`` under this buffer's ``id``.
     """
 
     def __init__(
@@ -207,7 +210,6 @@ class ParticleBuffer:
         texture: Texture | None = None,
         additive: bool = False,
         bin_order: int = 20,
-        task_name: str = "particle_buffer_update",
     ):
         self.game = game
         self.id = uuid.uuid4()
@@ -297,8 +299,6 @@ class ParticleBuffer:
         self.node_path.setShaderInput("uTime", 0.0)
         self.node_path.setShaderInput("uCamRight", Vec3(1, 0, 0))
         self.node_path.setShaderInput("uCamUp", Vec3(0, 0, 1))
-
-        self.task_name = task_name
 
         self.game.method_lists[self.id].append(self.update)
 
@@ -414,40 +414,102 @@ class ParticleBuffer:
         """
         self.node_path.setShaderInput(name, value)
 
-    def set_texture(self, texture: Texture):
-        """
-        Replace the texture bound to the default :class:`TextureStage`.
-
-        :param texture: New :class:`Texture` to bind.
-        """
-        self.node_path.setTexture(TextureStage.getDefault(), texture)
-
     def clean(self):
         """
         Unregister the per-frame update and destroy the geometry node.
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         self.node_path.removeNode()
 
 
 # ---------------------------------------------------------------------------
-# Atlas loader
+# Fullscreen quad
 # ---------------------------------------------------------------------------
+
+
+def make_fullscreen_quad(render2d: NodePath, name: str, sort: int) -> NodePath:
+    """
+    Build one transparent fullscreen quad on render2d, for a fullscreen shader:
+    no depth test nor write, drawn in the "fixed" bin.
+
+    :param render2d: The render2d node to attach the quad to
+    :param name: The quad's name
+    :param sort: Its fixed-bin sort order (higher draws on top)
+    :return: The quad NodePath
+    """
+    cm = CardMaker(name)
+    cm.setFrameFullscreenQuad()
+    quad = render2d.attachNewNode(cm.generate())
+    quad.setDepthWrite(False)
+    quad.setDepthTest(False)
+    quad.setTransparency(TransparencyAttrib.MAlpha)
+    quad.setBin("fixed", sort)
+    return quad
+
+
+# ---------------------------------------------------------------------------
+# Shader, texture and atlas loaders
+# ---------------------------------------------------------------------------
+
+
+@functools.cache
+def load_glsl_shader(vertex: str, fragment: str) -> Shader:
+    """
+    Load (once) and return a GLSL shader shared by every user.
+
+    :param vertex: The vertex shader file name, in datafiles/shaders
+    :param fragment: The fragment shader file name, in datafiles/shaders
+    :return: The shared :class:`Shader`
+    """
+    return Shader.load(
+        Shader.SL_GLSL,
+        vertex=DATAFILES_PATH / "shaders" / vertex,
+        fragment=DATAFILES_PATH / "shaders" / fragment,
+    )
+
+
+def load_clamped_texture(game: FlightState, path: Path) -> Texture:
+    """
+    Get a sprite texture from the asset manager, linearly filtered and clamped
+    at its edges (so a sprite does not wrap, nor bleed into its atlas
+    neighbours, at quad edges).
+
+    :param game: The parent game object
+    :param path: Path to the texture file
+    :return: The texture
+    """
+    tex = game.app.asset_manager.get_asset(
+        asset_type="texture", path=path
+    ).get_texture()
+    tex.setMagfilter(Texture.FTLinear)
+    tex.setMinfilter(Texture.FTLinear)
+    tex.setWrapU(Texture.WMClamp)
+    tex.setWrapV(Texture.WMClamp)
+    return tex
+
+
+def read_atlas_rects(json_path: Path) -> list:
+    """
+    Read a sprite atlas' JSON descriptor: a list of dicts with keys u_min,
+    v_min, u_size, v_size (0-1 UV space, already flipped for OpenGL's
+    bottom-left origin by scripts/build_particle_atlas.py).
+
+    :param json_path: Path to the JSON rect descriptor.
+    :return: A list of (u, v, uw, vh) tuples, one per sprite frame.
+    """
+    with open(json_path) as f:
+        return [
+            (r["u_min"], r["v_min"], r["u_size"], r["v_size"]) for r in json.load(f)
+        ]
 
 
 def load_atlas(
     game: FlightState, texture_path: Path, json_path: Path
 ) -> tuple[Texture, list]:
     """
-    Load a sprite atlas from a PNG and its companion JSON descriptor.
-
-    The JSON is a list of dicts with keys u_min, v_min, u_size, v_size (0-1 UV
-    space, already flipped for OpenGL's bottom-left origin by
-    scripts/build_particle_atlas.py).
+    Load a sprite atlas from a PNG and its companion JSON descriptor (see
+    :func:`read_atlas_rects`).
 
     :param game: The parent game object
     :param texture_path:  Path to the atlas PNG file.
@@ -455,17 +517,5 @@ def load_atlas(
     :return: A (texture, rects) tuple where *rects* is a list of
               (u, v, uw, vh) tuples, one per sprite frame.
     """
-    with open(json_path) as f:
-        data = json.load(f)
-    rects = [(r["u_min"], r["v_min"], r["u_size"], r["v_size"]) for r in data]
-
-    tex = game.app.asset_manager.get_asset(
-        asset_type="texture",
-        path=texture_path,
-    ).get_texture()
-    tex.setMagfilter(Texture.FTLinear)
-    tex.setMinfilter(Texture.FTLinear)
-    # Clamp prevents colour bleeding from neighbouring atlas frames at quad edges.
-    tex.setWrapU(Texture.WMClamp)
-    tex.setWrapV(Texture.WMClamp)
-    return tex, rects
+    rects = read_atlas_rects(json_path)
+    return load_clamped_texture(game, texture_path), rects

@@ -104,6 +104,7 @@ class MockPawn:
         self.is_dead = False
         self.forward = np.array([0.0, 1.0, 0.0])
         self.right = np.array([1.0, 0.0, 0.0])
+        self.up = np.array([0.0, 0.0, 1.0])
         self.orientation = np.array([1.0, 0.0, 0.0, 0.0])
         self.target = None
         self.health = 100.0

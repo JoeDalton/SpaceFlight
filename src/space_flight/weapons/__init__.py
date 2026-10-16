@@ -23,6 +23,7 @@ harder than physical damage would.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -322,21 +323,14 @@ class Munition:
             game cleanup, which iterates that registry itself.
         """
         self._clean_extra()
-        try:
+        with contextlib.suppress(AttributeError):
             self.collider_np.setPythonTag("owner", None)
-        except AttributeError:
-            pass
         self.collider_np = None
-        try:
+        with contextlib.suppress(AttributeError):
             self.shot.removeNode()
-        except AttributeError:
-            pass
         self.shot = None
         if remove_from_game_objects and self.game.game_objects is not None:
-            try:
-                self.game.game_objects.pop(self.id)
-            except KeyError:
-                pass
+            self.game.game_objects.pop(self.id, None)
         self.game = None
 
     def __del__(self):

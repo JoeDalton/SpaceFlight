@@ -18,11 +18,17 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.ai.interactions import pair_geometry
 from space_flight.ai.missile.incoming_missile import (
     IncomingMissile,
     nearest_incoming,
 )
-from space_flight.utils import magnitude, smooth_step_down, smooth_step_up
+from space_flight.utils import (
+    magnitude,
+    project_on_plane,
+    smooth_step_down,
+    smooth_step_up,
+)
 from space_flight.weapons import ION, is_ion_vulnerable
 
 if TYPE_CHECKING:
@@ -69,29 +75,28 @@ class FighterNavigator(GenericShipNavigator):
         if intent == Intent.IDLE:
             self.engage_phase = ""
             return NO_DIRECTION
-        elif intent == Intent.PATROL:
+        if intent == Intent.PATROL:
             self.engage_phase = ""
             return self.follow_waypoints()
-        elif intent == Intent.ENGAGE:
+        if intent == Intent.ENGAGE:
             # TODO reset spiral time if new order ? May not be necessary
             return self.engage_target(target_dict)
-        elif intent == Intent.EVADE:
+        if intent == Intent.EVADE:
             self.engage_phase = ""
             return self.evade_target(target_dict)
-        elif intent == Intent.DEFEND_MISSILE:
+        if intent == Intent.DEFEND_MISSILE:
             self.engage_phase = ""
             return self.defend_missile(target_dict)
-        elif intent == Intent.REGROUP:
+        if intent == Intent.REGROUP:
             self.engage_phase = ""
             return self.regroup(target_dict)
-        elif intent == Intent.DISENGAGE:
+        if intent == Intent.DISENGAGE:
             self.engage_phase = ""
             return self.disengage(target_dict)
-        elif intent == Intent.FORMATION:
+        if intent == Intent.FORMATION:
             self.engage_phase = ""
             return self.formation(target_dict)
-        else:
-            raise ValueError(f"Unknown intent: {intent}")
+        raise ValueError(f"Unknown intent: {intent}")
 
         # %% ==== ENGAGE ====
 
@@ -109,12 +114,7 @@ class FighterNavigator(GenericShipNavigator):
             (for surface-mounted preys) surface normal/hit point
         :return: The direction to point to and the desired speed
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to engage "
-                "but there's no attached target"
-            )
+        if self._has_no_target(target_dict, "engage"):
             return NO_DIRECTION
 
         if not self._resolve_engagement(target_dict):
@@ -137,32 +137,13 @@ class FighterNavigator(GenericShipNavigator):
             mutated with the resolved geometry keys
         :return: True if resolved, False if the target is gone
         """
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
+        geometry = pair_geometry(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if geometry is None:
+            self._log_target_lost()
             return False
-
-        # TODO Same pair lookup and target reconstruction as in
-        #  TrackingMountNavigator and AutoAim: share one interactions helper
-        #  returning the target's position and absolute velocity for an
-        #  (actor, target) pair.
-        distance_m = self.game.interactions.distances[
-            my_actor_index, target_actor_index
-        ]
-        direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
-        ]
-        relative_speed_vector = self.game.interactions.rel_velocities[
-            my_actor_index, target_actor_index, :
-        ]
+        distance_m, direction, relative_speed_vector = geometry
         target_dict["distance_m"] = distance_m
         target_dict["direction"] = direction
         target_dict["relative_speed_vector"] = relative_speed_vector
@@ -467,8 +448,8 @@ class FighterNavigator(GenericShipNavigator):
         target_position = target_dict["target_current_position"]
         target_speed = target_dict["target_current_speed"]
         if weapon == "bomb":
-            launcher = self.pawn.selected_secondary
-            if launcher is None or launcher.category != "bomb" or launcher.stock <= 0:
+            launcher = self.pawn.selected_secondary_with_stock("bomb")
+            if launcher is None:
                 return False
             if not self.compute_release_condition(
                 target_position,
@@ -505,17 +486,6 @@ class FighterNavigator(GenericShipNavigator):
         )
         return fired
 
-    def _selected_secondary_with_stock(self, category: str) -> OrdnanceLauncher | None:
-        """
-        :param category: The ordnance type ("missile" or "rocket")
-        :return: The selected secondary weapon if it is of that type with stock
-            left, else None
-        """
-        launcher = self.pawn.selected_secondary
-        if launcher is None or launcher.category != category or launcher.stock <= 0:
-            return None
-        return launcher
-
     def _fire_missile(self, target_dict: dict) -> bool:
         """
         Launch a missile at the target once it is locked (the lock builds while
@@ -525,7 +495,7 @@ class FighterNavigator(GenericShipNavigator):
         :param target_dict: The target info enriched with the engagement geometry
         :return: Whether a missile was launched
         """
-        launcher = self._selected_secondary_with_stock("missile")
+        launcher = self.pawn.selected_secondary_with_stock("missile")
         if launcher is None or not self.pawn.is_missile_locked:
             return False
         ordnance = self.personality["navigator"]["ordnance"]
@@ -574,7 +544,7 @@ class FighterNavigator(GenericShipNavigator):
         :param target_dict: The target info enriched with the engagement geometry
         :return: Whether a rocket was fired
         """
-        launcher = self._selected_secondary_with_stock("rocket")
+        launcher = self.pawn.selected_secondary_with_stock("rocket")
         if launcher is None:
             return False
         distance_m = target_dict["distance_m"]
@@ -772,12 +742,13 @@ class FighterNavigator(GenericShipNavigator):
             # AND on its track line.
             if along_track_m < 0.0 and cross_track_m < bomb["lateral_tolerance_m"]:
                 self.behaviour_sm.request("bomb_approach")
-                return self._bomb_approach(
+                return self._bomb_belly_leg(
                     target_position,
                     track_direction,
                     up_reference,
                     along_track_m,
                     bomb,
+                    "approach_speed_factor",
                 )
             self.behaviour_sm.request("bomb_ingress")
             return self._bomb_ingress(
@@ -812,20 +783,22 @@ class FighterNavigator(GenericShipNavigator):
                 and cross_track_m < bomb["lateral_tolerance_m"]
             ):
                 self.behaviour_sm.request("bomb_run")
-                return self._bomb_run(
+                return self._bomb_belly_leg(
                     target_position,
                     track_direction,
                     up_reference,
                     along_track_m,
                     bomb,
+                    "run_speed_factor",
                 )
             self.behaviour_sm.request("bomb_approach")
-            return self._bomb_approach(
+            return self._bomb_belly_leg(
                 target_position,
                 track_direction,
                 up_reference,
                 along_track_m,
                 bomb,
+                "approach_speed_factor",
             )
 
         if phase == "bomb_run":
@@ -838,12 +811,13 @@ class FighterNavigator(GenericShipNavigator):
                 self.behaviour_sm.request("bomb_break")
                 return self._bomb_break(direction, bomb)
             self.behaviour_sm.request("bomb_run")
-            return self._bomb_run(
+            return self._bomb_belly_leg(
                 target_position,
                 track_direction,
                 up_reference,
                 along_track_m,
                 bomb,
+                "run_speed_factor",
             )
 
         if phase == "bomb_break":
@@ -947,7 +921,7 @@ class FighterNavigator(GenericShipNavigator):
             track = target_speed / target_speed_norm
         else:
             track = direction
-        track = track - np.dot(track, up_reference) * up_reference
+        track = project_on_plane(track, up_reference)
         track_norm = magnitude(track)
         # track is a (near-)unit vector, so compare against a small epsilon, not the
         # metres-scale distance tolerance: only fall back to the nose when the track
@@ -1030,47 +1004,23 @@ class FighterNavigator(GenericShipNavigator):
             speed,
         )
 
-    def _bomb_approach(
+    def _bomb_belly_leg(
         self,
         target_position: np.ndarray,
         track_direction: np.ndarray,
         up_reference: np.ndarray,
         along_track_m: float,
         bomb: dict,
+        speed_key: str,
     ) -> Tuple[np.ndarray, float]:
         """
-        Approach leg: belly-down (publishes the up-reference) along the track line
-        with the short lookahead. Avoidance is dwarfed and the outer sensor sphere
+        A belly-down leg: the approach, then the committed delivery run until the
+        release fires. Publishes the up-reference and follows the track line with
+        the short lookahead; avoidance is dwarfed and the outer sensor sphere
         dropped for the close overfly.
-        """
-        self.up_reference = up_reference
-        self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
-            "corridor_avoidance_factor"
-        ]
-        self.collision_sensor.active_range = self.collision_sensor.n_spheres - 1
-        return (
-            self._bomb_line_carrot(
-                target_position,
-                track_direction,
-                up_reference,
-                along_track_m,
-                bomb["run_lookahead_m"],
-            ),
-            bomb["approach_speed_factor"] * self.pawn.max_speed_mps,
-        )
 
-    def _bomb_run(
-        self,
-        target_position: np.ndarray,
-        track_direction: np.ndarray,
-        up_reference: np.ndarray,
-        along_track_m: float,
-        bomb: dict,
-    ) -> Tuple[np.ndarray, float]:
-        """
-        The committed delivery leg: same as the approach (belly-down, short
-        lookahead line-follow, dwarfed avoidance, outer sphere dropped) at the run
-        speed, until the release fires.
+        :param speed_key: The leg's speed factor ("approach_speed_factor" or
+            "run_speed_factor")
         """
         self.up_reference = up_reference
         self.avoidance_weight_factor = self.personality["navigator"]["strafe"][
@@ -1085,7 +1035,7 @@ class FighterNavigator(GenericShipNavigator):
                 along_track_m,
                 bomb["run_lookahead_m"],
             ),
-            bomb["run_speed_factor"] * self.pawn.max_speed_mps,
+            bomb[speed_key] * self.pawn.max_speed_mps,
         )
 
     def _bomb_break(
@@ -1166,18 +1116,17 @@ class FighterNavigator(GenericShipNavigator):
                 self.time_in_spiral_s
                 > self.personality["navigator"]["extend"]["maximum_time_in_spiral_s"]
             )
-        elif (
+        if (
             self.behaviour == "extend"
             and self.behaviour_duration_s
             < self.personality["navigator"]["extend"]["minimum_duration_s"]
         ):
             # Extending for not enough time
             return True
-        else:
-            # Velocity condition not met, not in spiral
-            # Reset time in spiral
-            self.time_in_spiral_s = 0.0
-            return False
+        # Velocity condition not met, not in spiral
+        # Reset time in spiral
+        self.time_in_spiral_s = 0.0
+        return False
 
     def check_overshoot_risk(
         self,
@@ -1255,14 +1204,10 @@ class FighterNavigator(GenericShipNavigator):
             return NO_DIRECTION
         line_of_sight /= distance_m
 
-        beam = self.pawn.forward - np.dot(self.pawn.forward, line_of_sight) * (
-            line_of_sight
-        )
+        beam = project_on_plane(self.pawn.forward, line_of_sight)
         if magnitude(beam) < 1e-3:
             # Flying straight along the line of sight: break to the right
-            beam = self.pawn.right - np.dot(self.pawn.right, line_of_sight) * (
-                line_of_sight
-            )
+            beam = project_on_plane(self.pawn.right, line_of_sight)
         return beam / magnitude(beam), self.pawn.max_speed_mps
 
     def _drop_flare(self, incoming: IncomingMissile):
@@ -1302,37 +1247,20 @@ class FighterNavigator(GenericShipNavigator):
         :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to evade but "
-                "there's no attached target"
-            )
+        if self._has_no_target(target_dict, "evade"):
             return NO_DIRECTION
 
-        # Identify self and target in interactions
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
+        geometry = pair_geometry(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if geometry is None:
+            self._log_target_lost()
             return NO_DIRECTION
-
-        distance = self.game.interactions.distances[my_actor_index, target_actor_index]
+        distance, direction, _ = geometry
 
         # Case where the target is at zero distance (Should not happen once ship-ship
         # collisions are implemented)
         if distance < TARGET_DISTANCE_TOLERANCE_M:
             return NO_DIRECTION
-
-        direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
-        ]
 
         return direction, 2 * distance

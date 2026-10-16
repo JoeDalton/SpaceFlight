@@ -48,10 +48,7 @@ class Destructible:
         the Bot has already cleaned it. Clearing tasks then is a safe no-op.
         """
         if self.game is not None and self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
 
     def clean(self):
         """

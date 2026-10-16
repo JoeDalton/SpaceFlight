@@ -77,6 +77,15 @@
 
 ````
 
+````{py:property} spheres
+:canonical: space_flight.ai.collision_sensor.CollisionSensor.spheres
+:type: tuple[panda3d.core.NodePath, panda3d.core.NodePath, panda3d.core.NodePath]
+
+```{autodoc2-docstring} space_flight.ai.collision_sensor.CollisionSensor.spheres
+```
+
+````
+
 ````{py:method} set_active(active: bool)
 :canonical: space_flight.ai.collision_sensor.CollisionSensor.set_active
 

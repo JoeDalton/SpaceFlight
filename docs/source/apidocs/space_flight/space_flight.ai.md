@@ -83,8 +83,8 @@ space_flight.ai.target_lock
   - ```{autodoc2-docstring} space_flight.ai.HALF_PI
     :summary:
     ```
-* - {py:obj}`LOGGER <space_flight.ai.LOGGER>`
-  - ```{autodoc2-docstring} space_flight.ai.LOGGER
+* - {py:obj}`_SHIP_PILOT <space_flight.ai._SHIP_PILOT>`
+  - ```{autodoc2-docstring} space_flight.ai._SHIP_PILOT
     :summary:
     ```
 ````
@@ -147,16 +147,6 @@ space_flight.ai.target_lock
    None
 
 ```{autodoc2-docstring} space_flight.ai.HALF_PI
-```
-
-````
-
-````{py:data} LOGGER
-:canonical: space_flight.ai.LOGGER
-:value: >
-   'getLogger(...)'
-
-```{autodoc2-docstring} space_flight.ai.LOGGER
 ```
 
 ````
@@ -312,6 +302,16 @@ Bases: {py:obj}`enum.Enum`
 ````
 
 `````
+
+````{py:data} _SHIP_PILOT
+:canonical: space_flight.ai._SHIP_PILOT
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.ai._SHIP_PILOT
+```
+
+````
 
 `````{py:class} Personality
 :canonical: space_flight.ai.Personality

@@ -16,6 +16,17 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger()
 
+#: The target dict entries whose change is a new decision (see think)
+_DECISION_KEYS = (
+    "target_id",
+    # Changing formation position, for ships only
+    "formation_index",
+    # Switching weapon (e.g. bombs depleted -> guns)
+    "attack_mode",
+    # Switching secondary weapon (e.g. missiles -> rockets)
+    "launcher",
+)
+
 
 class GenericTactician:
     """
@@ -69,20 +80,9 @@ class GenericTactician:
         ) and (self.intent_sm.time_in_state_s >= commitment_time_s):
             self.time_since_update_s = 0.0
             intent, target_dict = self.update_intent()
-            if (
-                (intent != self.intent_sm.state)
-                or (target_dict.get("target_id") != self.target_dict.get("target_id"))
-                or (  # Changing formation position, for ships only
-                    target_dict.get("formation_index")
-                    != self.target_dict.get("formation_index")
-                )
-                or (  # Switching weapon (e.g. bombs depleted -> guns)
-                    target_dict.get("attack_mode")
-                    != self.target_dict.get("attack_mode")
-                )
-                or (  # Switching secondary weapon (e.g. missiles -> rockets)
-                    target_dict.get("launcher") != self.target_dict.get("launcher")
-                )
+            if intent != self.intent_sm.state or any(
+                target_dict.get(key) != self.target_dict.get(key)
+                for key in _DECISION_KEYS
             ):
                 if self.debug:
                     LOGGER.info(
@@ -141,19 +141,7 @@ class GenericTactician:
         # Assemble all contributions
         threat_scores = interact_mask * distance_scores * forward_scores
 
-        # Select highest scoring prey
-        max_threat_score_idx = np.nanargmax(threat_scores)
-        max_threat_score = threat_scores[max_threat_score_idx]
-
-        if max_threat_score == 0:
-            return {"score": 0, "target_id": None}
-
-        highest_threat_dict = {
-            "score": max_threat_score,
-            "target_id": self.game.interactions.actors[max_threat_score_idx].id,
-        }
-
-        return highest_threat_dict
+        return self._best_scored(threat_scores)
 
     def evaluate_preys(self, my_actor_index: int) -> dict:
         """
@@ -201,19 +189,41 @@ class GenericTactician:
             * primary_target_scores
         )
 
-        # Select highest scoring prey
-        max_prey_score_idx = np.nanargmax(prey_scores)
-        max_prey_score = prey_scores[max_prey_score_idx]
+        return self._best_scored(prey_scores)
 
-        if max_prey_score == 0:
+    def _best_scored(self, scores: np.ndarray) -> dict:
+        """
+        :param scores: A score per interactions slot
+        :return: {"score", "target_id"} of the highest scoring actor (target_id
+            None if every score is 0)
+        """
+        best_idx = np.nanargmax(scores)
+        best_score = scores[best_idx]
+        if best_score == 0:
             return {"score": 0, "target_id": None}
-
-        best_prey_dict = {
-            "score": max_prey_score,
-            "target_id": self.game.interactions.actors[max_prey_score_idx].id,
+        return {
+            "score": best_score,
+            "target_id": self.game.interactions.actors[best_idx].id,
         }
 
-        return best_prey_dict
+    def _is_in_poor_shape(self) -> bool:
+        """Whether the bot's ship is in too poor a shape to keep fighting."""
+        return (
+            self.evaluate_fighting_shape()
+            <= self.personality["tactician"]["min_fighting_shape"]
+        )
+
+    def _team_center_intent(self, intent: Intent) -> tuple[Intent, dict]:
+        """
+        :param intent: DISENGAGE (from the foes' centre) or REGROUP (on the
+            friends' centre)
+        :return: The intent, and the team centre's target dict (its target_id
+            is the intent)
+        """
+        team = "foes" if intent == Intent.DISENGAGE else "friends"
+        center_dict = self.evaluate_team_center(team=team)
+        center_dict["target_id"] = intent
+        return intent, center_dict
 
     def compute_alignment_score(
         self, alignments: np.ndarray, is_hunter: bool
@@ -279,17 +289,16 @@ class GenericTactician:
         if formation_index == 0:
             # Self is the leader of the formation. Not applicable
             return {"active": False}
-        else:
-            # Self belongs to a formation and is not the leader :
-            # Activate formation and get the corresponding position
-            return {
-                "active": True,
-                "target_id": self.pawn.formation.ship_ids[0],
-                "formation_index": formation_index,
-                "target_relative_position": self.pawn.formation.relative_positions[
-                    formation_index
-                ],
-            }
+        # Self belongs to a formation and is not the leader :
+        # Activate formation and get the corresponding position
+        return {
+            "active": True,
+            "target_id": self.pawn.formation.ship_ids[0],
+            "formation_index": formation_index,
+            "target_relative_position": self.pawn.formation.relative_positions[
+                formation_index
+            ],
+        }
 
     def evaluate_orders(self) -> tuple[Intent, dict] | None:
         """

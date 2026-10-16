@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,8 +16,6 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.ship import Ship
     from space_flight.game.flight_state import FlightState
-
-LOGGER = logging.getLogger()
 
 
 class TrackingMount(SubSystem):

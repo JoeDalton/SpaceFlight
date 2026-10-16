@@ -113,6 +113,24 @@ def magnitude(vector: np.ndarray) -> float:
     return math.sqrt(float(np.dot(vector, vector)))
 
 
+def clamp(value: float, minimum: float, maximum: float) -> float:
+    """
+    :return: value clamped to [minimum, maximum] (exactly min(max(value,
+        minimum), maximum))
+    """
+    return min(max(value, minimum), maximum)
+
+
+def project_on_plane(vector: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    """
+    :param vector: A vector
+    :param normal: The plane's unit normal
+    :return: The vector's projection on the plane (its component along the
+        normal removed)
+    """
+    return vector - np.dot(vector, normal) * normal
+
+
 def safe_angle_rad(angle_rad: float) -> float:
     """
     Wraps an angle into [-pi, pi[

@@ -6,12 +6,14 @@ All tests bypass __init__ via object.__new__() and populate the instance with
 the minimal attributes consumed by each method.
 """
 
+import functools
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
+from space_flight.actors.fighter import Fighter
 from space_flight.ai import Intent, Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.generic.generic_ship_navigator import NO_DIRECTION
@@ -59,6 +61,10 @@ def make_fighter_navigator(
     nav.pawn.position = np.zeros(3) if pawn_position is None else pawn_position.copy()
     nav.pawn.max_speed_mps = 500.0
     nav.pawn.parent = MagicMock()
+    # The real selection logic, reading the fake pawn's selected_secondary
+    nav.pawn.selected_secondary_with_stock = functools.partial(
+        Fighter.selected_secondary_with_stock, nav.pawn
+    )
     nav.personality = personality
     nav.debug = False
     nav.behaviour_sm = StateMachine("idle", clock=clock)
@@ -1392,10 +1398,10 @@ def test_no_flare_without_flares(flare_launcher):
 def test_time_in_spiral_accrues_the_time_between_thinks():
     """Checked every 0.1 s instead of every frame, a spiral lasts as long."""
     extend = Personality.FIGHTER_DEFAULT["navigator"]["extend"]
-    in_spiral = dict(
-        longitudinal_speed_scalar_mps=0.0,
-        lateral_speed_scalar_mps=2.0 * extend["maximum_lateral_speed_mps"] + 1.0,
-    )
+    in_spiral = {
+        "longitudinal_speed_scalar_mps": 0.0,
+        "lateral_speed_scalar_mps": 2.0 * extend["maximum_lateral_speed_mps"] + 1.0,
+    }
     per_frame, per_think = make_fighter_navigator(), make_fighter_navigator()
     per_frame.think_dt_s = 1.0 / 60.0
     per_think.think_dt_s = 0.1

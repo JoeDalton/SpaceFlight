@@ -48,7 +48,7 @@ fire/smoke billboard system on top of `ParticleBuffer`.
 
 - **`_FireSmokeBuffer`** applies the shared
   [`explosion.{vert,frag}`](shaders.md#explosion-particle-shaders) shader
-  (loaded once by `_explosion_shader()`), sets its layer's `uFadein`, and
+  (loaded once by `load_glsl_shader()`), sets its layer's `uFadein`, and
   `spawn_particle()` resolves a random atlas tile index to its UV rect for the
   `tile_rect` column. Fire and smoke differ only by atlas and `uFadein`.
 - **`FireSmokePool`** (`game.fire_smoke_pool`) owns the fire and smoke buffers
@@ -181,8 +181,7 @@ sound:
   category (player crash short/long, laser on player hull/shield, distant
   target hit, terrain hit). The pools come from `build_sound_pool` in
   [`global_architecture/asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py)
-  and handle random pitch and slot reuse (`get_sound`/`release_sound`);
-  `SFX.build_sound_pool()` is an unused legacy helper.
+  and handle random pitch and slot reuse (`get_sound`/`release_sound`).
 - **Distant impacts.** `distant_impact_hit()` (hits not on the player) uses an
   inverse-square falloff from `SOUND_VOLUME_REFERENCE_DISTANCE_M`, drops the
   sound beyond `MAX_SOUND_DISTANCE_M`, and multiplies by the per-surface

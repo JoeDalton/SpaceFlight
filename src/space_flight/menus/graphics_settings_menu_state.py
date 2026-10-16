@@ -14,13 +14,8 @@ the Save button). See
 
 from __future__ import annotations
 
-import copy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from direct.gui.DirectGui import DirectFrame, DirectLabel
-from panda3d.core import TextNode
-
-from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.graphics_settings import (
     _MAX_MIRROR,
     _MAX_REFLECTION,
@@ -33,11 +28,17 @@ from space_flight.global_architecture.graphics_settings import (
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
 )
+from space_flight.global_architecture.yaml_files import load_yaml
 from space_flight.menus.menu_utils import (
     CustomButton,
     CustomSlider,
-    MenuNavigator,
-    ScrollableList,
+    ScrollingSettingsMenuState,
+    get_by_path,
+    make_action_buttons,
+    make_settings_chrome,
+    make_warning,
+    section_label,
+    set_by_path,
 )
 
 if TYPE_CHECKING:
@@ -95,23 +96,7 @@ _WARNING_Y = -0.8
 
 def _section_label(name: str) -> str:
     """Return the display header for a top-level graphics.yaml section."""
-    return _SECTION_LABELS.get(name, name.replace("_", " ").title())
-
-
-def _get_by_path(cfg: dict, path: tuple) -> Any:
-    """Return the value at *path* (a tuple of keys) within nested dict *cfg*."""
-    d = cfg
-    for key in path:
-        d = d[key]
-    return d
-
-
-def _set_by_path(cfg: dict, path: tuple, value: Any):
-    """Set the value at *path* (a tuple of keys) within nested dict *cfg*."""
-    d = cfg
-    for key in path[:-1]:
-        d = d[key]
-    d[path[-1]] = value
+    return section_label(name, _SECTION_LABELS)
 
 
 def _pct(value: float) -> str:
@@ -119,7 +104,7 @@ def _pct(value: float) -> str:
     return f"{round(value * 100)}%"
 
 
-class GraphicsSettingsMenuState(BaseState):
+class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
     """
     Full-screen overlay for viewing and editing graphics options.
 
@@ -128,58 +113,17 @@ class GraphicsSettingsMenuState(BaseState):
     """
 
     def __init__(self, app: SpaceFlightSimulator):
-        super().__init__(app)
-        self.working_config: dict = {}
-        # Display-mode button group: list of (value, CustomButton).
-        self.mode_buttons: list = []
-        # Quality sliders keyed by config path, plus their value labels.
-        self.sliders: dict[tuple, CustomSlider] = {}
-        self.slider_value_labels: dict[tuple, DirectLabel] = {}
-        self.checkboxes: dict[tuple, object] = {}
-        # Navigable scroll rows: (row index, widgets)
-        self.navigable_rows: list[tuple[int, list]] = []
-        self.menu_navigator: MenuNavigator | None = None
-        self.scroll_list = ScrollableList(
+        super().__init__(
             app,
             row_height=_ROW_HEIGHT,
             frame_top=_FRAME_TOP,
             frame_bottom=_FRAME_BOTTOM,
         )
+        # Display-mode button group: list of (value, CustomButton).
+        self.mode_buttons: list = []
 
-    # ------------------------------------------------------------------
-    # State lifecycle
-    # ------------------------------------------------------------------
-
-    def enter(self):
-        """Take a working copy of the current settings and build the UI."""
-        self.working_config = copy.deepcopy(self.app.graphics_settings.config)
-        self.build_static_ui()
-        self.rebuild_scroll()
-        rows, scroll_rows = self.navigation_rows()
-        self.menu_navigator = MenuNavigator(
-            self.app,
-            rows,
-            on_back=self.cancel,
-            scroll_list=self.scroll_list,
-            scroll_rows=scroll_rows,
-        )
-        self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
-        self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
-
-    def exit(self):
-        """Destroy every UI element and force a frame render."""
-        self.menu_navigator.remove()
-        self.menu_navigator = None
-        self.app.ignore("wheel_up")
-        self.app.ignore("wheel_down")
-        self.scroll_list.destroy()
-        self.title.destroy()
-        self.bg.destroy()
-        self.warning.destroy()
-        self.default_btn.destroy()
-        self.cancel_btn.destroy()
-        self.save_btn.destroy()
-        self.force_render()
+    def settings(self):
+        return self.app.graphics_settings
 
     # ------------------------------------------------------------------
     # UI construction
@@ -189,58 +133,26 @@ class GraphicsSettingsMenuState(BaseState):
         """Build the background, title, warning, and the Save / Cancel /
         Default action buttons. Called once per :meth:`enter`; only the
         scrollable content is rebuilt afterwards."""
-        self.bg = DirectFrame(
-            frameSize=(self.app.a2dLeft, self.app.a2dRight, -1.0, 1.0),
-            frameColor=(0.04, 0.04, 0.1, 0.97),
+        self.bg, self.title = make_settings_chrome(self.app, "Graphics Settings")
+        self.warning = make_warning(
+            "Render & quality changes apply on the next level load.", _WARNING_Y
         )
-        self.bg.setTransparency(True)
-
-        self.title = DirectLabel(
-            text="Graphics Settings",
-            scale=0.1,
-            pos=(0, 0, 0.88),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1, 1, 1, 1),
-            text_shadow=(0, 0, 0, 0.75),
-            text_shadowOffset=(0.05, 0.05),
-            text_align=TextNode.ACenter,
+        self.default_btn, self.cancel_btn, self.save_btn = make_action_buttons(
+            self.app,
+            [
+                ("Default", self.load_default),
+                ("Cancel", self.cancel),
+                ("Save", self.save),
+            ],
         )
-        self.title.setTransparency(True)
-
-        self.warning = DirectLabel(
-            text="Render & quality changes apply on the next level load.",
-            scale=0.045,
-            pos=(0, 0, _WARNING_Y),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1.0, 0.85, 0.4, 1.0),
-            text_align=TextNode.ACenter,
-        )
-        self.warning.setTransparency(True)
-
-        self.default_btn = CustomButton(
-            app=self.app,
-            pos=(-0.7, 0, -0.91),
-            command=self.load_default,
-            text="Default",
-            scale=0.28,
-            layout="center",
-        )
-        self.cancel_btn = CustomButton(
-            app=self.app,
-            pos=(0.0, 0, -0.91),
-            command=self.cancel,
-            text="Cancel",
-            scale=0.28,
-            layout="center",
-        )
-        self.save_btn = CustomButton(
-            app=self.app,
-            pos=(0.7, 0, -0.91),
-            command=self.save,
-            text="Save",
-            scale=0.28,
-            layout="center",
-        )
+        self.static_widgets = [
+            self.title,
+            self.bg,
+            self.warning,
+            self.default_btn,
+            self.cancel_btn,
+            self.save_btn,
+        ]
 
     def rebuild_scroll(self):
         """
@@ -282,8 +194,7 @@ class GraphicsSettingsMenuState(BaseState):
                 widgets = [self.checkboxes[row["path"]]]
             self.navigable_rows.append((i, widgets))
 
-        if self.menu_navigator is not None:
-            self.menu_navigator.set_rows(*self.navigation_rows())
+        self._refresh_navigator()
 
     def navigation_rows(self) -> tuple[list[list], list[int | None]]:
         """
@@ -314,23 +225,15 @@ class GraphicsSettingsMenuState(BaseState):
 
     def _add_value_label(self, path: tuple, text: str, y: float):
         """Create and register the value readout to the right of a slider."""
-        label = DirectLabel(
-            parent=self.scroll_list.content,
-            text=text,
-            scale=0.05,
-            pos=(_VALUE_LABEL_X, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.7, 0.85, 1.0, 1.0),
-            text_align=TextNode.ALeft,
+        self.slider_value_labels[path] = self.scroll_list.add_value_label(
+            text, _VALUE_LABEL_X, y
         )
-        label.setTransparency(True)
-        self.slider_value_labels[path] = label
 
     def add_slider_row(self, path: tuple, y: float):
         """Add a continuous quality slider row (label, slider, % value)."""
         label, value_range = _SCALE_SLIDERS[path]
         self.scroll_list.add_row_label(label, y)
-        value = _get_by_path(self.working_config, path)
+        value = get_by_path(self.working_config, path)
         self.sliders[path] = CustomSlider(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
@@ -348,7 +251,7 @@ class GraphicsSettingsMenuState(BaseState):
         label, values, labels = _DISCRETE_SLIDERS[path]
         self.scroll_list.add_row_label(label, y)
         # sanitise() guarantees a known value, so this cannot raise.
-        idx = values.index(_get_by_path(self.working_config, path))
+        idx = values.index(get_by_path(self.working_config, path))
         self.sliders[path] = CustomSlider(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
@@ -364,10 +267,10 @@ class GraphicsSettingsMenuState(BaseState):
 
     def add_checkbox_row(self, path: tuple, label: str, y: float):
         """Add a boolean setting label and checkbox to the scroll canvas."""
-        self.scroll_list.add_row_label(label, y)
-        self.checkboxes[path] = self.scroll_list.add_checkbox(
+        self.checkboxes[path] = self.scroll_list.add_checkbox_row(
+            label,
             y,
-            _get_by_path(self.working_config, path),
+            get_by_path(self.working_config, path),
             self.on_checkbox_toggle,
             extraArgs=[path],
         )
@@ -434,7 +337,7 @@ class GraphicsSettingsMenuState(BaseState):
     def on_scale_slider(self, path: tuple):
         """Store a continuous slider's value and refresh its % label."""
         value = self.sliders[path].get_value()
-        _set_by_path(self.working_config, path, value)
+        set_by_path(self.working_config, path, value)
         self.slider_value_labels[path]["text"] = _pct(value)
 
     def on_discrete_slider(self, path: tuple):
@@ -449,20 +352,16 @@ class GraphicsSettingsMenuState(BaseState):
         _label, values, labels = _DISCRETE_SLIDERS[path]
         idx = int(round(self.sliders[path].get_value()))
         idx = max(0, min(len(values) - 1, idx))
-        _set_by_path(self.working_config, path, values[idx])
+        set_by_path(self.working_config, path, values[idx])
         self.slider_value_labels[path]["text"] = labels[idx]
 
     def on_checkbox_toggle(self, status: int, path: tuple):
         """Store a toggled checkbox value straight into :attr:`working_config`."""
-        _set_by_path(self.working_config, path, bool(status))
+        set_by_path(self.working_config, path, bool(status))
 
     # ------------------------------------------------------------------
     # Button callbacks
     # ------------------------------------------------------------------
-
-    def wheel_scroll(self, direction: float):
-        """Scroll the option list by *direction* scroll steps (negative = up)."""
-        self.scroll_list.wheel_scroll(direction)
 
     def save(self):
         """Write the config, apply window mode live, and return to the caller."""
@@ -470,13 +369,9 @@ class GraphicsSettingsMenuState(BaseState):
         self.app.graphics_manager.apply_window_settings()
         self.app.state_manager.pop()
 
-    def cancel(self):
-        """Discard all unsaved changes and return to the caller."""
-        self.app.state_manager.pop()
-
     def load_default(self):
         """Reload the factory defaults into the working config and rebuild rows."""
         self.working_config = GraphicsSettings.sanitise(
-            GraphicsSettings.load_file(DEFAULT_GRAPHICS_FILE)
+            load_yaml(DEFAULT_GRAPHICS_FILE)
         )
         self.rebuild_scroll()

@@ -122,8 +122,7 @@ docstring has the overview):
   `reflection_scale`, so it tracks the internal render resolution rather than
   the window. `uReflUVScale` corrects for power-of-two texture padding and is
   refreshed from the real texture size once the buffer is realized: the default
-  pipeline pads, simplepbr (currently disabled in
-  `global_architecture/simulator.py`) does not.
+  pipeline pads, simplepbr (not used) does not.
 - `attach_collision_plane` registers a flat terrain plane at Z=0 (see
   [docs/game.md](game.md)) so ships can crash into the water.
 

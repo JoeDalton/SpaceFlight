@@ -1,4 +1,3 @@
-import logging
 from enum import Enum, auto
 
 import numpy as np
@@ -10,8 +9,6 @@ INTERACT_MAX_DISTANCE_M = 10000.0
 REFERENCE_ERROR_VELOCITY_MPS = 100
 ROLL_TOLERANCE = 1e-2
 HALF_PI = np.pi / 2
-
-LOGGER = logging.getLogger()
 
 
 class Intent(Enum):
@@ -44,6 +41,25 @@ class AttackMode(Enum):
     STRAFE = auto()
     ORBIT = auto()
     BOMB = auto()
+
+
+#: The pilot settings every ship personality starts from: the minimum throttle
+#: and the PID gains (proportional only, but for the throttle's)
+_SHIP_PILOT = {
+    "minimum_throttle": 0.2,
+    "yaw_kp": 1.0,
+    "yaw_ki": 0.0,
+    "yaw_kd": 0.0,
+    "pitch_kp": -1.0,
+    "pitch_ki": 0.0,
+    "pitch_kd": 0.0,
+    "roll_kp": -1.0,
+    "roll_ki": 0.0,
+    "roll_kd": 0.0,
+    "throttle_kp": 2.0,
+    "throttle_ki": 0.1,
+    "throttle_kd": 0.0,
+}
 
 
 class Personality:
@@ -230,25 +246,14 @@ class Personality:
             },
         },
         "pilot": {
+            **_SHIP_PILOT,
             "sample_time_s": 0.1,
-            "minimum_throttle": 0.2,
             # Energy protection below the navigator's speed floor: the yaw/pitch
             # rates ramp down to min_turn_authority over a range of
             # energy_protection_range_factor * max_speed_mps (see GenericShipPilot)
             "min_turn_authority": 0.8,
             "energy_protection_range_factor": 0.15,
-            "yaw_kp": 1.0,
-            "yaw_ki": 0.0,
-            "yaw_kd": 0.0,
-            "pitch_kp": -1.0,
-            "pitch_ki": 0.0,
-            "pitch_kd": 0.0,
             "roll_kp": -0.5,
-            "roll_ki": 0.0,
-            "roll_kd": 0.0,
-            "throttle_kp": 2.0,
-            "throttle_ki": 0.1,
-            "throttle_kd": 0.0,
         },
     }
 
@@ -287,35 +292,7 @@ class Personality:
     TRACTOR_BEAM_DEFAULT = {
         # Aiming (target selection / lead aim / steering) is identical to a
         # turret's: a tractor beam is just another tracking mount.
-        "tactician": {
-            "min_engagement_score": 0.5,
-            "primary_target_engagement_multiplier": 5.0,
-            "hunter_cutoff_distance": 900.0,
-            "hunter_angular_focus": 0.3,
-            "intent_update_delay": 0.5,
-            "commitment_times": {
-                Intent.ENGAGE: 10.0,
-                Intent.IDLE: 0.1,
-            },
-        },
-        "navigator": {
-            "fire": {
-                "maximum_distance_m": 1000,
-                "minimum_cos_angle": np.cos(np.deg2rad(5)),
-            },
-            "attack": {
-                "lead_time_s": 0.1,
-            },
-        },
-        "pilot": {
-            "sample_time_s": 0.1,
-            "yaw_kp": 3.0,
-            "yaw_ki": 0.0,
-            "yaw_kd": 0.0,
-            "pitch_kp": -3.0,
-            "pitch_ki": 0.0,
-            "pitch_kd": 0.0,
-        },
+        **TURRET_DEFAULT,
         # Grab behaviour (as opposed to the projector's fixed hardware specs, which
         # live in its model config): how long it commits to and holds a prey, and
         # the relative speed at which the prey wrenches free.
@@ -369,22 +346,7 @@ class Personality:
                 "min_turn_radius_m": 400.0,
             },
         },
-        "pilot": {
-            "sample_time_s": 0.2,
-            "minimum_throttle": 0.2,
-            "yaw_kp": 1.0,
-            "yaw_ki": 0.0,
-            "yaw_kd": 0.0,
-            "pitch_kp": -1.0,
-            "pitch_ki": 0.0,
-            "pitch_kd": 0.0,
-            "roll_kp": -1.0,
-            "roll_ki": 0.0,
-            "roll_kd": 0.0,
-            "throttle_kp": 2.0,
-            "throttle_ki": 0.1,
-            "throttle_kd": 0.0,
-        },
+        "pilot": {**_SHIP_PILOT, "sample_time_s": 0.2},
     }
 
     # A scripted capital ship (e.g. a star destroyer) has no tactician (it always
@@ -402,22 +364,7 @@ class Personality:
                 "progress_epsilon_m": 5.0,
             },
         },
-        "pilot": {
-            "sample_time_s": 0.5,
-            "minimum_throttle": 0.2,
-            "yaw_kp": 1.0,
-            "yaw_ki": 0.0,
-            "yaw_kd": 0.0,
-            "pitch_kp": -1.0,
-            "pitch_ki": 0.0,
-            "pitch_kd": 0.0,
-            "roll_kp": -1.0,
-            "roll_ki": 0.0,
-            "roll_kd": 0.0,
-            "throttle_kp": 2.0,
-            "throttle_ki": 0.1,
-            "throttle_kd": 0.0,
-        },
+        "pilot": {**_SHIP_PILOT, "sample_time_s": 0.5},
     }
 
     # A guided missile has no tactician (it always engages the target given at

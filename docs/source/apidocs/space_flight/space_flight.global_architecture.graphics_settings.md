@@ -31,6 +31,10 @@
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._deep_merge
     :summary:
     ```
+* - {py:obj}`_clamp_float <space_flight.global_architecture.graphics_settings._clamp_float>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._clamp_float
+    :summary:
+    ```
 ````
 
 ### Data
@@ -39,10 +43,6 @@
 :class: autosummary longtable
 :align: left
 
-* - {py:obj}`LOGGER <space_flight.global_architecture.graphics_settings.LOGGER>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.LOGGER
-    :summary:
-    ```
 * - {py:obj}`GRAPHICS_FILE <space_flight.global_architecture.graphics_settings.GRAPHICS_FILE>`
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GRAPHICS_FILE
     :summary:
@@ -90,16 +90,6 @@
 ````
 
 ### API
-
-````{py:data} LOGGER
-:canonical: space_flight.global_architecture.graphics_settings.LOGGER
-:value: >
-   'getLogger(...)'
-
-```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.LOGGER
-```
-
-````
 
 ````{py:data} GRAPHICS_FILE
 :canonical: space_flight.global_architecture.graphics_settings.GRAPHICS_FILE
@@ -218,6 +208,13 @@
 ```
 ````
 
+````{py:function} _clamp_float(value, default: float, minimum: float, maximum: float) -> float
+:canonical: space_flight.global_architecture.graphics_settings._clamp_float
+
+```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._clamp_float
+```
+````
+
 `````{py:class} GraphicsSettings()
 :canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings
 
@@ -229,15 +226,6 @@
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.__init__
 ```
-
-````{py:method} load_file(path: pathlib.Path) -> dict
-:canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.load_file
-:staticmethod:
-
-```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.load_file
-```
-
-````
 
 ````{py:method} load() -> dict
 :canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.load
@@ -251,14 +239,6 @@
 :canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.save
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.save
-```
-
-````
-
-````{py:method} reset_to_default() -> dict
-:canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.reset_to_default
-
-```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.reset_to_default
 ```
 
 ````
