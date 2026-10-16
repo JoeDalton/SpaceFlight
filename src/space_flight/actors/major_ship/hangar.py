@@ -10,6 +10,7 @@ import quaternion
 from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.ship import load_ship_configuration
 from space_flight.ai.formation import Formation
+from space_flight.utils import project_on_plane
 
 if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
@@ -144,18 +145,14 @@ class Hangar(SubSystem):
         self._launch_serial = 0
         self._next_launch_s = -np.inf
 
-        # Visible geometry: a placeholder box matching the collider (the stock
-        # unit cube spans 0..1), flat-shaded like the other placeholder
-        # subsystems to be visible under any lighting.
-        # TODO: swap for a proper hangar bay model.
-        self.model = self.game.app.loader.loadModel("models/box")
-        self.model.setTextureOff(1)
-        self.model.setColor(0.3, 0.9, 0.3, 1.0)
-        self.model.setScale(*(2.0 * self.half_extents_m))
-        self.model.setPos(*(-self.half_extents_m))
-        self.model.reparentTo(self.node)
-        self.model.setShaderOff()
-        self.model.setLightOff()
+        # A placeholder box matching the collider (the stock unit cube spans
+        # 0..1). TODO: swap for a proper hangar bay model.
+        self._attach_placeholder_model(
+            "models/box",
+            (0.3, 0.9, 0.3),
+            2.0 * self.half_extents_m,
+            position=-self.half_extents_m,
+        )
 
         self.add_task(method=self.update)
 
@@ -278,7 +275,7 @@ class Hangar(SubSystem):
         forward = body_to_world @ self.launch_direction
         ship_axes = (body_to_world[:, 1], body_to_world[:, 2], body_to_world[:, 0])
         reference = min(ship_axes, key=lambda axis: abs(np.dot(axis, forward)))
-        up = reference - np.dot(reference, forward) * forward
+        up = project_on_plane(reference, forward)
         up /= np.linalg.norm(up)
         right = np.cross(forward, up)
         return quaternion.as_float_array(

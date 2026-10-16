@@ -7,7 +7,7 @@ import numpy as np
 
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent, Personality
 from space_flight.ai.generic.generic_navigator import GenericNavigator
-from space_flight.utils import magnitude
+from space_flight.utils import magnitude, project_on_plane
 
 if TYPE_CHECKING:
     from space_flight.actors.ordnance import Ordnance
@@ -69,9 +69,7 @@ class MissileNavigator(GenericNavigator):
         relative_velocity = (
             np.asarray(getattr(target, "speed", _ZERO3), dtype=float) - self.pawn.speed
         )
-        lateral_speed_vector = (
-            relative_velocity - np.dot(relative_velocity, direction) * direction
-        )
+        lateral_speed_vector = project_on_plane(relative_velocity, direction)
         return (
             self.compute_constant_angle_pursuit(
                 direction=direction,

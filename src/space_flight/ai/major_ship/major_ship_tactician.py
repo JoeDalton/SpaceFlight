@@ -37,11 +37,8 @@ class MajorShipTactician(GenericTactician):
         :return: The intent and its target dict
         """
         # Check if the bot's ship is in good enough shape to continue fighting
-        fighting_shape = self.evaluate_fighting_shape()
-        if fighting_shape <= self.personality["tactician"]["min_fighting_shape"]:
-            foes_center_dict = self.evaluate_team_center(team="foes")
-            foes_center_dict["target_id"] = Intent.DISENGAGE
-            return Intent.DISENGAGE, foes_center_dict
+        if self._is_in_poor_shape():
+            return self._team_center_intent(Intent.DISENGAGE)
 
         # Placeholder trigger: engagement is scenario-scripted. TODO derive it
         # from threat scoring, so capital ships pick their own orbit targets.
@@ -55,6 +52,4 @@ class MajorShipTactician(GenericTactician):
             return orders
 
         # Nothing specific to do for now. Regroup with friends
-        friends_center_dict = self.evaluate_team_center(team="friends")
-        friends_center_dict["target_id"] = Intent.REGROUP
-        return Intent.REGROUP, friends_center_dict
+        return self._team_center_intent(Intent.REGROUP)

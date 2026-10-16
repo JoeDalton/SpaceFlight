@@ -10,7 +10,7 @@ from space_flight.actors.pawn import Pawn
 from space_flight.ai import TARGET_DISTANCE_TOLERANCE_M, Intent
 from space_flight.ai.collision_sensor import CollisionSensor
 from space_flight.ai.generic.generic_navigator import GenericNavigator
-from space_flight.utils import magnitude, smooth_step_down
+from space_flight.utils import clamp, magnitude, smooth_step_down
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -183,16 +183,10 @@ class GenericShipNavigator(GenericNavigator):
         :param target_dict: A dictionary with the target's position
         :return: The direction to point to and the desired speed
         """
-        target_relative_position = target_dict["position"] - self.pawn.position
-        target_distance = magnitude(target_relative_position)
-
-        # Case where the target is at zero distance
-        if target_distance < TARGET_DISTANCE_TOLERANCE_M:
-            return NO_DIRECTION
-
-        return (
-            target_relative_position / target_distance,
+        return self._head_for(
+            target_dict["position"],
             self.personality["navigator"]["regroup"]["speed_mps"],
+            away=False,
         )
 
     # %% ==== DISENGAGE ====
@@ -204,16 +198,32 @@ class GenericShipNavigator(GenericNavigator):
         :param target_dict: A dictionary with the target's position
         :return: The direction to point to and the desired speed
         """
-        target_relative_position = target_dict["position"] - self.pawn.position
+        return self._head_for(
+            target_dict["position"],
+            self.personality["navigator"]["speeding"]["speed_mps"],
+            away=True,
+        )
+
+    def _head_for(
+        self, position: np.ndarray, speed_mps: float, away: bool
+    ) -> Tuple[np.ndarray, float]:
+        """
+        :param position: A world position
+        :param speed_mps: The desired speed
+        :param away: Whether to flee from the position rather than head to it
+        :return: The direction to point to and the desired speed (no direction
+            if the ship is already at the position)
+        """
+        target_relative_position = position - self.pawn.position
         target_distance = magnitude(target_relative_position)
 
         # Case where the target is at zero distance
         if target_distance < TARGET_DISTANCE_TOLERANCE_M:
             return NO_DIRECTION
 
-        fleeing_direction = -target_relative_position / target_distance
-
-        return fleeing_direction, self.personality["navigator"]["speeding"]["speed_mps"]
+        if away:
+            target_relative_position = -target_relative_position
+        return target_relative_position / target_distance, speed_mps
 
     # %% ==== PATROL ====
 
@@ -361,17 +371,10 @@ class GenericShipNavigator(GenericNavigator):
         #     leader.pqr, (position_in_formation - leader.position)
         # )
 
-        # Compute relative quantities
-        direction = np.float64(target_position - self.pawn.position)
-        distance_m = magnitude(direction)
-        if distance_m > TARGET_DISTANCE_TOLERANCE_M:
-            direction /= distance_m
-        else:
-            direction = np.zeros(3)
+        # Distance to the aimed point (none within the tolerance)
+        distance_m = magnitude(np.float64(target_position - self.pawn.position))
+        if distance_m <= TARGET_DISTANCE_TOLERANCE_M:
             distance_m = 0.0
-
-        relative_speed_vector = target_speed - self.pawn.speed
-        longitudinal_speed_scalar_mps = np.dot(relative_speed_vector, direction)
 
         # Compute Lead pursuit
         aim_vector = self.compute_lead_pursuit(
@@ -391,7 +394,7 @@ class GenericShipNavigator(GenericNavigator):
         pursuit_speed_mps = self.compute_follow_speed(
             distance_m=distance_m,
             target_speed_mps=target_speed_mps,
-            longitudinal_speed_scalar_mps=longitudinal_speed_scalar_mps,
+            longitudinal_speed_scalar_mps=0.0,  # unused (see compute_follow_speed)
             intent="formation",
         )
 
@@ -445,8 +448,9 @@ class GenericShipNavigator(GenericNavigator):
                 distance_m=distance_m, intent=intent
             )
         )
-        desired_speed_mps = min(
-            max(desired_speed_mps, self.compute_minimum_speed(intent)),
+        desired_speed_mps = clamp(
+            desired_speed_mps,
+            self.compute_minimum_speed(intent),
             self.pawn.max_speed_mps,
         )
         return desired_speed_mps

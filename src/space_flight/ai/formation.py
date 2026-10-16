@@ -58,6 +58,13 @@ class Formation:
         np.array([0, 4, 0]),
     ]
 
+    #: Formation shape -> its slot layout
+    TEMPLATES = {
+        "arrowhead": ARROWHEAD_POSITIONS,
+        "diamond": DIAMOND_POSITIONS,
+        "around_diamond": AROUND_DIAMOND_POSITIONS,
+    }
+
     def __init__(
         self,
         scale_m: float | None = None,
@@ -70,13 +77,8 @@ class Formation:
             shape = "arrowhead"
 
         # Select the template layout for the requested shape
-        if shape == "arrowhead":
-            template = self.ARROWHEAD_POSITIONS
-        elif shape == "diamond":
-            template = self.DIAMOND_POSITIONS
-        elif shape == "around_diamond":
-            template = self.AROUND_DIAMOND_POSITIONS
-        else:
+        template = self.TEMPLATES.get(shape)
+        if template is None:
             raise NotImplementedError(f"Unknown formation shape {shape}")
 
         # position * scale_m allocates new arrays: scaling the shared class-level
@@ -87,12 +89,9 @@ class Formation:
         """
         Returns the position of a given ship in the formation
         """
-        ship_index = None
-        for index, candidate_id in enumerate(self.ship_ids):
-            if ship_id == candidate_id:
-                ship_index = index
-                break
-        return ship_index
+        if ship_id not in self.ship_ids:
+            return None
+        return self.ship_ids.index(ship_id)
 
     def add_ship(self, ship: Pawn, leader: bool = False):
         """

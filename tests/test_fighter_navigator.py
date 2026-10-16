@@ -6,12 +6,14 @@ All tests bypass __init__ via object.__new__() and populate the instance with
 the minimal attributes consumed by each method.
 """
 
+import functools
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
+from space_flight.actors.fighter import Fighter
 from space_flight.ai import Intent, Personality
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.generic.generic_ship_navigator import NO_DIRECTION
@@ -59,6 +61,10 @@ def make_fighter_navigator(
     nav.pawn.position = np.zeros(3) if pawn_position is None else pawn_position.copy()
     nav.pawn.max_speed_mps = 500.0
     nav.pawn.parent = MagicMock()
+    # The real selection logic, reading the fake pawn's selected_secondary
+    nav.pawn.selected_secondary_with_stock = functools.partial(
+        Fighter.selected_secondary_with_stock, nav.pawn
+    )
     nav.personality = personality
     nav.debug = False
     nav.behaviour_sm = StateMachine("idle", clock=clock)

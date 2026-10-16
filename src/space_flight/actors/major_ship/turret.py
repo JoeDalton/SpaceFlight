@@ -3,11 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-import yaml
 
-from space_flight import DATAFILES_PATH
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.major_ship.tracking_mount import TrackingMount
+from space_flight.actors.ship import load_model_configuration
 from space_flight.ai import Personality
 from space_flight.ai.auto_aim import AutoAim
 from space_flight.global_architecture.gameplay_settings import (
@@ -58,9 +57,7 @@ class Turret(TrackingMount):
         personality: dict = Personality.TURRET_DEFAULT,
     ):
         # Load configuration first: it feeds the TrackingMount parameters below
-        filepath = DATAFILES_PATH / f"models/turrets/{turret_type}/configuration.yaml"
-        with open(filepath, "r") as f:
-            conf = yaml.safe_load(f)
+        conf = load_model_configuration("turrets", turret_type)
 
         super().__init__(
             game=game,

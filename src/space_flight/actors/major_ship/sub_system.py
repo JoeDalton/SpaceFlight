@@ -189,6 +189,36 @@ class SubSystem(Destructible):
             return False
         return getattr(self.mounted_on, "in_hyperspace", False)
 
+    def _attach_placeholder_model(
+        self,
+        model_path: str,
+        color: tuple[float, float, float],
+        scale: tuple[float, ...],
+        position: tuple[float, float, float] | None = None,
+    ):
+        """
+        Visible geometry: a placeholder shape matching the collider, so the
+        subsystem can be seen and targeted. Flat-shaded like the waypoint markers
+        (see ui/player_waypoints.py) to be visible under any lighting. Sets
+        :attr:`model`.
+
+        TODO: swap for proper per-subsystem 3D models.
+
+        :param model_path: The placeholder model
+        :param color: Its flat RGB colour
+        :param scale: Its scale (one factor, or one per axis)
+        :param position: Its position on the subsystem node, if not the origin
+        """
+        self.model = self.game.app.loader.loadModel(model_path)
+        self.model.setTextureOff(1)
+        self.model.setColor(*color, 1.0)
+        self.model.setScale(*scale)
+        if position is not None:
+            self.model.setPos(*position)
+        self.model.reparentTo(self.node)
+        self.model.setShaderOff()
+        self.model.setLightOff()
+
     def take_hit(
         self,
         damage: float,

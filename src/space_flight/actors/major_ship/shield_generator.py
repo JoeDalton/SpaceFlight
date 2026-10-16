@@ -54,14 +54,7 @@ class ShieldGenerator(SubSystem):
             name=name,
             ion_capacity=ion_capacity,
         )
-        # Visible geometry: a placeholder sphere matching the collider, so the
-        # subsystem can be seen and targeted. Flat-shaded like the waypoint
-        # markers (see ui/player_waypoints.py) to be visible under any lighting.
-        # TODO: swap for a proper per-subsystem 3D model.
-        self.model = self.game.app.loader.loadModel("models/misc/smiley")
-        self.model.setTextureOff(1)
-        self.model.setColor(0.6, 0.6, 0.65, 1.0)
-        self.model.setScale(self.hit_box_radius_m)
-        self.model.reparentTo(self.node)
-        self.model.setShaderOff()
-        self.model.setLightOff()
+        # A placeholder sphere matching the collider
+        self._attach_placeholder_model(
+            "models/misc/smiley", (0.6, 0.6, 0.65), (self.hit_box_radius_m,)
+        )

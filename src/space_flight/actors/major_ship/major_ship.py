@@ -13,13 +13,29 @@ from space_flight.actors.major_ship.shield import Shield
 from space_flight.actors.major_ship.shield_generator import ShieldGenerator
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.ship import Ship
-from space_flight.game.collisions import attach_collision_sphere
 from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
+
+
+def _sub_system_kwargs(
+    conf: dict, health: float = 1000.0, explosion_scale: float = 10.0
+) -> dict:
+    """
+    :param conf: A subsystem's entry in the ship config
+    :param health: Its default health
+    :param explosion_scale: Its default explosion scale
+    :return: The SubSystem keyword arguments every subsystem reads from it
+    """
+    return {
+        "relative_position": np.array(conf.get("relative_position", [0.0, 0.0, 0.0])),
+        "health": conf.get("health", health),
+        "explosion_scale": conf.get("explosion_scale", explosion_scale),
+        "ion_capacity": conf.get("ion_capacity"),
+    }
 
 
 class MajorShip(Ship):
@@ -68,13 +84,8 @@ class MajorShip(Ship):
             generator = ShieldGenerator(
                 game=self.game,
                 parent=self,
-                relative_position=np.array(
-                    gen_conf.get("relative_position", [0.0, 0.0, 0.0])
-                ),
+                **_sub_system_kwargs(gen_conf),
                 hit_box_radius_m=gen_conf.get("hit_box_radius_m", 5.0),
-                health=gen_conf.get("health", 1000.0),
-                explosion_scale=gen_conf.get("explosion_scale", 10.0),
-                ion_capacity=gen_conf.get("ion_capacity"),
             )
             self.sub_systems.append(generator)
             self.shield_generators.append(generator)
@@ -86,15 +97,10 @@ class MajorShip(Ship):
                 TargetingSystem(
                     game=self.game,
                     parent=self,
-                    relative_position=np.array(
-                        ts_conf.get("relative_position", [0.0, 0.0, 0.0])
-                    ),
+                    **_sub_system_kwargs(ts_conf),
                     hit_box_radius_m=ts_conf.get("hit_box_radius_m", 5.0),
-                    health=ts_conf.get("health", 1000.0),
-                    explosion_scale=ts_conf.get("explosion_scale", 10.0),
                     fire_rate_multiplier=ts_conf.get("fire_rate_multiplier", 2.0),
                     auto_aim_params=ts_conf.get("auto_aim", {}),
-                    ion_capacity=ts_conf.get("ion_capacity"),
                 )
             )
 
@@ -111,18 +117,7 @@ class MajorShip(Ship):
         )
 
         # Initialize collisions # TODO capsule/mesh/whatever relevant
-        self.hit_box_radius_m = self.conf["hit_box_radius_m"]
-        self.collision_sphere_np = attach_collision_sphere(
-            game=self.game,
-            name="ship",
-            radius=self.hit_box_radius_m,
-            collider_type="destructible",
-            parent_node=self.node,
-            parent_object=self,
-        )
-
-        # Set explosion size for death animation
-        self.explosion_scale = self.conf["explosion_scale"]
+        self._attach_hull_collider()
 
     def _build_hangars(self, sub_systems_conf: dict) -> list[Hangar]:
         """
@@ -137,14 +132,12 @@ class MajorShip(Ship):
                 Hangar(
                     game=self.game,
                     parent=self,
-                    relative_position=np.array(
-                        hangar_conf.get("relative_position", [0.0, 0.0, 0.0])
+                    **_sub_system_kwargs(
+                        hangar_conf, health=3000.0, explosion_scale=40.0
                     ),
                     half_extents_m=hangar_conf.get(
                         "half_extents_m", [20.0, 20.0, 10.0]
                     ),
-                    health=hangar_conf.get("health", 3000.0),
-                    explosion_scale=hangar_conf.get("explosion_scale", 40.0),
                     group_size=hangar_conf.get("group_size", 3),
                     launch_interval_s=hangar_conf.get("launch_interval_s", 1.5),
                     max_active=hangar_conf.get("max_active", 6),
@@ -154,7 +147,6 @@ class MajorShip(Ship):
                     launch_speed_mps=hangar_conf.get("launch_speed_mps", 30.0),
                     launch_margin_m=hangar_conf.get("launch_margin_m", 5.0),
                     name=f"hangar_{i}",
-                    ion_capacity=hangar_conf.get("ion_capacity"),
                 )
             )
         return hangars

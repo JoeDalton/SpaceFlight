@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import uuid
+from operator import attrgetter
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
@@ -51,6 +52,48 @@ TARGET_FILTERS = [
     "Fighters",
     "Waypoints",
     "",
+]
+
+
+def _category_is(category: str) -> Callable[[object], bool]:
+    """:return: Whether an actor is of the category"""
+    return lambda actor: getattr(actor, "category", None) == category
+
+
+_is_waypoint = _category_is("waypoint")
+
+#: Target filter -> whether a live actor passes it. The "Enemies" filter reads
+#: the interaction matrix instead.
+_TARGET_FILTER_TESTS = {
+    # Everything except waypoint markers (those are Waypoints-mode only).
+    "All": lambda actor: not _is_waypoint(actor),
+    "": lambda actor: not _is_waypoint(actor),
+    # Only waypoint markers.
+    "Waypoints": _is_waypoint,
+    "Capital ships": _category_is("capital_ship"),
+    # Includes turrets: a turret is a subsystem too, and it also matches the
+    # dedicated "Turrets" filter.
+    "Subsystems": _category_is("sub_system"),
+    "Turrets": lambda actor: isinstance(actor, Turret),
+    "Fighters": _category_is("fighter"),
+}
+
+#: The player's recorded state: (variable name, attribute of the player)
+_RECORDED_STATE = [
+    ("player_throttle", attrgetter("throttle")),
+    ("player_yaw_rate_radps", attrgetter("yaw_rate")),
+    ("player_pitch_rate_radps", attrgetter("pitch_rate")),
+    ("player_roll_rate_radps", attrgetter("roll_rate")),
+    ("player_impact_force_n", attrgetter("pawn.impact_force_n")),
+    ("player_additional_force_n", attrgetter("pawn.additional_force_n")),
+    ("player_lift_n", attrgetter("pawn.lift_n")),
+    ("player_lift_body_n", attrgetter("pawn.lift_body_n")),
+    ("player_drag_n", attrgetter("pawn.drag_n")),
+    ("player_thrust_n", attrgetter("pawn.thrust_n")),
+    ("player_position_m", attrgetter("pawn.position")),
+    ("player_orientation_quat", attrgetter("pawn.orientation")),
+    ("player_speed_mps", attrgetter("pawn.speed")),
+    ("player_acceleration_mps2", attrgetter("pawn.acceleration_mps2")),
 ]
 
 
@@ -121,24 +164,17 @@ class Player:
                 game=self.game, pawn=self.pawn, debug=True
             )
 
-        # Initialize rear view mirror (needs a real window to render into;
-        # skipped headless, where there is nothing to display it on)
+        # Display-only parts, skipped headless (no window nor camera): the rear
+        # view mirror, the camera anchored to the player ship node, and the
+        # first-person low-health feedback.
+        self.rear_view_mirror = None
+        self.cockpit_fx = None
         if not self.game.headless:
             self.rear_view_mirror = RearViewMirror(
                 game=self.game, player_node=self.pawn.node
             )
-        else:
-            self.rear_view_mirror = None
-
-        # Anchor camera to player ship node (there is no camera headless)
-        if not self.game.headless:
             self.initialize_camera()
-
-        # First-person low-health feedback (display-only; player pawn only).
-        if not self.game.headless:
             self.cockpit_fx = CockpitFX(game=self.game, player=self)
-        else:
-            self.cockpit_fx = None
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
@@ -370,9 +406,7 @@ class Player:
         self.update_target_mask(player_actor_index=my_actor_index)
         # Case of no available targets
         if np.sum(self.target_mask) == 0:
-            self.pawn.target = None
-            self.pawn.target_id = None
-            self.pawn.target_idx = None
+            self._clear_target()
             return
 
         # available_indices are positions in the compacted live_actors list,
@@ -405,9 +439,7 @@ class Player:
         self.update_target_mask(player_actor_index=my_actor_index)
         # Case of no available targets
         if np.sum(self.target_mask) == 0:
-            self.pawn.target = None
-            self.pawn.target_id = None
-            self.pawn.target_idx = None
+            self._clear_target()
             return
         # Find the best prey
         distances = self.game.interactions.distances[
@@ -430,9 +462,7 @@ class Player:
         max_prey_score_idx = np.nanargmax(prey_scores)
         # Case of no interesting target
         if prey_scores[max_prey_score_idx] < 1e-4:
-            self.pawn.target = None
-            self.pawn.target_id = None
-            self.pawn.target_idx = None
+            self._clear_target()
             return
         self.set_target_from_actor_index(target_idx=max_prey_score_idx)
 
@@ -459,9 +489,13 @@ class Player:
         :param target_to_remove: The actor to clear if it is the current target
         """
         if self.pawn.target is target_to_remove:
-            self.pawn.target = None
-            self.pawn.target_id = None
-            self.pawn.target_idx = None
+            self._clear_target()
+
+    def _clear_target(self):
+        """Clear the player's current target."""
+        self.pawn.target = None
+        self.pawn.target_id = None
+        self.pawn.target_idx = None
 
     def update_target_mask(self, player_actor_index: int):
         """
@@ -470,59 +504,19 @@ class Player:
 
         :param player_actor_index: Index of the player in the interactions class
         """
-        if (self.target_filter == "All") or (self.target_filter == ""):
-            # Everything except waypoint markers (those are Waypoints-mode only).
-            self.target_mask = np.array(
-                [
-                    0.0 if getattr(actor, "category", None) == "waypoint" else 1.0
-                    for actor in self.game.interactions.live_actors
-                ]
-            )
-        elif self.target_filter == "Waypoints":
-            # Only waypoint markers.
-            self.target_mask = np.array(
-                [
-                    1.0 if getattr(actor, "category", None) == "waypoint" else 0.0
-                    for actor in self.game.interactions.live_actors
-                ]
-            )
-        elif self.target_filter == "Enemies":
+        live_actors = self.game.interactions.live_actors
+        if self.target_filter == "Enemies":
             self.target_mask = self.game.interactions.interact[
                 player_actor_index, self.game.interactions.alive
             ]
-        elif self.target_filter == "Capital ships":
+        elif self.target_filter in _TARGET_FILTER_TESTS:
+            passes = _TARGET_FILTER_TESTS[self.target_filter]
             self.target_mask = np.array(
-                [
-                    1.0 if getattr(actor, "category", None) == "capital_ship" else 0.0
-                    for actor in self.game.interactions.live_actors
-                ]
-            )
-        elif self.target_filter == "Subsystems":
-            # Includes turrets: a turret is a subsystem too, and it also
-            # matches the dedicated "Turrets" filter below.
-            self.target_mask = np.array(
-                [
-                    1.0 if getattr(actor, "category", None) == "sub_system" else 0.0
-                    for actor in self.game.interactions.live_actors
-                ]
-            )
-        elif self.target_filter == "Turrets":
-            self.target_mask = np.array(
-                [
-                    1.0 if isinstance(actor, Turret) else 0.0
-                    for actor in self.game.interactions.live_actors
-                ]
-            )
-        elif self.target_filter == "Fighters":
-            self.target_mask = np.array(
-                [
-                    1.0 if getattr(actor, "category", None) == "fighter" else 0.0
-                    for actor in self.game.interactions.live_actors
-                ]
+                [1.0 if passes(actor) else 0.0 for actor in live_actors]
             )
         else:
             # Fail safe for unrecognised filters
-            self.target_mask = np.zeros(len(self.game.interactions.live_actors))
+            self.target_mask = np.zeros(len(live_actors))
         # Whatever the filter, an actor in a hyperspace transit cannot be targeted
         in_hyperspace = np.array(
             [
@@ -560,48 +554,10 @@ class Player:
         """
         Records the player's state
         """
-        self.game.record.record(variable_name="player_throttle", variable=self.throttle)
-        self.game.record.record(
-            variable_name="player_yaw_rate_radps", variable=self.yaw_rate
-        )
-        self.game.record.record(
-            variable_name="player_pitch_rate_radps", variable=self.pitch_rate
-        )
-        self.game.record.record(
-            variable_name="player_roll_rate_radps", variable=self.roll_rate
-        )
-        self.game.record.record(
-            variable_name="player_impact_force_n", variable=self.pawn.impact_force_n
-        )
-        self.game.record.record(
-            variable_name="player_additional_force_n",
-            variable=self.pawn.additional_force_n,
-        )
-        self.game.record.record(
-            variable_name="player_lift_n", variable=self.pawn.lift_n
-        )
-        self.game.record.record(
-            variable_name="player_lift_body_n", variable=self.pawn.lift_body_n
-        )
-        self.game.record.record(
-            variable_name="player_drag_n", variable=self.pawn.drag_n
-        )
-        self.game.record.record(
-            variable_name="player_thrust_n", variable=self.pawn.thrust_n
-        )
-        self.game.record.record(
-            variable_name="player_position_m", variable=self.pawn.position
-        )
-        self.game.record.record(
-            variable_name="player_orientation_quat", variable=self.pawn.orientation
-        )
-        self.game.record.record(
-            variable_name="player_speed_mps", variable=self.pawn.speed
-        )
-        self.game.record.record(
-            variable_name="player_acceleration_mps2",
-            variable=self.pawn.acceleration_mps2,
-        )
+        for variable_name, attribute in _RECORDED_STATE:
+            self.game.record.record(
+                variable_name=variable_name, variable=attribute(self)
+            )
 
     def clean(self):
         """

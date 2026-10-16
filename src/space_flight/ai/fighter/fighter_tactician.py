@@ -65,11 +65,8 @@ class FighterTactician(GenericTactician):
             return Intent.EVADE, highest_threat_dict
 
         # Check if the bot's ship is in good enough shape to continue fighting
-        fighting_shape = self.evaluate_fighting_shape()
-        if fighting_shape <= self.personality["tactician"]["min_fighting_shape"]:
-            foes_center_dict = self.evaluate_team_center(team="foes")
-            foes_center_dict["target_id"] = Intent.DISENGAGE
-            return Intent.DISENGAGE, foes_center_dict
+        if self._is_in_poor_shape():
+            return self._team_center_intent(Intent.DISENGAGE)
 
         # Check if bot has a good enough target to engage
         best_prey_dict = self.evaluate_preys(my_actor_index)
@@ -86,9 +83,7 @@ class FighterTactician(GenericTactician):
             return orders
 
         # Nothing specific to do for now. Regroup with friends
-        friends_center_dict = self.evaluate_team_center(team="friends")
-        friends_center_dict["target_id"] = Intent.REGROUP
-        return Intent.REGROUP, friends_center_dict
+        return self._team_center_intent(Intent.REGROUP)
 
     def evaluate_missile_defense(self) -> tuple[Intent, dict] | None:
         """

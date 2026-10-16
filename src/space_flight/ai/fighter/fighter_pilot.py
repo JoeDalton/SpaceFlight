@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from space_flight.actors.pawn import Pawn
-from space_flight.ai import HALF_PI, ROLL_TOLERANCE, Personality
+from space_flight.ai import ROLL_TOLERANCE, Personality
 from space_flight.ai.generic.generic_ship_pilot import GenericShipPilot
-from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -44,55 +43,25 @@ class FighterPilot(GenericShipPilot):
         :return: the yaw, pitch and roll error, and the alignment error
         """
 
-        # Compute directions
-        target_direction_norm = magnitude(target_direction)
-        if target_direction_norm == 0.0:
-            yaw_error = 0.0
-            pitch_error = 0.0
-            roll_error = 0.0
-            cos_angle_to_target = 1.0
-        else:
-            # Find ship axes
-            # TODO remove normalization since the autonavigator is supposed to give
-            # either a null or a unit direction
-            target_direction = target_direction / target_direction_norm
-            ship_x = self.pawn.right
-            ship_y = self.pawn.forward
-            ship_z = self.pawn.up
-            # Project target direction on ship axes
-            target_x = np.dot(ship_x, target_direction)
-            target_y = np.dot(ship_y, target_direction)
-            target_z = np.dot(ship_z, target_direction)
-            # Find angle errors
-            yaw_error = np.arctan2(target_x, target_y)
-            pitch_error = np.arctan2(target_z, target_y)
+        projection = self._project_target(target_direction)
+        if projection is None:
+            return 0.0, 0.0, 0.0, 1.0
+        yaw_error, pitch_error, target_x, target_z, cos_angle_to_target = projection
 
-            # The vector to level +Z toward: the caller's up-reference (bomb belly
-            # aim) or, by default, scene up.
-            if up_reference is None:
-                level_reference = self.game.scene.up_direction
-                # Normal flight: bank into the turn, then add a light scene-leveling.
-                roll_error = np.arctan2(target_x, target_z)
-                if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
-                    roll_error = 0.0
-                level_weight = SCENE_ROLL_MULTIPLIER
-            else:
-                level_reference = up_reference
-                # Commanded attitude (bomb run): no banking, roll fully to level.
+        # The vector to level +Z toward: the caller's up-reference (bomb belly
+        # aim) or, by default, scene up.
+        if up_reference is None:
+            level_reference = self.game.scene.up_direction
+            # Normal flight: bank into the turn, then add a light scene-leveling.
+            roll_error = np.arctan2(target_x, target_z)
+            if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:
                 roll_error = 0.0
-                level_weight = 1.0
-
-            # Clamp before arccos: float error can push the dot of two unit
-            # vectors past ±1, and a NaN would poison the whole state.
-            right_dot_ref = np.dot(self.pawn.right, level_reference)
-            right_dot_ref = min(max(right_dot_ref, -1.0), 1.0)
-            is_up = np.dot(self.pawn.up, level_reference) >= 0
-            if is_up:
-                level_roll_error = HALF_PI - np.arccos(right_dot_ref)
-            else:
-                level_roll_error = HALF_PI + np.arccos(right_dot_ref)
-            roll_error += level_weight * level_roll_error
-            # Debug output
-            cos_angle_to_target = np.dot(ship_y, target_direction)
+            level_weight = SCENE_ROLL_MULTIPLIER
+        else:
+            level_reference = up_reference
+            # Commanded attitude (bomb run): no banking, roll fully to level.
+            roll_error = 0.0
+            level_weight = 1.0
+        roll_error += level_weight * self._level_roll_error(level_reference)
 
         return yaw_error, pitch_error, roll_error, cos_angle_to_target

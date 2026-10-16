@@ -813,7 +813,7 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
         patch.object(Ship, "__init__", _fake_ship_init),
         patch("space_flight.actors.fighter.AutoAim") as auto_aim_cls,
         patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
-        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.ship.attach_collision_sphere"),
         patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
     ):
         fighter = Fighter(
@@ -847,7 +847,7 @@ def test_init_arms_itself_with_the_given_loadout():
         patch.object(Ship, "__init__", _fake_ship_init),
         patch("space_flight.actors.fighter.AutoAim"),
         patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
-        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.ship.attach_collision_sphere"),
         patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
     ):
         fighter = Fighter(
@@ -873,7 +873,7 @@ def test_init_defaults_to_the_configured_loadout():
         patch.object(Ship, "__init__", _fake_ship_init),
         patch("space_flight.actors.fighter.AutoAim"),
         patch("space_flight.actors.fighter.LaserCannon") as laser_cannon_cls,
-        patch("space_flight.actors.fighter.attach_collision_sphere"),
+        patch("space_flight.actors.ship.attach_collision_sphere"),
         patch("space_flight.actors.fighter.OrdnanceLauncher") as launcher_cls,
     ):
         fighter = Fighter(game=game, parent=MagicMock(), ship_type="test")

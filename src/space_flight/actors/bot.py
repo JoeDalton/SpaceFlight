@@ -42,6 +42,17 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger()
 
+#: Mounted bot type -> its pawn class, the name of the pawn's model argument,
+#: and its personality
+_MOUNTS = {
+    "turret": (Turret, "turret_type", Personality.TURRET_DEFAULT),
+    "tractor_beam": (
+        TractorBeamProjector,
+        "projector_type",
+        Personality.TRACTOR_BEAM_DEFAULT,
+    ),
+}
+
 
 class Bot(Destructible):
     def __init__(
@@ -79,13 +90,16 @@ class Bot(Destructible):
             self.tactician = FighterTactician(
                 game=self.game, pawn=self.pawn, debug=debug_decisions
             )
-        elif self.bot_type == "turret":
-            # A turret is a subsystem of the ship it is mounted on (its team is
-            # taken from that ship); the bot only controls it.
-            self.pawn = Turret(
+        elif self.bot_type in _MOUNTS:
+            # A turret or a tractor beam projector is a subsystem of the ship it
+            # is mounted on (its team is taken from that ship); the bot only
+            # controls it. Both share the generic tracking-mount AI; only their
+            # personality (e.g. grab behaviour) and their pawn differ.
+            pawn_class, model_argument, personality = _MOUNTS[self.bot_type]
+            self.pawn = pawn_class(
                 game=self.game,
                 parent=self,
-                turret_type=pawn_model,
+                **{model_argument: pawn_model},
                 mounted_on=kwargs.get("parent_object"),
                 base_position=kwargs.get("base_position", np.zeros(3)),
                 base_orientation=kwargs.get(
@@ -93,49 +107,22 @@ class Bot(Destructible):
                 ),
                 ini_yaw_deg=kwargs.get("ini_yaw_deg", 0.0),
                 ini_pitch_deg=kwargs.get("ini_pitch_deg", -30),
-                personality=Personality.TURRET_DEFAULT,
-            )
-
-            self.pilot = TrackingMountPilot(game=self.game, pawn=self.pawn)
-            self.navigator = TrackingMountNavigator(
-                game=self.game, pawn=self.pawn, debug=debug_decisions
-            )
-            self.tactician = TrackingMountTactician(
-                game=self.game, pawn=self.pawn, debug=debug_decisions
-            )
-        elif self.bot_type == "tractor_beam":
-            # A tractor beam projector is, like a turret, a subsystem of its ship
-            # driven by this bot. It shares the generic tracking-mount AI; only its
-            # personality (grab behaviour) and its pawn differ.
-            self.pawn = TractorBeamProjector(
-                game=self.game,
-                parent=self,
-                projector_type=pawn_model,
-                mounted_on=kwargs.get("parent_object"),
-                base_position=kwargs.get("base_position", np.zeros(3)),
-                base_orientation=kwargs.get(
-                    "base_orientation", np.array([1.0, 0.0, 0.0, 0.0])
-                ),
-                ini_yaw_deg=kwargs.get("ini_yaw_deg", 0.0),
-                ini_pitch_deg=kwargs.get("ini_pitch_deg", -30),
-                personality=Personality.TRACTOR_BEAM_DEFAULT,
+                personality=personality,
             )
 
             self.pilot = TrackingMountPilot(
-                game=self.game,
-                pawn=self.pawn,
-                personality=Personality.TRACTOR_BEAM_DEFAULT,
+                game=self.game, pawn=self.pawn, personality=personality
             )
             self.navigator = TrackingMountNavigator(
                 game=self.game,
                 pawn=self.pawn,
-                personality=Personality.TRACTOR_BEAM_DEFAULT,
+                personality=personality,
                 debug=debug_decisions,
             )
             self.tactician = TrackingMountTactician(
                 game=self.game,
                 pawn=self.pawn,
-                personality=Personality.TRACTOR_BEAM_DEFAULT,
+                personality=personality,
                 debug=debug_decisions,
             )
         elif self.bot_type == "major_ship":
@@ -301,15 +288,23 @@ class Bot(Destructible):
 
         :param delay_s: Time to wait, hidden, before the drop starts
         """
-        self.hyperspace_transit = HyperspaceTransit(
+        self.hyperspace_transit = self._make_transit(arriving=True, delay_s=delay_s)
+        self.hyperspace_transit.begin()
+
+    def _make_transit(self, arriving: bool, delay_s: float = 0.0) -> HyperspaceTransit:
+        """
+        :param arriving: Whether the ship drops in (else it jumps out)
+        :param delay_s: Time to wait, hidden, before the transit starts
+        :return: The ship's hyperspace transit, sized for its bot type
+        """
+        return HyperspaceTransit(
             ship=self.pawn,
-            arriving=True,
+            arriving=arriving,
             distance_m=TRANSIT_DISTANCE_M[self.bot_type],
             duration_s=TRANSIT_DURATION_S[self.bot_type],
             clock=self.game.game_time.get_current_time,
             delay_s=delay_s,
         )
-        self.hyperspace_transit.begin()
 
     def _end_hyperspace_arrival(self):
         """The ship has arrived: back in the fight, it thinks on its next frame."""
@@ -342,9 +337,7 @@ class Bot(Destructible):
             self._end_hyperspace_arrival()
         # The AI is silenced: the ship no longer thinks
         self._release_think_slot()
-        sensor = getattr(self.navigator, "collision_sensor", None)
-        if sensor is not None:
-            sensor.set_active(False)
+        self._deactivate_collision_sensor()
         self._jump_at_s = self.game.game_time.get_current_time() + spool_s
 
     def _spool_hyperdrive(self):
@@ -363,13 +356,7 @@ class Bot(Destructible):
         for actor in self._mounted_actors():
             # A turret or tractor beam bot is targeted through its pawn
             self._drop_as_players_target(getattr(actor, "pawn", actor))
-        self.hyperspace_transit = HyperspaceTransit(
-            ship=self.pawn,
-            arriving=False,
-            distance_m=TRANSIT_DISTANCE_M[self.bot_type],
-            duration_s=TRANSIT_DURATION_S[self.bot_type],
-            clock=self.game.game_time.get_current_time,
-        )
+        self.hyperspace_transit = self._make_transit(arriving=False)
         self.hyperspace_transit.begin()
         self.hyperspace_transit.step()
 
@@ -390,8 +377,7 @@ class Bot(Destructible):
         self.pawn.node.hide()
         self.game.departed_ids.add(self.pawn.id)
         self._drop_as_players_target(self.pawn)
-        with contextlib.suppress(KeyError, AttributeError):
-            self.game.interactions.remove_actor(self.pawn)
+        self._remove_from_interactions()
         # Mounted parts first: they are bolted onto the ship's node
         for destructible in [*self._mounted_actors(), self]:
             self.game.destructibles.depart(destructible)
@@ -416,6 +402,19 @@ class Bot(Destructible):
         # The player may be gone (level cleanup)
         with contextlib.suppress(AttributeError):
             self.game.player.remove_target(target_to_remove=actor)
+
+    def _remove_from_interactions(self):
+        """Take the pawn out of the interacting actors."""
+        # Already removed (a subsystem pawn deregisters itself), or
+        # game.interactions is gone during level cleanup
+        with contextlib.suppress(KeyError, AttributeError):
+            self.game.interactions.remove_actor(self.pawn)
+
+    def _deactivate_collision_sensor(self):
+        """Take the collision sensor (if any) out of the collision traversal."""
+        sensor = getattr(self.navigator, "collision_sensor", None)
+        if sensor is not None:
+            sensor.set_active(False)
 
     def _think_is_due(self) -> bool:
         """
@@ -599,17 +598,13 @@ class Bot(Destructible):
         super().begin_death()
         # The AI is silenced: the dying bot no longer thinks
         self._release_think_slot()
-        sensor = getattr(self.navigator, "collision_sensor", None)
-        if sensor is not None:
-            sensor.set_active(False)
+        self._deactivate_collision_sensor()
 
         # Drop the pawn from targeting/interactions immediately, so nothing can
         # lock onto or keep shooting the wreck while it spins (it stays collidable
         # -- the collider lives until clean()).
-        with contextlib.suppress(AttributeError):
-            self.game.player.remove_target(target_to_remove=self.pawn)
-        with contextlib.suppress(KeyError, AttributeError):
-            self.game.interactions.remove_actor(self.pawn)
+        self._drop_as_players_target(self.pawn)
+        self._remove_from_interactions()
 
         # Ships tumble; the dying phase lasts their configured spin duration.
         if hasattr(self.pawn, "begin_tumble"):
@@ -635,13 +630,8 @@ class Bot(Destructible):
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaning bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
-        # In level cleanup, player may no longer exist at this point
-        with contextlib.suppress(AttributeError):
-            self.game.player.remove_target(target_to_remove=self.pawn)
-        # Already removed (a subsystem pawn deregisters itself), or
-        # game.interactions is gone during level cleanup
-        with contextlib.suppress(KeyError, AttributeError):
-            self.game.interactions.remove_actor(self.pawn)
+        self._drop_as_players_target(self.pawn)
+        self._remove_from_interactions()
         self._release_think_slot()
         self.pilot.clean()
         self.pilot = None
