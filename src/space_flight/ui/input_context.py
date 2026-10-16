@@ -333,23 +333,34 @@ class FlightInputContext(InputContext):
 
     def refresh_bindings(self, app: SpaceFlightSimulator):
         self.bindings = app.bindings
+        # The keys bound to each flight action, filled as they are asked for
+        self._flight_keys: dict[str, frozenset[str]] = {}
 
     # ------------------------------------------------------------------
     # Binding helpers
     # ------------------------------------------------------------------
 
+    def flight_keys(self, action: str) -> frozenset[str]:
+        """:return: The hardware names bound to a flight action (cached)"""
+        keys = self._flight_keys.get(action)
+        if keys is None:
+            keys = self._flight_keys[action] = bound_keys(
+                self.bindings, "flight", action
+            )
+        return keys
+
     def pressed(self, state: InputState, action: str) -> bool:
-        return _any(state.buttons, bound_keys(self.bindings, "flight", action))
+        return _any(state.buttons, self.flight_keys(action))
 
     def held(self, state: InputState, action: str) -> bool:
-        return _any(state.repeats, bound_keys(self.bindings, "flight", action))
+        return _any(state.repeats, self.flight_keys(action))
 
     def active(self, state: InputState, action: str) -> bool:
         """True on the frame of first press OR while held."""
         return self.pressed(state, action) or self.held(state, action)
 
     def released(self, state: InputState, action: str) -> bool:
-        return _any(state.releases, bound_keys(self.bindings, "flight", action))
+        return _any(state.releases, self.flight_keys(action))
 
     def axis(self, state: InputState, device: str, action: str) -> float | None:
         """

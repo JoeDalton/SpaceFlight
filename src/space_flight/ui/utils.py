@@ -260,17 +260,61 @@ def make_arc_geom(
     :param n_segments: The number of segments in the full half-ring
     :return: The geometry, one triangle strip
     """
-    vertex_data = GeomVertexData("arc", GeomVertexFormat.getV3(), Geom.UHStatic)
-    vertex_data.setNumRows(2 * (n_steps + 1))
-    vertex = GeomVertexWriter(vertex_data, "vertex")
-    strip = GeomTristrips(Geom.UHStatic)
-    for step in range(n_steps + 1):
-        angle_rad = np.pi * (1.0 - step / n_segments)
+    return _band_geom(
+        "arc", inner_radius, outer_radius, _half_ring_angles(n_steps, n_segments)
+    )
+
+
+def _half_ring_angles(n_steps: int, n_segments: int) -> list[float]:
+    """
+    :return: The angles of the first n_steps segment edges of a half-ring of
+        n_segments, from its left end (-X) clockwise over the top
+    """
+    return [np.pi * (1.0 - step / n_segments) for step in range(n_steps + 1)]
+
+
+def _write_band(
+    vertex: GeomVertexWriter,
+    strip: GeomTristrips,
+    row: int,
+    outer_radius: float,
+    inner_radius: float,
+    angles_rad: list[float],
+) -> int:
+    """
+    Write a band between two radii, along angles in the screen's XZ plane, as
+    one closed triangle strip.
+
+    :param vertex: The vertex writer
+    :param strip: The triangle strips to add the band to
+    :param row: The band's first vertex row
+    :param outer_radius: The band's outer radius
+    :param inner_radius: The band's inner radius
+    :param angles_rad: The angles of its edges, counter-clockwise from +X
+    :return: The row after the band's last vertex
+    """
+    for angle_rad in angles_rad:
         cos, sin = np.cos(angle_rad), np.sin(angle_rad)
         vertex.addData3(outer_radius * cos, 0.0, outer_radius * sin)
         vertex.addData3(inner_radius * cos, 0.0, inner_radius * sin)
-        strip.addVertices(2 * step, 2 * step + 1)
+        strip.addVertices(row, row + 1)
+        row += 2
     strip.closePrimitive()
+    return row
+
+
+def _band_geom(
+    name: str, inner_radius: float, outer_radius: float, angles_rad: list[float]
+) -> Geom:
+    """
+    :return: A band between two radii along angles (see _write_band), as a
+        geometry of one triangle strip
+    """
+    vertex_data = GeomVertexData(name, GeomVertexFormat.getV3(), Geom.UHStatic)
+    vertex_data.setNumRows(2 * len(angles_rad))
+    vertex = GeomVertexWriter(vertex_data, "vertex")
+    strip = GeomTristrips(Geom.UHStatic)
+    _write_band(vertex, strip, 0, outer_radius, inner_radius, angles_rad)
     geom = Geom(vertex_data)
     geom.addPrimitive(strip)
     return geom
@@ -295,18 +339,12 @@ def make_arc_outline_geom(
     vertex = GeomVertexWriter(vertex_data, "vertex")
     strip = GeomTristrips(Geom.UHStatic)
     row = 0
+    angles_rad = _half_ring_angles(n_segments, n_segments)
     for band_outer, band_inner in (
         (outer_radius + width, outer_radius),
         (inner_radius, inner_radius - width),
     ):
-        for step in range(n_segments + 1):
-            angle_rad = np.pi * (1.0 - step / n_segments)
-            cos, sin = np.cos(angle_rad), np.sin(angle_rad)
-            vertex.addData3(band_outer * cos, 0.0, band_outer * sin)
-            vertex.addData3(band_inner * cos, 0.0, band_inner * sin)
-            strip.addVertices(row, row + 1)
-            row += 2
-        strip.closePrimitive()
+        row = _write_band(vertex, strip, row, band_outer, band_inner, angles_rad)
     # The caps close the outline under the ends, which lie on the base line
     for side in (-1.0, 1.0):
         near_x, far_x = side * (inner_radius - width), side * (outer_radius + width)
@@ -338,22 +376,11 @@ def make_ring_sector_geom(
     :param n_steps: The number of segments along the arc (at least 1)
     :return: The geometry, one triangle strip
     """
-    vertex_data = GeomVertexData("ring_sector", GeomVertexFormat.getV3(), Geom.UHStatic)
-    vertex_data.setNumRows(2 * (n_steps + 1))
-    vertex = GeomVertexWriter(vertex_data, "vertex")
-    strip = GeomTristrips(Geom.UHStatic)
-    for step in range(n_steps + 1):
-        angle_rad = start_angle_rad + (end_angle_rad - start_angle_rad) * (
-            step / n_steps
-        )
-        cos, sin = np.cos(angle_rad), np.sin(angle_rad)
-        vertex.addData3(outer_radius * cos, 0.0, outer_radius * sin)
-        vertex.addData3(inner_radius * cos, 0.0, inner_radius * sin)
-        strip.addVertices(2 * step, 2 * step + 1)
-    strip.closePrimitive()
-    geom = Geom(vertex_data)
-    geom.addPrimitive(strip)
-    return geom
+    angles_rad = [
+        start_angle_rad + (end_angle_rad - start_angle_rad) * (step / n_steps)
+        for step in range(n_steps + 1)
+    ]
+    return _band_geom("ring_sector", inner_radius, outer_radius, angles_rad)
 
 
 class _Gauge:

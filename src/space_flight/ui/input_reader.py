@@ -429,26 +429,6 @@ class InputReader(DirectObject):
         """
         raise NotImplementedError
 
-    #: The device axes read_axes reads (see _read_device_axes)
-    AXES: tuple = ()
-
-    def _read_device_axes(self, device: InputDevice, state: InputState):
-        """
-        Read and dead-zone the device's :attr:`AXES` into state.axes.
-
-        :param device: The connected device
-        :param state: The :class:`InputState` being built
-        """
-        dead_zones = {
-            "stick": self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE),
-            "throttle": self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE),
-        }
-        for name, axis, dead_zone, inverted in self.AXES:
-            value = device.findAxis(axis).value
-            if inverted:
-                value = 1 - value
-            state.axes[name] = self.apply_dead_zone(value, dead_zones[dead_zone])
-
     def read_axes(self, state: InputState):
         """
         Populates state.axes with dead-zoned axis values for this frame.
@@ -602,7 +582,136 @@ class KeyboardReader(InputReader):
 # ---------------------------------------------------------------------------
 
 
-class GamepadReader(InputReader):
+class DeviceReader(InputReader):
+    """
+    Base of the readers of a hot-pluggable device (a gamepad, a flight stick):
+    the first connected device of its class is attached, and replaced by
+    another one, if any, when it is disconnected. With no device, the reader
+    reports nothing.
+    """
+
+    #: The device class read
+    DEVICE_CLASS: InputDevice.DeviceClass
+    #: Prefix of the attached device's Panda3D events
+    EVENT_PREFIX: str = ""
+    #: The device's name in logs
+    LABEL: str = ""
+    #: The bound axis names, which are not buttons (see collect_button_names)
+    AXIS_NAMES: frozenset = frozenset()
+    #: (state axis name, device axis, dead zone kind, inverted)
+    AXES: tuple = ()
+    #: Errors swallowed when the device is detached on clean
+    DETACH_ERRORS: tuple = ()
+
+    def __init__(self, app: SpaceFlightSimulator):
+        """
+        Detects a connected device and registers hot-plug events.
+
+        :param app: The Panda3D application instance.
+        """
+        super().__init__(app)
+        self.button_names = self.collect_button_names(self.AXIS_NAMES)
+        self.dead_zones = app.bindings.get("dead_zones", {})
+        self.device: InputDevice | None = None
+
+        devices = app.devices.getDevices(self.DEVICE_CLASS)
+        if devices:
+            self.connect(devices[0])
+
+        self.accept("connect-device", self.connect)
+        self.accept("disconnect-device", self.disconnect)
+
+    @staticmethod
+    def device_label(device: InputDevice) -> str:
+        """:return: How the device reads in logs"""
+        return str(device)
+
+    # ------------------------------------------------------------------
+
+    def connect(self, device: InputDevice):
+        """
+        Attaches *device* if it is of the reader's class and none is already
+        active.
+
+        :param device: The device that was just connected.
+        """
+        if device.device_class == self.DEVICE_CLASS and not self.device:
+            print(f"{self.LABEL} connected: {self.device_label(device)}")
+            self.device = device
+            self.app.attachInputDevice(device, prefix=self.EVENT_PREFIX)
+
+    def disconnect(self, device: InputDevice):
+        """
+        Detaches *device* and falls back to another device of its class, if
+        any.
+
+        :param device: The device that was just disconnected.
+        """
+        if self.device != device:
+            return
+        print(f"{self.LABEL} disconnected: {self.device_label(device)}")
+        self.app.detachInputDevice(device)
+        self.device = None
+        devices = self.app.devices.getDevices(self.DEVICE_CLASS)
+        if devices:
+            self.connect(devices[0])
+
+    # ------------------------------------------------------------------
+
+    def read_all_buttons(self) -> dict[str, bool]:
+        """
+        Polls the physical state of every bound button.
+
+        :return: Dict mapping hardware name → True if the button is held
+            (all False with no device).
+        """
+        if not self.device:
+            return dict.fromkeys(self.button_names, False)
+        return self.read_device_buttons()
+
+    def read_device_buttons(self) -> dict[str, bool]:
+        """
+        :return: Dict mapping each bound hardware name → True if the connected
+            device's button is held.
+        """
+        raise NotImplementedError
+
+    def read_axes(self, state: InputState):
+        """
+        Reads and dead-zones the device's :attr:`AXES` into state.axes.
+
+        :param state: The :class:`InputState` being built; state.axes is
+            populated in place.
+        """
+        if not self.device:
+            return
+        dead_zones = {
+            "stick": self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE),
+            "throttle": self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE),
+        }
+        for name, axis, dead_zone, inverted in self.AXES:
+            value = self.device.findAxis(axis).value
+            if inverted:
+                value = 1 - value
+            state.axes[name] = self.apply_dead_zone(value, dead_zones[dead_zone])
+
+    def clean(self):
+        """
+        Detaches the device, then delegates to the base class.
+        """
+        if self.device:
+            with contextlib.suppress(*self.DETACH_ERRORS):
+                self.app.detachInputDevice(self.device)
+            self.device = None
+        super().clean()
+
+
+# ---------------------------------------------------------------------------
+# GamepadReader
+# ---------------------------------------------------------------------------
+
+
+class GamepadReader(DeviceReader):
     """
     Reads gamepad state.  Named buttons support both polling and events.
     Axes are dead-zoned only; sign flips come from the invert_* bindings
@@ -610,7 +719,10 @@ class GamepadReader(InputReader):
     """
 
     device_type = "gamepad"
-    #: (state axis name, device axis, dead zone kind, inverted)
+    DEVICE_CLASS = InputDevice.DeviceClass.gamepad
+    EVENT_PREFIX = "gamepad"
+    LABEL = "Gamepad"
+    AXIS_NAMES = GAMEPAD_AXIS_NAMES
     AXES = (
         ("right_trigger", InputDevice.Axis.right_trigger, "throttle", False),
         ("left_trigger", InputDevice.Axis.left_trigger, "throttle", False),
@@ -619,14 +731,11 @@ class GamepadReader(InputReader):
         ("right_x", InputDevice.Axis.right_x, "stick", False),
         ("right_y", InputDevice.Axis.right_y, "stick", False),
     )
+    DETACH_ERRORS = (AssertionError,)
 
     def __init__(self, app: SpaceFlightSimulator):
         """
         Detects a connected gamepad and registers hot-plug and button events.
-
-        If a gamepad is already connected it is attached immediately via
-        :meth:`connect`.  Hot-plug events are accepted so the reader adapts at
-        runtime; with no gamepad, the reader simply reports nothing.
 
         Safety-net accept() callbacks are registered for every bound
         button, mapping Panda3D's "gamepad-lshoulder" event names to the
@@ -635,17 +744,6 @@ class GamepadReader(InputReader):
         :param app: The Panda3D application instance.
         """
         super().__init__(app)
-        self.button_names = self.collect_button_names(GAMEPAD_AXIS_NAMES)
-        self.dead_zones = app.bindings.get("dead_zones", {})
-        self.gamepad = None
-
-        devices = app.devices.getDevices(InputDevice.DeviceClass.gamepad)
-        if devices:
-            self.connect(devices[0])
-
-        self.accept("connect-device", self.connect)
-        self.accept("disconnect-device", self.disconnect)
-
         # Safety-net events for named gamepad buttons
         # Hardware name "gamepad_lshoulder" → Panda3D event "gamepad-lshoulder"
         for hw in self.button_names:
@@ -653,78 +751,30 @@ class GamepadReader(InputReader):
             self.accept(evt, lambda n=hw: self.ev_pressed.add(n))
             self.accept(evt + "-up", lambda n=hw: self.ev_released.add(n))
 
-    # ------------------------------------------------------------------
+    @property
+    def gamepad(self) -> InputDevice | None:
+        """The connected gamepad, if any."""
+        return self.device
 
-    def connect(self, device: InputDevice):
+    @staticmethod
+    def device_label(device: InputDevice) -> str:
+        return safe_device_name(device)
+
+    def read_device_buttons(self) -> dict[str, bool]:
         """
-        Attaches *device* if it is a gamepad and no gamepad is already active.
-
-        :param device: The device that was just connected.
-        """
-        if device.device_class == InputDevice.DeviceClass.gamepad and not self.gamepad:
-            print(f"Gamepad connected: {safe_device_name(device)}")
-            self.gamepad = device
-            self.app.attachInputDevice(device, prefix="gamepad")
-
-    def disconnect(self, device: InputDevice):
-        """
-        Detaches *device* and falls back to another gamepad if one is available.
-
-        :param device: The device that was just disconnected.
-        """
-        if self.gamepad != device:
-            return
-        print(f"Gamepad disconnected: {safe_device_name(device)}")
-        self.app.detachInputDevice(device)
-        self.gamepad = None
-        devices = self.app.devices.getDevices(InputDevice.DeviceClass.gamepad)
-        if devices:
-            self.connect(devices[0])
-
-    # ------------------------------------------------------------------
-
-    def read_all_buttons(self) -> dict[str, bool]:
-        """
-        Polls the physical state of every bound gamepad button.
-
         Uses :data:`GAMEPAD_BUTTON_CODES` to map hardware names to Panda3D
         :class:`~panda3d.core.GamepadButton` handles, then reads the
         pressed flag directly from the device.
-
-        :return: Dict mapping hardware name → True if the button is held.
         """
-        if not self.gamepad:
-            return dict.fromkeys(self.button_names, False)
         result: dict[str, bool] = {}
         for hw in self.button_names:
             code = GAMEPAD_BUTTON_CODES.get(hw)
             if code is not None:
-                btn = self.gamepad.findButton(code)
+                btn = self.device.findButton(code)
                 result[hw] = bool(btn.pressed) if btn else False
             else:
                 result[hw] = False
         return result
-
-    def read_axes(self, state: InputState):
-        """
-        Reads and dead-zones all six gamepad axes into state.axes.
-
-        :param state: The :class:`InputState` being built; state.axes is
-            populated in place.
-        """
-        if not self.gamepad:
-            return
-        self._read_device_axes(self.gamepad, state)
-
-    def clean(self):
-        """
-        Detaches the gamepad, then delegates to the base class.
-        """
-        if self.gamepad:
-            with contextlib.suppress(AssertionError):
-                self.app.detachInputDevice(self.gamepad)
-            self.gamepad = None
-        super().clean()
 
 
 # ---------------------------------------------------------------------------
@@ -732,7 +782,7 @@ class GamepadReader(InputReader):
 # ---------------------------------------------------------------------------
 
 
-class JoystickReader(InputReader):
+class JoystickReader(DeviceReader):
     """
     Reads flight-stick state.  Buttons are polled directly because unnamed
     buttons on most sticks do not generate Panda3D events reliably; no
@@ -740,9 +790,12 @@ class JoystickReader(InputReader):
     """
 
     device_type = "joystick"
-    #: (state axis name, device axis, dead zone kind, inverted). The throttle
-    #: is inverted (1 - raw), so pulling the lever towards the pilot
-    #: increases it.
+    DEVICE_CLASS = InputDevice.DeviceClass.flight_stick
+    EVENT_PREFIX = "stick"
+    LABEL = "Joystick"
+    AXIS_NAMES = JOYSTICK_AXIS_NAMES
+    # The throttle is inverted (1 - raw), so pulling the lever towards the
+    # pilot increases it.
     AXES = (
         ("throttle", InputDevice.Axis.throttle, "throttle", True),
         ("yaw", InputDevice.Axis.yaw, "stick", False),
@@ -750,61 +803,10 @@ class JoystickReader(InputReader):
         ("roll", InputDevice.Axis.roll, "stick", False),
     )
 
-    def __init__(self, app: SpaceFlightSimulator):
-        """
-        Detects a connected flight stick and registers hot-plug events.
-
-        Unlike :class:`GamepadReader`, no safety-net button event callbacks
-        are registered because most flight-stick buttons do not generate
-        reliable Panda3D events; button state is read by polling only.
-
-        :param app: The Panda3D application instance.
-        """
-        super().__init__(app)
-        self.button_names = self.collect_button_names(JOYSTICK_AXIS_NAMES)
-        self.dead_zones = app.bindings.get("dead_zones", {})
-        self.flightStick = None
-
-        devices = app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
-        if devices:
-            self.connect(devices[0])
-
-        self.accept("connect-device", self.connect)
-        self.accept("disconnect-device", self.disconnect)
-        # No button events — polling-only for joystick buttons
-
-    # ------------------------------------------------------------------
-
-    def connect(self, device: InputDevice):
-        """
-        Attaches *device* if it is a flight stick and none is already active.
-
-        :param device: The device that was just connected.
-        """
-        if (
-            device.device_class == InputDevice.DeviceClass.flight_stick
-            and not self.flightStick
-        ):
-            print(f"Joystick connected: {device}")
-            self.flightStick = device
-            self.app.attachInputDevice(device, prefix="stick")
-
-    def disconnect(self, device: InputDevice):
-        """
-        Detaches *device* and falls back to another flight stick if available.
-
-        :param device: The device that was just disconnected.
-        """
-        if self.flightStick != device:
-            return
-        print(f"Joystick disconnected: {device}")
-        self.app.detachInputDevice(device)
-        self.flightStick = None
-        devices = self.app.devices.getDevices(InputDevice.DeviceClass.flight_stick)
-        if devices:
-            self.connect(devices[0])
-
-    # ------------------------------------------------------------------
+    @property
+    def flightStick(self) -> InputDevice | None:
+        """The connected flight stick, if any."""
+        return self.device
 
     @staticmethod
     def button_index(hw_name: str) -> int | None:
@@ -821,50 +823,21 @@ class JoystickReader(InputReader):
         suffix = hw_name.rsplit("_", 1)[-1]
         return int(suffix) - 1 if suffix.isdigit() else None
 
-    def read_all_buttons(self) -> dict[str, bool]:
+    def read_device_buttons(self) -> dict[str, bool]:
         """
-        Polls every bound flight-stick button by its zero-based hardware index.
-
-        Returns all-false when no stick is connected or when a button index
-        is out of range for the attached device.
-
-        :return: Dict mapping hardware name → True if the button is held.
+        Polls every bound flight-stick button by its zero-based hardware index
+        (False when the index is out of range for the attached device).
         """
-        if not self.flightStick:
-            return dict.fromkeys(self.button_names, False)
-        n = len(self.flightStick.buttons)
+        n = len(self.device.buttons)
         result: dict[str, bool] = {}
         for hw in self.button_names:
             idx = self.button_index(hw)
             result[hw] = (
-                bool(self.flightStick.buttons[idx].pressed)
+                bool(self.device.buttons[idx].pressed)
                 if idx is not None and 0 <= idx < n
                 else False
             )
         return result
-
-    def read_axes(self, state: InputState):
-        """
-        Reads and dead-zones the four flight-stick axes into state.axes.
-
-        The throttle axis is inverted (1 − raw) so that pulling the lever
-        towards the pilot increases the output value.
-
-        :param state: The :class:`InputState` being built; state.axes is
-            populated in place.
-        """
-        if not self.flightStick:
-            return
-        self._read_device_axes(self.flightStick, state)
-
-    def clean(self):
-        """
-        Detaches the flight stick, then delegates to the base class.
-        """
-        if self.flightStick:
-            self.app.detachInputDevice(self.flightStick)
-            self.flightStick = None
-        super().clean()
 
 
 # ---------------------------------------------------------------------------

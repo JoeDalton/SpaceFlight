@@ -198,14 +198,16 @@ class ChangeBindingDialog(object):
             "deviceListenEvent", lambda btn: self.buttonPressed(btn, from_device=True)
         )
 
-        # Snapshot current axis values as a baseline for dead-zone detection.
+        # Snapshot current axis values as a baseline for dead-zone detection
+        # (devices without axes get no entry).
         self.axisStates = {None: {}}
-        for device in self.attachedDevices:
-            for axis in device.axes:
-                if device not in self.axisStates:
-                    self.axisStates[device] = {axis.axis: axis.value}
-                else:
-                    self.axisStates[device][axis.axis] = axis.value
+        self.axisStates.update(
+            {
+                device: baseline
+                for device in self.attachedDevices
+                if (baseline := {axis.axis: axis.value for axis in device.axes})
+            }
+        )
 
         app.taskMgr.add(self.watchControls, "checkControls")
 
