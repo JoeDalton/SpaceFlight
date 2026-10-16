@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import BitMask32
+from panda3d.core import BitMask32, NodePath
 
 from space_flight import DEBUG_DELETION
 from space_flight.game.collisions import CollisionLayers, attach_collision_sphere
@@ -52,39 +52,32 @@ class CollisionSensor:
         # navigate().
         self.n_spheres = 3
         self.active_range = self.n_spheres
-        self.sphere_1 = attach_collision_sphere(
-            game=game,
-            name="sensor",
-            radius=radius_1_m,
-            collider_type="sensor",
-            parent_node=ship.node,
-            parent_object=self,
-            relative_position=[0, ship_distance_1_m, 0],
-        )
-        self.sphere_1.setPythonTag("owner", self)
-        self.sphere_1.setPythonTag("sensor_range", 1)
-        self.sphere_2 = attach_collision_sphere(
-            game=game,
-            name="sensor",
-            radius=radius_2_m,
-            collider_type="sensor",
-            parent_node=ship.node,
-            parent_object=self,
-            relative_position=[0, ship_distance_2_m, 0],
-        )
-        self.sphere_2.setPythonTag("owner", self)
-        self.sphere_2.setPythonTag("sensor_range", 2)
-        self.sphere_3 = attach_collision_sphere(
-            game=game,
-            name="sensor",
-            radius=radius_3_m,
-            collider_type="sensor",
-            parent_node=ship.node,
-            parent_object=self,
-            relative_position=[0, ship_distance_3_m, 0],
-        )
-        self.sphere_3.setPythonTag("owner", self)
-        self.sphere_3.setPythonTag("sensor_range", 3)
+        spheres = []
+        for sensor_range, (ship_distance_m, radius_m) in enumerate(
+            (
+                (ship_distance_1_m, radius_1_m),
+                (ship_distance_2_m, radius_2_m),
+                (ship_distance_3_m, radius_3_m),
+            ),
+            start=1,
+        ):
+            sphere = attach_collision_sphere(
+                game=game,
+                name="sensor",
+                radius=radius_m,
+                collider_type="sensor",
+                parent_node=ship.node,
+                parent_object=self,
+                relative_position=[0, ship_distance_m, 0],
+            )
+            sphere.setPythonTag("sensor_range", sensor_range)
+            spheres.append(sphere)
+        self.sphere_1, self.sphere_2, self.sphere_3 = spheres
+
+    @property
+    def spheres(self) -> tuple[NodePath, NodePath, NodePath]:
+        """The look-ahead spheres, from the innermost to the outermost."""
+        return self.sphere_1, self.sphere_2, self.sphere_3
 
     def set_active(self, active: bool):
         """
@@ -97,7 +90,7 @@ class CollisionSensor:
         if active == self.active:
             return
         mask = CollisionLayers.SENSOR_FROM if active else BitMask32.allOff()
-        for sphere in (self.sphere_1, self.sphere_2, self.sphere_3):
+        for sphere in self.spheres:
             sphere.node().setFromCollideMask(mask)
         self.active = active
 
@@ -175,15 +168,10 @@ class CollisionSensor:
         Cleans the CollisionSensor object
         """
         self.ship = None
-        self.sphere_1.setPythonTag("owner", None)
-        self.sphere_1.remove_node()
-        self.sphere_1 = None
-        self.sphere_2.setPythonTag("owner", None)
-        self.sphere_2.remove_node()
-        self.sphere_2 = None
-        self.sphere_3.setPythonTag("owner", None)
-        self.sphere_3.remove_node()
-        self.sphere_3 = None
+        for sphere in self.spheres:
+            sphere.setPythonTag("owner", None)
+            sphere.remove_node()
+        self.sphere_1 = self.sphere_2 = self.sphere_3 = None
         self.obstacles = None
         if DEBUG_DELETION:
             LOGGER.info("Cleaned CollisionSensor")

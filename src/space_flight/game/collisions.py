@@ -973,14 +973,9 @@ class CollisionSystem:
             if DEBUG_COLLISION:
                 LOGGER.info("Obstacle is being removed while it is hit by a sensor")
             return
-        try:
-            if sensor.ship.id == obstacle.id:
-                return  # It's the sensor's parent => Ignore collision
-            # A subsystem mounted on the sensor's own ship is not an obstacle
-            if owners_share_vehicle(sensor.ship, obstacle):
-                return
-        except AttributeError:
-            pass  # When the obstacle does not have an id, it's not the sensor parent
+        # The sensor's own ship, or a subsystem mounted on it, is not an obstacle
+        if owners_share_vehicle(sensor.ship, obstacle):
+            return
 
         if DEBUG_COLLISION:
             LOGGER.info(f"sensor into obstacle: {obstacle} with id: {obstacle.id}")

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from space_flight import DEBUG_DELETION
+from space_flight.ai.interactions import pair_indices
 from space_flight.utils.state_machine import StateMachine
 
 if TYPE_CHECKING:
@@ -96,20 +97,16 @@ class TargetLock:
             return
 
         # Target should exist and is the same as last time.
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.parent.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                self.parent.target_id
-            )
-        except ValueError:
+        indices = pair_indices(
+            self.game.interactions, self.parent.id, self.parent.target_id
+        )
+        if indices is None:
             # Target gone => Nothing to lock
             self.reset()
             return
 
         # Is the target inside the cone ?
-        alignment = self.game.interactions.alignments[
-            my_actor_index, target_actor_index
-        ]
+        alignment = self.game.interactions.alignments[indices]
         if alignment < self.min_alignment:
             # Not aligned enough => restart the delay
             self._restart()
