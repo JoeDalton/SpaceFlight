@@ -9,6 +9,7 @@ from space_flight import EPSILON_TOLERANCE
 from space_flight.actors.pawn import Pawn
 from space_flight.ai import Intent, Personality
 from space_flight.ai.generic.generic_navigator import GenericNavigator
+from space_flight.ai.interactions import pair_geometry
 from space_flight.utils import magnitude
 
 if TYPE_CHECKING:
@@ -66,44 +67,19 @@ class TrackingMountNavigator(GenericNavigator):
         :param target_dict: A dictionary with the target's info
         :return: The direction to point to
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to engage "
-                "but there's no attached target"
-            )
+        if self._has_no_target(target_dict, "engage"):
             self._publish_no_engagement()
             return NO_DIRECTION
 
-        # Identify self and target in interactions
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
-            self._publish_no_engagement()
-            return NO_DIRECTION
-
-        # TODO Same pair lookup and target reconstruction as in
-        #  FighterNavigator and AutoAim: share one interactions helper
-        #  returning the target's position and absolute velocity for an
-        #  (actor, target) pair.
         # Get necessary info from interactions and pre compute target properties
-        distance_m = self.game.interactions.distances[
-            my_actor_index, target_actor_index
-        ]
-        direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
-        ]
-        relative_speed_vector = self.game.interactions.rel_velocities[
-            my_actor_index, target_actor_index, :
-        ]
+        geometry = pair_geometry(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if geometry is None:
+            self._log_target_lost()
+            self._publish_no_engagement()
+            return NO_DIRECTION
+        distance_m, direction, relative_speed_vector = geometry
 
         # Compute lead pursuit direction necessary for a firing/grab solution
         # TODO Without auto-aim, bolts go down the barrel and inherit the ship's

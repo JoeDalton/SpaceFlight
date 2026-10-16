@@ -328,12 +328,7 @@ class GenericShipNavigator(GenericNavigator):
         :return: The direction to point to and the desired speed
         """
 
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to form up "
-                "but there's no attached target"
-            )
+        if self._has_no_target(target_dict, "form up"):
             return NO_DIRECTION
 
         # Fly close in formation: dwarf the collision-avoidance contribution.
@@ -344,11 +339,7 @@ class GenericShipNavigator(GenericNavigator):
         # Identify leader in interactions
         leader = self.game.interactions.find_actor(target_dict["target_id"])
         if leader is None:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Formation leader has been destroyed since last intent update."
-                )
+            self._log_target_lost("Formation leader")
             return NO_DIRECTION
 
         self._sync_route_progress(leader)

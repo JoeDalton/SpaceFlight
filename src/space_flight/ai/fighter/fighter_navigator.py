@@ -18,6 +18,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.ai.interactions import pair_geometry
 from space_flight.ai.missile.incoming_missile import (
     IncomingMissile,
     nearest_incoming,
@@ -113,12 +114,7 @@ class FighterNavigator(GenericShipNavigator):
             (for surface-mounted preys) surface normal/hit point
         :return: The direction to point to and the desired speed
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to engage "
-                "but there's no attached target"
-            )
+        if self._has_no_target(target_dict, "engage"):
             return NO_DIRECTION
 
         if not self._resolve_engagement(target_dict):
@@ -141,32 +137,13 @@ class FighterNavigator(GenericShipNavigator):
             mutated with the resolved geometry keys
         :return: True if resolved, False if the target is gone
         """
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
+        geometry = pair_geometry(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if geometry is None:
+            self._log_target_lost()
             return False
-
-        # TODO Same pair lookup and target reconstruction as in
-        #  TrackingMountNavigator and AutoAim: share one interactions helper
-        #  returning the target's position and absolute velocity for an
-        #  (actor, target) pair.
-        distance_m = self.game.interactions.distances[
-            my_actor_index, target_actor_index
-        ]
-        direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
-        ]
-        relative_speed_vector = self.game.interactions.rel_velocities[
-            my_actor_index, target_actor_index, :
-        ]
+        distance_m, direction, relative_speed_vector = geometry
         target_dict["distance_m"] = distance_m
         target_dict["direction"] = direction
         target_dict["relative_speed_vector"] = relative_speed_vector
@@ -1270,37 +1247,20 @@ class FighterNavigator(GenericShipNavigator):
         :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to evade but "
-                "there's no attached target"
-            )
+        if self._has_no_target(target_dict, "evade"):
             return NO_DIRECTION
 
-        # Identify self and target in interactions
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
+        geometry = pair_geometry(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if geometry is None:
+            self._log_target_lost()
             return NO_DIRECTION
-
-        distance = self.game.interactions.distances[my_actor_index, target_actor_index]
+        distance, direction, _ = geometry
 
         # Case where the target is at zero distance (Should not happen once ship-ship
         # collisions are implemented)
         if distance < TARGET_DISTANCE_TOLERANCE_M:
             return NO_DIRECTION
-
-        direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
-        ]
 
         return direction, 2 * distance

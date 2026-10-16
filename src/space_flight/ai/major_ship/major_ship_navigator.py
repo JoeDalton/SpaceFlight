@@ -16,6 +16,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
+from space_flight.ai.interactions import pair_indices
 from space_flight.utils import cross3, magnitude, project_on_plane
 
 if TYPE_CHECKING:
@@ -86,26 +87,16 @@ class MajorShipNavigator(GenericShipNavigator):
         :param target_dict: A dictionary with the target id
         :return: The direction to point to and the desired speed
         """
-        # Case where there is no target (Should not happen, but you never know...)
-        if target_dict == {}:
-            LOGGER.warning(
-                f"Navigator {self.pawn.parent.name} told to engage "
-                "but there's no attached target"
-            )
+        if self._has_no_target(target_dict, "engage"):
             return NO_DIRECTION
 
-        my_actor_index = self.game.interactions.get_actor_index_from_id(self.pawn.id)
-        try:
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                target_dict["target_id"]
-            )
-        except ValueError:
-            if self.debug:
-                LOGGER.info(
-                    f"Navigator {self.pawn.parent.name}: "
-                    "Target has been destroyed since last intent update."
-                )
+        indices = pair_indices(
+            self.game.interactions, self.pawn.id, target_dict["target_id"]
+        )
+        if indices is None:
+            self._log_target_lost()
             return NO_DIRECTION
+        my_actor_index, target_actor_index = indices
 
         distance_m = self.game.interactions.distances[
             my_actor_index, target_actor_index

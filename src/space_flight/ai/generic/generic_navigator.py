@@ -60,6 +60,31 @@ class GenericNavigator:
         """How long the current behaviour has been running."""
         return self.behaviour_sm.time_in_state_s
 
+    def _has_no_target(self, target_dict: dict, action: str) -> bool:
+        """
+        Whether there is no target to act on, warning if so (should not
+        happen, but you never know...).
+
+        :param target_dict: The tactician's target info
+        :param action: What the navigator was told to do (e.g. "engage")
+        :return: True if target_dict is empty
+        """
+        if target_dict != {}:
+            return False
+        LOGGER.warning(
+            f"Navigator {self.pawn.parent.name} told to {action} "
+            "but there's no attached target"
+        )
+        return True
+
+    def _log_target_lost(self, what: str = "Target"):
+        """Log (in debug) that the target died since the last intent update."""
+        if self.debug:
+            LOGGER.info(
+                f"Navigator {self.pawn.parent.name}: "
+                f"{what} has been destroyed since last intent update."
+            )
+
     def navigate(
         self, intent: Intent, target_dict: dict
     ) -> tuple[np.ndarray, float] | np.ndarray:

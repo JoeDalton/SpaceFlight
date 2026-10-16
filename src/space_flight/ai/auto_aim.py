@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from space_flight import DEBUG_DELETION
+from space_flight.ai.interactions import pair_geometry
 from space_flight.ai.target_lock import TargetLock
 from space_flight.utils import (
     low_pass_filter_first_order,
@@ -103,29 +104,16 @@ class AutoAim:
             target is not in the interactions.
         """
         try:
-            my_actor_index = self.game.interactions.get_actor_index_from_id(
-                self.parent.id
-            )
-            target_actor_index = self.game.interactions.get_actor_index_from_id(
-                self.parent.target_id
+            geometry = pair_geometry(
+                self.game.interactions, self.parent.id, self.parent.target_id
             )
         except ValueError:
-            # Parent has died during this frame, or has no target
+            # Parent has died during this frame
             return None
-
-        # TODO Same pair lookup and target reconstruction as in
-        #  FighterNavigator and TrackingMountNavigator: share one interactions helper
-        #  returning the target's position and absolute velocity for an
-        #  (actor, target) pair.
-        distance_m = self.game.interactions.distances[
-            my_actor_index, target_actor_index
-        ]
-        direction = self.game.interactions.directions[
-            my_actor_index, target_actor_index, :
-        ]
-        relative_speed_vector = self.game.interactions.rel_velocities[
-            my_actor_index, target_actor_index, :
-        ]
+        if geometry is None:
+            # Parent has no target
+            return None
+        distance_m, direction, relative_speed_vector = geometry
 
         # Impact time is assumed to be the distance between target and self
         # divided by laser speed
