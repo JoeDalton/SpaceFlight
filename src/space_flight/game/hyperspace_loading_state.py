@@ -42,6 +42,7 @@ from panda3d.core import (
 from space_flight import DATAFILES_PATH
 from space_flight.fx import make_fullscreen_quad
 from space_flight.global_architecture.base_state import BaseState
+from space_flight.utils import clamp
 
 if TYPE_CHECKING:
     from direct.task import Task
@@ -100,7 +101,7 @@ def set_resolution(quads: list[NodePath], win: GraphicsWindow):
 
 def _smoothstep(x: float) -> float:
     """Ease 0..1 with a Hermite curve for a softer-feeling fade."""
-    x = min(max(x, 0.0), 1.0)
+    x = clamp(x, 0.0, 1.0)
     return x * x * (3.0 - 2.0 * x)
 
 

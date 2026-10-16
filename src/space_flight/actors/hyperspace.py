@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Callable
 import numpy as np
 from panda3d.core import BitMask32
 
+from space_flight.utils import clamp
+
 if TYPE_CHECKING:
     from space_flight.actors.ship import Ship
 
@@ -61,10 +63,10 @@ def transit_offset_fraction(
     :param sharpness: How sharply the motion brakes
     :return: The offset fraction in [0, 1]
     """
-    progress = min(max(progress, 0.0), 1.0)
+    progress = clamp(progress, 0.0, 1.0)
     if not arriving:
         return transit_offset_fraction(1.0 - progress, True, speed_fraction, sharpness)
-    speed_fraction = min(max(speed_fraction, 0.0), 1.0)
+    speed_fraction = clamp(speed_fraction, 0.0, 1.0)
     floor = math.exp(-sharpness)
     # From 1 to 0, with a zero slope at the end
     decay = (

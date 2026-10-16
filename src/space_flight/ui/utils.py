@@ -20,6 +20,8 @@ from panda3d.core import (
     TransparencyAttrib,
 )
 
+from space_flight.utils import clamp
+
 # Height of a line's glyph centre above its baseline, in text scale units
 TEXT_CENTER_OFFSET = 0.35
 
@@ -138,7 +140,7 @@ class RollingDrum:
             still has to roll, easing out to zero
         """
         elapsed_s = self.clock() - self._roll_start_time_s
-        progress = min(max(elapsed_s / self.roll_time_s, 0.0), 1.0)
+        progress = clamp(elapsed_s / self.roll_time_s, 0.0, 1.0)
         return self._roll_start_rad * (1.0 - progress) ** 2
 
     def _start_roll(self, items: list, index: int):
@@ -425,7 +427,7 @@ class ArcGauge:
         :param level: The gauge level, in [0, 1] (clipped). Any non-empty level
             shows at least one segment.
         """
-        level = min(max(level, 0.0), 1.0)
+        level = clamp(level, 0.0, 1.0)
         steps = int(round(level * self.n_segments))
         if level > 0.0:
             steps = max(steps, 1)
@@ -527,7 +529,7 @@ class ColumnGauge:
         """
         :param level: The gauge level, in [0, 1] (clipped)
         """
-        level = min(max(level, 0.0), 1.0)
+        level = clamp(level, 0.0, 1.0)
         if level == self.level:
             return
         self.level = level

@@ -14,7 +14,7 @@ from space_flight.game.collisions import (
     attach_collision_sphere,
     attach_collision_tube,
 )
-from space_flight.utils import magnitude
+from space_flight.utils import clamp, magnitude
 from space_flight.utils.state_machine import Cooldown, StateMachine
 from space_flight.weapons import ION, ION_DAMAGE_FACTOR, PHYSICAL
 
@@ -227,9 +227,7 @@ class Shield(Destructible):
         axis_length_sq = float(np.dot(axis, axis))
         t = 0.0
         if axis_length_sq > 0.0:
-            t = min(
-                max(float(np.dot(local - point_a, axis)) / axis_length_sq, 0.0), 1.0
-            )
+            t = clamp(float(np.dot(local - point_a, axis)) / axis_length_sq, 0.0, 1.0)
         return magnitude(local - (point_a + t * axis)) <= self.model.radius_m
 
     # ------------------------------------------------------------------

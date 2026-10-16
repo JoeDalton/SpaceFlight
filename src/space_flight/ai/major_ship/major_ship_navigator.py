@@ -16,7 +16,7 @@ from space_flight.ai.generic.generic_ship_navigator import (
     NO_DIRECTION,
     GenericShipNavigator,
 )
-from space_flight.utils import cross3, magnitude
+from space_flight.utils import cross3, magnitude, project_on_plane
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -139,7 +139,7 @@ class MajorShipNavigator(GenericShipNavigator):
 
         # Outward normal from the hull, kept in the horizontal plane.
         outward = self.pawn.position - nearest_point
-        outward_horizontal = outward - np.dot(outward, world_up) * world_up
+        outward_horizontal = project_on_plane(outward, world_up)
         outward_distance_m = magnitude(outward_horizontal)
         if outward_distance_m < TARGET_DISTANCE_TOLERANCE_M:
             # Degenerate (directly over the hull): fall back to the target's beam.
@@ -184,7 +184,7 @@ class MajorShipNavigator(GenericShipNavigator):
         :param world_up: The world up direction
         :return: The horizontal projection (not normalised)
         """
-        return axis - np.dot(axis, world_up) * world_up
+        return project_on_plane(axis, world_up)
 
     def _nearest_point_on_horizontal_obb(
         self, target: Any, center: np.ndarray, point: np.ndarray
