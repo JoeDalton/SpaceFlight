@@ -1,10 +1,12 @@
-import sys
-
 from direct.gui.DirectGui import DirectFrame
 
-from space_flight import RECORD_GAME
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton, MenuNavigator
+from space_flight.menus.menu_utils import (
+    MenuNavigator,
+    make_button_column,
+    quit_game,
+    return_to_main_menu,
+)
 
 
 class PauseMenuState(BaseState):
@@ -20,44 +22,23 @@ class PauseMenuState(BaseState):
             pos=(0, 0, 0),
         )
         self.frame.setTransparency(True)
-        button_scale = 0.5
-        text_scale = 0.15
-        self.resume_button = CustomButton(
-            app=self.app,
-            text="Resume Game",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.resume_game,
-            pos=(0.0, 0.0, 0.45),
-            layout="center",
+        self.buttons = make_button_column(
+            self.app,
+            [
+                ("Resume Game", self.resume_game),
+                ("Settings", self.enter_settings),
+                ("Return to main menu", self.return_to_main),
+                ("Quit Game", self.quit_game),
+            ],
+            top_z=0.45,
+            step=0.3,
         )
-        self.settings_button = CustomButton(
-            app=self.app,
-            text="Settings",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.enter_settings,
-            pos=(0.0, 0.0, 0.15),
-            layout="center",
-        )
-        self.return_button = CustomButton(
-            app=self.app,
-            text="Return to main menu",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.return_to_main,
-            pos=(0.0, 0.0, -0.15),
-            layout="center",
-        )
-        self.quit_button = CustomButton(
-            app=self.app,
-            text="Quit Game",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.quit_game,
-            pos=(0.0, 0.0, -0.45),
-            layout="center",
-        )
+        (
+            self.resume_button,
+            self.settings_button,
+            self.return_button,
+            self.quit_button,
+        ) = self.buttons
         self.menu_navigator = MenuNavigator(
             self.app,
             [
@@ -76,36 +57,23 @@ class PauseMenuState(BaseState):
         self.app.state_manager.push(self.app.state_manager.SETTINGS_STATE)
 
     def pause(self):
-        self.resume_button.hide()
-        self.settings_button.hide()
-        self.return_button.hide()
-        self.quit_button.hide()
+        for button in self.buttons:
+            button.hide()
         self.frame.hide()
 
     def resume(self):
         self.frame.show()
-        self.resume_button.show()
-        self.settings_button.show()
-        self.return_button.show()
-        self.quit_button.show()
+        for button in self.buttons:
+            button.show()
 
     def return_to_main(self):
-        if RECORD_GAME:
-            # Record game logs
-            self.app.state_manager.stack[-2].record.save()
-        self.app.state_manager.clear()
-        self.app.state_manager.replace(self.app.state_manager.MAIN_MENU_STATE)
+        return_to_main_menu(self.app)
 
     def quit_game(self):
-        if RECORD_GAME:
-            # Record game logs
-            self.app.state_manager.stack[-2].record.save()
-        sys.exit()
+        quit_game(self.app)
 
     def exit(self):
         self.menu_navigator.remove()
-        self.resume_button.destroy()
-        self.settings_button.destroy()
-        self.return_button.destroy()
-        self.quit_button.destroy()
+        for button in self.buttons:
+            button.destroy()
         self.frame.destroy()

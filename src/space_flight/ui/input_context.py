@@ -52,6 +52,11 @@ ENERGY_MODE_ACTIONS = {
 }
 
 
+def _any(values: dict[str, bool], keys) -> bool:
+    """:return: Whether any of the keys is set in values (e.g. state.buttons)"""
+    return any(values.get(key) for key in keys)
+
+
 def bound_keys(bindings: dict, context: str, action: str) -> frozenset[str]:
     """
     Hardware names bound to *action* under *context*, on every device.
@@ -334,20 +339,17 @@ class FlightInputContext(InputContext):
     # ------------------------------------------------------------------
 
     def pressed(self, state: InputState, action: str) -> bool:
-        keys = bound_keys(self.bindings, "flight", action)
-        return any(state.buttons.get(key) for key in keys)
+        return _any(state.buttons, bound_keys(self.bindings, "flight", action))
 
     def held(self, state: InputState, action: str) -> bool:
-        keys = bound_keys(self.bindings, "flight", action)
-        return any(state.repeats.get(key) for key in keys)
+        return _any(state.repeats, bound_keys(self.bindings, "flight", action))
 
     def active(self, state: InputState, action: str) -> bool:
         """True on the frame of first press OR while held."""
         return self.pressed(state, action) or self.held(state, action)
 
     def released(self, state: InputState, action: str) -> bool:
-        keys = bound_keys(self.bindings, "flight", action)
-        return any(state.releases.get(key) for key in keys)
+        return _any(state.releases, bound_keys(self.bindings, "flight", action))
 
     def axis(self, state: InputState, device: str, action: str) -> float | None:
         """
@@ -467,23 +469,9 @@ class FlightInputContext(InputContext):
         )
 
         dt = self.game.game_time.get_time_step()
-        self.yaw_smoothed = low_pass_filter_first_order(
-            value=yaw, previous=self.yaw_smoothed, dt=dt, rise_time=0.05, fall_time=0.01
-        )
-        self.pitch_smoothed = low_pass_filter_first_order(
-            value=pitch,
-            previous=self.pitch_smoothed,
-            dt=dt,
-            rise_time=0.05,
-            fall_time=0.01,
-        )
-        self.roll_smoothed = low_pass_filter_first_order(
-            value=roll,
-            previous=self.roll_smoothed,
-            dt=dt,
-            rise_time=0.05,
-            fall_time=0.01,
-        )
+        self.yaw_smoothed = _smooth(yaw, self.yaw_smoothed, dt)
+        self.pitch_smoothed = _smooth(pitch, self.pitch_smoothed, dt)
+        self.roll_smoothed = _smooth(roll, self.roll_smoothed, dt)
         return self.yaw_smoothed, self.pitch_smoothed, self.roll_smoothed
 
     def update_throttle(self, state: InputState) -> float:
@@ -513,6 +501,16 @@ class FlightInputContext(InputContext):
             )
             self.throttle = max(0.0, min(1.0, self.throttle))
         return self.throttle
+
+
+def _smooth(value: float, previous: float, dt: float) -> float:
+    """
+    :return: A rotation key's command, low-pass filtered: a quick rise and an
+        even quicker fall
+    """
+    return low_pass_filter_first_order(
+        value=value, previous=previous, dt=dt, rise_time=0.05, fall_time=0.01
+    )
 
 
 def clamp_unit(value: float) -> float:
@@ -617,10 +615,10 @@ class MenuInputContext(InputContext):
     # ------------------------------------------------------------------
 
     def pressed(self, state: InputState, action: str) -> bool:
-        return any(state.buttons.get(key) for key in self.keys[action])
+        return _any(state.buttons, self.keys[action])
 
     def held(self, state: InputState, action: str) -> bool:
-        return any(state.repeats.get(key) for key in self.keys[action])
+        return _any(state.repeats, self.keys[action])
 
     def direction(self, state: InputState) -> str | None:
         """
@@ -696,7 +694,7 @@ class HyperspaceInputContext(InputContext):
         self.app = app
         self.on_trigger = on_trigger
         self.triggered = False
-        self.drop_keys = bound_keys(app.bindings, "hyperspace", "drop_hyperspace")
+        self.refresh_bindings(app)
 
     def consume(self, state: InputState):
         """
@@ -704,14 +702,11 @@ class HyperspaceInputContext(InputContext):
         """
         if self.triggered:
             return
-        for key in self.drop_keys:
-            if state.buttons.get(key):
-                # Latch only once the callback accepts the press: the overlay
-                # may not be waiting for the key yet, and an early press must
-                # not use up the trigger.
-                if self.on_trigger():
-                    self.triggered = True
-                return
+        # Latch only once the callback accepts the press: the overlay may not
+        # be waiting for the key yet, and an early press must not use up the
+        # trigger.
+        if _any(state.buttons, self.drop_keys) and self.on_trigger():
+            self.triggered = True
 
     def refresh_bindings(self, app: SpaceFlightSimulator):
         self.drop_keys = bound_keys(app.bindings, "hyperspace", "drop_hyperspace")
@@ -814,7 +809,7 @@ class RadialMenuInputContext(InputContext):
         if self.on_hover is not None:
             self.on_hover(self.selected_slice)
 
-        if any(state.releases.get(key) for key in self.trigger_hw_names):
+        if _any(state.releases, self.trigger_hw_names):
             selected = self.selected_slice
             on_select = self.on_select
             self.game.app.state_manager.pop()

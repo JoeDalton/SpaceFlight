@@ -356,7 +356,28 @@ def make_ring_sector_geom(
     return geom
 
 
-class ArcGauge:
+class _Gauge:
+    """
+    A gauge's colouring: a fill over a dimmer track, both of its colour scaled
+    by its brightness.
+    """
+
+    def set_brightness(self, brightness: float):
+        """
+        :param brightness: Multiplier applied to the gauge's colour
+        """
+        if brightness == self.brightness:
+            return
+        self.brightness = brightness
+        self.fill.setColor(*gauge_color(self.color, brightness))
+        self.track.setColor(
+            *gauge_color(
+                self.color, brightness * GAUGE_TRACK_BRIGHTNESS, GAUGE_TRACK_ALPHA
+            )
+        )
+
+
+class ArcGauge(_Gauge):
     """
     A half-ring gauge, read by the angular portion filled, sweeping from its
     left end over the top. A line of text sits at its centre, and an outline
@@ -449,20 +470,6 @@ class ArcGauge:
         """
         self.text.node().setText(text)
 
-    def set_brightness(self, brightness: float):
-        """
-        :param brightness: Multiplier applied to the gauge's colour
-        """
-        if brightness == self.brightness:
-            return
-        self.brightness = brightness
-        self.fill.setColor(*gauge_color(self.color, brightness))
-        self.track.setColor(
-            *gauge_color(
-                self.color, brightness * GAUGE_TRACK_BRIGHTNESS, GAUGE_TRACK_ALPHA
-            )
-        )
-
     def set_highlighted(self, highlighted: bool):
         """
         :param highlighted: Whether the outline is white rather than black
@@ -486,7 +493,7 @@ class ArcGauge:
         self.text = None
 
 
-class ColumnGauge:
+class ColumnGauge(_Gauge):
     """
     A vertical bar gauge, filling up from its base.
     """
@@ -539,20 +546,6 @@ class ColumnGauge:
         else:
             # A zero scale would make the transform singular
             self.fill.hide()
-
-    def set_brightness(self, brightness: float):
-        """
-        :param brightness: Multiplier applied to the gauge's colour
-        """
-        if brightness == self.brightness:
-            return
-        self.brightness = brightness
-        self.fill.setColor(*gauge_color(self.color, brightness))
-        self.track.setColor(
-            *gauge_color(
-                self.color, brightness * GAUGE_TRACK_BRIGHTNESS, GAUGE_TRACK_ALPHA
-            )
-        )
 
     def clean(self):
         """

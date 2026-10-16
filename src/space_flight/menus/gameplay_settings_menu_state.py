@@ -19,25 +19,24 @@ import copy
 import math
 from typing import TYPE_CHECKING
 
-from direct.gui.DirectGui import DirectFrame, DirectLabel
+from direct.gui.DirectGui import DirectLabel
 from panda3d.core import TextNode
 
-from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.gameplay_settings import (
     CUSTOM_PRESET,
     LIMITS,
     SIDES,
 )
-from space_flight.menus.graphics_settings_menu_state import (
-    _get_by_path,
-    _set_by_path,
-)
 from space_flight.menus.menu_utils import (
-    CustomButton,
     CustomDropDown,
     CustomSlider,
-    MenuNavigator,
-    ScrollableList,
+    ScrollingSettingsMenuState,
+    get_by_path,
+    make_action_buttons,
+    make_settings_chrome,
+    make_warning,
+    section_label,
+    set_by_path,
 )
 
 if TYPE_CHECKING:
@@ -73,8 +72,6 @@ _ROW_ORDER = (
     ("lead_indicator",),
 )
 
-_SECTION_LABELS = {"player": "Player", "bots": "Bots"}
-
 # Layout
 _SLIDER_X = 0.0
 _SLIDER_SCALE = 0.35
@@ -93,7 +90,7 @@ def _snap(value: float, step: float) -> float:
     return round(round(value / step) * step, 6)
 
 
-class GameplaySettingsMenuState(BaseState):
+class GameplaySettingsMenuState(ScrollingSettingsMenuState):
     """
     Full-screen overlay for picking a difficulty preset or tuning the gameplay
     settings.
@@ -102,58 +99,16 @@ class GameplaySettingsMenuState(BaseState):
     """
 
     def __init__(self, app: SpaceFlightSimulator):
-        super().__init__(app)
-        self.working_config: dict = {}
-        self.preset_menu: CustomDropDown | None = None
-        # Sliders keyed by full config path, plus their value labels.
-        self.sliders: dict[tuple, CustomSlider] = {}
-        self.slider_value_labels: dict[tuple, DirectLabel] = {}
-        self.checkboxes: dict[tuple, object] = {}
-        # Navigable scroll rows: (row index, widgets)
-        self.navigable_rows: list[tuple[int, list]] = []
-        self.menu_navigator: MenuNavigator | None = None
-        self.scroll_list = ScrollableList(
+        super().__init__(
             app,
             row_height=_ROW_HEIGHT,
             frame_top=_FRAME_TOP,
             frame_bottom=_FRAME_BOTTOM,
         )
+        self.preset_menu: CustomDropDown | None = None
 
-    # ------------------------------------------------------------------
-    # State lifecycle
-    # ------------------------------------------------------------------
-
-    def enter(self):
-        """Take a working copy of the current settings and build the UI."""
-        self.working_config = copy.deepcopy(self.app.gameplay_settings.config)
-        self.build_static_ui()
-        self.rebuild_scroll()
-        rows, scroll_rows = self.navigation_rows()
-        self.menu_navigator = MenuNavigator(
-            self.app,
-            rows,
-            on_back=self.cancel,
-            scroll_list=self.scroll_list,
-            scroll_rows=scroll_rows,
-        )
-        self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
-        self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
-
-    def exit(self):
-        """Destroy every UI element and force a frame render."""
-        self.menu_navigator.remove()
-        self.menu_navigator = None
-        self.app.ignore("wheel_up")
-        self.app.ignore("wheel_down")
-        self.scroll_list.destroy()
-        self.title.destroy()
-        self.bg.destroy()
-        self.preset_label.destroy()
-        self.preset_menu.destroy()
-        self.warning.destroy()
-        self.cancel_btn.destroy()
-        self.save_btn.destroy()
-        self.force_render()
+    def settings(self):
+        return self.app.gameplay_settings
 
     # ------------------------------------------------------------------
     # UI construction
@@ -170,23 +125,7 @@ class GameplaySettingsMenuState(BaseState):
         """Build the background, title, preset drop-down, warning, and the
         Save / Cancel action buttons. Called once per :meth:`enter`; only the
         scrollable content is rebuilt afterwards."""
-        self.bg = DirectFrame(
-            frameSize=(self.app.a2dLeft, self.app.a2dRight, -1.0, 1.0),
-            frameColor=(0.04, 0.04, 0.1, 0.97),
-        )
-        self.bg.setTransparency(True)
-
-        self.title = DirectLabel(
-            text="Gameplay Settings",
-            scale=0.1,
-            pos=(0, 0, 0.88),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1, 1, 1, 1),
-            text_shadow=(0, 0, 0, 0.75),
-            text_shadowOffset=(0.05, 0.05),
-            text_align=TextNode.ACenter,
-        )
-        self.title.setTransparency(True)
+        self.bg, self.title = make_settings_chrome(self.app, "Gameplay Settings")
 
         self.preset_label = DirectLabel(
             text="Difficulty:",
@@ -205,32 +144,19 @@ class GameplaySettingsMenuState(BaseState):
             command=self.select_preset,
         )
 
-        self.warning = DirectLabel(
-            text="Changes apply from the next mission.",
-            scale=0.045,
-            pos=(0, 0, _WARNING_Y),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1.0, 0.85, 0.4, 1.0),
-            text_align=TextNode.ACenter,
+        self.warning = make_warning("Changes apply from the next mission.", _WARNING_Y)
+        self.cancel_btn, self.save_btn = make_action_buttons(
+            self.app, [("Cancel", self.cancel), ("Save", self.save)]
         )
-        self.warning.setTransparency(True)
-
-        self.cancel_btn = CustomButton(
-            app=self.app,
-            pos=(-0.35, 0, -0.91),
-            command=self.cancel,
-            text="Cancel",
-            scale=0.28,
-            layout="center",
-        )
-        self.save_btn = CustomButton(
-            app=self.app,
-            pos=(0.35, 0, -0.91),
-            command=self.save,
-            text="Save",
-            scale=0.28,
-            layout="center",
-        )
+        self.static_widgets = [
+            self.title,
+            self.bg,
+            self.preset_label,
+            self.preset_menu,
+            self.warning,
+            self.cancel_btn,
+            self.save_btn,
+        ]
 
     def rebuild_scroll(self):
         """
@@ -262,8 +188,7 @@ class GameplaySettingsMenuState(BaseState):
                 self.add_checkbox_row(row["path"], y)
                 self.navigable_rows.append((i, [self.checkboxes[row["path"]]]))
 
-        if self.menu_navigator is not None:
-            self.menu_navigator.set_rows(*self.navigation_rows())
+        self._refresh_navigator()
 
     def navigation_rows(self) -> tuple[list[list], list[int | None]]:
         """
@@ -280,7 +205,7 @@ class GameplaySettingsMenuState(BaseState):
         """Add a slider row (label, slider, value readout) for a full path."""
         label, step, value_format = _SLIDERS[path[1:]]
         self.scroll_list.add_row_label(label, y)
-        value = _get_by_path(self.working_config, path)
+        value = get_by_path(self.working_config, path)
         self.sliders[path] = CustomSlider(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
@@ -292,24 +217,16 @@ class GameplaySettingsMenuState(BaseState):
             parent=self.scroll_list.content,
             step=step,
         )
-        value_label = DirectLabel(
-            parent=self.scroll_list.content,
-            text=value_format.format(value),
-            scale=0.05,
-            pos=(_VALUE_LABEL_X, 0, y - 0.015),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(0.7, 0.85, 1.0, 1.0),
-            text_align=TextNode.ALeft,
+        self.slider_value_labels[path] = self.scroll_list.add_value_label(
+            value_format.format(value), _VALUE_LABEL_X, y
         )
-        value_label.setTransparency(True)
-        self.slider_value_labels[path] = value_label
 
     def add_checkbox_row(self, path: tuple, y: float):
         """Add a boolean setting label and checkbox for a full path."""
-        self.scroll_list.add_row_label(_CHECKBOXES[path[1:]], y)
-        self.checkboxes[path] = self.scroll_list.add_checkbox(
+        self.checkboxes[path] = self.scroll_list.add_checkbox_row(
+            _CHECKBOXES[path[1:]],
             y,
-            _get_by_path(self.working_config, path),
+            get_by_path(self.working_config, path),
             self.on_checkbox_toggle,
             extraArgs=[path],
         )
@@ -336,10 +253,10 @@ class GameplaySettingsMenuState(BaseState):
         """
         rows = []
         for side in SIDES:
-            rows.append({"kind": "header", "text": _SECTION_LABELS[side]})
+            rows.append({"kind": "header", "text": section_label(side)})
             for key in _ROW_ORDER:
                 try:
-                    _get_by_path(self.working_config[side], key)
+                    get_by_path(self.working_config[side], key)
                 except KeyError:
                     continue
                 kind = "slider" if key in _SLIDERS else "checkbox"
@@ -381,33 +298,25 @@ class GameplaySettingsMenuState(BaseState):
         """
         _label, step, value_format = _SLIDERS[path[1:]]
         value = _snap(self.sliders[path].get_value(), step)
-        if math.isclose(value, _get_by_path(self.working_config, path), abs_tol=1e-6):
+        if math.isclose(value, get_by_path(self.working_config, path), abs_tol=1e-6):
             return
-        _set_by_path(self.working_config, path, value)
+        set_by_path(self.working_config, path, value)
         self.slider_value_labels[path]["text"] = value_format.format(value)
         self.mark_custom()
 
     def on_checkbox_toggle(self, status: int, path: tuple):
         """Store a toggled checkbox value, and switch to Custom if it changed."""
         value = bool(status)
-        if value == _get_by_path(self.working_config, path):
+        if value == get_by_path(self.working_config, path):
             return
-        _set_by_path(self.working_config, path, value)
+        set_by_path(self.working_config, path, value)
         self.mark_custom()
 
     # ------------------------------------------------------------------
     # Button callbacks
     # ------------------------------------------------------------------
 
-    def wheel_scroll(self, direction: float):
-        """Scroll the option list by *direction* scroll steps (negative = up)."""
-        self.scroll_list.wheel_scroll(direction)
-
     def save(self):
         """Write the config and return to the caller."""
         self.app.gameplay_settings.save(self.working_config)
-        self.app.state_manager.pop()
-
-    def cancel(self):
-        """Discard all unsaved changes and return to the caller."""
         self.app.state_manager.pop()

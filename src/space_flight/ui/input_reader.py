@@ -271,6 +271,13 @@ class InputState:
         self.axes: dict[str, float] = {}
         self.mouse_moved = False
 
+    def clear(self):
+        """Empty the per-frame dicts (mouse_moved is set on its own)."""
+        self.buttons.clear()
+        self.repeats.clear()
+        self.releases.clear()
+        self.axes.clear()
+
 
 # ---------------------------------------------------------------------------
 # InputReader base class
@@ -347,10 +354,7 @@ class InputReader(DirectObject):
         """
         current = self.read_all_buttons()
 
-        self.state.buttons.clear()
-        self.state.repeats.clear()
-        self.state.releases.clear()
-        self.state.axes.clear()
+        self.state.clear()
 
         for name in current.keys() | self.ev_pressed | self.ev_released:
             is_down = current.get(name, False)
@@ -424,6 +428,26 @@ class InputReader(DirectObject):
             state this frame.
         """
         raise NotImplementedError
+
+    #: The device axes read_axes reads (see _read_device_axes)
+    AXES: tuple = ()
+
+    def _read_device_axes(self, device: InputDevice, state: InputState):
+        """
+        Read and dead-zone the device's :attr:`AXES` into state.axes.
+
+        :param device: The connected device
+        :param state: The :class:`InputState` being built
+        """
+        dead_zones = {
+            "stick": self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE),
+            "throttle": self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE),
+        }
+        for name, axis, dead_zone, inverted in self.AXES:
+            value = device.findAxis(axis).value
+            if inverted:
+                value = 1 - value
+            state.axes[name] = self.apply_dead_zone(value, dead_zones[dead_zone])
 
     def read_axes(self, state: InputState):
         """
@@ -586,6 +610,15 @@ class GamepadReader(InputReader):
     """
 
     device_type = "gamepad"
+    #: (state axis name, device axis, dead zone kind, inverted)
+    AXES = (
+        ("right_trigger", InputDevice.Axis.right_trigger, "throttle", False),
+        ("left_trigger", InputDevice.Axis.left_trigger, "throttle", False),
+        ("left_x", InputDevice.Axis.left_x, "stick", False),
+        ("left_y", InputDevice.Axis.left_y, "stick", False),
+        ("right_x", InputDevice.Axis.right_x, "stick", False),
+        ("right_y", InputDevice.Axis.right_y, "stick", False),
+    )
 
     def __init__(self, app: SpaceFlightSimulator):
         """
@@ -681,27 +714,7 @@ class GamepadReader(InputReader):
         """
         if not self.gamepad:
             return
-        sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
-        tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
-
-        state.axes["right_trigger"] = self.apply_dead_zone(
-            self.gamepad.findAxis(InputDevice.Axis.right_trigger).value, tdz
-        )
-        state.axes["left_trigger"] = self.apply_dead_zone(
-            self.gamepad.findAxis(InputDevice.Axis.left_trigger).value, tdz
-        )
-        state.axes["left_x"] = self.apply_dead_zone(
-            self.gamepad.findAxis(InputDevice.Axis.left_x).value, sdz
-        )
-        state.axes["left_y"] = self.apply_dead_zone(
-            self.gamepad.findAxis(InputDevice.Axis.left_y).value, sdz
-        )
-        state.axes["right_x"] = self.apply_dead_zone(
-            self.gamepad.findAxis(InputDevice.Axis.right_x).value, sdz
-        )
-        state.axes["right_y"] = self.apply_dead_zone(
-            self.gamepad.findAxis(InputDevice.Axis.right_y).value, sdz
-        )
+        self._read_device_axes(self.gamepad, state)
 
     def clean(self):
         """
@@ -727,6 +740,15 @@ class JoystickReader(InputReader):
     """
 
     device_type = "joystick"
+    #: (state axis name, device axis, dead zone kind, inverted). The throttle
+    #: is inverted (1 - raw), so pulling the lever towards the pilot
+    #: increases it.
+    AXES = (
+        ("throttle", InputDevice.Axis.throttle, "throttle", True),
+        ("yaw", InputDevice.Axis.yaw, "stick", False),
+        ("pitch", InputDevice.Axis.pitch, "stick", False),
+        ("roll", InputDevice.Axis.roll, "stick", False),
+    )
 
     def __init__(self, app: SpaceFlightSimulator):
         """
@@ -833,21 +855,7 @@ class JoystickReader(InputReader):
         """
         if not self.flightStick:
             return
-        sdz = self.dead_zones.get("stick", DEFAULT_STICK_DEAD_ZONE)
-        tdz = self.dead_zones.get("throttle", DEFAULT_THROTTLE_DEAD_ZONE)
-
-        state.axes["throttle"] = self.apply_dead_zone(
-            1 - self.flightStick.findAxis(InputDevice.Axis.throttle).value, tdz
-        )
-        state.axes["yaw"] = self.apply_dead_zone(
-            self.flightStick.findAxis(InputDevice.Axis.yaw).value, sdz
-        )
-        state.axes["pitch"] = self.apply_dead_zone(
-            self.flightStick.findAxis(InputDevice.Axis.pitch).value, sdz
-        )
-        state.axes["roll"] = self.apply_dead_zone(
-            self.flightStick.findAxis(InputDevice.Axis.roll).value, sdz
-        )
+        self._read_device_axes(self.flightStick, state)
 
     def clean(self):
         """
@@ -907,10 +915,7 @@ class CompositeInputReader:
 
         :return: The merged :class:`InputState` for this frame.
         """
-        self.state.buttons.clear()
-        self.state.repeats.clear()
-        self.state.releases.clear()
-        self.state.axes.clear()
+        self.state.clear()
         device_used = False
         for reader in self.readers:
             state = reader.poll()

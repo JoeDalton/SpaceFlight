@@ -1,5 +1,5 @@
 """
-Unit tests for the graphics settings menu and the settings hub navigation.
+Unit tests for the graphics settings menu.
 
 Only the pure data + callback methods are exercised (mock app, no DirectGui),
 mirroring tests/test_input_settings.py. UI construction (sliders, checkbox)
@@ -9,17 +9,16 @@ needs a real window and is verified manually / via integration.
 from unittest.mock import MagicMock
 
 import pytest
+from menu_fakes import mock_slider
 
 from space_flight.global_architecture.graphics_settings import GraphicsSettings
 from space_flight.menus.graphics_settings_menu_state import (
     _SCALE_SLIDERS,
     GraphicsSettingsMenuState,
-    _get_by_path,
     _pct,
     _section_label,
-    _set_by_path,
 )
-from space_flight.menus.settings_menu_state import SettingsMenuState
+from space_flight.menus.menu_utils import get_by_path, set_by_path
 
 
 @pytest.fixture
@@ -37,30 +36,23 @@ def state():
     return s
 
 
-def _mock_slider(value):
-    """A stand-in CustomSlider exposing get_value() and a set_value spy."""
-    sl = MagicMock()
-    sl.get_value.return_value = value
-    return sl
-
-
 # ---------------------------------------------------------------------------
 # Path / format helpers
 # ---------------------------------------------------------------------------
 
 
 class TestPathHelpers:
-    def test_get_by_path_nested(self):
-        assert _get_by_path({"a": {"b": {"c": 3}}}, ("a", "b", "c")) == 3
+    def testget_by_path_nested(self):
+        assert get_by_path({"a": {"b": {"c": 3}}}, ("a", "b", "c")) == 3
 
-    def test_set_by_path_nested(self):
+    def testset_by_path_nested(self):
         d = {"a": {"b": {"c": 1}}}
-        _set_by_path(d, ("a", "b", "c"), 9)
+        set_by_path(d, ("a", "b", "c"), 9)
         assert d["a"]["b"]["c"] == 9
 
-    def test_set_by_path_leaves_siblings(self):
+    def testset_by_path_leaves_siblings(self):
         d = {"a": {"b": 1, "c": 2}}
-        _set_by_path(d, ("a", "b"), 9)
+        set_by_path(d, ("a", "b"), 9)
         assert d["a"] == {"b": 9, "c": 2}
 
     @pytest.mark.parametrize(
@@ -78,7 +70,7 @@ class TestPathHelpers:
 class TestOnScaleSlider:
     def test_stores_value_and_updates_label(self, state):
         path = ("render", "scale")
-        state.sliders = {path: _mock_slider(0.65)}
+        state.sliders = {path: mock_slider(0.65)}
         state.slider_value_labels = {path: MagicMock()}
 
         state.on_scale_slider(path)
@@ -93,10 +85,10 @@ class TestOnScaleSlider:
             (("render", "reflection_scale"), 0.3),
             (("render", "mirror_scale"), 0.8),
         ]:
-            state.sliders = {path: _mock_slider(value)}
+            state.sliders = {path: mock_slider(value)}
             state.slider_value_labels = {path: MagicMock()}
             state.on_scale_slider(path)
-            assert _get_by_path(state.working_config, path) == pytest.approx(value)
+            assert get_by_path(state.working_config, path) == pytest.approx(value)
 
 
 class TestScaleSliderRanges:
@@ -108,9 +100,9 @@ class TestScaleSliderRanges:
         """
         _label, (low, high) = _SCALE_SLIDERS[path]
         config = {path[0]: {path[1]: -1e9}}
-        assert _get_by_path(GraphicsSettings.sanitise(config), path) == low
+        assert get_by_path(GraphicsSettings.sanitise(config), path) == low
         config = {path[0]: {path[1]: 1e9}}
-        assert _get_by_path(GraphicsSettings.sanitise(config), path) == high
+        assert get_by_path(GraphicsSettings.sanitise(config), path) == high
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +126,7 @@ class TestOnMsaaSlider:
     def test_rounds_to_nearest_stop(
         self, state, slider_value, expected_msaa, expected_label
     ):
-        state.sliders = {self.PATH: _mock_slider(slider_value)}
+        state.sliders = {self.PATH: mock_slider(slider_value)}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
         state.on_discrete_slider(self.PATH)
@@ -145,7 +137,7 @@ class TestOnMsaaSlider:
         )
 
     def test_out_of_range_value_is_clamped(self, state):
-        state.sliders = {self.PATH: _mock_slider(99.0)}
+        state.sliders = {self.PATH: mock_slider(99.0)}
         state.slider_value_labels = {self.PATH: MagicMock()}
         state.on_discrete_slider(self.PATH)
         assert state.working_config["antialiasing"]["msaa"] == 8
@@ -154,7 +146,7 @@ class TestOnMsaaSlider:
         # Regression: writing the value back from inside the ADJUST handler
         # re-enqueues ADJUST forever and freezes the game. The handler must
         # never call set_value / mutate the slider.
-        slider = _mock_slider(2.0)
+        slider = mock_slider(2.0)
         state.sliders = {self.PATH: slider}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
@@ -248,7 +240,7 @@ class TestOnCloudQualitySlider:
     def test_rounds_to_nearest_stop(
         self, state, slider_value, expected, expected_label
     ):
-        state.sliders = {self.PATH: _mock_slider(slider_value)}
+        state.sliders = {self.PATH: mock_slider(slider_value)}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
         state.on_discrete_slider(self.PATH)
@@ -260,14 +252,14 @@ class TestOnCloudQualitySlider:
 
     @pytest.mark.parametrize("value,expected", [(99.0, "ultra"), (-5.0, "low")])
     def test_out_of_range_value_is_clamped(self, state, value, expected):
-        state.sliders = {self.PATH: _mock_slider(value)}
+        state.sliders = {self.PATH: mock_slider(value)}
         state.slider_value_labels = {self.PATH: MagicMock()}
         state.on_discrete_slider(self.PATH)
         assert state.working_config["clouds"]["quality"] == expected
 
     def test_does_not_write_back_to_slider(self, state):
         # Same freeze regression as the MSAA slider.
-        slider = _mock_slider(2.0)
+        slider = mock_slider(2.0)
         state.sliders = {self.PATH: slider}
         state.slider_value_labels = {self.PATH: MagicMock()}
 
@@ -282,7 +274,7 @@ class TestOnCloudQualitySlider:
         from space_flight.scenes.cloud import CloudQuality
 
         for index in range(4):
-            state.sliders = {self.PATH: _mock_slider(float(index))}
+            state.sliders = {self.PATH: mock_slider(float(index))}
             state.slider_value_labels = {self.PATH: MagicMock()}
             state.on_discrete_slider(self.PATH)
             CloudQuality(state.working_config["clouds"]["quality"])
@@ -307,7 +299,7 @@ class TestOnCheckboxToggle:
     )
     def test_stores_bool(self, state, path, status, expected):
         state.on_checkbox_toggle(status, path)
-        assert _get_by_path(state.working_config, path) is expected
+        assert get_by_path(state.working_config, path) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -343,29 +335,3 @@ class TestSaveCancel:
         state.cancel()
         state.app.graphics_settings.save.assert_not_called()
         state.app.state_manager.pop.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# SettingsMenuState navigation
-# ---------------------------------------------------------------------------
-
-
-class TestSettingsHubNavigation:
-    def test_input_button_pushes_input_state(self):
-        s = SettingsMenuState(app=MagicMock())
-        s.enter_input_settings()
-        s.app.state_manager.push.assert_called_once_with(
-            s.app.state_manager.INPUT_SETTINGS_STATE
-        )
-
-    def test_graphics_button_pushes_graphics_state(self):
-        s = SettingsMenuState(app=MagicMock())
-        s.enter_graphics_settings()
-        s.app.state_manager.push.assert_called_once_with(
-            s.app.state_manager.GRAPHICS_SETTINGS_STATE
-        )
-
-    def test_back_pops(self):
-        s = SettingsMenuState(app=MagicMock())
-        s.back()
-        s.app.state_manager.pop.assert_called_once()

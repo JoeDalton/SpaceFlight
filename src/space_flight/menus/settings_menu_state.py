@@ -8,7 +8,7 @@ Reached from the main menu and the pause menu via their *Settings* button.
 from direct.gui.DirectGui import DirectFrame
 
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.menus.menu_utils import CustomButton, MenuNavigator
+from space_flight.menus.menu_utils import MenuNavigator, make_button_column
 
 
 class SettingsMenuState(BaseState):
@@ -24,44 +24,23 @@ class SettingsMenuState(BaseState):
             frameSize=(self.app.a2dLeft, self.app.a2dRight, -1.0, 1.0),
             frameColor=(0, 0, 0, 1),
         )
-        button_scale = 0.5
-        text_scale = 0.15
-        self.gameplay_button = CustomButton(
-            app=self.app,
-            text="Gameplay Settings",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.enter_gameplay_settings,
-            pos=(0.0, 0.0, 0.45),
-            layout="center",
+        self.buttons = make_button_column(
+            self.app,
+            [
+                ("Gameplay Settings", self.enter_gameplay_settings),
+                ("Input Settings", self.enter_input_settings),
+                ("Graphics Settings", self.enter_graphics_settings),
+                ("Back", self.back),
+            ],
+            top_z=0.45,
+            step=0.3,
         )
-        self.input_button = CustomButton(
-            app=self.app,
-            text="Input Settings",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.enter_input_settings,
-            pos=(0.0, 0.0, 0.15),
-            layout="center",
-        )
-        self.graphics_button = CustomButton(
-            app=self.app,
-            text="Graphics Settings",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.enter_graphics_settings,
-            pos=(0.0, 0.0, -0.15),
-            layout="center",
-        )
-        self.back_button = CustomButton(
-            app=self.app,
-            text="Back",
-            scale=button_scale,
-            text_scale=text_scale,
-            command=self.back,
-            pos=(0.0, 0.0, -0.45),
-            layout="center",
-        )
+        (
+            self.gameplay_button,
+            self.input_button,
+            self.graphics_button,
+            self.back_button,
+        ) = self.buttons
         self.menu_navigator = MenuNavigator(
             self.app,
             [
@@ -91,24 +70,18 @@ class SettingsMenuState(BaseState):
 
     def pause(self):
         """Hide the buttons while a settings screen is open on top."""
-        self.gameplay_button.hide()
-        self.input_button.hide()
-        self.graphics_button.hide()
-        self.back_button.hide()
+        for button in self.buttons:
+            button.hide()
 
     def resume(self):
         """Re-show the buttons when a settings screen above is popped."""
-        self.gameplay_button.show()
-        self.input_button.show()
-        self.graphics_button.show()
-        self.back_button.show()
+        for button in self.buttons:
+            button.show()
 
     def exit(self):
         """Destroy all buttons and force a frame render."""
         self.menu_navigator.remove()
-        self.gameplay_button.destroy()
-        self.input_button.destroy()
-        self.graphics_button.destroy()
-        self.back_button.destroy()
+        for button in self.buttons:
+            button.destroy()
         self.bg.destroy()
         self.force_render()

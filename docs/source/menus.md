@@ -72,8 +72,19 @@ All of it lives in [`src/space_flight/menus/`](https://github.com/JoeDalton/Spac
   `rebuild(n_rows)` → content node, `row_y(i)`, `wheel_scroll(step)`,
   `scroll_to(i)` (the least scroll showing row *i* with a row of margin on
   each side, so the header above a section's first row shows),
-  `destroy()`, plus `add_header`/`add_row_label`/`add_checkbox` row helpers.
-  Every settings screen uses it.
+  `destroy()`, plus `add_header`/`add_row_label`/`add_checkbox`/
+  `add_checkbox_row`/`add_value_label` row helpers. Every settings screen uses
+  it.
+- **`ScrollingSettingsMenuState`** is the base of the gameplay and graphics
+  settings screens: it takes the working copy of `settings().config`, builds
+  the screen (`build_static_ui`, `rebuild_scroll`) and its `MenuNavigator`
+  (`navigation_rows`), and destroys `static_widgets` on exit.
+- **Building blocks**: `make_settings_chrome` (background and title),
+  `make_warning`, `make_action_buttons` (the bottom row of a settings screen),
+  `make_button_column` (the main, settings hub, pause and level-end menus),
+  `section_label`, `get_by_path`/`set_by_path` (a nested config value), and
+  `return_to_main_menu`/`quit_game` (the pause and level-end menus, saving the
+  level's game record if recording).
 
 ## Navigation
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import random
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -19,7 +21,8 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import ClockObject, aspect2d
 from panda3d.core import NodePath, TextNode
 
-from space_flight import DATAFILES_PATH
+from space_flight import DATAFILES_PATH, RECORD_GAME
+from space_flight.global_architecture.base_state import BaseState
 from space_flight.ui.input_context import MenuInputContext
 
 # Colour scale marking the focus on widgets without a "hover" image
@@ -331,6 +334,33 @@ class ScrollableList:
             extraArgs=extraArgs,
             parent=self.content,
         )
+
+    def add_checkbox_row(
+        self,
+        label: str,
+        y: float,
+        value: bool,
+        command: Callable,
+        extraArgs: list = [],
+    ) -> CustomCheckButton:
+        """Add a boolean setting row: its label, and a checkbox (see
+        :meth:`add_checkbox`)."""
+        self.add_row_label(label, y)
+        return self.add_checkbox(y, value, command, extraArgs=extraArgs)
+
+    def add_value_label(self, text: str, x: float, y: float) -> DirectLabel:
+        """Add a left-aligned value readout (e.g. a slider's) at *x*, *y*."""
+        label = DirectLabel(
+            parent=self.content,
+            text=text,
+            scale=0.05,
+            pos=(x, 0, y - 0.015),
+            frameColor=(0, 0, 0, 0),
+            text_fg=(0.7, 0.85, 1.0, 1.0),
+            text_align=TextNode.ALeft,
+        )
+        label.setTransparency(True)
+        return label
 
     def scroll_to(self, index: int):
         """
@@ -1234,3 +1264,256 @@ class CustomDropDown:
         self.close()
         self.arrow.destroy()
         self.head.destroy()
+
+
+# ---------------------------------------------------------------------------
+# Shared menu building blocks
+# ---------------------------------------------------------------------------
+
+
+def get_by_path(cfg: dict, path: tuple) -> Any:
+    """Return the value at *path* (a tuple of keys) within nested dict *cfg*."""
+    d = cfg
+    for key in path:
+        d = d[key]
+    return d
+
+
+def set_by_path(cfg: dict, path: tuple, value: Any):
+    """Set the value at *path* (a tuple of keys) within nested dict *cfg*."""
+    d = cfg
+    for key in path[:-1]:
+        d = d[key]
+    d[path[-1]] = value
+
+
+def section_label(name: str, overrides: dict[str, str] | None = None) -> str:
+    """
+    :param name: A config section's key
+    :param overrides: Labels for the keys title-casing reads oddly for
+    :return: The section's display header
+    """
+    if overrides and name in overrides:
+        return overrides[name]
+    return name.replace("_", " ").title()
+
+
+def make_settings_chrome(app: ShowBase, title: str) -> tuple[DirectFrame, DirectLabel]:
+    """
+    Build a settings screen's full-screen background and title.
+
+    :param app: The ShowBase application
+    :param title: The screen's title
+    :return: The background frame and the title label
+    """
+    bg = DirectFrame(
+        frameSize=(app.a2dLeft, app.a2dRight, -1.0, 1.0),
+        frameColor=(0.04, 0.04, 0.1, 0.97),
+    )
+    bg.setTransparency(True)
+    title_label = DirectLabel(
+        text=title,
+        scale=0.1,
+        pos=(0, 0, 0.88),
+        frameColor=(0, 0, 0, 0),
+        text_fg=(1, 1, 1, 1),
+        text_shadow=(0, 0, 0, 0.75),
+        text_shadowOffset=(0.05, 0.05),
+        text_align=TextNode.ACenter,
+    )
+    title_label.setTransparency(True)
+    return bg, title_label
+
+
+def make_warning(text: str, y: float) -> DirectLabel:
+    """
+    :param text: The warning
+    :param y: Its height
+    :return: A centred warning label (e.g. when the settings apply)
+    """
+    warning = DirectLabel(
+        text=text,
+        scale=0.045,
+        pos=(0, 0, y),
+        frameColor=(0, 0, 0, 0),
+        text_fg=(1.0, 0.85, 0.4, 1.0),
+        text_align=TextNode.ACenter,
+    )
+    warning.setTransparency(True)
+    return warning
+
+
+def make_action_buttons(
+    app: ShowBase, actions: list[tuple[str, Callable]]
+) -> list[CustomButton]:
+    """
+    Build a settings screen's bottom row of action buttons (Cancel, Save...),
+    centred and evenly spaced.
+
+    :param app: The ShowBase application
+    :param actions: Each button's text and command, left to right
+    :return: The buttons, left to right
+    """
+    middle = (len(actions) - 1) / 2
+    return [
+        CustomButton(
+            app=app,
+            pos=((i - middle) * 0.7, 0, -0.91),
+            command=command,
+            text=text,
+            scale=0.28,
+            layout="center",
+        )
+        for i, (text, command) in enumerate(actions)
+    ]
+
+
+def make_button_column(
+    app: ShowBase, actions: list[tuple[str, Callable]], top_z: float, step: float
+) -> list[CustomButton]:
+    """
+    Build a menu's column of large centred buttons (main, pause... menus).
+
+    :param app: The ShowBase application
+    :param actions: Each button's text and command, top to bottom
+    :param top_z: Height of the top button
+    :param step: Vertical distance between two buttons
+    :return: The buttons, top to bottom
+    """
+    return [
+        CustomButton(
+            app=app,
+            text=text,
+            scale=0.5,
+            text_scale=0.15,
+            command=command,
+            pos=(0.0, 0.0, top_z - i * step),
+            layout="center",
+        )
+        for i, (text, command) in enumerate(actions)
+    ]
+
+
+def save_game_record(app: ShowBase):
+    """Save the game logs of the level below the current state, if recording."""
+    if RECORD_GAME:
+        app.state_manager.stack[-2].record.save()
+
+
+def return_to_main_menu(app: ShowBase):
+    """Leave the level for the main menu (saving its logs, if recording)."""
+    save_game_record(app)
+    app.state_manager.clear()
+    app.state_manager.replace(app.state_manager.MAIN_MENU_STATE)
+
+
+def quit_game(app: ShowBase):
+    """Quit the application from a level (saving its logs, if recording)."""
+    save_game_record(app)
+    sys.exit()
+
+
+class ScrollingSettingsMenuState(BaseState):
+    """
+    Base of the settings screens editing a working copy of their settings in a
+    scrollable list of rows, written back only on *Save*.
+
+    Subclasses build their static widgets (also listed in
+    :attr:`static_widgets`, destroyed on exit) in build_static_ui, their rows
+    in rebuild_scroll, and give the menu navigator's rows in
+    navigation_rows.
+
+    :param app: The ShowBase application
+    :param row_height: Vertical space allotted to each row
+    :param frame_top: Z of the top edge of the scrollable frame
+    :param frame_bottom: Z of the bottom edge of the scrollable frame
+    """
+
+    def __init__(
+        self, app: ShowBase, row_height: float, frame_top: float, frame_bottom: float
+    ):
+        super().__init__(app)
+        self.working_config: dict = {}
+        # Sliders keyed by config path, plus their value labels.
+        self.sliders: dict[tuple, CustomSlider] = {}
+        self.slider_value_labels: dict[tuple, DirectLabel] = {}
+        self.checkboxes: dict[tuple, object] = {}
+        # Navigable scroll rows: (row index, widgets)
+        self.navigable_rows: list[tuple[int, list]] = []
+        self.static_widgets: list = []
+        self.menu_navigator: MenuNavigator | None = None
+        self.scroll_list = ScrollableList(
+            app,
+            row_height=row_height,
+            frame_top=frame_top,
+            frame_bottom=frame_bottom,
+        )
+
+    def settings(self) -> Any:
+        """:return: The edited settings object (with a ``config`` dict)"""
+        raise NotImplementedError
+
+    # ------------------------------------------------------------------
+    # State lifecycle
+    # ------------------------------------------------------------------
+
+    def enter(self):
+        """Take a working copy of the current settings and build the UI."""
+        self.working_config = copy.deepcopy(self.settings().config)
+        self.build_static_ui()
+        self.rebuild_scroll()
+        rows, scroll_rows = self.navigation_rows()
+        self.menu_navigator = MenuNavigator(
+            self.app,
+            rows,
+            on_back=self.cancel,
+            scroll_list=self.scroll_list,
+            scroll_rows=scroll_rows,
+        )
+        self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
+        self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
+
+    def exit(self):
+        """Destroy every UI element and force a frame render."""
+        self.menu_navigator.remove()
+        self.menu_navigator = None
+        self.app.ignore("wheel_up")
+        self.app.ignore("wheel_down")
+        self.scroll_list.destroy()
+        for widget in self.static_widgets:
+            widget.destroy()
+        self.static_widgets = []
+        self.force_render()
+
+    # ------------------------------------------------------------------
+    # Subclass hooks
+    # ------------------------------------------------------------------
+
+    def build_static_ui(self):
+        """Build the widgets around the scrollable rows, once per enter."""
+        raise NotImplementedError
+
+    def rebuild_scroll(self):
+        """(Re)build the scrollable rows from the working config."""
+        raise NotImplementedError
+
+    def navigation_rows(self) -> tuple[list[list], list[int | None]]:
+        """:return: The menu navigator's rows and their scroll-list row indices"""
+        raise NotImplementedError
+
+    def _refresh_navigator(self):
+        """Hand the rebuilt rows to the menu navigator, once it exists."""
+        if self.menu_navigator is not None:
+            self.menu_navigator.set_rows(*self.navigation_rows())
+
+    # ------------------------------------------------------------------
+    # Callbacks
+    # ------------------------------------------------------------------
+
+    def wheel_scroll(self, direction: float):
+        """Scroll the option list by *direction* scroll steps (negative = up)."""
+        self.scroll_list.wheel_scroll(direction)
+
+    def cancel(self):
+        """Discard all unsaved changes and return to the caller."""
+        self.app.state_manager.pop()

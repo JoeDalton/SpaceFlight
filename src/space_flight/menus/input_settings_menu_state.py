@@ -5,11 +5,12 @@ Input settings menu — lets the player view and remap all input bindings.
 from __future__ import annotations
 
 import contextlib
+import functools
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import yaml
-from direct.gui.DirectGui import DGG, DirectFrame, DirectLabel, OkCancelDialog
+from direct.gui.DirectGui import DGG, DirectLabel, OkCancelDialog
 from panda3d.core import ButtonHandle, InputDevice, NodePath, TextNode, VBase4, Vec2
 
 from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
@@ -18,6 +19,11 @@ from space_flight.menus.menu_utils import (
     CustomButton,
     CustomEntry,
     ScrollableList,
+    get_by_path,
+    make_action_buttons,
+    make_settings_chrome,
+    section_label,
+    set_by_path,
 )
 from space_flight.ui.input_reader import (
     GAMEPAD_AXIS_NAMES,
@@ -35,7 +41,6 @@ if TYPE_CHECKING:
 _BINDINGS_FILE = CONFIGURATION_PATH / "bindings.yaml"
 _DEFAULT_BINDINGS_FILE = DEFAULT_CONFIGURATION_PATH / "default_bindings.yaml"
 
-_CONTEXT_LABELS = {"flight": "Flight", "radial_menu": "Radial Menu"}
 _ROW_HEIGHT = 0.09
 _AXIS_DEAD_ZONE = 0.33
 
@@ -341,6 +346,18 @@ class ChangeBindingDialog(object):
 # ---------------------------------------------------------------------------
 
 
+def _unless_dialog_open(method: Callable) -> Callable:
+    """Make a method silently ignored while a ChangeBindingDialog is open."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if self.active_dialog is not None:
+            return None
+        return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class InputSettingsMenuState(BaseState):
     """
     Full-screen overlay for viewing and editing all input bindings.
@@ -426,23 +443,7 @@ class InputSettingsMenuState(BaseState):
         invocation; only the scrollable content is rebuilt when the edited
         device changes.
         """
-        self.bg = DirectFrame(
-            frameSize=(self.app.a2dLeft, self.app.a2dRight, -1.0, 1.0),
-            frameColor=(0.04, 0.04, 0.1, 0.97),
-        )
-        self.bg.setTransparency(True)
-
-        self.title = DirectLabel(
-            text="Input Settings",
-            scale=0.1,
-            pos=(0, 0, 0.88),
-            frameColor=(0, 0, 0, 0),
-            text_fg=(1, 1, 1, 1),
-            text_shadow=(0, 0, 0, 0.75),
-            text_shadowOffset=(0.05, 0.05),
-            text_align=TextNode.ACenter,
-        )
-        self.title.setTransparency(True)
+        self.bg, self.title = make_settings_chrome(self.app, "Input Settings")
 
         # Device tabs label
         it_label = DirectLabel(
@@ -472,29 +473,13 @@ class InputSettingsMenuState(BaseState):
         self.refresh_device_buttons()
 
         # Bottom action buttons
-        self.default_btn = CustomButton(
-            app=self.app,
-            pos=(-0.7, 0, -0.91),
-            command=self.load_default,
-            text="Default",
-            scale=0.28,
-            layout="center",
-        )
-        self.cancel_btn = CustomButton(
-            app=self.app,
-            pos=(0.0, 0, -0.91),
-            command=self.cancel,
-            text="Cancel",
-            scale=0.28,
-            layout="center",
-        )
-        self.save_btn = CustomButton(
-            app=self.app,
-            pos=(0.7, 0, -0.91),
-            command=self.save,
-            text="Save",
-            scale=0.28,
-            layout="center",
+        self.default_btn, self.cancel_btn, self.save_btn = make_action_buttons(
+            self.app,
+            [
+                ("Default", self.load_default),
+                ("Cancel", self.cancel),
+                ("Save", self.save),
+            ],
         )
 
     def rebuild_scroll(self):
@@ -563,9 +548,12 @@ class InputSettingsMenuState(BaseState):
             "value" keys.
         :param y: Vertical position on the canvas.
         """
-        self.scroll_list.add_row_label(row["label"], y)
-        self.scroll_list.add_checkbox(
-            y, row["value"], self.on_checkbox_toggle, extraArgs=[row["path"]]
+        self.scroll_list.add_checkbox_row(
+            row["label"],
+            y,
+            row["value"],
+            self.on_checkbox_toggle,
+            extraArgs=[row["path"]],
         )
 
     def add_binding_row(self, row: dict, y: float):
@@ -661,7 +649,7 @@ class InputSettingsMenuState(BaseState):
             bindings = ctx_data.get(inp, {})
             if not bindings:
                 continue
-            label = _CONTEXT_LABELS.get(ctx_name, ctx_name.replace("_", " ").title())
+            label = section_label(ctx_name)
             rows.append({"kind": "header", "text": f"{label} Bindings"})
             for action, val in bindings.items():
                 if isinstance(val, bool):
@@ -700,14 +688,11 @@ class InputSettingsMenuState(BaseState):
         """
         for path, entry in self.dz_entries.items():
             val = entry.get().strip()
-            d = self.working_config
-            for key in path[:-1]:
-                d = d[key]
-            orig = d.get(path[-1])
-            if isinstance(orig, float):
+            section = get_by_path(self.working_config, path[:-1])
+            if isinstance(section.get(path[-1]), float):
                 with contextlib.suppress(ValueError):
                     val = float(val)
-            d[path[-1]] = val
+            section[path[-1]] = val
 
     def on_checkbox_toggle(self, status: int, path: tuple):
         """
@@ -719,15 +704,13 @@ class InputSettingsMenuState(BaseState):
             :class:`~space_flight.menus.menu_utils.CustomCheckButton`.
         :param path: Config-tree path tuple identifying the boolean setting.
         """
-        d = self.working_config
-        for key in path[:-1]:
-            d = d[key]
-        d[path[-1]] = bool(status)
+        set_by_path(self.working_config, path, bool(status))
 
     # ------------------------------------------------------------------
     # Dialog
     # ------------------------------------------------------------------
 
+    @_unless_dialog_open
     def open_dialog(self, path: tuple, label: str):
         """
         Open a :class:`ChangeBindingDialog` for the action at *path*.
@@ -738,8 +721,6 @@ class InputSettingsMenuState(BaseState):
             ("contexts", "flight", "keyboard", "fire")).
         :param label: Human-readable action name shown inside the dialog.
         """
-        if self.active_dialog is not None:
-            return
         self.active_dialog = ChangeBindingDialog(
             app=self.app,
             action=label,
@@ -765,10 +746,7 @@ class InputSettingsMenuState(BaseState):
         self.active_dialog = None
         if new_value is None:
             return
-        d = self.working_config
-        for key in path[:-1]:
-            d = d[key]
-        d[path[-1]] = new_value
+        set_by_path(self.working_config, path, new_value)
         if path in self.binding_labels:
             self.binding_labels[path]["text"] = format_binding(
                 self.edited_device, new_value, new_type
@@ -778,6 +756,7 @@ class InputSettingsMenuState(BaseState):
     # Button callbacks
     # ------------------------------------------------------------------
 
+    @_unless_dialog_open
     def wheel_scroll(self, direction: float):
         """
         Scroll the binding list by *direction* scroll steps (negative = up).
@@ -788,10 +767,9 @@ class InputSettingsMenuState(BaseState):
         :param direction: Number of scroll steps; negative scrolls toward the
             top.
         """
-        if self.active_dialog is not None:
-            return
         self.scroll_list.wheel_scroll(direction)
 
+    @_unless_dialog_open
     def select_device(self, device: str):
         """
         Switch the edited device and rebuild the binding list.
@@ -801,13 +779,12 @@ class InputSettingsMenuState(BaseState):
 
         :param device: One of "keyboard", "gamepad", or "joystick".
         """
-        if self.active_dialog is not None:
-            return
         self.flush_dead_zones()
         self.edited_device = device
         self.refresh_device_buttons()
         self.rebuild_scroll()
 
+    @_unless_dialog_open
     def save(self):
         """
         Flush edits, write the configuration to disk, and rebuild the reader.
@@ -818,8 +795,6 @@ class InputSettingsMenuState(BaseState):
         without a restart, then pops back to the settings screen.  Silently
         ignored if a dialog is open.
         """
-        if self.active_dialog is not None:
-            return
         self.flush_dead_zones()
         with open(_BINDINGS_FILE, "w") as f:
             yaml.dump(self.working_config, f, default_flow_style=False, sort_keys=False)
@@ -831,6 +806,7 @@ class InputSettingsMenuState(BaseState):
         self.app.input_context_stack.refresh_all_bindings(self.app)
         self.app.state_manager.pop()
 
+    @_unless_dialog_open
     def cancel(self):
         """
         Discard all unsaved changes and return to the caller.
@@ -838,10 +814,9 @@ class InputSettingsMenuState(BaseState):
         The YAML file on disk is not modified.  Silently ignored if a dialog is
         open.
         """
-        if self.active_dialog is not None:
-            return
         self.app.state_manager.pop()
 
+    @_unless_dialog_open
     def load_default(self):
         """
         Replace the working configuration with the factory defaults.
@@ -850,7 +825,5 @@ class InputSettingsMenuState(BaseState):
         rebuilds the binding list.  Changes are not written to disk until the
         user clicks *Save*.  Silently ignored if a dialog is open.
         """
-        if self.active_dialog is not None:
-            return
         self.working_config = load_bindings(_DEFAULT_BINDINGS_FILE)
         self.rebuild_scroll()
