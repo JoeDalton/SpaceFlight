@@ -31,10 +31,6 @@
 :class: autosummary longtable
 :align: left
 
-* - {py:obj}`_explosion_shader <space_flight.fx.fire_smoke_fx._explosion_shader>`
-  - ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._explosion_shader
-    :summary:
-    ```
 * - {py:obj}`_emit_layer <space_flight.fx.fire_smoke_fx._emit_layer>`
   - ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._emit_layer
     :summary:
@@ -109,10 +105,6 @@
     ```
 * - {py:obj}`HIT_EXPLOSION_JET_ANGLE_SCALE <space_flight.fx.fire_smoke_fx.HIT_EXPLOSION_JET_ANGLE_SCALE>`
   - ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.HIT_EXPLOSION_JET_ANGLE_SCALE
-    :summary:
-    ```
-* - {py:obj}`_EXPLOSION_SHADER <space_flight.fx.fire_smoke_fx._EXPLOSION_SHADER>`
-  - ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._EXPLOSION_SHADER
     :summary:
     ```
 * - {py:obj}`_EXPLOSION_COLUMNS <space_flight.fx.fire_smoke_fx._EXPLOSION_COLUMNS>`
@@ -303,23 +295,6 @@
 
 ````
 
-````{py:data} _EXPLOSION_SHADER
-:canonical: space_flight.fx.fire_smoke_fx._EXPLOSION_SHADER
-:value: >
-   None
-
-```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._EXPLOSION_SHADER
-```
-
-````
-
-````{py:function} _explosion_shader() -> panda3d.core.Shader
-:canonical: space_flight.fx.fire_smoke_fx._explosion_shader
-
-```{autodoc2-docstring} space_flight.fx.fire_smoke_fx._explosion_shader
-```
-````
-
 ````{py:data} _EXPLOSION_COLUMNS
 :canonical: space_flight.fx.fire_smoke_fx._EXPLOSION_COLUMNS
 :value: >
@@ -330,7 +305,7 @@
 
 ````
 
-`````{py:class} _FireSmokeBuffer(game: space_flight.game.flight_state.FlightState, texture: panda3d.core.Texture, tile_rects: list, fadein: float, bin_order: int, additive: bool, task_name: str)
+`````{py:class} _FireSmokeBuffer(game: space_flight.game.flight_state.FlightState, texture: panda3d.core.Texture, tile_rects: list, fadein: float, bin_order: int = 20, additive: bool = False)
 :canonical: space_flight.fx.fire_smoke_fx._FireSmokeBuffer
 
 Bases: {py:obj}`space_flight.fx.ParticleBuffer`
@@ -451,6 +426,14 @@ Bases: {py:obj}`space_flight.fx.ParticleBuffer`
 :canonical: space_flight.fx.fire_smoke_fx.FireSmokePool.trail_fire
 
 ```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool.trail_fire
+```
+
+````
+
+````{py:method} _trail(buffer: space_flight.fx.fire_smoke_fx._FireSmokeBuffer, layer: space_flight.fx.fire_smoke_fx._Layer, position: panda3d.core.Vec3, base_velocity: panda3d.core.Vec3, scale: float, count: int)
+:canonical: space_flight.fx.fire_smoke_fx.FireSmokePool._trail
+
+```{autodoc2-docstring} space_flight.fx.fire_smoke_fx.FireSmokePool._trail
 ```
 
 ````

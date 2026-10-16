@@ -43,10 +43,6 @@
   - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._clean
     :summary:
     ```
-* - {py:obj}`_load_file <space_flight.global_architecture.gameplay_settings._load_file>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._load_file
-    :summary:
-    ```
 * - {py:obj}`load_presets <space_flight.global_architecture.gameplay_settings.load_presets>`
   - ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings.load_presets
     :summary:
@@ -244,13 +240,6 @@
 :canonical: space_flight.global_architecture.gameplay_settings._clean
 
 ```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._clean
-```
-````
-
-````{py:function} _load_file(path: pathlib.Path) -> dict
-:canonical: space_flight.global_architecture.gameplay_settings._load_file
-
-```{autodoc2-docstring} space_flight.global_architecture.gameplay_settings._load_file
 ```
 ````
 

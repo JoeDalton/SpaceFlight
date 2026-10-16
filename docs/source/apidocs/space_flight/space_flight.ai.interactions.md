@@ -21,6 +21,22 @@
     ```
 ````
 
+### Functions
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`pair_indices <space_flight.ai.interactions.pair_indices>`
+  - ```{autodoc2-docstring} space_flight.ai.interactions.pair_indices
+    :summary:
+    ```
+* - {py:obj}`pair_geometry <space_flight.ai.interactions.pair_geometry>`
+  - ```{autodoc2-docstring} space_flight.ai.interactions.pair_geometry
+    :summary:
+    ```
+````
+
 ### Data
 
 ````{list-table}
@@ -57,6 +73,20 @@
 ```{autodoc2-docstring} space_flight.ai.interactions._ZERO3
 ```
 
+````
+
+````{py:function} pair_indices(interactions: Interactions, actor_id: uuid.UUID, target_id: typing.Any) -> tuple[int, int] | None
+:canonical: space_flight.ai.interactions.pair_indices
+
+```{autodoc2-docstring} space_flight.ai.interactions.pair_indices
+```
+````
+
+````{py:function} pair_geometry(interactions: Interactions, actor_id: uuid.UUID, target_id: typing.Any) -> tuple[float, numpy.ndarray, numpy.ndarray] | None
+:canonical: space_flight.ai.interactions.pair_geometry
+
+```{autodoc2-docstring} space_flight.ai.interactions.pair_geometry
+```
 ````
 
 `````{py:class} Interactions(max_actors: int = MAX_ACTORS)

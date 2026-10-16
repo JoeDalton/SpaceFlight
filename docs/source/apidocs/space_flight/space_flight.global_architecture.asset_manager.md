@@ -77,7 +77,7 @@
 
 ````
 
-````{py:method} load_game_assets(app_state: space_flight.menus.splash_state.SplashState, assets_to_load: list[tuple[str, pathlib.Path, str]] | None = None)
+````{py:method} load_game_assets(app_state: space_flight.menus.splash_state.SplashState)
 :canonical: space_flight.global_architecture.asset_manager.AssetManager.load_game_assets
 
 ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.AssetManager.load_game_assets

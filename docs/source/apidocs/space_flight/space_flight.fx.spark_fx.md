@@ -29,18 +29,6 @@
     ```
 ````
 
-### Functions
-
-````{list-table}
-:class: autosummary longtable
-:align: left
-
-* - {py:obj}`_spark_shader <space_flight.fx.spark_fx._spark_shader>`
-  - ```{autodoc2-docstring} space_flight.fx.spark_fx._spark_shader
-    :summary:
-    ```
-````
-
 ### Data
 
 ````{list-table}
@@ -65,10 +53,6 @@
     ```
 * - {py:obj}`_SPARK_TEXTURE <space_flight.fx.spark_fx._SPARK_TEXTURE>`
   - ```{autodoc2-docstring} space_flight.fx.spark_fx._SPARK_TEXTURE
-    :summary:
-    ```
-* - {py:obj}`_SPARK_SHADER <space_flight.fx.spark_fx._SPARK_SHADER>`
-  - ```{autodoc2-docstring} space_flight.fx.spark_fx._SPARK_SHADER
     :summary:
     ```
 * - {py:obj}`METAL <space_flight.fx.spark_fx.METAL>`
@@ -147,23 +131,6 @@
 ```{autodoc2-docstring} space_flight.fx.spark_fx._SPARK_TEXTURE
 ```
 
-````
-
-````{py:data} _SPARK_SHADER
-:canonical: space_flight.fx.spark_fx._SPARK_SHADER
-:value: >
-   None
-
-```{autodoc2-docstring} space_flight.fx.spark_fx._SPARK_SHADER
-```
-
-````
-
-````{py:function} _spark_shader() -> panda3d.core.Shader
-:canonical: space_flight.fx.spark_fx._spark_shader
-
-```{autodoc2-docstring} space_flight.fx.spark_fx._spark_shader
-```
 ````
 
 `````{py:class} SparkPreset

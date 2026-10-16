@@ -49,6 +49,22 @@ space_flight.fx.spark_fx
   - ```{autodoc2-docstring} space_flight.fx._add_column_data
     :summary:
     ```
+* - {py:obj}`make_fullscreen_quad <space_flight.fx.make_fullscreen_quad>`
+  - ```{autodoc2-docstring} space_flight.fx.make_fullscreen_quad
+    :summary:
+    ```
+* - {py:obj}`load_glsl_shader <space_flight.fx.load_glsl_shader>`
+  - ```{autodoc2-docstring} space_flight.fx.load_glsl_shader
+    :summary:
+    ```
+* - {py:obj}`load_clamped_texture <space_flight.fx.load_clamped_texture>`
+  - ```{autodoc2-docstring} space_flight.fx.load_clamped_texture
+    :summary:
+    ```
+* - {py:obj}`read_atlas_rects <space_flight.fx.read_atlas_rects>`
+  - ```{autodoc2-docstring} space_flight.fx.read_atlas_rects
+    :summary:
+    ```
 * - {py:obj}`load_atlas <space_flight.fx.load_atlas>`
   - ```{autodoc2-docstring} space_flight.fx.load_atlas
     :summary:
@@ -149,7 +165,7 @@ space_flight.fx.spark_fx
 ```
 ````
 
-`````{py:class} ParticleBuffer(game: space_flight.game.flight_state.FlightState, shader: panda3d.core.Shader, columns: list[tuple[str, int]], texture: panda3d.core.Texture | None = None, additive: bool = False, bin_order: int = 20, task_name: str = 'particle_buffer_update')
+`````{py:class} ParticleBuffer(game: space_flight.game.flight_state.FlightState, shader: panda3d.core.Shader, columns: list[tuple[str, int]], texture: panda3d.core.Texture | None = None, additive: bool = False, bin_order: int = 20)
 :canonical: space_flight.fx.ParticleBuffer
 
 ```{autodoc2-docstring} space_flight.fx.ParticleBuffer
@@ -193,14 +209,6 @@ space_flight.fx.spark_fx
 
 ````
 
-````{py:method} set_texture(texture: panda3d.core.Texture)
-:canonical: space_flight.fx.ParticleBuffer.set_texture
-
-```{autodoc2-docstring} space_flight.fx.ParticleBuffer.set_texture
-```
-
-````
-
 ````{py:method} clean()
 :canonical: space_flight.fx.ParticleBuffer.clean
 
@@ -210,6 +218,34 @@ space_flight.fx.spark_fx
 ````
 
 `````
+
+````{py:function} make_fullscreen_quad(render2d: panda3d.core.NodePath, name: str, sort: int) -> panda3d.core.NodePath
+:canonical: space_flight.fx.make_fullscreen_quad
+
+```{autodoc2-docstring} space_flight.fx.make_fullscreen_quad
+```
+````
+
+````{py:function} load_glsl_shader(vertex: str, fragment: str) -> panda3d.core.Shader
+:canonical: space_flight.fx.load_glsl_shader
+
+```{autodoc2-docstring} space_flight.fx.load_glsl_shader
+```
+````
+
+````{py:function} load_clamped_texture(game: space_flight.game.flight_state.FlightState, path: pathlib.Path) -> panda3d.core.Texture
+:canonical: space_flight.fx.load_clamped_texture
+
+```{autodoc2-docstring} space_flight.fx.load_clamped_texture
+```
+````
+
+````{py:function} read_atlas_rects(json_path: pathlib.Path) -> list
+:canonical: space_flight.fx.read_atlas_rects
+
+```{autodoc2-docstring} space_flight.fx.read_atlas_rects
+```
+````
 
 ````{py:function} load_atlas(game: space_flight.game.flight_state.FlightState, texture_path: pathlib.Path, json_path: pathlib.Path) -> tuple[panda3d.core.Texture, list]
 :canonical: space_flight.fx.load_atlas

@@ -44,6 +44,14 @@ space_flight.utils.state_machine
   - ```{autodoc2-docstring} space_flight.utils.magnitude
     :summary:
     ```
+* - {py:obj}`clamp <space_flight.utils.clamp>`
+  - ```{autodoc2-docstring} space_flight.utils.clamp
+    :summary:
+    ```
+* - {py:obj}`project_on_plane <space_flight.utils.project_on_plane>`
+  - ```{autodoc2-docstring} space_flight.utils.project_on_plane
+    :summary:
+    ```
 * - {py:obj}`safe_angle_rad <space_flight.utils.safe_angle_rad>`
   - ```{autodoc2-docstring} space_flight.utils.safe_angle_rad
     :summary:
@@ -116,6 +124,20 @@ space_flight.utils.state_machine
 :canonical: space_flight.utils.magnitude
 
 ```{autodoc2-docstring} space_flight.utils.magnitude
+```
+````
+
+````{py:function} clamp(value: float, minimum: float, maximum: float) -> float
+:canonical: space_flight.utils.clamp
+
+```{autodoc2-docstring} space_flight.utils.clamp
+```
+````
+
+````{py:function} project_on_plane(vector: numpy.ndarray, normal: numpy.ndarray) -> numpy.ndarray
+:canonical: space_flight.utils.project_on_plane
+
+```{autodoc2-docstring} space_flight.utils.project_on_plane
 ```
 ````
 

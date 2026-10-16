@@ -25,18 +25,6 @@
     ```
 ````
 
-### Functions
-
-````{list-table}
-:class: autosummary longtable
-:align: left
-
-* - {py:obj}`_laser_shader <space_flight.weapons.laser_cannon._laser_shader>`
-  - ```{autodoc2-docstring} space_flight.weapons.laser_cannon._laser_shader
-    :summary:
-    ```
-````
-
 ### Data
 
 ````{list-table}
@@ -77,10 +65,6 @@
     ```
 * - {py:obj}`LIGHT_COLORS <space_flight.weapons.laser_cannon.LIGHT_COLORS>`
   - ```{autodoc2-docstring} space_flight.weapons.laser_cannon.LIGHT_COLORS
-    :summary:
-    ```
-* - {py:obj}`_LASER_SHADER <space_flight.weapons.laser_cannon._LASER_SHADER>`
-  - ```{autodoc2-docstring} space_flight.weapons.laser_cannon._LASER_SHADER
     :summary:
     ```
 ````
@@ -175,23 +159,6 @@
 ```{autodoc2-docstring} space_flight.weapons.laser_cannon.LIGHT_COLORS
 ```
 
-````
-
-````{py:data} _LASER_SHADER
-:canonical: space_flight.weapons.laser_cannon._LASER_SHADER
-:value: >
-   None
-
-```{autodoc2-docstring} space_flight.weapons.laser_cannon._LASER_SHADER
-```
-
-````
-
-````{py:function} _laser_shader() -> panda3d.core.Shader
-:canonical: space_flight.weapons.laser_cannon._laser_shader
-
-```{autodoc2-docstring} space_flight.weapons.laser_cannon._laser_shader
-```
 ````
 
 `````{py:class} LaserCannon(game: space_flight.game.flight_state.FlightState, parent: space_flight.actors.fighter.Fighter | space_flight.actors.major_ship.turret.Turret, parent_node: panda3d.core.NodePath | None = None, energy: space_flight.actors.energy.EnergySystem | None = None, deviation_cone_deg: float = 0.0, damage_multiplier: float = 1.0, damage_type: str = PHYSICAL)

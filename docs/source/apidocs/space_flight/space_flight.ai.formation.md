@@ -107,6 +107,16 @@
 
 ````
 
+````{py:attribute} TEMPLATES
+:canonical: space_flight.ai.formation.Formation.TEMPLATES
+:value: >
+   None
+
+```{autodoc2-docstring} space_flight.ai.formation.Formation.TEMPLATES
+```
+
+````
+
 ````{py:method} get_ship_index(ship_id: uuid.UUID) -> int | None
 :canonical: space_flight.ai.formation.Formation.get_ship_index
 
