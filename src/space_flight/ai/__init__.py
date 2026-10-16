@@ -1,4 +1,3 @@
-import logging
 from enum import Enum, auto
 
 import numpy as np
@@ -10,8 +9,6 @@ INTERACT_MAX_DISTANCE_M = 10000.0
 REFERENCE_ERROR_VELOCITY_MPS = 100
 ROLL_TOLERANCE = 1e-2
 HALF_PI = np.pi / 2
-
-LOGGER = logging.getLogger()
 
 
 class Intent(Enum):

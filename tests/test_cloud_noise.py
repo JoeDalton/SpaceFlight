@@ -659,7 +659,7 @@ def test_the_gains_are_independent_of_each_other():
 def test_the_anisotropy_is_shape_only():
     """It reshapes the falloff BETWEEN the pinned angles, and cannot move the gains
     — so it is safe to adjust without re-tuning either."""
-    gains = dict(forward_gain=4.72, backward_gain=1.52)
+    gains = {"forward_gain": 4.72, "backward_gain": 1.52}
     for g in (0.2, 0.4, 0.6, 0.8):
         optics = CloudOptics(**gains, forward_anisotropy=g)
         assert phase(optics, 1.0) == pytest.approx(4.72)

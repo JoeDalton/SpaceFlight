@@ -69,29 +69,28 @@ class FighterNavigator(GenericShipNavigator):
         if intent == Intent.IDLE:
             self.engage_phase = ""
             return NO_DIRECTION
-        elif intent == Intent.PATROL:
+        if intent == Intent.PATROL:
             self.engage_phase = ""
             return self.follow_waypoints()
-        elif intent == Intent.ENGAGE:
+        if intent == Intent.ENGAGE:
             # TODO reset spiral time if new order ? May not be necessary
             return self.engage_target(target_dict)
-        elif intent == Intent.EVADE:
+        if intent == Intent.EVADE:
             self.engage_phase = ""
             return self.evade_target(target_dict)
-        elif intent == Intent.DEFEND_MISSILE:
+        if intent == Intent.DEFEND_MISSILE:
             self.engage_phase = ""
             return self.defend_missile(target_dict)
-        elif intent == Intent.REGROUP:
+        if intent == Intent.REGROUP:
             self.engage_phase = ""
             return self.regroup(target_dict)
-        elif intent == Intent.DISENGAGE:
+        if intent == Intent.DISENGAGE:
             self.engage_phase = ""
             return self.disengage(target_dict)
-        elif intent == Intent.FORMATION:
+        if intent == Intent.FORMATION:
             self.engage_phase = ""
             return self.formation(target_dict)
-        else:
-            raise ValueError(f"Unknown intent: {intent}")
+        raise ValueError(f"Unknown intent: {intent}")
 
         # %% ==== ENGAGE ====
 
@@ -1166,18 +1165,17 @@ class FighterNavigator(GenericShipNavigator):
                 self.time_in_spiral_s
                 > self.personality["navigator"]["extend"]["maximum_time_in_spiral_s"]
             )
-        elif (
+        if (
             self.behaviour == "extend"
             and self.behaviour_duration_s
             < self.personality["navigator"]["extend"]["minimum_duration_s"]
         ):
             # Extending for not enough time
             return True
-        else:
-            # Velocity condition not met, not in spiral
-            # Reset time in spiral
-            self.time_in_spiral_s = 0.0
-            return False
+        # Velocity condition not met, not in spiral
+        # Reset time in spiral
+        self.time_in_spiral_s = 0.0
+        return False
 
     def check_overshoot_risk(
         self,

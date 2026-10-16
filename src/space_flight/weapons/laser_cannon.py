@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import TYPE_CHECKING, Tuple
 
@@ -374,9 +375,7 @@ class LaserShot(Munition):
         # Clear the laser's own light (if any) before the shared teardown removes
         # the node.
         if self.plnp is not None:
-            try:
+            with contextlib.suppress(AttributeError):
                 self.game.app.render.clear_light(self.plnp)
-            except AttributeError:
-                pass
             self.plnp.removeNode()
             self.plnp = None

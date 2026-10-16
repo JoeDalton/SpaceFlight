@@ -362,15 +362,15 @@ def sample_field_particles(
     local = (points - np.repeat(centres, population[occupied], axis=0)).astype(
         np.float32
     )
-    return dict(
-        local=local,
-        radii=radii,
-        uv=uv,
-        cell_centres=centres,
-        cell_start=cell_start,
-        phi=volume_fraction(radii, cloud_volume),
-        cloud_volume=cloud_volume,
-    )
+    return {
+        "local": local,
+        "radii": radii,
+        "uv": uv,
+        "cell_centres": centres,
+        "cell_start": cell_start,
+        "phi": volume_fraction(radii, cloud_volume),
+        "cloud_volume": cloud_volume,
+    }
 
 
 # ── Sprite atlas ──────────────────────────────────────────────────────────────

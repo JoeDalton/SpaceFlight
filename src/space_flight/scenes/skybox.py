@@ -52,9 +52,6 @@ class Skybox:
         Cleans the Skybox object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         self.node.removeNode()
         self.game = None

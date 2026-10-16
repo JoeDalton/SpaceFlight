@@ -444,10 +444,8 @@ class Ocean:
         self.refl_buffer.setSort(-100)
         # Clear the reflection buffer to the water colour, so wherever the
         # reflection camera renders nothing (no skybox/geometry) the reflection
-        # blends into the water.  For debugging, swap in the bright-red clear
-        # below to see exactly where the clear colour shows through.
+        # blends into the water.
         self.refl_buffer.setClearColor(LVecBase4f(*water_color, 1))
-        # self.refl_buffer.setClearColor((1.0, 0.0, 0.0, 1))
 
         self.refl_cam_node = Camera("refl_cam")
         # Use a wider lens than the main camera to avoid frustum culling
@@ -502,10 +500,7 @@ class Ocean:
         Cleans the Ocean object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         # Destroy the offscreen reflection buffer; removing base_node alone
         # leaves the buffer registered with the graphics engine, so it keeps
         # rendering its camera every frame (a leak across scene reloads).

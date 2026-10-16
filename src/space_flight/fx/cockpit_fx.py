@@ -413,10 +413,7 @@ class CockpitFX:
     def clean(self):
         """Drop the per-frame task and overlay quad (sparks use the shared pool)."""
         if self.game is not None and self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         if self._overlay is not None:
             self._overlay.removeNode()
             self._overlay = None

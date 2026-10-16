@@ -151,8 +151,6 @@ class _FireSmokeBuffer(ParticleBuffer):
                        uploaded as the uFadein uniform.
     :param bin_order:  Transparent bin sort order.
     :param additive:   Whether to use additive blending.
-    :param task_name:  Descriptive name for this buffer's update (updates run
-                       via ``game.method_lists``, not a Panda3D task).
     """
 
     def __init__(
@@ -163,7 +161,6 @@ class _FireSmokeBuffer(ParticleBuffer):
         fadein: float,
         bin_order: int,
         additive: bool,
-        task_name: str,
     ):
         super().__init__(
             game=game,
@@ -172,7 +169,6 @@ class _FireSmokeBuffer(ParticleBuffer):
             texture=texture,
             additive=additive,
             bin_order=bin_order,
-            task_name=task_name,
         )
         self.tile_rects = tile_rects
         self.set_input("uFadein", fadein)
@@ -367,7 +363,6 @@ class FireSmokePool:
             fadein=FIRE_FADEIN,
             bin_order=20,
             additive=False,
-            task_name="fire_update",
         )
         self.smoke = _FireSmokeBuffer(
             game,
@@ -376,7 +371,6 @@ class FireSmokePool:
             fadein=SMOKE_FADEIN,
             bin_order=20,
             additive=False,
-            task_name="smoke_update",
         )
 
     # ------------------------------------------------------------------

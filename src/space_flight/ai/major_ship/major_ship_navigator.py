@@ -59,22 +59,21 @@ class MajorShipNavigator(GenericShipNavigator):
         if intent == Intent.IDLE:
             self.engage_phase = ""
             return NO_DIRECTION
-        elif intent == Intent.PATROL:
+        if intent == Intent.PATROL:
             self.engage_phase = ""
             return self.follow_waypoints()
-        elif intent == Intent.ENGAGE:
+        if intent == Intent.ENGAGE:
             return self.engage_target(target_dict)
-        elif intent == Intent.REGROUP:
+        if intent == Intent.REGROUP:
             self.engage_phase = ""
             return self.regroup(target_dict)
-        elif intent == Intent.DISENGAGE:
+        if intent == Intent.DISENGAGE:
             self.engage_phase = ""
             return self.disengage(target_dict)
-        elif intent == Intent.FORMATION:
+        if intent == Intent.FORMATION:
             self.engage_phase = ""
             return self.formation(target_dict)
-        else:
-            raise ValueError(f"Unknown intent: {intent}")
+        raise ValueError(f"Unknown intent: {intent}")
 
         # %% ==== ENGAGE ====
 

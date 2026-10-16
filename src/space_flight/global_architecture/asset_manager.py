@@ -139,20 +139,13 @@ class AssetManager:
             asset = self.assets[path]
         return asset
 
-    def load_game_assets(
-        self,
-        app_state: SplashState,
-        assets_to_load: list[tuple[str, Path, str]] | None = None,
-    ):
+    def load_game_assets(self, app_state: SplashState):
         """
         Launches the load_assets task, which loads COMMON_ASSETS_TO_LOAD
 
         :param app_state: The state to report progress to (the splash screen)
-        :param assets_to_load: Broken: a passed list is never stored, so only
-            the default None (load COMMON_ASSETS_TO_LOAD) works
         """
-        if assets_to_load is None:
-            self.assets_to_load = COMMON_ASSETS_TO_LOAD.copy()
+        self.assets_to_load = COMMON_ASSETS_TO_LOAD.copy()
         self.n_assets_to_load = len(self.assets_to_load)
 
         self.app.taskMgr.add(
@@ -194,13 +187,9 @@ class AssetManager:
         :param path: The path where the asset is found
         :param pattern: The asset pattern if path is a directory
         """
-        if asset_type == "3d_sound":
+        if asset_type in ("sound", "3d_sound"):
             self.assets[path] = SoundPool(
-                app=self.app, path=path, pattern=pattern, is_3d=True
-            )
-        elif asset_type == "sound":
-            self.assets[path] = SoundPool(
-                app=self.app, path=path, pattern=pattern, is_3d=False
+                app=self.app, path=path, pattern=pattern, is_3d=asset_type == "3d_sound"
             )
         elif asset_type == "model":
             try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import TYPE_CHECKING, Callable
 
@@ -37,7 +38,6 @@ CAMERA_FAR_M = 600000.0
 COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_SPRING_COEFFICIENT_NPM = 17
 HEAD_DAMPING_RATIO = 0.8  # Slightly suboptimal damping
-HEAD_ROTATION_POSITION_FACTOR_DEGPM = 500.0
 HEAD_ROTATION_SHIP_ROTATION_RATE_FACTOR_DEGSPRAD = 1.0
 
 IMPACT_FEELING_FACTOR = 1000
@@ -211,10 +211,8 @@ class Player:
         """
         if not self._dying.begin():
             return
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             self.game.interactions.remove_actor(self.pawn)
-        except (KeyError, AttributeError):
-            pass
         self.pawn.begin_tumble()
 
     def death_spin_finished(self) -> bool:
@@ -245,8 +243,6 @@ class Player:
         self.head_pivot = self.head_jolt.attachNewNode("head_pivot")
         # Attach camera to head
         self.game.app.camera.reparentTo(self.head_pivot)
-        # Allow near objects to be rendered
-        # self.game.app.camLens.setNear(0.01)
         # Set BEFORE the scene is built: the ocean's reflection camera copies this
         # lens, and the levels create the player first for exactly that reason.
         self.game.app.camLens.setFar(CAMERA_FAR_M)

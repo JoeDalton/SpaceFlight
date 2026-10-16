@@ -279,17 +279,16 @@ class GenericTactician:
         if formation_index == 0:
             # Self is the leader of the formation. Not applicable
             return {"active": False}
-        else:
-            # Self belongs to a formation and is not the leader :
-            # Activate formation and get the corresponding position
-            return {
-                "active": True,
-                "target_id": self.pawn.formation.ship_ids[0],
-                "formation_index": formation_index,
-                "target_relative_position": self.pawn.formation.relative_positions[
-                    formation_index
-                ],
-            }
+        # Self belongs to a formation and is not the leader :
+        # Activate formation and get the corresponding position
+        return {
+            "active": True,
+            "target_id": self.pawn.formation.ship_ids[0],
+            "formation_index": formation_index,
+            "target_relative_position": self.pawn.formation.relative_positions[
+                formation_index
+            ],
+        }
 
     def evaluate_orders(self) -> tuple[Intent, dict] | None:
         """

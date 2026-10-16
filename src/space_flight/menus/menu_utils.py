@@ -443,7 +443,7 @@ class CustomButton:
             text_align = TextNode.ARight
             text_pos = (0.9 * width_scale, -0.35 * text_scale)
         else:
-            raise NotImplementedError(f"Unkonwn layout: {layout}")
+            raise NotImplementedError(f"Unknown layout: {layout}")
 
         self.button = DirectButton(
             # Personalizable items
@@ -840,14 +840,6 @@ class CustomEntry:
         :return: The string currently typed in the entry.
         """
         return self.entry.get()
-
-    def set(self, text: str):
-        """
-        Replace the entry field's contents with the given string.
-
-        :param text: The new string to display in the entry.
-        """
-        self.entry.set(text)
 
     def destroy(self):
         """Remove the entry widget from the scene graph and free its resources."""

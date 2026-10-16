@@ -81,7 +81,7 @@ class AsteroidField:
             ini_pos = self.rng.random(3) * field_size - 0.5 * field_size
 
             instance.set_pos(*ini_pos)
-            # instance.show_bounds()
+            # instance.show_bounds() # debug
 
             # Set scale
             scale = (self.rng.random() * 100 + 1) * scale_factor
@@ -173,10 +173,7 @@ class AsteroidField:
         Cleans the AsteroidField object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         for asteroid in self.asteroids:
             asteroid.removeNode()
         self.asteroids = None

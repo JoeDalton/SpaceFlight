@@ -9,6 +9,7 @@ player's normal targeting can lock onto it, while bots ignore it.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import TYPE_CHECKING
 
@@ -103,10 +104,8 @@ class WaypointMarker:
             self.node.removeNode()
             self.node = None
         if self.game is not None:
-            try:
+            with contextlib.suppress(KeyError, AttributeError):
                 self.game.interactions.remove_actor(self)
-            except (KeyError, AttributeError):
-                pass
             self.game = None
 
 

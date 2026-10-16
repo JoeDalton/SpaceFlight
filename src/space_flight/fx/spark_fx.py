@@ -202,7 +202,6 @@ class SparkPool(ParticleBuffer):
             texture=texture,
             additive=True,  # additive blending for a bright glow
             bin_order=20,
-            task_name="spark_update",
         )
 
     def spawn(

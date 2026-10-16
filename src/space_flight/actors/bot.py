@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gc
 import logging
 import math
@@ -40,7 +41,6 @@ if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger()
-WAYPOINT_MEETING_TOLERANCE = 10
 
 
 class Bot(Destructible):
@@ -205,10 +205,8 @@ class Bot(Destructible):
 
         # Add the pawn to the interacting actors. A subsystem pawn (e.g. a
         # turret) already registered itself, so skip the duplicate.
-        try:
+        with contextlib.suppress(ValueError):
             self.game.interactions.add_actor(self.pawn)
-        except ValueError:
-            pass
 
     def move_bot_task(self):
         """
@@ -392,10 +390,8 @@ class Bot(Destructible):
         self.pawn.node.hide()
         self.game.departed_ids.add(self.pawn.id)
         self._drop_as_players_target(self.pawn)
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             self.game.interactions.remove_actor(self.pawn)
-        except (KeyError, AttributeError):
-            pass
         # Mounted parts first: they are bolted onto the ship's node
         for destructible in [*self._mounted_actors(), self]:
             self.game.destructibles.depart(destructible)
@@ -417,11 +413,9 @@ class Bot(Destructible):
 
     def _drop_as_players_target(self, actor):
         """Clear the player's target if it is actor."""
-        try:
+        # The player may be gone (level cleanup)
+        with contextlib.suppress(AttributeError):
             self.game.player.remove_target(target_to_remove=actor)
-        except AttributeError:
-            # The player may be gone (level cleanup)
-            pass
 
     def _think_is_due(self) -> bool:
         """
@@ -612,14 +606,10 @@ class Bot(Destructible):
         # Drop the pawn from targeting/interactions immediately, so nothing can
         # lock onto or keep shooting the wreck while it spins (it stays collidable
         # -- the collider lives until clean()).
-        try:
+        with contextlib.suppress(AttributeError):
             self.game.player.remove_target(target_to_remove=self.pawn)
-        except AttributeError:
-            pass
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             self.game.interactions.remove_actor(self.pawn)
-        except (KeyError, AttributeError):
-            pass
 
         # Ships tumble; the dying phase lasts their configured spin duration.
         if hasattr(self.pawn, "begin_tumble"):
@@ -645,17 +635,13 @@ class Bot(Destructible):
         if DEBUG_DELETION:
             LOGGER.info(f"Cleaning bot {self.name}")
             LOGGER.info(f"Bot tasks {self.tasks}")
-        try:
+        # In level cleanup, player may no longer exist at this point
+        with contextlib.suppress(AttributeError):
             self.game.player.remove_target(target_to_remove=self.pawn)
-        except AttributeError:
-            # In level cleanup, player may no longer exist at this point
-            pass
-        try:
+        # Already removed (a subsystem pawn deregisters itself), or
+        # game.interactions is gone during level cleanup
+        with contextlib.suppress(KeyError, AttributeError):
             self.game.interactions.remove_actor(self.pawn)
-        except (KeyError, AttributeError):
-            # Already removed (a subsystem pawn deregisters itself), or
-            # game.interactions is gone during level cleanup
-            pass
         self._release_think_slot()
         self.pilot.clean()
         self.pilot = None

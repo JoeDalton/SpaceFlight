@@ -494,16 +494,11 @@ class HUD:
                     f"{self.game.lead_bot.navigator.next_waypoint_idx:.1f}\n"
                     "Lead Bot health = "
                     f"{self.game.lead_bot.pawn.health:.1f}\n"
-                    # "Lead Bot shield = "
-                    # f"{self.game.lead_bot.pawn.shield:.1f}\n"
                     "Lead Bot throttle = "
                     f"{self.game.lead_bot.pilot.throttle:.4f}\n"
                     "Lead Bot Speed = "
                     f"{magnitude(self.game.lead_bot.pawn.state[7:10]):.1f}m/s\n"
                     "\n"
-                    # "Lead Bot has target lock = "
-                    # f"{self.game.lead_bot.pawn.auto_aim.is_target_acquired}\n"
-                    # "\n"
                 )
             except AttributeError:
                 bot_text = ""
@@ -528,10 +523,7 @@ class HUD:
         Cleans the HUD object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         if DEBUG_HUD:
             self.debug_textNodePath.removeNode()
             self.debug = None
@@ -1229,10 +1221,7 @@ class AimHUD:
         Clean the AimHUD object
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         self.name_label.destroy()
         self.distance_label.destroy()
         # The warning line is on aspect2d; the cards go with the root

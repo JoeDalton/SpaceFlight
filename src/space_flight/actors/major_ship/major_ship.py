@@ -233,24 +233,6 @@ class MajorShip(Ship):
             model=shield_conf.get("model"),
         )
 
-    def move(
-        self, throttle: float, yaw_rate: float, pitch_rate: float, roll_rate: float
-    ):
-        """
-        Moves the ship given throttle and turn rates (see :meth:`Ship.move`)
-
-        :param throttle: Throttle command in [0, 1], above 1 for boost
-        :param yaw_rate: Yaw rate command in [-1, 1]
-        :param pitch_rate: Pitch rate command in [-1, 1]
-        :param roll_rate: Roll rate command in [-1, 1]
-        """
-        super().move(
-            throttle=throttle,
-            yaw_rate=yaw_rate,
-            pitch_rate=pitch_rate,
-            roll_rate=roll_rate,
-        )
-
     @property
     def shield_level(self) -> float:
         """

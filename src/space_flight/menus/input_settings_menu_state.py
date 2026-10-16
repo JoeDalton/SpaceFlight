@@ -4,7 +4,7 @@ Input settings menu — lets the player view and remap all input bindings.
 
 from __future__ import annotations
 
-import copy
+import contextlib
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -16,7 +16,6 @@ from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.menu_utils import (
     CustomButton,
-    CustomCheckButton,
     CustomEntry,
     ScrollableList,
 )
@@ -287,7 +286,6 @@ class ChangeBindingDialog(object):
         :param task: Panda3D task object.
         :return: task.cont to keep the task running.
         """
-        DEAD_ZONE = 0.33
         for device in self.attachedDevices:
             if device.device_class == InputDevice.DeviceClass.mouse:
                 continue
@@ -297,8 +295,8 @@ class ChangeBindingDialog(object):
                 if axis.axis not in self.axisStates[device]:
                     continue
                 if (
-                    self.axisStates[device][axis.axis] + DEAD_ZONE < axis.value
-                    or self.axisStates[device][axis.axis] - DEAD_ZONE > axis.value
+                    self.axisStates[device][axis.axis] + _AXIS_DEAD_ZONE < axis.value
+                    or self.axisStates[device][axis.axis] - _AXIS_DEAD_ZONE > axis.value
                 ):
                     self.axisStates[device][axis.axis] = axis.value
                     if axis.axis != InputDevice.Axis.none:
@@ -359,10 +357,8 @@ class InputSettingsMenuState(BaseState):
     def __init__(self, app: SpaceFlightSimulator):
         super().__init__(app)
         self.working_config: dict = {}
-        self.saved_config: dict = {}
         self.dz_entries: dict[tuple, CustomEntry] = {}
         self.binding_labels: dict[tuple, DirectLabel] = {}
-        self.checkbox_buttons: dict[tuple, CustomCheckButton] = {}
         # Device whose bindings are listed and edited (every device is live
         # in game; this only picks the tab)
         self.edited_device = "keyboard"
@@ -386,23 +382,10 @@ class InputSettingsMenuState(BaseState):
         changes written by a previous session are picked up automatically.
         """
         self.working_config = load_bindings(_BINDINGS_FILE)
-        self.saved_config = copy.deepcopy(self.working_config)
         self.build_static_ui()
         self.rebuild_scroll()
         self.app.accept("wheel_up", lambda: self.wheel_scroll(-0.5))
         self.app.accept("wheel_down", lambda: self.wheel_scroll(0.5))
-
-    def pause(self):
-        """
-        Pause the state; no action required.
-        """
-        pass
-
-    def resume(self):
-        """
-        Resume the state; no action required.
-        """
-        pass
 
     def exit(self):
         """
@@ -521,16 +504,14 @@ class InputSettingsMenuState(BaseState):
 
         Called on :meth:`enter` and again each time the edited device changes
         so the binding list always reflects that device's mappings.  Also
-        resets the :attr:`dz_entries`, :attr:`binding_labels` and
-        :attr:`checkbox_buttons` caches so stale widget references are never
-        kept.
+        resets the :attr:`dz_entries` and :attr:`binding_labels` caches so
+        stale widget references are never kept.
         """
         self.dz_entries.clear()
         self.binding_labels.clear()
-        self.checkbox_buttons.clear()
 
         rows = self.make_row_data()
-        content = self.scroll_list.rebuild(len(rows))
+        self.scroll_list.rebuild(len(rows))
 
         for i, row in enumerate(rows):
             y = self.scroll_list.row_y(i)
@@ -538,20 +519,19 @@ class InputSettingsMenuState(BaseState):
             if kind == "header":
                 self.scroll_list.add_header(row["text"], y)
             elif kind == "deadzone":
-                self.add_deadzone_row(content, row, y)
+                self.add_deadzone_row(row, y)
             elif kind == "checkbox":
                 self.add_checkbox_row(row, y)
             else:
-                self.add_binding_row(content, row, y)
+                self.add_binding_row(row, y)
 
-    def add_deadzone_row(self, canvas: NodePath, row: dict, y: float):
+    def add_deadzone_row(self, row: dict, y: float):
         """
         Add a dead-zone label and editable entry to the scroll canvas.
 
         The entry is stored in :attr:`dz_entries` keyed by *row["path"]* so
         that :meth:`flush_dead_zones` can read back the edited value.
 
-        :param canvas: The scroll canvas node to parent the widgets to.
         :param row: Row descriptor dict with "label", "path", and
             "value" keys.
         :param y: Vertical position on the canvas.
@@ -568,7 +548,7 @@ class InputSettingsMenuState(BaseState):
             ),
             initial_text=row["value"],
             width=2 * btn_scale / entry_scale,
-            parent=canvas,
+            parent=self.scroll_list.content,
         )
         self.dz_entries[row["path"]] = entry
 
@@ -576,20 +556,19 @@ class InputSettingsMenuState(BaseState):
         """
         Add a boolean setting label and checkbox to the scroll canvas.
 
-        The checkbox is stored in :attr:`checkbox_buttons` keyed by
-        *row["path"]* and writes straight into :attr:`working_config`
-        on every toggle (see :meth:`on_checkbox_toggle`).
+        The checkbox writes straight into :attr:`working_config` on every
+        toggle (see :meth:`on_checkbox_toggle`).
 
         :param row: Row descriptor dict with "label", "path", and
             "value" keys.
         :param y: Vertical position on the canvas.
         """
         self.scroll_list.add_row_label(row["label"], y)
-        self.checkbox_buttons[row["path"]] = self.scroll_list.add_checkbox(
+        self.scroll_list.add_checkbox(
             y, row["value"], self.on_checkbox_toggle, extraArgs=[row["path"]]
         )
 
-    def add_binding_row(self, canvas: NodePath, row: dict, y: float):
+    def add_binding_row(self, row: dict, y: float):
         """
         Add an action-binding row to the scroll canvas.
 
@@ -599,7 +578,6 @@ class InputSettingsMenuState(BaseState):
         :attr:`binding_labels` keyed by *row["path"]* so it can be updated
         in place when the user confirms a new binding.
 
-        :param canvas: The scroll canvas node to parent the widgets to.
         :param row: Row descriptor dict with "label", "path", and
             "value" keys.
         :param y: Vertical position on the canvas.
@@ -607,7 +585,7 @@ class InputSettingsMenuState(BaseState):
         self.scroll_list.add_row_label(row["label"], y)
 
         val_lbl = DirectLabel(
-            parent=canvas,
+            parent=self.scroll_list.content,
             text=format_binding(self.edited_device, row["value"]),
             scale=0.045,
             pos=(-0.15, 0, y - 0.015),
@@ -627,7 +605,7 @@ class InputSettingsMenuState(BaseState):
             scale=btn_scale,
             layout="center",
             extraArgs=[row["path"], row["label"]],
-            parent=canvas,
+            parent=self.scroll_list.content,
         )
 
     def refresh_device_buttons(self):
@@ -727,10 +705,8 @@ class InputSettingsMenuState(BaseState):
                 d = d[key]
             orig = d.get(path[-1])
             if isinstance(orig, float):
-                try:
+                with contextlib.suppress(ValueError):
                     val = float(val)
-                except ValueError:
-                    pass
             d[path[-1]] = val
 
     def on_checkbox_toggle(self, status: int, path: tuple):
@@ -847,7 +823,6 @@ class InputSettingsMenuState(BaseState):
         self.flush_dead_zones()
         with open(_BINDINGS_FILE, "w") as f:
             yaml.dump(self.working_config, f, default_flow_style=False, sort_keys=False)
-        self.saved_config = copy.deepcopy(self.working_config)
         # Rebuild the input reader so the new bindings take effect immediately.
         # reader_factory re-reads the YAML, sets app.bindings, and re-registers
         # all accept() callbacks with the updated hardware names.

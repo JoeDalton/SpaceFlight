@@ -23,14 +23,13 @@ def scene_factory(
 ) -> SceneAsteroids | SceneLavaPlanet | SceneOcean | SceneDebug:
     if scene_name == "asteroids":
         return SceneAsteroids(game=game)
-    elif scene_name == "lava_planet":
+    if scene_name == "lava_planet":
         return SceneLavaPlanet(game=game)
-    elif scene_name == "ocean_planet":
+    if scene_name == "ocean_planet":
         return SceneOcean(game=game)
-    elif scene_name == "debug":
+    if scene_name == "debug":
         return SceneDebug(game=game)
-    else:
-        raise NotImplementedError(f"Unknown scene {scene_name}")
+    raise NotImplementedError(f"Unknown scene {scene_name}")
 
 
 class Scene:
@@ -40,9 +39,6 @@ class Scene:
     ):
         self.game = game
         self.up_direction = np.array([0, 0, 1])
-
-    def inititalize_move(self):
-        pass
 
 
 class SceneOcean(Scene):

@@ -285,10 +285,10 @@ def _reference_compute_derivatives(ship):
 @pytest.mark.parametrize(
     "case",
     [
-        dict(),  # typical flight
-        dict(quaternion_norm=0.99),  # orientation drifted off unit norm
-        dict(speed_mps=0.0),  # at rest: no lift nor drag
-        dict(lift_factor=10.0),  # lift clipped to max thrust
+        {},  # typical flight
+        {"quaternion_norm": 0.99},  # orientation drifted off unit norm
+        {"speed_mps": 0.0},  # at rest: no lift nor drag
+        {"lift_factor": 10.0},  # lift clipped to max thrust
     ],
 )
 def test_compute_derivatives_matches_per_vector_rotations(seed, case):

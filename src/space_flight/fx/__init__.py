@@ -194,9 +194,6 @@ class ParticleBuffer:
     :param additive:  If True, additive blending (src * alpha + dst) for a
                       glow; otherwise standard alpha blending.
     :param bin_order: Sort order within the "transparent" render bin.
-    :param task_name: Descriptive name stored as ``self.task_name``. The update
-                      is not a Panda3D task: :meth:`update` is registered in
-                      ``game.method_lists`` under this buffer's ``id``.
     """
 
     def __init__(
@@ -207,7 +204,6 @@ class ParticleBuffer:
         texture: Texture | None = None,
         additive: bool = False,
         bin_order: int = 20,
-        task_name: str = "particle_buffer_update",
     ):
         self.game = game
         self.id = uuid.uuid4()
@@ -297,8 +293,6 @@ class ParticleBuffer:
         self.node_path.setShaderInput("uTime", 0.0)
         self.node_path.setShaderInput("uCamRight", Vec3(1, 0, 0))
         self.node_path.setShaderInput("uCamUp", Vec3(0, 0, 1))
-
-        self.task_name = task_name
 
         self.game.method_lists[self.id].append(self.update)
 
@@ -414,23 +408,12 @@ class ParticleBuffer:
         """
         self.node_path.setShaderInput(name, value)
 
-    def set_texture(self, texture: Texture):
-        """
-        Replace the texture bound to the default :class:`TextureStage`.
-
-        :param texture: New :class:`Texture` to bind.
-        """
-        self.node_path.setTexture(TextureStage.getDefault(), texture)
-
     def clean(self):
         """
         Unregister the per-frame update and destroy the geometry node.
         """
         if self.game.method_lists:
-            try:
-                self.game.method_lists.pop(self.id)
-            except KeyError:
-                pass
+            self.game.method_lists.pop(self.id, None)
         self.node_path.removeNode()
 
 

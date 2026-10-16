@@ -181,8 +181,7 @@ sound:
   category (player crash short/long, laser on player hull/shield, distant
   target hit, terrain hit). The pools come from `build_sound_pool` in
   [`global_architecture/asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py)
-  and handle random pitch and slot reuse (`get_sound`/`release_sound`);
-  `SFX.build_sound_pool()` is an unused legacy helper.
+  and handle random pitch and slot reuse (`get_sound`/`release_sound`).
 - **Distant impacts.** `distant_impact_hit()` (hits not on the player) uses an
   inverse-square falloff from `SOUND_VOLUME_REFERENCE_DISTANCE_M`, drops the
   sound beyond `MAX_SOUND_DISTANCE_M`, and multiplies by the per-surface

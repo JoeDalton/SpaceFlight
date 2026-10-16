@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import random
 import weakref
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -39,8 +37,6 @@ NPC_CANNON_FIRE_VOLUME = 3.0
 # the player): the player's own shots vs an NPC's.
 PLAYER_DISTANT_IMPACT_VOLUME = 1.0
 NPC_DISTANT_IMPACT_VOLUME = 0.2
-
-SOUND_POOL_LENGTH = 20
 
 # Distances are in metres (OpenAL's speed of sound is 343.3 * this, in units/s)
 DISTANCE_FACTOR = 1.0
@@ -191,38 +187,6 @@ class SFX:
         if self.app.camera is not None:
             for node in self.app.camera.findAllMatches("player_hit_sound_node"):
                 node.removeNode()
-
-    def build_sound_pool(
-        self, directory: Path, pattern: str, is_3d: bool
-    ) -> list[AudioSound]:
-        """
-        Builds a sound pool from a glob pattern (unused legacy helper: pools
-        come from ``asset_pools.build_sound_pool`` via the asset manager)
-
-        :param directory: The directory to search
-        :param pattern: The glob pattern to find the sound files
-        :param is_3d: Whether to load the sounds as 3D sounds
-        :return: a list of SOUND_POOL_LENGTH randomly chosen sounds
-        """
-        sound_files = list(directory.glob(pattern))
-        sound_pool = []
-        for _ in range(SOUND_POOL_LENGTH):
-            sound_file = random.choice(sound_files)
-            if is_3d:
-                sound = self.get_3d_sound(sound_file)
-            else:
-                sound = self.app.loader.loadSfx(sound_file)
-            sound_pool.append(sound)
-        return sound_pool
-
-    def get_3d_sound(self, sound_file: str | Path) -> AudioSound:
-        """
-        Loads a 3D sound
-
-        :param sound_file: The sound file to load
-        :return: the 3d sound object
-        """
-        return self.audio3d.loadSfx(sound_file)
 
     def get_sounds_from_asset_manager(self):
         self.player_crash_short_sound_pool = self.app.asset_manager.get_asset(

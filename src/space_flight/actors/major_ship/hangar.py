@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -17,8 +16,6 @@ if TYPE_CHECKING:
     from space_flight.actors.major_ship.major_ship import MajorShip
     from space_flight.game.flight_state import FlightState
     from space_flight.weapons.loadout import Loadout
-
-LOGGER = logging.getLogger()
 
 # A launch waits while fewer interaction slots than this are free, so fighters
 # never take the last ones (adding an actor to a full Interactions raises)

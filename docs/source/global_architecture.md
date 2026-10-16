@@ -105,8 +105,7 @@ reads `configuration/bindings.yaml` alone, and
 input settings menu's reset-to-defaults. `sanitise()` then clamps every field to something the renderer can act on (valid display mode,
 minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample count,
 known cloud-quality name, ...), so a malformed or hand-edited file degrades to
-defaults instead of crashing. `save()` re-sanitises and writes the user file;
-`reset_to_default()` reloads the defaults without writing it.
+defaults instead of crashing. `save()` re-sanitises and writes the user file.
 
 Not every setting goes through `GraphicsManager`: the setting belongs to the
 thing that acts on it. `CloudField` reads `clouds.quality` when it builds, and

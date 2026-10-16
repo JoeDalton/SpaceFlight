@@ -68,10 +68,7 @@ class LevelSelectionMenuState(BaseState):
         )
 
     def start_game(self):
-        level_names = []
-        for level in self.LEVELS:
-            level_names.append(level["name"])
-        if self.menu_selection in level_names:
+        if any(level["name"] == self.menu_selection for level in self.LEVELS):
             self.app.configuration["selected_level"] = self.menu_selection
             self.menu_selection = None
             self.app.state_manager.replace(self.app.state_manager.GAME_STATE)
@@ -134,7 +131,6 @@ class LevelSelectionMenuState(BaseState):
             verticalScroll_decButton_frameColor=(0, 0, 0, 0),
         )
 
-        self.actionLabels: dict = {}
         for idx, level in enumerate(self.LEVELS):
             level_name = level["name"]
             item = self.makeListItem(level_name, idx)

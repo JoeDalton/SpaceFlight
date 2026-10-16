@@ -90,11 +90,6 @@ class GraphicsSettings:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
         self.config = config
 
-    def reset_to_default(self) -> dict:
-        """Reload the default config (without writing the user file) and return it."""
-        self.config = self.sanitise(self.load_file(DEFAULT_GRAPHICS_FILE))
-        return self.config
-
     @staticmethod
     def sanitise(config: dict) -> dict:
         """

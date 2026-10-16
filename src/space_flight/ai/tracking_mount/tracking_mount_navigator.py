@@ -54,10 +54,9 @@ class TrackingMountNavigator(GenericNavigator):
             self.engage_phase = ""
             self._publish_no_engagement()
             return NO_DIRECTION
-        elif intent == Intent.ENGAGE:
+        if intent == Intent.ENGAGE:
             return self.engage_target(target_dict)
-        else:
-            raise ValueError(f"Unknown intent: {intent}")
+        raise ValueError(f"Unknown intent: {intent}")
 
     def engage_target(self, target_dict: dict = {}) -> np.ndarray:
         """

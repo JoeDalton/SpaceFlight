@@ -46,7 +46,6 @@ class GenericShipNavigator(GenericNavigator):
         self._best_distance_to_waypoint_m = float("inf")
         self._time_without_progress_s = 0.0
         self.patrol_speed_factor = 1.0
-        self.time_in_spiral_s = 0.0
         # Game time of the last navigate() and the time elapsed since the one
         # before: navigate() runs when the bot thinks, not necessarily every frame
         self._last_navigate_s = None

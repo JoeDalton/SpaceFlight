@@ -18,6 +18,7 @@ button press *means* in a given game mode.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -660,7 +661,7 @@ class GamepadReader(InputReader):
         :return: Dict mapping hardware name → True if the button is held.
         """
         if not self.gamepad:
-            return {name: False for name in self.button_names}
+            return dict.fromkeys(self.button_names, False)
         result: dict[str, bool] = {}
         for hw in self.button_names:
             code = GAMEPAD_BUTTON_CODES.get(hw)
@@ -707,10 +708,8 @@ class GamepadReader(InputReader):
         Detaches the gamepad, then delegates to the base class.
         """
         if self.gamepad:
-            try:
+            with contextlib.suppress(AssertionError):
                 self.app.detachInputDevice(self.gamepad)
-            except AssertionError:
-                pass
             self.gamepad = None
         super().clean()
 
@@ -810,7 +809,7 @@ class JoystickReader(InputReader):
         :return: Dict mapping hardware name → True if the button is held.
         """
         if not self.flightStick:
-            return {name: False for name in self.button_names}
+            return dict.fromkeys(self.button_names, False)
         n = len(self.flightStick.buttons)
         result: dict[str, bool] = {}
         for hw in self.button_names:

@@ -201,12 +201,6 @@ class RadialMenuState(BaseState):
         )
         self.app.input_context_stack.push(ctx)
 
-    def pause(self):
-        pass
-
-    def resume(self):
-        pass
-
     def exit(self):
         self.app.input_context_stack.pop()
         if self.visual is not None:

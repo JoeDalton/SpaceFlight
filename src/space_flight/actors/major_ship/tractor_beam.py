@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import TYPE_CHECKING
 
@@ -21,8 +20,6 @@ if TYPE_CHECKING:
 # Grab state machine states.
 _SEARCHING = "searching"
 _GRABBING = "grabbing"
-
-LOGGER = logging.getLogger()
 
 
 class TractorBeamProjector(TrackingMount):

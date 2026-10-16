@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import contextlib
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from space_flight.actors.bot import Bot
     from space_flight.actors.ship import Ship
     from space_flight.game.flight_state import FlightState
-
-LOGGER = logging.getLogger()
 
 # A standalone subsystem (whose parent is the ship it is bolted to, e.g. a shield
 # generator) smokes at full intensity for this long before it explodes, since it
@@ -331,10 +329,8 @@ class SubSystem(Destructible):
             # Stop our per-frame tasks first, so nothing touches removed nodes
             self.clear_tasks()
             # Remove ourselves from the targetable actors
-            try:
+            with contextlib.suppress(KeyError, AttributeError):
                 self.game.interactions.remove_actor(self)
-            except (KeyError, AttributeError):
-                pass
             # Remove collision node
             self.collision_np.setPythonTag("owner", None)
             self.collision_np.remove_node()
