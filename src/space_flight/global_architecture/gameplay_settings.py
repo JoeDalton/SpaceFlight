@@ -21,11 +21,11 @@ mission.
 import copy
 import functools
 import logging
-from pathlib import Path
 
 import yaml
 
 from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
+from space_flight.global_architecture.yaml_files import load_user_yaml, load_yaml
 
 LOGGER = logging.getLogger()
 
@@ -108,12 +108,6 @@ def _clean(path: tuple, value, fallback):
     return min(maximum, max(minimum, number))
 
 
-def _load_file(path: Path) -> dict:
-    """Parse a YAML file and return its contents as a dict ({} if empty)."""
-    with open(path, "r") as f:
-        return yaml.safe_load(f) or {}
-
-
 def load_presets() -> dict[str, dict]:
     """
     :return: The values of each preset of gameplay_presets.yaml, by name, in
@@ -122,7 +116,7 @@ def load_presets() -> dict[str, dict]:
         preset's name, or has a preset missing a value or with an invalid one
         (it is read-only: there is nothing to fall back on)
     """
-    presets = {str(name): values for name, values in _load_file(PRESETS_FILE).items()}
+    presets = {str(name): values for name, values in load_yaml(PRESETS_FILE).items()}
     if DEFAULT_PRESET not in presets:
         raise ValueError(f"{PRESETS_FILE} has no '{DEFAULT_PRESET}' preset")
     if CUSTOM_PRESET in presets:
@@ -158,13 +152,7 @@ class GameplaySettings:
         selects. Never raises on a malformed user file — it logs and falls back
         to the default preset.
         """
-        user = {}
-        if GAMEPLAY_FILE.exists():
-            try:
-                user = _load_file(GAMEPLAY_FILE)
-            except Exception as exc:  # noqa: BLE001 - never let bad YAML crash boot
-                LOGGER.warning(f"Could not read {GAMEPLAY_FILE}: {exc}; using defaults")
-        return self.resolve(user)
+        return self.resolve(load_user_yaml(GAMEPLAY_FILE))
 
     def resolve(self, config: dict) -> dict:
         """

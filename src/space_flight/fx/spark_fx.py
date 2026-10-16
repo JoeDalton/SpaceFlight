@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import Point3, Shader, Texture, Vec3
+from panda3d.core import Point3, Vec3
 
 from space_flight import DATAFILES_PATH
-from space_flight.fx import ParticleBuffer
+from space_flight.fx import ParticleBuffer, load_clamped_texture, load_glsl_shader
 from space_flight.utils import build_orthogonal_basis, sample_direction_in_cone
 
 if TYPE_CHECKING:
@@ -54,30 +54,6 @@ _SPARK_COLUMNS = [
 #: Single spark sprite (its red channel adds detail on top of the procedural
 #: SDF glow; the shape floors to the glow so a flat texture still reads).
 _SPARK_TEXTURE = DATAFILES_PATH / "sprites/particles/spark.png"
-
-
-# ---------------------------------------------------------------------------
-# Spark shader
-# ---------------------------------------------------------------------------
-
-#: The spark shader is shared by every burst; load it once, lazily.
-_SPARK_SHADER = None
-
-
-def _spark_shader() -> Shader:
-    """
-    Load (once) and return the shared spark GLSL shader.
-
-    :return: The shared spark :class:`Shader`.
-    """
-    global _SPARK_SHADER
-    if _SPARK_SHADER is None:
-        _SPARK_SHADER = Shader.load(
-            Shader.SL_GLSL,
-            vertex=DATAFILES_PATH / "shaders/spark.vert",
-            fragment=DATAFILES_PATH / "shaders/spark.frag",
-        )
-    return _SPARK_SHADER
 
 
 # ---------------------------------------------------------------------------
@@ -187,19 +163,11 @@ class SparkPool(ParticleBuffer):
     """
 
     def __init__(self, game: FlightState):
-        texture = game.app.asset_manager.get_asset(
-            asset_type="texture", path=_SPARK_TEXTURE
-        ).get_texture()
-        texture.setMagfilter(Texture.FTLinear)
-        texture.setMinfilter(Texture.FTLinear)
-        # Clamp so the round sprite does not wrap at the quad edges.
-        texture.setWrapU(Texture.WMClamp)
-        texture.setWrapV(Texture.WMClamp)
         super().__init__(
             game=game,
-            shader=_spark_shader(),
+            shader=load_glsl_shader("spark.vert", "spark.frag"),
             columns=_SPARK_COLUMNS,
-            texture=texture,
+            texture=load_clamped_texture(game, _SPARK_TEXTURE),
             additive=True,  # additive blending for a bright glow
             bin_order=20,
         )

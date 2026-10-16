@@ -188,6 +188,61 @@ class SFX:
             for node in self.app.camera.findAllMatches("player_hit_sound_node"):
                 node.removeNode()
 
+    def _play_pooled(
+        self,
+        game: FlightState,
+        sound_pool: SoundPool,
+        volume: float,
+        release_name: str,
+        randomize_pitch: bool,
+        node: NodePath | None = None,
+        velocity_source: Pawn | SubSystem | None = None,
+    ):
+        """
+        Draw a sound from a pool, play it, and schedule its release back to the
+        pool once it is surely over.
+
+        :param game: The game object (its delayed methods release the sound)
+        :param sound_pool: The pool to draw the sound from
+        :param volume: The sound volume
+        :param release_name: Name of the scheduled release
+        :param randomize_pitch: Whether to draw the sound at a random pitch
+        :param node: The node to attach the 3D sound to, or None to play it as is
+        :param velocity_source: Object whose ``speed`` drives the Doppler shift
+            of an attached sound (see :meth:`attach_sound`), or None
+        """
+        sound = sound_pool.get_sound(randomize_pitch=randomize_pitch)
+        if node is not None:
+            self.attach_sound(sound, node, velocity_source=velocity_source)
+        sound.setVolume(volume)
+        sound.play()
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name=release_name,
+            method=sound_pool.release_sound,
+            extra_args=[sound],
+        )
+
+    def _temp_sound_node(
+        self, game: FlightState, relative_hit_point: np.ndarray
+    ) -> NodePath:
+        """
+        Create an ad-hoc dummy node to place a sound, removed in the near future
+
+        :param game: The game object (its delayed methods remove the node)
+        :param relative_hit_point: The node position relative to the player,
+            applied in the camera's frame (the node is parented to it)
+        :return: The dummy node
+        """
+        dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
+        dummy_node.setPos(*relative_hit_point)
+        game.delayed_methods.do_method_later(
+            delay_s=SFX_MAX_SOUND_DURATION_S,
+            name="remove_player_hit_sound_node",
+            method=dummy_node.remove_node,
+        )
+        return dummy_node
+
     def get_sounds_from_asset_manager(self):
         self.player_crash_short_sound_pool = self.app.asset_manager.get_asset(
             asset_type="3d_sound",
@@ -265,17 +320,12 @@ class SFX:
             PLAYER_DISTANT_IMPACT_VOLUME if is_player else NPC_DISTANT_IMPACT_VOLUME
         )
 
-        # Add sound to laser hit
-        sound = sound_pool.get_sound(randomize_pitch=False)
-        sound.setVolume(volume * multiplier * shooter_multiplier)
-        sound.play()
-
-        # Schedule sound release
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="Release distant impact sound",
-            method=sound_pool.release_sound,
-            extra_args=[sound],
+        self._play_pooled(
+            game,
+            sound_pool,
+            volume=volume * multiplier * shooter_multiplier,
+            release_name="Release distant impact sound",
+            randomize_pitch=False,
         )
 
     def tractor_beam_grab(self, game: FlightState):
@@ -316,32 +366,15 @@ class SFX:
             sound_pool = self.player_shield_laser_hit_sound_pool
         else:
             sound_pool = self.player_hull_laser_hit_sound_pool
-        multiplier = PLAYER_HIT_SOUND_MULTIPLIER
-
-        # Create ad-hoc dummy node to place the sound
-        dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
-        dummy_node.setPos(*relative_hit_point)
-
-        # Delete it in the near future
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="remove_player_hit_sound_node",
-            method=dummy_node.remove_node,
-        )
-        # Add sound to laser hit
-        sound = sound_pool.get_sound(randomize_pitch=True)
-
-        # Attach sound to the dummy node
-        self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
-        sound.setVolume(multiplier)
-        sound.play()
-
-        # Schedule sound release
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="Release Laser impact on player sound",
-            method=sound_pool.release_sound,
-            extra_args=[sound],
+        dummy_node = self._temp_sound_node(game, relative_hit_point)
+        self._play_pooled(
+            game,
+            sound_pool,
+            volume=PLAYER_HIT_SOUND_MULTIPLIER,
+            release_name="Release Laser impact on player sound",
+            randomize_pitch=True,
+            node=dummy_node,
+            velocity_source=game.player.pawn,
         )
 
     def player_crash(
@@ -360,58 +393,27 @@ class SFX:
         # No one to hear it, and no camera to hang a 3D sound off of, headless.
         if game.headless:
             return
-        # Create ad-hoc dummy node to place the sound
-        dummy_node = self.app.camera.attachNewNode("player_hit_sound_node")
-        dummy_node.setPos(*relative_hit_point)
-        # Delete it in the near future
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="remove_player_hit_sound_node",
-            method=dummy_node.remove_node,
-        )
-        multiplier = PLAYER_HIT_SOUND_MULTIPLIER
-
-        # Play terrain hit sound if crash in terrain
+        dummy_node = self._temp_sound_node(game, relative_hit_point)
+        # Terrain hit sound if crash in terrain, then the short and long crash
+        # sounds, in this order
+        pools = [
+            (self.player_crash_short_sound_pool, "Release player crash short sound"),
+            (self.player_crash_long_sound_pool, "Release player crash long sound"),
+        ]
         if in_terrain:
-            sound_pool = self.terrain_hit_sound_pool
-            sound = sound_pool.get_sound(randomize_pitch=True)
-            self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
-            sound.setVolume(multiplier)
-            sound.play()
-            game.delayed_methods.do_method_later(
-                delay_s=SFX_MAX_SOUND_DURATION_S,
-                name="Release player crash terrain sound",
-                method=sound_pool.release_sound,
-                extra_args=[sound],
+            pools.insert(
+                0, (self.terrain_hit_sound_pool, "Release player crash terrain sound")
             )
-
-        # Play short crash sound
-        sound_pool = self.player_crash_short_sound_pool
-        sound = sound_pool.get_sound(randomize_pitch=True)
-
-        self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
-        sound.setVolume(multiplier)
-        sound.play()
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="Release player crash short sound",
-            method=sound_pool.release_sound,
-            extra_args=[sound],
-        )
-
-        # Play long crash sound
-        sound_pool = self.player_crash_long_sound_pool
-        sound = sound_pool.get_sound(randomize_pitch=True)
-
-        self.attach_sound(sound, dummy_node, velocity_source=game.player.pawn)
-        sound.setVolume(multiplier)
-        sound.play()
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="Release player crash long sound",
-            method=sound_pool.release_sound,
-            extra_args=[sound],
-        )
+        for sound_pool, release_name in pools:
+            self._play_pooled(
+                game,
+                sound_pool,
+                volume=PLAYER_HIT_SOUND_MULTIPLIER,
+                release_name=release_name,
+                randomize_pitch=True,
+                node=dummy_node,
+                velocity_source=game.player.pawn,
+            )
 
     def cannon_fire(
         self,
@@ -435,18 +437,14 @@ class SFX:
         # No one to hear it, headless.
         if game.headless:
             return
-        sound = sound_pool.get_sound(randomize_pitch=True)
-        self.attach_sound(sound, node, velocity_source=velocity_source)
-        sound.setVolume(
-            PLAYER_CANNON_FIRE_VOLUME if is_player else NPC_CANNON_FIRE_VOLUME
-        )
-        sound.play()
-        # Schedule sound release
-        game.delayed_methods.do_method_later(
-            delay_s=SFX_MAX_SOUND_DURATION_S,
-            name="Release player crash sound",
-            method=sound_pool.release_sound,
-            extra_args=[sound],
+        self._play_pooled(
+            game,
+            sound_pool,
+            volume=PLAYER_CANNON_FIRE_VOLUME if is_player else NPC_CANNON_FIRE_VOLUME,
+            release_name="Release player crash sound",
+            randomize_pitch=True,
+            node=node,
+            velocity_source=velocity_source,
         )
 
     def update_task(self, task: Task) -> int:

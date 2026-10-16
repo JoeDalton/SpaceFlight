@@ -48,7 +48,7 @@ fire/smoke billboard system on top of `ParticleBuffer`.
 
 - **`_FireSmokeBuffer`** applies the shared
   [`explosion.{vert,frag}`](shaders.md#explosion-particle-shaders) shader
-  (loaded once by `_explosion_shader()`), sets its layer's `uFadein`, and
+  (loaded once by `load_glsl_shader()`), sets its layer's `uFadein`, and
   `spawn_particle()` resolves a random atlas tile index to its UV rect for the
   `tile_rect` column. Fire and smoke differ only by atlas and `uFadein`.
 - **`FireSmokePool`** (`game.fire_smoke_pool`) owns the fire and smoke buffers

@@ -68,7 +68,7 @@ drag / lift parameters. `Interactions` already works this way.
 
 Every frame, each capital ship's hull touches its own turret, shield
 generator and targeting system. Each contact becomes a
-`ship-again-subsystem` event, which `ship_again_subsystem` then discards
+`ship-again-subsystem` event, which `ship_into_subsystem_pushback` then discards
 because `owners_share_vehicle` says it's the same vehicle. That's ~13 of the
 ~16 events per frame, plus their collision tests.
 

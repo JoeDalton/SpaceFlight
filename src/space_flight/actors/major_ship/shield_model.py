@@ -39,12 +39,11 @@ from panda3d.core import (
     NodePath,
     Point3,
     PTA_LVecBase4f,
-    Shader,
     TransparencyAttrib,
     Vec3,
 )
 
-from space_flight import DATAFILES_PATH
+from space_flight.fx import load_glsl_shader
 
 if TYPE_CHECKING:
     from direct.showbase.Loader import Loader
@@ -98,21 +97,6 @@ _NUM_SINKS = 6  # retraction/emergence points used per animation
 _IMPACT_LIFE_S = 2.0  # seconds an impact flash lingers
 # Cap on how many surface vertices we keep for sink placement / calibration.
 _MAX_SURFACE_SAMPLES = 1500
-
-# The shield shader is shared by every bubble; load it once, lazily.
-_SHIELD_SHADER = None
-
-
-def _shield_shader() -> Shader:
-    """Load (once) and return the shared shield GLSL shader."""
-    global _SHIELD_SHADER
-    if _SHIELD_SHADER is None:
-        _SHIELD_SHADER = Shader.load(
-            Shader.SL_GLSL,
-            vertex=DATAFILES_PATH / "shaders/shield.vert",
-            fragment=DATAFILES_PATH / "shaders/shield.frag",
-        )
-    return _SHIELD_SHADER
 
 
 def make_capsule(
@@ -370,7 +354,7 @@ class ShieldModel:
         base_alpha = color[3] if len(color) > 3 else _SHIELD_COLOR[3]
 
         v = self.visual
-        v.setShader(_shield_shader())
+        v.setShader(load_glsl_shader("shield.vert", "shield.frag"))
         # Look knobs
         v.setShaderInput("uColorFull", Vec3(r, g, b))
         v.setShaderInput("uColorMid", Vec3(*_SHIELD_COLOR_MID))

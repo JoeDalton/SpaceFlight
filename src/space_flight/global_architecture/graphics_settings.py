@@ -7,14 +7,11 @@ sanitised, so that any missing or invalid key falls back to a sane default.
 """
 
 import copy
-import logging
-from pathlib import Path
 
 import yaml
 
 from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
-
-LOGGER = logging.getLogger()
+from space_flight.global_architecture.yaml_files import load_user_yaml, load_yaml
 
 GRAPHICS_FILE = CONFIGURATION_PATH / "graphics.yaml"
 DEFAULT_GRAPHICS_FILE = DEFAULT_CONFIGURATION_PATH / "default_graphics.yaml"
@@ -49,6 +46,17 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def _clamp_float(value, default: float, minimum: float, maximum: float) -> float:
+    """
+    :return: value as a float clamped to [minimum, maximum], or default if it
+        is not a number
+    """
+    try:
+        return min(maximum, max(minimum, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 class GraphicsSettings:
     """
     Loads, sanitises and saves the graphics configuration.
@@ -59,26 +67,14 @@ class GraphicsSettings:
     def __init__(self):
         self.config = self.load()
 
-    @staticmethod
-    def load_file(path: Path) -> dict:
-        """Parse a YAML file and return its contents as a dict ({} if empty)."""
-        with open(path, "r") as f:
-            return yaml.safe_load(f) or {}
-
     def load(self) -> dict:
         """
         Read the defaults, overlay the user file (if present and readable), and
         return the sanitised result. Never raises on a malformed user file — it
         logs and falls back to the defaults.
         """
-        defaults = self.load_file(DEFAULT_GRAPHICS_FILE)
-        user = {}
-        if GRAPHICS_FILE.exists():
-            try:
-                user = self.load_file(GRAPHICS_FILE)
-            except Exception as exc:  # noqa: BLE001 - never let bad YAML crash boot
-                LOGGER.warning(f"Could not read {GRAPHICS_FILE}: {exc}; using defaults")
-        return self.sanitise(_deep_merge(defaults, user))
+        defaults = load_yaml(DEFAULT_GRAPHICS_FILE)
+        return self.sanitise(_deep_merge(defaults, load_user_yaml(GRAPHICS_FILE)))
 
     def save(self, config: dict):
         """
@@ -118,27 +114,15 @@ class GraphicsSettings:
         except (TypeError, ValueError, IndexError):
             display["windowed_size"] = [1280, 720]
 
-        try:
-            render["scale"] = min(
-                _MAX_SCALE, max(_MIN_SCALE, float(render.get("scale", 1.0)))
-            )
-        except (TypeError, ValueError):
-            render["scale"] = 1.0
-
-        try:
-            render["reflection_scale"] = min(
-                _MAX_REFLECTION,
-                max(_MIN_REFLECTION, float(render.get("reflection_scale", 0.5))),
-            )
-        except (TypeError, ValueError):
-            render["reflection_scale"] = 0.5
-
-        try:
-            render["mirror_scale"] = min(
-                _MAX_MIRROR, max(_MIN_MIRROR, float(render.get("mirror_scale", 1.0)))
-            )
-        except (TypeError, ValueError):
-            render["mirror_scale"] = 1.0
+        render["scale"] = _clamp_float(
+            render.get("scale", 1.0), 1.0, _MIN_SCALE, _MAX_SCALE
+        )
+        render["reflection_scale"] = _clamp_float(
+            render.get("reflection_scale", 0.5), 0.5, _MIN_REFLECTION, _MAX_REFLECTION
+        )
+        render["mirror_scale"] = _clamp_float(
+            render.get("mirror_scale", 1.0), 1.0, _MIN_MIRROR, _MAX_MIRROR
+        )
 
         if aa.get("msaa") not in _VALID_MSAA:
             aa["msaa"] = 0

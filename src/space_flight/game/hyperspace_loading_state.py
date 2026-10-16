@@ -32,16 +32,15 @@ from typing import TYPE_CHECKING
 
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import (
-    CardMaker,
     ClockObject,
     LVecBase2f,
     Shader,
     TextNode,
-    TransparencyAttrib,
     Vec3,
 )
 
 from space_flight import DATAFILES_PATH
+from space_flight.fx import make_fullscreen_quad
 from space_flight.global_architecture.base_state import BaseState
 
 if TYPE_CHECKING:
@@ -84,6 +83,19 @@ MAX_DT = 1 / 30
 CENTER_OFFSET = 0.1
 
 _TASK_NAME = "hyperspace_update"
+
+
+def set_resolution(quads: list[NodePath], win: GraphicsWindow):
+    """
+    Feed the window size to the phase shaders of fullscreen quads.
+
+    :param quads: The fullscreen quads
+    :param win: The window they cover
+    """
+    props = win.getProperties()
+    res = LVecBase2f(props.getXSize(), props.getYSize())
+    for quad in quads:
+        quad.setShaderInput("iResolution", res)
 
 
 def _smoothstep(x: float) -> float:
@@ -143,11 +155,12 @@ class HyperspaceLoadingState(BaseState):
         }
 
         # Two stacked fullscreen quads: index 0 = back (sort 0), 1 = front.
-        self._quads = [self._make_quad(sort=0), self._make_quad(sort=1)]
-        props = self.app.win.getProperties()
-        res = LVecBase2f(props.getXSize(), props.getYSize())
+        self._quads = [
+            make_fullscreen_quad(self.app.render2d, "hyperspace_quad", sort=sort)
+            for sort in (0, 1)
+        ]
+        set_resolution(self._quads, self.app.win)
         for quad in self._quads:
-            quad.setShaderInput("iResolution", res)
             quad.setShaderInput("iMouse", Vec3(0, 0, 0))
             quad.setShaderInput("iTime", 0.0)
             quad.setShaderInput("iAlpha", 0.0)
@@ -193,16 +206,6 @@ class HyperspaceLoadingState(BaseState):
         self._shaders = {}
 
     # -- internals -----------------------------------------------------------
-
-    def _make_quad(self, sort: int) -> NodePath:
-        cm = CardMaker("hyperspace_quad")
-        cm.setFrameFullscreenQuad()
-        quad = self.app.render2d.attachNewNode(cm.generate())
-        quad.setDepthWrite(False)
-        quad.setDepthTest(False)
-        quad.setTransparency(TransparencyAttrib.MAlpha)
-        quad.setBin("fixed", sort)
-        return quad
 
     def _show_shader(self, idx: int, name: str, alpha: float):
         """Assign a phase shader to a quad, reset its clock, reveal it."""
@@ -350,7 +353,4 @@ class HyperspaceLoadingState(BaseState):
         self.app.windowEvent(win)
         if not self._quads:
             return
-        props = win.getProperties()
-        res = LVecBase2f(props.getXSize(), props.getYSize())
-        for quad in self._quads:
-            quad.setShaderInput("iResolution", res)
+        set_resolution(self._quads, win)

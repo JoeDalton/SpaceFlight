@@ -32,6 +32,7 @@ from space_flight.global_architecture.gameplay_settings import (
     gameplay_config,
     load_presets,
 )
+from space_flight.global_architecture.yaml_files import load_yaml
 
 # A fully-populated, valid config matching the YAML schema. Several tests assert
 # exact equality against it, so every field sanitise() populates must appear
@@ -408,5 +409,5 @@ class TestShippedPresets:
         assert normal["player"]["lead_indicator"] is True
 
     def test_shipped_user_file_selects_a_preset(self):
-        user = gps._load_file(gps.GAMEPLAY_FILE)
+        user = load_yaml(gps.GAMEPLAY_FILE)
         assert user.get("preset") in [*load_presets(), CUSTOM_PRESET]

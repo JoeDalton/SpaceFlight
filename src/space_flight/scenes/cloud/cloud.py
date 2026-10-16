@@ -14,7 +14,6 @@ toroidal recycling (field.py), stored ragged with an offsets table.
 from __future__ import annotations
 
 import functools
-import json
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
@@ -23,7 +22,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from panda3d.core import Filename, PNMImage, Texture
 
-from space_flight.fx import load_atlas
+from space_flight.fx import load_atlas, read_atlas_rects
 from space_flight.scenes.cloud.noise import (
     MIE_ASYMMETRY_ICE,
     MIE_ASYMMETRY_WATER,
@@ -394,11 +393,7 @@ def load_cloud_atlas(game: FlightState) -> tuple[Texture, list]:
 
 def atlas_rects() -> list:
     """:returns: the atlas rects (u, v, du, dv), read from the JSON with no GL."""
-    with open(ATLAS_JSON) as handle:
-        return [
-            (r["u_min"], r["v_min"], r["u_size"], r["v_size"])
-            for r in json.load(handle)
-        ]
+    return read_atlas_rects(ATLAS_JSON)
 
 
 @functools.cache

@@ -5,7 +5,7 @@ Unit tests for the graphics-settings persistence layer
 Covers:
 - :func:`_deep_merge` — recursive dict overlay
 - :meth:`GraphicsSettings.sanitise` — clamping / coercion of every field
-- :meth:`GraphicsSettings.load_file` — static YAML loader
+- :func:`load_yaml` — YAML loader
 - :meth:`GraphicsSettings.load` — defaults + user overlay + sanitise
 - :meth:`GraphicsSettings.save` — round-trip to disk
 """
@@ -18,6 +18,7 @@ from space_flight.global_architecture.graphics_settings import (
     GraphicsSettings,
     _deep_merge,
 )
+from space_flight.global_architecture.yaml_files import load_yaml
 
 # A fully-populated, valid config matching the YAML schema. Several tests assert
 # exact equality against it, so every section sanitise() populates must appear
@@ -200,19 +201,19 @@ class TestSanitise:
 
 
 # ---------------------------------------------------------------------------
-# GraphicsSettings.load_file
+# load_yaml
 # ---------------------------------------------------------------------------
 
 
 class TestLoadFile:
     def test_parses_yaml_to_dict(self, tmp_path):
         f = _write_yaml(tmp_path / "g.yaml", {"render": {"scale": 0.5}})
-        assert GraphicsSettings.load_file(f) == {"render": {"scale": 0.5}}
+        assert load_yaml(f) == {"render": {"scale": 0.5}}
 
     def test_empty_file_returns_empty_dict(self, tmp_path):
         f = tmp_path / "empty.yaml"
         f.write_text("")
-        assert GraphicsSettings.load_file(f) == {}
+        assert load_yaml(f) == {}
 
 
 # ---------------------------------------------------------------------------

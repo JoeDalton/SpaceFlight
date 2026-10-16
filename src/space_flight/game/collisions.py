@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Callable
 from typing import TYPE_CHECKING, TypeAlias
 
 import numpy as np
@@ -14,6 +15,7 @@ from panda3d.core import (
     CollisionNode,
     CollisionPlane,
     CollisionSegment,
+    CollisionSolid,
     CollisionSphere,
     CollisionTraverser,
     CollisionTube,
@@ -70,6 +72,34 @@ _TERRAIN_SPARK_PRESET = {
 }
 
 LOGGER = logging.getLogger()
+
+#: Collision event -> the CollisionSystem method handling it. A ship still
+#: touching something from a previous frame ("again") is only pushed back.
+_EVENT_HANDLERS = {
+    # Weapon hit = one time events
+    "laser-into-ship": "munition_into_destructible",
+    "laser-into-terrain": "munition_into_terrain",
+    "laser-into-turret": "munition_into_destructible",
+    "laser-into-subsystem": "munition_into_destructible",
+    "laser-into-shield": "munition_into_shield",
+    # Ordnance hits reuse the laser damage handlers (same projectile
+    # interface), and are stopped by flares.
+    "ordnance-into-ship": "munition_into_destructible",
+    "ordnance-into-terrain": "munition_into_terrain",
+    "ordnance-into-turret": "munition_into_destructible",
+    "ordnance-into-subsystem": "munition_into_destructible",
+    "ordnance-into-shield": "munition_into_shield",
+    "ordnance-into-flare": "ordnance_into_flare",
+    # Collision physics = detected at each frame
+    "ship-into-ship": "ship_into_ship",
+    "ship-again-ship": "ship_into_ship_pushback",
+    "ship-into-terrain": "ship_into_terrain",
+    "ship-again-terrain": "ship_into_terrain_pushback",
+    "ship-into-turret": "ship_into_massive_actor",
+    "ship-again-turret": "ship_into_massive_actor_pushback",
+    "ship-into-subsystem": "ship_into_subsystem",
+    "ship-again-subsystem": "ship_into_subsystem_pushback",
+}
 
 
 class CollisionLayers:
@@ -132,38 +162,32 @@ class CollisionLayers:
         :return: Its from and into mask bits, and whether to add said collider to
             the collision handler
         """
-        add_to_collision_handler = True
-        if collider_type == "laser":
-            from_mask_bit = CollisionLayers.MUNITION_FROM
-            into_mask_bit = CollisionLayers.MUNITION_INTO
-        elif collider_type == "ordnance":
-            from_mask_bit = CollisionLayers.ORDNANCE_FROM
-            into_mask_bit = CollisionLayers.ORDNANCE_INTO
-        elif collider_type == "flare":
-            from_mask_bit = CollisionLayers.DECOY_FROM
-            into_mask_bit = CollisionLayers.DECOY_INTO
-            add_to_collision_handler = False
-        elif collider_type == "sensor":
-            from_mask_bit = CollisionLayers.SENSOR_FROM
-            into_mask_bit = CollisionLayers.SENSOR_INTO
-        elif collider_type == "destructible":
-            from_mask_bit = CollisionLayers.DESTRUCTIBLE_FROM
-            into_mask_bit = CollisionLayers.DESTRUCTIBLE_INTO
-        elif collider_type == "terrain":
-            from_mask_bit = CollisionLayers.TERRAIN_FROM
-            into_mask_bit = CollisionLayers.TERRAIN_INTO
-            add_to_collision_handler = False
-        elif collider_type == "subsystem":
-            from_mask_bit = CollisionLayers.SUBSYSTEM_FROM
-            into_mask_bit = CollisionLayers.SUBSYSTEM_INTO
-            add_to_collision_handler = False
-        elif collider_type == "shield":
-            from_mask_bit = CollisionLayers.SHIELD_FROM
-            into_mask_bit = CollisionLayers.SHIELD_INTO
-            add_to_collision_handler = False
-        else:
-            raise ValueError(f"Unknown collider type {collider_type}")
-        return from_mask_bit, into_mask_bit, add_to_collision_handler
+        try:
+            return _COLLIDER_MASKS[collider_type]
+        except KeyError:
+            raise ValueError(f"Unknown collider type {collider_type}") from None
+
+
+#: Collider type -> its from and into mask bits, and whether to add it to the
+#: collision handler (see CollisionLayers.define_collision_masks)
+_COLLIDER_MASKS = {
+    "laser": (CollisionLayers.MUNITION_FROM, CollisionLayers.MUNITION_INTO, True),
+    "ordnance": (CollisionLayers.ORDNANCE_FROM, CollisionLayers.ORDNANCE_INTO, True),
+    "flare": (CollisionLayers.DECOY_FROM, CollisionLayers.DECOY_INTO, False),
+    "sensor": (CollisionLayers.SENSOR_FROM, CollisionLayers.SENSOR_INTO, True),
+    "destructible": (
+        CollisionLayers.DESTRUCTIBLE_FROM,
+        CollisionLayers.DESTRUCTIBLE_INTO,
+        True,
+    ),
+    "terrain": (CollisionLayers.TERRAIN_FROM, CollisionLayers.TERRAIN_INTO, False),
+    "subsystem": (
+        CollisionLayers.SUBSYSTEM_FROM,
+        CollisionLayers.SUBSYSTEM_INTO,
+        False,
+    ),
+    "shield": (CollisionLayers.SHIELD_FROM, CollisionLayers.SHIELD_INTO, False),
+}
 
 
 def owners_share_vehicle(
@@ -219,6 +243,36 @@ def _hit_velocity(obj: VehicleOwner | None) -> np.ndarray:
     return np.asarray(speed, dtype=float) if speed is not None else np.zeros(3)
 
 
+def _normalize(vector: Vec3) -> Vec3:
+    """
+    Normalise a collision normal in place: it can have a non-unit length if a
+    parent object was scaled. It's dumb, but it is what it is... A null vector
+    is left null.
+
+    :param vector: The vector to normalise
+    :return: The same vector
+    """
+    if not vector.almostEqual(Vec3(0, 0, 0)):
+        vector.normalize()
+    return vector
+
+
+def _immovable_bounce(normal: Vec3, normal_relative_velocity: float) -> np.ndarray:
+    """
+    Velocity correction bouncing a ship off something that does not move in
+    response (terrain, a massive actor), if the two are still approaching.
+
+    :param normal: The unit contact normal, pointing towards the ship
+    :param normal_relative_velocity: The relative velocity along the normal
+    :return: The ship's velocity correction (zeros when separating)
+    """
+    if normal_relative_velocity < 0:
+        return np.array(
+            -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
+        )
+    return np.zeros(3)
+
+
 class CollisionSystem:
     def __init__(self, game: FlightState):
         """
@@ -242,29 +296,8 @@ class CollisionSystem:
         # routing each one through Panda3D's event messenger
         self.sensor_queue = CollisionHandlerQueue()
 
-        # Weapon hit = one time events
-        self.game.app.accept("laser-into-ship", self.munition_into_destructible)
-        self.game.app.accept("laser-into-terrain", self.munition_into_terrain)
-        self.game.app.accept("laser-into-turret", self.munition_into_destructible)
-        self.game.app.accept("laser-into-subsystem", self.munition_into_destructible)
-        self.game.app.accept("laser-into-shield", self.munition_into_shield)
-        # Ordnance hits reuse the laser damage handlers (same projectile
-        # interface), and are stopped by flares.
-        self.game.app.accept("ordnance-into-ship", self.munition_into_destructible)
-        self.game.app.accept("ordnance-into-terrain", self.munition_into_terrain)
-        self.game.app.accept("ordnance-into-turret", self.munition_into_destructible)
-        self.game.app.accept("ordnance-into-subsystem", self.munition_into_destructible)
-        self.game.app.accept("ordnance-into-shield", self.munition_into_shield)
-        self.game.app.accept("ordnance-into-flare", self.ordnance_into_flare)
-        # Collision physics = detected at each frame
-        self.game.app.accept("ship-into-ship", self.ship_into_ship)
-        self.game.app.accept("ship-again-ship", self.ship_again_ship)
-        self.game.app.accept("ship-into-terrain", self.ship_into_terrain)
-        self.game.app.accept("ship-again-terrain", self.ship_again_terrain)
-        self.game.app.accept("ship-into-turret", self.ship_into_massive_actor)
-        self.game.app.accept("ship-again-turret", self.ship_again_massive_actor)
-        self.game.app.accept("ship-into-subsystem", self.ship_into_subsystem)
-        self.game.app.accept("ship-again-subsystem", self.ship_again_subsystem)
+        for event, method_name in _EVENT_HANDLERS.items():
+            self.game.app.accept(event, getattr(self, method_name))
 
     def collision_damage(self, ship: Ship, normal_relative_velocity: float) -> float:
         """
@@ -288,6 +321,31 @@ class CollisionSystem:
         self.traverser.traverse(self.game.app.render)
         for entry in self.sensor_queue.entries:
             self.sensor_into_obstacle(entry)
+
+    def _world_normal(self, entry: CollisionEntry) -> Vec3:
+        """
+        :param entry: Panda3d's description of a collision
+        :return: The unit (or null) surface normal, in world space
+        """
+        return _normalize(entry.getSurfaceNormal(self.game.root_node))
+
+    def _distant_impact(
+        self, entry: CollisionEntry, munition: Munition, impact_type: str
+    ):
+        """
+        Play the impact sound of a munition landing away from the player.
+
+        :param entry: Panda3d's description of the collision
+        :param munition: The munition that hit
+        :param impact_type: "target" or "terrain"
+        """
+        self.game.app.sfx.distant_impact_hit(
+            game=self.game,
+            player_ship_pos=self.game.player.pawn.position,
+            hit_pos=entry.into_node_path.parent.getPos(),
+            impact_type=impact_type,
+            is_player=munition.origin_ship_id == self.game.player.pawn.id,
+        )
 
     def munition_into_destructible(self, entry: CollisionEntry):
         """
@@ -333,10 +391,7 @@ class CollisionSystem:
             entry.getInto(), CollisionBox
         ):
             normal = self._box_face_normal(entry)
-        # Normalize the normal vector because it can have a non-unit length if a parent
-        # object was scaled. It's dumb, but it is what it is...
-        if not normal.almostEqual(Vec3(0, 0, 0)):
-            normal.normalize()
+        _normalize(normal)
 
         # Was the target's shield still up when the shot landed? Fighters carry a
         # scalar shield. Read it BEFORE take_hit spends the shield, so a shielded
@@ -375,13 +430,7 @@ class CollisionSystem:
             )
         else:
             # TODO: Mute bots shooting on bots ?
-            self.game.app.sfx.distant_impact_hit(
-                game=self.game,
-                player_ship_pos=self.game.player.pawn.position,
-                hit_pos=entry.into_node_path.parent.getPos(),
-                impact_type="target",
-                is_player=munition.origin_ship_id == self.game.player.pawn.id,
-            )
+            self._distant_impact(entry, munition, "target")
             hit_point = entry.getSurfacePoint(self.game.root_node)
             hit_velocity = _hit_velocity(destructible)
             # Electric sparks for an ion hit; else blue ice sparks off a
@@ -429,13 +478,7 @@ class CollisionSystem:
                 )
             return
 
-        self.game.app.sfx.distant_impact_hit(
-            game=self.game,
-            player_ship_pos=self.game.player.pawn.position,
-            hit_pos=entry.into_node_path.parent.getPos(),
-            impact_type="terrain",
-            is_player=munition.origin_ship_id == self.game.player.pawn.id,
-        )
+        self._distant_impact(entry, munition, "terrain")
 
         # Sparks coloured by the terrain type (water → ice, rock → gray-brown).
         # Terrain is static, so no inherited velocity. An infinite-plane terrain
@@ -445,8 +488,7 @@ class CollisionSystem:
             normal = entry.getSurfaceNormal(self.game.root_node)
         else:
             normal = Vec3(-munition.speed[0], -munition.speed[1], -munition.speed[2])
-        if not normal.almostEqual(Vec3(0, 0, 0)):
-            normal.normalize()
+        _normalize(normal)
         if entry.hasSurfacePoint():
             hit_point = entry.getSurfacePoint(self.game.root_node)
         else:
@@ -555,10 +597,7 @@ class CollisionSystem:
         if shield.contains(munition.launch_position):
             return
 
-        normal = entry.getSurfaceNormal(self.game.root_node)
-        # Normalize: a scaled parent can give a non-unit normal.
-        if not normal.almostEqual(Vec3(0, 0, 0)):
-            normal.normalize()
+        normal = self._world_normal(entry)
 
         if DEBUG_COLLISION:
             LOGGER.info("munition into shield")
@@ -587,56 +626,80 @@ class CollisionSystem:
         munition.on_impact()
 
         # Impact feedback
-        self.game.app.sfx.distant_impact_hit(
-            game=self.game,
-            player_ship_pos=self.game.player.pawn.position,
-            hit_pos=entry.into_node_path.parent.getPos(),
-            impact_type="target",
-            is_player=munition.origin_ship_id == self.game.player.pawn.id,
-        )
+        self._distant_impact(entry, munition, "target")
 
-    def ship_into_terrain(self, entry: CollisionEntry):
+    def _ship_contact(
+        self,
+        entry: CollisionEntry,
+        pushback: Callable[[CollisionEntry], None],
+        into_label: str,
+        *,
+        in_terrain: bool = False,
+        check_same_vehicle: bool = True,
+    ):
         """
-        Handles the case where a ship hits immobile terrain.
-        If ship_from is the player, plays a crash sfx
-        In any case, calls ship_into_terrain_pushback
+        Handle a ship's first contact with something solid: push it back and, if
+        it is the player's, play a crash sfx. Terrain pushes back before the
+        sound, everything else after it.
 
         :param entry: Panda3d's description of the collision
+        :param pushback: The pushback method for this kind of contact (also the
+            handler of the "again" events that follow)
+        :param into_label: What the ship hits, for debug logs
+        :param in_terrain: Whether the ship hits terrain (picks the crash sfx)
+        :param check_same_vehicle: Skip contacts with the ship's own vehicle (a
+            ship never collides with its own subsystems, nor they with each
+            other: see owners_share_vehicle)
         """
         ship_from = entry.from_node_path.python_tags["owner"]
-        terrain_into = entry.into_node_path.python_tags["owner"]
+        into = entry.into_node_path.python_tags["owner"]
 
         # Handle pathologic cases
         if ship_from is None:
             if DEBUG_COLLISION:
                 LOGGER.info("ship_from being removed while it hits. Ignoring.")
             return
-        if terrain_into is None:
+        if into is None:
             if DEBUG_COLLISION:
-                LOGGER.info("terrain_into being removed while it hits. Ignoring.")
+                LOGGER.info(f"{into_label} being removed while it hits. Ignoring.")
+            return
+        if check_same_vehicle and owners_share_vehicle(ship_from, into):
             return
 
         if DEBUG_COLLISION:
-            LOGGER.info("ship into terrain")
+            LOGGER.info(f"ship into {into_label}")
             LOGGER.info(f"ship from : {ship_from.id}")
 
-        self.ship_into_terrain_pushback(entry)
+        def crash_sound():
+            # Play SFX for player only
+            if ship_from.id == self.game.player.pawn.id:
+                relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
+                self.game.app.sfx.player_crash(
+                    game=self.game,
+                    relative_hit_point=relative_hit_point,
+                    in_terrain=in_terrain,
+                )
 
-        # Play SFX for player only
-        if ship_from.id == self.game.player.pawn.id:
-            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
-            self.game.app.sfx.player_crash(
-                game=self.game, relative_hit_point=relative_hit_point, in_terrain=True
-            )
+        if in_terrain:
+            pushback(entry)
+            crash_sound()
+        else:
+            crash_sound()
+            pushback(entry)
 
-    def ship_again_terrain(self, entry: CollisionEntry):
+    def ship_into_terrain(self, entry: CollisionEntry):
         """
-        Handles a ship still touching immobile terrain from a previous frame:
-        calls ship_into_terrain_pushback
+        Handles the case where a ship hits immobile terrain for the first time
 
         :param entry: Panda3d's description of the collision
         """
-        self.ship_into_terrain_pushback(entry)
+        self._ship_contact(
+            entry,
+            self.ship_into_terrain_pushback,
+            "terrain",
+            in_terrain=True,
+            check_same_vehicle=False,
+        )
 
     def ship_into_terrain_pushback(self, entry: CollisionEntry):
         """
@@ -659,21 +722,11 @@ class CollisionSystem:
             return
 
         # Get impact parameters
-        normal = entry.getSurfaceNormal(self.game.root_node)
-        # Normalize the normal vector because it can have a non-unit length if a parent
-        # object was scaled. It's dumb, but it is what it is...
-        if not normal.almostEqual(Vec3(0, 0, 0)):
-            normal.normalize()
+        normal = self._world_normal(entry)
         normal_relative_velocity = np.dot(normal, ship_from.speed)
 
         # Compute impulse correction
-        # Push back if objects are still approaching
-        if normal_relative_velocity < 0:
-            velocity_correction = np.array(
-                -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
-            )
-        else:
-            velocity_correction = np.zeros(3)
+        velocity_correction = _immovable_bounce(normal, normal_relative_velocity)
         # Position correction is too complicated to compute with arbitrary mesh
         # => Rely only on elastic impact to push back
 
@@ -693,50 +746,10 @@ class CollisionSystem:
     def ship_into_ship(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits another ship for the first time
-        If ship_from is the player, play a crash sfx
-        In any case, call ship_into_ship_pushback
 
         :param entry: Panda3d's description of the collision
         """
-        ship_from = entry.from_node_path.python_tags["owner"]
-        ship_into = entry.into_node_path.python_tags["owner"]
-
-        # Handle pathologic cases
-        if ship_from is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. Ignoring.")
-            return
-        if ship_into is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("ship_into being removed while it hits. Ignoring.")
-            return
-
-        # A ship never collides with its own subsystems (nor they with each
-        # other): the owner mechanic spares same-vehicle colliders.
-        if owners_share_vehicle(ship_from, ship_into):
-            return
-
-        if DEBUG_COLLISION:
-            LOGGER.info("ship into ship")
-            LOGGER.info(f"ship into : {ship_into.id}")
-            LOGGER.info(f"ship from : {ship_from.id}")
-
-        # Play SFX for player only
-        if ship_from.id == self.game.player.pawn.id:
-            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
-            self.game.app.sfx.player_crash(
-                game=self.game, relative_hit_point=relative_hit_point, in_terrain=False
-            )
-        self.ship_into_ship_pushback(entry)
-
-    def ship_again_ship(self, entry: CollisionEntry):
-        """
-        Handle a ship still touching another ship from a previous frame:
-        call ship_into_ship_pushback
-
-        :param entry: Panda3d's description of the collision
-        """
-        self.ship_into_ship_pushback(entry)
+        self._ship_contact(entry, self.ship_into_ship_pushback, "ship")
 
     def ship_into_ship_pushback(self, entry: CollisionEntry):
         """
@@ -810,45 +823,15 @@ class CollisionSystem:
     def ship_into_massive_actor(self, entry: CollisionEntry):
         """
         Handle the case where a ship hits a massive actor for the first time
-        If ship_from is the player, play a crash sfx
-        In any case, call ship_into_massive_actor_pushback
 
         :param entry: Panda3d's description of the collision
         """
-        ship_from = entry.from_node_path.python_tags["owner"]
-        massive_actor_into = entry.into_node_path.python_tags["owner"]
-
-        # Handle pathologic cases
-        if ship_from is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. Ignoring.")
-            return
-        if massive_actor_into is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("massive_actor_into being removed while it hits. Ignoring.")
-            return
-
-        if DEBUG_COLLISION:
-            LOGGER.info("ship into massive actor")
-            LOGGER.info(f"Massive actor into : {massive_actor_into.id}")
-            LOGGER.info(f"ship from : {ship_from.id}")
-
-        # Play SFX for player only
-        if ship_from.id == self.game.player.pawn.id:
-            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
-            self.game.app.sfx.player_crash(
-                game=self.game, relative_hit_point=relative_hit_point, in_terrain=False
-            )
-        self.ship_into_massive_actor_pushback(entry)
-
-    def ship_again_massive_actor(self, entry: CollisionEntry):
-        """
-        Handle a ship still touching a massive actor from a previous frame:
-        call ship_into_massive_actor_pushback
-
-        :param entry: Panda3d's description of the collision
-        """
-        self.ship_into_massive_actor_pushback(entry)
+        self._ship_contact(
+            entry,
+            self.ship_into_massive_actor_pushback,
+            "massive actor",
+            check_same_vehicle=False,
+        )
 
     def ship_into_massive_actor_pushback(self, entry: CollisionEntry):
         """
@@ -868,22 +851,12 @@ class CollisionSystem:
             return
 
         # Get impact parameters
-        normal = entry.getSurfaceNormal(self.game.root_node)
-        # Normalize the normal vector because it can have a non-unit length if a parent
-        # object was scaled. It's dumb, but it is what it is...
-        if not normal.almostEqual(Vec3(0, 0, 0)):
-            normal.normalize()
+        normal = self._world_normal(entry)
         relative_velocity = ship_from.speed - massive_actor_into.speed
         normal_relative_velocity = np.dot(normal, relative_velocity)
 
         # Compute impulse correction
-        # Push back if objects are still approaching
-        if normal_relative_velocity < 0:
-            velocity_correction = np.array(
-                -normal * (1 + SOLID_COLLISION_ELASTICITY) * normal_relative_velocity
-            )
-        else:
-            velocity_correction = np.zeros(3)
+        velocity_correction = _immovable_bounce(normal, normal_relative_velocity)
         # Position correction is too complicated to compute with arbitrary mesh
         # => Rely only on elastic impact to push back
 
@@ -901,44 +874,11 @@ class CollisionSystem:
 
     def ship_into_subsystem(self, entry: CollisionEntry):
         """
-        Handle a ship hitting a subsystem for the first time.
-        Play a crash sfx if the incoming ship is the player, then push back.
+        Handle a ship hitting a subsystem for the first time
 
         :param entry: Panda3d's description of the collision
         """
-        ship_from = entry.from_node_path.python_tags["owner"]
-        subsystem_into = entry.into_node_path.python_tags["owner"]
-
-        # Handle pathologic cases
-        if ship_from is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("ship_from being removed while it hits. Ignoring.")
-            return
-        if subsystem_into is None:
-            if DEBUG_COLLISION:
-                LOGGER.info("subsystem_into being removed while it hits. Ignoring.")
-            return
-
-        # A ship never collides with its own subsystems
-        if owners_share_vehicle(ship_from, subsystem_into):
-            return
-
-        # Play SFX for player only
-        if ship_from.id == self.game.player.pawn.id:
-            relative_hit_point = entry.getSurfacePoint(entry.getFromNodePath())
-            self.game.app.sfx.player_crash(
-                game=self.game, relative_hit_point=relative_hit_point, in_terrain=False
-            )
-        self.ship_into_subsystem_pushback(entry)
-
-    def ship_again_subsystem(self, entry: CollisionEntry):
-        """
-        Handle a ship still touching a subsystem from a previous frame:
-        call ship_into_subsystem_pushback.
-
-        :param entry: Panda3d's description of the collision
-        """
-        self.ship_into_subsystem_pushback(entry)
+        self._ship_contact(entry, self.ship_into_subsystem_pushback, "subsystem")
 
     def ship_into_subsystem_pushback(self, entry: CollisionEntry):
         """
@@ -970,10 +910,7 @@ class CollisionSystem:
         # Impact normal from the actual geometry (robust to the subsystem's own
         # position lagging its moving hull). It points out of the subsystem,
         # i.e. roughly towards the incoming ship.
-        normal = entry.getSurfaceNormal(self.game.root_node)
-        # Normalize: a scaled parent can give a non-unit normal.
-        if not normal.almostEqual(Vec3(0, 0, 0)):
-            normal.normalize()
+        normal = self._world_normal(entry)
 
         # The subsystem is rigid, so its kinematics are its host ship's
         relative_velocity = ship_from.speed - host.speed
@@ -1067,17 +1004,60 @@ class CollisionSystem:
         # Clean handler
         self.handler.clearInPatterns()
         self.handler.clearOutPatterns()
-        for munition_type in ("laser", "ordnance"):
-            for into_type in ("ship", "terrain", "turret", "subsystem", "shield"):
-                self.game.app.ignore(f"{munition_type}-into-{into_type}")
-        self.game.app.ignore("ordnance-into-flare")
-        self.game.app.ignore("ship-into-terrain")
-        self.game.app.ignore("ship-into-ship")
-        self.game.app.ignore("ship-into-subsystem")
-        self.game.app.ignore("ship-again-subsystem")
+        for event in _EVENT_HANDLERS:
+            self.game.app.ignore(event)
         self.handler = None
         self.sensor_queue = None
         self.game = None
+
+
+def _attach_solid(
+    game: FlightState,
+    name: str,
+    solid: CollisionSolid,
+    collider_type: str,
+    parent_node: NodePath,
+    parent_object: ColliderOwner,
+) -> NodePath:
+    """
+    Attach a collision node holding one solid to an existing node, and register
+    it in the collision handler (the sensor queue for a sensor) if its type
+    initiates collisions.
+
+    :param game: The game stage
+    :param name: The name of the collision node
+    :param solid: The collision solid, in the parent node's frame
+    :param collider_type: The nature of the collider, defines from and into bitmasks
+    :param parent_node: Its parent_node
+    :param parent_object: Its parent_object
+    :return: The node path to the collision node
+    """
+    (
+        from_mask_bit,
+        into_mask_bit,
+        add_to_collision_handler,
+    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
+
+    cnode = CollisionNode(name)
+    cnode.addSolid(solid)
+    # Define masks
+    cnode.setFromCollideMask(from_mask_bit)
+    cnode.setIntoCollideMask(into_mask_bit)
+    # Attach to parent node and object
+    node_path = parent_node.attachNewNode(cnode)
+    node_path.setPythonTag("owner", parent_object)
+    # Register in collision handler
+    if add_to_collision_handler:
+        handler = (
+            game.collision_system.sensor_queue
+            if collider_type == "sensor"
+            else game.collision_system.handler
+        )
+        game.collision_system.traverser.addCollider(node_path, handler)
+
+    if DEBUG_COLLISION:
+        node_path.show()
+    return node_path
 
 
 def attach_collision_sphere(
@@ -1101,36 +1081,10 @@ def attach_collision_sphere(
     :param relative_position: Its position relative to the origin of its parent node
     :return: The node path to the collision sphere
     """
-    (
-        from_mask_bit,
-        into_mask_bit,
-        add_to_collision_handler,
-    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
-
-    cnode = CollisionNode(name)
-    cnode.addSolid(
-        CollisionSphere(
-            relative_position[0], relative_position[1], relative_position[2], radius
-        )
+    solid = CollisionSphere(
+        relative_position[0], relative_position[1], relative_position[2], radius
     )
-    # Define masks
-    cnode.setFromCollideMask(from_mask_bit)
-    cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and object
-    node_path = parent_node.attachNewNode(cnode)
-    node_path.setPythonTag("owner", parent_object)
-    # Register in collision handler
-    if add_to_collision_handler:
-        handler = (
-            game.collision_system.sensor_queue
-            if collider_type == "sensor"
-            else game.collision_system.handler
-        )
-        game.collision_system.traverser.addCollider(node_path, handler)
-
-    if DEBUG_COLLISION:
-        node_path.show()
-    return node_path
+    return _attach_solid(game, name, solid, collider_type, parent_node, parent_object)
 
 
 def attach_collision_tube(
@@ -1158,39 +1112,10 @@ def attach_collision_tube(
     :param parent_object: Its parent_object
     :return: The node path to the collision tube
     """
-    (
-        from_mask_bit,
-        into_mask_bit,
-        add_to_collision_handler,
-    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
-
-    cnode = CollisionNode(name)
-    cnode.addSolid(
-        CollisionTube(
-            point_a[0],
-            point_a[1],
-            point_a[2],
-            point_b[0],
-            point_b[1],
-            point_b[2],
-            radius,
-        )
+    solid = CollisionTube(
+        point_a[0], point_a[1], point_a[2], point_b[0], point_b[1], point_b[2], radius
     )
-    # Define masks
-    cnode.setFromCollideMask(from_mask_bit)
-    cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and object
-    node_path = parent_node.attachNewNode(cnode)
-    node_path.setPythonTag("owner", parent_object)
-    # Register in collision handler
-    if add_to_collision_handler:
-        game.collision_system.traverser.addCollider(
-            node_path, game.collision_system.handler
-        )
-
-    if DEBUG_COLLISION:
-        node_path.show()
-    return node_path
+    return _attach_solid(game, name, solid, collider_type, parent_node, parent_object)
 
 
 def attach_collision_box(
@@ -1215,36 +1140,13 @@ def attach_collision_box(
     :param parent_object: Its parent_object
     :return: The node path to the collision box
     """
-    (
-        from_mask_bit,
-        into_mask_bit,
-        add_to_collision_handler,
-    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
-
-    cnode = CollisionNode(name)
-    cnode.addSolid(
-        CollisionBox(
-            LPoint3(center[0], center[1], center[2]),
-            half_extents[0],
-            half_extents[1],
-            half_extents[2],
-        )
+    solid = CollisionBox(
+        LPoint3(center[0], center[1], center[2]),
+        half_extents[0],
+        half_extents[1],
+        half_extents[2],
     )
-    # Define masks
-    cnode.setFromCollideMask(from_mask_bit)
-    cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and object
-    node_path = parent_node.attachNewNode(cnode)
-    node_path.setPythonTag("owner", parent_object)
-    # Register in collision handler
-    if add_to_collision_handler:
-        game.collision_system.traverser.addCollider(
-            node_path, game.collision_system.handler
-        )
-
-    if DEBUG_COLLISION:
-        node_path.show()
-    return node_path
+    return _attach_solid(game, name, solid, collider_type, parent_node, parent_object)
 
 
 def attach_collision_segment(
@@ -1268,29 +1170,8 @@ def attach_collision_segment(
     :param relative_end_position: Its relative end position
     :return: The node path to the collision segment
     """
-    (
-        from_mask_bit,
-        into_mask_bit,
-        add_to_collision_handler,
-    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
-
-    cnode = CollisionNode(name)
-    cnode.addSolid(CollisionSegment(relative_start_position, relative_end_position))
-    # Define masks
-    cnode.setFromCollideMask(from_mask_bit)
-    cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and object
-    node_path = parent_node.attachNewNode(cnode)
-    node_path.setPythonTag("owner", parent_object)
-    # Register in collision handler
-    if add_to_collision_handler:
-        game.collision_system.traverser.addCollider(
-            node_path, game.collision_system.handler
-        )
-
-    if DEBUG_COLLISION:
-        node_path.show()
-    return node_path
+    solid = CollisionSegment(relative_start_position, relative_end_position)
+    return _attach_solid(game, name, solid, collider_type, parent_node, parent_object)
 
 
 def attach_collision_plane(
@@ -1310,29 +1191,8 @@ def attach_collision_plane(
     :param parent_object: Its parent_object
     :return: The node path to the collision plane
     """
-    (
-        from_mask_bit,
-        into_mask_bit,
-        add_to_collision_handler,
-    ) = CollisionLayers.define_collision_masks(collider_type=collider_type)
-
     # Define a plane: normal + point
     plane = Plane(Vec3(0, 0, 1), Vec3(0, 0, 0))  # Z-up plane at Z=0
-
-    cnode = CollisionNode(name)
-    cnode.addSolid(CollisionPlane(plane))
-    # Define masks
-    cnode.setFromCollideMask(from_mask_bit)
-    cnode.setIntoCollideMask(into_mask_bit)
-    # Attach to parent node and object
-    node_path = parent_node.attachNewNode(cnode)
-    node_path.setPythonTag("owner", parent_object)
-    # Register in collision handler
-    if add_to_collision_handler:
-        game.collision_system.traverser.addCollider(
-            node_path, game.collision_system.handler
-        )
-
-    if DEBUG_COLLISION:
-        node_path.show()
-    return node_path
+    return _attach_solid(
+        game, name, CollisionPlane(plane), collider_type, parent_node, parent_object
+    )

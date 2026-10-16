@@ -34,7 +34,7 @@ from space_flight.game.scenario.conditions import (
     pawns_of,
 )
 from space_flight.game.scenario.objectives import Objective, reaches
-from space_flight.game.scenario.wave import WaveHandle, WaveSpec
+from space_flight.game.scenario.wave import WaveHandle, WaveSpec, _jump_out
 from space_flight.ui.player_waypoints import PlayerWaypoints
 
 if TYPE_CHECKING:
@@ -324,6 +324,16 @@ class Mission:
         self.triggers.append(trigger)
         return trigger
 
+    def say_when(
+        self, condition: Condition, text: str, speaker: Optional[str] = None
+    ) -> Trigger:
+        """
+        Play a line of speech (see :meth:`speech`) when condition becomes true.
+
+        :return: The rule (call its cancel() to retire it)
+        """
+        return self.on(condition, lambda: self.speech(text, speaker=speaker))
+
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
@@ -349,6 +359,24 @@ class Mission:
         if not self.game.headless:
             subtitle = f"{speaker}: {text}" if speaker else text
             self.game.hud.set_chatter_text(text=subtitle)
+
+    def dialogue(
+        self,
+        lines: Sequence[tuple[float, str, str]],
+        stop: Optional[Condition] = None,
+    ) -> Iterator[None]:
+        """
+        Play lines of speech in turn (run it with ``yield from``, or
+        :meth:`schedule` it to run alongside the body).
+
+        :param lines: (delay after the previous line, speaker, line) tuples
+        :param stop: Ends the dialogue once true, checked before each line
+        """
+        for delay, speaker, text in lines:
+            yield from self.wait(delay)
+            if stop is not None and stop():
+                return
+            self.speech(text, speaker=speaker)
 
     def player_waypoints(
         self,
@@ -387,10 +415,7 @@ class Mission:
             bot = pawn.parent
             if bot is self.game.player or not hasattr(bot, "jump_out"):
                 continue
-            if spool_s is None:
-                bot.jump_out()
-            else:
-                bot.jump_out(spool_s=spool_s)
+            _jump_out(bot, spool_s)
 
     def end_level(self, outcome: str, text: str = ""):
         """

@@ -33,6 +33,7 @@ from space_flight.global_architecture.graphics_settings import (
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
 )
+from space_flight.global_architecture.yaml_files import load_yaml
 from space_flight.menus.menu_utils import (
     CustomButton,
     CustomSlider,
@@ -477,6 +478,6 @@ class GraphicsSettingsMenuState(BaseState):
     def load_default(self):
         """Reload the factory defaults into the working config and rebuild rows."""
         self.working_config = GraphicsSettings.sanitise(
-            GraphicsSettings.load_file(DEFAULT_GRAPHICS_FILE)
+            load_yaml(DEFAULT_GRAPHICS_FILE)
         )
         self.rebuild_scroll()

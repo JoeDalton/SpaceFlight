@@ -6,10 +6,10 @@ from collections import namedtuple
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import Point3, Shader, Texture, Vec3
+from panda3d.core import Point3, Texture, Vec3
 
 from space_flight import DATAFILES_PATH
-from space_flight.fx import ParticleBuffer, load_atlas
+from space_flight.fx import ParticleBuffer, load_atlas, load_glsl_shader
 from space_flight.utils import (
     build_orthogonal_basis,
     sample_direction_in_cone,
@@ -97,31 +97,6 @@ HIT_EXPLOSION_JET_ANGLE_SCALE = 1.0
 
 
 # ---------------------------------------------------------------------------
-# Explosion shader
-# ---------------------------------------------------------------------------
-
-#: The explosion shader, shared by the fire and smoke buffers; loaded once,
-#: lazily.
-_EXPLOSION_SHADER = None
-
-
-def _explosion_shader() -> Shader:
-    """
-    Load (once) and return the shared explosion GLSL shader.
-
-    :return: The shared explosion :class:`Shader`.
-    """
-    global _EXPLOSION_SHADER
-    if _EXPLOSION_SHADER is None:
-        _EXPLOSION_SHADER = Shader.load(
-            Shader.SL_GLSL,
-            vertex=DATAFILES_PATH / "shaders/explosion.vert",
-            fragment=DATAFILES_PATH / "shaders/explosion.frag",
-        )
-    return _EXPLOSION_SHADER
-
-
-# ---------------------------------------------------------------------------
 # Explosion buffer
 # ---------------------------------------------------------------------------
 
@@ -159,12 +134,12 @@ class _FireSmokeBuffer(ParticleBuffer):
         texture: Texture,
         tile_rects: list,
         fadein: float,
-        bin_order: int,
-        additive: bool,
+        bin_order: int = 20,
+        additive: bool = False,
     ):
         super().__init__(
             game=game,
-            shader=_explosion_shader(),
+            shader=load_glsl_shader("explosion.vert", "explosion.frag"),
             columns=_EXPLOSION_COLUMNS,
             texture=texture,
             additive=additive,
@@ -361,16 +336,12 @@ class FireSmokePool:
             texture=fire_tex,
             tile_rects=self.fire_rects,
             fadein=FIRE_FADEIN,
-            bin_order=20,
-            additive=False,
         )
         self.smoke = _FireSmokeBuffer(
             game,
             texture=smoke_tex,
             tile_rects=self.smoke_rects,
             fadein=SMOKE_FADEIN,
-            bin_order=20,
-            additive=False,
         )
 
     # ------------------------------------------------------------------
@@ -409,28 +380,21 @@ class FireSmokePool:
                          half-angles (1.0 = the default cones).
         """
         position, basis = self._prepare(position, normal)
-        _emit_layer(
-            self.fire,
-            _FIRE_LAYER,
-            fire_count,
-            position,
-            base_velocity,
-            basis,
-            scale,
-            speed_scale,
-            jet_angle_scale,
-        )
-        _emit_layer(
-            self.smoke,
-            _SMOKE_LAYER,
-            smoke_count,
-            position,
-            base_velocity,
-            basis,
-            scale,
-            speed_scale,
-            jet_angle_scale,
-        )
+        for buffer, layer, count in (
+            (self.fire, _FIRE_LAYER, fire_count),
+            (self.smoke, _SMOKE_LAYER, smoke_count),
+        ):
+            _emit_layer(
+                buffer,
+                layer,
+                count,
+                position,
+                base_velocity,
+                basis,
+                scale,
+                speed_scale,
+                jet_angle_scale,
+            )
 
     def hit_burst(self, position: Point3, normal: Vec3, base_velocity: Vec3):
         """
@@ -469,17 +433,8 @@ class FireSmokePool:
         :param scale:         Size multiplier for the puff.
         :param count:         Number of smoke billboards to emit.
         """
-        position, basis = self._prepare(position, normal=None)
-        _emit_layer(
-            self.smoke,
-            _TRAIL_SMOKE_LAYER,
-            count,
-            position,
-            base_velocity,
-            basis,
-            scale,
-            1.0,
-            1.0,
+        self._trail(
+            self.smoke, _TRAIL_SMOKE_LAYER, position, base_velocity, scale, count
         )
 
     def trail_fire(self, position: Vec3, base_velocity: Vec3, scale: float, count: int):
@@ -494,17 +449,30 @@ class FireSmokePool:
         :param scale:         Size multiplier for the puff.
         :param count:         Number of fire billboards to emit.
         """
+        self._trail(self.fire, _TRAIL_FIRE_LAYER, position, base_velocity, scale, count)
+
+    def _trail(
+        self,
+        buffer: _FireSmokeBuffer,
+        layer: _Layer,
+        position: Vec3,
+        base_velocity: Vec3,
+        scale: float,
+        count: int,
+    ):
+        """
+        Emit one puff of a continuous trail layer, with no directional spread.
+
+        :param buffer:        The buffer to spawn into.
+        :param layer:         The trail :data:`_Layer` config.
+        :param position:      World-space emission point.
+        :param base_velocity: Velocity the puff inherits.
+        :param scale:         Size multiplier for the puff.
+        :param count:         Number of billboards to emit.
+        """
         position, basis = self._prepare(position, normal=None)
         _emit_layer(
-            self.fire,
-            _TRAIL_FIRE_LAYER,
-            count,
-            position,
-            base_velocity,
-            basis,
-            scale,
-            1.0,
-            1.0,
+            buffer, layer, count, position, base_velocity, basis, scale, 1.0, 1.0
         )
 
     @staticmethod
