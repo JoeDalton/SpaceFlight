@@ -52,8 +52,10 @@ hardcoded menu keys (`MENU_BUTTONS`):
   is tracked from its raw events instead.
   Keyboards have no analogue axes, so `read_axes` is a no-op and flight axes
   are synthesised in `FlightInputContext`.
-- **`GamepadReader`** and **`JoystickReader`** poll their device, apply dead
-  zones (`apply_dead_zone()`: zeroes the band and shifts the rest down so output starts at
+- **`GamepadReader`** and **`JoystickReader`** share a **`DeviceReader`**
+  base (device class, event prefix and an `AXES` table per subclass; the
+  device is `reader.device`, also `gamepad`/`flightStick`). They poll their
+  device, apply dead zones (`apply_dead_zone()`: zeroes the band and shifts the rest down so output starts at
   0 at its edge; not renormalised, so full deflection gives `1 - dead_zone`),
   and handle hot-plugging (falling back to another device of the same class;
   with none attached they simply report nothing). Only
