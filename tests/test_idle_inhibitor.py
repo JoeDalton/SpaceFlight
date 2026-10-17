@@ -3,12 +3,13 @@ Unit tests for :mod:`space_flight.global_architecture.idle_inhibitor`.
 
 The platform is faked through ``sys.platform`` and every OS call is stubbed,
 so no test touches the real D-Bus session, Win32 API or ``caffeinate``.
+jeepney is a Linux-only dependency, so the Linux tests use a fake jeepney
+package registered in ``sys.modules`` and run on every OS.
 """
 
 import sys
 import types
 
-import jeepney.io.blocking
 import pytest
 
 from space_flight.global_architecture import idle_inhibitor as ii
@@ -22,24 +23,43 @@ class _FakeConnection:
         self.fail_on = None
 
     def send_and_get_reply(self, message, timeout=None):
-        member = message.header.fields[jeepney.HeaderFields.member]
-        self.calls.append((member, message.body))
-        if member == self.fail_on:
+        self.calls.append((message.member, message.body))
+        if message.member == self.fail_on:
             raise ConnectionError("bus gone")
-        return types.SimpleNamespace(body=(42,) if member == "Inhibit" else ())
+        return types.SimpleNamespace(body=(42,) if message.member == "Inhibit" else ())
 
     def close(self):
         self.closed = True
 
 
 @pytest.fixture
-def linux(monkeypatch):
-    connection = _FakeConnection()
-    monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(
-        jeepney.io.blocking, "open_dbus_connection", lambda bus: connection
+def fake_jeepney(monkeypatch):
+    """
+    Install a minimal fake jeepney (just what idle_inhibitor imports).
+
+    :return: the fake ``jeepney.io.blocking`` module, whose
+        ``open_dbus_connection`` tests may replace
+    """
+    jeepney = types.ModuleType("jeepney")
+    jeepney.DBusAddress = lambda object_path, bus_name, interface: object_path
+    jeepney.new_method_call = lambda address, member, signature, body: (
+        types.SimpleNamespace(member=member, body=body)
     )
-    monkeypatch.setattr("jeepney.wrappers.unwrap_msg", lambda reply: reply.body)
+    io = types.ModuleType("jeepney.io")
+    blocking = types.ModuleType("jeepney.io.blocking")
+    wrappers = types.ModuleType("jeepney.wrappers")
+    wrappers.unwrap_msg = lambda reply: reply.body
+    jeepney.io, io.blocking, jeepney.wrappers = io, blocking, wrappers
+    for module in (jeepney, io, blocking, wrappers):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.setattr(sys, "platform", "linux")
+    return blocking
+
+
+@pytest.fixture
+def linux(fake_jeepney):
+    connection = _FakeConnection()
+    fake_jeepney.open_dbus_connection = lambda bus: connection
     return connection
 
 
@@ -78,12 +98,11 @@ def test_linux_acquire_failure_is_swallowed(linux, caplog):
     assert "Could not inhibit" in caplog.text
 
 
-def test_linux_no_session_bus_is_swallowed(monkeypatch, caplog):
+def test_linux_no_session_bus_is_swallowed(fake_jeepney, caplog):
     def no_bus(bus):
         raise KeyError("DBUS_SESSION_BUS_ADDRESS")
 
-    monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(jeepney.io.blocking, "open_dbus_connection", no_bus)
+    fake_jeepney.open_dbus_connection = no_bus
     inhibitor = IdleInhibitor()
     inhibitor.acquire()
     assert not inhibitor.active
