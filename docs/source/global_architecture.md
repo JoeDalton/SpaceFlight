@@ -40,10 +40,11 @@ two classes:
   `GameplaySettings` → `GraphicsManager` → `StateManager` → `InputContextStack` and input reader
   (see [`ui/input_context.py`](../../src/space_flight/ui/input_context.py)) →
   `AssetManager` → `MenuModels` → `SFX` (see [docs/fx.md](fx.md)), then pushes
-  `SplashState`. `input_task` (task sort `-100`, before other tasks) polls the
+  `SplashState`. Before the splash, it acquires an `IdleInhibitor` (see
+  below), released at exit. `input_task` (task sort `-100`, before other tasks) polls the
   reader and dispatches through the context stack every frame, whatever state
-  is active. With `headless=True` there is no input reader, no `input_task`
-  and no splash: the stack stays empty for
+  is active. With `headless=True` there is no input reader, no `input_task`,
+  no idle inhibitor and no splash: the stack stays empty for
   [`headless/harness.py`](../../src/space_flight/headless/harness.py) to push
   a headless `FlightState` itself.
 
@@ -51,6 +52,27 @@ Two module-level `loadPrcFileData` calls configure Panda3D: one silences
 ffmpeg (`notify-level-ffmpeg error`), the other disables the on-disk model
 cache (`model-cache-dir`), and with it the compiled-shader cache, because it
 was implicated in glTF models failing to load on some systems.
+
+## `idle_inhibitor.py` — keeping the screen saver off
+
+Panda3D never asks the desktop to hold off the screen saver, and gamepads and
+flight sticks are read straight from the OS input layer, which the desktop's
+idle timer does not count as activity: flying with a stick alone would blank
+the screen after the idle delay.
+[`idle_inhibitor.py`](../../src/space_flight/global_architecture/idle_inhibitor.py)'s
+`IdleInhibitor` holds an inhibition between `acquire()` and `release()`:
+
+- **Linux**: `org.freedesktop.ScreenSaver.Inhibit` on the D-Bus session bus,
+  through [jeepney](https://jeepney.readthedocs.io/) (a Linux-only
+  dependency). The desktop drops it when the connection closes, so a crash
+  cannot leave it stuck. Check it with `gnome-session-inhibit --list` while
+  the game runs.
+- **Windows**: `SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED)`.
+- **macOS**: a `caffeinate -d -w <pid>` child process, which also exits on its
+  own when the game does.
+
+Both methods are idempotent and never raise: a failure is logged as a warning
+and the game runs without the inhibition.
 
 ## `base_state.py` — the state contract
 

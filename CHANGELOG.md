@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spawned ships must look like they dropped from hyperspace #153
 - Add ion weapons and damage #157
 
+### Fixed
+
+- Inhibited screen saver during play #163
+
 ## [0.2.0] - 2026-10-09
 
 Second alpha release: play with any input device at any time, navigate the menus
