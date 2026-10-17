@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +15,7 @@ from space_flight.global_architecture.base_state import BaseState
 from space_flight.global_architecture.gameplay_settings import GameplaySettings
 from space_flight.global_architecture.graphics_manager import GraphicsManager
 from space_flight.global_architecture.graphics_settings import GraphicsSettings
+from space_flight.global_architecture.idle_inhibitor import IdleInhibitor
 from space_flight.menus.gameplay_settings_menu_state import GameplaySettingsMenuState
 from space_flight.menus.graphics_settings_menu_state import GraphicsSettingsMenuState
 from space_flight.menus.input_settings_menu_state import InputSettingsMenuState
@@ -173,9 +175,15 @@ class SpaceFlightSimulator(ShowBase):
 
         self.configuration = {}
 
-        # Start with splash screen (skipped headless: it needs a real window,
-        # and there is no menu flow to lead into)
         if not headless:
+            # Stick/gamepad input does not reset the desktop idle timer, so
+            # the screen saver must be held off explicitly while playing.
+            self.idle_inhibitor = IdleInhibitor()
+            self.idle_inhibitor.acquire()
+            atexit.register(self.idle_inhibitor.release)
+
+            # Start with splash screen (skipped headless: it needs a real
+            # window, and there is no menu flow to lead into)
             self.state_manager.push(SplashState)
 
     def input_task(self, task: Task) -> int:
