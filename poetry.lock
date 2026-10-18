@@ -2906,7 +2906,28 @@ packaging = ">=26.3"
 platformdirs = ">=4.4,<5"
 python-discovery = ">=1.6.1"
 
+[[package]]
+name = "world-builder"
+version = "0.1.0"
+description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
+optional = false
+python-versions = ">=3.12,<3.15"
+groups = ["main"]
+files = [
+    {file = "0.1.0.zip", hash = "sha256:a798de2ed487f4387fb84296087513fbc045959eb296f1b2df7835954da65ce9"},
+]
+
+[package.dependencies]
+numpy = ">=2.3.5,<3.0.0"
+Panda3D = ">=1.10.15,<2.0.0"
+pyyaml = ">=6.0.3,<7.0.0"
+scipy = ">=1.13.1,<2.0.0"
+
+[package.source]
+type = "url"
+url = "https://github.com/JoeDalton/WorldBuilder/archive/refs/tags/0.1.0.zip"
+
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "f6d5bc8cbd9237b000b0664c6680fa74652922b95d0379497879ce9b720ff1f3"
+content-hash = "9471b5b1a2968cc18d09627acb3cb433851e95922134f7d2615b7821f88b31c8"

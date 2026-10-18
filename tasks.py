@@ -21,6 +21,11 @@ def develop(c):
     c.run("poetry install")
     c.run("poetry run pre-commit install")
 
+@task(pre=[check_dynamic_versioning])
+def develop_full(c):
+    c.run("poetry install")
+    c.run("poetry run pre-commit install")
+    c.run("cd ../WorldBuilder && invoke develop")
 
 @task
 def test(c):
