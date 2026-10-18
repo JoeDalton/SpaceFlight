@@ -292,7 +292,7 @@ class ShieldModel:
         v.setTwoSided(True)
         v.setDepthWrite(False)
         # Drawn after the clouds, which sit in their own bin between "opaque" and
-        # "transparent" (see scenes/cloud/field.py), so the translucent shield
+        # "transparent" (see world_builder.clouds.field), so the translucent shield
         # composites *over* a cloud behind it. Note the converse does NOT hold:
         # the clouds write no depth, so a dense cloud in FRONT of the shield does
         # not hide it.

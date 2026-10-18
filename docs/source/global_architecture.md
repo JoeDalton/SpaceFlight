@@ -132,8 +132,8 @@ defaults instead of crashing. `save()` re-sanitises and writes the user file.
 Not every setting goes through `GraphicsManager`: the setting belongs to the
 thing that acts on it. `CloudField` reads `clouds.quality` when it builds, and
 the ocean reads `render.reflection_scale`. The four quality names must match
-`CloudQuality` in
-[`scenes/cloud/cloud.py`](../../src/space_flight/scenes/cloud/cloud.py): a name
+WorldBuilder's `CloudQuality`
+([`world_builder.clouds`](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/clouds.md)): a name
 the sanitiser accepts but the enum doesn't know would fall back to `high` at
 build time. A test asserts the two lists agree.
 

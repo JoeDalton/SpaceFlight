@@ -271,7 +271,7 @@ class TestOnCloudQualitySlider:
     def test_stores_a_name_the_cloud_model_knows(self, state):
         """The stop values must be CloudQuality names, or a saved setting would
         pass the sanitiser and then silently fall back to HIGH."""
-        from space_flight.scenes.cloud import CloudQuality
+        from world_builder.clouds import CloudQuality
 
         for index in range(4):
             state.sliders = {self.PATH: mock_slider(float(index))}
