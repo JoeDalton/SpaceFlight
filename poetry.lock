@@ -788,14 +788,14 @@ testing = ["hatch", "pre-commit", "pytest", "tox"]
 
 [[package]]
 name = "filelock"
-version = "4.2.0"
+version = "4.2.2"
 description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.11"
 groups = ["main", "dev"]
 files = [
-    {file = "filelock-4.2.0-py3-none-any.whl", hash = "sha256:2ff5690882e8cdb00ef31fb3d01a3094c29f30985426c59495afb1733f3b7238"},
-    {file = "filelock-4.2.0.tar.gz", hash = "sha256:7a60906c75227cf04d0c273afadc8219400f11aeb13cc69591d4f6cdc6c8036e"},
+    {file = "filelock-4.2.2-py3-none-any.whl", hash = "sha256:1851d2f14ca2901e98069d68333b33ad7409f56904e17b48cc0c32a0db8ed73a"},
+    {file = "filelock-4.2.2.tar.gz", hash = "sha256:b29ff2ae9140bb17b3bc77c648dc4f010d9ac0955eccabff4f2b01dde859f787"},
 ]
 
 [[package]]
@@ -1385,14 +1385,14 @@ certifi = ["certifi"]
 
 [[package]]
 name = "nptdms"
-version = "1.12.1"
+version = "1.13.0"
 description = "Cross-platform, NumPy based module for reading TDMS files produced by LabView"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "nptdms-1.12.1-py3-none-any.whl", hash = "sha256:da83ad761eb10b734b1e1d9aa4c877d2caba83e8f25fb9f509af733d58976138"},
-    {file = "nptdms-1.12.1.tar.gz", hash = "sha256:ef0e7bdedda4f26c602c822e58e6254f067b9bc139efca572ccb15a4ecedef23"},
+    {file = "nptdms-1.13.0-py3-none-any.whl", hash = "sha256:b1001d832d18612c208177d1a76d4e63337444d0bbd4f4f3f5a096acc5b3b7d9"},
+    {file = "nptdms-1.13.0.tar.gz", hash = "sha256:d9209da06c21edc28c9a8620cf78466ace80d2e1d8a23cfea534b0938ed310cc"},
 ]
 
 [package.dependencies]
@@ -1816,14 +1816,14 @@ xml = ["lxml (>=5.3.0)"]
 
 [[package]]
 name = "platformdirs"
-version = "4.13.3"
+version = "4.13.4"
 description = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
 optional = false
 python-versions = ">=3.11"
 groups = ["main", "dev"]
 files = [
-    {file = "platformdirs-4.13.3-py3-none-any.whl", hash = "sha256:f6ad7f447f24f8a3b82cce5976387428bff894a0eca6c3488f4a17f153c130c4"},
-    {file = "platformdirs-4.13.3.tar.gz", hash = "sha256:5e567f664eb087ab8521c0179cd8d1bd60857d271136567a39719e28e2d383ce"},
+    {file = "platformdirs-4.13.4-py3-none-any.whl", hash = "sha256:502ce08e9d36cf90579ee44e1e764838842fa658e4975ef47344fd053011d2c8"},
+    {file = "platformdirs-4.13.4.tar.gz", hash = "sha256:dd96496961684a7f42041923f842ec7494e09f5e87aded99117e1109cd40570e"},
 ]
 
 [[package]]
@@ -2002,14 +2002,14 @@ windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
 name = "pyproject-api"
-version = "1.11.7"
+version = "1.12.0"
 description = "API to interact with the python pyproject.toml based projects"
 optional = false
 python-versions = ">=3.11"
 groups = ["dev"]
 files = [
-    {file = "pyproject_api-1.11.7-py3-none-any.whl", hash = "sha256:e90ddef94bd3027c652e11b04537d269788b6c5d75311c139ffb372e4fcb562c"},
-    {file = "pyproject_api-1.11.7.tar.gz", hash = "sha256:408e31b80e054e70d26f11b0ae3f60210ae6d54cd050e904aac63462b56404e9"},
+    {file = "pyproject_api-1.12.0-py3-none-any.whl", hash = "sha256:1d3cbf37ac4c3a40940e09cbd4374608d25cdd89e6019f7e06fc285afd3ab467"},
+    {file = "pyproject_api-1.12.0.tar.gz", hash = "sha256:2e83226079dc446a8e2357def7622c01c733284e39afc8e332d9f722fe0c2beb"},
 ]
 
 [package.dependencies]
@@ -2772,14 +2772,14 @@ files = [
 
 [[package]]
 name = "tox"
-version = "4.66.0"
+version = "4.67.1"
 description = "tox is a generic virtualenv management and test command line tool"
 optional = false
 python-versions = ">=3.11"
 groups = ["dev"]
 files = [
-    {file = "tox-4.66.0-py3-none-any.whl", hash = "sha256:f12458756246e8be78934f011024dc952c25631008c7a935683fe5843408add4"},
-    {file = "tox-4.66.0.tar.gz", hash = "sha256:f9dc2cec9310a3ab5a560669cf860cf6ffad7d04733a0845c7ad7ac00d6b2808"},
+    {file = "tox-4.67.1-py3-none-any.whl", hash = "sha256:23d614cb703e1f7bd39e00c046d4c261b63fb9986e185134c6be2f93531d9726"},
+    {file = "tox-4.67.1.tar.gz", hash = "sha256:a68602f64421b199016127364ee47347b958391d19c2b2e53fe95673a8fe98e9"},
 ]
 
 [package.dependencies]
@@ -2889,14 +2889,14 @@ zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
 name = "virtualenv"
-version = "21.14.9"
+version = "21.14.11"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.9"
 groups = ["main", "dev"]
 files = [
-    {file = "virtualenv-21.14.9-py3-none-any.whl", hash = "sha256:ac51744da66ae56ff814b087d65096c94de698ec520adc624b108b679655809b"},
-    {file = "virtualenv-21.14.9.tar.gz", hash = "sha256:4d1bee354cd81c820da3bee56e38be3426490f8d1fc54e10ea5b2072ebad8ef8"},
+    {file = "virtualenv-21.14.11-py3-none-any.whl", hash = "sha256:b319f8590a84e5de5f8f2c803ecd2237e9bc0ffa7c1e875e3169c107cecb7454"},
+    {file = "virtualenv-21.14.11.tar.gz", hash = "sha256:593052d8477ea8c55a842387ce111bd08c72618f0c1133c302cafe335e570a57"},
 ]
 
 [package.dependencies]

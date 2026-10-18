@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+
+## [0.3.0] - 2026-10-18
+
 ### Added
 
 - Add hangar subsystem for carriers / bases #83
@@ -17,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Inhibited screen saver during play #163
+
+### Changed
+
+- Moved ocean and clouds to the new WorldBuilder repo to prepare for procedural planetary terrain #165
 
 ## [0.2.0] - 2026-10-09
 
