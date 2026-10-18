@@ -19,7 +19,7 @@ DEFAULT_GRAPHICS_FILE = DEFAULT_CONFIGURATION_PATH / "default_graphics.yaml"
 _VALID_MODES = ("fullscreen", "windowed")
 _VALID_MSAA = (0, 2, 4, 8)
 # Cheapest first, so the menu slider's stops read left-to-right as increasing cost.
-# Mirrors CloudQuality in scenes.cloud.cloud; a test asserts the two agree, since
+# Mirrors world_builder.clouds.CloudQuality; a test asserts the two agree, since
 # a name here that the enum does not know would fall back to "high" at build time.
 _VALID_CLOUD_QUALITY = ("low", "mid", "high", "ultra")
 _MIN_SCALE = 0.25

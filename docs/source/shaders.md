@@ -4,24 +4,23 @@
 holds the GLSL the game loads from disk (as opposed to shaders baked into
 imported models). GLSL isn't covered by the docstring-generated
 [code reference](apidocs/index.rst), so this page says what each shader does
-and which Python module compiles and drives it. The volumetric cloud field's
-`cloud.vert`/`cloud.frag`, loaded by
-[`scenes/cloud/field.py`](../../src/space_flight/scenes/cloud/field.py), are
-covered in [scenes.md](scenes.md).
+and which Python module compiles and drives it. The ocean's and the
+volumetric clouds' shaders come with them from
+[WorldBuilder](https://github.com/JoeDalton/WorldBuilder) and are covered in
+its [ocean](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/ocean.md) and [clouds](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/clouds.md) pages.
 
 ## Mental model
 
-- Every shader is `#version 140` GLSL (the cloud shaders are `#version 330`),
+- Every shader is `#version 140` GLSL,
   loaded with `Shader.load` and fed only by uniforms, textures and vertex
   columns from Python — nothing persists on the shader side between frames.
-- `ocean.vert`, `ocean.frag` and `shield.frag` each carry their own copy of a
-  small value-noise kit (`hash`/`smoothNoise` plus `fbmNoise`, or a variant
-  `fbm` in the shield). The two ocean copies must stay identical, because the
-  geometric swell and the shading normal must match.
+- `shield.frag` carries its own copy of a small value-noise kit
+  (`hash`/`smoothNoise` and a variant `fbm`), from the same lineage as
+  WorldBuilder's ocean shaders.
 - Shaders that sample an offscreen render target correct for Panda3D padding
   it up to a power of two: the composite samples only the `texScale` fraction
-  of the scene texture, and the ocean scales its reflection lookup by
-  `uReflUVScale`. (The hyperspace shaders work from
+  of the scene texture (WorldBuilder's ocean does the same for its reflection,
+  with `uReflUVScale`). (The hyperspace shaders work from
   `gl_FragCoord`/`iResolution` on plain render2d cards and don't need this.)
 - **Render space is not world space.** The render origin stays on the player
   (see [the floating render origin](game.md#the-floating-render-origin)), so
@@ -29,14 +28,14 @@ covered in [scenes.md](scenes.md).
   relative to a frame that moves every frame. A shader must never combine them
   with a position Python measured relative to `game.root_node`. The shaders
   here stay consistent in one of three ways:
-  - **Their own world matrix.** `ocean.vert` takes `uModelMatrix`, the plane's
-    matrix relative to the ocean's base node, so its world position,
-    `iCameraPos` and `uReflMVP` share that frame.
+  - **Their own world matrix.** WorldBuilder's `ocean.vert` takes
+    `uModelMatrix`, the plane's matrix relative to the ocean's base node, so
+    its world position, `iCameraPos` and `uReflMVP` share that frame.
   - **One frame on the GPU.** `shield.frag` takes the eye from
     `p3d_ViewMatrixInverse`, in the same render space as its
     `p3d_ModelMatrix` position. `laser.vert` works in model space.
-  - **World geometry under `root_node`.** `cloud.vert`, `spark.vert` and
-    `explosion.vert` place vertices in world coordinates and project them with
+  - **World geometry under `root_node`.** `spark.vert`, `explosion.vert` (and
+    WorldBuilder's `cloud.vert`) place vertices in world coordinates and project them with
     `p3d_ModelViewProjectionMatrix`, whose model part carries the offset.
 
 ## Hyperspace loading-screen shaders
@@ -90,50 +89,6 @@ shaders share the fullscreen-quad passthrough
   along it (`rgbA`) and two more further out (`rgbB`), and outputs `rgbB`
   unless its luma leaves the local range (`lumaMin`/`lumaMax`), in which case
   it falls back to `rgbA`.
-
-## Ocean shaders
-
-Driven by [`scenes/ocean.py`](../../src/space_flight/scenes/ocean.py) (see
-[scenes.md](scenes.md)):
-
-- **[`ocean.vert`](../../src/space_flight/datafiles/shaders/ocean.vert)** is a
-  passthrough plus the optional `uGeometricSwell` mode (which `SceneOcean`
-  enables): it displaces vertices vertically by the same `swellField` the
-  fragment shader samples, tapered to zero near the dense grid's edge so the
-  displaced centre joins the flat border. Its world position comes from
-  `uModelMatrix` (refreshed by `Ocean.update` after the plane is re-centred),
-  not `p3d_ModelMatrix`, so the waves stay anchored to the world rather than
-  to the moving render origin.
-- **[`ocean.frag`](../../src/space_flight/datafiles/shaders/ocean.frag)**:
-  - **Wave field.** `getwaves`/`waveGradient` accumulate Gerstner-like octaves
-    (`wavedx`) along per-iteration directions `iWaveDirs`, precomputed in
-    Python by `compute_wave_dirs`. `waveGradient` computes the slope
-    analytically in one pass instead of a three-sample finite difference.
-  - **Level of detail.** `detailAngle` (view-ray elevation, so the look is
-    consistent at any altitude) and `distFade` (camera distance) fade wave
-    detail toward a flat mirror. `normalIter` decays exponentially with
-    distance (`uWaveFadeK2`); `warpIter` and the warp strength follow
-    `lodFactor = detailAngle × distFade`. Below a `detailAngle` of 0.01 the
-    small waves are skipped.
-  - **Swell + frequency modulation.** A large-scale `swellField` (the product
-    of two drifting value-noise layers, so it changes shape rather than
-    scrolling) tilts the normal with no distance fade, and also shifts the
-    small-wave phase (`fmPhase`) so the dominant octave's tiling drifts.
-  - **Reflection.** The reflection UV is recomputed per fragment from the
-    flat (z = 0) surface position: interpolating a vertex clip-space value
-    would skew the projective divide per triangle once the swell displaces
-    vertices. Sampling at that flat footprint still slides against the
-    displaced geometry (see the
-    [ocean swell artifact report](https://github.com/JoeDalton/SpaceFlight/blob/main/src/space_flight/scenes/OCEAN_SWELL_ARTIFACT_REPORT.md)).
-    The ripple-perturbed UV is clamped to the rendered region
-    (`uReflUVScale`) so it never samples the power-of-two padding.
-  - **Output.** The fresnel blend of reflection and water colour is
-    ACES-tonemapped (`aces_tonemap`), then hazed toward `uHazeColor` over
-    `uHazeDistance` — after the tonemap, as the cloud field does, so sea and
-    sky meet cleanly at the horizon.
-  - **Debug.** `uDebugMode` 1–8 visualise intermediate quantities (0 is normal
-    rendering): normal, reflection UV, fresnel, world grid, reflection-UV
-    clamp, raw reflection, pre-tonemap clipping, FM phase.
 
 ## Shield shaders
 

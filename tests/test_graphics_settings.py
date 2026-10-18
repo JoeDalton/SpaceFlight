@@ -285,3 +285,17 @@ class TestSave:
 
         GraphicsSettings().save(_VALID)
         assert GraphicsSettings().config == _VALID
+
+
+def test_cloud_quality_names_match_world_builder():
+    """A cross-project contract with no import between the two sides: a name the
+    settings sanitiser accepts but WorldBuilder's CloudQuality does not know
+    would pass validation and then silently fall back to HIGH, so the player's
+    choice would do nothing."""
+    from world_builder.clouds import CloudQuality
+
+    assert set(gs._VALID_CLOUD_QUALITY) == {q.value for q in CloudQuality}
+    # And the settings list is ordered cheapest-first, which the menu slider's
+    # stops depend on for "drag right costs more".
+    assert list(gs._VALID_CLOUD_QUALITY) == ["low", "mid", "high", "ultra"]
+    assert [q.value for q in CloudQuality] == list(gs._VALID_CLOUD_QUALITY)

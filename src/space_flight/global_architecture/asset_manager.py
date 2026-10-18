@@ -9,6 +9,7 @@ import numpy as np
 import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Filename
+from world_builder.clouds.cloud import ATLAS_PNG as CLOUD_ATLAS_PNG
 
 from space_flight import DATAFILES_PATH, LOGGER
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
@@ -93,8 +94,9 @@ COMMON_ASSETS_TO_LOAD = [
     # loadTexture caches by path, so Planet2D's own load becomes a cache hit)
     ("texture", DATAFILES_PATH / "sprites/planets_2d/terran.png", ""),
     # Cloud sprite atlas (loaded in CloudField's build preamble — preload so the
-    # cloud build doesn't block ~77ms on it; load_atlas keys get_asset by path)
-    ("texture", DATAFILES_PATH.parent / "scenes/cloud/cloud_atlas.png", ""),
+    # cloud build doesn't block ~77ms on it; WorldBuilder's atlas loader goes
+    # through this asset manager, keyed by path)
+    ("texture", CLOUD_ATLAS_PNG, ""),
     # Dust textures
     ("texture", DATAFILES_PATH / "sprites/dust/dust_blue.png", ""),
     ("texture", DATAFILES_PATH / "sprites/dust/dust_green.png", ""),

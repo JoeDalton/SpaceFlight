@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import LVecBase3f, Vec3
+from world_builder.clouds import Clouds
 
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.scenes.asteroid_field import AsteroidField
-from space_flight.scenes.cloud import Clouds
 from space_flight.scenes.lighting import Lighting
 from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D

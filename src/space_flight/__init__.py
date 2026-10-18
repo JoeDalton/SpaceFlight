@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from world_builder import PLANET_RADIUS_M  # noqa: F401 - re-exported for the game
 
 from space_flight import _version
 
@@ -25,8 +26,8 @@ FORWARD_BODY = np.array([0.0, 1.0, 0.0])
 RIGHT_BODY = np.array([1.0, 0.0, 0.0])
 UP_BODY = np.array([0.0, 0.0, 1.0])
 EPSILON_TOLERANCE = 1.0e-5
-# Shared by the curved ocean and the cloud deck, which must droop identically.
-PLANET_RADIUS_M = 6371000.0
+# PLANET_RADIUS_M (imported above) is shared by the curved ocean and the cloud
+# deck, both from WorldBuilder, which must droop identically.
 
 LOGGER = logging.getLogger()
 LOGGER.handlers = []
