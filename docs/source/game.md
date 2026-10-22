@@ -46,9 +46,10 @@ HUD, and drives the per-frame update.
   → kill destructibles whose health hit zero → resolve collisions →
   recompute actor interactions → integrate physics → run every actor's
   registered update methods (`game.method_lists`) → re-centre the render
-  origin on the player (see
-  [The floating render origin](#the-floating-render-origin)) → check player
-  death. **`update_mission_task`** separately advances `game.mission`. Both
+  origin on the player, then the depth split and the scene follow it
+  (`follow_render_origin`, see
+  [The floating render origin](#the-floating-render-origin) and
+  [Split depth](#split-depth)) → check player death. **`update_mission_task`** separately advances `game.mission`. Both
   are no-ops while `is_paused`.
 - **`initialize_game_structure()`** builds the session-scoped objects in
   dependency order; **`exit()`** tears them down in roughly reverse order
@@ -115,6 +116,50 @@ is sampled at world coordinates. None of these is visible in practice.
 The behaviour is pinned by the `recenter_render_origin` tests in
 [`tests/test_flight_state.py`](../../tests/test_flight_state.py), including one
 that shows the imprecision without the offset.
+
+## Split depth
+
+One depth buffer cannot cover a cockpit a metre away and a horizon 600 km
+away. With a 24-bit buffer and a 1 m near plane, two surfaces at 10 km must
+be about 6 m apart to be told apart, and distant ground and sea shimmer into
+each other.
+
+`FlightState.split_depth` is WorldBuilder's `SplitDepthCameras`, in every
+level, so the level scripts never deal with it:
+- A far camera draws everything past a **split** distance first.
+- The depth buffer is cleared.
+- The main camera (`app.cam`) then draws from 1 m to the split.
+
+Each camera gets the whole buffer for its own range.
+
+**Lifecycle.**
+- It is built in `enter()`, right after the level's up-front build:
+  - after the render-scale / anti-aliasing pipeline, whose offscreen buffer
+    the far camera then draws into too;
+  - after the scene's up-front objects, because an ocean's reflection camera
+    copies the main lens once, before the split shortens it.
+- Each frame, `follow_render_origin()` sets its ranges from
+  `scene.depth_ranges()` (split and far distances, metres), then calls
+  `scene.update_after_recenter()`.
+- `depth_far` is the far camera's far distance this frame, for a scene's sky.
+- `exit()` destroys it before the render pipeline.
+- Headless there is none, and `depth_far` is `CAMERA_FAR_M`.
+
+**Ranges.**
+- By default, `Scene.depth_ranges()` splits at 2 km, which gives about
+  0.25 m depth steps there, and reaches `CAMERA_FAR_M`. The space levels'
+  skyboxes and 2D planets lie beyond the split, so only the far camera draws
+  them.
+- A planet scene follows its ground instead.
+
+**What reads the lens.**
+- The main lens (`app.camLens`) now ends at the split. Its near and far do not
+  change where a point lands on screen, so the HUD's markers
+  (`project_to_screen`) are unaffected.
+- The laser shader's depth uses Panda's per-camera
+  `p3d_ModelViewProjectionMatrix`, right in both passes.
+- The rear-view mirror copies the lens but sets its own range back to
+  `CAMERA_FAR_M`.
 
 ## Time keeping
 

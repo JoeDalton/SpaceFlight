@@ -1,23 +1,79 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+import logging
+import math
+import time
+from collections.abc import Callable, Generator
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
 from panda3d.core import LVecBase3f, Vec3
+from world_builder.atmosphere import AtmosphereParams
 from world_builder.clouds import Clouds
+from world_builder.terrain.level import load_level
+from world_builder.terrain.planet import PRESETS
+from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook, World
 
-from space_flight import DATAFILES_PATH
+from space_flight import CAMERA_FAR_M, DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
+from space_flight.game.collisions import CollisionLayers
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.lighting import Lighting
 from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D
-from space_flight.scenes.planet_surface import PlanetSurface
 from space_flight.scenes.skybox import Skybox
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
+
+LOGGER = logging.getLogger(__name__)
+
+# The default depth split, metres: depth steps stay about 0.25 m just short of
+# it and about 10 m at the far plane (see Scene.depth_ranges)
+DEFAULT_DEPTH_SPLIT_M = 2000.0
+
+# The world counts as loaded once its loading flag has stayed False this long:
+# it turns on briefly whenever detail refines, so one quiet frame is not enough.
+WORLD_QUIET_S = 0.5
+# Give up waiting for the world after this long (and say so)
+WORLD_TIMEOUT_S = 60.0
+
+
+def wait_until_loaded(
+    loading: Callable[[], bool],
+    step: Callable[[], None],
+    clock: Callable[[], float] = time.monotonic,
+) -> Generator[str, None, None]:
+    """
+    Hold the level's loading until a world has loaded around the player:
+    step it once per frame until *loading* has stayed False for
+    :data:`WORLD_QUIET_S` (ground not drawn yet is not solid), or for at most
+    :data:`WORLD_TIMEOUT_S`.
+
+    :param loading: Whether the world still loads
+    :param step: Advance the world by a frame (the game loop is paused while
+        loading)
+    :param clock: Real time, in seconds
+    :return: A generator to advance once per frame
+    """
+    start = clock()
+    quiet_since = None
+    while True:
+        step()
+        now = clock()
+        if loading():
+            quiet_since = None
+        elif quiet_since is None:
+            quiet_since = now
+        elif now - quiet_since >= WORLD_QUIET_S:
+            return
+        if now - start >= WORLD_TIMEOUT_S:
+            LOGGER.warning(
+                f"World still loading after {WORLD_TIMEOUT_S:.0f} s: starting anyway"
+            )
+            return
+        yield "world"
 
 
 def scene_factory(
@@ -43,6 +99,19 @@ class Scene:
     ):
         self.game = game
         self.up_direction = np.array([0, 0, 1])
+
+    def depth_ranges(self) -> tuple[float, float]:
+        """
+        The split cameras' ranges this frame (see FlightState.split_depth):
+        the main camera draws up to the split, a far camera beyond it, each
+        with the whole depth buffer.
+
+        By default a fixed split, past which a space level has only distant
+        things (skyboxes, 2D planets), and the camera's whole far range.
+
+        :return: (split, far), metres
+        """
+        return DEFAULT_DEPTH_SPLIT_M, CAMERA_FAR_M
 
     def update_after_recenter(self):
         """
@@ -182,69 +251,112 @@ class SceneOcean(Scene):
 
 class SceneEarthlike(Scene):
     """
-    A copy of WorldBuilder's earth-like demo world: its spherical terrain, sea
-    included, under a daytime sun.
+    A copy of WorldBuilder's earth-like demo world around the player: the
+    planet (terrain, air, clouds, swell ocean), its moon, the sky and the sun.
+
+    WorldBuilder's World builds and updates them. What they look like is
+    decided here. The planet is not rotated: its centre is one radius below
+    the world origin, so the ground under Mission 3 is its +z pole, with sea
+    level at z = 0 there.
     """
 
     LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
     # Toward the sun: high in the south-east sky
-    SUN_DIRECTION = np.array([0.4, -0.5, 0.75])
-    SUN_COLOR = np.array([1.0, 0.95, 0.85, 1])
-    AMBIENT_COLOR = np.array([0.3, 0.35, 0.45, 1])
+    SUN = SunLook(direction=(0.4, -0.5, 0.75))
+    SKY = SkyLook()
+    # Cumulus above the convoy, which flies at 200-800 m
+    CLOUDS = CloudLook(altitude=2200.0)
+    # The 20 m swell, calmed over the shallows; the air's own haze colour
+    OCEAN = OceanLook(haze_color=(0.62, 0.71, 0.84), haze_distance=150000.0)
+    # The moon: the demo's airless sand moon, this far from the planet's
+    # centre, this far from the vertical over the origin toward north (ahead
+    # of the convoy). Next to no sky light: a black sky.
+    MOON_DISTANCE_M = 10_000e3
+    MOON_ZENITH_ANGLE_DEG = 75.0
+    MOON_AMBIENT = (0.025, 0.025, 0.03)
+    # The ships are lit by Panda3D's fixed-function lights, with no tone map:
+    # the world's physical noon sun (about 2.4) is scaled to about white
+    LIGHT_SCALE = 0.4
+
+    def bodies(self) -> list[BodyLook]:
+        """:return: The planet (from LEVEL_PATH) and its moon"""
+        spec, _camera_pose = load_level(self.LEVEL_PATH)
+        centre = np.array([0.0, 0.0, -spec.radius])
+        angle = math.radians(self.MOON_ZENITH_ANGLE_DEG)
+        moon = centre + self.MOON_DISTANCE_M * np.array(
+            [0.0, math.sin(angle), math.cos(angle)]
+        )
+        return [
+            BodyLook(
+                "planet",
+                spec,
+                position=tuple(centre),
+                atmosphere=AtmosphereParams(),
+                clouds=self.CLOUDS,
+                ocean=self.OCEAN,
+            ),
+            BodyLook(
+                "moon",
+                replace(PRESETS["moon"], seed=7),
+                position=tuple(moon),
+                ambient=self.MOON_AMBIENT,
+            ),
+        ]
 
     def build_upfront(self):
         """
-        Build the terrain (its shaders, textures and worker processes) on the
-        black screen, before the hyperspace animation starts. Its chunks are
-        loaded during the animation (see build_decomposed).
+        Build the world (shaders, textures, worker processes, the ocean's
+        reflection buffer) on the black screen, before the hyperspace
+        animation starts and before FlightState's split cameras: the ocean's
+        reflection copies the main lens. The ground loads during the
+        animation (see build_decomposed).
         """
-        self.planet = PlanetSurface(
-            game=self.game,
-            level_path=self.LEVEL_PATH,
-            sun_direction=self.SUN_DIRECTION / np.linalg.norm(self.SUN_DIRECTION),
+        app = self.game.app
+        self.world = World(
+            app,
+            self.bodies(),
+            sun=self.SUN,
+            sky=self.SKY,
+            settings=app.graphics_settings.world_settings(),
+            light_scale=self.LIGHT_SCALE,
+            clock=self.game.game_time.get_current_time,
         )
+        # Solid to ships, munitions and sensors, the sea surface included
+        self.world.enable_collision(CollisionLayers.TERRAIN_INTO, bodies=["planet"])
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """
         Build the rest of the scene incrementally, then hold the loading
-        animation until the ground around the player is loaded: ground not
-        drawn yet is not solid.
+        animation until the ground and the clouds around the player are
+        loaded: ground not drawn yet is not solid.
         """
-        self.skybox = Skybox(game=self.game, name="dusk")
-        yield "skybox"
-
-        self.lighting = Lighting(
-            game=self.game,
-            directional_color=self.SUN_COLOR,
-            directional_direction=self.SUN_DIRECTION,
-            ambient_color=self.AMBIENT_COLOR,
-        )
-        yield "lighting"
-
         self.speed_dust_cloud = SpeedDustCloud(
             game=self.game, colors=["blue", "yellow", "white"], defer_build=True
         )
         yield from self.speed_dust_cloud.build()
 
-        # The game loop is paused while loading: this drives the terrain
-        yield from self.planet.wait_until_loaded(self.game.player.pawn.position)
+        # The game loop is paused while loading: step the world as a frame does
+        yield from wait_until_loaded(
+            lambda: self.world.loading, self.game.follow_render_origin
+        )
+
+    def depth_ranges(self) -> tuple[float, float]:
+        """:return: The split following the nearest ground, the far plane
+        reaching the farthest visible part of the planet and the moon"""
+        return self.world.depth_ranges(self.game.player.pawn.position)
 
     def update_after_recenter(self):
-        """Detail the terrain around the player, now at the render origin."""
-        self.planet.update(self.game.player.pawn.position)
+        """Everything around the player, now at the render origin."""
+        self.world.update(self.game.player.pawn.position, far=self.game.depth_far)
 
     def clean(self):
         """
         Cleans the SceneEarthlike
         """
-        self.planet.clean()
-        self.planet = None
-        self.skybox.clean()
-        self.skybox = None
+        self.world.destroy()
+        self.world = None
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
-        self.lighting.clean()
-        self.lighting = None
         self.game = None
 
 

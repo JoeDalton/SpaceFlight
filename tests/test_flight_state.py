@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import numpy as np
 from panda3d.core import NodePath
 
+from space_flight import CAMERA_FAR_M
 from space_flight.game.flight_state import FlightState
 from space_flight.game.kills import DamageSource, KillLog, credit_hit
 from space_flight.game.scenario import Mission
@@ -161,6 +162,8 @@ def test_world_update_moves_the_scene_after_the_render_origin():
     fs.player = MagicMock(is_dying=False)
     fs.player.pawn.health = 1.0
     fs.scene = order.scene
+    fs.scene.depth_ranges.return_value = (2000.0, 5e5)
+    fs.split_depth = order.split_depth
     fs.recenter_render_origin = order.recenter_render_origin
     task = SimpleNamespace(cont="cont")
 
@@ -168,5 +171,45 @@ def test_world_update_moves_the_scene_after_the_render_origin():
 
     assert [c[0] for c in order.mock_calls] == [
         "recenter_render_origin",
+        "scene.depth_ranges",
+        "split_depth.update",
         "scene.update_after_recenter",
     ]
+    order.split_depth.update.assert_called_once_with(2000.0, 5e5)
+
+
+def test_without_split_cameras_the_scene_still_follows_the_origin():
+    """Headless there are no split cameras: the scene is updated all the same,
+    and its sky reaches the camera's whole range."""
+    fs = object.__new__(FlightState)
+    fs.split_depth = None
+    fs.recenter_render_origin = MagicMock()
+    fs.scene = MagicMock()
+    fs.follow_render_origin()
+    fs.scene.update_after_recenter.assert_called_once()
+    fs.scene.depth_ranges.assert_not_called()
+    assert fs.depth_far == CAMERA_FAR_M
+
+
+def test_depth_far_is_the_far_cameras():
+    fs = object.__new__(FlightState)
+    fs.split_depth = SimpleNamespace(far=123456.0)
+    assert fs.depth_far == 123456.0
+
+
+def test_headless_entry_centres_render_on_the_player_before_building():
+    """A scene's loading steps work around the player: render is centred on
+    it as soon as it exists, before the rest of the level is built."""
+    fs = object.__new__(FlightState)
+    order = MagicMock()
+    entry = SimpleNamespace(upfront=order.upfront)
+    fs.recenter_render_origin = order.recenter_render_origin
+    fs._make_build_generator = lambda _entry: iter([order.build_step()])
+    fs._on_build_complete = order.build_complete
+    fs.resume = order.resume
+
+    fs._enter_headless(entry)
+
+    names = [c[0] for c in order.mock_calls]
+    assert names.index("upfront") < names.index("recenter_render_origin")
+    assert names.index("recenter_render_origin") < names.index("build_complete")

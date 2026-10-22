@@ -6,7 +6,9 @@ import sys
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
-from space_flight import DEBUG_DELETION, RECORD_GAME
+from world_builder.depth import SplitDepthCameras
+
+from space_flight import CAMERA_FAR_M, DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructibles
 from space_flight.ai.interactions import Interactions
 from space_flight.ai.think_scheduler import ThinkScheduler
@@ -63,6 +65,11 @@ class FlightState(BaseState):
         # The level's tally (kills, objectives), set with the outcome (see
         # compute_level_stats)
         self.level_stats: dict | None = None
+        # The depth split: a far camera drawing first what lies past the
+        # scene's split distance, the main camera the rest, each with the
+        # whole depth buffer, so distant ground does not shimmer. Built once
+        # the level's up-front objects exist; None headless.
+        self.split_depth: SplitDepthCameras | None = None
 
     def enter(self):
         """
@@ -93,6 +100,14 @@ class FlightState(BaseState):
         # one-time compile/upload spikes out of the animation.
         self.force_render()
         entry.upfront(game=self)
+        # The player exists: centre render on it now, so a scene's loading
+        # steps (see Scene.build_decomposed) already work around it
+        self.recenter_render_origin()
+        # After the up-front objects: an ocean's reflection camera copies the
+        # main lens once, which the split then shortens to the near range.
+        # After the render-scale pipeline too, whose buffer it draws into.
+        self.split_depth = SplitDepthCameras(self.app)
+        self.split_depth.update(*self.scene.depth_ranges())
 
         # Phase 2 — play the hyperspace animation; the rest of the level is built
         # incrementally during its looping "inside" phase. The overlay declares
@@ -122,6 +137,7 @@ class FlightState(BaseState):
         """
         self.loading_overlay = None
         entry.upfront(game=self)
+        self.recenter_render_origin()
         for _ in self._make_build_generator(entry):
             pass
         self._build_generator = None
@@ -205,8 +221,7 @@ class FlightState(BaseState):
             self.aim_hud = AimHUD(game=self)
 
         # Render the first frame around the player too
-        self.recenter_render_origin()
-        self.scene.update_after_recenter()
+        self.follow_render_origin()
 
         # Game tasks. They stay idle until is_paused is cleared by resume().
         self.game_world_task = self.app.taskMgr.add(
@@ -332,8 +347,7 @@ class FlightState(BaseState):
             for method in method_list:
                 method()
         # After the actors: move() has written (and sanitised) the player's pose
-        self.recenter_render_origin()
-        self.scene.update_after_recenter()
+        self.follow_render_origin()
         # Handle the death of the player: send it into an out-of-control tumble
         # first, and only show the level-end screen once the death spin finishes.
         if self.player.pawn.health <= 0:
@@ -359,6 +373,25 @@ class FlightState(BaseState):
         """
         x, y, z = self.player.pawn.position
         self.root_node.setPos(-x, -y, -z)
+
+    def follow_render_origin(self):
+        """
+        Move the render origin onto the player, then what follows it: the
+        depth split's ranges (the scene's, for this camera position), then
+        the scene's own per-frame update, which may read :attr:`depth_far`.
+        """
+        self.recenter_render_origin()
+        if self.split_depth is not None:
+            self.split_depth.update(*self.scene.depth_ranges())
+        self.scene.update_after_recenter()
+
+    @property
+    def depth_far(self) -> float:
+        """The far camera's far distance this frame, metres: the scene's
+        sky is drawn just inside it. The camera's whole range headless."""
+        if self.split_depth is None:
+            return CAMERA_FAR_M
+        return self.split_depth.far
 
     def end_level(self, outcome: str, text: str = ""):
         """
@@ -439,6 +472,12 @@ class FlightState(BaseState):
         # Save records
         if RECORD_GAME:
             self.record.save()
+
+        # Remove the far camera first: it draws into the render-scale / AA
+        # pipeline's buffer when there is one.
+        if self.split_depth is not None:
+            self.split_depth.destroy()
+            self.split_depth = None
 
         # Tear down the render-scale / AA pipeline, restoring direct-to-window
         # rendering before the scene it was compositing is destroyed. There is
