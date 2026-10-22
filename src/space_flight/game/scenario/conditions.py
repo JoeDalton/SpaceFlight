@@ -155,23 +155,24 @@ def damaged(who: Any) -> Condition:
     return cond
 
 
-def being_hit(who: Any, by_player: bool = False) -> Condition:
+def hit_pawns(who: Any, by_player: bool = False) -> Callable[[], list]:
     """
-    True on a frame where any live pawn of who has lost health or shield
-    since the previous check: a hit, wherever its regenerating shield was.
+    A reader of the live pawns of who that have lost health or shield since
+    the previous reading: the pawns hit, wherever their regenerating shield
+    was.
 
     Keeps the last reading per pawn, so it is stateful: build it once, when
-    the rule is declared. Its first check only takes the readings.
+    the rule is declared. Its first reading only takes the readings.
 
     :param who: See :func:`pawns_of`
     :param by_player: Only count the player's hits (the pawn's last hitter,
         see :func:`~space_flight.game.kills.credit_hit`)
-    :return: The condition
+    :return: The reader, giving the pawns hit this frame
     """
     readings: dict = {}
 
-    def cond() -> bool:
-        was_hit = False
+    def read() -> list:
+        hit = []
         for pawn in pawns_of(who):
             integrity = pawn.health + pawn.shield_level
             previous = readings.get(pawn.id)
@@ -180,10 +181,25 @@ def being_hit(who: Any, by_player: bool = False) -> Condition:
                 continue
             hitter = getattr(pawn, "last_hit_by", None)
             if not by_player or (hitter is not None and hitter.is_player):
-                was_hit = True
-        return was_hit
+                hit.append(pawn)
+        return hit
 
-    return cond
+    return read
+
+
+def being_hit(who: Any, by_player: bool = False) -> Condition:
+    """
+    True on a frame where any live pawn of who has lost health or shield
+    since the previous check: a hit, wherever its regenerating shield was.
+
+    Stateful, see :func:`hit_pawns`.
+
+    :param who: See :func:`pawns_of`
+    :param by_player: Only count the player's hits
+    :return: The condition
+    """
+    read = hit_pawns(who, by_player)
+    return lambda: bool(read())
 
 
 # ---------------------------------------------------------------------------

@@ -411,6 +411,74 @@ def test_mission1_race_banter_runs_while_racing(game, spawned):
     )
 
 
+def friendly_hit(game, m, pawn):
+    """One hit on a teammate, let through the forgiveness of the previous one."""
+    advance(game, m, mission1.FRIENDLY_FIRE_GRACE_S + 0.2)
+    player_hits(game, pawn)
+    advance(game, m, 0.1)
+
+
+def spoken(game):
+    return [text for text, _ in game.hud.chatter]
+
+
+def test_mission1_friendly_fire_warns_then_grounds_before_the_race(game, spawned):
+    m = start(game, mission1.mission1_mission)
+    blue = reach_formation(game, m, spawned)
+    advance(game, m, 0.1)
+    for stage in mission1.PRE_RACE_WARNINGS[:-1]:
+        friendly_hit(game, m, blue[1])
+        assert stage[0][1] in " ".join(spoken(game))
+        assert m.ending is None
+    friendly_hit(game, m, blue[1])
+    assert mission1.PRE_RACE_WARNINGS[-1][0][1] in " ".join(spoken(game))
+    assert m.ending == "defeat"
+
+
+def test_mission1_friendly_fire_shots_in_flight_are_forgiven(game, spawned):
+    m = start(game, mission1.mission1_mission)
+    blue = reach_formation(game, m, spawned)
+    advance(game, m, 0.1)
+    player_hits(game, blue[1])
+    advance(game, m, 0.1)
+    player_hits(game, blue[1])
+    advance(game, m, mission1.FRIENDLY_FIRE_GRACE_S)
+    assert not any(mission1.PRE_RACE_WARNINGS[1][0][1] in text for text in spoken(game))
+
+
+def test_mission1_friendly_fire_count_resets_when_the_race_starts(game, spawned):
+    m = start(game, mission1.mission1_mission)
+    blue = reach_formation(game, m, spawned)
+    advance(game, m, 0.1)
+    friendly_hit(game, m, blue[1])
+    friendly_hit(game, m, blue[1])
+    game.player.pawn.position = blue[0].position.copy()
+    advance(game, m, 1)
+    blue[0].parent.navigator.next_waypoint_idx = len(mission1.CIRCUIT_WAYPOINTS)
+    advance(game, m, 1)
+    assert m.ending is None
+
+    # Four hits ground the player in the race; the earlier two do not count
+    for _ in range(3):
+        friendly_hit(game, m, blue[1])
+        assert m.ending is None
+    friendly_hit(game, m, blue[1])
+    assert m.ending == "defeat"
+
+
+def test_mission1_race_nagging_comes_from_the_ship_shot_and_a_teammate(game, spawned):
+    m = start(game, mission1.mission1_mission)
+    blue = finish_circuit(game, m, spawned)
+    friendly_hit(game, m, blue[3])
+    texts = spoken(game)
+    assert any("Blue Four" in t and "Did Five just shoot me" in t for t in texts)
+    # Not the leader, not the ship shot
+    assert any(
+        t.startswith(("Blue Two", "Blue Three")) and "without cheating" in t
+        for t in texts
+    )
+
+
 @pytest.mark.parametrize("player_leads", [True, False])
 def test_mission1_comments_on_who_leads_the_race(game, spawned, player_leads):
     m = start(game, mission1.mission1_mission)

@@ -4,17 +4,25 @@ Helpers shared by the level scripts.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Sequence, Union
 
 import numpy as np
 
 from space_flight.actors.player import Player
+from space_flight.game.scenario.conditions import hit_pawns
 from space_flight.scenes.scenes import scene_factory
 
 if TYPE_CHECKING:
     from space_flight.actors.pawn import Pawn
     from space_flight.game.flight_state import FlightState
+    from space_flight.game.scenario import Mission
     from space_flight.weapons.loadout import Loadout
+
+#: A speaker: a name, or a function of the pawn that was shot giving one.
+Speaker = Union[str, Callable[["Pawn"], str]]
+
+# Shots still on their way after a warning are forgiven
+FRIENDLY_FIRE_GRACE_S = 2
 
 
 def build_upfront(
@@ -66,3 +74,71 @@ def relative_position(
     return (
         pawn.position + pawn.forward * forward_m + pawn.right * right_m + pawn.up * up_m
     )
+
+
+class FirePolice:
+    """
+    The handle of a :func:`police_fire` chain.
+    """
+
+    def __init__(self):
+        self.trigger = None
+        self.cancelled = False
+
+    def cancel(self):
+        """Stop watching the player's fire."""
+        self.cancelled = True
+        if self.trigger is not None:
+            self.trigger.cancel()
+
+
+def police_fire(
+    m: Mission,
+    who: Any,
+    stages: Sequence[Sequence[tuple[Speaker, str]]],
+    on_grounded: Callable[[], None],
+    grace_s: float = FRIENDLY_FIRE_GRACE_S,
+) -> FirePolice:
+    """
+    Rules of engagement: each of the player's hits on who plays the next stage
+    of chatter, and the hit of the last stage grounds the player.
+
+    A hit within grace_s of the previous one is forgiven (shots already on
+    their way). Every call counts its hits from zero.
+
+    :param m: The level's :class:`Mission`
+    :param who: What the player must not shoot, see
+        :func:`~space_flight.game.scenario.conditions.pawns_of`
+    :param stages: One group of (speaker, line) per hit; a speaker is a name
+        or a function of the pawn that was shot
+    :param on_grounded: Called once the last stage is spoken; ends the level
+    :param grace_s: The forgiveness after each hit
+    :return: The handle, to cancel the rules
+    """
+    police = FirePolice()
+    hits = hit_pawns(who, by_player=True)
+    shot: list = []
+
+    def arm(index: int):
+        # Read every frame, so a hit during the grace is not kept for later
+        def read() -> bool:
+            shot[:] = hits()
+            return bool(shot)
+
+        grace = m.after(grace_s if index else 0)
+        police.trigger = m.on(lambda: read() and grace(), lambda: play(index))
+
+    def play(index: int):
+        if police.cancelled or m.ending is not None:
+            return
+        victim = shot[0]
+        for speaker, text in stages[index]:
+            name = speaker(victim) if callable(speaker) else speaker
+            m.speech(text, speaker=name)
+        if index + 1 < len(stages):
+            arm(index + 1)
+        else:
+            on_grounded()
+
+    arm(0)
+    return police

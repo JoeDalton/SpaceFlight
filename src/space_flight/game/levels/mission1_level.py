@@ -11,9 +11,14 @@ very ships the player was just escorting.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
-from space_flight.game.levels.common import build_upfront, relative_position
+from space_flight.game.levels.common import (
+    FRIENDLY_FIRE_GRACE_S,
+    build_upfront,
+    police_fire,
+    relative_position,
+)
 from space_flight.game.levels.hints import (
     engine_power_hint,
     formation_hint,
@@ -123,6 +128,53 @@ RACE_CHATTER = [
     (12, "Blue Leader", "Tight turn coming up. Nobody scratch my paint."),
 ]
 
+
+# Lines of the rules of engagement, one group per hit on a teammate; a speaker
+# given as a function is picked from the pawn that was shot.
+PRE_RACE_WARNINGS = [
+    [("Blue Leader", "Five, watch your fire! That's your own squadron!")],
+    [
+        (
+            "Blue Leader",
+            "Five, I'm warning you once more. Seriously, back off, or I'll ground you!",
+        )
+    ],
+    [("Blue Leader", "That's it, Five. You're grounded!")],
+]
+PRE_RACE_GROUNDED = "You kept firing on your own squadron.\nYour wings are grounded."
+
+
+def cheating_lines(victim_name: Callable, other_name: Callable) -> list:
+    """
+    The rules of engagement lines once the race is on: accusations of cheating
+    from the ship shot and another teammate, then the leader.
+
+    :param victim_name: Speaker: the ship shot
+    :param other_name: Speaker: a teammate other than the leader and the ship shot
+    :return: One group of (speaker, line) per hit
+    """
+    return [
+        [
+            (victim_name, "Hey! Did Five just shoot me?"),
+            (other_name, "Looks like the rookie can't win without cheating."),
+        ],
+        [
+            (victim_name, "Shooting your own squad? Seriously, Five?"),
+            (
+                other_name,
+                "Good thing these lasers are ion shots. "
+                "The kid's ready to do anything to win.",
+            ),
+        ],
+        [("Blue Leader", "Five, that's enough. Seriously, back off!")],
+        [("Blue Leader", "Race over, Five. You're grounded!")],
+    ]
+
+
+RACE_GROUNDED = (
+    "You cheated in the race by firing on your own squadron.\nYour wings are grounded."
+)
+
 # Race waypoint index -> the line if the player gets there first, and the
 # one if a wingman does (spoken by that wingman when its speaker is None).
 RACE_GATE_LINES = {
@@ -216,6 +268,26 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # formation's) marks the end of the circuit in step 4.
     leader = blue.pawns()[0]
 
+    def victim_name(victim) -> str:
+        # Named in spawn order, dead or alive
+        return BLUE_NAMES[blue.ids.index(victim.id)]
+
+    def other_name(victim) -> str:
+        """A live teammate other than the leader and the ship shot."""
+        others = [
+            victim_name(p) for p in blue.pawns() if p is not leader and p is not victim
+        ]
+        return others[0] if others else victim_name(victim)
+
+    # Hits on teammates: a warning, then grounded
+    pre_race_police = police_fire(
+        m,
+        blue,
+        PRE_RACE_WARNINGS,
+        lambda: m.defeat(PRE_RACE_GROUNDED),
+        grace_s=FRIENDLY_FIRE_GRACE_S,
+    )
+
     close_to_blue = near_actor(game.player, blue, FOLLOW_RADIUS_M)
     race_started = []
 
@@ -277,6 +349,15 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     lost_contact.cancel()
     circuit.complete()
     race_started.append(True)
+    # The hit count starts again, with the teammates now accusing the player
+    pre_race_police.cancel()
+    police_fire(
+        m,
+        blue,
+        cheating_lines(victim_name, other_name),
+        lambda: m.defeat(RACE_GROUNDED),
+        grace_s=FRIENDLY_FIRE_GRACE_S,
+    )
 
     m.speech(
         "Not bad, Five! Now let's see what you've really got.\n"
