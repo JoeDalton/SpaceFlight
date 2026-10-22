@@ -10,6 +10,7 @@ very ships the player was just escorting.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Iterator
 
 from space_flight.game.levels.common import build_upfront, relative_position
@@ -26,6 +27,8 @@ from space_flight.game.scenario.conditions import (
     not_,
     reached_waypoint,
 )
+from space_flight.weapons import ION
+from space_flight.weapons.loadout import default_loadout
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -55,6 +58,16 @@ CIRCUIT_WAYPOINTS = [
     [-2000, 3000, 550],
 ]
 
+ION_LOADOUT = replace(default_loadout("x-wing"), lasers=ION).with_ordnance(
+    concussion_missile=0,
+    ion_missile=0,
+    rocket=0,
+    proton_bomb=0,
+    ion_torpedo=0,
+    proton_torpedo=0,
+    ion_bomb=0,
+)
+
 # The leader + 3 wingmen the player follows, then races. Their spawn point
 # depends on the player's position when WAYPOINT_1 is reached, so it is given
 # at spawn time.
@@ -66,6 +79,7 @@ BLUE_SQUADRON = WaveSpec(
     formation="arrowhead",
     waypoints=CIRCUIT_WAYPOINTS,
     loop=True,
+    loadouts={"x-wing": ION_LOADOUT},
 )
 
 # The race route, given to the player AND every formation member once the
@@ -143,6 +157,7 @@ def build_mission1_upfront(game: FlightState):
         scene_name="asteroids",
         player_ship_type="x-wing",
         player_position=PLAYER_SPAWN_POINT,
+        player_loadout=ION_LOADOUT,
     )
 
 
