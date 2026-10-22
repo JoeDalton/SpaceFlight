@@ -126,16 +126,22 @@ reads `configuration/bindings.yaml` alone, and
 `datafiles/default_configuration/default_bindings.yaml` is only read by the
 input settings menu's reset-to-defaults. `sanitise()` then clamps every field to something the renderer can act on (valid display mode,
 minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample count,
-known cloud-quality name, ...), so a malformed or hand-edited file degrades to
-defaults instead of crashing. `save()` re-sanitises and writes the user file.
+...), so a malformed or hand-edited file degrades to defaults instead of
+crashing. `save()` re-sanitises and writes the user file.
+
+The `world` section is WorldBuilder's: its quality settings for the terrain,
+air, sky, clouds and ocean, as `WorldSettings.to_dict()` writes them (a preset
+and the knobs that differ from it). `sanitise()` reads it back through
+`WorldSettings.from_dict`, which clamps or drops what it cannot use, and the
+graphics menu builds its World rows from `WorldSettings.schema()`, so the game
+names none of these knobs (see
+[WorldBuilder's quality page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/quality.md)).
+Older files' `clouds.quality` and `render.reflection_scale` are carried into it
+on load (`_migrate_legacy`).
 
 Not every setting goes through `GraphicsManager`: the setting belongs to the
-thing that acts on it. `CloudField` reads `clouds.quality` when it builds, and
-the ocean reads `render.reflection_scale`. The four quality names must match
-WorldBuilder's `CloudQuality`
-([`world_builder.clouds`](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/clouds.md)): a name
-the sanitiser accepts but the enum doesn't know would fall back to `high` at
-build time. A test asserts the two lists agree.
+thing that acts on it. Scenes build their WorldBuilder objects with
+`graphics_settings.world_settings().settings_for(...)`.
 
 [`graphics_manager.py`](../../src/space_flight/global_architecture/graphics_manager.py)'s
 `GraphicsManager` applies the sanitised config to the live engine:

@@ -62,12 +62,16 @@ class SceneOcean(Scene):
         Requires the player to already exist: the ocean's reflection camera
         copies the player camera's lens.
         """
+        # The quality the player chose in the graphics settings
+        world = self.game.app.graphics_settings.world_settings()
+
         # Ocean (geometry, reflection buffer, shader). Curved over the planet, so
         # it has a real horizon that dips and bows with altitude.
         self.ocean = Ocean(
             game=self.game,
             geometric_swell=True,
             haze_color=LVecBase3f(*self.HAZE_COLOR),
+            settings=world.settings_for(Ocean),
         )
 
         # Volumetric clouds, lit to match the dusk sun. The lighting is live, so
@@ -79,6 +83,7 @@ class SceneOcean(Scene):
             sun_color=self.SUN_COLOR[:3],
             sky_color=self.AMBIENT_COLOR[:3],
             haze_color=self.HAZE_COLOR,
+            settings=world.settings_for(Clouds),
         )
 
         # Force the one-time GPU preparation now (textures, vertex buffers and

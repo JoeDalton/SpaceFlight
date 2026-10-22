@@ -140,8 +140,36 @@ def test_graphics_rows(entered):
         entered.cancel_btn,
         entered.save_btn,
     ]
-    n_settings = len(entered.sliders) + len(entered.checkboxes) + 1  # + mode row
+    n_settings = (
+        len(entered.sliders)
+        + len(entered.checkboxes)
+        + len(entered.drop_downs)
+        + 1  # mode row
+    )
     assert len(navigator.rows) == n_settings + 1
+
+
+@pytest.mark.parametrize("entered", [GraphicsSettingsMenuState], indirect=True)
+def test_graphics_world_rows_built_unchanged(entered, spaceflight_app):
+    """
+    Every world row is built, and the values its widgets report once built
+    (sliders do, a frame later) leave the settings as they were.
+    """
+    world = entered.working_config["world"]
+    assert ("world", "terrain", "workers") in entered.sliders
+    assert isinstance(entered.drop_downs[("world",)], CustomDropDown)
+    for _ in range(3):
+        spaceflight_app.taskMgr.step()
+    assert entered.working_config["world"] == world
+
+
+@pytest.mark.parametrize("entered", [GraphicsSettingsMenuState], indirect=True)
+def test_graphics_world_preset_rebuild_refreshes_navigator_rows(entered):
+    old_rows = entered.menu_navigator.rows
+    entered.select_world_level(("world",), "low")
+    assert entered.menu_navigator.rows is not old_rows
+    assert entered.drop_downs[("world",)].get_value() == "low"
+    assert entered.working_config["world"]["preset"] == "low"
 
 
 @pytest.mark.parametrize("entered", [GraphicsSettingsMenuState], indirect=True)

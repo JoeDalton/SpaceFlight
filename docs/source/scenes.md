@@ -86,8 +86,9 @@ for how they work). The game adds only what is game-specific:
   Z=0 (see [docs/game.md](game.md)), so ships can crash into the water, and to
   give lasers the `"water"` material for their sparks.
 - **`Clouds`** (`world_builder.clouds.Clouds`) is used as is. Its sprite atlas
-  goes through the game's `asset_manager`, which preloads it, and its quality
-  comes from `clouds.quality` in the graphics settings (see
+  goes through the game's `asset_manager`, which preloads it.
+- **Quality.** The ocean and clouds are built with their sections of the
+  `world` graphics settings (see
   [docs/global_architecture.md](global_architecture.md)).
 - **Far plane.** `CAMERA_FAR_M` in `player.py` raises it to 600 km, set before
   the scene is built because the ocean's reflection camera copies the lens:

@@ -10,20 +10,26 @@ On save the display mode is applied to the live window immediately; every
 other setting is read on the next level load (hence the warning shown above
 the Save button). See
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
+
+The WorldBuilder rows (terrain, air, sky, clouds, ocean) are generated from
+:meth:`WorldSettings.schema`, so this menu names none of their knobs: a
+"World" preset drop-down, then per section a preset drop-down and one row per
+knob. They edit ``working_config["world"]`` through :class:`WorldSettings`,
+which clamps and validates every value.
 """
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
+
+from world_builder.settings import WorldSettings
 
 from space_flight.global_architecture.graphics_settings import (
     _MAX_MIRROR,
-    _MAX_REFLECTION,
     _MAX_SCALE,
     _MIN_MIRROR,
-    _MIN_REFLECTION,
     _MIN_SCALE,
-    _VALID_CLOUD_QUALITY,
     _VALID_MSAA,
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
@@ -31,6 +37,7 @@ from space_flight.global_architecture.graphics_settings import (
 from space_flight.global_architecture.yaml_files import load_yaml
 from space_flight.menus.menu_utils import (
     CustomButton,
+    CustomDropDown,
     CustomSlider,
     ScrollingSettingsMenuState,
     get_by_path,
@@ -51,10 +58,6 @@ _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
 # ones sanitise() clamps to.
 _SCALE_SLIDERS = {
     ("render", "scale"): ("Render Scale", (_MIN_SCALE, _MAX_SCALE)),
-    ("render", "reflection_scale"): (
-        "Reflection Quality",
-        (_MIN_REFLECTION, _MAX_REFLECTION),
-    ),
     ("render", "mirror_scale"): ("Mirror Quality", (_MIN_MIRROR, _MAX_MIRROR)),
 }
 
@@ -62,11 +65,6 @@ _SCALE_SLIDERS = {
 # first, so dragging right costs more, like every other slider here.
 _DISCRETE_SLIDERS = {
     ("antialiasing", "msaa"): ("MSAA", _VALID_MSAA, ("Off", "2x", "4x", "8x")),
-    ("clouds", "quality"): (
-        "Cloud Quality",
-        _VALID_CLOUD_QUALITY,
-        tuple(name.title() for name in _VALID_CLOUD_QUALITY),
-    ),
 }
 
 # Checkbox toggles: path -> label.
@@ -78,15 +76,22 @@ _CHECKBOXES = {
 
 # Section headers are named after the top-level keys of default_graphics.yaml,
 # in the order they appear there; override only where title-casing the key
-# reads oddly.
-_SECTIONS = ("display", "render", "antialiasing", "compatibility", "clouds", "hud")
+# reads oddly. The "world" section is listed apart: its rows come from
+# WorldBuilder's schema (see make_world_rows).
+_SECTIONS = ("display", "render", "antialiasing", "compatibility", "hud")
 _SECTION_LABELS = {"hud": "HUD"}
+
+# The world rows' widget paths start with this key, like the config's section
+_WORLD = "world"
+# A preset drop-down's extra option: the values are no preset's
+_CUSTOM = "custom"
 
 # Layout
 _SLIDER_X = 0.0
 _SLIDER_SCALE = 0.35
 _VALUE_LABEL_X = 0.65
 _MODE_BUTTON_X = -0.1
+_DROP_DOWN_SCALE = 0.17
 
 _ROW_HEIGHT = 0.15
 _FRAME_TOP = 0.78
@@ -102,6 +107,43 @@ def _section_label(name: str) -> str:
 def _pct(value: float) -> str:
     """Format a fraction as a rounded percentage string."""
     return f"{round(value * 100)}%"
+
+
+def _knob_decimals(knob: dict) -> int:
+    """
+    :return: The decimals a numeric knob's slider keeps: none for an int,
+        else about three significant digits of its range (0.01 over 0.25..2,
+        1 m over 500..10000 m)
+    """
+    if knob["kind"] == "int":
+        return 0
+    low, high = knob["range"]
+    return max(0, 2 - math.floor(math.log10(high - low)))
+
+
+def _knob_value(knob: dict, raw: float) -> float | int:
+    """:return: A numeric knob's slider position as the value to store"""
+    if knob["kind"] == "int":
+        return int(round(raw))
+    return round(raw, _knob_decimals(knob))
+
+
+def _knob_text(knob: dict, value) -> str:
+    """:return: A knob's value readout, with its unit ("2.00x", "4000 m")"""
+    if knob["kind"] == "float":
+        value = f"{value:.{_knob_decimals(knob)}f}"
+    unit = knob["unit"]
+    if not unit:
+        return str(value)
+    return f"{value}{unit}" if unit == "x" else f"{value} {unit}"
+
+
+def _level_options(schema: dict) -> list[tuple[str, str]]:
+    """:return: A preset drop-down's (label, value) options: the levels, then
+    Custom"""
+    return [(level["label"], level["id"]) for level in schema["levels"]] + [
+        (_CUSTOM.title(), _CUSTOM)
+    ]
 
 
 class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
@@ -121,9 +163,22 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
         )
         # Display-mode button group: list of (value, CustomButton).
         self.mode_buttons: list = []
+        # WorldBuilder's settings menu description (see WorldSettings.schema)
+        self.world_schema = WorldSettings.schema()
+        # World preset and choice drop-downs, by widget path (see
+        # make_world_rows)
+        self.drop_downs: dict[tuple, CustomDropDown] = {}
 
     def settings(self):
         return self.app.graphics_settings
+
+    def exit(self):
+        """Close and destroy the drop-downs (an open list hangs off aspect2d),
+        then the rest of the UI."""
+        for drop_down in self.drop_downs.values():
+            drop_down.destroy()
+        self.drop_downs.clear()
+        super().exit()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -165,6 +220,9 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
         references are never kept, and hands the new rows to the menu
         navigator.
         """
+        for drop_down in self.drop_downs.values():
+            drop_down.destroy()
+        self.drop_downs.clear()
         self.mode_buttons.clear()
         self.sliders.clear()
         self.slider_value_labels.clear()
@@ -189,6 +247,10 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             elif kind == "discrete":
                 self.add_discrete_row(row["path"], y)
                 widgets = [self.sliders[row["path"]]]
+            elif kind == "world_level":
+                widgets = [self.add_world_level_row(row["path"], row["label"], y)]
+            elif kind == "world_knob":
+                widgets = [self.add_world_knob_row(row["path"], row["knob"], y)]
             else:
                 self.add_checkbox_row(row["path"], row["label"], y)
                 widgets = [self.checkboxes[row["path"]]]
@@ -275,6 +337,67 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             extraArgs=[path],
         )
 
+    def add_world_level_row(self, path: tuple, label: str, y: float):
+        """
+        Add a world preset drop-down row: the whole world's for the path
+        ("world",), one section's for ("world", section).
+
+        :return: The drop-down
+        """
+        self.scroll_list.add_row_label(label, y)
+        self.drop_downs[path] = CustomDropDown(
+            app=self.app,
+            pos=(_SLIDER_X, 0, y),
+            options=_level_options(self.world_schema),
+            value=self.world_level(path),
+            command=lambda level: self.select_world_level(path, level),
+            parent=self.scroll_list.content,
+            scale=_DROP_DOWN_SCALE,
+        )
+        return self.drop_downs[path]
+
+    def add_world_knob_row(self, path: tuple, knob: dict, y: float):
+        """
+        Add a row for one WorldBuilder knob, by its schema kind: a checkbox
+        (bool), a drop-down (choice) or a slider with a readout (int, float).
+
+        :param path: ("world", section, knob id)
+        :param knob: The knob's schema entry
+        :return: The row's widget
+        """
+        value = self.world_value(path)
+        if knob["kind"] == "bool":
+            self.checkboxes[path] = self.scroll_list.add_checkbox_row(
+                knob["label"], y, value, self.on_checkbox_toggle, extraArgs=[path]
+            )
+            return self.checkboxes[path]
+        self.scroll_list.add_row_label(knob["label"], y)
+        if knob["kind"] == "choice":
+            self.drop_downs[path] = CustomDropDown(
+                app=self.app,
+                pos=(_SLIDER_X, 0, y),
+                options=[(choice, choice) for choice in knob["choices"]],
+                value=value,
+                command=lambda choice: self.set_world_value(path, choice),
+                parent=self.scroll_list.content,
+                scale=_DROP_DOWN_SCALE,
+            )
+            return self.drop_downs[path]
+        low, high = knob["range"]
+        self.sliders[path] = CustomSlider(
+            app=self.app,
+            pos=(_SLIDER_X, 0, y),
+            value=value,
+            value_range=(low, high),
+            command=self.on_world_slider,
+            extraArgs=[path, knob],
+            scale=_SLIDER_SCALE,
+            parent=self.scroll_list.content,
+            step=max(1, round((high - low) / 20)) if knob["kind"] == "int" else None,
+        )
+        self._add_value_label(path, _knob_text(knob, value), y)
+        return self.sliders[path]
+
     def refresh_mode_buttons(self):
         """Press the button matching the current display mode, reset the rest."""
         current = self.working_config["display"]["mode"]
@@ -323,7 +446,133 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
                 if path[0] == section:
                     rows.append({"kind": "checkbox", "path": path, "label": label})
 
+        return rows + self.make_world_rows()
+
+    def make_world_rows(self) -> list[dict]:
+        """
+        Build the WorldBuilder rows from its schema: a "World" header and the
+        whole world's preset, then per section a header, its preset, and one
+        row per knob (advanced ones included), in the schema's order.
+
+        Adds two row kinds to :meth:`make_row_data`'s:
+
+        - "world_level" — a preset drop-down, with "path" (("world",) or
+          ("world", section)) and "label" keys.
+        - "world_knob" — one knob, with "path" (("world", section, knob id))
+          and "knob" (its schema entry) keys.
+
+        :return: Ordered list of row descriptor dicts.
+        """
+        rows = [
+            {"kind": "header", "text": _section_label(_WORLD)},
+            {"kind": "world_level", "path": (_WORLD,), "label": "Preset"},
+        ]
+        for section in self.world_schema["sections"]:
+            rows.append({"kind": "header", "text": section["label"]})
+            rows.append(
+                {
+                    "kind": "world_level",
+                    "path": (_WORLD, section["id"]),
+                    "label": "Preset",
+                }
+            )
+            for knob in section["knobs"]:
+                rows.append(
+                    {
+                        "kind": "world_knob",
+                        "path": (_WORLD, section["id"], knob["id"]),
+                        "knob": knob,
+                    }
+                )
         return rows
+
+    # ------------------------------------------------------------------
+    # World settings
+    # ------------------------------------------------------------------
+
+    def world(self) -> WorldSettings:
+        """:return: The working config's world settings"""
+        return WorldSettings.from_dict(self.working_config[_WORLD])
+
+    def world_level(self, path: tuple) -> str:
+        """
+        :param path: ("world",) or ("world", section)
+        :return: The preset the whole world, or a section, is at, or "custom"
+        """
+        world = self.world()
+        if len(path) == 1:
+            return _CUSTOM if world.is_custom() else world.level.value
+        level = world.section_level(path[1])
+        return _CUSTOM if level is None else level.value
+
+    def world_value(self, path: tuple):
+        """
+        :param path: ("world", section, knob id)
+        :return: The knob's value as saved: a choice by its label
+        """
+        _, section, name = path
+        settings = getattr(self.world(), section)
+        value = getattr(settings, name)
+        knob = dict(settings.knobs())[name]
+        label = knob.label_of(value)
+        return value if label is None else label
+
+    def set_world_value(self, path: tuple, value):
+        """
+        Store one knob's value (WorldSettings clamps it), and show which
+        presets still match.
+
+        :param path: ("world", section, knob id)
+        """
+        _, section, name = path
+        world = self.world().with_value(section, name, value)
+        self.working_config[_WORLD] = world.to_dict()
+        self.refresh_world_levels()
+
+    def refresh_world_levels(self):
+        """Show the presets the values are at, or Custom, in the drop-downs."""
+        for path, drop_down in self.drop_downs.items():
+            if len(path) < 3:
+                drop_down.set_value(self.world_level(path))
+
+    def select_world_level(self, path: tuple, level: str):
+        """
+        Load a preset into the whole world, or one section, and rebuild the
+        rows to show its values. Picking Custom keeps the current values.
+
+        :param path: ("world",) or ("world", section)
+        :param level: A level's id, or "custom"
+        """
+        if level == _CUSTOM:
+            self.refresh_world_levels()
+            return
+        world = self.world()
+        if len(path) == 1:
+            world = world.with_level(level)
+        else:
+            world = world.with_section_level(path[1], level)
+        self.working_config[_WORLD] = world.to_dict()
+        scroll = self.scroll_list.v_scrollbar["value"]
+        self.rebuild_scroll()
+        self.scroll_list.v_scrollbar["value"] = scroll
+
+    def on_world_slider(self, path: tuple, knob: dict):
+        """
+        Store a numeric knob's slider value, rounded to what it keeps (see
+        :func:`_knob_value`), and refresh its readout.
+
+        A slider also reports its value when built: within the rounding of
+        the stored value, that stores nothing, so it cannot turn a preset into
+        Custom. The thumb is *not* written back (see
+        :meth:`on_discrete_slider`).
+        """
+        raw = self.sliders[path].get_value()
+        if abs(raw - self.world_value(path)) < 0.5 * 10.0 ** -_knob_decimals(knob):
+            return
+        self.set_world_value(path, _knob_value(knob, raw))
+        self.slider_value_labels[path]["text"] = _knob_text(
+            knob, self.world_value(path)
+        )
 
     # ------------------------------------------------------------------
     # Control callbacks
@@ -356,7 +605,12 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
         self.slider_value_labels[path]["text"] = labels[idx]
 
     def on_checkbox_toggle(self, status: int, path: tuple):
-        """Store a toggled checkbox value straight into :attr:`working_config`."""
+        """Store a toggled checkbox value straight into :attr:`working_config`,
+        or into the world settings for a WorldBuilder knob."""
+        if path[0] == _WORLD:
+            if bool(status) != self.world_value(path):
+                self.set_world_value(path, bool(status))
+            return
         set_by_path(self.working_config, path, bool(status))
 
     # ------------------------------------------------------------------
