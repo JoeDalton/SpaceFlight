@@ -507,6 +507,69 @@ def test_munition_into_terrain_spends_it_at_its_own_position_without_contact_poi
     munition.on_impact.assert_called_once()
 
 
+def make_terrain_hit(terrain) -> MagicMock:
+    """
+    :param terrain: The terrain collider's owner
+    :return: A munition's contact with it, at a reported surface point
+    """
+    entry = MagicMock()
+    entry.from_node_path.python_tags = {"owner": MagicMock(speed=np.ones(3))}
+    entry.into_node_path.python_tags = {"owner": terrain}
+    entry.hasSurfaceNormal.return_value = True
+    entry.getSurfaceNormal.return_value = Vec3(0.0, 0.0, 1.0)
+    entry.hasSurfacePoint.return_value = True
+    entry.getSurfacePoint.return_value = Vec3(10.0, 20.0, 0.0)
+    return entry
+
+
+@pytest.mark.parametrize(
+    "material,preset",
+    [
+        ("water", spark_fx.ICE),
+        ("rock", spark_fx.ROCK),
+        ("metal", spark_fx.METAL),
+        (None, spark_fx.ROCK),
+        ("lava", spark_fx.ROCK),
+    ],
+)
+def test_terrain_sparks_by_its_material(material, preset):
+    """A terrain of one material (ocean, asteroid field) sparks by it."""
+    system = make_collision_system_without_init()
+    system.munition_into_terrain(make_terrain_hit(SimpleNamespace(material=material)))
+    assert spawned_spark_preset(system) is preset
+
+
+@pytest.mark.parametrize(
+    "material,preset",
+    [
+        ("water", spark_fx.ICE),
+        ("snow", spark_fx.ICE),
+        ("rock", spark_fx.ROCK),
+        ("grass", spark_fx.ROCK),
+        ("forest", spark_fx.ROCK),
+        ("desert", spark_fx.ROCK),
+        ("beach", spark_fx.ROCK),
+        (None, spark_fx.ROCK),  # no collision chunk registered there
+    ],
+)
+def test_planet_terrain_sparks_by_the_material_at_the_hit_point(material, preset):
+    """
+    A planet's terrain (WorldBuilder's TerrainSurface) has no single material:
+    it is asked for the one at the hit point, in the game root's frame.
+    """
+    system = make_collision_system_without_init()
+    terrain = SimpleNamespace(
+        material=None, material_at=MagicMock(return_value=material)
+    )
+
+    system.munition_into_terrain(make_terrain_hit(terrain))
+
+    terrain.material_at.assert_called_once_with(
+        Vec3(10.0, 20.0, 0.0), system.game.root_node
+    )
+    assert spawned_spark_preset(system) is preset
+
+
 # ---------------------------
 # munition_into_shield
 # ---------------------------

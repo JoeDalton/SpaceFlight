@@ -3,7 +3,8 @@ Unit tests for the planet terrain scene (space_flight.scenes.planet_surface,
 space_flight.scenes.scenes.SceneEarthlike).
 
 The ground-loading gate runs on a fake terrain; the ground heights under
-Mission 3 are queried from WorldBuilder's terrain (no window, no workers).
+Mission 3 are queried from WorldBuilder's terrain (no window, no workers). One
+end-to-end test builds the real terrain, loads its ground and traverses it.
 """
 
 import logging
@@ -11,10 +12,19 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from panda3d.core import (
+    BitMask32,
+    CollisionHandlerQueue,
+    CollisionNode,
+    CollisionSegment,
+    CollisionTraverser,
+)
+from world_builder.terrain.biomes import BIOMES
 from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import Planet
 from world_builder.terrain.query import TerrainQuery
 
+from space_flight.game.collisions import CollisionLayers
 from space_flight.game.levels import mission3_level as mission3
 from space_flight.scenes import planet_surface
 from space_flight.scenes.planet_surface import PlanetSurface
@@ -160,3 +170,57 @@ def test_mission3_starts_clear_of_the_ground():
     altitude = np.linalg.norm(planet_points, axis=1) - spec.radius
     ground = query.height_at(planet_points)
     assert (altitude - ground).min() > MISSION3_CLEARANCE_M
+
+
+# ---------------------------------------------------------------------------
+# Collision, end to end
+# ---------------------------------------------------------------------------
+
+# Where the smoke test's player hovers (the sea under it is at z = 0)
+_HOVER = np.array([0.0, 0.0, 1000.0])
+
+
+def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
+    """
+    The real terrain, once its ground is loaded, stops a laser-masked segment
+    fired straight down: one "terrain" entry, on the low ground or sea under
+    the origin, facing up, whose owner knows its material.
+
+    The drawn mesh, not the finest one, is solid: at this altitude its coarser
+    triangles put the ground a few metres off the finest level's.
+    """
+    native = pytest.importorskip("world_builder.terrain.native")
+    game = SimpleNamespace(app=spaceflight_app)
+    try:
+        surface = PlanetSurface(
+            game, SceneEarthlike.LEVEL_PATH, sun_direction=np.array([0, 0, 1.0])
+        )
+    except native.NativeCollisionError as error:
+        pytest.skip(f"No native terrain collision: {error}")
+    try:
+        for _ in surface.wait_until_loaded(_HOVER):
+            pass
+
+        # The player is at the render origin: the sea is 1000 m below it
+        root = spaceflight_app.render.attach_new_node("smoke_root")
+        segment = CollisionNode("laser")
+        segment.add_solid(CollisionSegment(0, 0, -900, 0, 0, -1100))
+        segment.set_from_collide_mask(CollisionLayers.MUNITION_FROM)
+        segment.set_into_collide_mask(BitMask32.all_off())
+        segment_path = root.attach_new_node(segment)
+        queue = CollisionHandlerQueue()
+        traverser = CollisionTraverser()
+        traverser.add_collider(segment_path, queue)
+        traverser.traverse(spaceflight_app.render)
+
+        entries = [queue.get_entry(i) for i in range(queue.get_num_entries())]
+        assert [e.get_into_node().name for e in entries] == ["terrain"]
+        entry = entries[0]
+        point = entry.get_surface_point(spaceflight_app.render)
+        assert point.z == pytest.approx(-1000.0, abs=30.0)
+        assert entry.get_surface_normal(spaceflight_app.render).z > 0.9
+        owner = entry.get_into_node_path().get_python_tag("owner")
+        assert owner.material_at(point, spaceflight_app.render) in {"water", *BIOMES}
+        root.remove_node()
+    finally:
+        surface.clean()

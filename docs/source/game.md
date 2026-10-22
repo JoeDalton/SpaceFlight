@@ -194,6 +194,11 @@ entry into game effects.
     collision events are handled on the next frame, once the munition has
     moved on. The launch point does not move, and a shielded ship is slow next
     to a munition, so its bubble has barely moved since the launch.
+    On terrain, the sparks follow its material: an ocean or asteroid field
+    declares one (`material`), while a planet's terrain, whose ground varies,
+    gives the one at the hit point (`material_at`: `"water"` or a biome);
+    `_TERRAIN_SPARK_PRESET` maps water and snow to ice, and anything else to
+    rock.
   - **Flares** (`ordnance_into_flare`): ordnance hitting a flare of another
     team is spent, and so is the flare.
   - **Ship physical hits** (`ship-into-*` / `ship-again-*` events, against

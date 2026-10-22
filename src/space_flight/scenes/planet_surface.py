@@ -8,6 +8,11 @@ flat world frame is the planet's frame shifted by one radius: the ground under
 the origin is the planet's +z pole. Away from the origin the surface drops
 below z = 0 (about 80 m at 10 km on a 600 km planet), which the flat flight
 model ignores.
+
+The drawn terrain is solid: WorldBuilder adds a "terrain" collision node,
+owned by its TerrainSurface, that the game's terrain handlers see like any
+other terrain (see space_flight.game.collisions). Only drawn ground is solid,
+hence the wait for it to load.
 """
 
 from __future__ import annotations
@@ -21,6 +26,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from world_builder.terrain.level import load_level
 from world_builder.terrain.terrain import Terrain
+
+from space_flight.game.collisions import CollisionLayers
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -66,6 +73,10 @@ class PlanetSurface:
         )
         # No swell ocean: the terrain draws the sea itself
         self.terrain.set_sea_surface(True)
+        # Solid to ships, munitions and sensors, the sea surface included. Raises
+        # NativeCollisionError if the native library is missing or built for
+        # another Panda3D series.
+        self.terrain.enable_collision(CollisionLayers.TERRAIN_INTO)
 
     @property
     def loading(self) -> bool:

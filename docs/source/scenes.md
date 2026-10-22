@@ -123,6 +123,13 @@ level (`terrain/levels/demo.yaml` and its stamps).
   minute. The game loop is paused then, so the generator drives the terrain.
 - **Sea.** There is no swell ocean: the terrain draws the sea itself
   (`set_sea_surface(True)`).
+- **Solid.** `enable_collision(CollisionLayers.TERRAIN_INTO)` adds an
+  into-only `"terrain"` collision node, owned by WorldBuilder's
+  `TerrainSurface`, so ships, munitions and sensors hit it through the usual
+  terrain handlers (see [docs/game.md](game.md)), the sea surface included.
+  Only drawn chunks within 100 km are solid, at the drawn level of detail:
+  coarser away from the player. Without the native collision library built
+  for this Panda3D series, building the scene raises `NativeCollisionError`.
 - **Quality.** The terrain is built with the `terrain` section of the `world`
   graphics settings.
 
