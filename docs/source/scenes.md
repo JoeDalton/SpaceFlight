@@ -4,7 +4,7 @@
 asteroid fields, ocean and volumetric clouds — as independent, game-agnostic
 pieces assembled by a per-level `Scene` subclass. It all lives in
 [`src/space_flight/scenes/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/),
-except the ocean surface and the clouds, which come from
+except the ocean surface, the clouds and the planet terrain, which come from
 [WorldBuilder](https://github.com/JoeDalton/WorldBuilder); the per-class API
 is in the [code reference](apidocs/index.rst).
 
@@ -36,6 +36,7 @@ is in the [code reference](apidocs/index.rst).
 | `asteroids` | `SceneAsteroids` | three asteroid fields (one static, two rotating) | purple skybox, lighting, dust |
 | `lava_planet` | `SceneLavaPlanet` | three asteroid fields | lava-toned lighting, dust, 2D lava planet, Imperial Star Destroyer (no skybox) |
 | `ocean_planet` | `SceneOcean` | `Ocean` (geometric swell on), `Clouds` | dusk skybox, 2D terran planet, lighting, dust |
+| `earthlike_planet` | `SceneEarthlike` | `PlanetSurface` (terrain and sea) | dusk skybox, lighting, dust, then waits for the ground to load |
 | `debug` | `SceneDebug` | nothing | test skybox, lighting |
 
 `clean()` tears the owned pieces down. Only `SceneOcean.build_upfront` also
@@ -44,6 +45,10 @@ upload) while the screen is black, and it must run after the player exists:
 the ocean's reflection camera copies the player camera's lens. `SceneOcean`
 passes one `HAZE_COLOR` to both the ocean and the clouds so they meet at the
 horizon.
+
+A scene can also update things each frame after the render origin has moved
+onto the player: `FlightState` calls `scene.update_after_recenter()` right
+after `recenter_render_origin()` (a no-op by default).
 
 ## Static environment pieces
 
@@ -94,6 +99,32 @@ for how they work). The game adds only what is game-specific:
   the scene is built because the ocean's reflection camera copies the lens:
   Panda's default 100 km clips the outermost cloud shell and keeps the ocean
   horizon in view only up to 785 m of altitude.
+
+## Planet terrain — from WorldBuilder
+
+**[`planet_surface.py`](../../src/space_flight/scenes/planet_surface.py)**'s
+`PlanetSurface` builds WorldBuilder's spherical `Terrain` from a WorldBuilder
+level file (planet preset, stamps, paints). `SceneEarthlike` uses
+`datafiles/worlds/earthlike_demo/`, an unchanged copy of WorldBuilder's demo
+level (`terrain/levels/demo.yaml` and its stamps).
+
+- **Placement.** The planet is not rotated: its centre sits one radius below
+  the world origin, so the ground under the origin is the planet's +z pole,
+  with sea level at z = 0 there. The demo level's hand-made features sit far
+  away, around its reference latitude, and are not seen. The surface curves
+  away from z = 0 with distance (about 80 m at 10 km on the 600 km planet);
+  the flight model stays flat.
+- **Render origin.** The terrain hangs under `render`, not `root_node`, and
+  rebases itself in float64: `update_after_recenter` passes it the player's
+  world position each frame, after `recenter_render_origin`.
+- **Loading.** The ground takes about 10 s to load. `build_decomposed` ends
+  with `PlanetSurface.wait_until_loaded`, which keeps the hyperspace tunnel
+  open until `Terrain.loading` has stayed False for half a second, at most a
+  minute. The game loop is paused then, so the generator drives the terrain.
+- **Sea.** There is no swell ocean: the terrain draws the sea itself
+  (`set_sea_surface(True)`).
+- **Quality.** The terrain is built with the `terrain` section of the `world`
+  graphics settings.
 
 ## Where things live
 

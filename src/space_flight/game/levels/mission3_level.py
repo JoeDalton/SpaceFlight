@@ -73,6 +73,8 @@ ALL_CLEAR_VICTORY_DELAY_S = 7
 FACING_NORTH = [1, 0, 0, 0]
 FACING_SOUTH = [0, 0, 0, 1]
 
+PLAYER_POSITION = [0, -2600, 250]
+
 TRANSPORTS = WaveSpec(
     name="transports",
     ship_model=[("cr-90", 1), ("gr-75", 2)],  # leader, then two wingmen
@@ -159,18 +161,17 @@ def build_mission3_upfront(game: FlightState):
     Build the heavy, up-front part of the level — run synchronously on a black
     screen BEFORE the hyperspace animation starts.
 
-    This is the player plus the scene's GPU-heavy objects (ocean, cloud field),
-    whose one-time first-render preparation would otherwise spike a frame in the
-    middle of the animation. The player is created here first because the scene's
-    ocean reflection camera copies the player camera's lens.
+    This is the player plus the scene's terrain (shaders, textures, worker
+    processes); its ground is loaded during the animation. The whole mission
+    flies over the shallow sea of the earth-like demo world.
 
     :param game: The game/flight state
     """
     build_upfront(
         game,
-        scene_name="ocean_planet",
+        scene_name="earthlike_planet",
         player_ship_type="a-wing",
-        player_position=[0, -2600, 250],
+        player_position=PLAYER_POSITION,
     )
 
 

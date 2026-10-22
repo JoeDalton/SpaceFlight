@@ -53,7 +53,7 @@ def build_mission3_upfront(game):
     # The player, then the scene's up-front objects (game/levels/common.py)
     build_upfront(
         game,
-        scene_name="ocean_planet",
+        scene_name="earthlike_planet",
         player_ship_type="a-wing",
         player_position=[0, -2600, 250],
     )

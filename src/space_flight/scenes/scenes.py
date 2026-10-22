@@ -7,11 +7,13 @@ import numpy as np
 from panda3d.core import LVecBase3f, Vec3
 from world_builder.clouds import Clouds
 
+from space_flight import DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.lighting import Lighting
 from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D
+from space_flight.scenes.planet_surface import PlanetSurface
 from space_flight.scenes.skybox import Skybox
 
 if TYPE_CHECKING:
@@ -20,13 +22,15 @@ if TYPE_CHECKING:
 
 def scene_factory(
     game: FlightState, scene_name: str
-) -> SceneAsteroids | SceneLavaPlanet | SceneOcean | SceneDebug:
+) -> SceneAsteroids | SceneLavaPlanet | SceneOcean | SceneEarthlike | SceneDebug:
     if scene_name == "asteroids":
         return SceneAsteroids(game=game)
     if scene_name == "lava_planet":
         return SceneLavaPlanet(game=game)
     if scene_name == "ocean_planet":
         return SceneOcean(game=game)
+    if scene_name == "earthlike_planet":
+        return SceneEarthlike(game=game)
     if scene_name == "debug":
         return SceneDebug(game=game)
     raise NotImplementedError(f"Unknown scene {scene_name}")
@@ -39,6 +43,13 @@ class Scene:
     ):
         self.game = game
         self.up_direction = np.array([0, 0, 1])
+
+    def update_after_recenter(self):
+        """
+        Per-frame update of what must follow the render origin once it has
+        been moved onto the player (see FlightState.recenter_render_origin).
+        Nothing by default.
+        """
 
 
 class SceneOcean(Scene):
@@ -167,6 +178,74 @@ class SceneOcean(Scene):
 
         # self.big_rotating_asteroid_field.clean()
         # self.big_rotating_asteroid_field = None
+
+
+class SceneEarthlike(Scene):
+    """
+    A copy of WorldBuilder's earth-like demo world: its spherical terrain, sea
+    included, under a daytime sun.
+    """
+
+    LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
+    # Toward the sun: high in the south-east sky
+    SUN_DIRECTION = np.array([0.4, -0.5, 0.75])
+    SUN_COLOR = np.array([1.0, 0.95, 0.85, 1])
+    AMBIENT_COLOR = np.array([0.3, 0.35, 0.45, 1])
+
+    def build_upfront(self):
+        """
+        Build the terrain (its shaders, textures and worker processes) on the
+        black screen, before the hyperspace animation starts. Its chunks are
+        loaded during the animation (see build_decomposed).
+        """
+        self.planet = PlanetSurface(
+            game=self.game,
+            level_path=self.LEVEL_PATH,
+            sun_direction=self.SUN_DIRECTION / np.linalg.norm(self.SUN_DIRECTION),
+        )
+
+    def build_decomposed(self) -> Generator[str | None, None, None]:
+        """
+        Build the rest of the scene incrementally, then hold the loading
+        animation until the ground around the player is loaded: ground not
+        drawn yet is not solid.
+        """
+        self.skybox = Skybox(game=self.game, name="dusk")
+        yield "skybox"
+
+        self.lighting = Lighting(
+            game=self.game,
+            directional_color=self.SUN_COLOR,
+            directional_direction=self.SUN_DIRECTION,
+            ambient_color=self.AMBIENT_COLOR,
+        )
+        yield "lighting"
+
+        self.speed_dust_cloud = SpeedDustCloud(
+            game=self.game, colors=["blue", "yellow", "white"], defer_build=True
+        )
+        yield from self.speed_dust_cloud.build()
+
+        # The game loop is paused while loading: this drives the terrain
+        yield from self.planet.wait_until_loaded(self.game.player.pawn.position)
+
+    def update_after_recenter(self):
+        """Detail the terrain around the player, now at the render origin."""
+        self.planet.update(self.game.player.pawn.position)
+
+    def clean(self):
+        """
+        Cleans the SceneEarthlike
+        """
+        self.planet.clean()
+        self.planet = None
+        self.skybox.clean()
+        self.skybox = None
+        self.speed_dust_cloud.clean()
+        self.speed_dust_cloud = None
+        self.lighting.clean()
+        self.lighting = None
+        self.game = None
 
 
 class SceneAsteroids(Scene):

@@ -143,3 +143,30 @@ def test_only_the_first_ending_counts():
 
     assert fs.outcome == "victory"
     fs.app.state_manager.push.assert_called_once()
+
+
+def test_world_update_moves_the_scene_after_the_render_origin():
+    """
+    The terrain is placed around the player at the render origin: the scene
+    must be updated after recenter_render_origin, in the same frame.
+    """
+    fs = object.__new__(FlightState)
+    fs.is_paused = False
+    order = MagicMock()
+    for name in ("delayed_methods", "destructibles", "collision_system"):
+        setattr(fs, name, MagicMock())
+    fs.interactions = MagicMock()
+    fs.integrator = MagicMock()
+    fs.method_lists = {}
+    fs.player = MagicMock(is_dying=False)
+    fs.player.pawn.health = 1.0
+    fs.scene = order.scene
+    fs.recenter_render_origin = order.recenter_render_origin
+    task = SimpleNamespace(cont="cont")
+
+    assert fs.update_game_world_task(task) == "cont"
+
+    assert [c[0] for c in order.mock_calls] == [
+        "recenter_render_origin",
+        "scene.update_after_recenter",
+    ]

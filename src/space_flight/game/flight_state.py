@@ -206,6 +206,7 @@ class FlightState(BaseState):
 
         # Render the first frame around the player too
         self.recenter_render_origin()
+        self.scene.update_after_recenter()
 
         # Game tasks. They stay idle until is_paused is cleared by resume().
         self.game_world_task = self.app.taskMgr.add(
@@ -332,6 +333,7 @@ class FlightState(BaseState):
                 method()
         # After the actors: move() has written (and sanitised) the player's pose
         self.recenter_render_origin()
+        self.scene.update_after_recenter()
         # Handle the death of the player: send it into an out-of-control tumble
         # first, and only show the level-end screen once the death spin finishes.
         if self.player.pawn.health <= 0:
