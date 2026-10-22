@@ -164,6 +164,7 @@ def test_world_update_moves_the_scene_after_the_render_origin():
     fs.scene = order.scene
     fs.scene.depth_ranges.return_value = (2000.0, 5e5)
     fs.split_depth = order.split_depth
+    fs.translucent_volumes = set()
     fs.recenter_render_origin = order.recenter_render_origin
     task = SimpleNamespace(cont="cont")
 
@@ -175,7 +176,9 @@ def test_world_update_moves_the_scene_after_the_render_origin():
         "split_depth.update",
         "scene.update_after_recenter",
     ]
-    order.split_depth.update.assert_called_once_with(2000.0, 5e5)
+    order.split_depth.update.assert_called_once_with(
+        2000.0, 5e5, translucent=fs.translucent_volumes
+    )
 
 
 def test_without_split_cameras_the_scene_still_follows_the_origin():
@@ -213,3 +216,18 @@ def test_headless_entry_centres_render_on_the_player_before_building():
     names = [c[0] for c in order.mock_calls]
     assert names.index("upfront") < names.index("recenter_render_origin")
     assert names.index("recenter_render_origin") < names.index("build_complete")
+
+
+def test_the_split_keeps_off_translucent_volumes():
+    """The split cameras get the scene's ranges and the translucent volumes
+    (shield bubbles) to keep the split off."""
+    fs = object.__new__(FlightState)
+    fs.scene = SimpleNamespace(depth_ranges=lambda: (2000.0, 6e5))
+    fs.split_depth = MagicMock()
+    fs.translucent_volumes = {"bubble"}
+
+    fs.update_split_depth()
+
+    fs.split_depth.update.assert_called_once_with(
+        2000.0, 6e5, translucent=fs.translucent_volumes
+    )

@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from world_builder import PLANET_RADIUS_M  # noqa: F401 - re-exported for the game
 
 from space_flight import _version
 
@@ -32,8 +31,6 @@ EPSILON_TOLERANCE = 1.0e-5
 # rest (see FlightState.split_depth); the rear-view mirror and the ocean's
 # reflection camera keep this whole range.
 CAMERA_FAR_M = 600000.0
-# PLANET_RADIUS_M (imported above) is shared by the curved ocean and the cloud
-# deck, both from WorldBuilder, which must droop identically.
 
 LOGGER = logging.getLogger()
 LOGGER.handlers = []

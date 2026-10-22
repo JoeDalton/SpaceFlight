@@ -8,9 +8,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import LVecBase3f, Vec3
 from world_builder.atmosphere import AtmosphereParams
-from world_builder.clouds import Clouds
 from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import PRESETS
 from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook, World
@@ -20,7 +18,6 @@ from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
 from space_flight.scenes.asteroid_field import AsteroidField
 from space_flight.scenes.lighting import Lighting
-from space_flight.scenes.ocean import Ocean
 from space_flight.scenes.planet_2d import Planet2D
 from space_flight.scenes.skybox import Skybox
 
@@ -78,13 +75,11 @@ def wait_until_loaded(
 
 def scene_factory(
     game: FlightState, scene_name: str
-) -> SceneAsteroids | SceneLavaPlanet | SceneOcean | SceneEarthlike | SceneDebug:
+) -> SceneAsteroids | SceneLavaPlanet | SceneEarthlike | SceneDebug:
     if scene_name == "asteroids":
         return SceneAsteroids(game=game)
     if scene_name == "lava_planet":
         return SceneLavaPlanet(game=game)
-    if scene_name == "ocean_planet":
-        return SceneOcean(game=game)
     if scene_name == "earthlike_planet":
         return SceneEarthlike(game=game)
     if scene_name == "debug":
@@ -119,134 +114,6 @@ class Scene:
         been moved onto the player (see FlightState.recenter_render_origin).
         Nothing by default.
         """
-
-
-class SceneOcean(Scene):
-    # Sun lighting, shared by the cloud field (build_upfront) and the directional
-    # light (build_decomposed).
-    SUN_DIRECTION = [-0.35, -1, 0.05]
-    SUN_COLOR = np.array([1.0, 0.8, 0.2, 1])
-    AMBIENT_COLOR = np.array([0.2, 0.2, 0.4, 0.2])
-    # What distant things fade to. ONE value, shared by the ocean and the cloud
-    # field: both curve over the planet and meet at the horizon, so if they faded
-    # to different colours they would not join.
-    HAZE_COLOR = AMBIENT_COLOR[:3]
-
-    def build_upfront(self):
-        """
-        Build the objects whose one-time GPU preparation (shader compile, vertex
-        munge, buffer upload) is heavy enough to spike a frame, and force that
-        prep now — on a black screen, BEFORE the hyperspace animation starts —
-        so the animation that follows stays smooth.
-
-        Requires the player to already exist: the ocean's reflection camera
-        copies the player camera's lens.
-        """
-        # The quality the player chose in the graphics settings
-        world = self.game.app.graphics_settings.world_settings()
-
-        # Ocean (geometry, reflection buffer, shader). Curved over the planet, so
-        # it has a real horizon that dips and bows with altitude.
-        self.ocean = Ocean(
-            game=self.game,
-            geometric_swell=True,
-            haze_color=LVecBase3f(*self.HAZE_COLOR),
-            settings=world.settings_for(Ocean),
-        )
-
-        # Volumetric clouds, lit to match the dusk sun. The lighting is live, so
-        # moving the sun here (or later, via clouds.field.set_sun) relights them
-        # with no rebuild.
-        self.clouds = Clouds(
-            game=self.game,
-            sun_direction=Vec3(*self.SUN_DIRECTION),
-            sun_color=self.SUN_COLOR[:3],
-            sky_color=self.AMBIENT_COLOR[:3],
-            haze_color=self.HAZE_COLOR,
-            settings=world.settings_for(Clouds),
-        )
-
-        # Force the one-time GPU preparation now (textures, vertex buffers and
-        # shader compile) so the first time these draw during the animation
-        # there is no upload/compile spike. We're on a black screen here, so the
-        # cost is invisible.
-        gsg = self.game.app.win.get_gsg()
-        if gsg is not None:
-            self.ocean.base_node.prepare_scene(gsg)
-            self.clouds.field.node.prepare_scene(gsg)
-
-    def build_decomposed(self) -> Generator[str | None, None, None]:
-        """
-        Build the rest of the scene incrementally, yielding between components
-        so the loading animation keeps rendering. These are all light and their
-        first-render GPU prep is cheap, so they need no special handling.
-        """
-        # Skybox
-        self.skybox = Skybox(game=self.game, name="dusk")
-        yield "skybox"
-
-        # Planet
-        self.planet = Planet2D(
-            game=self.game,
-            type="terran",
-            scale=1000,
-            position=np.array([10000.0, 0.0, 2000.0]),
-            orientation=np.quaternion(np.sqrt(2) / 2, 0, 0, -np.sqrt(2) / 2),
-        )
-        yield "planet"
-
-        # Lights
-        self.lighting = Lighting(
-            game=self.game,
-            directional_color=self.SUN_COLOR,
-            directional_direction=self.SUN_DIRECTION,
-            ambient_color=[0.2, 0.3, 0.4, 0.2],
-        )
-        yield "lighting"
-
-        # Speed dust effect (100 nodes — build in chunks across frames)
-        self.speed_dust_cloud = SpeedDustCloud(
-            game=self.game, colors=["blue", "yellow", "white"], defer_build=True
-        )
-        yield from self.speed_dust_cloud.build()
-
-        # # Star destroyer
-        # self.isd = self.game.root_node.attachNewNode("isd_instance")
-        # isd_path = (
-        #     DATAFILES_PATH
-        #     / "models/star_wars_imperial-class_star_destroyer/scene.gltf"
-        # )
-        # self.game.app.asset_manager.instantiate_3d_model_to_node(
-        #     path=isd_path,
-        #     parent_node=self.isd,
-        # )
-        # self.isd.reparent_to(self.game.root_node)
-        # self.isd.set_pos(2000, 3000, 1000)
-        # self.isd.setP(90)
-        # self.isd.set_scale(1)
-        # yield "isd"
-
-    def clean(self):
-        """
-        Cleans the SceneOcean
-        """
-        # self.isd.removeNode()
-        self.ocean.clean()
-        self.ocean = None
-        self.clouds.clean()
-        self.clouds = None
-        self.skybox.clean()
-        self.skybox = None
-        self.planet.clean()
-        self.planet = None
-        self.speed_dust_cloud.clean()
-        self.speed_dust_cloud = None
-        self.lighting.clean()
-        self.lighting = None
-        self.game = None
-
-        # self.big_rotating_asteroid_field.clean()
-        # self.big_rotating_asteroid_field = None
 
 
 class SceneEarthlike(Scene):
@@ -473,7 +340,7 @@ class SceneLavaPlanet(Scene):
     def build_decomposed(self) -> Generator[str, None, None]:
         """
         Build the lava-planet scene incrementally (see
-        SceneOcean.build_decomposed): lighting, dust, planet and Star Destroyer.
+        SceneAsteroids.build_decomposed): lighting, dust, planet and Star Destroyer.
         """
         # Lights
         self.lighting = Lighting(
@@ -522,7 +389,7 @@ class SceneDebug(Scene):
 
     def build_decomposed(self) -> Generator[str, None, None]:
         """
-        Build the debug scene incrementally (see SceneOcean.build_decomposed):
+        Build the debug scene incrementally (see SceneAsteroids.build_decomposed):
         a skybox and lighting.
         """
         # Skybox

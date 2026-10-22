@@ -691,3 +691,21 @@ def test_model_shield_renames_its_baked_colliders():
     assert collision_np.node().getName() == "shield"
     assert collision_np.node().getIntoCollideMask() == into_mask
     assert collision_np.getPythonTag("owner") is shield
+
+
+# ---------------------------
+# Depth split
+# ---------------------------
+
+
+def test_clean_forgets_the_bubble_as_a_translucent_volume():
+    """The depth split stops keeping off a cleaned shield's bubble."""
+    shield = make_shield_without_init()
+    shield.id = "shield-id"
+    visual = shield.model.visual
+    volumes = {visual, "another"}
+    shield.game.translucent_volumes = volumes
+
+    shield.clean()
+
+    assert volumes == {"another"}

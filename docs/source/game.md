@@ -24,8 +24,9 @@ HUD, and drives the per-frame update.
   hyperspace-jump animation
   ([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)):
   1. the level's upfront function runs synchronously on a black screen for the
-     GPU-heavy one-time work (player, ocean and its reflection, cloud
-     field), so its first-render compile spike is invisible;
+     GPU-heavy one-time work (the player, then the scene's heavy objects, such
+     as a planet's whole world), so its first-render compile spike is
+     invisible;
   2. the loading overlay then advances `_build_generator` (the rest of the
      scene, then the mission) one step per frame via `_advance_build`,
      during its looping "inside" phase;
@@ -66,9 +67,11 @@ The scene graph has two frames that are easy to confuse:
 
 - **`game.root_node` is the world frame.** It is the single child of
   `render` created by `initialize_game_structure()`, and every gameplay node
-  hangs under it: ships, munitions, asteroids, the ocean, clouds, skybox,
-  lights. A position relative to `root_node` is a world position, the same
-  thing physics stores in `pawn.position`.
+  hangs under it: ships, munitions, asteroids, skyboxes, lights. A position
+  relative to `root_node` is a world position, the same thing physics stores
+  in `pawn.position`. A planet's world (WorldBuilder's `World`) is the
+  exception: it hangs under `render` and places itself around the camera in
+  float64, from the player's world position.
 - **`render` is the frame Panda3D draws from.** The engine composes every
   node's net transform from `render` down, in float32.
 
@@ -151,6 +154,16 @@ Each camera gets the whole buffer for its own range.
   skyboxes and 2D planets lie beyond the split, so only the far camera draws
   them.
 - A planet scene follows its ground instead.
+
+**Translucent volumes.** The near camera reaches 2% past the split, so the
+two ranges never leave a gap. A big translucent volume with no depth write,
+such as a shield bubble, would be blended twice in that band and show a ring
+at the split distance. So the split never cuts one:
+- owners register their volumes in `FlightState.translucent_volumes` (`Shield`
+  does for its bubble);
+- `update_split_depth` hands them to `SplitDepthCameras.update(...,
+  translucent=...)`, which moves the split in front of any it would cut, or
+  past it from inside (see WorldBuilder's `world_builder.depth`).
 
 **What reads the lens.**
 - The main lens (`app.camLens`) now ends at the split. Its near and far do not
@@ -239,8 +252,8 @@ entry into game effects.
     collision events are handled on the next frame, once the munition has
     moved on. The launch point does not move, and a shielded ship is slow next
     to a munition, so its bubble has barely moved since the launch.
-    On terrain, the sparks follow its material: an ocean or asteroid field
-    declares one (`material`), while a planet's terrain, whose ground varies,
+    On terrain, the sparks follow its material: an asteroid field declares
+    one (`material`), while a planet's terrain, whose ground varies,
     gives the one at the hit point (`material_at`: `"water"` or a biome);
     `_TERRAIN_SPARK_PRESET` maps water and snow to ice, and anything else to
     rock.

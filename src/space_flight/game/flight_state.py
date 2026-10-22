@@ -36,6 +36,7 @@ from space_flight.ui.input_context import (
 
 if TYPE_CHECKING:
     from direct.task import Task
+    from panda3d.core import NodePath
 
     from space_flight.game.levels import LevelEntry
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
@@ -70,6 +71,11 @@ class FlightState(BaseState):
         # whole depth buffer, so distant ground does not shimmer. Built once
         # the level's up-front objects exist; None headless.
         self.split_depth: SplitDepthCameras | None = None
+        # Big translucent volumes (shield bubbles) the depth split must not
+        # cut: blended twice where the two cameras overlap, they would show a
+        # ring there (see world_builder.depth). Their owners add and remove
+        # them.
+        self.translucent_volumes: set[NodePath] = set()
 
     def enter(self):
         """
@@ -107,7 +113,7 @@ class FlightState(BaseState):
         # main lens once, which the split then shortens to the near range.
         # After the render-scale pipeline too, whose buffer it draws into.
         self.split_depth = SplitDepthCameras(self.app)
-        self.split_depth.update(*self.scene.depth_ranges())
+        self.update_split_depth()
 
         # Phase 2 — play the hyperspace animation; the rest of the level is built
         # incrementally during its looping "inside" phase. The overlay declares
@@ -382,8 +388,17 @@ class FlightState(BaseState):
         """
         self.recenter_render_origin()
         if self.split_depth is not None:
-            self.split_depth.update(*self.scene.depth_ranges())
+            self.update_split_depth()
         self.scene.update_after_recenter()
+
+    def update_split_depth(self):
+        """
+        Set the split cameras' ranges for this frame: the scene's, the split
+        kept off the translucent volumes (see world_builder.depth).
+        """
+        self.split_depth.update(
+            *self.scene.depth_ranges(), translucent=self.translucent_volumes
+        )
 
     @property
     def depth_far(self) -> float:

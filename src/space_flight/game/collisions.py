@@ -13,7 +13,6 @@ from panda3d.core import (
     CollisionHandlerEvent,
     CollisionHandlerQueue,
     CollisionNode,
-    CollisionPlane,
     CollisionSegment,
     CollisionSolid,
     CollisionSphere,
@@ -21,7 +20,6 @@ from panda3d.core import (
     CollisionTube,
     LPoint3,
     NodePath,
-    Plane,
     Vec3,
 )
 
@@ -41,7 +39,6 @@ if TYPE_CHECKING:
     from space_flight.ai.collision_sensor import CollisionSensor
     from space_flight.game.flight_state import FlightState
     from space_flight.scenes.asteroid_field import AsteroidField
-    from space_flight.scenes.ocean import Ocean
     from space_flight.weapons import Munition
 
     # Any object that can own a collider (stored as its "owner" python tag).
@@ -49,7 +46,6 @@ if TYPE_CHECKING:
         Ship
         | SubSystem
         | Shield
-        | Ocean
         | AsteroidField
         | TerrainSurface
         | Munition
@@ -71,8 +67,8 @@ COLLISION_DAMAGE_FACTOR = 0.05
 HIT_EXPLOSION_CHANCE = 1.0 / 3.0
 
 #: Terrain material → spark preset. Each terrain object declares a material
-#: attribute (e.g. Ocean.material == "water", AsteroidField.material ==
-#: "rock"), or, for a planet's terrain whose ground varies, a
+#: attribute (e.g. AsteroidField.material == "rock"), or, for a planet's
+#: terrain whose ground varies, a
 #: material_at(point, relative_to) method giving "water" or the biome there
 #: (WorldBuilder's TerrainSurface). Water and snow read as ice, rock as
 #: gray-brown, metal as metal. Terrain with no/unknown material (the other
@@ -1128,27 +1124,3 @@ def attach_collision_segment(
     """
     solid = CollisionSegment(relative_start_position, relative_end_position)
     return _attach_solid(game, name, solid, collider_type, parent_node, parent_object)
-
-
-def attach_collision_plane(
-    game: FlightState,
-    name: str,
-    collider_type: str,
-    parent_node: NodePath,
-    parent_object: ColliderOwner,
-) -> NodePath:
-    """
-    Attach a collision plane to an existing node facing this node's z-up
-
-    :param game: The game stage
-    :param name: The name of the collision plane
-    :param collider_type: The nature of the collider, defines from and into bitmasks
-    :param parent_node: Its parent_node
-    :param parent_object: Its parent_object
-    :return: The node path to the collision plane
-    """
-    # Define a plane: normal + point
-    plane = Plane(Vec3(0, 0, 1), Vec3(0, 0, 0))  # Z-up plane at Z=0
-    return _attach_solid(
-        game, name, CollisionPlane(plane), collider_type, parent_node, parent_object
-    )
