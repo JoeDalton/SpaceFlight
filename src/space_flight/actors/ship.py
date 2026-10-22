@@ -75,6 +75,30 @@ _TURN_RATE_PARABOLA = np.polyfit(
 )
 
 
+def _merge_correction(stored: np.ndarray, correction: np.ndarray) -> np.ndarray:
+    """
+    Combine one contact's collision correction with those already stored this
+    frame.
+
+    Each correction lies along its contact normal, and is computed from the
+    ship's state at the start of the frame. So it is only added along its own
+    direction, minus what the stored corrections already push that way: two
+    contacts with (nearly) parallel normals, e.g. a subsystem and its host's
+    hull, keep the larger push instead of doubling the bounce, while opposite
+    ones (a ship squeezed between two others) add up.
+
+    :param stored: The corrections stored so far this frame
+    :param correction: The new contact's correction
+    :return: The combined correction
+    """
+    correction_norm = magnitude(correction)
+    if correction_norm < 1e-12:
+        return stored
+    direction = correction / correction_norm
+    already_m = max(float(np.dot(stored, direction)), 0.0)
+    return stored + direction * max(correction_norm - already_m, 0.0)
+
+
 def turn_rate_scale(throttle: float) -> float:
     """
     Fraction of the max turn rates available at a given throttle command.
@@ -904,15 +928,20 @@ class Ship(Pawn):
         Instead, we use impulse and position correction
 
         The corrections are stored and applied (then reset) by the next
-        :meth:`move_ship_physics`.
+        :meth:`move_ship_physics`. Several contacts in one frame combine (see
+        :func:`_merge_correction`), so none of them is lost.
 
         :param damage: The damage to take
         :param velocity_correction: The velocity correction to apply
         :param position_correction: The position correction to apply
         """
         self.apply_damage(damage=damage, damage_type=PHYSICAL)
-        self.velocity_correction = velocity_correction
-        self.position_correction = position_correction
+        self.velocity_correction = _merge_correction(
+            self.velocity_correction, velocity_correction
+        )
+        self.position_correction = _merge_correction(
+            self.position_correction, position_correction
+        )
 
     def adjust_engine_pitch(self, throttle: float):
         """

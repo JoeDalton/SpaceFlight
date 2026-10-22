@@ -79,14 +79,12 @@ _EVENT_HANDLERS = {
     # Weapon hit = one time events
     "laser-into-ship": "munition_into_destructible",
     "laser-into-terrain": "munition_into_terrain",
-    "laser-into-turret": "munition_into_destructible",
     "laser-into-subsystem": "munition_into_destructible",
     "laser-into-shield": "munition_into_shield",
     # Ordnance hits reuse the laser damage handlers (same projectile
     # interface), and are stopped by flares.
     "ordnance-into-ship": "munition_into_destructible",
     "ordnance-into-terrain": "munition_into_terrain",
-    "ordnance-into-turret": "munition_into_destructible",
     "ordnance-into-subsystem": "munition_into_destructible",
     "ordnance-into-shield": "munition_into_shield",
     "ordnance-into-flare": "ordnance_into_flare",
@@ -95,8 +93,6 @@ _EVENT_HANDLERS = {
     "ship-again-ship": "ship_into_ship_pushback",
     "ship-into-terrain": "ship_into_terrain",
     "ship-again-terrain": "ship_into_terrain_pushback",
-    "ship-into-turret": "ship_into_massive_actor",
-    "ship-again-turret": "ship_into_massive_actor_pushback",
     "ship-into-subsystem": "ship_into_subsystem",
     "ship-again-subsystem": "ship_into_subsystem_pushback",
 }
@@ -260,7 +256,7 @@ def _normalize(vector: Vec3) -> Vec3:
 def _immovable_bounce(normal: Vec3, normal_relative_velocity: float) -> np.ndarray:
     """
     Velocity correction bouncing a ship off something that does not move in
-    response (terrain, a massive actor), if the two are still approaching.
+    response (terrain), if the two are still approaching.
 
     :param normal: The unit contact normal, pointing towards the ship
     :param normal_relative_velocity: The relative velocity along the normal
@@ -818,58 +814,6 @@ class CollisionSystem:
             damage=self.collision_damage(ship_into, normal_relative_velocity),
             velocity_correction=velocity_correction,
             position_correction=position_correction,
-        )
-
-    def ship_into_massive_actor(self, entry: CollisionEntry):
-        """
-        Handle the case where a ship hits a massive actor for the first time
-
-        :param entry: Panda3d's description of the collision
-        """
-        self._ship_contact(
-            entry,
-            self.ship_into_massive_actor_pushback,
-            "massive actor",
-            check_same_vehicle=False,
-        )
-
-    def ship_into_massive_actor_pushback(self, entry: CollisionEntry):
-        """
-        Handle the case where a ship hits massive actor.
-        We don't use collision forces because they are too stiff.
-        Instead, we use impulse correction
-
-        :param entry: Panda3d's description of the collision
-        """
-        ship_from = entry.from_node_path.python_tags["owner"]
-        massive_actor_into = entry.into_node_path.python_tags["owner"]
-
-        # Handle pathologic cases
-        if ship_from is None:
-            return
-        if massive_actor_into is None:
-            return
-
-        # Get impact parameters
-        normal = self._world_normal(entry)
-        relative_velocity = ship_from.speed - massive_actor_into.speed
-        normal_relative_velocity = np.dot(normal, relative_velocity)
-
-        # Compute impulse correction
-        velocity_correction = _immovable_bounce(normal, normal_relative_velocity)
-        # Position correction is too complicated to compute with arbitrary mesh
-        # => Rely only on elastic impact to push back
-
-        # Apply damage to the ship
-        ship_from.push(
-            damage=self.collision_damage(ship_from, normal_relative_velocity),
-            velocity_correction=velocity_correction,
-            position_correction=np.zeros(3),
-        )
-        # Apply damage to the massive actor (never the player's, so unscaled)
-        massive_actor_into.apply_damage(
-            damage=COLLISION_DAMAGE_FACTOR * normal_relative_velocity**2,
-            damage_type=PHYSICAL,
         )
 
     def ship_into_subsystem(self, entry: CollisionEntry):

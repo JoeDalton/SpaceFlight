@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Level 1: ion shots only and teammates warn then ground the player who shoots them #170
 
+### Fixed
+
+- Fix collision bugs #171
+
 
 
 ## [0.3.0] - 2026-10-18
