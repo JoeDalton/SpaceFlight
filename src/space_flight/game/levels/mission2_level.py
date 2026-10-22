@@ -17,7 +17,11 @@ from typing import TYPE_CHECKING, Iterator, Sequence
 
 import numpy as np
 
-from space_flight.game.levels.common import build_upfront, relative_position
+from space_flight.game.levels.common import (
+    build_upfront,
+    police_fire,
+    relative_position,
+)
 from space_flight.game.levels.hints import (
     laser_power_hint,
     scan_hint,
@@ -27,7 +31,6 @@ from space_flight.game.scenario import WaveSpec
 from space_flight.game.scenario.conditions import (
     all_of,
     any_of,
-    being_hit,
     near,
 )
 
@@ -221,30 +224,31 @@ def mission2_mission(m: Mission) -> Iterator[None]:
 
     def on_fired_again():
         fired_again.append(True)
-        m.speech(
-            "Three, I said cease fire! That's it, you're grounded.",
-            speaker="Blue Leader",
-        )
         end(
             "defeat",
             "You kept firing on civilians after Blue Leader's order.\n"
             "Your wings are grounded.",
         )
 
-    def warn_civilian_fire():
-        m.speech("Blue Three, cease fire! Those are civilians!", speaker="Blue Leader")
-        endings.append(
-            m.on(
-                all_of(
-                    m.after(CEASE_FIRE_GRACE_S), being_hit(civilians, by_player=True)
-                ),
-                on_fired_again,
-            )
-        )
-
     # Only the player's fire counts: a civilian grazing an asteroid is no one's
     # fault
-    m.on(being_hit(civilians, by_player=True), warn_civilian_fire)
+    endings.append(
+        police_fire(
+            m,
+            civilians,
+            [
+                [("Blue Leader", "Blue Three, cease fire! Those are civilians!")],
+                [
+                    (
+                        "Blue Leader",
+                        "Three, I said cease fire! That's it, you're grounded.",
+                    )
+                ],
+            ],
+            on_fired_again,
+            grace_s=CEASE_FIRE_GRACE_S,
+        )
+    )
     revealed = []
     convoy_killed_by_player = m.kills(convoy, by_player=True)
     smuggler_killed_by_player = m.kills(smuggler, by_player=True)
