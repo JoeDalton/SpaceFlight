@@ -7,7 +7,12 @@ license = ""
 readme = "README.md"
 homepage = "https://github.com/JoeDalton/SpaceFlight"
 repository = "https://github.com/JoeDalton/SpaceFlight"
-include = ["src/space_flight/_version.py", "scripts"]
+# _version.py is generated and git-ignored: list it for the wheel too, which a
+# bare path no longer covers (poetry-core 2 includes it in the sdist only).
+include = [
+  { path = "src/space_flight/_version.py", format = ["sdist", "wheel"] },
+  "scripts",
+]
 
 
 [tool.poetry.dependencies]
@@ -26,9 +31,10 @@ panda3d-simplepbr ="^0.13.1"
 pandas = "^3.0.3"
 pyyaml = "^6.0.3"
 jeepney = {version = "^0.9.0", markers = "sys_platform == 'linux'"}
-# Terrain, ocean and clouds. A tagged release's zip: a plain HTTPS download, so
-# installing needs no git. Bump the tag to take a new WorldBuilder release.
-world_builder = { url = "https://github.com/JoeDalton/WorldBuilder/archive/refs/tags/0.1.0.zip" }
+# Terrain, ocean and clouds. The wheel attached to a tagged release: a plain HTTPS
+# download, so installing needs no git. Not the tag's source zip: GitHub regenerates
+# those and their hash drifts. Bump the tag to take a new WorldBuilder release.
+world_builder = { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.1.0/world_builder-0.1.0-py3-none-any.whl" }
 
 [tool.poetry.group.dev.dependencies]
 cruft = "^2.15.0"
