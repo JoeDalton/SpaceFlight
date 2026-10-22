@@ -173,6 +173,63 @@ def test_push_stores_velocity_and_position_corrections():
     assert concrete.last_damage == 10.0
 
 
+def make_pushable_ship():
+    """A Ship (bypassing __init__) with no stored collision corrections."""
+
+    class ConcreteShip(Ship):
+        def apply_damage(self, damage, damage_type):
+            self.damage_taken = getattr(self, "damage_taken", 0.0) + damage
+
+        def ship_handle_health(self):
+            pass
+
+    ship = object.__new__(ConcreteShip)
+    ship.velocity_correction = np.zeros(3)
+    ship.position_correction = np.zeros(3)
+    return ship
+
+
+def test_push_keeps_every_contact_of_a_frame():
+    """
+    A ship squeezed between two others in one frame gets both pushes, not only
+    the last one, and takes both damages.
+    """
+    ship = make_pushable_ship()
+
+    ship.push(
+        damage=1.0,
+        velocity_correction=np.array([3.0, 0.0, 0.0]),
+        position_correction=np.array([0.5, 0.0, 0.0]),
+    )
+    ship.push(
+        damage=2.0,
+        velocity_correction=np.array([-1.0, 0.0, 0.0]),
+        position_correction=np.array([0.0, 0.2, 0.0]),
+    )
+
+    np.testing.assert_allclose(ship.velocity_correction, [2.0, 0.0, 0.0])
+    np.testing.assert_allclose(ship.position_correction, [0.5, 0.2, 0.0])
+    assert ship.damage_taken == 3.0
+
+
+def test_push_does_not_double_parallel_contacts():
+    """
+    Two contacts pushing the same way in one frame (a subsystem and its host's
+    hull) keep the larger push instead of adding up into a double bounce.
+    """
+    ship = make_pushable_ship()
+
+    for velocity_correction in ([0.0, 0.0, 2.0], [0.0, 0.0, 3.0], [0.0, 0.0, 1.0]):
+        ship.push(
+            damage=0.0,
+            velocity_correction=np.array(velocity_correction),
+            position_correction=np.zeros(3),
+        )
+
+    np.testing.assert_allclose(ship.velocity_correction, [0.0, 0.0, 3.0])
+    np.testing.assert_allclose(ship.position_correction, np.zeros(3))
+
+
 # ---------------------------
 # compute_derivatives: rotation matrix vs the original per-vector rotations
 # ---------------------------

@@ -660,3 +660,34 @@ def test_contains_nothing_in_a_model_bubble():
     shield = make_shield_for_contains("model")
 
     assert not shield.contains(np.zeros(3))
+
+
+# ---------------------------
+# _build_collision
+# ---------------------------
+
+
+def test_model_shield_renames_its_baked_colliders():
+    """
+    A shield built from a model takes the model's baked collision nodes, and
+    names them "shield": collision events are named after the nodes, so the
+    munition hits must read "-into-shield" to reach munition_into_shield.
+    """
+    from panda3d.core import CollisionNode, CollisionSphere, NodePath
+
+    from space_flight.game.collisions import CollisionLayers
+
+    visual = NodePath("visual")
+    baked = CollisionNode("hull_collision")
+    baked.addSolid(CollisionSphere(0, 0, 0, 1))
+    visual.attachNewNode(baked)
+    shield = object.__new__(Shield)
+    shield.model = SimpleNamespace(shape_type="model", visual=visual)
+
+    shield._build_collision(model="shared_bubble")
+
+    collision_np = visual.find("**/+CollisionNode")
+    _, into_mask, _ = CollisionLayers.define_collision_masks("shield")
+    assert collision_np.node().getName() == "shield"
+    assert collision_np.node().getIntoCollideMask() == into_mask
+    assert collision_np.getPythonTag("owner") is shield

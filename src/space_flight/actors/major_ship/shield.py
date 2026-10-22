@@ -165,8 +165,8 @@ class Shield(Destructible):
 
         The dimensions come from :attr:`model` (resolved once when it built the
         mesh), so the collider always matches the visuals. A shared 3D model
-        carries its own (baked) collision geometry, which is re-masked as a shield
-        collider and tagged with this shield as owner.
+        carries its own (baked) collision geometry, which is renamed and re-masked
+        as a shield collider and tagged with this shield as owner.
 
         :param model: The shared-model path (only used for the log message)
         """
@@ -177,6 +177,9 @@ class Shield(Destructible):
             if collision_nodes.isEmpty():
                 LOGGER.warning("Shield model %s carries no collision geometry", model)
             for collision_np in collision_nodes:
+                # Collision events are named after the nodes ("%fn-into-%in"):
+                # the baked names would match no "-into-shield" handler
+                collision_np.node().setName("shield")
                 collision_np.node().setFromCollideMask(from_mask)
                 collision_np.node().setIntoCollideMask(into_mask)
                 collision_np.setPythonTag("owner", self)
