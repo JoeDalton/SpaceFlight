@@ -33,8 +33,8 @@ pyyaml = "^6.0.3"
 jeepney = {version = "^0.9.0", markers = "sys_platform == 'linux'"}
 # Terrain, ocean and clouds. Bump the tag in every URL to take a new WorldBuilder release.
 world_builder = [
-  { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.2.0/world_builder-0.2.0-py3-none-manylinux2014_x86_64.whl", markers = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
-  { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.2.0/world_builder-0.2.0-py3-none-manylinux2014_aarch64.whl", markers = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+  { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.2.0/world_builder-0.2.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", markers = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+  { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.2.0/world_builder-0.2.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", markers = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
   { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.2.0/world_builder-0.2.0-py3-none-win_amd64.whl", markers = "sys_platform == 'win32'" },
   { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.2.0/world_builder-0.2.0-py3-none-macosx_11_0_universal2.whl", markers = "sys_platform == 'darwin'" },
 ]

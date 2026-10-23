@@ -6,7 +6,9 @@ https://github.com/JoeDalton/SpaceFlight
 
 A home-made space combat flight simulator, heavily inspired by Star Wars Squadrons, written in Python.
 
-Most graphical assets are borrowed from Creative Commons sources; their licence files sit alongside the assets.
+This game is dependent on WorldBuilder, which provides vast procedural worlds.
+
+Most ship assets are borrowed from Creative Commons sources; their licence files sit alongside the assets.
 
 <img width="2560" height="1440" alt="asteroid_screenshot" src="https://github.com/user-attachments/assets/75727762-0fe6-4b0f-b97e-f969cc833e30" />
 
