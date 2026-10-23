@@ -147,6 +147,8 @@ class Shield(Destructible):
             shape=shape,
             model=model,
         )
+        # A big translucent bubble: keep the depth split off it
+        game.translucent_volumes.add(self.model.visual)
         # Collision solid coinciding with the visible bubble.
         self.collision_np = None
         self._build_collision(model=model)
@@ -499,6 +501,7 @@ class Shield(Destructible):
                 self.node.removeNode()
                 self.node = None
             if self.model is not None:
+                self.game.translucent_volumes.discard(self.model.visual)
                 self.model.clean()
                 self.model = None
             self.collision_np = None

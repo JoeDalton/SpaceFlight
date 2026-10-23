@@ -102,8 +102,8 @@ space_flight.cli
   - ```{autodoc2-docstring} space_flight.EPSILON_TOLERANCE
     :summary:
     ```
-* - {py:obj}`PLANET_RADIUS_M <space_flight.PLANET_RADIUS_M>`
-  - ```{autodoc2-docstring} space_flight.PLANET_RADIUS_M
+* - {py:obj}`CAMERA_FAR_M <space_flight.CAMERA_FAR_M>`
+  - ```{autodoc2-docstring} space_flight.CAMERA_FAR_M
     :summary:
     ```
 * - {py:obj}`LOGGER <space_flight.LOGGER>`
@@ -282,12 +282,12 @@ space_flight.cli
 
 ````
 
-````{py:data} PLANET_RADIUS_M
-:canonical: space_flight.PLANET_RADIUS_M
+````{py:data} CAMERA_FAR_M
+:canonical: space_flight.CAMERA_FAR_M
 :value: >
-   6371000.0
+   600000.0
 
-```{autodoc2-docstring} space_flight.PLANET_RADIUS_M
+```{autodoc2-docstring} space_flight.CAMERA_FAR_M
 ```
 
 ````

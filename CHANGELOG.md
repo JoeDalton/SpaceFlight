@@ -5,11 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-10-23
 
 ### Added
 
 - Level 1: ion shots only and teammates warn then ground the player who shoots them #170
+- Plug in WorldBuilder: world quality settings, planet terrain and terrain collisions #168
 
 ### Fixed
 

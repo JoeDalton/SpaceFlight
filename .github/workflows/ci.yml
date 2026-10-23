@@ -8,7 +8,7 @@ on:
 
 jobs:
   test_linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,8 +22,19 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
-  test_windows:
-    runs-on: windows-latest
+  # Every other platform WorldBuilder ships a wheel for (its compiled terrain
+  # collision library included).
+  test_other_os:
+    strategy:
+      # Let every platform finish when one fails
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-26.04-arm  # arm64
+          - runner: windows-latest  # x86_64
+          - runner: macos-latest  # arm64
+          - runner: macos-15-intel  # x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

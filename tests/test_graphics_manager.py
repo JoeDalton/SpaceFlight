@@ -30,7 +30,7 @@ def _full_config(**overrides):
     """A complete, valid settings dict with optional per-section overrides."""
     cfg = {
         "display": {"mode": "fullscreen", "windowed_size": [1280, 720]},
-        "render": {"scale": 1.0, "reflection_scale": 0.5, "mirror_scale": 1.0},
+        "render": {"scale": 1.0, "mirror_scale": 1.0},
         "antialiasing": {"msaa": 0, "fxaa": False},
     }
     for section, values in overrides.items():

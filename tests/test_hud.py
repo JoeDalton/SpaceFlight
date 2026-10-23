@@ -76,6 +76,19 @@ def test_project_to_screen_flags_points_behind():
     assert x < 0.0  # mirrored through the centre: true bearing is to the right
 
 
+def test_project_to_screen_ignores_the_lens_depth_range():
+    """With split depth the main lens only reaches the split (2 km), yet a
+    marker 50 km away still lands where it would on the whole range."""
+    near_only, whole = PerspectiveLens(), PerspectiveLens()
+    near_only.set_near_far(1.0, 2000.0)
+    whole.set_near_far(1.0, 600000.0)
+    far_point = Point3(8000.0, 50000.0, -3000.0)
+
+    assert project_to_screen(near_only, Point3(far_point)) == pytest.approx(
+        project_to_screen(whole, Point3(far_point))
+    )
+
+
 def test_project_to_screen_clamps_a_null_depth():
     """A point in the camera's XZ plane gets a non-zero depth: finite result."""
     cam_space_pos = Point3(1, 0, 0)

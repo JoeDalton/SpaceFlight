@@ -13,7 +13,6 @@ from panda3d.core import (
     CollisionHandlerEvent,
     CollisionHandlerQueue,
     CollisionNode,
-    CollisionPlane,
     CollisionSegment,
     CollisionSolid,
     CollisionSphere,
@@ -21,7 +20,6 @@ from panda3d.core import (
     CollisionTube,
     LPoint3,
     NodePath,
-    Plane,
     Vec3,
 )
 
@@ -33,18 +31,25 @@ from space_flight.utils import magnitude
 from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
+    from world_builder.terrain.collision import TerrainSurface
+
     from space_flight.actors.major_ship.shield import Shield
     from space_flight.actors.major_ship.sub_system import SubSystem
     from space_flight.actors.ship import Ship
     from space_flight.ai.collision_sensor import CollisionSensor
     from space_flight.game.flight_state import FlightState
     from space_flight.scenes.asteroid_field import AsteroidField
-    from space_flight.scenes.ocean import Ocean
     from space_flight.weapons import Munition
 
     # Any object that can own a collider (stored as its "owner" python tag).
     ColliderOwner: TypeAlias = (
-        Ship | SubSystem | Shield | Ocean | AsteroidField | Munition | CollisionSensor
+        Ship
+        | SubSystem
+        | Shield
+        | AsteroidField
+        | TerrainSurface
+        | Munition
+        | CollisionSensor
     )
     # Owners that are part of a vehicle (the share-vehicle / hit-velocity logic
     # only ever sees ships, their subsystems, and their shields).
@@ -62,11 +67,15 @@ COLLISION_DAMAGE_FACTOR = 0.05
 HIT_EXPLOSION_CHANCE = 1.0 / 3.0
 
 #: Terrain material → spark preset. Each terrain object declares a material
-#: attribute (e.g. Ocean.material == "water", AsteroidField.material ==
-#: "rock"); water reads as ice, rock as gray-brown, metal as metal. Terrain
-#: with no/unknown material falls back to rock.
+#: attribute (e.g. AsteroidField.material == "rock"), or, for a planet's
+#: terrain whose ground varies, a
+#: material_at(point, relative_to) method giving "water" or the biome there
+#: (WorldBuilder's TerrainSurface). Water and snow read as ice, rock as
+#: gray-brown, metal as metal. Terrain with no/unknown material (the other
+#: biomes: grass, forest, desert, beach) falls back to rock.
 _TERRAIN_SPARK_PRESET = {
     "water": spark_fx.ICE,
+    "snow": spark_fx.ICE,
     "rock": spark_fx.ROCK,
     "metal": spark_fx.METAL,
 }
@@ -490,7 +499,11 @@ class CollisionSystem:
         else:
             hit_point = munition.impact_position()
         terrain = entry.into_node_path.python_tags["owner"]
-        material = getattr(terrain, "material", None)
+        material_at = getattr(terrain, "material_at", None)
+        if material_at is not None:
+            material = material_at(hit_point, self.game.root_node)
+        else:
+            material = getattr(terrain, "material", None)
         preset = _TERRAIN_SPARK_PRESET.get(material, spark_fx.ROCK)
         self.game.spark_fx_pool.spawn(
             position=hit_point,
@@ -1111,27 +1124,3 @@ def attach_collision_segment(
     """
     solid = CollisionSegment(relative_start_position, relative_end_position)
     return _attach_solid(game, name, solid, collider_type, parent_node, parent_object)
-
-
-def attach_collision_plane(
-    game: FlightState,
-    name: str,
-    collider_type: str,
-    parent_node: NodePath,
-    parent_object: ColliderOwner,
-) -> NodePath:
-    """
-    Attach a collision plane to an existing node facing this node's z-up
-
-    :param game: The game stage
-    :param name: The name of the collision plane
-    :param collider_type: The nature of the collider, defines from and into bitmasks
-    :param parent_node: Its parent_node
-    :param parent_object: Its parent_object
-    :return: The node path to the collision plane
-    """
-    # Define a plane: normal + point
-    plane = Plane(Vec3(0, 0, 1), Vec3(0, 0, 0))  # Z-up plane at Z=0
-    return _attach_solid(
-        game, name, CollisionPlane(plane), collider_type, parent_node, parent_object
-    )

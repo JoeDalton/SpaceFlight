@@ -4,11 +4,16 @@ Graphics settings persistence.
 A user-editable configuration/graphics.yaml is layered over a read-only
 datafiles/default_configuration/default_graphics.yaml, and the result
 sanitised, so that any missing or invalid key falls back to a sane default.
+
+The ``world`` section holds WorldBuilder's quality settings (terrain, air,
+sky, clouds, ocean) as :meth:`WorldSettings.to_dict` writes them; WorldBuilder
+owns their knobs, names and limits.
 """
 
 import copy
 
 import yaml
+from world_builder.settings import WorldSettings
 
 from space_flight import CONFIGURATION_PATH, DEFAULT_CONFIGURATION_PATH
 from space_flight.global_architecture.yaml_files import load_user_yaml, load_yaml
@@ -18,14 +23,8 @@ DEFAULT_GRAPHICS_FILE = DEFAULT_CONFIGURATION_PATH / "default_graphics.yaml"
 
 _VALID_MODES = ("fullscreen", "windowed")
 _VALID_MSAA = (0, 2, 4, 8)
-# Cheapest first, so the menu slider's stops read left-to-right as increasing cost.
-# Mirrors world_builder.clouds.CloudQuality; a test asserts the two agree, since
-# a name here that the enum does not know would fall back to "high" at build time.
-_VALID_CLOUD_QUALITY = ("low", "mid", "high", "ultra")
 _MIN_SCALE = 0.25
 _MAX_SCALE = 1.0
-_MIN_REFLECTION = 0.1
-_MAX_REFLECTION = 1.0
 _MIN_MIRROR = 0.25
 _MAX_MIRROR = 1.0
 
@@ -57,6 +56,32 @@ def _clamp_float(value, default: float, minimum: float, maximum: float) -> float
         return default
 
 
+def _migrate_legacy(user: dict) -> dict:
+    """
+    Carry the settings older files kept outside ``world`` into it:
+    ``clouds.quality`` becomes the clouds' preset and
+    ``render.reflection_scale`` the ocean's knob. Only for a file without a
+    ``world`` section; :meth:`GraphicsSettings.sanitise` drops the old keys.
+
+    :param user: the user file's content, left untouched
+    :return: the content, with a ``world`` section if one was derived
+    """
+    if not isinstance(user, dict) or "world" in user:
+        return user
+    clouds = user.get("clouds")
+    render = user.get("render")
+    quality = clouds.get("quality") if isinstance(clouds, dict) else None
+    reflection = render.get("reflection_scale") if isinstance(render, dict) else None
+    if quality is None and reflection is None:
+        return user
+    world = WorldSettings.preset("high")
+    if quality is not None:
+        world = world.with_section_level("clouds", quality)
+    if reflection is not None:
+        world = world.with_value("ocean", "reflection_scale", reflection)
+    return {**user, "world": world.to_dict()}
+
+
 class GraphicsSettings:
     """
     Loads, sanitises and saves the graphics configuration.
@@ -74,7 +99,8 @@ class GraphicsSettings:
         logs and falls back to the defaults.
         """
         defaults = load_yaml(DEFAULT_GRAPHICS_FILE)
-        return self.sanitise(_deep_merge(defaults, load_user_yaml(GRAPHICS_FILE)))
+        user = _migrate_legacy(load_user_yaml(GRAPHICS_FILE))
+        return self.sanitise(_deep_merge(defaults, user))
 
     def save(self, config: dict):
         """
@@ -85,6 +111,10 @@ class GraphicsSettings:
         with open(GRAPHICS_FILE, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
         self.config = config
+
+    def world_settings(self) -> WorldSettings:
+        """:return: WorldBuilder's quality settings, to build its objects with"""
+        return WorldSettings.from_dict(self.config["world"])
 
     @staticmethod
     def sanitise(config: dict) -> dict:
@@ -101,7 +131,6 @@ class GraphicsSettings:
         render = config.setdefault("render", {})
         aa = config.setdefault("antialiasing", {})
         compatibility = config.setdefault("compatibility", {})
-        clouds = config.setdefault("clouds", {})
         hud = config.setdefault("hud", {})
 
         if display.get("mode") not in _VALID_MODES:
@@ -117,9 +146,9 @@ class GraphicsSettings:
         render["scale"] = _clamp_float(
             render.get("scale", 1.0), 1.0, _MIN_SCALE, _MAX_SCALE
         )
-        render["reflection_scale"] = _clamp_float(
-            render.get("reflection_scale", 0.5), 0.5, _MIN_REFLECTION, _MAX_REFLECTION
-        )
+        # Moved into world (see _migrate_legacy)
+        render.pop("reflection_scale", None)
+        config.pop("clouds", None)
         render["mirror_scale"] = _clamp_float(
             render.get("mirror_scale", 1.0), 1.0, _MIN_MIRROR, _MAX_MIRROR
         )
@@ -132,13 +161,9 @@ class GraphicsSettings:
             compatibility.get("alternate_model_orientation", False)
         )
 
-        quality = clouds.get("quality")
-        if isinstance(quality, str):
-            quality = quality.strip().lower()
-        if quality not in _VALID_CLOUD_QUALITY:
-            quality = "high"
-        clouds["quality"] = quality
-
         hud["fps_counter"] = bool(hud.get("fps_counter", True))
+
+        # Lenient: whatever it cannot use falls back to the preset, logged
+        config["world"] = WorldSettings.from_dict(config.get("world")).to_dict()
 
         return config

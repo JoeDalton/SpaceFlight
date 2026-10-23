@@ -8,15 +8,18 @@ Covers:
 - :func:`load_yaml` — YAML loader
 - :meth:`GraphicsSettings.load` — defaults + user overlay + sanitise
 - :meth:`GraphicsSettings.save` — round-trip to disk
+- :func:`_migrate_legacy` — old cloud / reflection keys into ``world``
 """
 
 import pytest
 import yaml
+from world_builder.settings import WorldSettings
 
 from space_flight.global_architecture import graphics_settings as gs
 from space_flight.global_architecture.graphics_settings import (
     GraphicsSettings,
     _deep_merge,
+    _migrate_legacy,
 )
 from space_flight.global_architecture.yaml_files import load_yaml
 
@@ -25,12 +28,18 @@ from space_flight.global_architecture.yaml_files import load_yaml
 # here -- otherwise adding a section looks like a test failure.
 _VALID = {
     "display": {"mode": "windowed", "windowed_size": [1280, 720]},
-    "render": {"scale": 0.75, "reflection_scale": 0.5, "mirror_scale": 1.0},
+    "render": {"scale": 0.75, "mirror_scale": 1.0},
     "antialiasing": {"msaa": 4, "fxaa": True},
     "compatibility": {"alternate_model_orientation": False},
-    "clouds": {"quality": "mid"},
     "hud": {"fps_counter": False},
+    "world": {
+        "version": 1,
+        "preset": "mid",
+        "overrides": {"terrain": {"detail_far": 3000.0}},
+    },
 }
+
+_HIGH = {"version": 1, "preset": "high", "overrides": {}}
 
 
 def _write_yaml(path, data):
@@ -119,14 +128,6 @@ class TestSanitise:
 
     @pytest.mark.parametrize(
         "raw,expected",
-        [(0.01, 0.1), (2.0, 1.0), (0.5, 0.5)],
-    )
-    def test_reflection_scale_clamped(self, raw, expected):
-        out = GraphicsSettings.sanitise({"render": {"reflection_scale": raw}})
-        assert out["render"]["reflection_scale"] == pytest.approx(expected)
-
-    @pytest.mark.parametrize(
-        "raw,expected",
         [(0.1, 0.25), (9.0, 1.0), (0.5, 0.5)],
     )
     def test_mirror_scale_clamped(self, raw, expected):
@@ -169,35 +170,48 @@ class TestSanitise:
         out = GraphicsSettings.sanitise({"hud": {"fps_counter": raw}})
         assert out["hud"]["fps_counter"] is expected
 
-    @pytest.mark.parametrize("quality", ["low", "mid", "high", "ultra"])
-    def test_valid_cloud_quality_preserved(self, quality):
-        out = GraphicsSettings.sanitise({"clouds": {"quality": quality}})
-        assert out["clouds"]["quality"] == quality
+    @pytest.mark.parametrize("preset", ["low", "mid", "high", "ultra"])
+    def test_world_preset_preserved(self, preset):
+        world = {"version": 1, "preset": preset, "overrides": {}}
+        out = GraphicsSettings.sanitise({"world": world})
+        assert out["world"] == world
 
-    @pytest.mark.parametrize("raw", ["HIGH", "Ultra", "  low  ", "Mid"])
-    def test_cloud_quality_is_case_and_space_insensitive(self, raw):
-        """A hand-edited file should not silently downgrade over capitalisation."""
-        out = GraphicsSettings.sanitise({"clouds": {"quality": raw}})
-        assert out["clouds"]["quality"] == raw.strip().lower()
+    def test_world_override_kept(self):
+        world = {"version": 1, "preset": "low", "overrides": {"ocean": {"foam": False}}}
+        assert GraphicsSettings.sanitise({"world": world})["world"] == world
 
-    @pytest.mark.parametrize("raw", ["insane", "", None, 3, [], "medium"])
-    def test_invalid_cloud_quality_defaults_to_high(self, raw):
-        """HIGH is what the cloud presets ship, so an unreadable value must mean the
-        authored look rather than a silent downgrade."""
-        out = GraphicsSettings.sanitise({"clouds": {"quality": raw}})
-        assert out["clouds"]["quality"] == "high"
+    @pytest.mark.parametrize("raw", ["insane", None, 3, [], {"preset": "medium"}])
+    def test_unreadable_world_is_high(self, raw):
+        """WorldBuilder reads it leniently: whatever it cannot use is HIGH, the
+        look the presets are authored at."""
+        assert GraphicsSettings.sanitise({"world": raw})["world"] == _HIGH
+
+    def test_world_value_out_of_range_clamped(self):
+        world = {"preset": "high", "overrides": {"terrain": {"detail_far": 1e9}}}
+        out = GraphicsSettings.sanitise({"world": world})
+        assert out["world"]["overrides"]["terrain"]["detail_far"] == 10000.0
+
+    def test_unknown_world_knob_dropped(self):
+        world = {"preset": "high", "overrides": {"terrain": {"warp_drive": 9}}}
+        assert GraphicsSettings.sanitise({"world": world})["world"] == _HIGH
+
+    def test_legacy_keys_dropped(self):
+        out = GraphicsSettings.sanitise(
+            {"clouds": {"quality": "low"}, "render": {"reflection_scale": 0.3}}
+        )
+        assert "clouds" not in out
+        assert "reflection_scale" not in out["render"]
 
     def test_empty_config_produces_full_defaults(self):
         out = GraphicsSettings.sanitise({})
         assert out["display"]["mode"] == "fullscreen"
         assert out["render"]["scale"] == 1.0
-        assert out["render"]["reflection_scale"] == 0.5
         assert out["render"]["mirror_scale"] == 1.0
         assert out["antialiasing"]["msaa"] == 0
         assert out["antialiasing"]["fxaa"] is False
         assert out["compatibility"]["alternate_model_orientation"] is False
-        assert out["clouds"]["quality"] == "high"
         assert out["hud"]["fps_counter"] is True
+        assert out["world"] == _HIGH
 
 
 # ---------------------------------------------------------------------------
@@ -287,15 +301,55 @@ class TestSave:
         assert GraphicsSettings().config == _VALID
 
 
-def test_cloud_quality_names_match_world_builder():
-    """A cross-project contract with no import between the two sides: a name the
-    settings sanitiser accepts but WorldBuilder's CloudQuality does not know
-    would pass validation and then silently fall back to HIGH, so the player's
-    choice would do nothing."""
-    from world_builder.clouds import CloudQuality
+# ---------------------------------------------------------------------------
+# Legacy keys
+# ---------------------------------------------------------------------------
 
-    assert set(gs._VALID_CLOUD_QUALITY) == {q.value for q in CloudQuality}
-    # And the settings list is ordered cheapest-first, which the menu slider's
-    # stops depend on for "drag right costs more".
-    assert list(gs._VALID_CLOUD_QUALITY) == ["low", "mid", "high", "ultra"]
-    assert [q.value for q in CloudQuality] == list(gs._VALID_CLOUD_QUALITY)
+
+class TestMigrateLegacy:
+    def test_cloud_quality_becomes_the_clouds_preset(self):
+        out = _migrate_legacy({"clouds": {"quality": "low"}})
+        world = WorldSettings.from_dict(out["world"])
+        assert world.section_level("clouds").value == "low"
+        assert world.section_level("terrain").value == "high"
+
+    def test_reflection_scale_becomes_the_ocean_knob(self):
+        out = _migrate_legacy({"render": {"reflection_scale": 0.3}})
+        assert WorldSettings.from_dict(out["world"]).ocean.reflection_scale == 0.3
+
+    def test_file_with_world_untouched(self):
+        user = {"clouds": {"quality": "low"}, "world": {"preset": "mid"}}
+        assert _migrate_legacy(user) is user
+
+    def test_file_without_legacy_keys_untouched(self):
+        user = {"render": {"scale": 0.5}}
+        assert _migrate_legacy(user) is user
+
+    def test_load_migrates_an_old_user_file(self, tmp_path, monkeypatch):
+        """The defaults have a world section, so the user file must be migrated
+        before it is merged over them."""
+        default = _write_yaml(tmp_path / "default.yaml", _VALID)
+        user = _write_yaml(tmp_path / "user.yaml", {"clouds": {"quality": "ultra"}})
+        monkeypatch.setattr(gs, "DEFAULT_GRAPHICS_FILE", default)
+        monkeypatch.setattr(gs, "GRAPHICS_FILE", user)
+
+        world = GraphicsSettings().world_settings()
+        assert world.section_level("clouds").value == "ultra"
+        assert "clouds" not in GraphicsSettings().config
+
+
+def test_world_settings_reads_the_world_section(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        gs, "DEFAULT_GRAPHICS_FILE", _write_yaml(tmp_path / "d", _VALID)
+    )
+    monkeypatch.setattr(gs, "GRAPHICS_FILE", tmp_path / "does_not_exist.yaml")
+    world = GraphicsSettings().world_settings()
+    assert world.level.value == "mid"
+    assert world.terrain.detail_far == 3000.0
+
+
+def test_shipped_defaults_are_world_settings_as_saved():
+    """The default file's world section reads back unchanged: no knob or
+    preset WorldBuilder no longer knows."""
+    defaults = gs.load_yaml(gs.DEFAULT_GRAPHICS_FILE)
+    assert GraphicsSettings.sanitise(defaults)["world"] == defaults["world"]

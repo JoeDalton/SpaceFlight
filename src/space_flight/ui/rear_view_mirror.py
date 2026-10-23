@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from direct.showbase.ShowBaseGlobal import aspect2d
 from panda3d.core import BitMask32, Camera, CardMaker, NodePath, Texture
 
+from space_flight import CAMERA_FAR_M
+
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
 
@@ -39,6 +41,10 @@ class RearViewMirror:
         self.mirror_np = NodePath(self.mirror_cam)
 
         self.mirror_cam.setLens(self.game.app.camLens.makeCopy())
+        # The whole range: the main lens only reaches the depth split while
+        # split cameras exist, and keeps their last range after (see
+        # FlightState.split_depth)
+        self.mirror_cam.getLens().setNearFar(1.0, CAMERA_FAR_M)
         self.mirror_cam.getLens().setFov(MIRROR_FOV)  # Narrower = more realistic mirror
         self.mirror_cam.getLens().setAspectRatio(MIRROR_ASPECT_RATIO)
 

@@ -24,8 +24,9 @@ HUD, and drives the per-frame update.
   hyperspace-jump animation
   ([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)):
   1. the level's upfront function runs synchronously on a black screen for the
-     GPU-heavy one-time work (player, ocean and its reflection, cloud
-     field), so its first-render compile spike is invisible;
+     GPU-heavy one-time work (the player, then the scene's heavy objects, such
+     as a planet's whole world), so its first-render compile spike is
+     invisible;
   2. the loading overlay then advances `_build_generator` (the rest of the
      scene, then the mission) one step per frame via `_advance_build`,
      during its looping "inside" phase;
@@ -46,9 +47,10 @@ HUD, and drives the per-frame update.
   → kill destructibles whose health hit zero → resolve collisions →
   recompute actor interactions → integrate physics → run every actor's
   registered update methods (`game.method_lists`) → re-centre the render
-  origin on the player (see
-  [The floating render origin](#the-floating-render-origin)) → check player
-  death. **`update_mission_task`** separately advances `game.mission`. Both
+  origin on the player, then the depth split and the scene follow it
+  (`follow_render_origin`, see
+  [The floating render origin](#the-floating-render-origin) and
+  [Split depth](#split-depth)) → check player death. **`update_mission_task`** separately advances `game.mission`. Both
   are no-ops while `is_paused`.
 - **`initialize_game_structure()`** builds the session-scoped objects in
   dependency order; **`exit()`** tears them down in roughly reverse order
@@ -65,9 +67,11 @@ The scene graph has two frames that are easy to confuse:
 
 - **`game.root_node` is the world frame.** It is the single child of
   `render` created by `initialize_game_structure()`, and every gameplay node
-  hangs under it: ships, munitions, asteroids, the ocean, clouds, skybox,
-  lights. A position relative to `root_node` is a world position, the same
-  thing physics stores in `pawn.position`.
+  hangs under it: ships, munitions, asteroids, skyboxes, lights. A position
+  relative to `root_node` is a world position, the same thing physics stores
+  in `pawn.position`. A planet's world (WorldBuilder's `World`) is the
+  exception: it hangs under `render` and places itself around the camera in
+  float64, from the player's world position.
 - **`render` is the frame Panda3D draws from.** The engine composes every
   node's net transform from `render` down, in float32.
 
@@ -115,6 +119,60 @@ is sampled at world coordinates. None of these is visible in practice.
 The behaviour is pinned by the `recenter_render_origin` tests in
 [`tests/test_flight_state.py`](../../tests/test_flight_state.py), including one
 that shows the imprecision without the offset.
+
+## Split depth
+
+One depth buffer cannot cover a cockpit a metre away and a horizon 600 km
+away. With a 24-bit buffer and a 1 m near plane, two surfaces at 10 km must
+be about 6 m apart to be told apart, and distant ground and sea shimmer into
+each other.
+
+`FlightState.split_depth` is WorldBuilder's `SplitDepthCameras`, in every
+level, so the level scripts never deal with it:
+- A far camera draws everything past a **split** distance first.
+- The depth buffer is cleared.
+- The main camera (`app.cam`) then draws from 1 m to the split.
+
+Each camera gets the whole buffer for its own range.
+
+**Lifecycle.**
+- It is built in `enter()`, right after the level's up-front build:
+  - after the render-scale / anti-aliasing pipeline, whose offscreen buffer
+    the far camera then draws into too;
+  - after the scene's up-front objects, because an ocean's reflection camera
+    copies the main lens once, before the split shortens it.
+- Each frame, `follow_render_origin()` sets its ranges from
+  `scene.depth_ranges()` (split and far distances, metres), then calls
+  `scene.update_after_recenter()`.
+- `depth_far` is the far camera's far distance this frame, for a scene's sky.
+- `exit()` destroys it before the render pipeline.
+- Headless there is none, and `depth_far` is `CAMERA_FAR_M`.
+
+**Ranges.**
+- By default, `Scene.depth_ranges()` splits at 2 km, which gives about
+  0.25 m depth steps there, and reaches `CAMERA_FAR_M`. The space levels'
+  skyboxes and 2D planets lie beyond the split, so only the far camera draws
+  them.
+- A planet scene follows its ground instead.
+
+**Translucent volumes.** The near camera reaches 2% past the split, so the
+two ranges never leave a gap. A big translucent volume with no depth write,
+such as a shield bubble, would be blended twice in that band and show a ring
+at the split distance. So the split never cuts one:
+- owners register their volumes in `FlightState.translucent_volumes` (`Shield`
+  does for its bubble);
+- `update_split_depth` hands them to `SplitDepthCameras.update(...,
+  translucent=...)`, which moves the split in front of any it would cut, or
+  past it from inside (see WorldBuilder's `world_builder.depth`).
+
+**What reads the lens.**
+- The main lens (`app.camLens`) now ends at the split. Its near and far do not
+  change where a point lands on screen, so the HUD's markers
+  (`project_to_screen`) are unaffected.
+- The laser shader's depth uses Panda's per-camera
+  `p3d_ModelViewProjectionMatrix`, right in both passes.
+- The rear-view mirror copies the lens but sets its own range back to
+  `CAMERA_FAR_M`.
 
 ## Time keeping
 
@@ -194,6 +252,11 @@ entry into game effects.
     collision events are handled on the next frame, once the munition has
     moved on. The launch point does not move, and a shielded ship is slow next
     to a munition, so its bubble has barely moved since the launch.
+    On terrain, the sparks follow its material: an asteroid field declares
+    one (`material`), while a planet's terrain, whose ground varies,
+    gives the one at the hit point (`material_at`: `"water"` or a biome);
+    `_TERRAIN_SPARK_PRESET` maps water and snow to ice, and anything else to
+    rock.
   - **Flares** (`ordnance_into_flare`): ordnance hitting a flare of another
     team is spent, and so is the flare.
   - **Ship physical hits** (`ship-into-*` / `ship-again-*` events, against
@@ -275,7 +338,7 @@ see [scenario_scripting.md](scenario_scripting.md).
 |-------|------|-------|---------|
 | Mission 1: Rookies | [`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py) | `asteroids` | Tutorial: target-filter menu, follow a formation, then race it |
 | Mission 2: Smugglers | [`mission2_level.py`](../../src/space_flight/game/levels/mission2_level.py) | `asteroids` | Patrol with a formation, scan passing transports, stop the gun-runner |
-| Mission 3: Escort | [`mission3_level.py`](../../src/space_flight/game/levels/mission3_level.py) | `ocean_planet` | Escort a convoy past an enemy blockade |
+| Mission 3: Escort | [`mission3_level.py`](../../src/space_flight/game/levels/mission3_level.py) | `earthlike_planet` | Escort a convoy past an enemy blockade |
 | Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `lava_planet` | Sandbox for the latest feature under development |
 
 `game/levels/__init__.py`'s `LEVELS` registry maps

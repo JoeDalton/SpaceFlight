@@ -35,6 +35,10 @@
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._clamp_float
     :summary:
     ```
+* - {py:obj}`_migrate_legacy <space_flight.global_architecture.graphics_settings._migrate_legacy>`
+  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._migrate_legacy
+    :summary:
+    ```
 ````
 
 ### Data
@@ -59,24 +63,12 @@
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_MSAA
     :summary:
     ```
-* - {py:obj}`_VALID_CLOUD_QUALITY <space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY
-    :summary:
-    ```
 * - {py:obj}`_MIN_SCALE <space_flight.global_architecture.graphics_settings._MIN_SCALE>`
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MIN_SCALE
     :summary:
     ```
 * - {py:obj}`_MAX_SCALE <space_flight.global_architecture.graphics_settings._MAX_SCALE>`
   - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MAX_SCALE
-    :summary:
-    ```
-* - {py:obj}`_MIN_REFLECTION <space_flight.global_architecture.graphics_settings._MIN_REFLECTION>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MIN_REFLECTION
-    :summary:
-    ```
-* - {py:obj}`_MAX_REFLECTION <space_flight.global_architecture.graphics_settings._MAX_REFLECTION>`
-  - ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MAX_REFLECTION
     :summary:
     ```
 * - {py:obj}`_MIN_MIRROR <space_flight.global_architecture.graphics_settings._MIN_MIRROR>`
@@ -131,16 +123,6 @@
 
 ````
 
-````{py:data} _VALID_CLOUD_QUALITY
-:canonical: space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY
-:value: >
-   ('low', 'mid', 'high', 'ultra')
-
-```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._VALID_CLOUD_QUALITY
-```
-
-````
-
 ````{py:data} _MIN_SCALE
 :canonical: space_flight.global_architecture.graphics_settings._MIN_SCALE
 :value: >
@@ -157,26 +139,6 @@
    1.0
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MAX_SCALE
-```
-
-````
-
-````{py:data} _MIN_REFLECTION
-:canonical: space_flight.global_architecture.graphics_settings._MIN_REFLECTION
-:value: >
-   0.1
-
-```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MIN_REFLECTION
-```
-
-````
-
-````{py:data} _MAX_REFLECTION
-:canonical: space_flight.global_architecture.graphics_settings._MAX_REFLECTION
-:value: >
-   1.0
-
-```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._MAX_REFLECTION
 ```
 
 ````
@@ -215,6 +177,13 @@
 ```
 ````
 
+````{py:function} _migrate_legacy(user: dict) -> dict
+:canonical: space_flight.global_architecture.graphics_settings._migrate_legacy
+
+```{autodoc2-docstring} space_flight.global_architecture.graphics_settings._migrate_legacy
+```
+````
+
 `````{py:class} GraphicsSettings()
 :canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings
 
@@ -239,6 +208,14 @@
 :canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.save
 
 ```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.save
+```
+
+````
+
+````{py:method} world_settings() -> world_builder.settings.WorldSettings
+:canonical: space_flight.global_architecture.graphics_settings.GraphicsSettings.world_settings
+
+```{autodoc2-docstring} space_flight.global_architecture.graphics_settings.GraphicsSettings.world_settings
 ```
 
 ````

@@ -1,12 +1,13 @@
 # Scenes
 
-`scenes` builds the environment a level flies in — skybox, lighting, planets,
-asteroid fields, ocean and volumetric clouds — as independent, game-agnostic
-pieces assembled by a per-level `Scene` subclass. It all lives in
+`scenes` builds the environment a level flies in: skyboxes, lighting, 2D
+planets, asteroid fields, and a whole planetary world. The pieces are
+independent and game-agnostic, assembled by a per-level `Scene` subclass.
+They live in
 [`src/space_flight/scenes/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/),
-except the ocean surface and the clouds, which come from
-[WorldBuilder](https://github.com/JoeDalton/WorldBuilder); the per-class API
-is in the [code reference](apidocs/index.rst).
+except the planetary world (terrain, air, clouds, ocean, sky), which comes
+from [WorldBuilder](https://github.com/JoeDalton/WorldBuilder). The per-class
+API is in the [code reference](apidocs/index.rst).
 
 ## Mental model
 
@@ -35,15 +36,20 @@ is in the [code reference](apidocs/index.rst).
 |------|-------|-----------------|--------------------|
 | `asteroids` | `SceneAsteroids` | three asteroid fields (one static, two rotating) | purple skybox, lighting, dust |
 | `lava_planet` | `SceneLavaPlanet` | three asteroid fields | lava-toned lighting, dust, 2D lava planet, Imperial Star Destroyer (no skybox) |
-| `ocean_planet` | `SceneOcean` | `Ocean` (geometric swell on), `Clouds` | dusk skybox, 2D terran planet, lighting, dust |
+| `earthlike_planet` | `SceneEarthlike` | WorldBuilder's `World`: planet (terrain, air, clouds, swell ocean), moon, sky, sun and lights | dust, then waits for the world to load |
 | `debug` | `SceneDebug` | nothing | test skybox, lighting |
 
-`clean()` tears the owned pieces down. Only `SceneOcean.build_upfront` also
-forces the one-time GPU prep (`prepare_scene(gsg)`: shader compile, vertex
-upload) while the screen is black, and it must run after the player exists:
-the ocean's reflection camera copies the player camera's lens. `SceneOcean`
-passes one `HAZE_COLOR` to both the ocean and the clouds so they meet at the
-horizon.
+`clean()` tears the owned pieces down. `build_upfront` runs after the player
+exists, so a scene's ocean reflection camera can copy the player camera's
+lens.
+
+Every frame, once the render origin has moved onto the player,
+`FlightState` asks the scene for two things:
+- `scene.depth_ranges()`: the split and far distances of its split depth
+  cameras (see [docs/game.md](game.md#split-depth)). By default the split is
+  at 2 km and the far plane at `CAMERA_FAR_M`.
+- `scene.update_after_recenter()`: updates what must follow the origin. It
+  is a no-op by default.
 
 ## Static environment pieces
 
@@ -51,7 +57,7 @@ horizon.
   named `.bam` sphere at a huge scale, applies its cube map at runtime (see
   `datafiles/models/skyboxes/create_skybox.py` for why it is not baked in), and
   draws it unshaded, unlit and without depth write in the "background" bin,
-  re-centred on the player every frame. It opts out of the ocean reflection
+  re-centred on the player every frame. It opts out of any ocean reflection
   camera's clip plane (`setClipPlaneOff(1)`); the comment there explains the
   horizon band that appears otherwise.
 - **[`lighting.py`](../../src/space_flight/scenes/lighting.py)**'s `Lighting` is
@@ -73,31 +79,73 @@ horizon.
   Scenes layer several fields: a dense static backdrop plus a few large,
   slowly tumbling rocks.
 
-## Ocean and clouds — from WorldBuilder
+## Planet world — from WorldBuilder
 
-The ocean surface and the volumetric clouds live in the separate
-[WorldBuilder](https://github.com/JoeDalton/WorldBuilder) project, installed
-as the `world_builder` dependency (see
-[its ocean page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/ocean.md) and [its clouds page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/clouds.md)
-for how they work). The game adds only what is game-specific:
+`SceneEarthlike` (Mission 3) is a whole planetary world: the planet (terrain,
+air, clouds, swell ocean), its moon, the sky and the sun. WorldBuilder's
+`World` builds and updates it (see
+[its world page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/world.md)).
+The scene only says what it looks like.
 
-- **[`ocean.py`](../../src/space_flight/scenes/ocean.py)**'s `Ocean` subclasses
-  `world_builder.ocean.Ocean` to register a flat terrain collision plane at
-  Z=0 (see [docs/game.md](game.md)), so ships can crash into the water, and to
-  give lasers the `"water"` material for their sparks.
-- **`Clouds`** (`world_builder.clouds.Clouds`) is used as is. Its sprite atlas
-  goes through the game's `asset_manager`, which preloads it, and its quality
-  comes from `clouds.quality` in the graphics settings (see
-  [docs/global_architecture.md](global_architecture.md)).
-- **Far plane.** `CAMERA_FAR_M` in `player.py` raises it to 600 km, set before
-  the scene is built because the ocean's reflection camera copies the lens:
-  Panda's default 100 km clips the outermost cloud shell and keeps the ocean
-  horizon in view only up to 785 m of altitude.
+**The look** (class attributes and `bodies()`):
+- **The planet** comes from `datafiles/worlds/earthlike_demo/`, an unchanged
+  copy of WorldBuilder's demo level (`terrain/levels/demo.yaml` and its
+  stamps). It has `AtmosphereParams()`, `CLOUDS` (cumulus at 2.2 km, above
+  the convoy) and `OCEAN` (the 20 m swell, hazed to the air's colour).
+- **The moon** is the demo's airless sand moon, 10,000 km away, in the
+  northern sky ahead of the convoy.
+- **The sun** is `SUN`, high in the south-east, and **the sky** is `SKY`,
+  WorldBuilder's star field.
+- **`LIGHT_SCALE`** scales the Panda3D lights `World` puts on render for the
+  ships, about 0.4. Ships use fixed-function lighting with no tone map, so the
+  world's physical noon sun would clip them to white.
+
+There is no skybox, no `Lighting` and no 2D planet: the sky, the moon and the
+lights are the world's.
+
+**How it runs:**
+- **Placement.** The planet is not rotated: its centre sits one radius below
+  the world origin, so the ground under the origin is the planet's +z pole,
+  with sea level at z = 0 there.
+  - That is a polar sea with snowy islands and mountains. The demo level's
+    hand-made features sit far away, around its reference latitude, and are
+    not seen.
+  - The surface curves away from z = 0 with distance (about 80 m at 10 km on
+    the 600 km planet), while the flight model stays flat.
+- **Build.** `build_upfront` builds the `World` on the black screen, about
+  5 s. It runs before `FlightState` creates the split cameras, because the
+  ocean's reflection copies the main lens.
+- **Loading.** `build_decomposed` ends with `wait_until_loaded`, which holds
+  the hyperspace tunnel until `world.loading` (ground and clouds) has stayed
+  False for half a second, at most a minute: about 11 s on this machine.
+  - The game loop is paused then, so each step is a
+    `FlightState.follow_render_origin()`, as a frame would do.
+  - `FlightState` centres render on the player as soon as the player exists,
+    so the world loads around it.
+- **Every frame.**
+  - `depth_ranges()` is `world.depth_ranges(player position)`: the split
+    follows the nearest ground.
+  - `update_after_recenter()` is
+    `world.update(player position, far=game.depth_far)`.
+- **Solid.** `world.enable_collision(CollisionLayers.TERRAIN_INTO,
+  bodies=["planet"])` adds an into-only `"terrain"` collision node, owned by
+  WorldBuilder's `TerrainSurface`. Ships, munitions and sensors hit it through
+  the usual terrain handlers (see [docs/game.md](game.md)), the sea surface
+  included.
+  - Only drawn chunks within 100 km are solid, at the drawn level of detail,
+    which is coarser away from the player.
+  - Without the native collision library built for this Panda3D series,
+    building the scene raises `NativeCollisionError`.
+- **Quality.** Every part is built with the `world` graphics settings.
+- **Far plane.** `CAMERA_FAR_M` (in `space_flight/__init__.py`, applied by
+  `player.py`) is 600 km. It is set before the scene is built, because the
+  ocean's reflection camera copies the lens. Panda's default of 100 km would
+  clip the outermost cloud shell.
 
 ## Where things live
 
-`Scene` and its subclasses are in `scenes.py`; the static pieces are one file
-each (`skybox.py`, `lighting.py`, `planet_2d.py`, `asteroid_field.py`); the
-game's ocean subclass is `ocean.py`. The ocean surface, the cloud system and
-their shaders are in WorldBuilder (`world_builder.ocean`,
-`world_builder.clouds`).
+`Scene` and its subclasses are in `scenes.py`, with the loading gate
+`wait_until_loaded`. The static pieces are one file each (`skybox.py`,
+`lighting.py`, `planet_2d.py`, `asteroid_field.py`). The planetary world and
+its shaders are in WorldBuilder (`world_builder.world` and the parts it
+builds).

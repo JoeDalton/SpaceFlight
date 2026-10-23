@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
-from space_flight import RECORD_GAME
+from space_flight import CAMERA_FAR_M, RECORD_GAME
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.major_ship.turret import Turret
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
@@ -32,10 +32,6 @@ _DEFAULT_HIT_COLOR = (1.0, 0.5, 0.2)
 # Camera movement parameters
 CAMERA_ANGLE_INCREMENT = 2.0
 
-# Far clip, in metres: clears the outermost cloud shell (512 km) and keeps the
-# curved ocean horizon in view up to ~28 km of altitude. Depth precision is set
-# by the near plane, so this costs almost nothing.
-CAMERA_FAR_M = 600000.0
 COCKPIT_ANTI_GRAVITY_MODULE_INV_STRENGTH = 0.001
 HEAD_SPRING_COEFFICIENT_NPM = 17
 HEAD_DAMPING_RATIO = 0.8  # Slightly suboptimal damping
