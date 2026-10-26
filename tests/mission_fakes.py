@@ -255,6 +255,18 @@ class FakePlayerWaypoints:
         self.cleaned = True
 
 
+class FakeScene:
+    """A scene with room everywhere: clear_position keeps the position, and
+    records each request (position, radius)."""
+
+    def __init__(self):
+        self.clear_requests = []
+
+    def clear_position(self, position, radius):
+        self.clear_requests.append((np.asarray(position, dtype=float), radius))
+        return np.asarray(position, dtype=float)
+
+
 class FakeGame:
     def __init__(self):
         self.game_time = FakeGameTime()
@@ -267,6 +279,7 @@ class FakeGame:
         self.player = MockBot("player", [0, 0, 0], team=1)
         self.interactions.add(self.player.pawn)
         self.player_waypoints = None
+        self.scene = FakeScene()
         self.app = SimpleNamespace(
             bindings={
                 "contexts": {

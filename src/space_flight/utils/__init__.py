@@ -75,8 +75,7 @@ def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 def normalize(vector: np.ndarray) -> np.ndarray:
     """
     Returns vector scaled to unit length: a 3D direction, or a quaternion's 4
-    raw components (e.g. AsteroidField renormalizing its integrated
-    orientations).
+    raw components (e.g. an integrated orientation, renormalized).
 
     Plain floats and math.sqrt instead of np.linalg.norm (see
     rotate_single_vector). A Taylor shortcut of sqrt near 1 was ruled out:

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Filename
 from world_builder.clouds.cloud import ATLAS_PNG as CLOUD_ATLAS_PNG
 
 from space_flight import DATAFILES_PATH, LOGGER
@@ -34,13 +33,6 @@ COMMON_ASSETS_TO_LOAD = [
     ("model", DATAFILES_PATH / "menus/thumb_map.egg", ""),
     ("model", DATAFILES_PATH / "menus/xbone-icons.egg", ""),
     ("texture", DATAFILES_PATH / "menus/dialog.png", ""),
-    # Asteroids
-    ("model", DATAFILES_PATH / "models/asteroids/54509_asteroid/scene.gltf", ""),
-    # Skyboxes
-    ("model", DATAFILES_PATH / "models/skyboxes/purple.bam", ""),
-    ("model", DATAFILES_PATH / "models/skyboxes/dusk.bam", ""),
-    ("cube_map", DATAFILES_PATH / "models/skyboxes/purple_#.png", ""),
-    ("cube_map", DATAFILES_PATH / "models/skyboxes/dusk_#.png", ""),
     # Ships
     ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
     ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
@@ -185,7 +177,7 @@ class AssetManager:
         """
         Loads an asset from file into the cache
 
-        :param asset_type: "model", "texture", "cube_map", "sound" or "3d_sound"
+        :param asset_type: "model", "texture", "sound" or "3d_sound"
         :param path: The path where the asset is found
         :param pattern: The asset pattern if path is a directory
         """
@@ -212,12 +204,6 @@ class AssetManager:
 
         elif asset_type == "texture":
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
-        elif asset_type == "cube_map":
-            # Absolute path required: Panda3D resolves a "#" pattern only
-            # against the working directory, never the model path.
-            self.assets[path] = self.app.loader.loadCubeMap(
-                Filename.fromOsSpecific(str(path))
-            )
         else:
             raise ValueError(f"Unkown asset type {asset_type}")
 

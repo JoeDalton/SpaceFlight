@@ -3,11 +3,21 @@ from __future__ import annotations
 import logging
 import math
 import time
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
+from world_builder.asteroids.distributions import Distribution
+from world_builder.asteroids.field import AsteroidField
+from world_builder.asteroids.spec import (
+    Box,
+    Clumping,
+    Density,
+    FieldSpec,
+    KeepOut,
+    MaterialSpec,
+)
 from world_builder.atmosphere import AtmosphereParams
 from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import PRESETS
@@ -16,10 +26,7 @@ from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook
 from space_flight import CAMERA_FAR_M, DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
-from space_flight.scenes.asteroid_field import AsteroidField
-from space_flight.scenes.lighting import Lighting
 from space_flight.scenes.planet_2d import Planet2D
-from space_flight.scenes.skybox import Skybox
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -35,12 +42,18 @@ DEFAULT_DEPTH_SPLIT_M = 2000.0
 WORLD_QUIET_S = 0.5
 # Give up waiting for the world after this long (and say so)
 WORLD_TIMEOUT_S = 60.0
+# Sleep this long after each step while the world loads: its worker
+# processes' results come back through a thread of this process, which a loop
+# that never sleeps starves (a headless build runs the loading loop flat out;
+# an animated one's frames leave it the time already).
+LOADING_YIELD_S = 0.005
 
 
 def wait_until_loaded(
     loading: Callable[[], bool],
     step: Callable[[], None],
     clock: Callable[[], float] = time.monotonic,
+    pause: Callable[[float], None] = time.sleep,
 ) -> Generator[str, None, None]:
     """
     Hold the level's loading until a world has loaded around the player:
@@ -52,6 +65,8 @@ def wait_until_loaded(
     :param step: Advance the world by a frame (the game loop is paused while
         loading)
     :param clock: Real time, in seconds
+    :param pause: Sleeps for a duration, seconds (LOADING_YIELD_S each step
+        while loading)
     :return: A generator to advance once per frame
     """
     start = clock()
@@ -61,6 +76,7 @@ def wait_until_loaded(
         now = clock()
         if loading():
             quiet_since = None
+            pause(LOADING_YIELD_S)
         elif quiet_since is None:
             quiet_since = now
         elif now - quiet_since >= WORLD_QUIET_S:
@@ -74,12 +90,18 @@ def wait_until_loaded(
 
 
 def scene_factory(
-    game: FlightState, scene_name: str
+    game: FlightState, scene_name: str, keep_outs: Sequence[KeepOut] = ()
 ) -> SceneAsteroids | SceneLavaPlanet | SceneEarthlike | SceneDebug:
+    """
+    :param game: The game/flight state
+    :param scene_name: Which scene
+    :param keep_outs: Room the scene's asteroid field leaves clear (a level's
+        spawn points and routes); ignored by scenes without one
+    """
     if scene_name == "asteroids":
-        return SceneAsteroids(game=game)
+        return SceneAsteroids(game=game, keep_outs=keep_outs)
     if scene_name == "lava_planet":
-        return SceneLavaPlanet(game=game)
+        return SceneLavaPlanet(game=game, keep_outs=keep_outs)
     if scene_name == "earthlike_planet":
         return SceneEarthlike(game=game)
     if scene_name == "debug":
@@ -102,7 +124,7 @@ class Scene:
         with the whole depth buffer.
 
         By default a fixed split, past which a space level has only distant
-        things (skyboxes, 2D planets), and the camera's whole far range.
+        things (the sky, 2D planets), and the camera's whole far range.
 
         :return: (split, far), metres
         """
@@ -114,6 +136,18 @@ class Scene:
         been moved onto the player (see FlightState.recenter_render_origin).
         Nothing by default.
         """
+
+    def clear_position(self, position: Sequence[float], radius: float) -> np.ndarray:
+        """
+        A place near *position* with room for a ball of *radius*, for ships
+        placed at run time (relative to the player): the position itself
+        unless the scene has obstacles there.
+
+        :param position: World position wanted
+        :param radius: Room needed around it, metres
+        :return: The position to use
+        """
+        return np.asarray(position, dtype=float)
 
 
 class SceneEarthlike(Scene):
@@ -227,136 +261,187 @@ class SceneEarthlike(Scene):
         self.game = None
 
 
-class SceneAsteroids(Scene):
+class SceneSpace(Scene):
+    """
+    Open space: WorldBuilder's World with no planet, for its sky (stars, the
+    sun's disc, a nebula), its sun and Panda3D's lights for the ships.
+
+    The ships are lit by Panda3D's fixed-function lights, with no tone map:
+    the world's light is scaled down by LIGHT_SCALE, its sky light in open
+    space (AMBIENT) given before that scale.
+    """
+
+    #: Toward the sun
+    SUN = SunLook(direction=(-0.42, -0.84, 0.35))
+    #: None: no sky (a scene with its own backdrop)
+    SKY: SkyLook | None = SkyLook()
+    #: The sky light in open space, before LIGHT_SCALE
+    AMBIENT = (0.5, 1.0, 2.0)
+    LIGHT_SCALE = 0.2
+
+    def build_upfront(self):
+        """Build the world (sky, lights, worker processes) on the black
+        screen, before the hyperspace animation starts."""
+        app = self.game.app
+        self.world = World(
+            app,
+            [],
+            sun=self.SUN,
+            sky=self.SKY,
+            settings=app.graphics_settings.world_settings(),
+            light_scale=self.LIGHT_SCALE,
+            clock=self.game.game_time.get_current_time,
+            space_ambient=self.AMBIENT,
+        )
+
+    def build_decomposed(self) -> Generator[str | None, None, None]:
+        """Nothing more by default."""
+        yield from ()
+
+    def update_after_recenter(self):
+        """The sky and the lights around the player, now at the render origin."""
+        self.world.update(self.game.player.pawn.position, far=self.game.depth_far)
+
+    def clean(self):
+        """
+        Cleans the scene
+        """
+        self.world.destroy()
+        self.world = None
+        self.game = None
+
+
+class SceneAsteroids(SceneSpace):
+    """
+    Missions 1 and 2's asteroid field (WorldBuilder's asteroids): a 15 km
+    cube of rock around the origin, patchy, its rocks from 50 m to 2 km
+    across in radius, turning with the game's clock. Its rocks are solid to
+    ships, munitions and sensors as terrain is, and leave room around the
+    level's spawn points and routes (``keep_outs``).
+    """
+
+    FIELD = FieldSpec(
+        shape=Box((7500.0, 7500.0, 7500.0), edge=500.0),
+        density=Density(3.0, Clumping(scale=4000.0, coverage=0.6, softness=0.12)),
+        sizes=Distribution.power_law(3.5, 50.0, 2000.0),
+        material=MaterialSpec(Distribution.uniform(0.0, 0.15)),
+    )
+    #: Rocks farther than this from the player are not solid
+    COLLISION_DISTANCE_M = 20_000.0
+    #: How far clear_position looks for room
+    CLEAR_SEARCH_M = 3000.0
+    #: Speed dust colours
+    DUST = ["blue", "green", "pink", "white"]
+
+    def __init__(self, game: FlightState, keep_outs: Sequence[KeepOut] = ()):
+        super().__init__(game=game)
+        self.keep_outs = tuple(keep_outs)
+
     def build_upfront(self):
         """
-        Build the asteroid fields (one dense static field plus two rotating
-        ones) synchronously on the black screen, BEFORE the hyperspace
-        animation starts. Their GPU preparation is not forced here.
+        Build the world, then the field on its worker pool: its rock shapes
+        are built by the workers during the hyperspace animation (see
+        build_decomposed).
         """
-        # Asteroid field
-        self.static_asteroid_field = AsteroidField(
-            game=self.game,
-            n_asteroids=2000,
-            field_size=15000,
-            is_moving=False,
-            seed=0,
+        super().build_upfront()
+        app = self.game.app
+        scale = self.LIGHT_SCALE
+        self.field = AsteroidField(
+            app,
+            self.FIELD,
+            clock=self.game.game_time.get_current_time,
+            settings=app.graphics_settings.world_settings().asteroids,
+            keep_outs=self.keep_outs,
+            executor=self.world.executor,
+            sun_direction=self.SUN.direction,
+            sun_color=tuple(np.asarray(self.SUN.color) * scale),
+            ambient=tuple(np.asarray(self.AMBIENT) * scale),
+            exposure=1.0,
+            tonemap=False,  # as the ships' fixed-function lighting
+            far=CAMERA_FAR_M,
         )
-        self.big_rotating_asteroid_field = AsteroidField(
-            game=self.game,
-            n_asteroids=20,
-            scale_factor=10,
-            field_size=15000,
-            is_moving=True,
-            seed=1,
-        )
-        self.rotating_asteroid_field = AsteroidField(
-            game=self.game,
-            n_asteroids=500,
-            field_size=15000,
-            is_moving=True,
-            seed=2,
+        # Solid as terrain: the same collision events and handlers
+        self.field.enable_collision(
+            CollisionLayers.TERRAIN_INTO,
+            name="terrain",
+            max_distance=self.COLLISION_DISTANCE_M,
         )
 
-    def build_decomposed(self) -> Generator[str, None, None]:
-        """Build the asteroids scene incrementally"""
-        # Skybox
-        self.skybox = Skybox(game=self.game, name="purple")
-        yield "skybox"
-
-        # Lights
-        self.lighting = Lighting(game=self.game, ambient_color=[0.2, 0.4, 0.6, 1])
-        yield "lighting"
-
-        # Speed dust effect
-        self.speed_dust_cloud = SpeedDustCloud(
-            game=self.game, colors=["blue", "green", "pink", "white"]
-        )
+    def build_decomposed(self) -> Generator[str | None, None, None]:
+        """
+        Build the speed dust, then hold the loading animation until the
+        field's rock shapes are built: nothing is drawn or solid before.
+        """
+        self.speed_dust_cloud = SpeedDustCloud(game=self.game, colors=self.DUST)
         yield "dust"
+        yield from self._build_backdrop()
+        # The game loop is paused while loading: step the field as a frame does
+        yield from wait_until_loaded(
+            lambda: self.field.loading, self.game.follow_render_origin
+        )
 
-        # Drydock
-        # self.drydock = self.game.root_node.attachNewNode("drydock_instance")
-        # drydock_path = DATAFILES_PATH / "models/star_trek_space_drydock/scene.gltf"
-        # self.game.app.asset_manager.instantiate_3d_model_to_node(
-        # path=drydock_path,
-        # parent_node=self.drydock,
-        # )
-        # self.drydock.reparent_to(self.game.root_node)
-        # self.drydock.set_pos(0, 8000, 50)
-        # self.drydock.set_scale(100, 100, 100)
-        # yield "drydock"
+    def _build_backdrop(self) -> Generator[str, None, None]:
+        """Scene-specific set dressing (none here)."""
+        yield from ()
+
+    def update_after_recenter(self):
+        """The sky, the lights and the field around the player: the main
+        camera and the rear-view mirror see it."""
+        super().update_after_recenter()
+        camera_render = self.world.camera_render()
+        camera_world = np.asarray(self.game.player.pawn.position) + camera_render
+        self.field.update(camera_world, camera_render, cameras=self._cameras())
+
+    def _cameras(self) -> list:
+        """:return: The views the rocks are drawn for"""
+        cameras = [getattr(self.game.app, "cam", None)]
+        mirror = getattr(self.game.player, "rear_view_mirror", None)
+        if mirror is not None:
+            cameras.append(mirror.mirror_np)
+        return [camera for camera in cameras if camera is not None]
+
+    def clear_position(self, position: Sequence[float], radius: float) -> np.ndarray:
+        """
+        The nearest place to *position* where a ball of *radius* touches no
+        rock (the field's frame is the world's), or *position* if there is
+        none within CLEAR_SEARCH_M.
+        """
+        position = np.asarray(position, dtype=float)
+        clear = self.field.scatter.find_clear(position, radius, self.CLEAR_SEARCH_M)
+        if clear is None:
+            LOGGER.warning(f"No room for {radius:.0f} m near {position}")
+            return position
+        return clear
 
     def clean(self):
         """
         Cleans the SceneAsteroids
         """
-        # self.drydock.removeNode()
-        self.rotating_asteroid_field.clean()
-        self.rotating_asteroid_field = None
-        self.big_rotating_asteroid_field.clean()
-        self.big_rotating_asteroid_field = None
-        self.static_asteroid_field.clean()
-        self.static_asteroid_field = None
+        self.field.destroy()  # before the world, which owns the worker pool
+        self.field = None
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
-        self.lighting.clean()
-        self.lighting = None
-        self.skybox.clean()
-        self.skybox = None
-        self.game = None
+        super().clean()
 
 
-class SceneLavaPlanet(Scene):
-    def build_upfront(self):
-        """
-        Build the asteroid fields (one static field plus two rotating ones)
-        synchronously on the black screen, BEFORE the hyperspace animation
-        starts. Their GPU preparation is not forced here.
-        """
-        # Asteroid field
-        self.static_asteroid_field = AsteroidField(
-            game=self.game,
-            n_asteroids=500,
-            field_size=15000,
-            is_moving=False,
-            seed=0,
-        )
-        self.big_rotating_asteroid_field = AsteroidField(
-            game=self.game,
-            n_asteroids=3,
-            scale_factor=10,
-            field_size=15000,
-            is_moving=True,
-            seed=1,
-        )
-        self.rotating_asteroid_field = AsteroidField(
-            game=self.game,
-            n_asteroids=100,
-            field_size=15000,
-            is_moving=True,
-            seed=2,
-        )
+class SceneLavaPlanet(SceneAsteroids):
+    """
+    The Dev level's scene: a sparser field in a lava planet's orange light,
+    the planet a 2D backdrop, no sky.
+    """
 
-    def build_decomposed(self) -> Generator[str, None, None]:
-        """
-        Build the lava-planet scene incrementally (see
-        SceneAsteroids.build_decomposed): lighting, dust, planet and Star Destroyer.
-        """
-        # Lights
-        self.lighting = Lighting(
-            game=self.game,
-            directional_direction=[0, 0, 0],
-            ambient_color=[0.4, 0.2, 0.1, 1],
-        )
-        yield "lighting"
+    FIELD = FieldSpec(
+        shape=Box((7500.0, 7500.0, 7500.0), edge=500.0),
+        density=Density(0.4),
+        sizes=Distribution.power_law(3.5, 50.0, 2000.0),
+        seed=1,
+    )
+    SUN = SunLook(direction=(0.0, 0.98, 0.2))  # from the planet
+    SKY = None
+    AMBIENT = (2.0, 1.0, 0.5)
+    DUST = ["orange", "pink", "yellow", "white"]
 
-        # Speed dust effect
-        self.speed_dust_cloud = SpeedDustCloud(
-            game=self.game, colors=["orange", "pink", "yellow", "white"]
-        )
-        yield "dust"
-
-        # Planet
+    def _build_backdrop(self) -> Generator[str, None, None]:
         self.planet = Planet2D(game=self.game, type="lava")
         yield "planet"
 
@@ -364,48 +449,10 @@ class SceneLavaPlanet(Scene):
         """
         Cleans the SceneLavaPlanet
         """
-        self.rotating_asteroid_field.clean()
-        self.rotating_asteroid_field = None
-        self.big_rotating_asteroid_field.clean()
-        self.big_rotating_asteroid_field = None
-        self.static_asteroid_field.clean()
-        self.static_asteroid_field = None
-        self.speed_dust_cloud.clean()
-        self.speed_dust_cloud = None
-        self.lighting.clean()
-        self.lighting = None
         self.planet.clean()
         self.planet = None
-        # No skybox: build_decomposed doesn't build one for this scene.
-        self.game = None
+        super().clean()
 
 
-class SceneDebug(Scene):
-    def build_upfront(self):
-        """
-        Nothing to build upfront: the debug scene has no heavy objects.
-        """
-        pass
-
-    def build_decomposed(self) -> Generator[str, None, None]:
-        """
-        Build the debug scene incrementally (see SceneAsteroids.build_decomposed):
-        a skybox and lighting.
-        """
-        # Skybox
-        self.skybox = Skybox(game=self.game, name="test")
-        yield "skybox"
-
-        # Lights
-        self.lighting = Lighting(game=self.game)
-        yield "lighting"
-
-    def clean(self):
-        """
-        Cleans the SceneDebug
-        """
-        self.lighting.clean()
-        self.lighting = None
-        self.skybox.clean()
-        self.skybox = None
-        self.game = None
+class SceneDebug(SceneSpace):
+    """An empty sky, lit."""

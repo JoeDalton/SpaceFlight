@@ -16,11 +16,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterator, Sequence
 
 import numpy as np
+from world_builder.asteroids.spec import KeepOut
 
 from space_flight.game.levels.common import (
     build_upfront,
+    clear_position,
     police_fire,
     relative_position,
+    route_keep_outs,
 )
 from space_flight.game.levels.hints import (
     laser_power_hint,
@@ -80,6 +83,24 @@ JUMP_POINT_RADIUS_M = 400
 
 TIES_BEHIND_M = 1000
 
+# Room the asteroid field leaves clear: the start, Blue flight's patrol loop
+# and the convoy's route (rocks stand close to them, not on them). The
+# smuggler and the TIEs, spawned relative to the player, find their own room
+# (clear_position).
+ROUTE_CLEARANCE_M = 300
+CONVOY_CLEARANCE_M = 500  # GR-75s, 30 m across, and room to avoid each other
+SMUGGLER_CLEARANCE_M = 150
+TIES_CLEARANCE_M = 200  # a diamond of four
+BLUE_SPAWN_POINT = [0, -4600, 500]
+KEEP_OUTS = [
+    *route_keep_outs(
+        [PLAYER_SPAWN_POINT, BLUE_SPAWN_POINT, PATROL_WAYPOINTS[0]], ROUTE_CLEARANCE_M
+    ),
+    *route_keep_outs(PATROL_WAYPOINTS, ROUTE_CLEARANCE_M, loop=True),
+    *route_keep_outs([CONVOY_SPAWN_POINT, *CONVOY_ROUTE], CONVOY_CLEARANCE_M),
+    KeepOut(tuple(EXIT_GATE), EXIT_GATE_RADIUS_M),
+]
+
 INTRO_DELAY_S = 40  # patrol chatter before the convoy shows up
 CONVOY_INTERVAL_S = 20  # between two convoy transports
 DEFEAT_DELAY_S = 3
@@ -108,7 +129,7 @@ BLUE_FLIGHT = WaveSpec(
     ship_model="x-wing",
     size=2,
     team=1,
-    spawn_point=[0, -4600, 500],
+    spawn_point=BLUE_SPAWN_POINT,
     spawn_orientation=(1, 0, 0, 0),  # north, as the player
     formation="arrowhead",
     waypoints=PATROL_WAYPOINTS,
@@ -176,6 +197,7 @@ def build_mission2_upfront(game: FlightState):
         scene_name="asteroids",
         player_ship_type="x-wing",
         player_position=PLAYER_SPAWN_POINT,
+        keep_outs=KEEP_OUTS,
     )
 
 
@@ -389,8 +411,12 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     yield from m.wait(6)
 
     player_pawn = game.player.pawn
-    spawn_point = relative_position(
-        player_pawn, right_m=-SMUGGLER_LEFT_M, forward_m=SMUGGLER_AHEAD_M
+    spawn_point = clear_position(
+        game,
+        relative_position(
+            player_pawn, right_m=-SMUGGLER_LEFT_M, forward_m=SMUGGLER_AHEAD_M
+        ),
+        SMUGGLER_CLEARANCE_M,
     )
     crossing = relative_position(player_pawn, forward_m=SMUGGLER_CROSSING_AHEAD_M)
     heading = (crossing - spawn_point) / np.linalg.norm(crossing - spawn_point)
@@ -459,7 +485,11 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     m.objective("Stop the gun-runner", done=smuggler.all_destroyed, failed=jumped)
 
     ties.spawn(
-        spawn_point=relative_position(player_pawn, forward_m=-TIES_BEHIND_M),
+        spawn_point=clear_position(
+            game,
+            relative_position(player_pawn, forward_m=-TIES_BEHIND_M),
+            TIES_CLEARANCE_M,
+        ),
         orientation=player_pawn.orientation,
         target=blue,
     )
