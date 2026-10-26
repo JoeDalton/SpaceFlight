@@ -175,6 +175,9 @@ class SceneEarthlike(Scene):
     MOON_DISTANCE_M = 10_000e3
     MOON_ZENITH_ANGLE_DEG = 75.0
     MOON_AMBIENT = (0.025, 0.025, 0.03)
+    # Masses in kg (for a gravity constant in SI units)
+    PLANET_MASS_KG = 5.97e24
+    MOON_MASS_KG = 7.35e22
     # The ships are lit by Panda3D's fixed-function lights, with no tone map:
     # the world's physical noon sun (about 2.4) is scaled to about white
     LIGHT_SCALE = 0.4
@@ -195,12 +198,14 @@ class SceneEarthlike(Scene):
                 atmosphere=AtmosphereParams(),
                 clouds=self.CLOUDS,
                 ocean=self.OCEAN,
+                mass=self.PLANET_MASS_KG,
             ),
             BodyLook(
                 "moon",
                 replace(PRESETS["moon"], seed=7),
                 position=tuple(moon),
                 ambient=self.MOON_AMBIENT,
+                mass=self.MOON_MASS_KG,
             ),
         ]
 

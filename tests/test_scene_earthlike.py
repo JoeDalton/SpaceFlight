@@ -257,7 +257,9 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
     """
     native = pytest.importorskip("world_builder.terrain.native")
     planet = SceneEarthlike(game=None).bodies()[0]
-    bare = BodyLook(planet.name, planet.spec, position=planet.position)
+    bare = BodyLook(
+        planet.name, planet.spec, position=planet.position, mass=planet.mass
+    )
     world = World(spaceflight_app, [bare], lights=False)
     try:
         try:
