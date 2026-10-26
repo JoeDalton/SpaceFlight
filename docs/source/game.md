@@ -67,11 +67,11 @@ The scene graph has two frames that are easy to confuse:
 
 - **`game.root_node` is the world frame.** It is the single child of
   `render` created by `initialize_game_structure()`, and every gameplay node
-  hangs under it: ships, munitions, asteroids, skyboxes, lights. A position
-  relative to `root_node` is a world position, the same thing physics stores
-  in `pawn.position`. A planet's world (WorldBuilder's `World`) is the
-  exception: it hangs under `render` and places itself around the camera in
-  float64, from the player's world position.
+  hangs under it: ships, munitions, 2D planets. A position relative to
+  `root_node` is a world position, the same thing physics stores in
+  `pawn.position`. WorldBuilder's parts are the exception: a `World` (sky,
+  lights, planets) and an asteroid field hang under `render` and place
+  themselves around the camera in float64, from the player's world position.
 - **`render` is the frame Panda3D draws from.** The engine composes every
   node's net transform from `render` down, in float32.
 
@@ -151,7 +151,7 @@ Each camera gets the whole buffer for its own range.
 **Ranges.**
 - By default, `Scene.depth_ranges()` splits at 2 km, which gives about
   0.25 m depth steps there, and reaches `CAMERA_FAR_M`. The space levels'
-  skyboxes and 2D planets lie beyond the split, so only the far camera draws
+  sky and 2D planets lie beyond the split, so only the far camera draws
   them.
 - A planet scene follows its ground instead.
 
@@ -252,11 +252,13 @@ entry into game effects.
     collision events are handled on the next frame, once the munition has
     moved on. The launch point does not move, and a shielded ship is slow next
     to a munition, so its bubble has barely moved since the launch.
-    On terrain, the sparks follow its material: an asteroid field declares
-    one (`material`), while a planet's terrain, whose ground varies,
-    gives the one at the hit point (`material_at`: `"water"` or a biome);
-    `_TERRAIN_SPARK_PRESET` maps water and snow to ice, and anything else to
-    rock.
+    On terrain, the sparks follow its material at the hit point
+    (`material_at`: `"water"` or a biome on a planet, `"rock"` or `"snow"`
+    on an asteroid; terrain with a single material declares it,
+    `material`); `_TERRAIN_SPARK_PRESET` maps water and snow to ice, and
+    anything else to rock. Where the terrain moves (a turning asteroid,
+    `velocity_at`), the sparks leave with its surface, and a crash's bounce
+    and damage take the ship's speed relative to it.
   - **Flares** (`ordnance_into_flare`): ordnance hitting a flare of another
     team is spent, and so is the flare.
   - **Ship physical hits** (`ship-into-*` / `ship-again-*` events, against

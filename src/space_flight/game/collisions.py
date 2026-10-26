@@ -31,6 +31,7 @@ from space_flight.utils import magnitude
 from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
+    from world_builder.asteroids.collision import AsteroidSurface
     from world_builder.terrain.collision import TerrainSurface
 
     from space_flight.actors.major_ship.shield import Shield
@@ -38,7 +39,6 @@ if TYPE_CHECKING:
     from space_flight.actors.ship import Ship
     from space_flight.ai.collision_sensor import CollisionSensor
     from space_flight.game.flight_state import FlightState
-    from space_flight.scenes.asteroid_field import AsteroidField
     from space_flight.weapons import Munition
 
     # Any object that can own a collider (stored as its "owner" python tag).
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
         Ship
         | SubSystem
         | Shield
-        | AsteroidField
+        | AsteroidSurface
         | TerrainSurface
         | Munition
         | CollisionSensor
@@ -67,12 +67,12 @@ COLLISION_DAMAGE_FACTOR = 0.05
 HIT_EXPLOSION_CHANCE = 1.0 / 3.0
 
 #: Terrain material → spark preset. Each terrain object declares a material
-#: attribute (e.g. AsteroidField.material == "rock"), or, for a planet's
-#: terrain whose ground varies, a
-#: material_at(point, relative_to) method giving "water" or the biome there
-#: (WorldBuilder's TerrainSurface). Water and snow read as ice, rock as
-#: gray-brown, metal as metal. Terrain with no/unknown material (the other
-#: biomes: grass, forest, desert, beach) falls back to rock.
+#: attribute, or, for terrain whose material varies, a
+#: material_at(point, relative_to) method: "water" or the biome there for a
+#: planet (WorldBuilder's TerrainSurface), "rock" or "snow" for an asteroid
+#: (its AsteroidSurface). Water and snow read as ice, rock as gray-brown,
+#: metal as metal. Terrain with no/unknown material (the other biomes: grass,
+#: forest, desert, beach) falls back to rock.
 _TERRAIN_SPARK_PRESET = {
     "water": spark_fx.ICE,
     "snow": spark_fx.ICE,
@@ -260,6 +260,24 @@ def _normalize(vector: Vec3) -> Vec3:
     if not vector.almostEqual(Vec3(0, 0, 0)):
         vector.normalize()
     return vector
+
+
+def _surface_velocity(
+    terrain: ColliderOwner, point: Vec3, frame: NodePath
+) -> np.ndarray:
+    """
+    How fast a terrain's surface moves at a contact point: an asteroid turns
+    (its AsteroidSurface's velocity_at); other terrain is still.
+
+    :param terrain: The terrain collider's owner
+    :param point: The contact point, in *frame*
+    :param frame: The frame of *point* and of the result
+    :return: The surface's velocity, m/s
+    """
+    velocity_at = getattr(terrain, "velocity_at", None)
+    if velocity_at is None:
+        return np.zeros(3)
+    return np.asarray(velocity_at(point, frame), dtype=float).reshape(3)
 
 
 def _immovable_bounce(normal: Vec3, normal_relative_velocity: float) -> np.ndarray:
@@ -485,10 +503,11 @@ class CollisionSystem:
 
         self._distant_impact(entry, munition, "terrain")
 
-        # Sparks coloured by the terrain type (water → ice, rock → gray-brown).
-        # Terrain is static, so no inherited velocity. An infinite-plane terrain
-        # collider reports a surface normal but not always a surface point, so
-        # fall back to the munition's own position/direction when either is missing.
+        # Sparks coloured by the terrain type (water → ice, rock → gray-brown),
+        # carried along by its surface where it moves (a turning asteroid). An
+        # infinite-plane terrain collider reports a surface normal but not
+        # always a surface point, so fall back to the munition's own
+        # position/direction when either is missing.
         if entry.hasSurfaceNormal():
             normal = entry.getSurfaceNormal(self.game.root_node)
         else:
@@ -508,7 +527,7 @@ class CollisionSystem:
         self.game.spark_fx_pool.spawn(
             position=hit_point,
             normal=normal,
-            base_velocity=np.zeros(3),
+            base_velocity=_surface_velocity(terrain, hit_point, self.game.root_node),
             preset=preset,
         )
 
@@ -712,7 +731,8 @@ class CollisionSystem:
 
     def ship_into_terrain_pushback(self, entry: CollisionEntry):
         """
-        Handle the case where a ship hits immobile terrain.
+        Handle the case where a ship hits terrain (still, or a turning
+        asteroid: the bounce and the damage take its surface's motion).
         We don't use collision forces because they are too stiff.
         Instead, we use impulse correction
 
@@ -730,9 +750,16 @@ class CollisionSystem:
         if terrain_into is None:
             return
 
-        # Get impact parameters
+        # Get impact parameters: the ship's speed relative to the surface,
+        # which moves where the terrain turns (an asteroid)
         normal = self._world_normal(entry)
-        normal_relative_velocity = np.dot(normal, ship_from.speed)
+        surface_velocity = np.zeros(3)
+        if getattr(terrain_into, "velocity_at", None) is not None:
+            hit_point = entry.getSurfacePoint(self.game.root_node)
+            surface_velocity = _surface_velocity(
+                terrain_into, hit_point, self.game.root_node
+            )
+        normal_relative_velocity = np.dot(normal, ship_from.speed - surface_velocity)
 
         # Compute impulse correction
         velocity_correction = _immovable_bounce(normal, normal_relative_velocity)

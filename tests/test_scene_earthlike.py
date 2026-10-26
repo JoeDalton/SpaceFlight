@@ -64,7 +64,11 @@ def _gate(loading: list[bool], clock: FakeClock, dt: float = 0.125):
         world.loading = next(states, loading[-1])
         clock.now += dt
 
-    yielded = sum(1 for _ in wait_until_loaded(lambda: world.loading, step, clock))
+    pauses = []
+    yielded = sum(
+        1 for _ in wait_until_loaded(lambda: world.loading, step, clock, pauses.append)
+    )
+    world.pauses = pauses
     return yielded, world.steps
 
 
@@ -86,6 +90,22 @@ class TestWaitUntilLoaded:
         _gate([False, True, True, False], clock)
         # Quiet again from the fourth step (0.5 s) on
         assert clock.now == 0.5 + scenes.WORLD_QUIET_S
+
+    def test_yields_to_the_workers_while_loading(self):
+        """A step still loading sleeps a little (the workers' results come
+        back through this process); once quiet, no more."""
+        clock = FakeClock()
+        states = iter([True, True, False])
+        world = SimpleNamespace(loading=True)
+        pauses = []
+
+        def step():
+            world.loading = next(states, False)
+            clock.now += 0.125
+
+        for _ in wait_until_loaded(lambda: world.loading, step, clock, pauses.append):
+            pass
+        assert pauses == [scenes.LOADING_YIELD_S] * 2
 
     def test_gives_up_after_the_timeout(self, caplog):
         clock = FakeClock()

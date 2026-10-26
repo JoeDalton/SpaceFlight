@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Sequence, Union
 
 import numpy as np
+from world_builder.asteroids.spec import KeepOut
 
 from space_flight.actors.player import Player
 from space_flight.game.scenario.conditions import hit_pawns
@@ -33,6 +34,7 @@ def build_upfront(
     player_is_neutral: bool = False,
     player_record: bool = False,
     player_loadout: Loadout | None = None,
+    keep_outs: Sequence[KeepOut] = (),
 ):
     """
     Build the heavy, up-front part of a level — run synchronously on a black
@@ -47,6 +49,8 @@ def build_upfront(
     :param player_is_neutral: Team 0 instead of 1
     :param player_record: Step-by-step-record the player
     :param player_loadout: The player's weapons; None for its default loadout
+    :param keep_outs: Room the scene's asteroid field leaves clear (see
+        route_keep_outs)
     """
     game.player = Player(
         game=game,
@@ -57,8 +61,40 @@ def build_upfront(
         record=player_record,
         loadout=player_loadout,
     )
-    game.scene = scene_factory(game=game, scene_name=scene_name)
+    game.scene = scene_factory(game=game, scene_name=scene_name, keep_outs=keep_outs)
     game.scene.build_upfront()
+
+
+def route_keep_outs(
+    points: Sequence[Sequence[float]], radius: float, loop: bool = False
+) -> list[KeepOut]:
+    """
+    Room along a route that no asteroid enters: a capsule of *radius* around
+    each leg (one ball for a single point).
+
+    :param points: The route's world positions, in order
+    :param radius: Clearance around the route, metres
+    :param loop: Whether the route closes on its first point
+    :return: The keep-outs
+    """
+    points = [tuple(float(v) for v in p) for p in points]
+    if len(points) == 1:
+        return [KeepOut(points[0], radius)]
+    legs = list(zip(points, points[1:]))
+    if loop:
+        legs.append((points[-1], points[0]))
+    return [KeepOut(a, radius, end=b) for a, b in legs]
+
+
+def clear_position(game: FlightState, position: Sequence[float], radius: float):
+    """
+    Where to put ships wanted at *position* (placed at run time, relative to
+    the player): the nearest place with room for a ball of *radius* in the
+    scene (clear of its asteroids).
+
+    :return: The world position to use
+    """
+    return game.scene.clear_position(position, radius)
 
 
 def relative_position(

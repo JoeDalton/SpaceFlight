@@ -13,11 +13,15 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Callable, Iterator
 
+from world_builder.asteroids.spec import KeepOut
+
 from space_flight.game.levels.common import (
     FRIENDLY_FIRE_GRACE_S,
     build_upfront,
+    clear_position,
     police_fire,
     relative_position,
+    route_keep_outs,
 )
 from space_flight.game.levels.hints import (
     engine_power_hint,
@@ -73,6 +77,19 @@ ION_LOADOUT = replace(default_loadout("x-wing"), lasers=ION).with_ordnance(
     ion_bomb=0,
 )
 
+# Room the asteroid field leaves clear: the player's way to the first
+# waypoint, the circuit and the race (rocks stand close to them, not on them).
+# The formation, spawned relative to the player, finds its own room
+# (clear_position).
+ROUTE_CLEARANCE_M = 300
+FORMATION_CLEARANCE_M = 150
+KEEP_OUTS = [
+    *route_keep_outs([PLAYER_SPAWN_POINT, WAYPOINT_1], ROUTE_CLEARANCE_M),
+    KeepOut(tuple(WAYPOINT_1), 2 * WAYPOINT_1_ARRIVAL_RADIUS_M),
+    *route_keep_outs([WAYPOINT_1, CIRCUIT_WAYPOINTS[0]], ROUTE_CLEARANCE_M),
+    *route_keep_outs(CIRCUIT_WAYPOINTS, ROUTE_CLEARANCE_M, loop=True),
+]
+
 # The leader + 3 wingmen the player follows, then races. Their spawn point
 # depends on the player's position when WAYPOINT_1 is reached, so it is given
 # at spawn time.
@@ -99,6 +116,7 @@ RACE_WAYPOINTS = [
 FINISH_RADIUS_M = 300
 # How close the player passes a race waypoint (the route's arrival radius)
 RACE_GATE_RADIUS_M = 350
+KEEP_OUTS += route_keep_outs(RACE_WAYPOINTS, RACE_GATE_RADIUS_M)
 RACE_TIMEOUT_S = 300  # defeat if the player hasn't finished by then
 RACE_NAG_S = RACE_TIMEOUT_S - 60  # "where are you?" before the timeout
 WAYPOINT_NAG_S = 45  # "any time today" if the first waypoint takes this long
@@ -210,6 +228,7 @@ def build_mission1_upfront(game: FlightState):
         player_ship_type="x-wing",
         player_position=PLAYER_SPAWN_POINT,
         player_loadout=ION_LOADOUT,
+        keep_outs=KEEP_OUTS,
     )
 
 
@@ -250,8 +269,12 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     # 2. Spawn the formation 1km ahead and to the left, teach Fighters + loop.
     # ==================================================================
-    spawn_point = relative_position(
-        game.player.pawn, right_m=-FORMATION_LEFT_M, forward_m=FORMATION_AHEAD_M
+    spawn_point = clear_position(
+        game,
+        relative_position(
+            game.player.pawn, right_m=-FORMATION_LEFT_M, forward_m=FORMATION_AHEAD_M
+        ),
+        FORMATION_CLEARANCE_M,
     )
     blue = m.spawn(BLUE_SQUADRON, spawn_point=spawn_point)
     form_up = m.objective("Form up with Blue squadron")

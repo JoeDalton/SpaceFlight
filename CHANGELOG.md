@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Space scenes draw WorldBuilder's sky (stars, sun, nebula) and take their lights from it, instead of skyboxes #176
+- Asteroid fields are now procdural, built in WorldBuilder
+- Crashes into and sparks off a turning rock take its surface's motion into account #176
+
+### Removed
+
+- Skyboxes, the old asteroid field and its rock models, and the scenes' `Lighting` #176
+
 ## [0.4.0] - 2026-10-23
 
 ### Added
