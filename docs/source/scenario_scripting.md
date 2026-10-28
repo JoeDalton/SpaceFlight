@@ -389,7 +389,7 @@ counting up, e.g. `wave.destroyed_count` or `m.kills(...)`) and `goal`, the
 line shows `"(n/goal)"` and, by default, is ticked when the count reaches
 the goal; the count freezes once the objective is settled. A line blinks
 for a moment when it is added, ticked or failed. Keep the text short: the
-checklist is a reminder, while `m.hud` / `m.speech` explain.
+checklist is a reminder, while `m.hud` / `m.say` explain.
 
 The returned `Objective` can also be settled by the body, `complete()` or
 `fail()` (no-ops once settled), or taken off the list, `remove()`. Its
@@ -435,7 +435,7 @@ friendly fire.
 |---|---|
 | `m.hud(text)` | HUD banner message |
 | `m.hint(text)` | tutorial hint, in place of the banner but smaller and wrapped; the texts, with the player's key bindings, come from [`game/levels/hints.py`](../../src/space_flight/game/levels/hints.py) |
-| `m.speech(text, speaker=None)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
+| `m.say(text, speaker=None)` | subtitle (`"speaker: text"`); audio is a logging stub for now |
 | `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
 | `m.clear_player_waypoints()` | removes it |
 | `m.jump_out(who, spool_s=None)` | every live bot of `who` leaves the level through [hyperspace](#hyperspace) |

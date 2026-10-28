@@ -198,7 +198,7 @@ def mission3_mission(m: Mission) -> Iterator[None]:
     # Reinforcements at 200s, or 3s after the first wave is wiped -- whichever
     # comes first, and only once.
     def spawn_third_wave():
-        m.speech(
+        m.say(
             "More bombers, eight of them, dropping out of the clouds!",
             speaker="Red Two",
         )
@@ -304,14 +304,14 @@ def mission3_mission(m: Mission) -> Iterator[None]:
                 speaker, line = lines["last"]
                 if after_the_last is not None:
                     m.schedule(after_the_last())
-            m.speech(line, speaker=speaker)
+            m.say(line, speaker=speaker)
 
         m.on(wave.all_destroyed, comment)
 
     def convoy_runs_for_it() -> Iterator[None]:
         yield from m.wait(4)
         if not every_wave_down():
-            m.speech(
+            m.say(
                 "Copy, Red Leader. Pushing our engines past the red line.",
                 speaker="Convoy Lead",
             )
@@ -349,7 +349,7 @@ def mission3_mission(m: Mission) -> Iterator[None]:
             mourned.add(pawn_id)
             if survivors:
                 line = ESCORT_LOSS_LINES[min(len(mourned), len(ESCORT_LOSS_LINES)) - 1]
-                m.speech(line.format(name=name), speaker=survivors[0])
+                m.say(line.format(name=name), speaker=survivors[0])
 
     m.on(lambda: escort.destroyed_count() > len(mourned), mourn_the_escort, once=False)
     m.say_when(
@@ -369,14 +369,14 @@ def mission3_mission(m: Mission) -> Iterator[None]:
 
     yield from m.wait(2)
     escort.spawn()
-    m.speech(
+    m.say(
         "Red squadron standing by. Red Seven, that A-wing's the fastest\n"
         "thing we've got: you're our interceptor. Stay near the convoy.",
         speaker="Red Leader",
     )
 
     yield from m.wait(10)
-    m.speech(
+    m.say(
         "Convoy Lead to escort: we're slow, fat and full of medical supplies.\n"
         "We're counting on you.",
         speaker="Convoy Lead",
@@ -389,7 +389,7 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         progress=first_wave.destroyed_count,
         goal=FIRST_WAVE.size,
     )
-    m.speech(
+    m.say(
         "Bombers, dead ahead and coming in low! They're after the transports.\n"
         "Red Seven, break and engage!",
         speaker="Red Leader",
@@ -403,9 +403,9 @@ def mission3_mission(m: Mission) -> Iterator[None]:
         progress=second_wave.destroyed_count,
         goal=SECOND_WAVE.size,
     )
-    m.speech("TIE-Fighters! They're coming for us this time!", speaker="Red Two")
+    m.say("TIE-Fighters! They're coming for us this time!", speaker="Red Two")
     yield from m.wait(3)
-    m.speech(
+    m.say(
         "Red Two, Three, with me on the fighters.\n"
         "Seven, keep those bombers off the convoy!",
         speaker="Red Leader",

@@ -227,7 +227,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     m.player_waypoints([WAYPOINT_1], arrival_radius_m=WAYPOINT_1_ARRIVAL_RADIUS_M)
     nav_point = m.objective("Reach the nav point")
     yield from m.wait(0.5)
-    m.speech(
+    m.say(
         "Morning, rookie. Blue squadron's running drills out past the rocks.\n"
         "First, show me you can find a nav point.",
         speaker="Blue Leader",
@@ -294,25 +294,25 @@ def mission1_mission(m: Mission) -> Iterator[None]:
     # The formation's chatter runs alongside the body, so catching up or
     # finishing the circuit early is not held back by it.
     def formation_chatter() -> Iterator[None]:
-        m.speech(
+        m.say(
             "There you are. Welcome to Blue squadron, you're Blue Five today.\n"
             "Form up on us.",
             speaker="Blue Leader",
         )
         yield from m.wait(5)
-        m.speech(
+        m.say(
             "A rookie? Lead, you promised no babysitting this week.",
             speaker="Blue Two",
         )
         yield from m.wait(4)
-        m.speech(
+        m.say(
             "Cut the chatter, Two. Five, stay close to any of us and keep up.",
             speaker="Blue Leader",
         )
         m.hint(stay_close_hint(FOLLOW_RADIUS_M, "Blue squadron"))
         yield from m.wait_until(close_to_blue)
         yield from m.wait(4)
-        m.speech("Good, you're with us. Now hold it there.", speaker="Blue Leader")
+        m.say("Good, you're with us. Now hold it there.", speaker="Blue Leader")
         yield from m.dialogue(CIRCUIT_CHATTER, stop=lambda: bool(race_started))
 
     m.schedule(formation_chatter())
@@ -359,7 +359,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
         grace_s=FRIENDLY_FIRE_GRACE_S,
     )
 
-    m.speech(
+    m.say(
         "Not bad, Five! Now let's see what you've really got.\n"
         "Race you to the marker! Follow the new waypoints.",
         speaker="Blue Leader",
@@ -391,7 +391,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
                 speaker, line = player_line
             else:
                 speaker, line = wingman_line[0] or arrivals[0], wingman_line[1]
-            m.speech(line, speaker=speaker)
+            m.say(line, speaker=speaker)
 
         m.on(lambda: bool(arrivals), comment)
 
@@ -420,7 +420,7 @@ def mission1_mission(m: Mission) -> Iterator[None]:
 
     def wingman_won():
         name = BLUE_NAMES[racers.index(finish_order[0]) - 1]
-        m.speech(WINNER_LINES[name], speaker=name)
+        m.say(WINNER_LINES[name], speaker=name)
 
     m.on(
         lambda: bool(finish_order) and finish_order[0] is not game.player,

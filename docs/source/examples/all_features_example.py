@@ -106,7 +106,7 @@ def all_features_mission(m: Mission) -> Iterator[None]:
     # A wave state method, passed uncalled, is a condition. any_destroyed
     # fires on the first loss (and stays true after a total wipe).
     hit = m.on(
-        homeguard.any_destroyed, lambda: m.speech("We're taking losses!", speaker="Ops")
+        homeguard.any_destroyed, lambda: m.say("We're taking losses!", speaker="Ops")
     )
 
     # delay: 3s after the home guard is wiped -> defeat. m.delay latches, so
@@ -158,8 +158,8 @@ def all_features_mission(m: Mission) -> Iterator[None]:
 
     homeguard.spawn()
     yield from m.wait(1)  # plain time
-    m.speech("Home guard in position.", speaker="Ops")
-    m.speech("A line with no speaker.")
+    m.say("Home guard in position.", speaker="Ops")
+    m.say("A line with no speaker.")
 
     strike.spawn(target=homeguard)  # target: a wave
     yield from m.wait_until(strike.alive)  # a condition
