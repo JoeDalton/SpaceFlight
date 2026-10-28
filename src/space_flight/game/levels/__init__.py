@@ -80,7 +80,7 @@ LEVELS: dict[str, LevelEntry] = {
         description="Escort rebellion transports and protect them "
         "from an imerial ambush.",
     ),
-    "Freeflight": LevelEntry(
+    "Free Flight": LevelEntry(
         upfront=build_free_flight_upfront,
         mission=free_flight_mission,
         description="Explore freely the solar system. No enemies, no mission, "
