@@ -18,6 +18,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from space_flight.game.levels.dev_level import build_dev_upfront, dev_mission
+from space_flight.game.levels.free_flight_level import (
+    build_free_flight_upfront,
+    free_flight_mission,
+)
 from space_flight.game.levels.mission1_level import (
     build_mission1_upfront,
     mission1_mission,
@@ -73,7 +77,14 @@ LEVELS: dict[str, LevelEntry] = {
     "Mission 3: Escort": LevelEntry(
         upfront=build_mission3_upfront,
         mission=mission3_mission,
-        description="The first `game ready` level.",
+        description="Escort rebellion transports and protect them "
+        "from an imerial ambush.",
+    ),
+    "Free Flight": LevelEntry(
+        upfront=build_free_flight_upfront,
+        mission=free_flight_mission,
+        description="Explore freely the solar system. No enemies, no mission, "
+        "just you and your ship.",
     ),
     "Dev": LevelEntry(
         upfront=build_dev_upfront,

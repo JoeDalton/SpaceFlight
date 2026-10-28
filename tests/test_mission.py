@@ -211,11 +211,11 @@ def test_sustained_needs_an_unbroken_run(game, mission):
 # ---------------------------------------------------------------------------
 
 
-def test_hud_hint_and_speech(game, mission):
+def test_hud_hint_and_say(game, mission):
     mission.hud("First wave")
     mission.hint("Press [1].")
-    mission.speech("Standing by.", speaker="Red Leader")
-    mission.speech("Narration.")
+    mission.say("Standing by.", speaker="Red Leader")
+    mission.say("Narration.")
     assert game.hud.messages == [("First wave", EVENT_DISPLAY_S)]
     assert game.hud.hints == [("Press [1].", HINT_DISPLAY_S)]
     assert game.hud.chatter == [
@@ -224,11 +224,11 @@ def test_hud_hint_and_speech(game, mission):
     ]
 
 
-def test_hud_and_speech_are_skipped_headless(game, mission):
+def test_hud_and_say_are_skipped_headless(game, mission):
     game.headless = True
     mission.hud("x")
     mission.hint("z")
-    mission.speech("y")
+    mission.say("y")
     assert game.hud.messages == [] and game.hud.chatter == []
     assert game.hud.hints == []
 

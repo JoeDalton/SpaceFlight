@@ -134,7 +134,7 @@ def police_fire(
         victim = shot[0]
         for speaker, text in stages[index]:
             name = speaker(victim) if callable(speaker) else speaker
-            m.speech(text, speaker=name)
+            m.say(text, speaker=name)
         if index + 1 < len(stages):
             arm(index + 1)
         else:

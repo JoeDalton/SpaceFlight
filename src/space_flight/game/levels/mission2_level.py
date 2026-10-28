@@ -300,7 +300,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     cleared = []
 
     def on_clear():
-        m.speech(CLEAR_LINES[len(cleared)], speaker="Blue Two")
+        m.say(CLEAR_LINES[len(cleared)], speaker="Blue Two")
         cleared.append(True)
 
     for scan in convoy_scans:
@@ -316,21 +316,21 @@ def mission2_mission(m: Mission) -> Iterator[None]:
 
     def on_first_ally_lost():
         if leader in blue.pawns():
-            m.speech("Blue Two is down! Stay sharp, Three.", speaker="Blue Leader")
+            m.say("Blue Two is down! Stay sharp, Three.", speaker="Blue Leader")
         else:
-            m.speech("Lead's hit! I'm on my own out here!", speaker="Blue Two")
+            m.say("Lead's hit! I'm on my own out here!", speaker="Blue Two")
 
     m.on(blue.any_destroyed, on_first_ally_lost)
 
     yield from m.wait(2)
-    m.speech(
+    m.say(
         "Blue Three, you're on my wing. Blue Two, take the high side.",
         speaker="Blue Leader",
     )
     yield from m.wait(4)
-    m.speech("Copy, Lead. Quiet out here... too quiet.", speaker="Blue Two")
+    m.say("Copy, Lead. Quiet out here... too quiet.", speaker="Blue Two")
     yield from m.wait(4)
-    m.speech(
+    m.say(
         "Intel says gun-runners use this field to supply the Tarsus pirates.\n"
         "Every hull that comes through gets scanned.",
         speaker="Blue Leader",
@@ -356,12 +356,12 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     standing_orders.append(
         m.objective("Keep Blue flight alive", failed=blue.all_destroyed)
     )
-    m.speech(
+    m.say(
         "Contact! GR-75 transports coming in from the far side of the field.",
         speaker="Blue Two",
     )
     yield from m.wait(4)
-    m.speech(
+    m.say(
         "Their transponders say civilian freight. Weapons cold, nobody fires on them.\n"
         "Three, you've got the scanner, so take point. We'll follow your lead.",
         speaker="Blue Leader",
@@ -380,9 +380,9 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # 3. The straggler
     # ==================================================================
     yield from m.wait(4)
-    m.speech("That's the lot. Heading home, Lead?", speaker="Blue Two")
+    m.say("That's the lot. Heading home, Lead?", speaker="Blue Two")
     yield from m.wait(4)
-    m.speech(
+    m.say(
         "Not yet. Something about this doesn't sit right. Hold position.",
         speaker="Blue Leader",
     )
@@ -413,12 +413,12 @@ def mission2_mission(m: Mission) -> Iterator[None]:
         lambda: end("defeat", "An unscanned transport slipped through the patrol."),
     )
     endings.append(smuggler_unscanned_exit)
-    m.speech(
+    m.say(
         "Another one! Late, alone, and running without a transponder.",
         speaker="Blue Two",
     )
     yield from m.wait(4)
-    m.speech("Stragglers make me nervous. Scan it, Three.", speaker="Blue Leader")
+    m.say("Stragglers make me nervous. Scan it, Three.", speaker="Blue Leader")
     m.say_when(
         smuggler_scan.progress_at_least(0.5),
         "It's picking up speed... it knows we're looking.",
@@ -432,7 +432,7 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # ==================================================================
     revealed.append(True)
     smuggler_unscanned_exit.cancel()
-    m.speech("Weapons crates! It's a gun-runner!", speaker="Blue Leader")
+    m.say("Weapons crates! It's a gun-runner!", speaker="Blue Leader")
     m.hint(laser_power_hint(game.app))
     smuggler.set_team(2)
 
@@ -476,11 +476,11 @@ def mission2_mission(m: Mission) -> Iterator[None]:
     # held back by it.
     def reveal_chatter() -> Iterator[None]:
         yield from m.wait(1.5)
-        m.speech("Blast! Escort, get them off me!", speaker="Dorn")
+        m.say("Blast! Escort, get them off me!", speaker="Dorn")
         yield from m.wait(1.5)
-        m.speech("TIEs! Four of them, right on our six!", speaker="Blue Two")
+        m.say("TIEs! Four of them, right on our six!", speaker="Blue Two")
         yield from m.wait(3)
-        m.speech(
+        m.say(
             "Two, with me on the fighters. Three, stop that transport\n"
             "before it jumps. Knock out its shield generators!",
             speaker="Blue Leader",

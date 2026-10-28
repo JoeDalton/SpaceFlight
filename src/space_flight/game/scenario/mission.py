@@ -328,11 +328,11 @@ class Mission:
         self, condition: Condition, text: str, speaker: Optional[str] = None
     ) -> Trigger:
         """
-        Play a line of speech (see :meth:`speech`) when condition becomes true.
+        Play a line of speech (see :meth:`say`) when condition becomes true.
 
         :return: The rule (call its cancel() to retire it)
         """
-        return self.on(condition, lambda: self.speech(text, speaker=speaker))
+        return self.on(condition, lambda: self.say(text, speaker=speaker))
 
     # ------------------------------------------------------------------
     # Actions
@@ -353,7 +353,7 @@ class Mission:
         if not self.game.headless:
             self.game.hud.set_hint_text(text=text)
 
-    def speech(self, text: str, speaker: Optional[str] = None):
+    def say(self, text: str, speaker: Optional[str] = None):
         """Play a line of speech (audio stubbed), shown as a subtitle."""
         LOGGER.info("speech [%s]: %s", speaker or "narrator", text)
         if not self.game.headless:
@@ -376,7 +376,7 @@ class Mission:
             yield from self.wait(delay)
             if stop is not None and stop():
                 return
-            self.speech(text, speaker=speaker)
+            self.say(text, speaker=speaker)
 
     def player_waypoints(
         self,
