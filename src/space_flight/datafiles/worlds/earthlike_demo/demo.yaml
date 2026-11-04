@@ -1,12 +1,12 @@
-# Demo level: a temperate coast (sea to the north, snowy range to the south)
-# with four hand-made features near the start. F1-F4 in the demo swap the
-# planet preset under them; the stamps and paints stay put.
+# Demo level: a dry subtropical coast (sea to the north, a range to the south)
+# with four hand-made features near the start. The demo's --planet swaps the
+# planet preset under them (and --seed the seed); the stamps and paints stay put.
 planet:
   preset: earthlike
   seed: 19
   radius: 600000          # metres; the demo's --radius overrides it
-  # Chosen on the 600 km planet: the coast is ~9 km north, a range ~12 km south.
-  reference: {lat: 38.85, lon: -125.72}
+  # Chosen on the 600 km planet: the coast is ~9 km north, a range ~10 km south.
+  reference: {lat: 20.91, lon: 30.4}
 
 stamps:
   # 0: an impact crater, carved into whatever terrain lies there
@@ -36,12 +36,13 @@ stamps:
     blend: flatten
     falloff: 250
 
-  # 3: a lake under a sheer cliff, set to absolute heights (water at sea level)
+  # 3: a lake under a sheer cliff, set to absolute heights (water at sea level;
+  # its edges at about 75 m, the coastal plain's height)
   - heightmap: stamps/lake.png
-    center: {x: -4500, y: 4500}
+    center: {x: -4500, y: 2500}
     size: [5000, 5000]
-    height_scale: 600
-    height_offset: -60   # pixel 0.1 = sea level, where the water lies
+    height_scale: 300
+    height_offset: -30   # pixel 0.1 = sea level, where the water lies
     blend: replace
     falloff: 700
 
@@ -60,4 +61,4 @@ paints:
     falloff: 60
 
 # South of the features, on the flank of the range, looking north to the coast.
-camera: {x: -2000, y: -10000, z: 1300, heading: 0, pitch: -8}
+camera: {x: 0, y: -4000, z: 1300, heading: 0, pitch: -8}

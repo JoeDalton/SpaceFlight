@@ -15,6 +15,7 @@ from space_flight.game.scenario.conditions import (
     damaged,
     reached_waypoint,
 )
+from space_flight.scenes.scenes import SceneEarthlike
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -70,31 +71,62 @@ FIGHTER_CLEAR_LINES = {
 # After every enemy wave is down: the closing chatter, then the victory.
 ALL_CLEAR_VICTORY_DELAY_S = 7
 
-FACING_NORTH = [1, 0, 0, 0]
-FACING_SOUTH = [0, 0, 0, 1]
+# Positions are written on the chart of the earth-like demo level (x metres
+# east, y metres north of its reference point, z metres above sea level) and
+# converted to world coordinates: the planet is not rotated, so these are not
+# the world's axes (see LevelFrame). The player starts at the demo's start
+# point (its `camera`, without the pitch), the convoy a few hundred metres
+# ahead; the coast is about 6 km north, the range to the south, the mesa
+# 3.5 km east of the first leg.
+FRAME = SceneEarthlike.level_frame()
+NORTH_M = 1000.0
 
-PLAYER_POSITION = [0, -2600, 250]
+
+def at(x: float, y: float, z: float) -> list[float]:
+    """:return: The world position of a chart point"""
+    return FRAME.position(x, y, z).tolist()
+
+
+def facing_north(x: float, y: float, z: float) -> list[float]:
+    """:return: The level orientation (w, x, y, z) facing chart north"""
+    return FRAME.orientation(at(x, y, z), at(x, y + NORTH_M, z)).tolist()
+
+
+def facing_south(x: float, y: float, z: float) -> list[float]:
+    """:return: The level orientation (w, x, y, z) facing chart south"""
+    return FRAME.orientation(at(x, y, z), at(x, y - NORTH_M, z)).tolist()
+
+
+# The demo's start point; the player flies level, parallel to the convoy.
+PLAYER_POSITION = at(0, -4000, 1300)
+PLAYER_ORIENTATION = facing_north(0, -4000, 1300)
+
+# Chart routes of the convoy: north over the coastal plain, then east along
+# the coast over the sea, then down to the fleet. Flown at 1200 m, 900 m over
+# the ground at the start and clear of the mesa.
+TRANSPORTS_ROUTE = [
+    (0, -1500, 1200),
+    (0, 2000, 1200),
+    (500, 4000, 1200),
+    (1000, 5500, 1200),
+    (2000, 6500, 1200),
+    (5000, 6500, 1200),
+    (6000, 6000, 1200),
+    (6500, 5000, 1200),
+    (7000, 4000, 1200),
+]
 
 TRANSPORTS = WaveSpec(
     name="transports",
     ship_model=[("cr-90", 1), ("gr-75", 2)],  # leader, then two wingmen
     bot_type="major_ship",
     team=1,
-    spawn_point=[0, -2000, 200],
-    spawn_orientation=FACING_NORTH,
+    spawn_point=at(0, -3400, 1200),
+    spawn_orientation=facing_north(0, -3400, 1200),
+    formation_frame=facing_north(0, -3400, 1200),
     formation="arrowhead",
     formation_scale_m=150,
-    waypoints=[
-        [0, 0, 200],
-        [0, 3000, 200],
-        [500, 4000, 200],
-        [1000, 4500, 200],
-        [2000, 5000, 200],
-        [5000, 5000, 200],
-        [6000, 4500, 200],
-        [6500, 4000, 200],
-        [7000, 3000, 200],
-    ],
+    waypoints=[at(*p) for p in TRANSPORTS_ROUTE],
     hyperspace=True,
 )
 # The convoy is past the blockade once it reaches its last waypoint.
@@ -107,11 +139,12 @@ ESCORT = WaveSpec(
     ship_model="x-wing",
     size=8,
     team=1,
-    spawn_point=[200, -2100, 300],
-    spawn_orientation=FACING_NORTH,
+    spawn_point=at(200, -3500, 1300),
+    spawn_orientation=facing_north(200, -3500, 1300),
+    formation_frame=facing_north(200, -3500, 1300),
     formation="arrowhead",
     # Flies alongside the convoy: 200m to its right, 100m above.
-    waypoints=[[x + 200, y, z + 100] for x, y, z in TRANSPORTS.waypoints],
+    waypoints=[at(x + 200, y, z + 100) for x, y, z in TRANSPORTS_ROUTE],
     hyperspace=True,
 )
 
@@ -119,40 +152,44 @@ FIRST_WAVE = WaveSpec(
     name="first_wave",
     ship_model="tie-bomber",
     size=5,
-    spawn_point=[300, 6000, 500],
-    spawn_orientation=FACING_SOUTH,
+    spawn_point=at(300, 5000, 1200),
+    spawn_orientation=facing_south(300, 5000, 1200),
+    formation_frame=facing_north(300, 5000, 1200),
     formation="arrowhead",
-    waypoints=[[300, 0, 500], [300, -6000, 500]],
+    waypoints=[at(300, -1500, 1200), at(300, -4500, 1200)],
 )
 
 SECOND_WAVE = WaveSpec(
     name="second_wave",
     ship_model="tie-fighter",
     size=5,
-    spawn_point=[300, 5700, 800],
-    spawn_orientation=FACING_SOUTH,
+    spawn_point=at(300, 4700, 1500),
+    spawn_orientation=facing_south(300, 4700, 1500),
+    formation_frame=facing_north(300, 4700, 1500),
     formation="diamond",
-    waypoints=[[300, 0, 500], [300, -6000, 500]],
+    waypoints=[at(300, -1500, 1200), at(300, -4500, 1200)],
 )
 
 THIRD_WAVE = WaveSpec(
     name="third_wave",
     ship_model="tie-bomber",
     size=8,
-    spawn_point=[300, 0, 500],
-    spawn_orientation=FACING_NORTH,
+    spawn_point=at(300, -1500, 1200),
+    spawn_orientation=facing_north(300, -1500, 1200),
+    formation_frame=facing_north(300, -1500, 1200),
     formation="diamond",
-    waypoints=[[300, 6000, 500], [300, 0, 500]],
+    waypoints=[at(300, 4500, 1200), at(300, -1500, 1200)],
 )
 
 FOURTH_WAVE = WaveSpec(
     name="fourth_wave",
     ship_model="tie-fighter",
     size=5,
-    spawn_point=[300, 300, 800],
-    spawn_orientation=FACING_NORTH,
+    spawn_point=at(300, -1200, 1500),
+    spawn_orientation=facing_north(300, -1200, 1500),
+    formation_frame=facing_north(300, -1200, 1500),
     formation="diamond",
-    waypoints=[[300, 6000, 500], [300, 0, 500]],
+    waypoints=[at(300, 4500, 1200), at(300, -1500, 1200)],
 )
 
 
@@ -163,7 +200,7 @@ def build_mission3_upfront(game: FlightState):
 
     This is the player plus the scene's terrain (shaders, textures, worker
     processes); its ground is loaded during the animation. The whole mission
-    flies over the shallow sea of the earth-like demo world.
+    flies over the coast of the earth-like demo world.
 
     :param game: The game/flight state
     """
@@ -172,6 +209,7 @@ def build_mission3_upfront(game: FlightState):
         scene_name="earthlike_planet",
         player_ship_type="a-wing",
         player_position=PLAYER_POSITION,
+        player_orientation=PLAYER_ORIENTATION,
     )
 
 

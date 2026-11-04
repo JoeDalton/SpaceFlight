@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import logging
 import math
 import time
@@ -29,6 +30,7 @@ from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook
 from space_flight import CAMERA_FAR_M, DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
+from space_flight.scenes.level_frame import LevelFrame
 from space_flight.scenes.planet_2d import Planet2D
 
 if TYPE_CHECKING:
@@ -194,14 +196,17 @@ class SceneEarthlike(Scene):
     planet (terrain, air, clouds, swell ocean), its moon, the sky and the sun.
 
     WorldBuilder's World builds and updates them. What they look like is
-    decided here. The planet is not rotated: its centre is one radius below
-    the world origin, so the ground under Mission 3 is its +z pole, with sea
-    level at z = 0 there.
+    decided here. The planet is not rotated: its centre is placed (see
+    LevelFrame) so that the level file's reference point is the world origin,
+    at sea level, with the file's east, north and up not the world's axes.
+    Positions are written on the file's chart and converted with
+    :meth:`level_frame`.
     """
 
     LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
-    # Toward the sun: high in the south-east sky
-    SUN = SunLook(direction=(0.4, -0.5, 0.75))
+    # Toward the sun, as (east, north, up) at the reference point: high in the
+    # south-east sky. SunLook is given the world direction (see __init__).
+    SUN_ENU = (0.4, -0.5, 0.75)
     SKY = SkyLook()
     # The convective clouds above the convoy, which flies at 200-800 m (the
     # stratus deck stays under their base). The genera (stratus, congestus,
@@ -222,13 +227,27 @@ class SceneEarthlike(Scene):
     # the world's physical noon sun (about 2.4) is scaled to about white
     LIGHT_SCALE = 0.4
 
+    @classmethod
+    @functools.cache
+    def level_frame(cls) -> LevelFrame:
+        """:return: The frame of the level file (chart to world)"""
+        spec, _camera_pose = load_level(cls.LEVEL_PATH)
+        return LevelFrame(spec)
+
+    def __init__(self, game: FlightState):
+        super().__init__(game=game)
+        frame = self.level_frame()
+        self.default_up_direction = frame.up
+        self.SUN = SunLook(direction=tuple(frame.vector(*self.SUN_ENU)))
+
     def bodies(self) -> list[BodyLook]:
         """:return: The planet (from LEVEL_PATH) and its moon"""
         spec, _camera_pose = load_level(self.LEVEL_PATH)
-        centre = np.array([0.0, 0.0, -spec.radius])
+        frame = self.level_frame()
+        centre = frame.centre
         angle = math.radians(self.MOON_ZENITH_ANGLE_DEG)
-        moon = centre + self.MOON_DISTANCE_M * np.array(
-            [0.0, math.sin(angle), math.cos(angle)]
+        moon = centre + self.MOON_DISTANCE_M * (
+            math.sin(angle) * frame.north + math.cos(angle) * frame.up
         )
         clouds = replace(
             self.CLOUDS,

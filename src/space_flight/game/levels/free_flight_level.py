@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from space_flight.game.levels import mission3_level as mission3
 from space_flight.game.levels.common import build_upfront
 
 if TYPE_CHECKING:
@@ -16,7 +17,9 @@ if TYPE_CHECKING:
     from space_flight.game.scenario import Mission
 
 
-PLAYER_POSITION = [0, -2600, 250]
+# The earth-like demo's start point, flying level to the north (see mission 3)
+PLAYER_POSITION = mission3.PLAYER_POSITION
+PLAYER_ORIENTATION = mission3.PLAYER_ORIENTATION
 
 
 def build_free_flight_upfront(game: FlightState):
@@ -35,6 +38,7 @@ def build_free_flight_upfront(game: FlightState):
         scene_name="earthlike_planet",
         player_ship_type="a-wing",
         player_position=PLAYER_POSITION,
+        player_orientation=PLAYER_ORIENTATION,
     )
 
 

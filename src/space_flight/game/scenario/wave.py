@@ -46,6 +46,9 @@ class WaveSpec:
     :param formation: "arrowhead", "diamond", "around_diamond", or None to
         spawn in a centred line
     :param formation_scale_m: Spacing of the formation slots
+    :param formation_frame: Quaternion (w, x, y, z) of the axes the formation's
+        spawn slots are written on, in world axes (default: the world's), for
+        a level whose "up" and "north" are not the world's
     :param waypoints: Patrol route given to every ship
     :param loop: Whether the route loops back to its first waypoint
     :param record: Step-by-step-record every bot of the wave (game.record)
@@ -67,6 +70,7 @@ class WaveSpec:
     spawn_orientation: Sequence[float] = (0, 0, 0, 1)
     formation: Optional[str] = None
     formation_scale_m: float = Formation.FIGHTER_SCALE_M
+    formation_frame: Sequence[float] = (1.0, 0.0, 0.0, 0.0)
     waypoints: Sequence[Sequence[float]] = ()
     loop: bool = True
     record: bool = False
@@ -240,6 +244,11 @@ class WaveHandle:
         # Every ship flies off along the spawn heading (the body Y axis)
         _, r01, _, _, r11, _, _, r21, _ = rotation_matrix_coefficients(*orientation)
         heading = np.array([r01, r11, r21])
+        # The formation's slots are written on the world axes, or on the axes
+        # of the spec's formation_frame
+        slots_to_world = np.array(
+            rotation_matrix_coefficients(*spec.formation_frame)
+        ).reshape(3, 3)
         ini_speed = spec.spawn_speed_mps * heading / np.linalg.norm(heading)
 
         for i, model in enumerate(models):
@@ -252,7 +261,8 @@ class WaveHandle:
                 name=f"{spec.name}_{i}",
                 bot_type=spec.bot_type,
                 pawn_model=model,
-                ini_position=spawn_point + _wave_offset(offsets, slot, size),
+                ini_position=spawn_point
+                + slots_to_world @ _wave_offset(offsets, slot, size),
                 ini_orientation=orientation,
                 ini_speed=ini_speed,
                 team=spec.team,
