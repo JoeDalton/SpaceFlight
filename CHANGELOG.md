@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Free flight level in the Earth-like scene
 
+### Added
+
+- Free flight level in the Earth-like scene # 177
+
 ### Changed
 
 - Space scenes draw WorldBuilder's sky (stars, sun, nebula) and take their lights from it, instead of skyboxes #176
