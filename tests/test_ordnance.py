@@ -77,6 +77,7 @@ def game(spaceflight_app):
     game.destructibles = Destructibles()
     game.interactions = FakeInteractions()
     game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    game.scene.up_at = lambda _position: game.scene.up_direction
     return game
 
 

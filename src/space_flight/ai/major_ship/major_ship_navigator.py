@@ -122,7 +122,7 @@ class MajorShipNavigator(GenericShipNavigator):
         :return: The direction to point to and the desired speed
         """
         orbit = self.personality["navigator"]["orbit"]
-        world_up = self.game.scene.up_direction
+        world_up = self.game.scene.up_at(self.pawn.position)
 
         nearest_point = self._nearest_point_on_horizontal_obb(
             target=target, center=target_position, point=self.pawn.position
@@ -191,7 +191,7 @@ class MajorShipNavigator(GenericShipNavigator):
         :param point: The query point (the attacker's position)
         :return: The nearest point on the footprint, in world coordinates
         """
-        world_up = self.game.scene.up_direction
+        world_up = self.game.scene.up_at(self.pawn.position)
         half_extents = getattr(target, "bounding_box_half_extents", None)
         if half_extents is None:
             radius_m = float(getattr(target, "hit_box_radius_m", 50.0))

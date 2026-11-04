@@ -112,13 +112,40 @@ def scene_factory(
     raise NotImplementedError(f"Unknown scene {scene_name}")
 
 
+#: A gravity weaker than this (norm of the raw vector) gives no "up"
+MIN_GRAVITY_NORM = 1e-1
+
+
 class Scene:
     def __init__(
         self,
         game: FlightState,
     ):
         self.game = game
-        self.up_direction = np.array([0, 0, 1])
+        self.default_up_direction = np.array([0, 0, 1])
+        self._gravity = None
+
+    def up_at(self, position: Sequence[float]) -> np.ndarray:
+        """
+        Returns the "up" direction at a given location in the world.
+        If there is significant gravity, up is its opposite.
+        Else, the (0.0.1) is used
+
+        :param position: A world position
+        :return: "Up" there: against the gravity of the scene's WorldBuilder
+            bodies when it is not negligible, else the scene's up_direction
+            (world +Z)
+        """
+        world = getattr(self, "world", None)
+        if world is None or not world.bodies:
+            return self.default_up_direction
+        if self._gravity is None:
+            self._gravity = world.gravity_field()
+        gravity = self._gravity.acceleration(np.asarray(position, dtype=np.float64))
+        norm = float(np.linalg.norm(gravity))
+        if not np.isfinite(norm) or norm < MIN_GRAVITY_NORM:
+            return self.default_up_direction
+        return -gravity / norm
 
     def depth_ranges(self) -> tuple[float, float]:
         """

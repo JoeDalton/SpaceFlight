@@ -51,7 +51,7 @@ class FighterPilot(GenericShipPilot):
         # The vector to level +Z toward: the caller's up-reference (bomb belly
         # aim) or, by default, scene up.
         if up_reference is None:
-            level_reference = self.game.scene.up_direction
+            level_reference = self.game.scene.up_at(self.pawn.position)
             # Normal flight: bank into the turn, then add a light scene-leveling.
             roll_error = np.arctan2(target_x, target_z)
             if (yaw_error**2 + pitch_error**2) < ROLL_TOLERANCE:

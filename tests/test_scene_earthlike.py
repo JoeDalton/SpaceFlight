@@ -306,3 +306,25 @@ def test_the_world_gets_the_split_cameras_for_its_raymarched_clouds():
     scene.use_split_depth(depth)
 
     scene.world.use_split_depth.assert_called_once_with(depth)
+
+
+def test_scene_up_follows_minus_gravity_or_defaults_to_world_z():
+    from types import SimpleNamespace
+
+    from space_flight.scenes.scenes import Scene
+
+    scene = Scene(game=None)
+    default = np.array([0, 0, 1])
+    # No world, or no bodies: world +Z
+    assert np.array_equal(scene.up_at([5.0, 5.0, 5.0]), default)
+    scene.world = SimpleNamespace(
+        bodies=[1],
+        gravity_field=lambda: SimpleNamespace(
+            acceleration=lambda p: -np.asarray(p) * 20
+        ),
+    )
+    up = scene.up_at([3.0, 0.0, 4.0])
+    assert np.allclose(up, [0.6, 0.0, 0.8])
+    # Negligible gravity: world +Z
+    scene._gravity = SimpleNamespace(acceleration=lambda p: np.zeros(3))
+    assert np.array_equal(scene.up_at([3.0, 0.0, 4.0]), default)

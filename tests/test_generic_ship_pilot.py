@@ -129,6 +129,7 @@ def test_generic_ship_pilot_pilot_returns_four_tuple(pilot, mock_game):
     pilot.pawn.forward = np.array([0.0, 1.0, 0.0])
     pilot.pawn.up = np.array([0.0, 0.0, 1.0])
     mock_game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    mock_game.scene.up_at = lambda _position: mock_game.scene.up_direction
 
     result = pilot.pilot(target_direction=np.zeros(3), desired_speed_mps=0.0)
 
@@ -144,6 +145,7 @@ def test_generic_ship_pilot_throttle_clipped_to_minimum(pilot, mock_game):
     pilot.pawn.forward = np.array([0.0, 1.0, 0.0])
     pilot.pawn.up = np.array([0.0, 0.0, 1.0])
     mock_game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    mock_game.scene.up_at = lambda _position: mock_game.scene.up_direction
 
     throttle, _, _, _ = pilot.pilot(target_direction=np.zeros(3), desired_speed_mps=0.0)
 
@@ -206,6 +208,7 @@ def test_feedforward_throttle_holds_speed_when_on_target(pilot, mock_game):
     throttle rather than the bare PID's zero.
     """
     mock_game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    mock_game.scene.up_at = lambda _position: mock_game.scene.up_direction
     pilot.pawn.right = np.array([1.0, 0.0, 0.0])
     pilot.pawn.forward = np.array([0.0, 1.0, 0.0])
     pilot.pawn.up = np.array([0.0, 0.0, 1.0])
@@ -278,6 +281,7 @@ def test_energy_protection_limits_yaw_and_pitch_but_not_roll(pilot, mock_game):
     authority, and leaves the roll rate alone.
     """
     mock_game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    mock_game.scene.up_at = lambda _position: mock_game.scene.up_direction
     pilot.pawn.right = np.array([1.0, 0.0, 0.0])
     pilot.pawn.forward = np.array([0.0, 1.0, 0.0])
     pilot.pawn.up = np.array([0.0, 0.0, 1.0])
