@@ -167,8 +167,8 @@ class SceneEarthlike(Scene):
     SKY = SkyLook()
     # Cumulus above the convoy, which flies at 200-800 m
     CLOUDS = CloudLook(altitude=2200.0)
-    # The 20 m swell, calmed over the shallows; the air's own haze colour
-    OCEAN = OceanLook(haze_color=(0.62, 0.71, 0.84), haze_distance=150000.0)
+    # The 20 m swell, calmed over the shallows (the atmosphere hazes the sea)
+    OCEAN = OceanLook()
     # The moon: the demo's airless sand moon, this far from the planet's
     # centre, this far from the vertical over the origin toward north (ahead
     # of the convoy). Next to no sky light: a black sky.
