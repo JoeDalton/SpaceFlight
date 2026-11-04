@@ -114,6 +114,8 @@ class FlightState(BaseState):
         # After the render-scale pipeline too, whose buffer it draws into.
         self.split_depth = SplitDepthCameras(self.app)
         self.update_split_depth()
+        # The scene's world needs them for its raymarched clouds
+        self.scene.use_split_depth(self.split_depth)
 
         # Phase 2 — play the hyperspace animation; the rest of the level is built
         # incrementally during its looping "inside" phase. The overlay declares

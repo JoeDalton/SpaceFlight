@@ -539,6 +539,24 @@ def test_terrain_sparks_by_its_material(material, preset):
     assert spawned_spark_preset(system) is preset
 
 
+def test_sparks_leave_a_turning_rock_with_its_surface():
+    system = make_collision_system_without_init()
+    rock = turning_rock([1.0, 2.0, 3.0])
+    system.munition_into_terrain(make_terrain_hit(rock))
+    spark_kwargs = system.game.spark_fx_pool.spawn.call_args.kwargs
+    np.testing.assert_allclose(spark_kwargs["base_velocity"], [1.0, 2.0, 3.0])
+    rock.velocity_at.assert_called_once_with(
+        Vec3(10.0, 20.0, 0.0), system.game.root_node
+    )
+
+
+def test_sparks_leave_still_terrain_at_rest():
+    system = make_collision_system_without_init()
+    system.munition_into_terrain(make_terrain_hit(SimpleNamespace(material="rock")))
+    spark_kwargs = system.game.spark_fx_pool.spawn.call_args.kwargs
+    np.testing.assert_allclose(spark_kwargs["base_velocity"], 0.0)
+
+
 @pytest.mark.parametrize(
     "material,preset",
     [
@@ -1396,12 +1414,60 @@ def test_ramming_a_wreck_leaves_its_killer():
     assert wreck.last_hit_by == "the killer"
 
 
-def make_terrain_entry(ship) -> MagicMock:
+def make_terrain_entry(ship, terrain=None) -> MagicMock:
+    """
+    :param terrain: The terrain's owner; default a still one (no velocity_at)
+    """
     entry = MagicMock()
     entry.from_node_path.python_tags = {"owner": ship}
-    entry.into_node_path.python_tags = {"owner": MagicMock()}
+    owner = terrain if terrain is not None else SimpleNamespace(material="rock")
+    entry.into_node_path.python_tags = {"owner": owner}
     entry.getSurfaceNormal.return_value = Vec3(1.0, 0.0, 0.0)
+    entry.getSurfacePoint.return_value = Vec3(5.0, 0.0, 0.0)
     return entry
+
+
+def turning_rock(velocity) -> SimpleNamespace:
+    """A terrain owner whose surface moves (an asteroid's AsteroidSurface)."""
+    return SimpleNamespace(
+        material="rock", velocity_at=MagicMock(return_value=np.array(velocity))
+    )
+
+
+def test_a_ship_matching_a_turning_rock_does_not_crash():
+    """Moving with the rock's surface is no impact: no damage, no bounce."""
+    system = make_collision_system_without_init()
+    ship = make_ship_at([0.0, 0.0, 0.0], [-30.0, 0.0, 0.0], health=10.0)
+    take_damage(ship)
+    rock = turning_rock([-30.0, 0.0, 0.0])
+
+    system.ship_into_terrain_pushback(make_terrain_entry(ship, rock))
+
+    assert ship.health == 10.0
+    np.testing.assert_allclose(ship.push.call_args.kwargs["velocity_correction"], 0.0)
+    rock.velocity_at.assert_called_once_with(Vec3(5.0, 0.0, 0.0), system.game.root_node)
+
+
+def test_a_turning_rock_hits_a_still_ship():
+    """The rock's surface sweeping into a still ship hurts it and pushes it
+    away as hard as the ship flying into a still rock would."""
+    system = make_collision_system_without_init()
+    still = make_ship_at([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], health=10.0)
+    take_damage(still)
+    system.ship_into_terrain_pushback(
+        make_terrain_entry(still, turning_rock([20, 0, 0]))
+    )
+
+    flying = make_ship_at([0.0, 0.0, 0.0], [-20.0, 0.0, 0.0], health=10.0)
+    take_damage(flying)
+    system.ship_into_terrain_pushback(make_terrain_entry(flying))
+
+    assert still.health < 10.0
+    assert still.health == pytest.approx(flying.health)
+    np.testing.assert_allclose(
+        still.push.call_args.kwargs["velocity_correction"],
+        flying.push.call_args.kwargs["velocity_correction"],
+    )
 
 
 def take_damage(ship) -> None:

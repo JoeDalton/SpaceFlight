@@ -1,31 +1,33 @@
 # Scenes
 
-`scenes` builds the environment a level flies in: skyboxes, lighting, 2D
-planets, asteroid fields, and a whole planetary world. The pieces are
-independent and game-agnostic, assembled by a per-level `Scene` subclass.
-They live in
-[`src/space_flight/scenes/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/),
-except the planetary world (terrain, air, clouds, ocean, sky), which comes
-from [WorldBuilder](https://github.com/JoeDalton/WorldBuilder). The per-class
+`scenes` builds the environment a level flies in: the sky and its lights,
+asteroid fields, 2D planets, and a whole planetary world. The pieces are
+assembled by a per-level `Scene` subclass in
+[`src/space_flight/scenes/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/scenes/).
+All but the 2D planet come from
+[WorldBuilder](https://github.com/JoeDalton/WorldBuilder): its `World` (sky,
+sun, lights, and planets with their air, clouds and ocean) and its asteroid
+fields. The per-class
 API is in the [code reference](apidocs/index.rst).
 
 ## Mental model
 
 - A **`Scene`** subclass is a level's environment recipe: it owns the pieces
-  below and no gameplay logic. `scene_factory(game, scene_name)` picks one by
-  name.
+  below and no gameplay logic. `scene_factory(game, scene_name, keep_outs)`
+  picks one by name; `keep_outs` is the room its asteroid field leaves clear
+  (a level's spawn points and routes).
 - Scenes build in two phases, mirroring `FlightState`'s level entry (see
   [docs/game.md](game.md#levels)). The level's upfront builder calls
   **`build_upfront()`**, which builds the heavy objects synchronously on the
   black screen before the hyperspace animation. `FlightState` then drives the
   **`build_decomposed()`** generator during the animation; it yields a label
-  after each cheaper piece (skybox, lighting, planet, dust, set dressing) so the
-  animation keeps rendering.
+  after each cheaper piece (dust, planet, set dressing) so the animation keeps
+  rendering, then holds it until WorldBuilder's parts have loaded.
 - Every piece follows the codebase's lifecycle contract: constructed with
   `game`, optionally registers a per-frame update in `game.method_lists`,
   exposes `clean()`.
-- `Skybox` and `Planet2D` "follow the camera to infinity": they re-centre on the
-  player every frame, so cheap geometry can stand for something arbitrarily
+- `Planet2D` "follows the camera to infinity": it re-centres on the player
+  every frame, so cheap geometry can stand for something arbitrarily
   distant. This is separate from the floating render origin (see
   [docs/game.md](game.md#the-floating-render-origin)); scene code works in world
   coordinates under `game.root_node`.
@@ -34,10 +36,10 @@ API is in the [code reference](apidocs/index.rst).
 
 | Name | Class | `build_upfront` | `build_decomposed` |
 |------|-------|-----------------|--------------------|
-| `asteroids` | `SceneAsteroids` | three asteroid fields (one static, two rotating) | purple skybox, lighting, dust |
-| `lava_planet` | `SceneLavaPlanet` | three asteroid fields | lava-toned lighting, dust, 2D lava planet, Imperial Star Destroyer (no skybox) |
+| `asteroids` | `SceneAsteroids` | open space (`World` with no planet: sky, sun, lights) and Missions 1-2's asteroid field | dust, then waits for the field's rock shapes |
+| `lava_planet` | `SceneLavaPlanet` | open space without a sky, lava-toned light, a sparser field | dust, 2D lava planet, then waits for the field |
 | `earthlike_planet` | `SceneEarthlike` | WorldBuilder's `World`: planet (terrain, air, clouds, swell ocean), moon, sky, sun and lights | dust, then waits for the world to load |
-| `debug` | `SceneDebug` | nothing | test skybox, lighting |
+| `debug` | `SceneDebug` | open space: sky, sun, lights | nothing |
 
 `clean()` tears the owned pieces down. `build_upfront` runs after the player
 exists, so a scene's ocean reflection camera can copy the player camera's
@@ -51,33 +53,56 @@ Every frame, once the render origin has moved onto the player,
 - `scene.update_after_recenter()`: updates what must follow the origin. It
   is a no-op by default.
 
-## Static environment pieces
+Missions also ask it `scene.clear_position(position, radius)` for ships
+placed at run time relative to the player: the nearest place with room, the
+position itself in a scene without obstacles.
 
-- **[`skybox.py`](../../src/space_flight/scenes/skybox.py)**'s `Skybox` loads a
-  named `.bam` sphere at a huge scale, applies its cube map at runtime (see
-  `datafiles/models/skyboxes/create_skybox.py` for why it is not baked in), and
-  draws it unshaded, unlit and without depth write in the "background" bin,
-  re-centred on the player every frame. It opts out of any ocean reflection
-  camera's clip plane (`setClipPlaneOff(1)`); the comment there explains the
-  horizon band that appears otherwise.
-- **[`lighting.py`](../../src/space_flight/scenes/lighting.py)**'s `Lighting` is
-  a directional + ambient light pair under `game.root_node`, enabled on
-  `render`; `directional_direction` points from the scene toward the sun. No
-  per-frame behaviour.
-- **[`planet_2d.py`](../../src/space_flight/scenes/planet_2d.py)**'s `Planet2D`
-  is a single textured card (not a sphere, and not camera-facing), placed far
-  away and scaled up, which `move_planet_task` keeps at a fixed offset from the
-  player. Its distance is arbitrary, so it draws in the "background" bin with no
-  depth write; the default "transparent" bin (sort 30) would paint it over the
-  clouds (sort 25).
-- **[`asteroid_field.py`](../../src/space_flight/scenes/asteroid_field.py)**'s
-  `AsteroidField` scatters `n_asteroids` model instances in a cube of side
-  `field_size`, each with a random scale and a terrain collision sphere. With
-  `is_moving=True` each also gets a fixed random spin, integrated by the shared
-  physics `Integrator` (see [docs/game.md](game.md)) as one flat state vector of
-  `4 * n_asteroids` quaternion components rather than per-asteroid objects.
-  Scenes layer several fields: a dense static backdrop plus a few large,
-  slowly tumbling rocks.
+## Open space and asteroid fields — from WorldBuilder
+
+`SceneSpace` is open space: WorldBuilder's `World` with no planet. It draws
+the sky (`SKY`: stars, the sun's disc, a violet nebula; None for none), and
+puts Panda3D's sun and ambient lights on render for the ships, from `SUN` and
+`AMBIENT` (the sky light in open space) scaled by `LIGHT_SCALE` (0.2: the
+ships' fixed-function lighting has no tone map). Every frame
+`update_after_recenter` is `world.update(player position, far=game.depth_far)`.
+`SceneDebug` is just that.
+
+`SceneAsteroids` adds Missions 1 and 2's field: a WorldBuilder
+`AsteroidField` (see
+[its asteroids page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/asteroids.md)),
+`FIELD` describing it.
+
+- **The field.** A 15 km cube around the origin, patchy, its rocks' radii
+  from 50 m to 2 km (a power law: many small, few big), a little ice; about
+  5,500 rocks. They turn, some tumbling, with the game's clock: a pause
+  freezes them.
+- **Room.** The level's `keep_outs` (`common.route_keep_outs`: capsules
+  along its routes, balls at its spawn points) are empty of rocks. Ships
+  spawned relative to the player (Mission 1's formation, Mission 2's
+  smuggler and TIEs) go through `scene.clear_position`, the field's
+  `find_clear`: the nearest place with room within 3 km.
+- **Drawn** by instancing, at levels of detail chosen by their pixel error,
+  for the main camera and the rear-view mirror. Its shapes are built in the
+  world's worker processes during the hyperspace animation;
+  `build_decomposed` holds it until they are in (about 3 s). Lit by the same
+  sun and ambient light as the ships, with no tone map either.
+- **Solid** through `field.enable_collision(TERRAIN_INTO, name="terrain")`:
+  ships, munitions and sensors hit the drawn rocks through the terrain
+  handlers. Its owner, WorldBuilder's `AsteroidSurface`, gives the material
+  at a hit ("rock", or "snow" for an icy rock) and the speed of the turning
+  surface there, which the crash and spark handlers take into account. Rocks
+  more than 20 km from the player are not solid.
+- **Quality.** The `asteroids` section of the `world` graphics settings.
+
+`SceneLavaPlanet` (the Dev level) is the same with a sparser field, an orange
+light from the lava planet's side, no sky, and the 2D lava planet.
+
+[`planet_2d.py`](../../src/space_flight/scenes/planet_2d.py)'s `Planet2D` is
+a single textured card (not a sphere, and not camera-facing), placed far away
+and scaled up, which `move_planet_task` keeps at a fixed offset from the
+player. Its distance is arbitrary, so it draws in the "background" bin with
+no depth write; the default "transparent" bin (sort 30) would paint it over
+the clouds (sort 25).
 
 ## Planet world — from WorldBuilder
 
@@ -100,8 +125,7 @@ The scene only says what it looks like.
   ships, about 0.4. Ships use fixed-function lighting with no tone map, so the
   world's physical noon sun would clip them to white.
 
-There is no skybox, no `Lighting` and no 2D planet: the sky, the moon and the
-lights are the world's.
+There is no 2D planet: the sky, the moon and the lights are the world's.
 
 **How it runs:**
 - **Placement.** The planet is not rotated: its centre sits one radius below
@@ -145,7 +169,8 @@ lights are the world's.
 ## Where things live
 
 `Scene` and its subclasses are in `scenes.py`, with the loading gate
-`wait_until_loaded`. The static pieces are one file each (`skybox.py`,
-`lighting.py`, `planet_2d.py`, `asteroid_field.py`). The planetary world and
-its shaders are in WorldBuilder (`world_builder.world` and the parts it
-builds).
+`wait_until_loaded` (which sleeps a few milliseconds per step while loading,
+so the worker processes' results get through a loading loop run flat out, as
+a headless build runs it). `planet_2d.py` is the 2D planet. The world, the
+asteroid fields and their shaders are in WorldBuilder (`world_builder.world`,
+`world_builder.asteroids`).

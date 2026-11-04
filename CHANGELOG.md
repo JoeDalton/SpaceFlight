@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Free flight level in the Earth-like scene
 
+### Added
+
+- Free flight level in the Earth-like scene # 177
+
+### Changed
+
+- Space scenes draw WorldBuilder's sky (stars, sun, nebula) and take their lights from it, instead of skyboxes #176
+- Asteroid fields are now procdural, built in WorldBuilder
+- Crashes into and sparks off a turning rock take its surface's motion into account #176
+
+### Removed
+
+- Skyboxes, the old asteroid field and its rock models, and the scenes' `Lighting` #176
+
+
+
 ## [0.4.0] - 2026-10-23
 
 ### Added
@@ -41,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Moved ocean and clouds to the new WorldBuilder repo to prepare for procedural planetary terrain #165
 
+
+
 ## [0.2.0] - 2026-10-09
 
 Second alpha release: play with any input device at any time, navigate the menus
@@ -61,6 +79,8 @@ without the mouse, and face bots that fight with missiles and flares.
 ### Fixed
 
 - Fixed level 1 waypoints in asteroid #138
+
+
 
 ## [0.1.0] - 2026-10-04
 

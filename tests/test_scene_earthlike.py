@@ -64,7 +64,11 @@ def _gate(loading: list[bool], clock: FakeClock, dt: float = 0.125):
         world.loading = next(states, loading[-1])
         clock.now += dt
 
-    yielded = sum(1 for _ in wait_until_loaded(lambda: world.loading, step, clock))
+    pauses = []
+    yielded = sum(
+        1 for _ in wait_until_loaded(lambda: world.loading, step, clock, pauses.append)
+    )
+    world.pauses = pauses
     return yielded, world.steps
 
 
@@ -86,6 +90,22 @@ class TestWaitUntilLoaded:
         _gate([False, True, True, False], clock)
         # Quiet again from the fourth step (0.5 s) on
         assert clock.now == 0.5 + scenes.WORLD_QUIET_S
+
+    def test_yields_to_the_workers_while_loading(self):
+        """A step still loading sleeps a little (the workers' results come
+        back through this process); once quiet, no more."""
+        clock = FakeClock()
+        states = iter([True, True, False])
+        world = SimpleNamespace(loading=True)
+        pauses = []
+
+        def step():
+            world.loading = next(states, False)
+            clock.now += 0.125
+
+        for _ in wait_until_loaded(lambda: world.loading, step, clock, pauses.append):
+            pass
+        assert pauses == [scenes.LOADING_YIELD_S] * 2
 
     def test_gives_up_after_the_timeout(self, caplog):
         clock = FakeClock()
@@ -118,7 +138,9 @@ def test_the_planet_and_its_moon():
     assert planet.name == "planet"
     assert planet.position == pytest.approx((0.0, 0.0, -radius))
     assert planet.atmosphere is not None
-    assert planet.clouds is SceneEarthlike.CLOUDS
+    assert planet.clouds.altitude == SceneEarthlike.CLOUDS.altitude
+    assert planet.clouds.genera is not None  # the low clouds by genus
+    assert planet.clouds.genera.weather.planet is planet.spec
     assert planet.ocean is SceneEarthlike.OCEAN
 
     assert moon.name == "moon" and moon.atmosphere is None
@@ -237,7 +259,9 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
     """
     native = pytest.importorskip("world_builder.terrain.native")
     planet = SceneEarthlike(game=None).bodies()[0]
-    bare = BodyLook(planet.name, planet.spec, position=planet.position)
+    bare = BodyLook(
+        planet.name, planet.spec, position=planet.position, mass=planet.mass
+    )
     world = World(spaceflight_app, [bare], lights=False)
     try:
         try:
@@ -270,3 +294,15 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
         root.remove_node()
     finally:
         world.destroy()
+
+
+def test_the_world_gets_the_split_cameras_for_its_raymarched_clouds():
+    """The default cloud renderer draws nothing until it has the game's split
+    cameras: the scene hands them to its world."""
+    scene = SceneEarthlike(game=None)
+    scene.world = MagicMock()
+    depth = object()
+
+    scene.use_split_depth(depth)
+
+    scene.world.use_split_depth.assert_called_once_with(depth)
