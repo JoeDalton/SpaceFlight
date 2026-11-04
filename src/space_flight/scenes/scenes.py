@@ -21,6 +21,7 @@ from world_builder.asteroids.spec import (
 from world_builder.atmosphere import AtmosphereParams
 from world_builder.clouds.genera import GeneraSpec
 from world_builder.clouds.weather import WeatherSpec
+from world_builder.depth import SplitDepthCameras
 from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import PRESETS
 from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook, World
@@ -131,6 +132,14 @@ class Scene:
         :return: (split, far), metres
         """
         return DEFAULT_DEPTH_SPLIT_M, CAMERA_FAR_M
+
+    def use_split_depth(self, depth: SplitDepthCameras) -> None:
+        """
+        The game's split cameras, built once the scene's up-front objects
+        exist (see FlightState.enter). Nothing by default.
+
+        :param depth: The split cameras
+        """
 
     def update_after_recenter(self):
         """
@@ -260,6 +269,16 @@ class SceneEarthlike(Scene):
         """:return: The split following the nearest ground, the far plane
         reaching the farthest visible part of the planet and the moon"""
         return self.world.depth_ranges(self.game.player.pawn.position)
+
+    def use_split_depth(self, depth: SplitDepthCameras) -> None:
+        """
+        Give the world the split cameras: the raymarched clouds (the
+        default renderer) draw their passes with them, and show nothing
+        in the sky until they have them.
+
+        :param depth: The split cameras
+        """
+        self.world.use_split_depth(depth)
 
     def update_after_recenter(self):
         """Everything around the player, now at the render origin."""

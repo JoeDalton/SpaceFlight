@@ -294,3 +294,15 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
         root.remove_node()
     finally:
         world.destroy()
+
+
+def test_the_world_gets_the_split_cameras_for_its_raymarched_clouds():
+    """The default cloud renderer draws nothing until it has the game's split
+    cameras: the scene hands them to its world."""
+    scene = SceneEarthlike(game=None)
+    scene.world = MagicMock()
+    depth = object()
+
+    scene.use_split_depth(depth)
+
+    scene.world.use_split_depth.assert_called_once_with(depth)
