@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Space scenes draw WorldBuilder's sky (stars, sun, nebula) and take their lights from it, instead of skyboxes #176
-- Asteroid fields are now procdural, built in WorldBuilder
+- Asteroid fields are now procdural, built in WorldBuilder #179
+- Bots take the planet's up as reference #174
 - Crashes into and sparks off a turning rock take its surface's motion into account #176
 
 ### Removed

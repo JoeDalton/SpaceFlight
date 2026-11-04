@@ -1181,3 +1181,23 @@ def test_a_launched_wave_cannot_be_spawned(mission, hangar):
 
     with pytest.raises(ValueError):
         squadron.spawn()
+
+
+def test_formation_slots_follow_the_spec_frame(mission, spawned):
+    """The wingmen's slots are written on the spec's formation_frame's axes,
+    not the world's."""
+    # A quarter turn about z: the slots' +x is the world's +y
+    quarter = [np.cos(np.pi / 4), 0.0, 0.0, np.sin(np.pi / 4)]
+    spec = WaveSpec(
+        name="turned",
+        ship_model="x-wing",
+        size=3,
+        spawn_point=[0, 0, 0],
+        formation="arrowhead",
+        formation_frame=quarter,
+    )
+    wave = mission.spawn(spec)
+    run_jobs(mission)
+    slot = wave.formation.relative_positions[1]
+    expected = np.array([-slot[1], slot[0], slot[2]])
+    assert np.allclose(spawned[1].pawn.position, expected)

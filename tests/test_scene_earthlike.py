@@ -142,6 +142,7 @@ def test_the_planet_and_its_moon():
     assert np.linalg.norm(frame.centre) == pytest.approx(radius)
     assert planet.atmosphere is not None
     assert planet.clouds.altitude == SceneEarthlike.CLOUDS.altitude
+    assert planet.clouds.cirrus is not None  # the high cirrus
     assert planet.clouds.genera is not None  # the low clouds by genus
     assert planet.clouds.genera.weather.planet is planet.spec
     assert planet.ocean is SceneEarthlike.OCEAN
