@@ -343,3 +343,46 @@ def test_scene_up_follows_minus_gravity_or_defaults_to_world_z():
     # Negligible gravity: world +Z
     scene._gravity = SimpleNamespace(acceleration=lambda p: np.zeros(3))
     assert np.array_equal(scene.up_at([3.0, 0.0, 4.0]), default)
+
+
+def _node_scene(tracked_nodes=()):
+    """A Scene over a stand-in world that records track_light calls."""
+    from panda3d.core import NodePath
+
+    scene = Scene(game=None)
+    calls = []
+    tracked = set(tracked_nodes)
+
+    def track_light(node, cast, shader):
+        calls.append((node, cast, shader))
+        tracked.add(node)
+
+    scene.world = SimpleNamespace(
+        tracked=SimpleNamespace(is_tracked=lambda node: node in tracked),
+        track_light=track_light,
+    )
+    return scene, calls, NodePath
+
+
+def test_scene_tracks_anchored_models_to_cast_shadows():
+    scene, calls, NodePath = _node_scene()
+    ship = NodePath("ship_node")
+    scene.track_model(ship)
+    assert calls == [(ship, True, True)]
+
+
+def test_scene_tracks_a_hierarchy_once():
+    """Turrets and props anchored below a tracked ship follow it."""
+    scene, calls, NodePath = _node_scene()
+    ship = NodePath("ship_node")
+    mount = ship.attach_new_node("mount")
+    scene.track_model(ship)
+    scene.track_model(ship)
+    scene.track_model(mount)
+    assert [call[0] for call in calls] == [ship]
+
+
+def test_scene_without_a_world_tracks_nothing():
+    from panda3d.core import NodePath
+
+    Scene(game=None).track_model(NodePath("ship_node"))  # no error

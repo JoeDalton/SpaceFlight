@@ -35,6 +35,8 @@ from space_flight.scenes.level_frame import LevelFrame
 from space_flight.scenes.planet_2d import Planet2D
 
 if TYPE_CHECKING:
+    from panda3d.core import NodePath
+
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger(__name__)
@@ -150,6 +152,40 @@ class Scene:
             return self.default_up_direction
         return -gravity / norm
 
+    #: Whether the models tracked by the scene cast shadows
+    MODELS_CAST_SHADOWS = True
+    #: Whether they are drawn by WorldBuilder's model shader (they then also
+    #: receive the world's shadows, per pixel) instead of Panda3D's lights
+    MODELS_USE_WORLD_SHADER = True
+
+    def track_model(self, node: NodePath) -> None:
+        """
+        Light a model by the light at its own position and have it cast
+        shadows (WorldBuilder's World.track_light), for the scenes that have a
+        World. Called for every model anchored to a node (see
+        AnchoredModel): the node is tracked once, whatever is anchored below
+        it, so ships, turrets and props need nothing more.
+
+        :param node: The node the model is anchored to (its children follow)
+        """
+        world = getattr(self, "world", None)
+        if world is None or node.is_empty():
+            return
+        # One tracking per hierarchy: a node below a tracked one is lit and
+        # casts with it
+        ancestor = node
+        while True:
+            if world.tracked.is_tracked(ancestor):
+                return
+            if not ancestor.has_parent():
+                break
+            ancestor = ancestor.get_parent()
+        world.track_light(
+            node,
+            cast=self.MODELS_CAST_SHADOWS,
+            shader=self.MODELS_USE_WORLD_SHADER,
+        )
+
     def depth_ranges(self) -> tuple[float, float]:
         """
         The split cameras' ranges this frame (see FlightState.split_depth):
@@ -205,9 +241,9 @@ class SceneEarthlike(Scene):
     """
 
     LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
-    # Toward the sun, as (east, north, up) at the reference point: high in the
-    # south-east sky. SunLook is given the world direction (see __init__).
-    SUN_ENU = (0.4, -0.5, 0.75)
+    # Toward the sun, as (east, north, up) at the reference point: sunrise in the east.
+    # SunLook is given the world direction (see __init__).
+    SUN_ENU = (1.0, 0, 0.3)
     SKY = SkyLook()
     # The convective clouds above the convoy, which flies at 200-800 m (the
     # stratus deck stays under their base). The genera (stratus, congestus,
