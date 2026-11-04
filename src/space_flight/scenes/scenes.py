@@ -19,6 +19,8 @@ from world_builder.asteroids.spec import (
     MaterialSpec,
 )
 from world_builder.atmosphere import AtmosphereParams
+from world_builder.clouds.genera import GeneraSpec
+from world_builder.clouds.weather import WeatherSpec
 from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import PRESETS
 from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook, World
@@ -165,7 +167,9 @@ class SceneEarthlike(Scene):
     # Toward the sun: high in the south-east sky
     SUN = SunLook(direction=(0.4, -0.5, 0.75))
     SKY = SkyLook()
-    # Cumulus above the convoy, which flies at 200-800 m
+    # The convective clouds above the convoy, which flies at 200-800 m (the
+    # stratus deck stays under their base). The genera (stratus, congestus,
+    # cumulonimbus, ...) are added in bodies(): they need the planet.
     CLOUDS = CloudLook(altitude=2200.0)
     # The 20 m swell, calmed over the shallows (the atmosphere hazes the sea)
     OCEAN = OceanLook()
@@ -190,13 +194,19 @@ class SceneEarthlike(Scene):
         moon = centre + self.MOON_DISTANCE_M * np.array(
             [0.0, math.sin(angle), math.cos(angle)]
         )
+        clouds = replace(
+            self.CLOUDS,
+            genera=GeneraSpec(
+                WeatherSpec(spec), focus=(spec.reference_lat, spec.reference_lon)
+            ),
+        )
         return [
             BodyLook(
                 "planet",
                 spec,
                 position=tuple(centre),
                 atmosphere=AtmosphereParams(),
-                clouds=self.CLOUDS,
+                clouds=clouds,
                 ocean=self.OCEAN,
                 mass=self.PLANET_MASS_KG,
             ),

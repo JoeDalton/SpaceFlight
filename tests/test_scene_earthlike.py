@@ -138,7 +138,9 @@ def test_the_planet_and_its_moon():
     assert planet.name == "planet"
     assert planet.position == pytest.approx((0.0, 0.0, -radius))
     assert planet.atmosphere is not None
-    assert planet.clouds is SceneEarthlike.CLOUDS
+    assert planet.clouds.altitude == SceneEarthlike.CLOUDS.altitude
+    assert planet.clouds.genera is not None  # the low clouds by genus
+    assert planet.clouds.genera.weather.planet is planet.spec
     assert planet.ocean is SceneEarthlike.OCEAN
 
     assert moon.name == "moon" and moon.atmosphere is None
