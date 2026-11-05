@@ -11,6 +11,8 @@ from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_manager import gltf_model_tilt_quaternion
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from space_flight.game.flight_state import FlightState
 
 
@@ -86,6 +88,15 @@ _MODELS = {
         tilt=False,
     ),
 }
+
+
+def exterior_model_path(ship_type: str) -> Path | None:
+    """
+    :param ship_type: A ship model's name (e.g. "x-wing")
+    :return: The file of its exterior model (what bots fly), None if unknown
+    """
+    spec = _MODELS.get((ship_type, False))
+    return None if spec is None else DATAFILES_PATH / "models" / spec.path
 
 
 class AnchoredModel:

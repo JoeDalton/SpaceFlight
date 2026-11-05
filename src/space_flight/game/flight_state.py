@@ -10,6 +10,7 @@ from world_builder.depth import SplitDepthCameras
 
 from space_flight import CAMERA_FAR_M, DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructibles
+from space_flight.actors.ship_model import exterior_model_path
 from space_flight.ai.interactions import Interactions
 from space_flight.ai.think_scheduler import ThinkScheduler
 from space_flight.fx.fire_smoke_fx import FireSmokePool
@@ -19,7 +20,7 @@ from space_flight.game.integrator import Integrator
 from space_flight.game.kills import KillLog
 from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
-from space_flight.game.scenario import Mission
+from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.objectives import summarize as summarize_objectives
 from space_flight.game.time_keeping import (
     DelayedMethodManager,
@@ -187,9 +188,32 @@ class FlightState(BaseState):
         :return: A generator yielding a short label once per build step.
         """
         yield from self.scene.build_decomposed()
+        yield from self._preload_wave_models(entry)
         self.mission = Mission(self)
         self.mission.run(entry.mission)
         yield "mission"
+
+    def _preload_wave_models(self, entry: LevelEntry) -> Iterator[str]:
+        """
+        Load the exterior models of every wave the level declares (the
+        WaveSpec constants of its mission's module), one per build step: a
+        model first loaded when its wave spawns stalls the game (about a
+        second for a fighter, mostly the glTF importer's tangents).
+
+        :param entry: The selected level's registry entry
+        :return: A generator yielding once per model loaded
+        """
+        module = sys.modules.get(entry.mission.__module__)
+        paths = []
+        for value in vars(module).values() if module is not None else ():
+            if isinstance(value, WaveSpec):
+                for ship_type in value.ship_models():
+                    path = exterior_model_path(ship_type)
+                    if path is not None and path not in paths:
+                        paths.append(path)
+        for path in paths:
+            self.app.asset_manager.get_asset(asset_type="model", path=path)
+            yield f"model {path.parent.name}"
 
     def _advance_build(self) -> bool:
         """

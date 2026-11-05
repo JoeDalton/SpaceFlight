@@ -142,12 +142,16 @@ class SpaceFlightSimulator(ShowBase):
     :class:`SplashState`.
     """
 
-    def __init__(self, headless: bool = False):
+    def __init__(self, headless: bool = False, interactive: bool = True):
         """
         :param headless: when True, skip the splash screen/menus (which need a
             real window) and leave the state stack empty. Intended for
             optimization-loop callers, which push :class:`FlightState` with
             headless=True themselves once the app is built.
+        :param interactive: when False, render as usual but read no input and
+            show no splash/menus (the state stack is left empty): for
+            scripted, possibly offscreen, runs such as benchmarks, which push
+            :class:`FlightState` themselves
         """
         ShowBase.__init__(self)
         self.disableMouse()
@@ -164,7 +168,7 @@ class SpaceFlightSimulator(ShowBase):
         # Real input needs a window (mouseWatcherNode), so it is skipped
         # headless. `bindings` is still loaded: input contexts (e.g.
         # FlightInputContext) read binding names even when nothing dispatches.
-        if headless:
+        if headless or not interactive:
             self.bindings = load_bindings()
         else:
             self.input_reader = reader_factory(app=self)
@@ -175,7 +179,7 @@ class SpaceFlightSimulator(ShowBase):
 
         self.configuration = {}
 
-        if not headless:
+        if not headless and interactive:
             # Stick/gamepad input does not reset the desktop idle timer, so
             # the screen saver must be held off explicitly while playing.
             self.idle_inhibitor = IdleInhibitor()

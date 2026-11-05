@@ -469,7 +469,10 @@ class HUD:
         """
         if self.fps_counter_enabled:
             frame_rate = self.game.game_time.get_average_frame_rate()
-            self.fps_counter.setText(f"FPS = {frame_rate:.0f}")
+            text = f"FPS = {frame_rate:.0f}"
+            # setText regenerates the text's geometry: only when it changes
+            if self.fps_counter.getText() != text:
+                self.fps_counter.setText(text)
 
         if DEBUG_HUD:
             # Count team members
@@ -610,12 +613,12 @@ class OrdnanceHUD:
         )
 
         flare_launcher = pawn.flare_launcher
-        self.flare_line.node().setText(
-            self.format_line(
-                flare_launcher.display_name if flare_launcher else "FLARE",
-                flare_launcher.stock if flare_launcher else 0,
-            )
+        text = self.format_line(
+            flare_launcher.display_name if flare_launcher else "FLARE",
+            flare_launcher.stock if flare_launcher else 0,
         )
+        if self.flare_line.node().getText() != text:
+            self.flare_line.node().setText(text)
 
     def clean(self) -> None:
         """

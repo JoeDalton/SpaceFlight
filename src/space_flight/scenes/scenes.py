@@ -119,6 +119,15 @@ def scene_factory(
 
 #: A gravity weaker than this (norm of the raw vector) gives no "up"
 MIN_GRAVITY_NORM = 1e-1
+#: "Up" is reckoned again this often, seconds: at the player, for every ship
+#: (the ships stay a few kilometres from it: on a planet of hundreds of
+#: kilometres, its "up" turns by a fraction of a degree over that, or in a
+#: second of flight)
+UP_REFRESH_S = 1.0
+#: Frames between two reckonings of the light at the ships and the camera
+#: (WorldBuilder's World.light_period): the light where a ship is changes
+#: slowly next to the frame rate
+LIGHT_PERIOD_FRAMES = 3
 
 
 class Scene:
@@ -129,12 +138,19 @@ class Scene:
         self.game = game
         self.default_up_direction = np.array([0, 0, 1])
         self._gravity = None
+        # The last "up" reckoned, and when (see up_at)
+        self._up: np.ndarray | None = None
+        self._up_time_s = -math.inf
 
     def up_at(self, position: Sequence[float]) -> np.ndarray:
         """
         Returns the "up" direction at a given location in the world.
         If there is significant gravity, up is its opposite.
         Else, the (0.0.1) is used
+
+        It is reckoned at the player (at *position* without one) at most
+        every UP_REFRESH_S and used for every position meanwhile: a gravity
+        evaluation per bot and per call was a sizable share of the frame.
 
         :param position: A world position
         :return: "Up" there: against the gravity of the scene's WorldBuilder
@@ -144,6 +160,18 @@ class Scene:
         world = getattr(self, "world", None)
         if world is None or not world.bodies:
             return self.default_up_direction
+        now = time.monotonic()
+        if self._up is None or now - self._up_time_s >= UP_REFRESH_S:
+            player = getattr(self.game, "player", None)
+            pawn = getattr(player, "pawn", None)
+            reference = position if pawn is None else pawn.position
+            self._up = self._gravity_up(world, reference)
+            self._up_time_s = now
+        return self._up
+
+    def _gravity_up(self, world: World, position: Sequence[float]) -> np.ndarray:
+        """:return: Against the bodies' gravity at *position*, or
+        default_up_direction where it is negligible"""
         if self._gravity is None:
             self._gravity = world.gravity_field()
         gravity = self._gravity.acceleration(np.asarray(position, dtype=np.float64))
@@ -329,6 +357,8 @@ class SceneEarthlike(Scene):
             light_scale=self.LIGHT_SCALE,
             clock=self.game.game_time.get_current_time,
         )
+        # Set after it is built: older WorldBuilders have no such parameter
+        self.world.light_period = LIGHT_PERIOD_FRAMES
         # Solid to ships, munitions and sensors, the sea surface included
         self.world.enable_collision(CollisionLayers.TERRAIN_INTO, bodies=["planet"])
 
@@ -410,6 +440,8 @@ class SceneSpace(Scene):
             clock=self.game.game_time.get_current_time,
             space_ambient=self.AMBIENT,
         )
+        # Set after it is built: older WorldBuilders have no such parameter
+        self.world.light_period = LIGHT_PERIOD_FRAMES
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """Nothing more by default."""

@@ -342,7 +342,39 @@ def test_scene_up_follows_minus_gravity_or_defaults_to_world_z():
     assert np.allclose(up, [0.6, 0.0, 0.8])
     # Negligible gravity: world +Z
     scene._gravity = SimpleNamespace(acceleration=lambda p: np.zeros(3))
+    scene._up = None  # reckoned again
     assert np.array_equal(scene.up_at([3.0, 0.0, 4.0]), default)
+
+
+def test_scene_up_is_reckoned_at_the_player_and_kept_a_while(monkeypatch):
+    """Up is the player's for every position, reckoned again once
+    UP_REFRESH_S has passed."""
+    from types import SimpleNamespace
+
+    from space_flight.scenes.scenes import UP_REFRESH_S, Scene
+
+    now = [100.0]
+    monkeypatch.setattr(scenes.time, "monotonic", lambda: now[0])
+    pawn = SimpleNamespace(position=np.array([0.0, 0.0, 10.0]))
+    scene = Scene(game=SimpleNamespace(player=SimpleNamespace(pawn=pawn)))
+    calls = []
+
+    def acceleration(p):
+        calls.append(np.array(p))
+        return -np.asarray(p, dtype=float)
+
+    scene.world = SimpleNamespace(
+        bodies=[1], gravity_field=lambda: SimpleNamespace(acceleration=acceleration)
+    )
+    # Anywhere: the player's up
+    assert np.allclose(scene.up_at([10.0, 0.0, 0.0]), [0.0, 0.0, 1.0])
+    assert np.allclose(scene.up_at([0.0, 10.0, 0.0]), [0.0, 0.0, 1.0])
+    assert len(calls) == 1
+    # A second later, where the player is now
+    pawn.position = np.array([10.0, 0.0, 0.0])
+    now[0] += UP_REFRESH_S
+    assert np.allclose(scene.up_at([0.0, 0.0, 1.0]), [1.0, 0.0, 0.0])
+    assert len(calls) == 2
 
 
 def _node_scene(tracked_nodes=()):

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Free flight level in the Earth-like scene # 177
-- Bots take the planet's up as reference #174
+- Bots take the planet's up as reference #174 #181
 - Game objects cast shadows and use the world's lighting #176
 
 ### Changed

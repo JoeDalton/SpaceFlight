@@ -95,6 +95,60 @@ Each is worth a few percent at most.
   `Interactions` every frame between thinks. Needed for rate of fire and bomb
   accuracy, but the lookups could be cached per frame.
 
+## Mission 3 (rendered)
+
+Mission 3 is the heaviest level: WorldBuilder's planet (terrain, raymarched
+clouds with genera and cirrus, swell ocean, shadows) and some 25 ships lit and
+shadowed by the world. The headless harness cannot run it (it draws nothing,
+and the sea needs a window), so it is measured drawn, by
+`scripts/bench_mission3.py`: the real game in an offscreen buffer at a fixed
+size and render scale 1.0, warmed up until the first waves have spawned and the
+world has settled, then 600 frames each waiting for the GPU (CPU and GPU in
+series). `--pose fly`, `--toggle`, `--world SECTION.KNOB=VALUE`, `--profile` and
+`--pstats` as its docstring says.
+
+Two runs of the same tree differ by up to 0.8 ms: compare medians of runs
+interleaved, at least two each.
+
+### Where the time goes (RTX 3070, 2560x1440, high)
+
+About 17 ms a frame, still:
+
+- **The GPU, ~7.5 ms**, then Panda's cull and draw on the CPU, ~5.5 ms. The
+  frame is GPU-bound at this size: at 1280x720 it is ~11 ms.
+- The cloud raymarch is the largest GPU item: a quarter of the view's
+  resolution instead of a half takes ~3.5 ms off, 32 steps instead of 64
+  ~1.4 ms (both lower the clouds' quality: left to the graphics settings).
+- `World.update`, ~2 ms of Python, mostly the light at the camera and at the
+  ships (`lights_at`, a CPU march through the clouds' shadow).
+- The bots, ~1.5 ms (flight model and thinking, see above).
+- The rear-view mirror, the cirrus and the ships' shadows each cost under
+  0.5 ms. Drawing the ships with Panda3D's lights instead of the world's
+  model shader is *slower* (+2.5 ms): one light state per ship.
+
+### Done
+
+| Change | Effect |
+|---|---|
+| Every wave's ship models loaded while the level loads (`FlightState._preload_wave_models`) | No more 1-2 s stall when a new kind of ship first spawns (the glTF importer's tangents) |
+| The light at the ships and the camera reckoned every 3 frames (`World.light_period`, `LIGHT_PERIOD_FRAMES`), at once when the sun moves or a ship is tracked | ~0.5 ms |
+| "Up" reckoned at the player once a second for every ship (`Scene.up_at`, `UP_REFRESH_S`) | gravity evaluations from 6 call sites per bot per frame gone |
+| The model shader's attrib set only when it changes; the bodies' arrays and the casters' bookkeeping kept between frames (WorldBuilder) | fewer render states made each frame |
+| The HUD's FPS and flare lines set only when their text changes | |
+
+Still: 17.5-18.1 ms median (mean 18.3-20.7 with the stalls) before,
+16-17 ms (mean 16.1-17.4) after. Flying: 19.3 ms median, 22.2 mean, 832 ms
+worst before; 16.8, 17.4 and 51 ms after.
+
+### Left
+
+- The clouds' raymarch resolution and steps, and the render scale: the
+  frame's GPU cost, but each lowers what is seen.
+- Panda's cull and draw (~5.5 ms): the scene is culled by about ten cameras
+  (near and far, the clouds' two depth passes, the sea's reflection, the
+  mirror, the shadow maps).
+- The bots' flight model (above).
+
 ## Ruled out
 
 - **Collision queues for every collision.** Sensors switched from events to a
