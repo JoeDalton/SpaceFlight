@@ -31,6 +31,7 @@ def build_upfront(
     scene_name: str,
     player_ship_type: str,
     player_position: Sequence[float],
+    player_orientation: Sequence[float] = (1.0, 0.0, 0.0, 0.0),
     player_is_neutral: bool = False,
     player_record: bool = False,
     player_loadout: Loadout | None = None,
@@ -46,6 +47,7 @@ def build_upfront(
     :param scene_name: The scene (see scene_factory)
     :param player_ship_type: The player's fighter model
     :param player_position: The player's initial world position
+    :param player_orientation: The player's initial orientation (w, x, y, z)
     :param player_is_neutral: Team 0 instead of 1
     :param player_record: Step-by-step-record the player
     :param player_loadout: The player's weapons; None for its default loadout
@@ -56,6 +58,7 @@ def build_upfront(
         game=game,
         ship_type=player_ship_type,
         ini_position=np.array(player_position),
+        ini_orientation=np.array(player_orientation),
         is_neutral=player_is_neutral,
         has_ai=False,
         record=player_record,

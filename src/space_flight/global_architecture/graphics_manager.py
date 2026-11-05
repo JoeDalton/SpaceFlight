@@ -246,6 +246,13 @@ class GraphicsManager:
             self._uniform_task = None
         if self._filter_manager is not None:
             self.app.render.clearAntialias()
+            # FilterManager.cleanup removes its buffers but not their display
+            # regions, which stay in the camera's list: the next level's depth
+            # split would take the dead one (the first) for the camera's output
+            # and put its far camera there, leaving everything past the split
+            # black.
+            for buffer in self._filter_manager.buffers:
+                buffer.remove_all_display_regions()
             self._filter_manager.cleanup()
             # FilterManager listens for window-event; drop it so old pipelines
             # don't accumulate handlers across level loads.

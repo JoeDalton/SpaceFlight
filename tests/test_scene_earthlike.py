@@ -131,14 +131,18 @@ def test_earthlike_level_file_is_a_world_builder_level():
 
 
 def test_the_planet_and_its_moon():
-    """The planet's centre is one radius below the origin, with air, clouds
-    and the swell ocean; the airless moon hangs in the northern sky."""
+    """The planet's centre is one radius below the level's reference point
+    (the origin), with air, clouds and the swell ocean; the airless moon hangs
+    in the northern sky there."""
     planet, moon = SceneEarthlike(game=None).bodies()
     radius = planet.spec.radius
     assert planet.name == "planet"
-    assert planet.position == pytest.approx((0.0, 0.0, -radius))
+    frame = SceneEarthlike.level_frame()
+    assert planet.position == pytest.approx(tuple(frame.centre))
+    assert np.linalg.norm(frame.centre) == pytest.approx(radius)
     assert planet.atmosphere is not None
     assert planet.clouds.altitude == SceneEarthlike.CLOUDS.altitude
+    assert planet.clouds.cirrus is not None  # the high cirrus
     assert planet.clouds.genera is not None  # the low clouds by genus
     assert planet.clouds.genera.weather.planet is planet.spec
     assert planet.ocean is SceneEarthlike.OCEAN
@@ -146,10 +150,13 @@ def test_the_planet_and_its_moon():
     assert moon.name == "moon" and moon.atmosphere is None
     offset = np.array(moon.position) - planet.position
     assert np.linalg.norm(offset) == pytest.approx(SceneEarthlike.MOON_DISTANCE_M)
-    assert math.degrees(math.acos(offset[2] / np.linalg.norm(offset))) == (
+    assert math.degrees(math.acos(offset @ frame.up / np.linalg.norm(offset))) == (
         pytest.approx(SceneEarthlike.MOON_ZENITH_ANGLE_DEG)
     )
-    assert offset[1] > 0.0 and offset[0] == 0.0  # north, ahead of the convoy
+    # north, ahead of the convoy
+    assert offset @ frame.north > 0.0 and offset @ frame.east == pytest.approx(
+        0.0, abs=1e-3
+    )
 
 
 def _scene(monkeypatch):
@@ -175,7 +182,12 @@ def test_the_world_is_built_with_the_scenes_look(monkeypatch):
     args, kwargs = world_class.call_args
     assert args[0] is scene.game.app
     assert [body.name for body in args[1]] == ["planet", "moon"]
-    assert kwargs["sun"] is SceneEarthlike.SUN
+    assert kwargs["sun"] is scene.SUN
+    # (east, north, up) of the level's reference point, in world axes
+    frame = SceneEarthlike.level_frame()
+    assert kwargs["sun"].direction == pytest.approx(
+        tuple(frame.vector(*SceneEarthlike.SUN_ENU))
+    )
     assert kwargs["sky"] is SceneEarthlike.SKY
     assert kwargs["settings"] == "settings"
     assert kwargs["light_scale"] == SceneEarthlike.LIGHT_SCALE
@@ -229,11 +241,12 @@ def test_mission3_starts_clear_of_the_ground():
     """Every Mission 3 ship and route is above the ground and the sea, on the
     finest terrain level."""
     spec, _pose = load_level(SceneEarthlike.LEVEL_PATH)
+    scenes_frame = SceneEarthlike.level_frame()
     planet = Planet(spec)
     query = TerrainQuery(planet, include_ocean=True, level=planet.grid.max_level)
     points = _mission3_points()
     # World frame -> planet frame: the planet's centre is one radius below
-    planet_points = points + np.array([0.0, 0.0, spec.radius])
+    planet_points = points - scenes_frame.centre
     altitude = np.linalg.norm(planet_points, axis=1) - spec.radius
     ground = query.height_at(planet_points)
     assert (altitude - ground).min() > MISSION3_CLEARANCE_M
@@ -244,7 +257,8 @@ def test_mission3_starts_clear_of_the_ground():
 # ---------------------------------------------------------------------------
 
 # Where the smoke test's player hovers (the sea under it is at z = 0)
-_HOVER = np.array([0.0, 0.0, 1000.0])
+# 1000 m above the sea north-east of the demo's coast (chart metres)
+_HOVER = SceneEarthlike.level_frame().position(4000.0, 8000.0, 1000.0)
 
 
 def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
@@ -274,7 +288,8 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
         # The player is at the render origin: the sea is 1000 m below it
         root = spaceflight_app.render.attach_new_node("smoke_root")
         segment = CollisionNode("laser")
-        segment.add_solid(CollisionSegment(0, 0, -900, 0, 0, -1100))
+        up = SceneEarthlike.level_frame().up_at(_HOVER)
+        segment.add_solid(CollisionSegment(*(-900 * up), *(-1100 * up)))
         segment.set_from_collide_mask(CollisionLayers.MUNITION_FROM)
         segment.set_into_collide_mask(BitMask32.all_off())
         segment_path = root.attach_new_node(segment)
@@ -287,8 +302,8 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
         assert [e.get_into_node().name for e in entries] == ["terrain"]
         entry = entries[0]
         point = entry.get_surface_point(spaceflight_app.render)
-        assert point.z == pytest.approx(-1000.0, abs=30.0)
-        assert entry.get_surface_normal(spaceflight_app.render).z > 0.9
+        assert np.dot(point, up) == pytest.approx(-1000.0, abs=30.0)
+        assert np.dot(entry.get_surface_normal(spaceflight_app.render), up) > 0.9
         owner = entry.get_into_node_path().get_python_tag("owner")
         assert owner.material_at(point, spaceflight_app.render) in {"water", *BIOMES}
         root.remove_node()
@@ -306,3 +321,68 @@ def test_the_world_gets_the_split_cameras_for_its_raymarched_clouds():
     scene.use_split_depth(depth)
 
     scene.world.use_split_depth.assert_called_once_with(depth)
+
+
+def test_scene_up_follows_minus_gravity_or_defaults_to_world_z():
+    from types import SimpleNamespace
+
+    from space_flight.scenes.scenes import Scene
+
+    scene = Scene(game=None)
+    default = np.array([0, 0, 1])
+    # No world, or no bodies: world +Z
+    assert np.array_equal(scene.up_at([5.0, 5.0, 5.0]), default)
+    scene.world = SimpleNamespace(
+        bodies=[1],
+        gravity_field=lambda: SimpleNamespace(
+            acceleration=lambda p: -np.asarray(p) * 20
+        ),
+    )
+    up = scene.up_at([3.0, 0.0, 4.0])
+    assert np.allclose(up, [0.6, 0.0, 0.8])
+    # Negligible gravity: world +Z
+    scene._gravity = SimpleNamespace(acceleration=lambda p: np.zeros(3))
+    assert np.array_equal(scene.up_at([3.0, 0.0, 4.0]), default)
+
+
+def _node_scene(tracked_nodes=()):
+    """A Scene over a stand-in world that records track_light calls."""
+    from panda3d.core import NodePath
+
+    scene = Scene(game=None)
+    calls = []
+    tracked = set(tracked_nodes)
+
+    def track_light(node, cast, shader):
+        calls.append((node, cast, shader))
+        tracked.add(node)
+
+    scene.world = SimpleNamespace(
+        tracked=SimpleNamespace(is_tracked=lambda node: node in tracked),
+        track_light=track_light,
+    )
+    return scene, calls, NodePath
+
+
+def test_scene_tracks_anchored_models_to_cast_shadows():
+    scene, calls, NodePath = _node_scene()
+    ship = NodePath("ship_node")
+    scene.track_model(ship)
+    assert calls == [(ship, True, True)]
+
+
+def test_scene_tracks_a_hierarchy_once():
+    """Turrets and props anchored below a tracked ship follow it."""
+    scene, calls, NodePath = _node_scene()
+    ship = NodePath("ship_node")
+    mount = ship.attach_new_node("mount")
+    scene.track_model(ship)
+    scene.track_model(ship)
+    scene.track_model(mount)
+    assert [call[0] for call in calls] == [ship]
+
+
+def test_scene_without_a_world_tracks_nothing():
+    from panda3d.core import NodePath
+
+    Scene(game=None).track_model(NodePath("ship_node"))  # no error

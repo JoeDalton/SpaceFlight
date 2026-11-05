@@ -9,17 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Free flight level in the Earth-like scene
-
-### Added
-
 - Free flight level in the Earth-like scene # 177
+- Bots take the planet's up as reference #174
+- Game objects cast shadows and use the world's lighting #176
 
 ### Changed
 
 - Space scenes draw WorldBuilder's sky (stars, sun, nebula) and take their lights from it, instead of skyboxes #176
-- Asteroid fields are now procdural, built in WorldBuilder
+- Asteroid fields are now procdural, built in WorldBuilder #179
 - Crashes into and sparks off a turning rock take its surface's motion into account #176
+
+### Fixed
+
+- Level reload with render pipeline drew solid black #176
 
 ### Removed
 

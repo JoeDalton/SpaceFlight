@@ -618,7 +618,7 @@ class FighterNavigator(GenericShipNavigator):
             self.avoidance_weight_factor = strafe["corridor_avoidance_factor"]
         else:
             base_direction = lead_direction
-            up_reference = self.game.scene.up_direction
+            up_reference = self.game.scene.up_at(self.pawn.position)
 
         amplitude = strafe["swivel_amplitude"] * min(
             distance_m / strafe["swivel_distance_scale_m"], 1.0
@@ -716,7 +716,7 @@ class FighterNavigator(GenericShipNavigator):
         up_reference = (
             surface_normal
             if surface_normal is not None
-            else self.game.scene.up_direction
+            else self.game.scene.up_at(self.pawn.position)
         )
 
         track_direction = self._bomb_track_direction(

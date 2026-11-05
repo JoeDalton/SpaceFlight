@@ -45,7 +45,9 @@ class MajorShipPilot(GenericShipPilot):
         # Capital ships only roll to level with the reference up (scene up by
         # default).
         level_reference = (
-            self.game.scene.up_direction if up_reference is None else up_reference
+            self.game.scene.up_at(self.pawn.position)
+            if up_reference is None
+            else up_reference
         )
         roll_error = self._level_roll_error(level_reference)
 

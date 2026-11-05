@@ -154,3 +154,33 @@ class TestBeginSceneRenderNoOp:
             mgr.begin_scene_render()
         assert built.get("called") is True
         assert mgr._render_size == (500, 400)
+
+
+# end_scene_render — the pipeline's buffers
+# ---------------------------------------------------------------------------
+
+
+class TestEndSceneRender:
+    def test_buffers_lose_their_display_regions(self):
+        """FilterManager.cleanup leaves the buffers' display regions on the
+        camera: the next level's depth split would take the dead one and draw
+        its far camera into a buffer that no longer exists (everything past
+        the split black). They are removed before the cleanup."""
+        mgr, _app = _make_manager(_full_config())
+        calls = []
+        buffer = MagicMock()
+        buffer.remove_all_display_regions.side_effect = lambda: calls.append("regions")
+        manager = MagicMock()
+        manager.buffers = [buffer]
+        manager.cleanup.side_effect = lambda: calls.append("cleanup")
+        mgr._filter_manager = manager
+
+        mgr.end_scene_render()
+
+        assert calls == ["regions", "cleanup"]
+        assert mgr._filter_manager is None
+
+    def test_without_a_pipeline_nothing_happens(self):
+        mgr, _app = _make_manager(_full_config())
+        mgr.end_scene_render()  # no error
+        assert mgr._filter_manager is None

@@ -22,6 +22,7 @@ def mock_game():
     game = MagicMock()
     game.game_time.get_current_time.return_value = 0.0
     game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    game.scene.up_at = lambda _position: game.scene.up_direction
     return game
 
 

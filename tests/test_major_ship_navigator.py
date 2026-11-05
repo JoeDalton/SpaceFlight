@@ -51,6 +51,7 @@ def make_major_ship_navigator(
     nav.collision_sensor.compute_repulsion.return_value = (np.zeros(3), 0.0)
     nav.engage_phase = ""
     nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    nav.game.scene.up_at = lambda _position: nav.game.scene.up_direction
     return nav
 
 

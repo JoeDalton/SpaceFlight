@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import logging
 import math
 import time
@@ -19,6 +20,7 @@ from world_builder.asteroids.spec import (
     MaterialSpec,
 )
 from world_builder.atmosphere import AtmosphereParams
+from world_builder.clouds.cirrus import CirrusSpec
 from world_builder.clouds.genera import GeneraSpec
 from world_builder.clouds.weather import WeatherSpec
 from world_builder.depth import SplitDepthCameras
@@ -29,9 +31,12 @@ from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook
 from space_flight import CAMERA_FAR_M, DATAFILES_PATH
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
+from space_flight.scenes.level_frame import LevelFrame
 from space_flight.scenes.planet_2d import Planet2D
 
 if TYPE_CHECKING:
+    from panda3d.core import NodePath
+
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger(__name__)
@@ -112,13 +117,74 @@ def scene_factory(
     raise NotImplementedError(f"Unknown scene {scene_name}")
 
 
+#: A gravity weaker than this (norm of the raw vector) gives no "up"
+MIN_GRAVITY_NORM = 1e-1
+
+
 class Scene:
     def __init__(
         self,
         game: FlightState,
     ):
         self.game = game
-        self.up_direction = np.array([0, 0, 1])
+        self.default_up_direction = np.array([0, 0, 1])
+        self._gravity = None
+
+    def up_at(self, position: Sequence[float]) -> np.ndarray:
+        """
+        Returns the "up" direction at a given location in the world.
+        If there is significant gravity, up is its opposite.
+        Else, the (0.0.1) is used
+
+        :param position: A world position
+        :return: "Up" there: against the gravity of the scene's WorldBuilder
+            bodies when it is not negligible, else the scene's up_direction
+            (world +Z)
+        """
+        world = getattr(self, "world", None)
+        if world is None or not world.bodies:
+            return self.default_up_direction
+        if self._gravity is None:
+            self._gravity = world.gravity_field()
+        gravity = self._gravity.acceleration(np.asarray(position, dtype=np.float64))
+        norm = float(np.linalg.norm(gravity))
+        if not np.isfinite(norm) or norm < MIN_GRAVITY_NORM:
+            return self.default_up_direction
+        return -gravity / norm
+
+    #: Whether the models tracked by the scene cast shadows
+    MODELS_CAST_SHADOWS = True
+    #: Whether they are drawn by WorldBuilder's model shader (they then also
+    #: receive the world's shadows, per pixel) instead of Panda3D's lights
+    MODELS_USE_WORLD_SHADER = True
+
+    def track_model(self, node: NodePath) -> None:
+        """
+        Light a model by the light at its own position and have it cast
+        shadows (WorldBuilder's World.track_light), for the scenes that have a
+        World. Called for every model anchored to a node (see
+        AnchoredModel): the node is tracked once, whatever is anchored below
+        it, so ships, turrets and props need nothing more.
+
+        :param node: The node the model is anchored to (its children follow)
+        """
+        world = getattr(self, "world", None)
+        if world is None or node.is_empty():
+            return
+        # One tracking per hierarchy: a node below a tracked one is lit and
+        # casts with it
+        ancestor = node
+        while True:
+            if world.tracked.is_tracked(ancestor):
+                return
+            if not ancestor.has_parent():
+                break
+            ancestor = ancestor.get_parent()
+        world.track_light(
+            node,
+            cast=self.MODELS_CAST_SHADOWS,
+            shader=self.MODELS_USE_WORLD_SHADER,
+        )
 
     def depth_ranges(self) -> tuple[float, float]:
         """
@@ -167,19 +233,22 @@ class SceneEarthlike(Scene):
     planet (terrain, air, clouds, swell ocean), its moon, the sky and the sun.
 
     WorldBuilder's World builds and updates them. What they look like is
-    decided here. The planet is not rotated: its centre is one radius below
-    the world origin, so the ground under Mission 3 is its +z pole, with sea
-    level at z = 0 there.
+    decided here. The planet is not rotated: its centre is placed (see
+    LevelFrame) so that the level file's reference point is the world origin,
+    at sea level, with the file's east, north and up not the world's axes.
+    Positions are written on the file's chart and converted with
+    :meth:`level_frame`.
     """
 
     LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
-    # Toward the sun: high in the south-east sky
-    SUN = SunLook(direction=(0.4, -0.5, 0.75))
+    # Toward the sun, as (east, north, up) at the reference point: sunrise in the east.
+    # SunLook is given the world direction (see __init__).
+    SUN_ENU = (1.0, 0, 0.3)
     SKY = SkyLook()
     # The convective clouds above the convoy, which flies at 200-800 m (the
     # stratus deck stays under their base). The genera (stratus, congestus,
     # cumulonimbus, ...) are added in bodies(): they need the planet.
-    CLOUDS = CloudLook(altitude=2200.0)
+    CLOUDS = CloudLook(altitude=2200.0, cirrus=CirrusSpec())
     # The 20 m swell, calmed over the shallows (the atmosphere hazes the sea)
     OCEAN = OceanLook()
     # The moon: the demo's airless sand moon, this far from the planet's
@@ -195,13 +264,27 @@ class SceneEarthlike(Scene):
     # the world's physical noon sun (about 2.4) is scaled to about white
     LIGHT_SCALE = 0.4
 
+    @classmethod
+    @functools.cache
+    def level_frame(cls) -> LevelFrame:
+        """:return: The frame of the level file (chart to world)"""
+        spec, _camera_pose = load_level(cls.LEVEL_PATH)
+        return LevelFrame(spec)
+
+    def __init__(self, game: FlightState):
+        super().__init__(game=game)
+        frame = self.level_frame()
+        self.default_up_direction = frame.up
+        self.SUN = SunLook(direction=tuple(frame.vector(*self.SUN_ENU)))
+
     def bodies(self) -> list[BodyLook]:
         """:return: The planet (from LEVEL_PATH) and its moon"""
         spec, _camera_pose = load_level(self.LEVEL_PATH)
-        centre = np.array([0.0, 0.0, -spec.radius])
+        frame = self.level_frame()
+        centre = frame.centre
         angle = math.radians(self.MOON_ZENITH_ANGLE_DEG)
-        moon = centre + self.MOON_DISTANCE_M * np.array(
-            [0.0, math.sin(angle), math.cos(angle)]
+        moon = centre + self.MOON_DISTANCE_M * (
+            math.sin(angle) * frame.north + math.cos(angle) * frame.up
         )
         clouds = replace(
             self.CLOUDS,

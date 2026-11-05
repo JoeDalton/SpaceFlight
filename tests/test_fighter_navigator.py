@@ -480,6 +480,7 @@ def _augment_pawn_for_strafe(nav):
     nav.pawn.position = np.zeros(3)
     nav.pawn.laser_cannon = MagicMock()
     nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    nav.game.scene.up_at = lambda _position: nav.game.scene.up_direction
 
 
 def _strafe_target_dict(distance_m):
@@ -620,6 +621,7 @@ def _augment_pawn_for_bomb(nav):
     nav.pawn.fire_secondary = MagicMock(return_value=True)
     nav.bomb_launcher = launcher
     nav.game.scene.up_direction = np.array([0.0, 0.0, 1.0])
+    nav.game.scene.up_at = lambda _position: nav.game.scene.up_direction
     nav.up_reference = None
 
 

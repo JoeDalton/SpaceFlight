@@ -106,6 +106,11 @@ class AnchoredModel:
         Anchors the 3D model to its parent node
         """
         self.model.reparent_to(node)
+        # The scene lights what is anchored by its position and has it cast
+        # shadows (a no-op without a world)
+        scene = getattr(self.game, "scene", None)
+        if scene is not None:
+            scene.track_model(node)
         self.model.setPos(*self.offset)
         self.model.setQuat(
             Quat(
