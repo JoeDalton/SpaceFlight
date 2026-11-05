@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Asteroid fields are now procdural, built in WorldBuilder #179
 - Crashes into and sparks off a turning rock take its surface's motion into account #176
 
+### Fixed
+
+- Level reload with render pipeline drew solid black #176
+
 ### Removed
 
 - Skyboxes, the old asteroid field and its rock models, and the scenes' `Lighting` #176
