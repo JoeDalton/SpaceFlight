@@ -193,7 +193,9 @@ def test_the_world_is_built_with_the_scenes_look(monkeypatch):
     assert kwargs["light_scale"] == SceneEarthlike.LIGHT_SCALE
     assert kwargs["clock"]() == 4.0  # the game's clock
     scene.world.enable_collision.assert_called_once_with(
-        CollisionLayers.TERRAIN_INTO, bodies=["planet"]
+        CollisionLayers.TERRAIN_INTO,
+        bodies=["planet"],
+        max_distance=SceneEarthlike.TERRAIN_COLLISION_RANGE_M,
     )
 
 

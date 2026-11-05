@@ -269,6 +269,9 @@ class SceneEarthlike(Scene):
     """
 
     LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
+    # The ground is solid within this of the player, metres: the fights stay a
+    # few kilometres from it (each chunk farther costs a check every frame)
+    TERRAIN_COLLISION_RANGE_M = 10_000.0
     # Toward the sun, as (east, north, up) at the reference point: sunrise in the east.
     # SunLook is given the world direction (see __init__).
     SUN_ENU = (1.0, 0, 0.3)
@@ -360,7 +363,11 @@ class SceneEarthlike(Scene):
         # Set after it is built: older WorldBuilders have no such parameter
         self.world.light_period = LIGHT_PERIOD_FRAMES
         # Solid to ships, munitions and sensors, the sea surface included
-        self.world.enable_collision(CollisionLayers.TERRAIN_INTO, bodies=["planet"])
+        self.world.enable_collision(
+            CollisionLayers.TERRAIN_INTO,
+            bodies=["planet"],
+            max_distance=self.TERRAIN_COLLISION_RANGE_M,
+        )
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """

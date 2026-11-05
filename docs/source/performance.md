@@ -135,6 +135,18 @@ About 17 ms a frame, still:
 | "Up" reckoned at the player once a second for every ship (`Scene.up_at`, `UP_REFRESH_S`) | gravity evaluations from 6 call sites per bot per frame gone |
 | The model shader's attrib set only when it changes; the bodies' arrays and the casters' bookkeeping kept between frames (WorldBuilder) | fewer render states made each frame |
 | The HUD's FPS and flare lines set only when their text changes | |
+| The speed dust animated in its vertex shader (`speed_dust.vert`) | a Python loop over 100 nodes gone |
+| The Earth-like ground solid within 10 km (`TERRAIN_COLLISION_RANGE_M`; WorldBuilder's default is now 20 km) | fewer chunks checked each frame |
+| The cloud march's inputs bound once, the planet's rotation given only when it turns (WorldBuilder) | fewer render states made each frame |
+
+Measured, no change: `transform-cache false` in the PRC (16.4/15.8 ms
+median without, 16.6/16.5 with).
+
+PStats (`--pstats` with `text-stats`) of a still frame: on the GPU, the
+clouds' far and near marches 2.5 and 1.5 ms, the main view 2.8 ms (its far
+range 2.1), the sea's reflection 0.55 ms; on the CPU, Panda's draw 5.3 ms
+(3 ms setting states), its cull 1.5 ms, the game's Python about 6.5 ms. See
+WorldBuilder's docs/source/performance_backlog.md for what is left there.
 
 Still: 17.5-18.1 ms median (mean 18.3-20.7 with the stalls) before,
 16-17 ms (mean 16.1-17.4) after. Flying: 19.3 ms median, 22.2 mean, 832 ms

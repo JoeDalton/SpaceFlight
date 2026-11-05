@@ -13,7 +13,7 @@ Usage:
         [--warmup 45] [--size "2560 1440"] [--level "Mission 3: Escort"]
         [--toggle mirror|shadows|model_shader|cirrus ...]
         [--world SECTION.KNOB=VALUE ...] [--profile [FILE]] [--pstats]
-        [--shot FILE]
+        [--prc LINE ...] [--shot FILE]
 
     --pose      still: the player stays where it spawns; fly: it flies on at
                 a fixed throttle
@@ -23,7 +23,10 @@ Usage:
                 settings store it (e.g. shadows.object_shadows=false)
     --profile   then profile as many frames with cProfile (stats to FILE,
                 default profiles/mission3.prof, top 30 printed)
-    --pstats    connect to a running PStats server
+    --pstats    connect to a running PStats server (pstats, or text-stats
+                for a text summary), the GPU's timings included
+    --prc       a Panda3D config line over the game's (e.g. "transform-cache
+                false")
     --shot      save a screenshot of the last frame
 
 Run each variant at least twice, interleaved, with the GPU in its performance
@@ -69,6 +72,7 @@ def parse_args() -> argparse.Namespace:
         "--profile", nargs="?", const="profiles/mission3.prof", default=None
     )
     parser.add_argument("--pstats", action="store_true")
+    parser.add_argument("--prc", action="append", default=[])
     parser.add_argument("--shot", default=None)
     return parser.parse_args()
 
@@ -122,7 +126,8 @@ def main():
         "sync-video false",
     ]
     if args.pstats:
-        prc.append("want-pstats 1")
+        prc += ["want-pstats 1", "pstats-gpu-timing 1"]
+    prc += args.prc
     loadPrcFileData("", "\n".join(prc))
 
     import space_flight.game.flight_state as flight_state
