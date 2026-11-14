@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 from panda3d.core import ConfigVariableFilename, loadPrcFileData
 
+from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_manager import (
     COMMON_ASSETS_TO_LOAD,
     AssetManager,
@@ -71,7 +72,7 @@ def test_common_assets_load_through_splash_state_path(spaceflight_app, tmp_path)
         assert app_state.finished, "load_assets_task never reached on_loading_finished"
         assert app_state.progress_bar.updates[-1] == pytest.approx(1.0)
 
-        for _asset_type, path, _pattern in COMMON_ASSETS_TO_LOAD:
+        for path in COMMON_ASSETS_TO_LOAD:
             assert path in asset_manager.assets, f"{path} was not loaded"
     finally:
         asset_manager.assets.clear()
@@ -145,3 +146,57 @@ def test_copy_3d_model_to_node_copies_rather_than_instances():
 
     model.copyTo.assert_called_once_with(parent)
     model.instanceTo.assert_called_once_with(parent)
+
+
+# ---------------------------
+# Flattening models at load
+# ---------------------------
+
+CR90 = DATAFILES_PATH / "models/ships/cr-90/scene.gltf"
+TURRET = DATAFILES_PATH / "models/turrets/test/turret.glb"
+
+
+def _geom_count(model) -> int:
+    return sum(
+        path.node().get_num_geoms() for path in model.find_all_matches("**/+GeomNode")
+    )
+
+
+def _fresh_manager(app) -> AssetManager:
+    """An AssetManager with an empty cache, over the real app's loader."""
+    return AssetManager(app=app)
+
+
+def test_models_whose_nodes_are_used_are_not_flattened():
+    """The turret's joints and the GUI maps' named parts must survive."""
+    assert COMMON_ASSETS_TO_LOAD[TURRET]["flatten"] is False
+    for path, spec in COMMON_ASSETS_TO_LOAD.items():
+        if path.suffix == ".egg":
+            assert spec["flatten"] is False, path
+
+
+def test_a_model_is_flattened_by_default(spaceflight_app):
+    """Loaded through the cache, a ship has far fewer geoms than as is."""
+    raw = _geom_count(spaceflight_app.loader.loadModel(CR90))
+    manager = _fresh_manager(spaceflight_app)
+    flattened = _geom_count(manager.get_asset(asset_type="model", path=CR90))
+    assert flattened < raw
+
+
+def test_a_copied_model_keeps_its_joints(spaceflight_app):
+    """copy_3d_model_to_node never flattens: the turret can still swivel."""
+    manager = _fresh_manager(spaceflight_app)
+    parent = spaceflight_app.render.attach_new_node("turret_parent")
+    try:
+        manager.copy_3d_model_to_node(path=TURRET, parent_node=parent)
+        assert not parent.find("**/heading_axis").is_empty()
+        assert not parent.find("**/cannon_axis").is_empty()
+    finally:
+        parent.remove_node()
+
+
+def test_get_asset_takes_the_listed_flag(spaceflight_app):
+    """With no flag given, the turret is loaded unflattened (its entry)."""
+    manager = _fresh_manager(spaceflight_app)
+    turret = manager.get_asset(asset_type="model", path=TURRET)
+    assert not turret.find("**/heading_axis").is_empty()

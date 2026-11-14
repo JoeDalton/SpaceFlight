@@ -1,12 +1,14 @@
 from unittest.mock import MagicMock
 
 import pytest
+from panda3d.core import LVecBase2f
 
 from space_flight.game.hyperspace_loading_state import (
     MAX_DT,
     OUTOF_DURATION,
     REVEAL_START,
     HyperspaceLoadingState,
+    set_resolution,
 )
 
 
@@ -111,3 +113,19 @@ def test_update_clamps_frame_time():
 
     assert state._quad_time[0] == pytest.approx(MAX_DT)
     assert not state._popped
+
+
+def test_set_resolution_reads_the_output_size():
+    """The quads get the size of what they cover, a window or an offscreen
+    buffer alike (a buffer has no window properties)."""
+    buffer = MagicMock(spec=["getXSize", "getYSize"])
+    buffer.getXSize.return_value = 1600
+    buffer.getYSize.return_value = 900
+    quads = [MagicMock(), MagicMock()]
+
+    set_resolution(quads, buffer)
+
+    for quad in quads:
+        quad.setShaderInput.assert_called_once_with(
+            "iResolution", LVecBase2f(1600, 900)
+        )

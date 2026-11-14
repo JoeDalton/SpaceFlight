@@ -212,3 +212,55 @@ def test_clear_keeps_top_state(manager):
     manager.clear()
     assert manager.stack[0] is top
     assert len(manager.stack) == 1
+
+
+# ---------------------------------------------------------------------------
+# SpaceFlightSimulator's modes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "headless, interactive, reads_input, shows_splash",
+    [
+        (False, True, True, True),
+        (True, True, False, False),
+        (False, False, False, False),
+    ],
+)
+def test_simulator_modes(monkeypatch, headless, interactive, reads_input, shows_splash):
+    """An interactive app reads input and shows the splash; a headless or a
+    non-interactive one (a scripted run, drawn) does neither."""
+    from space_flight.global_architecture import simulator
+
+    monkeypatch.setattr(simulator.ShowBase, "__init__", lambda self: None)
+    monkeypatch.setattr(
+        simulator.SpaceFlightSimulator, "disableMouse", lambda self: None
+    )
+    for name in (
+        "GraphicsSettings",
+        "GameplaySettings",
+        "GraphicsManager",
+        "InputContextStack",
+        "AssetManager",
+        "MenuModels",
+        "SFX",
+        "IdleInhibitor",
+        "reader_factory",
+        "load_bindings",
+    ):
+        monkeypatch.setattr(simulator, name, MagicMock())
+    state_manager = MagicMock()
+    monkeypatch.setattr(
+        simulator, "StateManager", MagicMock(return_value=state_manager)
+    )
+    monkeypatch.setattr(simulator.atexit, "register", MagicMock())
+    simulator.SpaceFlightSimulator.taskMgr = MagicMock()
+    try:
+        app = simulator.SpaceFlightSimulator(headless=headless, interactive=interactive)
+    finally:
+        del simulator.SpaceFlightSimulator.taskMgr
+
+    assert simulator.reader_factory.called is reads_input
+    assert hasattr(app, "input_reader") is reads_input
+    assert state_manager.push.called is shows_splash
+    assert simulator.IdleInhibitor.called is shows_splash

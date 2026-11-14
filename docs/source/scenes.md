@@ -57,6 +57,27 @@ Missions also ask it `scene.clear_position(position, radius)` for ships
 placed at run time relative to the player: the nearest place with room, the
 position itself in a scene without obstacles.
 
+Two more services every scene gives, through its WorldBuilder `World` when it
+has one:
+- **"Up"**: `scene.up_at(position)` is what the bots level their wings to
+  (see [ai.md](ai.md)). It points against the gravity of the world's bodies,
+  or is `default_up_direction` (world +Z) where there is none or it is
+  negligible (`MIN_GRAVITY_NORM`). It is reckoned at the player's position at
+  most every `UP_REFRESH_S` (1 s) and given for every position meanwhile: the
+  ships stay a few kilometres from the player, and over that distance a
+  planet's up turns by a fraction of a degree.
+- **Lighting and shadows of models**: `scene.track_model(node)` hands a node to
+  `World.track_light`, which lights it by the light where it is (not at the
+  camera) and makes it cast shadows (`MODELS_CAST_SHADOWS`). With
+  `MODELS_USE_WORLD_SHADER` (on by default) it is also drawn by WorldBuilder's
+  model shader, so it receives the world's shadows (clouds, mountains, the
+  other ships). `AnchoredModel.anchor_model` calls it for every model it
+  anchors (ships, turrets, any prop), with the node it anchors to: a
+  hierarchy is tracked once, and a node under a tracked one follows it. Without
+  a world it does nothing. The light at the tracked nodes is reckoned every
+  `LIGHT_PERIOD_FRAMES` (3) frames (`World.light_period`), and at once when the
+  sun moves or a node is tracked.
+
 ## Open space and asteroid fields — from WorldBuilder
 
 `SceneSpace` is open space: WorldBuilder's `World` with no planet. It draws
@@ -115,11 +136,16 @@ The scene only says what it looks like.
 **The look** (class attributes and `bodies()`):
 - **The planet** comes from `datafiles/worlds/earthlike_demo/`, an unchanged
   copy of WorldBuilder's demo level (`terrain/levels/demo.yaml` and its
-  stamps). It has `AtmosphereParams()`, `CLOUDS` (cumulus at 2.2 km, above
-  the convoy) and `OCEAN` (the 20 m swell, hazed to the air's colour).
+  stamps): a coast with the sea to the north, a range to the south, a crater,
+  a mesa, a landing pad and a lake near the start. It has
+  `AtmosphereParams()`, `CLOUDS` (the convective clouds at 2.2 km, above the
+  convoy, by genus, with cirrus above them) and `OCEAN` (the 20 m swell,
+  hazed to the air's colour).
 - **The moon** is the demo's airless sand moon, 10,000 km away, in the
   northern sky ahead of the convoy.
-- **The sun** is `SUN`, high in the south-east, and **the sky** is `SKY`,
+- **The sun** is `SUN_ENU` (east, north, up at the level's reference point),
+  high in the south-east, turned into a world direction when the scene is
+  made; **the sky** is `SKY`,
   WorldBuilder's star field.
 - **`LIGHT_SCALE`** scales the Panda3D lights `World` puts on render for the
   ships, about 0.4. Ships use fixed-function lighting with no tone map, so the
@@ -128,14 +154,24 @@ The scene only says what it looks like.
 There is no 2D planet: the sky, the moon and the lights are the world's.
 
 **How it runs:**
-- **Placement.** The planet is not rotated: its centre sits one radius below
-  the world origin, so the ground under the origin is the planet's +z pole,
-  with sea level at z = 0 there.
-  - That is a polar sea with snowy islands and mountains. The demo level's
-    hand-made features sit far away, around its reference latitude, and are
-    not seen.
-  - The surface curves away from z = 0 with distance (about 80 m at 10 km on
-    the 600 km planet), while the flight model stays flat.
+- **Placement.** WorldBuilder never rotates a planet, so the level's place
+  is not at the planet's +z pole. `SceneEarthlike.level_frame()` (a
+  [`LevelFrame`](../../src/space_flight/scenes/level_frame.py), made once from
+  the level file) places the planet's centre so that the level file's
+  reference point is the world origin, at sea level.
+  - There, the level's east, north and up are not the world's x, y and z.
+    `default_up_direction` is the frame's up, and the bots take "up" from
+    gravity (see above).
+  - Levels write their positions on the level file's chart (x metres east,
+    y metres north of the reference point, z metres above sea level), and
+    `LevelFrame.position(x, y, z)` turns them into world positions, on the
+    sphere. `LevelFrame.orientation(position, toward)` gives a level
+    orientation facing a point.
+  - Mission 3 and Free Flight start at the demo's start point (its
+    `camera`), (0, -4000, 1300) on the chart: 900 m over the coastal plain,
+    facing north to the coast. Mission 3's waves, routes and formations are
+    written on the chart too (`WaveSpec.formation_frame` turns the
+    formation's slots to the level's axes).
 - **Build.** `build_upfront` builds the `World` on the black screen, about
   5 s. It runs before `FlightState` creates the split cameras, because the
   ocean's reflection copies the main lens.
@@ -156,8 +192,10 @@ There is no 2D planet: the sky, the moon and the lights are the world's.
   WorldBuilder's `TerrainSurface`. Ships, munitions and sensors hit it through
   the usual terrain handlers (see [docs/game.md](game.md)), the sea surface
   included.
-  - Only drawn chunks within 100 km are solid, at the drawn level of detail,
-    which is coarser away from the player.
+  - Only drawn chunks within `TERRAIN_COLLISION_RANGE_M` (10 km) of the
+    player are solid, at the drawn level of detail, which is coarser away
+    from the player. Every chunk within that range is checked each frame, and
+    the fights stay a few kilometres from the player.
   - Without the native collision library built for this Panda3D series,
     building the scene raises `NativeCollisionError`.
 - **Quality.** Every part is built with the `world` graphics settings.
@@ -171,6 +209,7 @@ There is no 2D planet: the sky, the moon and the lights are the world's.
 `Scene` and its subclasses are in `scenes.py`, with the loading gate
 `wait_until_loaded` (which sleeps a few milliseconds per step while loading,
 so the worker processes' results get through a loading loop run flat out, as
-a headless build runs it). `planet_2d.py` is the 2D planet. The world, the
+a headless build runs it). `level_frame.py` is the chart-to-world frame of a
+level built on a WorldBuilder level file. `planet_2d.py` is the 2D planet. The world, the
 asteroid fields and their shaders are in WorldBuilder (`world_builder.world`,
 `world_builder.asteroids`).

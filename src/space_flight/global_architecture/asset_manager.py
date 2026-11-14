@@ -23,83 +23,105 @@ if TYPE_CHECKING:
 # TODO use bam files for faster loading of 3D models
 
 
-COMMON_ASSETS_TO_LOAD = [
+# Assets preloaded by the splash screen, by path (the cache's key)
+# A model whose nodes are looked up or moved (a turret's joints, a GUI map's
+# named parts) must say "flatten": False.
+COMMON_ASSETS_TO_LOAD: dict[Path, dict[str, Any]] = {
     # UI
-    ("model", DATAFILES_PATH / "menus/button_map.egg", ""),
-    ("model", DATAFILES_PATH / "menus/dec_map.egg", ""),
-    ("model", DATAFILES_PATH / "menus/inc_map.egg", ""),
-    ("model", DATAFILES_PATH / "menus/list_item_even.egg", ""),
-    ("model", DATAFILES_PATH / "menus/list_item_odd.egg", ""),
-    ("model", DATAFILES_PATH / "menus/thumb_map.egg", ""),
-    ("model", DATAFILES_PATH / "menus/xbone-icons.egg", ""),
-    ("texture", DATAFILES_PATH / "menus/dialog.png", ""),
+    DATAFILES_PATH / "menus/button_map.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/dec_map.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/inc_map.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/list_item_even.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/list_item_odd.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/thumb_map.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/xbone-icons.egg": {"type": "model", "flatten": False},
+    DATAFILES_PATH / "menus/dialog.png": {"type": "texture"},
     # Ships
-    ("model", DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/tie-interceptor/exterior/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/tie-fighter/exterior/scene.gltf", ""),
+    DATAFILES_PATH / "models/ships/a-wing/cockpit/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/a-wing/exterior/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/x-wing/cockpit/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/x-wing/exterior/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/y-wing/cockpit/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/y-wing/exterior/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/tie_common/cockpit/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/tie-interceptor/exterior/scene.gltf": {
+        "type": "model"
+    },
+    DATAFILES_PATH / "models/ships/tie-bomber/exterior/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/tie-fighter/exterior/scene.gltf": {"type": "model"},
     # Capital ships (heavy glTF — preload so the level build never blocks on them)
-    ("model", DATAFILES_PATH / "models/ships/gr-75/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/ships/cr-90/scene.gltf", ""),
-    ("model", DATAFILES_PATH / "models/turrets/test/turret.glb", ""),
-    (
-        "model",
-        DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf",
-        "",
-    ),
+    DATAFILES_PATH / "models/ships/gr-75/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/ships/cr-90/scene.gltf": {"type": "model"},
+    DATAFILES_PATH / "models/turrets/test/turret.glb": {
+        "type": "model",
+        "flatten": False,
+    },
+    DATAFILES_PATH / "models/star_wars_imperial-class_star_destroyer/scene.gltf": {
+        "type": "model"
+    },
     # Battle sounds
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/short", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/player_crash/long", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_hull", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/impacts/laser_on_player_shield", "*.ogg"),
-    ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_target", "*.wav"),
-    ("sound", DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock", "*.wav"),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.wav", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.wav", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/YWING_BLASTER.wav", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/weapons/AA_TURRET_BLASTER.wav", ""),
+    DATAFILES_PATH / "sounds/impacts/player_crash/short": {
+        "type": "3d_sound",
+        "pattern": "*.wav",
+    },
+    DATAFILES_PATH / "sounds/impacts/player_crash/long": {
+        "type": "3d_sound",
+        "pattern": "*.wav",
+    },
+    DATAFILES_PATH / "sounds/impacts/laser_on_player_hull": {
+        "type": "3d_sound",
+        "pattern": "*.wav",
+    },
+    DATAFILES_PATH / "sounds/impacts/laser_on_player_shield": {
+        "type": "3d_sound",
+        "pattern": "*.ogg",
+    },
+    DATAFILES_PATH / "sounds/impacts/laser_distant_on_target": {
+        "type": "sound",
+        "pattern": "*.wav",
+    },
+    DATAFILES_PATH / "sounds/impacts/laser_distant_on_rock": {
+        "type": "sound",
+        "pattern": "*.wav",
+    },
+    DATAFILES_PATH / "sounds/weapons/TIE_BLASTER.wav": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/weapons/XWING_BLASTER.wav": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/weapons/YWING_BLASTER.wav": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/weapons/AA_TURRET_BLASTER.wav": {"type": "3d_sound"},
     # Ship engine sounds
-    (
-        "3d_sound",
-        DATAFILES_PATH / "sounds/engines/capital_ships/test_capital_ext.ogg",
-        "",
-    ),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_high.ogg", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_med.ogg", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_low.ogg", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/a-wing/aw_ext_med.ogg", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/x-wing/xw_ext_med.ogg", ""),
-    ("3d_sound", DATAFILES_PATH / "sounds/engines/y-wing/yw_ext_med.ogg", ""),
-    ("sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_int_high.ogg", ""),
-    ("sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_int_med.ogg", ""),
-    ("sound", DATAFILES_PATH / "sounds/engines/tie_common/tie_int_low.ogg", ""),
-    ("sound", DATAFILES_PATH / "sounds/engines/a-wing/aw_int_med.ogg", ""),
-    ("sound", DATAFILES_PATH / "sounds/engines/x-wing/xw_int_med.ogg", ""),
-    ("sound", DATAFILES_PATH / "sounds/engines/y-wing/yw_int_med.ogg", ""),
+    DATAFILES_PATH / "sounds/engines/capital_ships/test_capital_ext.ogg": {
+        "type": "3d_sound"
+    },
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_high.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_med.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_ext_low.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/a-wing/aw_ext_med.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/x-wing/xw_ext_med.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/y-wing/yw_ext_med.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_high.ogg": {"type": "sound"},
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_med.ogg": {"type": "sound"},
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_low.ogg": {"type": "sound"},
+    DATAFILES_PATH / "sounds/engines/a-wing/aw_int_med.ogg": {"type": "sound"},
+    DATAFILES_PATH / "sounds/engines/x-wing/xw_int_med.ogg": {"type": "sound"},
+    DATAFILES_PATH / "sounds/engines/y-wing/yw_int_med.ogg": {"type": "sound"},
     # Planet sprite (large PNG — preload so the level build never blocks on it;
     # loadTexture caches by path, so Planet2D's own load becomes a cache hit)
-    ("texture", DATAFILES_PATH / "sprites/planets_2d/terran.png", ""),
+    DATAFILES_PATH / "sprites/planets_2d/terran.png": {"type": "texture"},
     # Cloud sprite atlas (loaded in CloudField's build preamble — preload so the
     # cloud build doesn't block ~77ms on it; WorldBuilder's atlas loader goes
     # through this asset manager, keyed by path)
-    ("texture", CLOUD_ATLAS_PNG, ""),
+    CLOUD_ATLAS_PNG: {"type": "texture"},
     # Dust textures
-    ("texture", DATAFILES_PATH / "sprites/dust/dust_blue.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/dust/dust_green.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/dust/dust_orange.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/dust/dust_pink.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/dust/dust_white.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/dust/dust_yellow.png", ""),
+    DATAFILES_PATH / "sprites/dust/dust_blue.png": {"type": "texture"},
+    DATAFILES_PATH / "sprites/dust/dust_green.png": {"type": "texture"},
+    DATAFILES_PATH / "sprites/dust/dust_orange.png": {"type": "texture"},
+    DATAFILES_PATH / "sprites/dust/dust_pink.png": {"type": "texture"},
+    DATAFILES_PATH / "sprites/dust/dust_white.png": {"type": "texture"},
+    DATAFILES_PATH / "sprites/dust/dust_yellow.png": {"type": "texture"},
     # Explosion textures
-    ("texture", DATAFILES_PATH / "sprites/particles/fire_atlas.png", ""),
-    ("texture", DATAFILES_PATH / "sprites/particles/smoke_atlas.png", ""),
-]
+    DATAFILES_PATH / "sprites/particles/fire_atlas.png": {"type": "texture"},
+    DATAFILES_PATH / "sprites/particles/smoke_atlas.png": {"type": "texture"},
+}
 
 
 class AssetManager:
@@ -115,13 +137,23 @@ class AssetManager:
         self.app = app
         self.assets = {}
 
-    def get_asset(self, asset_type: str, path: Path, pattern: str = "") -> Any:
+    def get_asset(
+        self,
+        asset_type: str,
+        path: Path,
+        pattern: str = "",
+        flatten: bool | None = None,
+    ) -> Any:
         """
         Returns the cached asset for *path*, loading and caching it first if needed
 
         :param asset_type: The type of asset (see :meth:`load_single_asset`)
         :param path: The path where the asset is found (the cache key)
         :param pattern: The asset pattern if path is a directory
+        :param flatten: Whether a model loaded now is flattened (see
+            :meth:`load_single_asset`); None = its COMMON_ASSETS_TO_LOAD flag,
+            True for a path not listed. A cached model is returned as it was
+            cached: the path's flag decides it once.
         :return: The model, cube map, :class:`TexturePool` or :class:`SoundPool`
         """
         try:
@@ -129,7 +161,12 @@ class AssetManager:
             asset = self.assets[path]
         except KeyError:
             # Load it, store it and return it
-            self.load_single_asset(asset_type=asset_type, path=path, pattern=pattern)
+            if flatten is None:
+                listed = COMMON_ASSETS_TO_LOAD.get(Path(path), {})
+                flatten = listed.get("flatten", True)
+            self.load_single_asset(
+                asset_type=asset_type, path=path, pattern=pattern, flatten=flatten
+            )
             asset = self.assets[path]
         return asset
 
@@ -139,7 +176,7 @@ class AssetManager:
 
         :param app_state: The state to report progress to (the splash screen)
         """
-        self.assets_to_load = COMMON_ASSETS_TO_LOAD.copy()
+        self.assets_to_load = dict(COMMON_ASSETS_TO_LOAD)
         self.n_assets_to_load = len(self.assets_to_load)
 
         self.app.taskMgr.add(
@@ -162,10 +199,16 @@ class AssetManager:
             app_state.on_loading_finished()
             return task.done
         # Select the next asset to load
-        asset_type, path, pattern = self.assets_to_load.pop(0)
+        path = next(iter(self.assets_to_load))
+        spec = self.assets_to_load.pop(path)
         # Load it from disk if it has not already been
         if path not in self.assets.keys():
-            self.load_single_asset(asset_type=asset_type, path=path, pattern=pattern)
+            self.load_single_asset(
+                asset_type=spec["type"],
+                path=path,
+                pattern=spec.get("pattern", ""),
+                flatten=spec.get("flatten", True),
+            )
         # Update progress
         progress = (
             self.n_assets_to_load - len(self.assets_to_load)
@@ -173,13 +216,21 @@ class AssetManager:
         app_state.progress_bar.update(value=progress)
         return task.cont
 
-    def load_single_asset(self, asset_type: str, path: Path, pattern: str):
+    def load_single_asset(
+        self, asset_type: str, path: Path, pattern: str = "", flatten: bool = True
+    ):
         """
         Loads an asset from file into the cache
 
         :param asset_type: "model", "texture", "sound" or "3d_sound"
         :param path: The path where the asset is found
         :param pattern: The asset pattern if path is a directory
+        :param flatten: For a model, merge it into as few geoms as possible
+            (``flatten_strong``): its node transforms baked into its
+            vertices, geoms sharing a state combined. Far fewer draw calls
+            for a ship drawn in several passes, but its inner nodes are gone:
+            False for a model whose nodes are looked up or moved (a turret's
+            joints, a GUI map's named parts)
         """
         if asset_type in ("sound", "3d_sound"):
             self.assets[path] = SoundPool(
@@ -187,7 +238,7 @@ class AssetManager:
             )
         elif asset_type == "model":
             try:
-                self.assets[path] = self.app.loader.loadModel(path)
+                model = self.app.loader.loadModel(path)
             except Exception:
                 LOGGER.exception(
                     "Failed to load model %s (resolved: %s, exists: %s, cwd: %s, "
@@ -201,6 +252,9 @@ class AssetManager:
                     importlib.metadata.version("panda3d-gltf"),
                 )
                 raise
+            if flatten:
+                model.flatten_strong()
+            self.assets[path] = model
 
         elif asset_type == "texture":
             self.assets[path] = TexturePool(app=self.app, path=path, pattern=pattern)
@@ -238,10 +292,8 @@ class AssetManager:
         :param path: The path of the asset
         :param parent_node: The node to attach the copy to
         """
-        model = self.get_asset(
-            asset_type="model",
-            path=path,
-        )
+        # Copies are for models whose parts move: never flattened
+        model = self.get_asset(asset_type="model", path=path, flatten=False)
         model.copyTo(parent_node)
 
 

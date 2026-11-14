@@ -46,7 +46,7 @@ from space_flight.utils import clamp
 
 if TYPE_CHECKING:
     from direct.task import Task
-    from panda3d.core import GraphicsWindow, NodePath
+    from panda3d.core import GraphicsOutput, GraphicsWindow, NodePath
 
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
@@ -86,15 +86,14 @@ CENTER_OFFSET = 0.1
 _TASK_NAME = "hyperspace_update"
 
 
-def set_resolution(quads: list[NodePath], win: GraphicsWindow):
+def set_resolution(quads: list[NodePath], win: GraphicsOutput):
     """
     Feed the window size to the phase shaders of fullscreen quads.
 
     :param quads: The fullscreen quads
-    :param win: The window they cover
+    :param win: The window (or offscreen buffer) they cover
     """
-    props = win.getProperties()
-    res = LVecBase2f(props.getXSize(), props.getYSize())
+    res = LVecBase2f(win.getXSize(), win.getYSize())
     for quad in quads:
         quad.setShaderInput("iResolution", res)
 

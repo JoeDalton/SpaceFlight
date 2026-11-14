@@ -13,6 +13,6 @@
 :titlesonly:
 :maxdepth: 1
 
-space_flight.ai.missile.incoming_missile
 space_flight.ai.missile.missile_navigator
+space_flight.ai.missile.incoming_missile
 ```

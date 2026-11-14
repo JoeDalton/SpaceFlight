@@ -158,6 +158,25 @@ One pair shared by every preset:
   flat texture still reads. Tinted by the per-spark `vColor`, additively
   blended.
 
+## Speed dust shaders
+
+Driven by `SpeedDustCloud` in
+[`fx/speed_dust_cloud.py`](../../src/space_flight/fx/speed_dust_cloud.py) (see
+[fx.md](fx.md)).
+
+- **[`speed_dust.vert`](../../src/space_flight/datafiles/shaders/speed_dust.vert)**
+  places each mote from the distance flown (`uTravel`, kept modulo a whole
+  number of depths), in the dust's frame (the ship's):
+  - it moves back from where it started (`p3d_Vertex`) until it is behind
+    the ship;
+  - then it comes back `uDepth` ahead, at a new place across within
+    `uSpread`, from a hash of its `seed` and its lap;
+  - its quad faces the eye: the `corner` offset (times its `size`) is added
+    in view space.
+- **[`speed_dust.frag`](../../src/space_flight/datafiles/shaders/speed_dust.frag)**
+  draws the mote's sprite (`p3d_Texture0`) under the dust's colour scale (its
+  opacity grows with speed).
+
 ## Laser bolt shaders
 
 Driven by `LaserShot` in
