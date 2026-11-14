@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import yaml
-from panda3d.core import NodePath, Quat, Vec3
+from panda3d.core import AudioSound, NodePath, Quat, Vec3
 
 from space_flight import (
     DATAFILES_PATH,
@@ -55,6 +55,9 @@ ENGINE_SPUTTER_MAX_DEPTH = 0.6
 # the running loop, slowed down and muffled
 ENGINE_OFFLINE_PLAY_RATE = 0.5
 ENGINE_OFFLINE_VOLUME_FACTOR = 0.3
+# The throttle the engine sound follows during a hyperspace jump (see
+# roar_engine_sound): full thrust, whatever the ship's real throttle
+JUMP_ENGINE_SOUND_THROTTLE = 1.0
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -162,6 +165,9 @@ class Ship(Pawn):
     # Warp flight model (see compute_derivatives, set by WarpDrive): the speed
     # the ship is pulled to along its nose while warping, None in normal flight
     warp_target_speed_mps: float | None = None
+    # The throttle the engine sound follows instead of the ship's (see
+    # roar_engine_sound), None to follow the ship's
+    engine_sound_throttle: float | None = None
 
     def __init__(
         self,
@@ -330,10 +336,28 @@ class Ship(Pawn):
     def _play_engine_sound(self):
         """
         Start the engine loop, unless the ship was cleaned before the delay
-        ran out (its sound is then back in the pool and must stay silent)
+        ran out (its sound is then back in the pool and must stay silent), or
+        it already runs (started early by roar_engine_sound: playing it again
+        would restart it)
         """
-        if self.sound is not None:
+        if self.sound is not None and self.sound.status() != AudioSound.PLAYING:
             self.sound.play()
+
+    def roar_engine_sound(self, roaring: bool):
+        """
+        Run the engine sound at full thrust whatever the throttle, for the
+        length of a hyperspace jump, or back to following the throttle.
+
+        Applied at once, and the loop started if it does not run yet: the jump
+        of the loading screen plays before the game (and its engine updates)
+        runs.
+
+        :param roaring: Whether a jump starts (else it is over)
+        """
+        self.engine_sound_throttle = JUMP_ENGINE_SOUND_THROTTLE if roaring else None
+        if roaring and self.sound is not None:
+            self._play_engine_sound()
+            self.adjust_engine_pitch(throttle=JUMP_ENGINE_SOUND_THROTTLE)
 
     def _compute_max_speed_mps(self) -> float:
         """
@@ -1020,9 +1044,12 @@ class Ship(Pawn):
         running and offline versions as the engines stop or restart
 
         :param throttle: The throttle value of the ship [0, 1], above 1 for boost
+            (overridden by engine_sound_throttle while jumping)
         """
         if self.sound is None:
             return
+        if self.engine_sound_throttle is not None:
+            throttle = self.engine_sound_throttle
         engines_online = self.engines_online()
         if engines_online != self.is_engine_sound_online:
             self.is_engine_sound_online = engines_online

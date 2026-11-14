@@ -80,7 +80,10 @@ Key responsibilities:
   exterior loop for everyone else; none if its config has none) and its
   `ShipModel`. While the engines are offline the loop is slowed down and
   muffled (`_on_engines_online_changed`, the place to swap in a dedicated
-  sound).
+  sound). Through a hyperspace jump, `roar_engine_sound(True)` runs the loop
+  at full thrust (`JUMP_ENGINE_SOUND_THROTTLE`) whatever the throttle, and
+  starts it at once if it is not playing yet: the loading screen's jump plays
+  before the game runs.
 - **Configuration.** Read from `models/ships/<ship_type>/configuration.yaml`
   (`load_ship_configuration`), unless given through the `conf` argument (as
   ordnance does).
@@ -494,6 +497,12 @@ designer sees them.
   [collision layers](game.md#collisionsystem--layers-routing-and-physical-response)).
   Only the cockpit is heard (`SFX.mute_exterior`, see
   [sound effects](fx.md#sfxpy--3d-sound-effects)).
+- **Sound.** The charge starts the shared
+  [jump sound](fx.md#hyperspace_soundpy-the-hyperspace-jump-sounds); an abort
+  cross-fades it into the abort sound. The engine roars at full thrust from the
+  charge until the ship is back in normal flight (or the jump is aborted or
+  stopped). The loading screen does the same: `FlightState` roars the engine
+  from the start of the level's jump until its reveal.
 - **Refusals.** A press too close to a body sets `refused_at_s`, which blinks
   the HUD's engine gauge `WARP_REFUSED_BLINKS` times.
 

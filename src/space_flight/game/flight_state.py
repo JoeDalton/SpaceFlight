@@ -109,6 +109,9 @@ class FlightState(BaseState):
         self.force_render()
         entry.upfront(game=self)
         self.player.warp_drive.allowed = entry.allow_warp
+        # The level opens on a hyperspace jump: the engine roars through it,
+        # until the reveal
+        self.player.pawn.roar_engine_sound(True)
         # The player exists: centre render on it now, so a scene's loading
         # steps (see Scene.build_decomposed) already work around it
         self.recenter_render_origin()
@@ -288,6 +291,8 @@ class FlightState(BaseState):
             self.app.input_context_stack.pop()
             self._jump_context = None
         self.loading_overlay = None
+        # Out of the jump: the engine follows the throttle again
+        self.player.pawn.roar_engine_sound(False)
         self.resume()
 
     def initialize_game_structure(self):

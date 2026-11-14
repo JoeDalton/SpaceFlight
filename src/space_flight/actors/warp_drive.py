@@ -15,6 +15,11 @@ The player holds the warp key:
 
 Releasing the key while charging aborts the jump.
 
+The jump is heard as well as seen: the jump sound starts with the charge (a
+quick cross-fade into the abort sound if the jump is called off, see
+HyperspaceSound), and the engine roars at full thrust until the ship is back
+in normal flight, whatever its imposed throttle.
+
 Physics never stops: the ship stays in the integrator and really moves. While
 INSIDE and EXITING, its flight model is the warp one (see
 Ship.compute_derivatives): its velocity relaxes to the warp speed along its nose
@@ -49,6 +54,7 @@ from space_flight.scenes.scenes import warp_speed_at_altitude
 if TYPE_CHECKING:
     from space_flight.actors.ship import Ship
     from space_flight.fx.hyperspace_overlay import HyperspaceOverlay
+    from space_flight.fx.hyperspace_sound import HyperspaceSound
 
 # How long each timed phase lasts: as long as its animation
 CHARGE_DURATION_S = INTO_DURATION
@@ -65,14 +71,22 @@ class WarpState(Enum):
 class WarpDrive:
     """A ship's warp drive, driven by the state of the warp key."""
 
-    def __init__(self, ship: Ship, overlay: HyperspaceOverlay | None = None):
+    def __init__(
+        self,
+        ship: Ship,
+        overlay: HyperspaceOverlay | None = None,
+        sound: HyperspaceSound | None = None,
+    ):
         """
         :param ship: The ship that warps
         :param overlay: The hyperspace effect to play (with the warp look), None
             to play none (headless games)
+        :param sound: The jump sounds to play, None to play none (headless
+            games)
         """
         self.ship = ship
         self.overlay = overlay
+        self.sound = sound
         # Whether the level (or its mission) lets the player warp
         self.allowed = False
         self.state = WarpState.IDLE
@@ -152,6 +166,8 @@ class WarpDrive:
         self._key_was_held = key_held
         if self.overlay is not None:
             self.overlay.update(dt)
+        if self.sound is not None:
+            self.sound.update(dt)
 
     def stop(self):
         """Stop any jump at once, whatever its state (e.g. the ship died)."""
@@ -159,15 +175,20 @@ class WarpDrive:
             self._leave_hyperspace()
         if self.active:
             self._play("hide")
+            self._hear("stop")
+            self.ship.roar_engine_sound(False)
         self.state = WarpState.IDLE
         self.state_time_s = 0.0
 
     def clean(self):
-        """Stop any jump at once and remove the effect."""
+        """Stop any jump at once and remove the effect and the sounds."""
         self.stop()
         if self.overlay is not None:
             self.overlay.destroy()
             self.overlay = None
+        if self.sound is not None:
+            self.sound.destroy()
+            self.sound = None
 
     # -- internals -----------------------------------------------------------
 
@@ -191,6 +212,8 @@ class WarpDrive:
         if state is WarpState.CHARGING:
             self._tunnel_started = False
             self._play("show", "into")
+            self._hear("jump")
+            self.ship.roar_engine_sound(True)
         elif state is WarpState.INSIDE:
             self._go_into_hyperspace()
             self._set_warp_speed()
@@ -219,6 +242,8 @@ class WarpDrive:
         self.state = WarpState.IDLE
         self.state_time_s = 0.0
         self._play("fade_out")
+        self._hear("abort")
+        self.ship.roar_engine_sound(False)
 
     def _finish(self):
         """End of the drop out: back to normal flight, at cruise speed."""
@@ -227,6 +252,7 @@ class WarpDrive:
         self.state_time_s = 0.0
         # Outof has dissolved into the scene by now
         self._play("hide")
+        self.ship.roar_engine_sound(False)
 
     def _go_into_hyperspace(self):
         """
@@ -269,3 +295,8 @@ class WarpDrive:
         """Call an overlay method, if there is an overlay."""
         if self.overlay is not None:
             getattr(self.overlay, method)(*args)
+
+    def _hear(self, method: str):
+        """Call a jump sound method, if there are sounds."""
+        if self.sound is not None:
+            getattr(self.sound, method)()

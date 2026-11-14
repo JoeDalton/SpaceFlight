@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from hyperspace_fakes import make_fake_sound
 from panda3d.core import BitMask32, CollisionNode, CollisionSphere, NodePath
 
 from space_flight import (
@@ -31,6 +32,7 @@ from space_flight.actors.warp_drive import (
     WarpState,
 )
 from space_flight.fx.hyperspace_overlay import WARP_LOOK
+from space_flight.fx.hyperspace_sound import ABORT_CROSS_FADE_S, ABORT_SOUND_VOLUME
 from space_flight.game.collisions import CollisionLayers
 from space_flight.game.integrator import Integrator
 from space_flight.scenes.scenes import Scene, warp_speed_at_altitude
@@ -303,6 +305,7 @@ def make_drive_ship(altitude_m: float = 100_000.0):
     ship.warp_target_speed_mps = None
     ship.engines_online = MagicMock(return_value=True)
     ship.cruise_speed_mps = MagicMock(return_value=CRUISE_MPS)
+    ship.roar_engine_sound = MagicMock()
     ship.game = SimpleNamespace(
         scene=MagicMock(), game_time=MagicMock(), app=MagicMock()
     )
@@ -311,8 +314,8 @@ def make_drive_ship(altitude_m: float = 100_000.0):
     return ship
 
 
-def make_drive(altitude_m: float = 100_000.0, overlay=None) -> WarpDrive:
-    drive = WarpDrive(make_drive_ship(altitude_m), overlay=overlay)
+def make_drive(altitude_m: float = 100_000.0, overlay=None, sound=None) -> WarpDrive:
+    drive = WarpDrive(make_drive_ship(altitude_m), overlay=overlay, sound=sound)
     drive.allowed = True
     return drive
 
@@ -654,3 +657,74 @@ def test_clean_stops_and_removes_the_animation(fake_overlay_factory):
     assert not drive.ship.in_hyperspace
     assert all(quad.removed for quad in quads)
     assert drive.overlay is None
+
+
+# ---------------------------
+# WarpDrive: the sound
+# ---------------------------
+
+
+def roars(drive: WarpDrive) -> list[bool]:
+    """Every roar_engine_sound call the drive made, in order."""
+    return [c.args[0] for c in drive.ship.roar_engine_sound.call_args_list]
+
+
+def test_charging_plays_the_jump_and_roars_the_engine():
+    sound = make_fake_sound()
+    drive = make_drive(sound=sound)
+
+    drive.update(key_held=True, dt=DT)
+
+    assert sound.jump_sound.playing
+    assert roars(drive) == [True]
+
+
+def test_the_engine_roars_until_the_drop_out_is_over():
+    drive = make_drive(sound=make_fake_sound())
+    charge_and_go_inside(drive)
+    drive.update(key_held=False, dt=DT)
+    run(drive, EXIT_DURATION_S - 2 * DT, key_held=False)
+    assert roars(drive) == [True]
+
+    run(drive, 3 * DT, key_held=False)
+
+    assert drive.state is WarpState.IDLE
+    assert roars(drive) == [True, False]
+
+
+def test_aborting_cross_fades_to_the_abort_sound_and_calms_the_engine():
+    sound = make_fake_sound()
+    drive = make_drive(sound=sound)
+    run(drive, 1.0)
+
+    drive.update(key_held=False, dt=DT)
+    assert sound.abort_sound.playing
+    assert roars(drive) == [True, False]
+
+    # The drive keeps the cross-fade going once idle
+    run(drive, ABORT_CROSS_FADE_S + DT, key_held=False)
+    assert not sound.jump_sound.playing
+    assert sound.abort_sound.volume == ABORT_SOUND_VOLUME
+
+
+def test_stopping_a_jump_silences_it():
+    sound = make_fake_sound()
+    drive = make_drive(sound=sound)
+    run(drive, 1.0)
+
+    drive.stop()
+
+    assert not sound.jump_sound.playing
+    assert not sound.abort_sound.playing
+    assert roars(drive) == [True, False]
+
+
+def test_clean_releases_the_sounds():
+    sound = make_fake_sound()
+    pools = sound._jump_pool, sound._abort_pool
+    drive = make_drive(sound=sound)
+
+    drive.clean()
+
+    assert drive.sound is None
+    assert not any(pool.in_use for pool in pools)

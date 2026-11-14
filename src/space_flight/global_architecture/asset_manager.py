@@ -98,6 +98,14 @@ COMMON_ASSETS_TO_LOAD: dict[Path, dict[str, Any]] = {
     DATAFILES_PATH / "sounds/engines/a-wing/aw_ext_med.ogg": {"type": "3d_sound"},
     DATAFILES_PATH / "sounds/engines/x-wing/xw_ext_med.ogg": {"type": "3d_sound"},
     DATAFILES_PATH / "sounds/engines/y-wing/yw_ext_med.ogg": {"type": "3d_sound"},
+    DATAFILES_PATH / "sounds/engines/common/jump_hyperspace.wav": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/common/abort_hyperspace.wav": {
+        "type": "sound",
+        "interior": True,
+    },
     DATAFILES_PATH / "sounds/engines/tie_common/tie_int_high.ogg": {
         "type": "sound",
         "interior": True,

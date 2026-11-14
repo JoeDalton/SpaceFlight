@@ -17,7 +17,9 @@ per-step stutter is confined to the looping tunnel, which has no fixed
 endpoint and so never "ends too soon".
 
 The drawing itself is done by a :class:`HyperspaceOverlay` with the opaque
-:data:`LOADING_LOOK`, so the half-built world never shows through.
+:data:`LOADING_LOOK`, so the half-built world never shows through. The jump
+sound (a :class:`HyperspaceSound`, as for a warp) starts with into; the
+player's engine roaring through the jump is the FlightState's doing.
 
 This state declares PAUSES_BELOW = False so the :class:`FlightState`
 below it stays alive (its game tasks are created during the build and only
@@ -38,6 +40,7 @@ from space_flight.fx.hyperspace_overlay import (
     OUTOF_DURATION,
     HyperspaceOverlay,
 )
+from space_flight.fx.hyperspace_sound import HyperspaceSound
 from space_flight.global_architecture.base_state import BaseState
 
 if TYPE_CHECKING:
@@ -112,8 +115,10 @@ class HyperspaceLoadingState(BaseState):
         # Set once on_reveal has fired (outof's background is dissolving).
         self._revealing = False
 
-        # Start on the "into" phase, fully opaque.
+        # Start on the "into" phase, fully opaque, as the jump is heard
         self._overlay.show("into")
+        self._sound = HyperspaceSound(self.app.asset_manager)
+        self._sound.jump()
 
         self.app.taskMgr.add(self._update, _TASK_NAME)
 
@@ -123,6 +128,7 @@ class HyperspaceLoadingState(BaseState):
             self._prompt.destroy()
             self._prompt = None
         self._overlay.destroy()
+        self._sound.destroy()
 
     # -- internals -----------------------------------------------------------
 

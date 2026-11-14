@@ -218,6 +218,22 @@ and by the in-flight warp.
 - **Window resizes** are picked up in `update`, which compares the window size
   each frame. No `window-event` handler is needed.
 
+## `hyperspace_sound.py`: the hyperspace jump sounds
+
+`HyperspaceSound` is the overlay's counterpart for the ears, shared the same
+way by the loading screen and the warp.
+
+- `jump()` plays `jump_hyperspace.wav` from the top, with the into phase. It
+  rings on into the tunnel.
+- `abort()` cross-fades it into `abort_hyperspace.wav` over
+  `ABORT_CROSS_FADE_S`, for a warp called off while charging. Its owner calls
+  `update(dt)` every frame to run the fade, on game time for the warp.
+- Both are cockpit sounds (`interior` in `COMMON_ASSETS_TO_LOAD`), so a warp's
+  `mute_exterior` does not cut them. Each owner holds one sound from each pool
+  until `destroy()`.
+- The player's engine roaring through the jump is the ship's part
+  (`Ship.roar_engine_sound`, see [`Ship`](actors.md#ship--flight-physics-and-state)).
+
 ## `sfx.py` — 3D sound effects
 
 [`sfx.py`](../../src/space_flight/fx/sfx.py)'s `SFX` handles every non-music
@@ -250,7 +266,7 @@ sound:
   loud blip.
 - **Two audio managers.** Every sound plays on Panda3D's sound-effects
   manager (`sfxManagerList[0]`), except the player's cockpit sounds (its
-  engine loop), on SFX's `interior_manager`. Those are plain `"sound"`
+  engine loop, the hyperspace jump sounds), on SFX's `interior_manager`. Those are plain `"sound"`
   assets flagged `interior` (in `COMMON_ASSETS_TO_LOAD`, or
   `get_asset(interior=True)`). This is independent of `is_3d`, which picks the
   loader: positional mono sounds rather than plain (e.g. stereo) ones.

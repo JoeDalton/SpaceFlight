@@ -269,3 +269,21 @@ def test_the_split_keeps_off_translucent_volumes():
     fs.split_depth.update.assert_called_once_with(
         2000.0, 6e5, translucent=fs.translucent_volumes
     )
+
+
+def test_the_reveal_ends_the_loading_jump_engine_roar():
+    """The level opens on a hyperspace jump, the engine roaring through it
+    (from FlightState.enter): the reveal hands the engine back to the
+    throttle."""
+    fs = object.__new__(FlightState)
+    fs.app = MagicMock()
+    fs.player = SimpleNamespace(pawn=MagicMock())
+    fs._jump_context = None
+    fs.is_paused = True
+    fs.interval_manager = MagicMock()
+    fs.game_time = MagicMock()
+
+    fs._on_reveal()
+
+    fs.player.pawn.roar_engine_sound.assert_called_once_with(False)
+    assert not fs.is_paused

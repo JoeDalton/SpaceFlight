@@ -16,6 +16,7 @@ from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.fx.cockpit_fx import CockpitFX, screen_direction_from_incoming
 from space_flight.fx.hyperspace_overlay import WARP_LOOK, HyperspaceOverlay
+from space_flight.fx.hyperspace_sound import HyperspaceSound
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
 from space_flight.utils.state_machine import DyingPhase
@@ -177,13 +178,14 @@ class Player:
             self.cockpit_fx = CockpitFX(game=self.game, player=self)
 
         # Local warp, allowed or not by the level (see LevelEntry.allow_warp).
-        # Its effect is drawn over the scene; none headless.
-        overlay = None
+        # Its effect is drawn over the scene, and heard; neither headless.
+        overlay = sound = None
         if not self.game.headless:
             overlay = HyperspaceOverlay(
                 self.game.app.render2d, self.game.app.win, look=WARP_LOOK
             )
-        self.warp_drive = WarpDrive(ship=self.pawn, overlay=overlay)
+            sound = HyperspaceSound(self.game.app.asset_manager)
+        self.warp_drive = WarpDrive(ship=self.pawn, overlay=overlay, sound=sound)
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)

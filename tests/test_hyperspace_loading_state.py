@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from hyperspace_fakes import make_fake_sound
 
 from space_flight.fx.hyperspace_overlay import FADE_DURATION, MAX_DT
 from space_flight.game import hyperspace_loading_state as loading_state
@@ -50,6 +51,8 @@ def make_entered_state(fake_overlay_factory, monkeypatch):
         monkeypatch.setattr(
             loading_state, "HyperspaceOverlay", lambda *args, **kw: overlay
         )
+        sound = make_fake_sound()
+        monkeypatch.setattr(loading_state, "HyperspaceSound", lambda *args: sound)
         state = HyperspaceLoadingState(MagicMock(), **kwargs)
         state.enter()
         state._clock = MagicMock()
@@ -192,3 +195,19 @@ def test_exit_destroys_the_overlay(make_entered_state):
     state.exit()
 
     assert all(quad.removed for quad in quads)
+
+
+def test_enter_plays_the_jump_sound(make_entered_state):
+    state = make_entered_state()
+
+    assert state._sound.jump_sound.playing
+
+
+def test_exit_releases_the_jump_sounds(make_entered_state):
+    state = make_entered_state()
+    pools = state._sound._jump_pool, state._sound._abort_pool
+
+    state.exit()
+
+    assert not state._sound.jump_sound.playing
+    assert not any(pool.in_use for pool in pools)

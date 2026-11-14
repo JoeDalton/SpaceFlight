@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Local warp speed for the player #178
+- Local hyperspace jumps for the player #178
 
 ### Fixed
 

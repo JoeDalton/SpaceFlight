@@ -3,11 +3,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 import quaternion
+from panda3d.core import AudioSound
 
 from space_flight import RIGHT_BODY, UP_BODY
 from space_flight.actors.ship import (
     ENGINE_OFFLINE_PLAY_RATE,
     ENGINE_OFFLINE_VOLUME_FACTOR,
+    JUMP_ENGINE_SOUND_THROTTLE,
     Ship,
     turn_rate_scale,
 )
@@ -655,6 +657,56 @@ def test_engine_sound_switches_as_the_engines_stop_and_restart():
     ship.adjust_engine_pitch(throttle=1.0)
     ship.sound.setVolume.assert_called_with(10.0)
     assert ship.sound.setPlayRate.call_args.args[0] != ENGINE_OFFLINE_PLAY_RATE
+
+
+def make_roaring_ship():
+    ship = make_engine_ship(online=True)
+    ship.parent = None  # no cockpit: no sputter
+    ship.sound = MagicMock()
+    ship.sound.status.return_value = AudioSound.READY
+    ship.engine_sound_volume = 10.0
+    ship.is_engine_sound_online = True
+    return ship
+
+
+def test_a_roaring_engine_sound_follows_full_thrust_not_the_throttle():
+    """Through a hyperspace jump, the engine sounds at full thrust, whatever
+    the imposed throttle; it follows the throttle again afterwards."""
+    ship = make_roaring_ship()
+    ship.adjust_engine_pitch(throttle=JUMP_ENGINE_SOUND_THROTTLE)
+    full_thrust_rate = ship.sound.setPlayRate.call_args.args[0]
+    ship.adjust_engine_pitch(throttle=0.5)
+    cruise_rate = ship.sound.setPlayRate.call_args.args[0]
+
+    ship.roar_engine_sound(True)
+    assert ship.sound.setPlayRate.call_args.args[0] == full_thrust_rate
+    ship.adjust_engine_pitch(throttle=0.5)
+    assert ship.sound.setPlayRate.call_args.args[0] == full_thrust_rate
+
+    ship.roar_engine_sound(False)
+    ship.adjust_engine_pitch(throttle=0.5)
+    assert ship.sound.setPlayRate.call_args.args[0] == cruise_rate
+
+
+def test_roaring_starts_a_silent_engine_loop_once():
+    """The loading screen's jump plays before the engine loop's delayed start:
+    roaring starts it, and the delayed start does not restart it."""
+    ship = make_roaring_ship()
+
+    ship.roar_engine_sound(True)
+    ship.sound.play.assert_called_once()
+
+    ship.sound.status.return_value = AudioSound.PLAYING
+    ship._play_engine_sound()
+    ship.sound.play.assert_called_once()
+
+
+def test_roaring_without_an_engine_sound_is_a_no_op():
+    ship = make_ship_without_init()
+    ship.sound = None
+
+    ship.roar_engine_sound(True)
+    ship.roar_engine_sound(False)
 
 
 @pytest.mark.parametrize("damage_type, jolts", [(PHYSICAL, True), (ION, False)])

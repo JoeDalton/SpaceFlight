@@ -18,6 +18,7 @@ import pytest
 from panda3d.core import ConfigVariableFilename, loadPrcFileData
 
 from space_flight import DATAFILES_PATH
+from space_flight.fx.hyperspace_sound import ABORT_SOUND_PATH, JUMP_SOUND_PATH
 from space_flight.global_architecture.asset_manager import (
     COMMON_ASSETS_TO_LOAD,
     AssetManager,
@@ -207,17 +208,22 @@ def test_get_asset_takes_the_listed_flag(spaceflight_app):
 # ---------------------------
 
 
-def test_cockpit_engine_loops_are_listed_as_interior_plain_sounds():
-    """The player's engine loops: plain (stereo) sounds, on the interior
-    manager so they are still heard while warping."""
+def test_cockpit_sounds_are_listed_as_interior_plain_sounds():
+    """The player's engine loops and the hyperspace jump sounds: plain sounds,
+    on the interior manager so they are still heard while warping."""
     interior = {
         path.name: spec
         for path, spec in COMMON_ASSETS_TO_LOAD.items()
         if spec.get("interior")
     }
-    assert interior
-    for name, spec in interior.items():
-        assert "_int_" in name
+    engine_loops = {
+        path.name
+        for path in COMMON_ASSETS_TO_LOAD
+        if "engines" in path.parts and "_int_" in path.name
+    }
+    assert engine_loops
+    assert engine_loops | {JUMP_SOUND_PATH.name, ABORT_SOUND_PATH.name} == set(interior)
+    for spec in interior.values():
         assert spec["type"] == "sound"
 
 
