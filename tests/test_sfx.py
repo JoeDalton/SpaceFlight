@@ -76,19 +76,6 @@ def test_listener_velocity_follows_its_source(manager):
     assert tuple(manager.getListenerVelocity()) == (0.0, 0.0, 0.0)
 
 
-def test_a_warping_ship_is_heard_at_its_top_speed(manager):
-    """Past its top speed (warping), a ship's velocity is capped to it, keeping
-    its direction, for the listener and the sounds alike."""
-    ship = _Body([0.0, 3_000_000.0, 0.0])
-    ship.max_speed_mps = 160.0
-    sound = MagicMock()
-    manager.set_listener_velocity_source(ship)
-    manager.set_sound_velocity_source(sound, ship)
-
-    assert tuple(manager.getListenerVelocity()) == pytest.approx((0.0, 160.0, 0.0))
-    assert tuple(manager.getSoundVelocity(sound)) == pytest.approx((0.0, 160.0, 0.0))
-
-
 def test_update_feeds_physics_velocities_to_the_audio_backend(manager):
     sound, ship = MagicMock(), _Body([0.0, -100.0, 0.0])
     node = manager.root.attachNewNode("ship")

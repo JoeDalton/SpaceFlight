@@ -482,9 +482,7 @@ designer sees them.
     `WARP_SPEED_PER_ALTITUDE · WARP_RELAX_TIME_S < 0.25`.
   - The speed is capped at `WARP_MAX_SPEED_MPS`: a ship that misses a body
     would otherwise speed up without bound until its position overflowed.
-  - Below `WARP_AUTO_EXIT_ALTITUDE_M`, the drive drops out on its own. It also
-    drops out when the ship flies out past `WARP_MAX_RANGE_M` from the world's
-    origin; warping back in is allowed.
+  - Below `WARP_AUTO_EXIT_ALTITUDE_M`, the drive drops out on its own.
   - `EXITING` slows the ship to its cruise speed before handing it back to
     the normal flight model.
 - **Exposure.** While `INSIDE` and `EXITING`, the ship is `in_hyperspace`, so

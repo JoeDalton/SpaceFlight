@@ -274,9 +274,7 @@ sound:
   when approaching and less when receding. A 1 kHz source at 170 m/s gives
   1329 Hz approaching (1981 Hz at factor 1) and 801 Hz receding (669 Hz).
   OpenAL goes silent as a source's closing speed × Doppler factor nears the
-  speed of sound (686 m/s at 0.5). Only a warping ship goes that fast, so a
-  velocity source faster than its own `max_speed_mps` is heard at that speed
-  (direction kept).
+  speed of sound (686 m/s at 0.5), which only a warping ship reaches.
 
 ## Where things live
 

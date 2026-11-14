@@ -14,7 +14,6 @@ from panda3d.core import BitMask32, CollisionNode, CollisionSphere, NodePath
 from space_flight import (
     WARP_AUTO_EXIT_ALTITUDE_M,
     WARP_CRUISE_THROTTLE,
-    WARP_MAX_RANGE_M,
     WARP_MAX_SPEED_MPS,
     WARP_MIN_ALTITUDE_M,
     WARP_MIN_SPEED_MPS,
@@ -520,28 +519,6 @@ def test_after_an_auto_drop_out_the_key_must_be_released():
     drive.update(key_held=True, dt=DT)
 
     assert drive.state is WarpState.CHARGING
-
-
-def test_flying_out_of_range_drops_out():
-    drive = make_drive()
-    charge_and_go_inside(drive)
-
-    drive.ship.position = np.array([WARP_MAX_RANGE_M + 1.0, 0.0, 0.0])
-    drive.ship.speed = np.array([1e6, 0.0, 0.0])
-    drive.update(key_held=True, dt=DT)
-
-    assert drive.state is WarpState.EXITING
-
-
-def test_warping_back_into_range_is_fine():
-    drive = make_drive()
-    drive.ship.position = np.array([WARP_MAX_RANGE_M + 1.0, 0.0, 0.0])
-    drive.ship.speed = np.array([-1e6, 0.0, 0.0])
-    charge_and_go_inside(drive)
-
-    drive.update(key_held=True, dt=DT)
-
-    assert drive.state is WarpState.INSIDE
 
 
 def test_disallowing_the_warp_mid_jump_drops_out():

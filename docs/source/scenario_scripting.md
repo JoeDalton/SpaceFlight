@@ -226,9 +226,8 @@ distances:
 - **Warp.** Once charged, while the key is held, the ship warps. Its speed
   grows with its altitude above the nearest body, about one e-fold per
   second. It is untargetable, and only terrain can stop it.
-- **Drop out.** Releasing the key, coming within 5 km of a body, or flying
-  out past 30,000 km from the world's origin drops the ship out at cruise
-  speed.
+- **Drop out.** Releasing the key, or coming within 5 km of a body, drops the
+  ship out at cruise speed.
 
 The jump only starts 10 km or more from any body. The drive is
 [`actors/warp_drive.py`](../../src/space_flight/actors/warp_drive.py), and
