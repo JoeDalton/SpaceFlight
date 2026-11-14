@@ -428,6 +428,21 @@ becomes just yaw/pitch, and the navigator runs every frame (only the pilot
 waits for a think). While the bot is dying it skips the AI entirely and
 drives the pawn's tumble instead.
 
+A ship bot can also escort its leader through a local warp (driven by
+[`WarpEscort`](#warpescort--wingmen-following-the-players-warp)):
+- `begin_warp_alignment(leader)` flies it along the leader's heading at its
+  speed, weapons cold (no tactician, navigator nor triggers);
+  `cancel_warp_alignment()` sends it back to the fight.
+- `jump_to_warp()` plays the jump-out transit, then *parks* the ship: hidden,
+  held at the jump point (`hold_step`), its colliders still muted and
+  `in_hyperspace`. Unlike `jump_out`, it does not `depart`: it stays alive, in
+  its wave, formation and the interactions.
+- `arrive_from_warp(position, orientation, velocity, delay_s)` moves it to a
+  new pose and plays the usual drop-in (`begin_hyperspace_arrival`).
+- `can_escort_warp` tells whether it can: a live fighter or major ship, not
+  leaving the level nor already escorting. `jump_out` on a parked ship
+  departs at once.
+
 ## `Player` — the human-controlled equivalent of a `Bot`
 
 [`player.py`](../../src/space_flight/actors/player.py) plays the same role as
@@ -442,7 +457,9 @@ everything specific to being watched by a human:
   out of the cockpit.
 - **Warp.** The player owns a [`WarpDrive`](#warpdrive--the-players-local-warp),
   fed the warp key's state every frame before the ship moves.
-  `flight_commands` applies its cruise throttle and turn-rate cap.
+  `flight_commands` applies its cruise throttle and turn-rate cap. A
+  [`WarpEscort`](#warpescort--wingmen-following-the-players-warp), fed the
+  drive's state right after, brings the player's wingmen along.
 - **Targeting.** `open_radial_target_menu` pushes a `RadialMenuState` over
   `TARGET_FILTERS` (All, Enemies, Capital ships, Subsystems, Turrets,
   Fighters, Waypoints, plus an empty slot); the chosen label becomes
@@ -505,6 +522,24 @@ designer sees them.
   from the start of the level's jump until its reveal.
 - **Refusals.** A press too close to a body sets `refused_at_s`, which blinks
   the HUD's engine gauge `WARP_REFUSED_BLINKS` times.
+
+## `WarpEscort` — wingmen following the player's warp
+
+[`warp_escort.py`](../../src/space_flight/actors/warp_escort.py) watches the
+`WarpDrive`'s state changes, so the drive knows nothing of bots. Only the
+wingmen of a formation the player leads (`formation.ship_ids[0]` is the
+player's pawn) escort; no extra bookkeeping of live ships is needed, as dead
+ships already leave their formation.
+
+| Drive change | Escorts |
+|---|---|
+| `IDLE → CHARGING` | the live wingmen able to escort (`can_escort_warp`) are taken, with their slot index, and `begin_warp_alignment` |
+| `CHARGING → IDLE` (abort) | `cancel_warp_alignment`, released |
+| `→ INSIDE` | `jump_to_warp` |
+| `INSIDE`/`EXITING → IDLE` | `arrive_from_warp` on their current slot around the player (reckoned as the formation navigator does), scattered by up to `WARP_ESCORT_SLOT_JITTER × formation.scale_m` per axis, at the player's orientation and velocity, staggered by up to `ARRIVAL_STAGGER_S` |
+
+`Player.begin_death` calls `player_lost()`: wingmen still aligning are
+released, those in hyperspace stay there.
 
 ## `Trihedron`
 

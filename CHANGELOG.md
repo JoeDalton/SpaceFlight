@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Local hyperspace jumps for the player #178
+- The wingmen of a formation the player leads follow it through its local hyperspace jumps #184
 
 ### Fixed
 

@@ -60,28 +60,28 @@ def test_dev_mission_spawns_the_frigate(game, spawned):
     assert len(live(game, spawned, "allied_frigate")) == 1
 
 
-def test_dev_mission_launches_fighters_from_the_star_destroyer(game, spawned):
-    """
-    The dev mission stocks the star destroyer's hangar from the level's stock
-    and launches TIE fighters at the frigate, then TIE bombers.
-    """
-    from space_flight.game.levels.dev_level import ENEMY_CAPITAL_SHIP_HANGAR_STOCK
-
+def test_dev_mission_gives_the_player_a_squadron_it_leads(game, spawned):
+    """The player leads a squadron of its own team, which so follows it through
+    its local warps (see WarpEscort)."""
     m = start(game, dev_mission)
-    advance(game, m, 8)
-    (isd,) = live(game, spawned, "enemy_isd")
-    hangar = isd.hangars[0]
-    assert set(hangar.stock) == set(ENEMY_CAPITAL_SHIP_HANGAR_STOCK)
-    hangar.launch_pending()
-    assert [bot.pawn_model for bot in hangar.launched] == ["tie-fighter"] * 3
-    (frigate,) = live(game, spawned, "allied_frigate")
-    assert all(
-        bot.tactician.primary_target_ids == [frigate.id] for bot in hangar.launched
-    )
+    advance(game, m, 1)
+    squadron = live(game, spawned, "player_squadron")
+    assert len(squadron) == 4
+    formation = game.player.pawn.formation
+    assert formation is not None
+    assert formation.ship_ids[0] == game.player.pawn.id
+    assert set(formation.ship_ids[1:]) == {pawn.id for pawn in squadron}
+    assert all(pawn.team == game.player.pawn.team for pawn in squadron)
 
-    advance(game, m, 20)
-    hangar.launch_pending()
-    assert [bot.pawn_model for bot in hangar.launched[3:]] == ["tie-bomber"] * 6
+
+def test_dev_mission_launches_no_tie(game, spawned):
+    m = start(game, dev_mission)
+    advance(game, m, 40)
+    assert {bot.name.rsplit("_", 1)[0] for bot in spawned} == {
+        "player_squadron",
+        "enemy_isd",
+        "allied_frigate",
+    }
 
 
 # ---------------------------------------------------------------------------
