@@ -29,3 +29,16 @@ def spaceflight_app():
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
     return SpaceFlightSimulator(headless=True)
+
+
+@pytest.fixture
+def fake_overlay_factory(monkeypatch):
+    """
+    Make HyperspaceOverlays drawing on FakeQuads, with no shader compiled (see
+    hyperspace_fakes.py). Call the returned function with an optional look and
+    window.
+    """
+    from hyperspace_fakes import make_fake_overlay, patch_overlay_building
+
+    patch_overlay_building(monkeypatch)
+    return make_fake_overlay

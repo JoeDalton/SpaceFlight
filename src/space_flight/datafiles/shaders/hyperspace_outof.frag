@@ -1,17 +1,9 @@
 #version 140
-// Hyperspace "outof" effect — dropping out of hyperspace into the level.
+// Hyperspace "outof" effect — dropping out of hyperspace into the scene.
 // Simplified and adapted from: https://www.shadertoy.com/view/MlKBWw
 
-// --- Panda3D uniforms (replaces ShaderToy built-ins) ---
-uniform float iTime;
-uniform vec2  iResolution;
-uniform vec3  iMouse;
-uniform float iAlpha;         // cross-fade opacity, driven from Python
-uniform float iCenterOffset;  // tunnel vanishing-point offset below screen centre
-// -------------------------------------------------------
-out vec4 p3d_FragColor;
+#pragma include "hyperspace_common.glsl"
 
-#define TAU 6.28318
 #define NUM_SLICES 125.0
 const float MAX_SLICE_OFFSET = 0.4;
 const float T_MAX = 2.0;
@@ -20,36 +12,12 @@ const float jump_speed = 5.0;
 const vec3 blue_col  = vec3(0.3, 0.3, 0.6);
 const vec3 white_col = vec3(0.8, 0.8, 0.95);
 
-float sdLine(in vec2 p, in vec2 a, in vec2 b, in float ring)
-{
-    vec2 pa = p-a, ba = b-a;
-    float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
-    return length(pa - ba*h) - ring;
-}
-
-float rand(vec2 co) {
-    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);
-}
-
 void main()
 {
-    vec2 fragCoord = gl_FragCoord.xy;
-
     vec3 color = vec3(0.0);
     float time = mod(iTime, T_MAX);
     float t = time / T_MAX;
-    vec2 mo = (2.0*iMouse.xy - iResolution.xy) / min(iResolution.x, iResolution.y);
-    vec2 p = (2.0*fragCoord - iResolution.xy) / min(iResolution.x, iResolution.y);
-    float p_len = length(p);
-    p += vec2(0.0, -iCenterOffset);
-
-    float ay = 0.0, ax = 0.0;
-    if (iMouse.z > 0.0) { ay = 3.0*mo.x; ax = 3.0*mo.y; }
-    mat3 mY = mat3(cos(ay),0.0,sin(ay), 0.0,1.0,0.0, -sin(ay),0.0,cos(ay));
-    mat3 mX = mat3(1.0,0.0,0.0, 0.0,cos(ax),sin(ax), 0.0,-sin(ax),cos(ax));
-    mat3 m = mX * mY;
-
-    vec3 v = m * vec3(p, 1.0);
+    vec3 v = mouse_rotation() * vec3(screen_point(), 1.0);
 
     float fade = mix(1.4, 0.0, smoothstep(0.65, 0.95, t));
 
@@ -91,13 +59,12 @@ void main()
     }
 
     // Whiteout (fade from white at start)
-    color += mix(1.0, 0.0, smoothstep(0.0, 0.2, t));
+    color += iMaxWhiteout * (1.0 - smoothstep(0.0, 0.2, t));
 
     // The black background dissolves into the scene behind the overlay while
-    // the streaks keep their brightness (alpha follows the colour intensity).
+    // the streaks keep their brightness (see overlay_color).
     // The 0.35 start must match REVEAL_START / T_MAX in
     // hyperspace_loading_state.py, which starts the simulation at that moment.
-    float bg = 1.0 - smoothstep(0.35, 0.9, t);
-    float a = clamp(max(bg, max(color.r, max(color.g, color.b))), 0.0, 1.0);
-    p3d_FragColor = vec4(a > 0.0 ? color / a : vec3(0.0), a * iAlpha);
+    float bg = iBackgroundOpacity * (1.0 - smoothstep(0.35, 0.9, t));
+    p3d_FragColor = overlay_color(color, bg, 1.0);
 }

@@ -2,18 +2,11 @@
 // Hyperspace "into" effect — entering hyperspace.
 // Simplified and adapted from: https://www.shadertoy.com/view/MlKBWw
 
-// --- Panda3D uniforms (replaces ShaderToy built-ins) ---
-uniform float iTime;
-uniform vec2  iResolution;
-uniform vec3  iMouse;
-uniform float iAlpha;         // cross-fade opacity, driven from Python
-uniform float iCenterOffset;  // tunnel vanishing-point offset below screen centre
+#pragma include "hyperspace_common.glsl"
+
 uniform float iIntoDuration;  // animation length (s); == the Python INTO_DURATION
-// -------------------------------------------------------
-out vec4 p3d_FragColor;
 
 #define FLARE 1
-#define TAU 6.28318
 #define NUM_SLICES 125.0
 const float MAX_SLICE_OFFSET = 0.4;
 // Ease-in exponent (>1): time crawls at the start, then accelerates. 1 = linear,
@@ -24,17 +17,6 @@ const float jump_speed = 15.0;
 const vec3 blue_col  = vec3(0.3, 0.3, 0.5);
 const vec3 white_col = vec3(0.85, 0.85, 0.9);
 const vec3 flare_col = vec3(0.9, 0.9, 1.4);
-
-float sdLine(in vec2 p, in vec2 a, in vec2 b, in float ring)
-{
-    vec2 pa = p-a, ba = b-a;
-    float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
-    return length(pa - ba*h) - ring;
-}
-
-float rand(vec2 co) {
-    return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);
-}
 
 vec3 lensflare(vec3 uv, vec3 pos, float flare_size, float ang_offset)
 {
@@ -62,25 +44,12 @@ vec3 cc(vec3 color, float factor, float factor2)
 
 void main()
 {
-    vec2 fragCoord = gl_FragCoord.xy;
-
     vec3 color = vec3(0.0);
     // Clamp (don't wrap): once the flare whites out the screen, t HOLDS at 1 so
     // the white frame stays for the cross-fade into the tunnel, instead of
     // mod() restarting the trails. INTO_EASE eases the pacing in (slow → fast).
     float t = pow(clamp(iTime / iIntoDuration, 0.0, 1.0), INTO_EASE);
-    vec2 p = (2.0*fragCoord - iResolution.xy) / min(iResolution.x, iResolution.y);
-    vec2 mo = (2.0*iMouse.xy - iResolution.xy) / min(iResolution.x, iResolution.y);
-    p += vec2(0.0, -iCenterOffset);
-
-    float ay = 0.0, ax = 0.0;
-    if (iMouse.z > 0.0) { ay = 3.0*mo.x; ax = 3.0*mo.y; }
-    mat3 mY = mat3(cos(ay),0.0,sin(ay), 0.0,1.0,0.0, -sin(ay),0.0,cos(ay));
-    mat3 mX = mat3(1.0,0.0,0.0, 0.0,cos(ax),sin(ax), 0.0,-sin(ax),cos(ax));
-    mat3 m = mX * mY;
-
-    float p_len = length(p);
-    vec3 v = m * vec3(p, 1.0);
+    vec3 v = mouse_rotation() * vec3(screen_point(), 1.0);
 
     float fade = clamp(mix(0.1, 1.1, t*2.0), 0.0, 2.0);
 
@@ -119,11 +88,11 @@ void main()
         color += cc(flare, 0.5, 0.1);
         //color += flare;
         // Whiteout
-        color += mix(0.0, 1.0, smoothstep(T_JUMP + 0.1, 1.0, t));
+        color += iMaxWhiteout * smoothstep(T_JUMP + 0.1, 1.0, t);
     #else
         // Whiteout
-        color += mix(0.0, 1.0, smoothstep(T_JUMP - 0.0, 1.0, t));
+        color += iMaxWhiteout * smoothstep(T_JUMP - 0.0, 1.0, t);
     #endif
 
-    p3d_FragColor = vec4(color, iAlpha);
+    p3d_FragColor = overlay_color(color, iBackgroundOpacity, 1.0);
 }

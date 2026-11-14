@@ -22,7 +22,9 @@ HUD, and drives the per-frame update.
 
 - **Two-phase, animated level entry.** `enter()` builds the level around a
   hyperspace-jump animation
-  ([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)):
+  ([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py),
+  drawing with the opaque look of the shared
+  [hyperspace overlay](fx.md#hyperspace_overlaypy-the-hyperspace-jump-effect)):
   1. the level's upfront function runs synchronously on a black screen for the
      GPU-heavy one-time work (the player, then the scene's heavy objects, such
      as a planet's whole world), so its first-render compile spike is

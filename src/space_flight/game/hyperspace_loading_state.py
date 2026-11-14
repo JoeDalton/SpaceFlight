@@ -16,9 +16,8 @@ out of every cross-fade) means those parts stay smooth; the unavoidable
 per-step stutter is confined to the looping tunnel, which has no fixed
 endpoint and so never "ends too soon".
 
-Cross-fades render two phase shaders simultaneously on stacked fullscreen
-quads. The back quad stays fully opaque (so the half-built world never shows
-through); only the incoming front quad fades in, eased with a smoothstep.
+The drawing itself is done by a :class:`HyperspaceOverlay` with the opaque
+:data:`LOADING_LOOK`, so the half-built world never shows through.
 
 This state declares PAUSES_BELOW = False so the :class:`FlightState`
 below it stays alive (its game tasks are created during the build and only
@@ -31,77 +30,30 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import (
-    ClockObject,
-    LVecBase2f,
-    Shader,
-    TextNode,
-    Vec3,
-)
+from panda3d.core import ClockObject, TextNode
 
-from space_flight import DATAFILES_PATH
-from space_flight.fx import make_fullscreen_quad
+from space_flight.fx.hyperspace_overlay import (
+    INTO_DURATION,
+    LOADING_LOOK,
+    OUTOF_DURATION,
+    HyperspaceOverlay,
+)
 from space_flight.global_architecture.base_state import BaseState
-from space_flight.utils import clamp
 
 if TYPE_CHECKING:
     from direct.task import Task
-    from panda3d.core import GraphicsOutput, GraphicsWindow, NodePath
 
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
 
-_VERT = DATAFILES_PATH / "shaders/hyperspace.vert"
-_FRAGS = {
-    "into": DATAFILES_PATH / "shaders/hyperspace_into.frag",
-    "inside": DATAFILES_PATH / "shaders/hyperspace_inside.frag",
-    "outof": DATAFILES_PATH / "shaders/hyperspace_outof.frag",
-}
-
-# Fixed durations, in seconds, of the non-looping phases.
-# INTO_DURATION is fed to hyperspace_into.frag as the iIntoDuration uniform, so
-# the shader's whiteout lands exactly when this phase cross-fades to the tunnel
-# — one source of truth, no constant to keep in sync.
-INTO_DURATION = 2.5
 # Minimum time the looping tunnel is shown, even if the level loads instantly,
 # so the "inside" phase never flashes by.
 INSIDE_MIN_DURATION = 2.0
-# Kept just under the shader's own 2.0s loop (T_MAX) so the effect has fully
-# dissolved into the scene at the end instead of wrapping back to the opening
-# white flash.
-OUTOF_DURATION = 1.9
-# Cross-fade length between two consecutive phases.
-FADE_DURATION = 1.0
 # Time into the outof phase at which the shader's black background starts
 # dissolving into the live scene (0.35 * its 2.0s T_MAX; keep in sync with the
 # `bg` smoothstep in hyperspace_outof.frag). The world is revealed from here.
 REVEAL_START = 0.7
-# Longest frame time the animation advances by. A one-off stall (e.g. a first
-# spawn after the reveal) then shows as a brief hitch instead of skipping the
-# rest of the current phase in a single frame.
-MAX_DT = 1 / 30
-# Tunnel vanishing-point offset below the screen centre, shared by all three
-# phases so their centres line up across transitions.
-CENTER_OFFSET = 0.1
 
 _TASK_NAME = "hyperspace_update"
-
-
-def set_resolution(quads: list[NodePath], win: GraphicsOutput):
-    """
-    Feed the window size to the phase shaders of fullscreen quads.
-
-    :param quads: The fullscreen quads
-    :param win: The window (or offscreen buffer) they cover
-    """
-    res = LVecBase2f(win.getXSize(), win.getYSize())
-    for quad in quads:
-        quad.setShaderInput("iResolution", res)
-
-
-def _smoothstep(x: float) -> float:
-    """Ease 0..1 with a Hermite curve for a softer-feeling fade."""
-    x = clamp(x, 0.0, 1.0)
-    return x * x * (3.0 - 2.0 * x)
 
 
 class HyperspaceLoadingState(BaseState):
@@ -147,35 +99,10 @@ class HyperspaceLoadingState(BaseState):
 
     def enter(self):
         self._clock = ClockObject.getGlobalClock()
+        self._overlay = HyperspaceOverlay(
+            self.app.render2d, self.app.win, look=LOADING_LOOK
+        )
 
-        # Compile the three phase shaders (shared vertex shader).
-        self._shaders = {
-            name: Shader.load(Shader.SL_GLSL, vertex=_VERT, fragment=frag)
-            for name, frag in _FRAGS.items()
-        }
-
-        # Two stacked fullscreen quads: index 0 = back (sort 0), 1 = front.
-        self._quads = [
-            make_fullscreen_quad(self.app.render2d, "hyperspace_quad", sort=sort)
-            for sort in (0, 1)
-        ]
-        set_resolution(self._quads, self.app.win)
-        for quad in self._quads:
-            quad.setShaderInput("iMouse", Vec3(0, 0, 0))
-            quad.setShaderInput("iTime", 0.0)
-            quad.setShaderInput("iAlpha", 0.0)
-            quad.setShaderInput("iCenterOffset", CENTER_OFFSET)
-            quad.setShaderInput("iIntoDuration", INTO_DURATION)
-            quad.hide()
-
-        # Per-quad elapsed time (each phase restarts its own clock from 0).
-        self._quad_time = [0.0, 0.0]
-        self._back = 0
-        self._front = 1
-
-        self._transitioning = False
-        self._fade_t = 0.0
-        self._next_state: str | None = None
         self._build_done = self._build_step is None
         self._popped = False
         # Wait-for-jump state (only used when wait_for_key is True).
@@ -185,52 +112,19 @@ class HyperspaceLoadingState(BaseState):
         # Set once on_reveal has fired (outof's background is dissolving).
         self._revealing = False
 
-        # Start on the "into" phase, fully opaque on the back quad.
-        self._show_shader(self._back, "into", alpha=1.0)
-        self._state = "into"
+        # Start on the "into" phase, fully opaque.
+        self._overlay.show("into")
 
-        self.app.accept("window-event", self._on_window)
         self.app.taskMgr.add(self._update, _TASK_NAME)
 
     def exit(self):
         self.app.taskMgr.remove(_TASK_NAME)
-        # Restore ShowBase's default window-event handler. `ignore` would leave
-        # the app with no handler, so closing the window would no longer quit.
-        self.app.accept("window-event", self.app.windowEvent)
         if self._prompt is not None:
             self._prompt.destroy()
             self._prompt = None
-        for quad in self._quads:
-            quad.removeNode()
-        self._quads = []
-        self._shaders = {}
+        self._overlay.destroy()
 
     # -- internals -----------------------------------------------------------
-
-    def _show_shader(self, idx: int, name: str, alpha: float):
-        """Assign a phase shader to a quad, reset its clock, reveal it."""
-        self._quads[idx].setShader(self._shaders[name])
-        self._quad_time[idx] = 0.0
-        self._quads[idx].setShaderInput("iAlpha", alpha)
-        self._quads[idx].show()
-
-    def _start_transition(self, next_state: str):
-        self._transitioning = True
-        self._fade_t = 0.0
-        self._next_state = next_state
-        self._show_shader(self._front, next_state, alpha=0.0)
-
-    def _finish_transition(self):
-        self._transitioning = False
-        assert self._next_state is not None  # set by _start_transition
-        self._state = self._next_state
-        # Hide the outgoing quad so it stops rendering and advancing its clock.
-        self._quads[self._back].hide()
-        # The incoming quad becomes the new stable back quad.
-        self._back, self._front = self._front, self._back
-        self._quads[self._back].setShaderInput("iAlpha", 1.0)
-        self._quads[self._back].setBin("fixed", 0)
-        self._quads[self._front].setBin("fixed", 1)
 
     def _step_build(self):
         """Advance the level build by one step during the inside phase."""
@@ -285,37 +179,25 @@ class HyperspaceLoadingState(BaseState):
             self._prompt = None
 
     def _update(self, task: Task) -> int:
-        dt = min(self._clock.getDt(), MAX_DT)
+        self._overlay.update(self._clock.getDt())
 
-        # Advance time only on visible quads.
-        for i in range(2):
-            if not self._quads[i].isHidden():
-                self._quad_time[i] += dt
-                self._quads[i].setShaderInput("iTime", self._quad_time[i])
-
-        # Drive the active cross-fade. The back quad stays fully opaque so the
-        # half-built world never shows through; we only fade the incoming quad
-        # in on top of it. No build steps run during a fade, so it stays smooth.
-        if self._transitioning:
-            self._fade_t += dt
-            alpha = _smoothstep(self._fade_t / FADE_DURATION)
-            self._quads[self._front].setShaderInput("iAlpha", alpha)
-            if self._fade_t >= FADE_DURATION:
-                self._finish_transition()
+        # Phase logic only once settled: no build steps run during a
+        # cross-fade, so it stays smooth.
+        if self._overlay.transitioning:
             return task.cont
 
-        # Phase logic (only when stable, i.e. not mid-transition).
-        back_time = self._quad_time[self._back]
-        if self._state == "into":
-            if back_time >= INTO_DURATION:
-                self._start_transition("inside")
-        elif self._state == "inside":
+        phase = self._overlay.phase
+        phase_time = self._overlay.phase_time
+        if phase == "into":
+            if phase_time >= INTO_DURATION:
+                self._overlay.cross_fade_to("inside")
+        elif phase == "inside":
             # Build the level here, one step per frame, then leave once it is
             # done AND the tunnel has shown for at least INSIDE_MIN_DURATION.
             self._step_build()
-            if self._build_done and back_time >= INSIDE_MIN_DURATION:
+            if self._build_done and phase_time >= INSIDE_MIN_DURATION:
                 if not self._wait_for_key:
-                    self._start_transition("outof")
+                    self._overlay.cross_fade_to("outof")
                 else:
                     # Hold the (seamlessly looping) tunnel and prompt the player
                     # until request_jump_out() is called.
@@ -323,15 +205,15 @@ class HyperspaceLoadingState(BaseState):
                         self._enter_await()
                     if self._jump_requested:
                         self._exit_await()
-                        self._start_transition("outof")
-        elif self._state == "outof":
-            if not self._revealing and back_time >= REVEAL_START:
+                        self._overlay.cross_fade_to("outof")
+        elif phase == "outof":
+            if not self._revealing and phase_time >= REVEAL_START:
                 # The shader's black background is now dissolving into the
                 # scene: bring the world to life as it appears.
                 self._revealing = True
                 if self._on_reveal is not None:
                     self._on_reveal()
-            if back_time >= OUTOF_DURATION:
+            if phase_time >= OUTOF_DURATION:
                 self._pop_self()
                 return task.done
 
@@ -344,13 +226,3 @@ class HyperspaceLoadingState(BaseState):
         # Popping triggers exit() (overlay cleanup) and resume() on the
         # FlightState below.
         self.app.state_manager.pop()
-
-    def _on_window(self, win: GraphicsWindow):
-        # Accepting "window-event" on the app replaces ShowBase's own handler,
-        # so call it explicitly to preserve default behaviour — in particular,
-        # closing the window must still quit the app. We only piggy-back to keep
-        # the shader resolution in sync with the window size.
-        self.app.windowEvent(win)
-        if not self._quads:
-            return
-        set_resolution(self._quads, win)

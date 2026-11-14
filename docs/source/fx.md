@@ -181,6 +181,31 @@ in a box ahead of it: one geometry per dust colour, a billboard quad per mote
 - With `defer_build=True`, `build()` is a generator (`yield from`) that makes
   one colour's geometry per step.
 
+## `hyperspace_overlay.py`: the hyperspace jump effect
+
+`HyperspaceOverlay` draws the three-phase jump animation (into, inside,
+outof) on two stacked fullscreen quads of `render2d`. It is used by the
+loading screen
+([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py))
+and by the in-flight warp.
+
+- **It only draws.** It knows nothing of level building, input or the state
+  stack. Its owner chooses the phases (`show`, `cross_fade_to`, `fade_out`)
+  and calls `update(dt)` every frame, on whichever clock suits it: the real
+  clock for the loading screen, game time for the warp (so pausing freezes
+  it). `dt` is clamped to `MAX_DT`, so a stall shows as a hitch instead of
+  skipping a phase.
+- **Cross-fades** keep the settled phase on the back quad and fade the
+  incoming one in on top. A new cross-fade or fade-out requested mid-fade
+  first settles the running one. `phase` and `phase_time` always describe the
+  settled phase.
+- **Looks.** A `HyperspaceLook` sets the shader uniforms that make the effect
+  opaque (`LOADING_LOOK`, so the half-built world never shows) or see-through
+  (`WARP_LOOK`, tuned by `WARP_TUNNEL_OPACITY` and `WARP_MAX_WHITEOUT` in
+  `space_flight/__init__.py`). See [shaders.md](shaders.md#hyperspace-shaders).
+- **Window resizes** are picked up in `update`, which compares the window size
+  each frame. No `window-event` handler is needed.
+
 ## `sfx.py` — 3D sound effects
 
 [`sfx.py`](../../src/space_flight/fx/sfx.py)'s `SFX` handles every non-music

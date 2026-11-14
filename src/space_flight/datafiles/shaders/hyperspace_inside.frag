@@ -1,20 +1,12 @@
 #version 140
-// Hyperspace "inside" effect — a seamlessly looping warp tunnel held while the
-// level loads.
+// Hyperspace "inside" effect — a seamlessly looping warp tunnel, held while the
+// level loads or while warping in flight.
 // Based on theGiallo's https://www.shadertoy.com/view/MttSz2
 // MIT License. Use freely; but attribution is expected.
 
-// --- Panda3D uniforms (replaces ShaderToy built-ins) ---
-uniform float iTime;
-uniform vec2  iResolution;
-uniform vec3  iMouse;         // xy = pos, z = button pressed (>0)
-uniform float iAlpha;         // cross-fade opacity, driven from Python
-uniform float iCenterOffset;  // tunnel vanishing-point offset below screen centre
-// -------------------------------------------------------
-out vec4 p3d_FragColor;
+#pragma include "hyperspace_common.glsl"
 
-#define TAU 6.28318
-#define PI 3.141592
+uniform float iTunnelOpacity;  // overall opacity of the tunnel, 0..1 (look)
 
 const float speed          = 2.0;  // tunnel scroll speed
 const float rotation_speed  = 0.3;  // tunnel swirl speed
@@ -98,27 +90,12 @@ float loopFbm(float angle, float depth_phase)
 
 void main()
 {
-    vec2 fragCoord = gl_FragCoord.xy;
-
     // Loop-local time: the effect is periodic in T_LOOP, so wrapping here keeps
     // the arguments small over long loads without introducing a seam.
     float lt = mod(iTime, T_LOOP);
 
     vec4 col = vec4(0.0);
-    vec2 p = (2.0 * fragCoord - iResolution.xy) / min(iResolution.y, iResolution.x);
-    vec2 mo = (2.0 * iMouse.xy - iResolution.xy) / min(iResolution.x, iResolution.y);
-    p += vec2(0.0, -iCenterOffset);
-
-    float ay = 0.0, ax = 0.0;
-    if (iMouse.z > 0.0) {
-        ay = 3.0 * mo.x;
-        ax = 3.0 * mo.y;
-    }
-    mat3 mY = mat3(cos(ay),0.0,sin(ay), 0.0,1.0,0.0, -sin(ay),0.0,cos(ay));
-    mat3 mX = mat3(1.0,0.0,0.0, 0.0,cos(ax),sin(ax), 0.0,-sin(ax),cos(ax));
-    mat3 m = mX * mY;
-
-    vec3 v = m * vec3(p, 1.0);
+    vec3 v = mouse_rotation() * vec3(screen_point(), 1.0);
     float z = v.z / length(v.xy);
 
     float focal_depth = 0.15;
@@ -141,5 +118,5 @@ void main()
     float disk_col = exp(-(p_len - 0.025) * 4.0);
     col.rgb += clamp(vec3(disk_col), 0.0, 1.0);
 
-    p3d_FragColor = vec4(col.rgb, iAlpha);
+    p3d_FragColor = overlay_color(col.rgb, iBackgroundOpacity, iTunnelOpacity);
 }

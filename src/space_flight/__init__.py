@@ -21,6 +21,10 @@ RECORD_GAME = False
 FLIGHT_MODEL = "airplane"  # "airplane", "space"
 THROTTLE_BOOST_VALUE = 2.0  # Throttle command when boosting (1.0 is full thrust)
 
+# Local warp (hyperspace jump in flight)
+WARP_TUNNEL_OPACITY = 0.5  # Opacity of the hyperspace tunnel over the scene, 0..1
+WARP_MAX_WHITEOUT = 0.6  # Strength of the white flashes entering/leaving, 0..1
+
 FORWARD_BODY = np.array([0.0, 1.0, 0.0])
 RIGHT_BODY = np.array([1.0, 0.0, 0.0])
 UP_BODY = np.array([0.0, 0.0, 1.0])
