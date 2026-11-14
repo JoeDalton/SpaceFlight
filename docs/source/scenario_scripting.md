@@ -237,8 +237,22 @@ It is off by default. Turn it on for a whole level with
 `LevelEntry(allow_warp=True)`, or during a mission with `m.allow_warp()` /
 `m.allow_warp(False)`. Disallowing it mid-jump drops the player out.
 
-Bots do not follow a warping player: plan the mission so the player warps
-alone, or jump the escorts out and spawn them again at the destination.
+Only the wingmen of a formation the player leads (see `wave.follow(game.player)`)
+follow it through a warp. Every other bot, friend or foe, stays where it is.
+- **Charge.** The wingmen fly along the player's heading, weapons cold. If the
+  jump is aborted, they go back to the fight.
+- **Warp.** As the player enters the tunnel, they jump out after it and wait
+  in hyperspace, hidden and untouchable.
+- **Drop out.** Once the player is back in normal flight, they drop in on
+  their formation slots around it, a little scattered
+  (`WARP_ESCORT_SLOT_JITTER`), at its heading and speed.
+
+They never leave the level: they stay alive, in their wave and formation, and
+keep their damage, so wave conditions see no escape (`any_jumped_out` stays
+false). A wingman killed or ordered out (`jump_out`) during the charge stays
+behind; ordered out while in hyperspace, it leaves the level at once. If the
+player dies while warping, the wingmen stay in hyperspace. The escort is
+[`actors/warp_escort.py`](../../src/space_flight/actors/warp_escort.py).
 
 ### Capital ships and hangars
 

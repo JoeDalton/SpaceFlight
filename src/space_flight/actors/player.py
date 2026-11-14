@@ -11,6 +11,7 @@ from space_flight import CAMERA_FAR_M, RECORD_GAME
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.major_ship.turret import Turret
 from space_flight.actors.warp_drive import WarpDrive
+from space_flight.actors.warp_escort import WarpEscort
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
@@ -186,6 +187,9 @@ class Player:
             )
             sound = HyperspaceSound(self.game.app.asset_manager)
         self.warp_drive = WarpDrive(ship=self.pawn, overlay=overlay, sound=sound)
+        # The wingmen of a formation the player leads follow it through its
+        # warps
+        self.warp_escort = WarpEscort(player=self)
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
@@ -223,6 +227,7 @@ class Player:
         self.warp_drive.update(
             key_held=self.warp_key_held, dt=self.game.game_time.get_time_step()
         )
+        self.warp_escort.update(self.warp_drive.state)
         throttle, yaw_rate, pitch_rate, roll_rate = self.flight_commands()
         self.pawn.move(
             throttle=throttle,
@@ -281,6 +286,7 @@ class Player:
         if not self._dying.begin():
             return
         self.warp_drive.stop()
+        self.warp_escort.player_lost()
         with contextlib.suppress(KeyError, AttributeError):
             self.game.interactions.remove_actor(self.pawn)
         self.pawn.begin_tumble()
@@ -626,6 +632,8 @@ class Player:
 
         self.warp_drive.clean()
         self.warp_drive = None
+        self.warp_escort.clean()
+        self.warp_escort = None
 
         self.game = None
 

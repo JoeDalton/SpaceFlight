@@ -75,6 +75,8 @@ class Formation:
             scale_m = self.FIGHTER_SCALE_M
         if shape is None:
             shape = "arrowhead"
+        # Spacing of the slots
+        self.scale_m = scale_m
 
         # Select the template layout for the requested shape
         template = self.TEMPLATES.get(shape)

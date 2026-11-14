@@ -715,6 +715,7 @@ def make_player_for_flight(warp_throttle=None, warp_turn_factor=1.0) -> Player:
     player.warp_drive = MagicMock(
         throttle=warp_throttle, turn_rate_factor=warp_turn_factor
     )
+    player.warp_escort = MagicMock()
     return player
 
 
@@ -737,12 +738,14 @@ def test_move_player_updates_the_drive_before_the_ship_moves():
     player = make_player_for_flight(warp_throttle=0.5, warp_turn_factor=0.25)
     order = MagicMock()
     player.warp_drive.update = order.update
+    player.warp_escort.update = order.escort
     player.pawn.move = order.move
 
     player.move_player()
 
-    assert [c[0] for c in order.mock_calls] == ["update", "move"]
+    assert [c[0] for c in order.mock_calls] == ["update", "escort", "move"]
     order.update.assert_called_once_with(key_held=True, dt=0.02)
+    order.escort.assert_called_once_with(player.warp_drive.state)
     assert order.move.call_args.kwargs["throttle"] == 0.5
     assert order.move.call_args.kwargs["roll_rate"] == pytest.approx(0.25)
 
@@ -755,3 +758,4 @@ def test_begin_death_stops_any_jump():
     player.begin_death()
 
     player.warp_drive.stop.assert_called_once_with()
+    player.warp_escort.player_lost.assert_called_once_with()

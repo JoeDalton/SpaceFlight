@@ -51,6 +51,9 @@ def make_bot_without_init(bot_type: str = "fighter") -> Bot:
     bot.hyperspace_transit = None
     bot._jump_at_s = None
     bot.has_departed = False
+    bot._warp_leader = None
+    bot._warp_departure = None
+    bot.parked_in_hyperspace = False
     return bot
 
 
