@@ -60,9 +60,10 @@ FADE_DURATION = 1.0
 # spawn after the reveal) then shows as a brief hitch instead of skipping the
 # rest of the current phase in a single frame.
 MAX_DT = 1 / 30
-# Tunnel vanishing-point offset below the screen centre, shared by all three
-# phases so their centres line up across transitions.
-CENTER_OFFSET = 0.1
+# Tunnel vanishing point above the screen centre (in half the screen's shorter
+# side), shared by all three phases so their centres line up across
+# transitions. 0: on the crosshair, where the ship is heading.
+CENTER_OFFSET = 0.0
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,7 @@ class HyperspaceLook:
     :param tunnel_opacity: overall opacity of the inside tunnel, 0..1
     :param max_whiteout: strength of the white flashes at the end of into and
         the start of outof, 0..1
-    :param center_offset: tunnel vanishing-point offset below the screen centre
+    :param center_offset: tunnel vanishing point above the screen centre
     """
 
     background_opacity: float = 1.0

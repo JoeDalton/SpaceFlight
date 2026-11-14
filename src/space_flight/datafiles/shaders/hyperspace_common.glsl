@@ -13,7 +13,7 @@ uniform float iTime;
 uniform vec2  iResolution;
 uniform vec3  iMouse;         // xy = pos, z = button pressed (>0)
 uniform float iAlpha;         // cross-fade opacity, driven from Python
-uniform float iCenterOffset;  // tunnel vanishing-point offset below screen centre
+uniform float iCenterOffset;  // tunnel vanishing point above the screen centre
 // --- Look uniforms ---
 uniform float iBackgroundOpacity;  // opacity of the black background, 0..1
 uniform float iMaxWhiteout;        // strength of the white flashes, 0..1
@@ -24,7 +24,7 @@ out vec4 p3d_FragColor;
 #define PI 3.141592
 
 // Pixel position, centred and scaled so the shorter screen side spans [-1, 1],
-// with the vanishing point moved down by iCenterOffset.
+// with the vanishing point (p = 0) moved up by iCenterOffset.
 vec2 screen_point()
 {
     vec2 p = (2.0 * gl_FragCoord.xy - iResolution.xy)
