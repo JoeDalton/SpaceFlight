@@ -110,7 +110,7 @@ class WarpDrive:
         self.state_time_s += dt
 
         if self.active and self._ship_lost():
-            self._stop()
+            self.stop()
         elif self.state is WarpState.IDLE:
             if key_held and self._can_start():
                 self._enter(WarpState.CHARGING)
@@ -137,9 +137,18 @@ class WarpDrive:
         if self.overlay is not None:
             self.overlay.update(dt)
 
+    def stop(self):
+        """Stop any jump at once, whatever its state (e.g. the ship died)."""
+        if self.state in (WarpState.INSIDE, WarpState.EXITING):
+            self._leave_hyperspace()
+        if self.active:
+            self._play("hide")
+        self.state = WarpState.IDLE
+        self.state_time_s = 0.0
+
     def clean(self):
         """Stop any jump at once and remove the effect."""
-        self._stop()
+        self.stop()
         if self.overlay is not None:
             self.overlay.destroy()
             self.overlay = None
@@ -190,15 +199,6 @@ class WarpDrive:
         self.state_time_s = 0.0
         # Outof has dissolved into the scene by now
         self._play("hide")
-
-    def _stop(self):
-        """Stop any jump at once, whatever its state (e.g. the ship died)."""
-        if self.state in (WarpState.INSIDE, WarpState.EXITING):
-            self._leave_hyperspace()
-        if self.active:
-            self._play("hide")
-        self.state = WarpState.IDLE
-        self.state_time_s = 0.0
 
     def _go_into_hyperspace(self):
         """

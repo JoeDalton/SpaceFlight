@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 from panda3d.core import NodePath
 
 from space_flight import CAMERA_FAR_M
@@ -203,19 +204,34 @@ def test_depth_far_is_the_far_cameras():
 def test_headless_entry_centres_render_on_the_player_before_building():
     """A scene's loading steps work around the player: render is centred on
     it as soon as it exists, before the rest of the level is built."""
-    fs = object.__new__(FlightState)
-    order = MagicMock()
-    entry = SimpleNamespace(upfront=order.upfront)
-    fs.recenter_render_origin = order.recenter_render_origin
-    fs._make_build_generator = lambda _entry: iter([order.build_step()])
-    fs._on_build_complete = order.build_complete
-    fs.resume = order.resume
+    fs, order = make_headless_entry_state()
 
-    fs._enter_headless(entry)
+    fs._enter_headless(SimpleNamespace(upfront=order.upfront, allow_warp=False))
 
     names = [c[0] for c in order.mock_calls]
     assert names.index("upfront") < names.index("recenter_render_origin")
     assert names.index("recenter_render_origin") < names.index("build_complete")
+
+
+@pytest.mark.parametrize("allow_warp", [True, False])
+def test_entry_lets_the_player_warp_as_the_level_says(allow_warp):
+    fs, order = make_headless_entry_state()
+
+    fs._enter_headless(SimpleNamespace(upfront=order.upfront, allow_warp=allow_warp))
+
+    assert fs.player.warp_drive.allowed is allow_warp
+
+
+def make_headless_entry_state():
+    """A FlightState ready for _enter_headless, its steps recorded in order."""
+    fs = object.__new__(FlightState)
+    order = MagicMock()
+    fs.player = MagicMock()
+    fs.recenter_render_origin = order.recenter_render_origin
+    fs._make_build_generator = lambda _entry: iter([order.build_step()])
+    fs._on_build_complete = order.build_complete
+    fs.resume = order.resume
+    return fs, order
 
 
 def test_the_split_keeps_off_translucent_volumes():

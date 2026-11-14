@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Callable
 
 from direct.showbase.ShowBaseGlobal import ClockObject
 
-from space_flight import THROTTLE_BOOST_VALUE
+from space_flight import THROTTLE_BOOST_VALUE, WARP_CRUISE_THROTTLE
 from space_flight.actors.energy import BALANCED, ENGINES, LASERS, SHIELDS
 from space_flight.ui.input_reader import MENU_BUTTONS, InputState
 from space_flight.utils import low_pass_filter_first_order
@@ -394,8 +394,17 @@ class FlightInputContext(InputContext):
         if self.player.is_dying:
             return
 
+        # Warp (see WarpDrive): held to charge and stay in hyperspace. While
+        # jumping the weapons are cold and boost is off, and the throttle is
+        # set to cruise, where it stays after dropping out until moved.
+        self.player.warp_key_held = self.active(state, "warp")
+        warping = self.player.warp_drive.active
+        if warping:
+            self.is_boost = False
+            self.hold_throttle(WARP_CRUISE_THROTTLE)
+
         # Fire weapons
-        if self.active(state, "fire"):
+        if not warping and self.active(state, "fire"):
             self.player.pawn.laser_cannon.fire()
 
         # Secondary weapon (bombs, rockets, missiles) and flares. Launches are
@@ -404,13 +413,13 @@ class FlightInputContext(InputContext):
         # is a harmless no-op.
         if self.pressed(state, "cycle_secondary"):
             self.player.pawn.cycle_secondary()
-        if self.active(state, "fire_secondary"):
+        if not warping and self.active(state, "fire_secondary"):
             self.player.pawn.fire_secondary()
-        if self.active(state, "drop_flare"):
+        if not warping and self.active(state, "drop_flare"):
             self.player.pawn.drop_flare()
 
         # Boost
-        if self.pressed(state, "boost_on"):
+        if not warping and self.pressed(state, "boost_on"):
             self.is_boost = True
         if self.released(state, "boost_off"):
             self.is_boost = False
@@ -484,6 +493,16 @@ class FlightInputContext(InputContext):
         self.pitch_smoothed = _smooth(pitch, self.pitch_smoothed, dt)
         self.roll_smoothed = _smooth(roll, self.roll_smoothed, dt)
         return self.yaw_smoothed, self.pitch_smoothed, self.roll_smoothed
+
+    def hold_throttle(self, throttle: float):
+        """
+        Set the throttle, whatever the devices: an analog throttle only takes
+        it back once moved (by more than THROTTLE_TAKEOVER from where it is).
+
+        :param throttle: The throttle
+        """
+        self.throttle = throttle
+        self.throttle_owner = None
 
     def update_throttle(self, state: InputState) -> float:
         """

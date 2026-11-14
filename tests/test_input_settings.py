@@ -164,7 +164,27 @@ class TestBindingsFiles:
         """
         contexts = load_bindings(path)["contexts"]
         assert contexts["flight"]["keyboard"]["pause"] == "escape"
-        assert contexts["hyperspace"]["keyboard"]["drop_hyperspace"] == "space"
+        assert contexts["hyperspace"]["keyboard"]["drop_hyperspace"] == "w"
+
+    @pytest.mark.parametrize("path", [_BINDINGS_FILE, _DEFAULT_BINDINGS_FILE])
+    @pytest.mark.parametrize("device", ["keyboard", "gamepad", "joystick"])
+    def test_loading_screen_drops_out_with_the_warp_key(self, path, device):
+        """Jumping and dropping out of hyperspace share one key per device."""
+        contexts = load_bindings(path)["contexts"]
+        warp_key = contexts["flight"][device]["warp"]
+        assert contexts["hyperspace"][device]["drop_hyperspace"] == warp_key
+
+    @pytest.mark.parametrize("path", [_BINDINGS_FILE, _DEFAULT_BINDINGS_FILE])
+    @pytest.mark.parametrize("device", ["keyboard", "gamepad", "joystick"])
+    def test_warp_key_is_bound_to_nothing_else_in_flight(self, path, device):
+        flight = load_bindings(path)["contexts"]["flight"][device]
+        warp_key = flight["warp"]
+        others = [
+            action
+            for action, key in flight.items()
+            if key == warp_key and action != "warp"
+        ]
+        assert others == []
 
     def test_load_bindings_reads_bindings_file(self):
         assert load_bindings() == load_bindings(_BINDINGS_FILE)

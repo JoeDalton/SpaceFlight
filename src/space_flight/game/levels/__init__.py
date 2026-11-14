@@ -50,11 +50,14 @@ class LevelEntry:
     :param upfront: Creates the player and the scene, on a black screen
     :param mission: The mission body, a generator function taking the Mission
     :param description: Shown in the level selection menu
+    :param allow_warp: Whether the player may warp (see WarpDrive); a mission
+        can change it on the way (see Mission.allow_warp)
     """
 
     upfront: Callable[["FlightState"], None]
     mission: Callable[["Mission"], "Iterator[None]"]
     description: str
+    allow_warp: bool = False
 
 
 #: Every shipped level, keyed by its name as stored in
@@ -85,10 +88,12 @@ LEVELS: dict[str, LevelEntry] = {
         mission=free_flight_mission,
         description="Explore freely the solar system. No enemies, no mission, "
         "just you and your ship.",
+        allow_warp=True,
     ),
     "Dev": LevelEntry(
         upfront=build_dev_upfront,
         mission=dev_mission,
         description="A development level, not player-intended",
+        allow_warp=True,
     ),
 }

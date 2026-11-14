@@ -10,10 +10,12 @@ import numpy as np
 from space_flight import CAMERA_FAR_M, RECORD_GAME
 from space_flight.actors.fighter import Fighter
 from space_flight.actors.major_ship.turret import Turret
+from space_flight.actors.warp_drive import WarpDrive
 from space_flight.ai.fighter.fighter_navigator import FighterNavigator
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.fighter.fighter_tactician import FighterTactician
 from space_flight.fx.cockpit_fx import CockpitFX, screen_direction_from_incoming
+from space_flight.fx.hyperspace_overlay import WARP_LOOK, HyperspaceOverlay
 from space_flight.ui.rear_view_mirror import RearViewMirror
 from space_flight.utils import rotate_single_vector, smooth_step_down
 from space_flight.utils.state_machine import DyingPhase
@@ -145,6 +147,8 @@ class Player:
         self.pitch_rate = 0.0
         self.roll_rate = 0.0
         self.view_offset = np.zeros(2)
+        # Whether the warp key is held, also written by FlightInputContext
+        self.warp_key_held = False
 
         # Death timer. The player is not a Destructible: FlightState calls
         # begin_death, then shows the level-end screen once death_spin_finished.
@@ -171,6 +175,15 @@ class Player:
             )
             self.initialize_camera()
             self.cockpit_fx = CockpitFX(game=self.game, player=self)
+
+        # Local warp, allowed or not by the level (see LevelEntry.allow_warp).
+        # Its effect is drawn over the scene; none headless.
+        overlay = None
+        if not self.game.headless:
+            overlay = HyperspaceOverlay(
+                self.game.app.render2d, self.game.app.win, look=WARP_LOOK
+            )
+        self.warp_drive = WarpDrive(ship=self.pawn, overlay=overlay)
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
@@ -204,11 +217,16 @@ class Player:
             ) = self.pilot.pilot(
                 target_direction=target_direction, desired_speed_mps=desired_speed_mps
             )
+        # Before the ship moves: the drive sets its flight model
+        self.warp_drive.update(
+            key_held=self.warp_key_held, dt=self.game.game_time.get_time_step()
+        )
+        throttle, yaw_rate, pitch_rate, roll_rate = self.flight_commands()
         self.pawn.move(
-            throttle=self.throttle,
-            yaw_rate=self.yaw_rate,
-            pitch_rate=self.pitch_rate,
-            roll_rate=self.roll_rate,
+            throttle=throttle,
+            yaw_rate=yaw_rate,
+            pitch_rate=pitch_rate,
+            roll_rate=roll_rate,
         )
 
         # Move camera relative to the ship node (there is no camera headless)
@@ -218,6 +236,23 @@ class Player:
         # Record state if needed
         if RECORD_GAME and self.record:
             self.record_state()
+
+    def flight_commands(self) -> tuple[float, float, float, float]:
+        """
+        The flight commands for the ship: the player's, within the warp
+        drive's limits while it jumps (cruise throttle, capped turn rates).
+
+        :return: Throttle, yaw, pitch and roll rate commands
+        """
+        drive = self.warp_drive
+        throttle = self.throttle if drive.throttle is None else drive.throttle
+        factor = drive.turn_rate_factor
+        return (
+            throttle,
+            factor * self.yaw_rate,
+            factor * self.pitch_rate,
+            factor * self.roll_rate,
+        )
 
     def add_task(self, method: Callable):
         """
@@ -243,6 +278,7 @@ class Player:
         """
         if not self._dying.begin():
             return
+        self.warp_drive.stop()
         with contextlib.suppress(KeyError, AttributeError):
             self.game.interactions.remove_actor(self.pawn)
         self.pawn.begin_tumble()
@@ -580,6 +616,9 @@ class Player:
         if self.cockpit_fx is not None:
             self.cockpit_fx.clean()
         self.cockpit_fx = None
+
+        self.warp_drive.clean()
+        self.warp_drive = None
 
         self.game = None
 

@@ -107,6 +107,7 @@ class FlightState(BaseState):
         # one-time compile/upload spikes out of the animation.
         self.force_render()
         entry.upfront(game=self)
+        self.player.warp_drive.allowed = entry.allow_warp
         # The player exists: centre render on it now, so a scene's loading
         # steps (see Scene.build_decomposed) already work around it
         self.recenter_render_origin()
@@ -146,6 +147,7 @@ class FlightState(BaseState):
         """
         self.loading_overlay = None
         entry.upfront(game=self)
+        self.player.warp_drive.allowed = entry.allow_warp
         self.recenter_render_origin()
         for _ in self._make_build_generator(entry):
             pass

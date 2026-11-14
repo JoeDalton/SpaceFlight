@@ -50,6 +50,7 @@ contexts:
       drop_flare:          f
       boost_on:            b
       boost_off:           b
+      warp:                w
       pause:               escape
       loop_target:         ","
       loop_target_reverse: ":"
@@ -79,6 +80,7 @@ contexts:
       drop_flare:          gamepad_face_b
       boost_on:            gamepad_rshoulder
       boost_off:           gamepad_rshoulder
+      warp:                gamepad_lstick
       pause:               gamepad_start
       loop_target:         gamepad_dpad_right
       loop_target_reverse: gamepad_dpad_left
@@ -109,6 +111,7 @@ contexts:
       drop_flare:          stick_button_5
       boost_on:            stick_button_8
       boost_off:           stick_button_8
+      warp:                stick_button_7
       # pause: not bound — assign a stick_button_N when your stick has one
       loop_target:         stick_button_9
       loop_target_reverse: stick_button_10
@@ -138,10 +141,10 @@ contexts:
       axis_y: pitch
 
   hyperspace:
-    # Hyperspace transition state
+    # Hyperspace transition state (the loading screen): the same keys as warp
     keyboard:
-      drop_hyperspace: space
+      drop_hyperspace: w
     gamepad:
-      drop_hyperspace: gamepad_lshoulder
+      drop_hyperspace: gamepad_lstick
     joystick:
-      drop_hyperspace: stick_button_1
+      drop_hyperspace: stick_button_7
