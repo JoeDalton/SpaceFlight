@@ -28,7 +28,13 @@ from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import PRESETS
 from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook, World
 
-from space_flight import CAMERA_FAR_M, DATAFILES_PATH
+from space_flight import (
+    CAMERA_FAR_M,
+    DATAFILES_PATH,
+    WARP_MIN_SPEED_MPS,
+    WARP_SPACE_SPEED_MPS,
+    WARP_SPEED_PER_ALTITUDE,
+)
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
 from space_flight.scenes.level_frame import LevelFrame
@@ -130,6 +136,19 @@ UP_REFRESH_S = 1.0
 LIGHT_PERIOD_FRAMES = 3
 
 
+def warp_speed_at_altitude(altitude_m: float) -> float:
+    """
+    How fast a warping ship goes at an altitude (see Scene.warp_speed_mps).
+
+    :param altitude_m: Height above the nearest body's ground, metres; infinite
+        in a scene without bodies
+    :return: The warp speed, m/s
+    """
+    if math.isinf(altitude_m):
+        return WARP_SPACE_SPEED_MPS
+    return max(WARP_MIN_SPEED_MPS, WARP_SPEED_PER_ALTITUDE * altitude_m)
+
+
 class Scene:
     def __init__(
         self,
@@ -179,6 +198,37 @@ class Scene:
         if not np.isfinite(norm) or norm < MIN_GRAVITY_NORM:
             return self.default_up_direction
         return -gravity / norm
+
+    def altitude_m(self, position: Sequence[float]) -> float:
+        """
+        Height above the ground of the nearest of the scene's WorldBuilder
+        bodies (the one whose sea level is nearest).
+
+        :param position: A world position
+        :return: The height, metres (0 under the ground), infinite in a scene
+            without bodies
+        """
+        world = getattr(self, "world", None)
+        if world is None or not world.bodies:
+            return math.inf
+        point = np.asarray(position, dtype=np.float64)
+        body = world.nearest(point)
+        relative = point - body.position
+        # Only what is already generated: a query must not stall the frame
+        ground_m = float(body.terrain.query.height_at(relative, generate=False))
+        return max(float(np.linalg.norm(relative)) - body.radius - ground_m, 0.0)
+
+    def warp_speed_mps(self, position: Sequence[float]) -> float:
+        """
+        How fast a warping ship goes at a position: in proportion to its
+        altitude above the nearest body (WorldBuilder's free-flight demo rule),
+        so the trip away from a body, or towards one, is exponential, a second
+        per factor of e. A fixed speed in a scene without bodies.
+
+        :param position: A world position
+        :return: The warp speed, m/s
+        """
+        return warp_speed_at_altitude(self.altitude_m(position))
 
     #: Whether the models tracked by the scene cast shadows
     MODELS_CAST_SHADOWS = True

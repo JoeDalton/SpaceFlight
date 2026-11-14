@@ -200,6 +200,17 @@ def test_show_after_fade_out_reuses_the_overlay(fake_overlay_factory):
     assert quad.inputs["iAlpha"] == 1.0
 
 
+def test_hide_stops_drawing_at_once(fake_overlay_factory):
+    overlay = fake_overlay_factory()
+    overlay.show("into")
+    overlay.cross_fade_to("inside")
+
+    overlay.hide()
+
+    assert not overlay.visible
+    assert visible_quads(overlay) == []
+
+
 def test_destroy_removes_the_quads(fake_overlay_factory):
     overlay = fake_overlay_factory()
     quads = list(overlay._quads)

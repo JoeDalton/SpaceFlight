@@ -226,6 +226,10 @@ entry into game effects.
   `ordnance` (bombs, rockets, missiles) hits what a laser hits plus `DECOY`,
   the flares' layer; nothing hits ordnance, and only ordnance hits flares, so
   two flares never collide.
+  `ENVIRONMENT` is terrain's layer: planets and asteroids are the only
+  colliders with it in their into mask (`TERRAIN_INTO`), and whatever has it in
+  its from mask hits them. That is how a warping ship's hull hits terrain and
+  nothing else (`WARPING_HULL_FROM`).
 - **`owners_share_vehicle()`** spares a ship from colliding with its own
   bolted-on parts: two collision owners are the "same vehicle" if they're
   identical, one is `mounted_on` the other, or both share the same

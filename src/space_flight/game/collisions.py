@@ -112,6 +112,7 @@ class CollisionLayers:
     SENSOR = BitMask32.bit(0)
     SHIELD = BitMask32.bit(1)
     DESTRUCTIBLE = BitMask32.bit(2)
+    # Terrain (planets, asteroids): the only colliders with it in their into mask
     ENVIRONMENT = BitMask32.bit(3)
     DECOY = BitMask32.bit(4)
 
@@ -140,9 +141,15 @@ class CollisionLayers:
     DESTRUCTIBLE_INTO = MUNITION | SENSOR | DESTRUCTIBLE
 
     # Terrain cannot hit anything
-    # It is hit by munitions, sensors and destructibles
+    # It is hit by whatever hits the environment: munitions, sensors and
+    # destructibles
     TERRAIN_FROM = BitMask32.allOff()
-    TERRAIN_INTO = MUNITION | SENSOR | DESTRUCTIBLE
+    TERRAIN_INTO = ENVIRONMENT
+
+    # A warping ship's hull (see WarpDrive) still hits terrain, and only
+    # terrain: other ships and munitions pass through
+    WARPING_HULL_FROM = ENVIRONMENT
+    WARPING_HULL_INTO = BitMask32.allOff()
 
     # Subsystems are chunks bolted onto a ship (shield generators, turrets...).
     # Like terrain they never initiate collisions (they are rigid parts of their

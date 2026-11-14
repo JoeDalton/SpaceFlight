@@ -16,6 +16,8 @@ from space_flight import (
     RIGHT_BODY,
     THROTTLE_BOOST_VALUE,
     UP_BODY,
+    WARP_RELAX_MIN_FRAMES,
+    WARP_RELAX_TIME_S,
 )
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
@@ -156,6 +158,10 @@ class Ship(Pawn):
     "Forward" is on an object's Y axis in panda3d, so thrust is in +Y
     X axis is to the right, Z axis is up
     """
+
+    # Warp flight model (see compute_derivatives, set by WarpDrive): the speed
+    # the ship is pulled to along its nose while warping, None in normal flight
+    warp_target_speed_mps: float | None = None
 
     def __init__(
         self,
@@ -334,6 +340,31 @@ class Ship(Pawn):
         """
         return np.sqrt(self.max_thrust_n / self.drag_factor)
 
+    def forward_thrust_n(self, throttle: float) -> float:
+        """
+        The thrust of a throttle command at or above ZERO_THRUST_POSITION: the
+        throttle is squared so the velocity is easier to modulate, and scaled by
+        thrust_factor().
+
+        :param throttle: Throttle command, at least ZERO_THRUST_POSITION
+        :return: The thrust, in N
+        """
+        return (
+            ((throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)) ** 2
+            * self.max_thrust_n
+            * self.thrust_factor()
+        )
+
+    def cruise_speed_mps(self, throttle: float) -> float:
+        """
+        The speed the ship settles at, flying straight at a constant throttle:
+        where its thrust balances drag.
+
+        :param throttle: Throttle command, at least ZERO_THRUST_POSITION
+        :return: The speed, in m/s
+        """
+        return float(np.sqrt(self.forward_thrust_n(throttle) / self.drag_factor))
+
     def _build_damage_fx(self) -> DamageFX | None:
         """
         Create the damage / death smoke-and-fire trail.
@@ -456,11 +487,7 @@ class Ship(Pawn):
 
         if throttle >= ZERO_THRUST_POSITION:
             # Thrust is positive
-            scalar_thrust_n = (
-                ((throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)) ** 2
-                * self.max_thrust_n
-                * self.thrust_factor()
-            )
+            scalar_thrust_n = self.forward_thrust_n(throttle)
         else:
             if FLIGHT_MODEL == "airplane" and not engines_online:
                 scalar_thrust_n = 0
@@ -524,6 +551,10 @@ class Ship(Pawn):
         r00, r01, r02, r10, r11, r12, r20, r21, r22 = (
             self._compute_attitude_derivative()
         )
+
+        if self.warp_target_speed_mps is not None:
+            self._compute_warp_acceleration()
+            return
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
@@ -617,6 +648,33 @@ class Ship(Pawn):
         # Consume the external force: it is re-applied every frame for as long as
         # another actor (e.g. a tractor beam) keeps holding this ship, and drops
         # to zero on the first frame nothing applies it.
+        self.external_force_n = np.zeros(3)
+
+    def _compute_warp_acceleration(self):
+        """
+        The warp flight model: no thrust, lift nor drag, the velocity relaxes
+        towards warp_target_speed_mps along the nose, in WARP_RELAX_TIME_S.
+        Impacts and external forces still apply.
+
+        Still integrated like any state, so the ship really moves (collisions,
+        terrain, waypoints...). The relaxation is a first-order lag: the
+        integrator (Adams-Bashforth 2) stays stable while a frame is shorter
+        than its time constant, so the time constant is stretched to a frame
+        and a half when the frame rate drops. See also WarpDrive for why
+        WARP_SPEED_PER_ALTITUDE * WARP_RELAX_TIME_S must stay under 0.25.
+        """
+        dt = self.game.game_time.get_time_step()
+        relax_time_s = max(WARP_RELAX_TIME_S, WARP_RELAX_MIN_FRAMES * dt)
+        target_velocity = self.warp_target_speed_mps * self.forward
+        self.thrust_n = np.zeros(3)
+        self.drag_n = np.zeros(3)
+        self.lift_n = np.zeros(3)
+        self.lift_body_n = np.zeros(3)
+        self.acceleration_mps2 = (target_velocity - self.speed) / relax_time_s + (
+            self.impact_force_n + self.external_force_n
+        ) / self.mass_kg
+        self.state_dot[7:10] = self.acceleration_mps2
+        # Consumed, as in the normal flight model
         self.external_force_n = np.zeros(3)
 
     def _compute_attitude_derivative(self) -> tuple[float, ...]:
@@ -734,7 +792,13 @@ class Ship(Pawn):
         """
         if np.all(np.isfinite(self.state)):
             speed_norm = magnitude(self.speed)
-            if speed_norm > DIVERGENCE_SPEED_FACTOR * self.max_speed_mps:
+            # A warping ship is meant to be far past its top speed (its warp
+            # flight model cannot diverge)
+            warping = self.warp_target_speed_mps is not None
+            if (
+                not warping
+                and speed_norm > DIVERGENCE_SPEED_FACTOR * self.max_speed_mps
+            ):
                 LOGGER.warning(
                     "Ship %s speed %.3g m/s is diverging; snapping to terminal.",
                     getattr(self.parent, "name", "?"),

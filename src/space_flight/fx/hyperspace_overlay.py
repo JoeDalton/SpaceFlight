@@ -220,6 +220,13 @@ class HyperspaceOverlay:
         self._fade_t = 0.0
         self._next_phase = None
 
+    def hide(self):
+        """Stop drawing at once (e.g. once outof has dissolved into the scene)."""
+        self.transitioning = False
+        for quad in self._quads:
+            quad.hide()
+        self.phase = None
+
     def update(self, dt: float):
         """
         Advance the animation: the visible quads' clocks and any fade.
