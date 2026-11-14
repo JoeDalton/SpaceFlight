@@ -201,9 +201,10 @@ class Scene:
             return
         # One tracking per hierarchy: a node below a tracked one is lit and
         # casts with it
+        tracked = {tracked_node.get_key() for tracked_node in world.tracked.nodes}
         ancestor = node
         while True:
-            if world.tracked.is_tracked(ancestor):
+            if ancestor.get_key() in tracked:
                 return
             if not ancestor.has_parent():
                 break

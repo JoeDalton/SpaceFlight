@@ -18,7 +18,8 @@ Usage:
     --pose      still: the player stays where it spawns; fly: it flies on at
                 a fixed throttle
     --toggle    turn a feature off, to measure what it costs: the rear-view
-                mirror, the ships' shadows, their model shader, the cirrus
+                mirror, the ships' shadows, their model shader, the cirrus, the
+                models' flattening at load
     --world     a WorldBuilder knob over the saved preset, as the graphics
                 settings store it (e.g. shadows.object_shadows=false)
     --profile   then profile as many frames with cProfile (stats to FILE,
@@ -56,7 +57,7 @@ SPIKE_MS = 100.0
 #: The player's throttle in the "fly" pose
 FLY_THROTTLE = 0.6
 
-TOGGLES = ("mirror", "shadows", "model_shader", "cirrus")
+TOGGLES = ("mirror", "shadows", "model_shader", "cirrus", "flatten")
 
 
 def parse_args() -> argparse.Namespace:
@@ -98,6 +99,15 @@ def apply_toggles(toggles: list[str]) -> None:
         Scene.MODELS_USE_WORLD_SHADER = False
     if "cirrus" in toggles:
         SceneEarthlike.CLOUDS = replace(SceneEarthlike.CLOUDS, cirrus=None)
+    if "flatten" in toggles:
+        from space_flight.global_architecture.asset_manager import AssetManager
+
+        load = AssetManager.load_single_asset
+
+        def unflattened(self, asset_type, path, pattern="", flatten=True):
+            load(self, asset_type, path, pattern, flatten=False)
+
+        AssetManager.load_single_asset = unflattened
 
 
 def turn_mirror_off(flight) -> None:

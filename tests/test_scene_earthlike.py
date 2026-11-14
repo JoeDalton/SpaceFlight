@@ -385,14 +385,14 @@ def _node_scene(tracked_nodes=()):
 
     scene = Scene(game=None)
     calls = []
-    tracked = set(tracked_nodes)
+    tracked = list(tracked_nodes)
 
     def track_light(node, cast, shader):
         calls.append((node, cast, shader))
-        tracked.add(node)
+        tracked.append(node)
 
     scene.world = SimpleNamespace(
-        tracked=SimpleNamespace(is_tracked=lambda node: node in tracked),
+        tracked=SimpleNamespace(nodes=tracked),
         track_light=track_light,
     )
     return scene, calls, NodePath

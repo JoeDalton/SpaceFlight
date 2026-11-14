@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+
+
+## [0.5.0] - 2026-11-14
+
 ### Added
 
 - Free flight level in the Earth-like scene # 177
@@ -20,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Crashes into and sparks off a turning rock take its surface's motion into account #176
 - Collisions only within 10km #181
 - Speed dust in GPU #181 #20
+- Models flattened at load #181
+- Build against WorldBuilder 0.4.0 #181
 
 ### Fixed
 
