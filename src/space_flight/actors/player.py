@@ -316,7 +316,7 @@ class Player:
         with a simple damped spring system
         """
         # Take ship acceleration into account
-        ship_acceleration_world_mps2 = self.pawn.state_dot[7:10]
+        ship_acceleration_world_mps2 = self.pawn.state_dot[7:10].copy()
         # Special treatment for impacts that should be more sensible
         ship_acceleration_world_mps2 += (
             (IMPACT_FEELING_FACTOR - 1) * self.pawn.impact_force_n / self.pawn.mass_kg

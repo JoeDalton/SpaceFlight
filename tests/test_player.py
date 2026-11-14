@@ -598,6 +598,23 @@ def test_compute_head_acceleration_stores_result_on_player():
     assert not np.allclose(player.head_acceleration_mps2, np.zeros(3))
 
 
+def test_compute_head_acceleration_does_not_mutate_pawn_state_dot():
+    """
+    The amplified impact feeling is for the head only: the pawn's state
+    derivative, which the integrator consumes, must not be modified.
+    """
+    state_dot = np.zeros(10)
+    state_dot[7:10] = [1.0, 2.0, 3.0]
+    player = make_player_for_head_physics(
+        pawn_state_dot=state_dot,
+        pawn_impact_force_n=np.array([500.0, 0.0, 0.0]),
+    )
+
+    player.compute_head_acceleration()
+
+    np.testing.assert_array_equal(player.pawn.state_dot, state_dot)
+
+
 # ---------------------------
 # compute_head_position
 # ---------------------------
