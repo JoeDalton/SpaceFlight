@@ -95,6 +95,9 @@ The level is then registered in
 ),
 ```
 
+`allow_warp=True` lets the player [warp](#player-warp) in that level
+(`False` by default).
+
 `FlightState` calls the upfront function on a black screen, builds the rest
 of the scene during the hyperspace animation, then creates the level's
 `Mission` (`game.mission`) and starts the body (see
@@ -212,6 +215,30 @@ The transit's distances, durations and sharpness are set in
 [`actors/hyperspace.py`](../../src/space_flight/actors/hyperspace.py).
 Fighters launched from a hangar do not drop in, and the player cannot jump
 out.
+
+### Player warp
+
+Where the level allows it, the player can warp across inter-planetary
+distances:
+- **Charge.** Holding the warp key charges the jump for 2.5 s. The ship
+  flies on at cruise throttle with its turn rates capped, its weapons cold,
+  and it can still be shot. Releasing the key during the charge aborts.
+- **Warp.** Once charged, while the key is held, the ship warps. Its speed
+  grows with its altitude above the nearest body, about one e-fold per
+  second. It is untargetable, and only terrain can stop it.
+- **Drop out.** Releasing the key, or coming within 5 km of a body, drops the
+  ship out at cruise speed.
+
+The jump only starts 10 km or more from any body. The drive is
+[`actors/warp_drive.py`](../../src/space_flight/actors/warp_drive.py), and
+its tunables are the `WARP_*` constants of `space_flight/__init__.py`.
+
+It is off by default. Turn it on for a whole level with
+`LevelEntry(allow_warp=True)`, or during a mission with `m.allow_warp()` /
+`m.allow_warp(False)`. Disallowing it mid-jump drops the player out.
+
+Bots do not follow a warping player: plan the mission so the player warps
+alone, or jump the escorts out and spawn them again at the destination.
 
 ### Capital ships and hangars
 
@@ -440,6 +467,7 @@ friendly fire.
 | `m.player_waypoints(points, arrival_radius_m=None, marker_radius_m=None)` | a route of targetable waypoint markers for the player, replacing any previous one |
 | `m.clear_player_waypoints()` | removes it |
 | `m.jump_out(who, spool_s=None)` | every live bot of `who` leaves the level through [hyperspace](#hyperspace) |
+| `m.allow_warp(allowed=True)` | lets the player [warp](#player-warp), or not; disallowing it mid-jump drops the player out |
 | `m.victory(text)` / `m.defeat(text)` / `m.end_level(outcome, text)` | ends the level (`"victory"`, `"defeat"` or `"death"`): freezes the objectives, then shows the level-end screen, with the player's kills and objectives, 2 seconds later. Only the first ending counts |
 
 How long each stays up is set in [`ui/hud.py`](../../src/space_flight/ui/hud.py)

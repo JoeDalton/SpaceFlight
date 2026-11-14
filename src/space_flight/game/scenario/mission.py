@@ -401,6 +401,15 @@ class Mission:
             route.clean()
             self.game.player_waypoints = None
 
+    def allow_warp(self, allowed: bool = True):
+        """
+        Let the player warp, or not (see WarpDrive). Disallowing it mid-jump
+        drops the player out of hyperspace.
+
+        :param allowed: Whether the player may warp
+        """
+        self.game.player.warp_drive.allowed = allowed
+
     def jump_out(self, who: Any, spool_s: Optional[float] = None):
         """
         Every live bot of who leaves the level through hyperspace: it flies

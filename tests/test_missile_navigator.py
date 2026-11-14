@@ -108,3 +108,14 @@ def test_pursue_takes_the_target_itself():
 
     np.testing.assert_allclose(direction, [0.0, 1.0, 0.0], atol=1e-9)
     np.testing.assert_array_equal(lost_direction, np.zeros(3))
+
+
+def test_loses_a_target_gone_into_hyperspace():
+    """A target warping or in a hyperspace transit is out of reach: lock lost."""
+    target = make_target([0.0, 1000.0, 0.0])
+    target.in_hyperspace = True
+    navigator = make_navigator(target)
+
+    direction, _ = navigate(navigator, target)
+
+    np.testing.assert_array_equal(direction, np.zeros(3))

@@ -22,6 +22,8 @@ from panda3d.core import BitMask32
 from space_flight.utils import clamp
 
 if TYPE_CHECKING:
+    from panda3d.core import NodePath
+
     from space_flight.actors.ship import Ship
 
 #: How sharply an arrival decelerates: the ship covers most of the distance
@@ -123,7 +125,7 @@ class HyperspaceTransit:
             self.speed_fraction = speed_mps * self.duration_s / self.distance_m
         self.start_s = self.clock() + self.delay_s
         ship.in_hyperspace = True
-        self._mute_colliders()
+        self._muted_colliders = mute_colliders(ship.node)
         if self.arriving and self.delay_s > 0.0:
             ship.node.hide()
 
@@ -156,30 +158,47 @@ class HyperspaceTransit:
 
     def end(self):
         """Restore the ship's colliders and bring it back into the fight."""
-        self._restore_colliders()
+        restore_colliders(self._muted_colliders)
+        self._muted_colliders = []
         self.ship.in_hyperspace = False
         if self.ship.node is not None:
             self.ship.node.show()
 
-    def _mute_colliders(self):
-        """
-        Mute every collider under the ship's node (hull, subsystems, shield,
-        sensors), remembering their masks to restore them.
-        """
-        for collider in self.ship.node.findAllMatches("**/+CollisionNode"):
-            node = collider.node()
-            self._muted_colliders.append(
-                (collider, node.getFromCollideMask(), node.getIntoCollideMask())
-            )
-            node.setFromCollideMask(BitMask32.allOff())
-            node.setIntoCollideMask(BitMask32.allOff())
 
-    def _restore_colliders(self):
-        """Restore the masks of the colliders muted by :meth:`begin`."""
-        for collider, from_mask, into_mask in self._muted_colliders:
-            if collider.isEmpty():
-                continue
-            node = collider.node()
-            node.setFromCollideMask(from_mask)
-            node.setIntoCollideMask(into_mask)
-        self._muted_colliders = []
+def mute_colliders(node: NodePath) -> list[tuple[NodePath, BitMask32, BitMask32]]:
+    """
+    Mute every collider under a node (a ship's hull, subsystems, shield,
+    sensors...), so it neither hits nor is hit by anything.
+
+    :param node: The node
+    :return: The colliders and their from and into masks, for
+        :func:`restore_colliders`
+    """
+    muted = []
+    for collider in node.findAllMatches("**/+CollisionNode"):
+        collision_node = collider.node()
+        muted.append(
+            (
+                collider,
+                collision_node.getFromCollideMask(),
+                collision_node.getIntoCollideMask(),
+            )
+        )
+        collision_node.setFromCollideMask(BitMask32.allOff())
+        collision_node.setIntoCollideMask(BitMask32.allOff())
+    return muted
+
+
+def restore_colliders(muted: list[tuple[NodePath, BitMask32, BitMask32]]):
+    """
+    Restore the masks of colliders muted by :func:`mute_colliders` (those
+    removed since are skipped).
+
+    :param muted: What mute_colliders returned
+    """
+    for collider, from_mask, into_mask in muted:
+        if collider.isEmpty():
+            continue
+        collision_node = collider.node()
+        collision_node.setFromCollideMask(from_mask)
+        collision_node.setIntoCollideMask(into_mask)

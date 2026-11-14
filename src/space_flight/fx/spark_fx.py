@@ -212,8 +212,9 @@ class SparkPool(ParticleBuffer):
         max_size = base_size * 1.8
         inner = np.array(preset.color_inner)
         outer = np.array(preset.color_outer)
-        # Every spark in the burst starts at the same point; build it once.
-        pos = Point3(position[0], position[1], position[2])
+        # Every spark in the burst starts at the same point (world, float64:
+        # write_slot makes it relative to the buffer's anchor)
+        pos = np.array([position[0], position[1], position[2]], dtype=float)
 
         for _ in range(preset.count):
             slot_index = self.alloc_slot()

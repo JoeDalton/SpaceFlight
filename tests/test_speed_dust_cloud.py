@@ -22,7 +22,10 @@ def game():
         asset_manager=SimpleNamespace(get_asset=lambda **_: texture_pool)
     )
     pawn = SimpleNamespace(
-        node=NodePath("ship"), speed=np.zeros(3), max_speed_mps=200.0
+        node=NodePath("ship"),
+        speed=np.zeros(3),
+        max_speed_mps=200.0,
+        warp_target_speed_mps=None,
     )
     return SimpleNamespace(
         app=app,
@@ -55,3 +58,29 @@ def test_the_update_moves_the_dust_by_the_distance_flown(game):
     dust.dust_update()
     assert dust.travel == pytest.approx(50.0)
     dust.clean()
+
+
+def test_the_dust_hides_while_warping(game):
+    dust = SpeedDustCloud(game=game)
+    game.player.pawn.warp_target_speed_mps = 50_000.0
+    game.player.pawn.speed = np.array([0.0, 50_000.0, 0.0])
+    travel = dust.travel
+
+    dust.dust_update()
+
+    assert dust.root.isHidden()
+    assert dust.travel == travel
+
+    game.player.pawn.warp_target_speed_mps = None
+    game.player.pawn.speed = np.array([0.0, 100.0, 0.0])
+    dust.dust_update()
+    assert not dust.root.isHidden()
+
+
+def test_the_dust_opacity_is_capped(game):
+    dust = SpeedDustCloud(game=game)
+    game.player.pawn.speed = np.array([0.0, 10 * game.player.pawn.max_speed_mps, 0.0])
+
+    dust.dust_update()
+
+    assert dust.root.getColorScale()[3] == pytest.approx(MAX_DUST_ALPHA, abs=1e-3)

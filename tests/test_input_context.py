@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from space_flight import THROTTLE_BOOST_VALUE
+from space_flight import THROTTLE_BOOST_VALUE, WARP_CRUISE_THROTTLE
 from space_flight.ui.input_context import (
     MENU_REPEAT_DELAY,
     MENU_REPEAT_INTERVAL,
@@ -79,6 +79,7 @@ def make_flight_ctx(
     player = MagicMock()
     player.view_offset = [0.0, 0.0]
     player.is_dying = False
+    player.warp_drive.active = False
     ctx = FlightInputContext(game=game, player=player)
     return ctx, game, player
 
@@ -869,6 +870,87 @@ def test_throttle_boost_overrides_owner():
     ctx.is_boost = True
     throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.3}))
     assert throttle == pytest.approx(THROTTLE_BOOST_VALUE)
+
+
+# ---------------------------------------------------------------------------
+# Warp
+# ---------------------------------------------------------------------------
+
+WARP_BINDINGS = {
+    "warp": "w",
+    "fire": "space",
+    "fire_secondary": "x",
+    "drop_flare": "f",
+    "boost_on": "b",
+    "boost_off": "b",
+    "throttle_up": "arrow_up",
+}
+
+
+def make_warping_ctx(warping: bool):
+    ctx, _, player = make_flight_ctx(
+        device_bindings=WARP_BINDINGS,
+        gamepad_bindings={"throttle": "right_trigger"},
+    )
+    player.warp_drive.active = warping
+    return ctx, player
+
+
+@pytest.mark.parametrize(
+    "state, held",
+    [
+        (make_state(buttons={"w": True}), True),
+        (make_state(repeats={"w": True}), True),
+        (make_state(releases={"w": True}), False),
+        (make_state(), False),
+    ],
+    ids=["pressed", "held", "released", "untouched"],
+)
+def test_warp_key_state_is_passed_to_the_player(state, held):
+    ctx, player = make_warping_ctx(warping=False)
+
+    ctx.handle_actions(state)
+
+    assert player.warp_key_held is held
+
+
+def test_weapons_are_cold_while_warping():
+    ctx, player = make_warping_ctx(warping=True)
+
+    ctx.handle_actions(make_state(buttons={"space": True, "x": True, "f": True}))
+
+    player.pawn.laser_cannon.fire.assert_not_called()
+    player.pawn.fire_secondary.assert_not_called()
+    player.pawn.drop_flare.assert_not_called()
+
+
+def test_warping_cuts_the_boost_and_holds_cruise_throttle():
+    ctx, _ = make_warping_ctx(warping=True)
+    ctx.is_boost = True
+    ctx.throttle = 1.0
+
+    ctx.handle_actions(make_state(buttons={"b": True}))
+
+    assert not ctx.is_boost
+    assert ctx.throttle == WARP_CRUISE_THROTTLE
+
+
+def test_cruise_throttle_stays_after_warp_until_a_throttle_moves():
+    """After dropping out, a lever left where it was does not take over."""
+    ctx, player = make_warping_ctx(warping=False)
+    lever = {"right_trigger": 1.0}
+    ctx.flight_axes(make_state(axes={"right_trigger": 0.0}))  # first seen
+    ctx.flight_axes(make_state(axes=lever))  # pushed forward: takes over
+    assert ctx.throttle == pytest.approx(1.0)
+
+    player.warp_drive.active = True
+    ctx.handle_actions(make_state(axes=lever))
+    player.warp_drive.active = False
+    throttle, *_ = ctx.flight_axes(make_state(axes=lever))
+    assert throttle == WARP_CRUISE_THROTTLE
+
+    throttle, *_ = ctx.flight_axes(make_state(axes={"right_trigger": 0.2}))
+    assert throttle == pytest.approx(0.2)
 
 
 def test_flight_ctx_clean_nulls_references():

@@ -19,6 +19,7 @@ from panda3d.core import NodePath
 from space_flight.actors.destructibles import Destructibles
 from space_flight.actors.ordnance import Ordnance, OrdnanceController
 from space_flight.game.integrator import Integrator
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.weapons import ION
 from space_flight.weapons.ordnance_launcher import (
     OrdnanceLauncher,
@@ -71,6 +72,7 @@ def game(spaceflight_app):
     game = MagicMock()
     game.app = spaceflight_app
     game.root_node = NodePath("root")
+    game.render_origin = RenderOrigin(game.root_node)
     game.game_time = FakeGameTime()
     game.integrator = Integrator(game=game, max_state_size=1000)
     game.method_lists = {}

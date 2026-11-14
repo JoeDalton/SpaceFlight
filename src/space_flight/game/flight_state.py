@@ -20,6 +20,7 @@ from space_flight.game.integrator import Integrator
 from space_flight.game.kills import KillLog
 from space_flight.game.levels import LEVELS
 from space_flight.game.record import Record
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.game.scenario.objectives import summarize as summarize_objectives
 from space_flight.game.time_keeping import (
@@ -107,6 +108,10 @@ class FlightState(BaseState):
         # one-time compile/upload spikes out of the animation.
         self.force_render()
         entry.upfront(game=self)
+        self.player.warp_drive.allowed = entry.allow_warp
+        # The level opens on a hyperspace jump: the engine roars through it,
+        # until the reveal
+        self.player.pawn.roar_engine_sound(True)
         # The player exists: centre render on it now, so a scene's loading
         # steps (see Scene.build_decomposed) already work around it
         self.recenter_render_origin()
@@ -146,6 +151,7 @@ class FlightState(BaseState):
         """
         self.loading_overlay = None
         entry.upfront(game=self)
+        self.player.warp_drive.allowed = entry.allow_warp
         self.recenter_render_origin()
         for _ in self._make_build_generator(entry):
             pass
@@ -285,6 +291,8 @@ class FlightState(BaseState):
             self.app.input_context_stack.pop()
             self._jump_context = None
         self.loading_overlay = None
+        # Out of the jump: the engine follows the throttle again
+        self.player.pawn.roar_engine_sound(False)
         self.resume()
 
     def initialize_game_structure(self):
@@ -293,8 +301,10 @@ class FlightState(BaseState):
         """
         self.app.set_background_color(0, 0, 0)
 
-        # Create a root node for the game
+        # Create a root node for the game, its frame following the player (see
+        # RenderOrigin): nodes under it are placed relative to render_origin
         self.root_node = self.app.render.attachNewNode("game_root_node")
+        self.render_origin = RenderOrigin(self.root_node)
 
         # Initialize a dictionary to hold actors and their update methods
         # {
@@ -392,19 +402,21 @@ class FlightState(BaseState):
 
     def recenter_render_origin(self):
         """
-        Offset the game root under render so the player's ship sits at the
-        render origin. Panda3D composes net transforms in float32 from render:
-        far from the world origin, the camera and the cockpit (both under the
-        ship node) would each be rounded to a coarse grid and jitter against
-        each other. The ship node and this offset are rounded from the same
-        float64 position, so they cancel exactly and everything near the player
-        gets small, precise transforms.
+        Keep the player's ship at render's origin, and every coordinate in the
+        scene graph small (see RenderOrigin): the root's frame follows the
+        player, re-based every few kilometres, and the root is offset so the
+        player sits at render's origin. Panda3D composes net transforms in
+        float32: the ship node and this offset are rounded from the same
+        float64 position, so they cancel exactly, and every other node is close
+        to the root's origin, so it is precisely placed and culled.
 
-        World coordinates are unchanged: gameplay reads positions relative to
-        root_node (collisions, HUD, weapons), never relative to render.
+        Gameplay stays in world coordinates: positions are converted at the
+        scene graph's boundary (render_origin.to_local / to_world).
         """
-        x, y, z = self.player.pawn.position
-        self.root_node.setPos(-x, -y, -z)
+        if self.render_origin.follow(self.player.pawn.position):
+            # Shifted with the root's other children, in float32: place it
+            # afresh, exactly on render's origin (the camera rides it)
+            self.player.pawn.sync_render_node()
 
     def follow_render_origin(self):
         """

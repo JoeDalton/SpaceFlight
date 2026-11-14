@@ -222,7 +222,10 @@ class Shield(Destructible):
         if shape_type not in ("sphere", "tube") or self.node is None:
             return False
         local = np.array(
-            self.node.getRelativePoint(self.game.root_node, Point3(*world_point))
+            self.node.getRelativePoint(
+                self.game.root_node,
+                Point3(*self.game.render_origin.to_local(world_point)),
+            )
         )
         if shape_type == "sphere":
             return magnitude(local) <= self.model.radius_m
@@ -261,7 +264,9 @@ class Shield(Destructible):
         self.regen_cooldown.trigger()
         self.apply_damage(damage=damage, damage_type=damage_type)
         if hit_world_point is not None:
-            self.model.add_impact(hit_world_point, self.game.root_node, now)
+            # The point in the game root's frame, given with it (see RenderOrigin)
+            local_point = Point3(*self.game.render_origin.to_local(hit_world_point))
+            self.model.add_impact(local_point, self.game.root_node, now)
 
     def apply_damage(self, damage: float, damage_type: str):
         """

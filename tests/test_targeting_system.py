@@ -15,6 +15,7 @@ from panda3d.core import NodePath
 
 from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
+from space_flight.game.render_origin import RenderOrigin
 
 
 def make_game_and_ship(team: int = 2):
@@ -25,6 +26,7 @@ def make_game_and_ship(team: int = 2):
     game.destructibles.alive_objects = []
     game.method_lists = {}
     game.root_node = NodePath("root")
+    game.render_origin = RenderOrigin(game.root_node)
     ship = SimpleNamespace(
         team=team, node=NodePath("ship"), is_dead=False, speed=np.zeros(3)
     )

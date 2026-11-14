@@ -1,5 +1,5 @@
 #version 140
-// Shared passthrough vertex shader for the hyperspace loading-screen quads.
+// Shared passthrough vertex shader for the hyperspace overlay quads.
 uniform mat4 p3d_ModelViewProjectionMatrix;
 in vec4 p3d_Vertex;
 void main() {

@@ -179,7 +179,7 @@ class _FireSmokeBuffer(ParticleBuffer):
 
         self.write_slot(
             slot_index,
-            pos=Point3(*pos),
+            pos=pos,
             spawn_delay=delay,
             velocity=Vec3(*vel),
             size=size,

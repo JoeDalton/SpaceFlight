@@ -18,6 +18,7 @@ from space_flight.actors.major_ship.hangar import HANGAR_ACTOR_SLOT_RESERVE, Han
 from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.ship import load_ship_configuration
 from space_flight.ai.formation import Formation
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.utils import rotation_matrix_coefficients
 from space_flight.weapons import ION, ION_DISABLE_DURATION_S
 from space_flight.weapons.loadout import Loadout
@@ -64,6 +65,7 @@ def make_game_and_ship(team: int = 2, free_slots: int = 50):
     game.destructibles.alive_objects = []
     game.method_lists = {}
     game.root_node = NodePath("root")
+    game.render_origin = RenderOrigin(game.root_node)
     game.game_time = FakeClock()
     game.interactions = FakeInteractions(free_slots=free_slots)
     ship = SimpleNamespace(

@@ -116,7 +116,9 @@ class SubSystem(Destructible):
         self.node = NodePath(f"{name}_node")
         self.node.reparentTo(self.mounted_on.node)
         self.node.set_pos(*relative_position)
-        self.position = np.array(self.node.getPos(self.game.root_node))
+        self.position = self.game.render_origin.to_world(
+            self.node.getPos(self.game.root_node)
+        )
 
         # Into-only collision geometry (see class docstring): a sphere, or a box
         # (whose bounding radius stands for its size wherever a radius is read)
@@ -317,7 +319,9 @@ class SubSystem(Destructible):
             self.health = 0.0
             return
         self.health = min(self.health, self.max_health)
-        self.position = np.array(self.node.getPos(self.game.root_node))
+        self.position = self.game.render_origin.to_world(
+            self.node.getPos(self.game.root_node)
+        )
 
     def get_health(self) -> float:
         """

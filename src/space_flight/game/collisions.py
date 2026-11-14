@@ -20,6 +20,7 @@ from panda3d.core import (
     CollisionTube,
     LPoint3,
     NodePath,
+    Point3,
     Vec3,
 )
 
@@ -112,6 +113,7 @@ class CollisionLayers:
     SENSOR = BitMask32.bit(0)
     SHIELD = BitMask32.bit(1)
     DESTRUCTIBLE = BitMask32.bit(2)
+    # Terrain (planets, asteroids): the only colliders with it in their into mask
     ENVIRONMENT = BitMask32.bit(3)
     DECOY = BitMask32.bit(4)
 
@@ -140,9 +142,15 @@ class CollisionLayers:
     DESTRUCTIBLE_INTO = MUNITION | SENSOR | DESTRUCTIBLE
 
     # Terrain cannot hit anything
-    # It is hit by munitions, sensors and destructibles
+    # It is hit by whatever hits the environment: munitions, sensors and
+    # destructibles
     TERRAIN_FROM = BitMask32.allOff()
-    TERRAIN_INTO = MUNITION | SENSOR | DESTRUCTIBLE
+    TERRAIN_INTO = ENVIRONMENT
+
+    # A warping ship's hull (see WarpDrive) still hits terrain, and only
+    # terrain: other ships and munitions pass through
+    WARPING_HULL_FROM = ENVIRONMENT
+    WARPING_HULL_INTO = BitMask32.allOff()
 
     # Subsystems are chunks bolted onto a ship (shield generators, turrets...).
     # Like terrain they never initiate collisions (they are rigid parts of their
@@ -345,6 +353,22 @@ class CollisionSystem:
         for entry in self.sensor_queue.entries:
             self.sensor_into_obstacle(entry)
 
+    def _world_point(self, entry: CollisionEntry) -> np.ndarray:
+        """
+        :param entry: Panda3d's description of a collision
+        :return: Its surface point, in world space, float64 (converted from the
+            game root's frame, see RenderOrigin)
+        """
+        return self._to_world(entry.getSurfacePoint(self.game.root_node))
+
+    def _to_world(self, local_point: Point3) -> np.ndarray:
+        """
+        :param local_point: A point in the game root's frame
+        :return: It in world space, float64 (a float32 Point3 would round a
+            point far from the world's origin to the metre)
+        """
+        return self.game.render_origin.to_world(local_point)
+
     def _world_normal(self, entry: CollisionEntry) -> Vec3:
         """
         :param entry: Panda3d's description of a collision
@@ -365,7 +389,9 @@ class CollisionSystem:
         self.game.app.sfx.distant_impact_hit(
             game=self.game,
             player_ship_pos=self.game.player.pawn.position,
-            hit_pos=entry.into_node_path.parent.getPos(),
+            hit_pos=self._to_world(
+                entry.into_node_path.parent.getPos(self.game.root_node)
+            ),
             impact_type=impact_type,
             is_player=munition.origin_ship_id == self.game.player.pawn.id,
         )
@@ -454,7 +480,7 @@ class CollisionSystem:
         else:
             # TODO: Mute bots shooting on bots ?
             self._distant_impact(entry, munition, "target")
-            hit_point = entry.getSurfacePoint(self.game.root_node)
+            hit_point = self._world_point(entry)
             hit_velocity = _hit_velocity(destructible)
             # Electric sparks for an ion hit; else blue ice sparks off a
             # still-raised shield, metal sparks off bare hull. All inherit the
@@ -514,20 +540,24 @@ class CollisionSystem:
             normal = Vec3(-munition.speed[0], -munition.speed[1], -munition.speed[2])
         _normalize(normal)
         if entry.hasSurfacePoint():
-            hit_point = entry.getSurfacePoint(self.game.root_node)
+            hit_point = self._world_point(entry)
         else:
             hit_point = munition.impact_position()
+        # The terrain's own queries take a point with the frame it is in
+        local_hit_point = Point3(*self.game.render_origin.to_local(hit_point))
         terrain = entry.into_node_path.python_tags["owner"]
         material_at = getattr(terrain, "material_at", None)
         if material_at is not None:
-            material = material_at(hit_point, self.game.root_node)
+            material = material_at(local_hit_point, self.game.root_node)
         else:
             material = getattr(terrain, "material", None)
         preset = _TERRAIN_SPARK_PRESET.get(material, spark_fx.ROCK)
         self.game.spark_fx_pool.spawn(
             position=hit_point,
             normal=normal,
-            base_velocity=_surface_velocity(terrain, hit_point, self.game.root_node),
+            base_velocity=_surface_velocity(
+                terrain, local_hit_point, self.game.root_node
+            ),
             preset=preset,
         )
 
@@ -632,7 +662,7 @@ class CollisionSystem:
 
         # The shield absorbs the hit. Pass the world-space impact point so the
         # bubble can flash where the munition struck.
-        hit_point = entry.getSurfacePoint(self.game.root_node)
+        hit_point = self._world_point(entry)
         shield.take_hit(
             damage=munition.power,
             normal_world_vector=normal,
@@ -755,9 +785,10 @@ class CollisionSystem:
         normal = self._world_normal(entry)
         surface_velocity = np.zeros(3)
         if getattr(terrain_into, "velocity_at", None) is not None:
-            hit_point = entry.getSurfacePoint(self.game.root_node)
+            # The terrain's own query takes a point with the frame it is in
+            local_hit_point = entry.getSurfacePoint(self.game.root_node)
             surface_velocity = _surface_velocity(
-                terrain_into, hit_point, self.game.root_node
+                terrain_into, local_hit_point, self.game.root_node
             )
         normal_relative_velocity = np.dot(normal, ship_from.speed - surface_velocity)
 
@@ -967,7 +998,7 @@ class CollisionSystem:
         # Register collision in sensor, tagged with which look-ahead sphere saw it
         # (so the sensor can ignore the outer sphere when its reach is shortened).
         normal = entry.getSurfaceNormal(self.game.root_node)
-        hit_point = entry.getSurfacePoint(self.game.root_node)
+        hit_point = self._world_point(entry)
         sensor_range = entry.from_node_path.python_tags.get("sensor_range", 1)
         sensor.record_obstacle(
             {"normal": normal, "hit_point": hit_point, "range": sensor_range}

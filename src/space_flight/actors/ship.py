@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import yaml
-from panda3d.core import NodePath, Quat, Vec3
+from panda3d.core import AudioSound, NodePath, Quat, Vec3
 
 from space_flight import (
     DATAFILES_PATH,
@@ -16,6 +16,8 @@ from space_flight import (
     RIGHT_BODY,
     THROTTLE_BOOST_VALUE,
     UP_BODY,
+    WARP_RELAX_MIN_FRAMES,
+    WARP_RELAX_TIME_S,
 )
 from space_flight.actors.pawn import Pawn
 from space_flight.actors.ship_model import ShipModel
@@ -53,6 +55,9 @@ ENGINE_SPUTTER_MAX_DEPTH = 0.6
 # the running loop, slowed down and muffled
 ENGINE_OFFLINE_PLAY_RATE = 0.5
 ENGINE_OFFLINE_VOLUME_FACTOR = 0.3
+# The throttle the engine sound follows during a hyperspace jump (see
+# roar_engine_sound): full thrust, whatever the ship's real throttle
+JUMP_ENGINE_SOUND_THROTTLE = 1.0
 # Reference scales normalising the placeholder mobility blend (see _compute_mobility)
 MOBILITY_REFERENCE_SPEED_MPS = 200.0
 MOBILITY_REFERENCE_TURN_RATE_RADPS = np.deg2rad(80.0)
@@ -157,6 +162,13 @@ class Ship(Pawn):
     X axis is to the right, Z axis is up
     """
 
+    # Warp flight model (see compute_derivatives, set by WarpDrive): the speed
+    # the ship is pulled to along its nose while warping, None in normal flight
+    warp_target_speed_mps: float | None = None
+    # The throttle the engine sound follows instead of the ship's (see
+    # roar_engine_sound), None to follow the ship's
+    engine_sound_throttle: float | None = None
+
     def __init__(
         self,
         game: FlightState,
@@ -234,7 +246,7 @@ class Ship(Pawn):
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
         self.node.reparentTo(self.game.root_node)
-        self.node.set_pos(*ini_position)
+        self.node.set_pos(*self.game.render_origin.to_local(ini_position))
         self.node.set_quat(Quat(*ini_orientation))
 
         # Setup state vector
@@ -287,7 +299,8 @@ class Ship(Pawn):
         # _on_engines_online_changed)
         self.is_engine_sound_online = True
         # The player hears its interior loop, everyone else the exterior one
-        if self.parent.name == "player":
+        is_player = self.parent.name == "player"
+        if is_player:
             sound_key, asset_type, volume = "interior_engine_sound", "sound", 0.1
         elif "exterior_engine_sound" in self.conf:
             sound_key, asset_type, volume = "exterior_engine_sound", "3d_sound", 10.0
@@ -297,6 +310,9 @@ class Ship(Pawn):
             self.sound_pool = self.game.app.asset_manager.get_asset(
                 asset_type=asset_type,
                 path=DATAFILES_PATH / self.conf[sound_key],
+                # The player's loop is a cockpit sound, heard even while
+                # warping (see SFX)
+                interior=is_player,
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)
@@ -320,10 +336,28 @@ class Ship(Pawn):
     def _play_engine_sound(self):
         """
         Start the engine loop, unless the ship was cleaned before the delay
-        ran out (its sound is then back in the pool and must stay silent)
+        ran out (its sound is then back in the pool and must stay silent), or
+        it already runs (started early by roar_engine_sound: playing it again
+        would restart it)
         """
-        if self.sound is not None:
+        if self.sound is not None and self.sound.status() != AudioSound.PLAYING:
             self.sound.play()
+
+    def roar_engine_sound(self, roaring: bool):
+        """
+        Run the engine sound at full thrust whatever the throttle, for the
+        length of a hyperspace jump, or back to following the throttle.
+
+        Applied at once, and the loop started if it does not run yet: the jump
+        of the loading screen plays before the game (and its engine updates)
+        runs.
+
+        :param roaring: Whether a jump starts (else it is over)
+        """
+        self.engine_sound_throttle = JUMP_ENGINE_SOUND_THROTTLE if roaring else None
+        if roaring and self.sound is not None:
+            self._play_engine_sound()
+            self.adjust_engine_pitch(throttle=JUMP_ENGINE_SOUND_THROTTLE)
 
     def _compute_max_speed_mps(self) -> float:
         """
@@ -333,6 +367,31 @@ class Ship(Pawn):
         :return: The top speed, in m/s
         """
         return np.sqrt(self.max_thrust_n / self.drag_factor)
+
+    def forward_thrust_n(self, throttle: float) -> float:
+        """
+        The thrust of a throttle command at or above ZERO_THRUST_POSITION: the
+        throttle is squared so the velocity is easier to modulate, and scaled by
+        thrust_factor().
+
+        :param throttle: Throttle command, at least ZERO_THRUST_POSITION
+        :return: The thrust, in N
+        """
+        return (
+            ((throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)) ** 2
+            * self.max_thrust_n
+            * self.thrust_factor()
+        )
+
+    def cruise_speed_mps(self, throttle: float) -> float:
+        """
+        The speed the ship settles at, flying straight at a constant throttle:
+        where its thrust balances drag.
+
+        :param throttle: Throttle command, at least ZERO_THRUST_POSITION
+        :return: The speed, in m/s
+        """
+        return float(np.sqrt(self.forward_thrust_n(throttle) / self.drag_factor))
 
     def _build_damage_fx(self) -> DamageFX | None:
         """
@@ -456,11 +515,7 @@ class Ship(Pawn):
 
         if throttle >= ZERO_THRUST_POSITION:
             # Thrust is positive
-            scalar_thrust_n = (
-                ((throttle - ZERO_THRUST_POSITION) / (1 - ZERO_THRUST_POSITION)) ** 2
-                * self.max_thrust_n
-                * self.thrust_factor()
-            )
+            scalar_thrust_n = self.forward_thrust_n(throttle)
         else:
             if FLIGHT_MODEL == "airplane" and not engines_online:
                 scalar_thrust_n = 0
@@ -524,6 +579,10 @@ class Ship(Pawn):
         r00, r01, r02, r10, r11, r12, r20, r21, r22 = (
             self._compute_attitude_derivative()
         )
+
+        if self.warp_target_speed_mps is not None:
+            self._compute_warp_acceleration()
+            return
 
         # Compute derivative of speed with forces:
         # Thrust is aligned with ship direction
@@ -619,6 +678,33 @@ class Ship(Pawn):
         # to zero on the first frame nothing applies it.
         self.external_force_n = np.zeros(3)
 
+    def _compute_warp_acceleration(self):
+        """
+        The warp flight model: no thrust, lift nor drag, the velocity relaxes
+        towards warp_target_speed_mps along the nose, in WARP_RELAX_TIME_S.
+        Impacts and external forces still apply.
+
+        Still integrated like any state, so the ship really moves (collisions,
+        terrain, waypoints...). The relaxation is a first-order lag: the
+        integrator (Adams-Bashforth 2) stays stable while a frame is shorter
+        than its time constant, so the time constant is stretched to a frame
+        and a half when the frame rate drops. See also WarpDrive for why
+        WARP_SPEED_PER_ALTITUDE * WARP_RELAX_TIME_S must stay under 0.25.
+        """
+        dt = self.game.game_time.get_time_step()
+        relax_time_s = max(WARP_RELAX_TIME_S, WARP_RELAX_MIN_FRAMES * dt)
+        target_velocity = self.warp_target_speed_mps * self.forward
+        self.thrust_n = np.zeros(3)
+        self.drag_n = np.zeros(3)
+        self.lift_n = np.zeros(3)
+        self.lift_body_n = np.zeros(3)
+        self.acceleration_mps2 = (target_velocity - self.speed) / relax_time_s + (
+            self.impact_force_n + self.external_force_n
+        ) / self.mass_kg
+        self.state_dot[7:10] = self.acceleration_mps2
+        # Consumed, as in the normal flight model
+        self.external_force_n = np.zeros(3)
+
     def _compute_attitude_derivative(self) -> tuple[float, ...]:
         """
         Compute the derivative of the orientation from the body rates, and the
@@ -697,9 +783,10 @@ class Ship(Pawn):
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-    def _sync_render_node(self):
-        """Move the render node to the ship's pose."""
-        self.node.setPos(*self.position)
+    def sync_render_node(self):
+        """Move the render node to the ship's pose (in the game root's frame,
+        see RenderOrigin)."""
+        self.node.setPos(*self.game.render_origin.to_local(self.position))
         self.node.setQuat(Quat(*self.orientation))
 
     def _attach_hull_collider(self):
@@ -734,7 +821,13 @@ class Ship(Pawn):
         """
         if np.all(np.isfinite(self.state)):
             speed_norm = magnitude(self.speed)
-            if speed_norm > DIVERGENCE_SPEED_FACTOR * self.max_speed_mps:
+            # A warping ship is meant to be far past its top speed (its warp
+            # flight model cannot diverge)
+            warping = self.warp_target_speed_mps is not None
+            if (
+                not warping
+                and speed_norm > DIVERGENCE_SPEED_FACTOR * self.max_speed_mps
+            ):
                 LOGGER.warning(
                     "Ship %s speed %.3g m/s is diverging; snapping to terminal.",
                     getattr(self.parent, "name", "?"),
@@ -786,7 +879,7 @@ class Ship(Pawn):
         self.adjust_engine_pitch(throttle=throttle)
 
         # Update render
-        self._sync_render_node()
+        self.sync_render_node()
 
     @property
     def is_dying(self) -> bool:
@@ -844,7 +937,7 @@ class Ship(Pawn):
 
         # Same physics + render update as move(), without set_inputs.
         self.move_ship_physics()
-        self._sync_render_node()
+        self.sync_render_node()
 
     def hold_step(
         self,
@@ -880,7 +973,9 @@ class Ship(Pawn):
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
         self._register_integrator()
-        self.node.setPos(*(self.position + offset_m * self.forward))
+        self.node.setPos(
+            *self.game.render_origin.to_local(self.position + offset_m * self.forward)
+        )
         self.node.setQuat(Quat(*self.orientation))
 
     def take_hit(
@@ -949,9 +1044,12 @@ class Ship(Pawn):
         running and offline versions as the engines stop or restart
 
         :param throttle: The throttle value of the ship [0, 1], above 1 for boost
+            (overridden by engine_sound_throttle while jumping)
         """
         if self.sound is None:
             return
+        if self.engine_sound_throttle is not None:
+            throttle = self.engine_sound_throttle
         engines_online = self.engines_online()
         if engines_online != self.is_engine_sound_online:
             self.is_engine_sound_online = engines_online

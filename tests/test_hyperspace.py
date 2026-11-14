@@ -28,6 +28,7 @@ from space_flight.actors.player import Player
 from space_flight.actors.ship import Ship
 from space_flight.ai.interactions import Interactions
 from space_flight.game.collisions import CollisionLayers
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.game.scenario import Mission, WaveSpec
 from space_flight.utils.state_machine import DyingPhase
 
@@ -257,7 +258,9 @@ def make_ship_for_hold_step():
     ship.lateral_lift_factor = 0.0
     ship.lift_inefficiency = 0.0
     ship.max_thrust_n = 1000.0
-    ship.game = SimpleNamespace(integrator=MagicMock())
+    ship.game = SimpleNamespace(
+        integrator=MagicMock(), render_origin=RenderOrigin(NodePath("root"))
+    )
     ship.game.integrator.set_state_variables.return_value = 7
     return ship
 
@@ -325,6 +328,7 @@ def test_the_player_cannot_target_an_actor_in_hyperspace(target_filter):
     player = object.__new__(Player)
     player.target_filter = target_filter
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.interactions.alive = np.ones(3, dtype=bool)
     game.interactions.live_actors = [
         SimpleNamespace(category="fighter", in_hyperspace=False),  # the player
@@ -351,6 +355,7 @@ def make_bot(bot_type="fighter"):
     bot.pawn = MagicMock()
     bot.tactician = MagicMock()
     bot.game = MagicMock()
+    bot.game.render_origin = RenderOrigin(NodePath("root"))
     bot.game.game_time.get_current_time.return_value = 0.0
     bot._dying = DyingPhase(clock=lambda: 0.0)
     bot._next_think_s = 5.0
@@ -500,6 +505,7 @@ class Part(Destructible):
 @pytest.fixture
 def parts_game():
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.destructibles = Destructibles(on_death=MagicMock())
     game.method_lists = {}
     return game

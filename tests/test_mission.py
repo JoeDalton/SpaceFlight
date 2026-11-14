@@ -6,6 +6,7 @@ conditions and scanning.
 """
 
 import uuid
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -268,6 +269,23 @@ def test_objectives_are_frozen_once_the_level_ends(game, mission):
     advance(game, mission, LEVEL_END_DELAY_S + 1)
 
     assert objective.active()
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+def test_allow_warp_sets_the_player_warp_drive(game, mission, allowed):
+    game.player.warp_drive = SimpleNamespace(allowed=not allowed)
+
+    mission.allow_warp(allowed)
+
+    assert game.player.warp_drive.allowed is allowed
+
+
+def test_allow_warp_allows_by_default(game, mission):
+    game.player.warp_drive = SimpleNamespace(allowed=False)
+
+    mission.allow_warp()
+
+    assert game.player.warp_drive.allowed is True
 
 
 def test_player_waypoints_replaces_the_previous_route(game, mission, spawned):

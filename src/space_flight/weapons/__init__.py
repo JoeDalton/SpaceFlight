@@ -29,8 +29,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from direct.interval.IntervalGlobal import LerpPosInterval
-from panda3d.core import LVector3, NodePath, Point3, TransparencyAttrib
+from panda3d.core import NodePath, Point3, TransparencyAttrib
 
 from space_flight import DEBUG_DELETION
 from space_flight.game.kills import DamageSource
@@ -262,12 +261,14 @@ class Munition:
         # inside a shield bubble through it
         self.launch_position = np.array(start_position, dtype=float)
 
-        # Visual node (built by the subclass), placed and set coasting here.
+        # Visual node (built by the subclass), placed here and set coasting by
+        # move(), every frame: from its launch, in float64 world coordinates,
+        # converted to the game root's frame (see RenderOrigin). An interval in
+        # the root's frame would jump when the frame is re-based.
+        self.launch_time_s = self.game.game_time.get_current_time()
         self.shot = self._build_visual(start_position)
-        self.shot.set_pos(start_position)
-        end_position = start_position + LVector3(*(self.speed * life_time_s))
-        movement_interval = LerpPosInterval(self.shot, life_time_s, end_position)
-        self.game.interval_manager.play_interval(movement_interval)
+        self.shot.set_pos(*self.game.render_origin.to_local(self.launch_position))
+        self.game.method_lists[self.id] = [self.move]
 
         # Collider (built by the subclass as a child of the visual, so removing the
         # visual removes the collider too).
@@ -280,6 +281,17 @@ class Munition:
             name=f"Clean{type(self).__name__}",
             method=self.clean,
         )
+
+    def world_position(self) -> np.ndarray:
+        """:return: Where the munition is now, coasting from its launch"""
+        elapsed_s = self.game.game_time.get_current_time() - self.launch_time_s
+        return self.launch_position + self.speed * elapsed_s
+
+    def move(self):
+        """Per frame: place the visual (and its collider) where it has coasted."""
+        if self.shot is None or self.shot.isEmpty():
+            return
+        self.shot.set_pos(*self.game.render_origin.to_local(self.world_position()))
 
     def _build_visual(self, start_position: Point3) -> NodePath:
         """
@@ -308,11 +320,11 @@ class Munition:
         """
         self.shot.removeNode()
 
-    def impact_position(self) -> Point3:
+    def impact_position(self) -> np.ndarray:
         """
-        :return: The munition's current position, in the game root's frame
+        :return: The munition's current position, world frame (float64)
         """
-        return self.shot.getPos(self.game.root_node)
+        return self.game.render_origin.to_world(self.shot.getPos(self.game.root_node))
 
     def clean(self, remove_from_game_objects: bool = True):
         """
@@ -323,6 +335,8 @@ class Munition:
             game cleanup, which iterates that registry itself.
         """
         self._clean_extra()
+        if self.game.method_lists is not None:
+            self.game.method_lists.pop(self.id, None)
         with contextlib.suppress(AttributeError):
             self.collider_np.setPythonTag("owner", None)
         self.collider_np = None

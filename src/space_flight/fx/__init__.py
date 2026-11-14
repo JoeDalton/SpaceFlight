@@ -26,7 +26,8 @@ columns:
 ==============  =====  =========================================================
 Column          Type   Content
 ==============  =====  =========================================================
-``vertex``      vec3   World-space spawn position (bias applied CPU-side).
+``vertex``      vec3   Spawn position relative to the buffer's anchor (bias
+                       applied CPU-side), see below.
 ``corner``      vec2   Corner selector: one of (-1,-1) (1,-1) (1,1) (-1,1).
 ``spawn_time``  float  Buffer-clock time at which the particle becomes active
                        (includes any spawn delay).
@@ -54,6 +55,15 @@ particle's state each frame from the spawn parameters:
 :meth:`ParticleBuffer.update` pushes three uniforms every frame: ``uTime``,
 ``uCamRight``, ``uCamUp``.
 
+Anchor
+------
+Spawn positions are written relative to the buffer's world **anchor**, and its
+node is placed at the anchor in the game root's frame (see
+:class:`~space_flight.game.render_origin.RenderOrigin`): float32 vertex data
+stays small, so precise, wherever in the world the particles are. A particle
+spawned more than ANCHOR_REACH_M from the anchor moves the anchor onto it, the
+live particles' positions rewritten to keep them where they are.
+
 Implementation notes
 --------------------
 - ``setTransparency(MAlpha)`` must be called **before** ``setShader()`` or
@@ -72,6 +82,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 from panda3d.core import (
     BitMask32,
     CardMaker,
@@ -83,6 +94,7 @@ from panda3d.core import (
     GeomVertexArrayFormat,
     GeomVertexData,
     GeomVertexFormat,
+    GeomVertexRewriter,
     GeomVertexWriter,
     InternalName,
     OmniBoundingVolume,
@@ -115,6 +127,11 @@ CORNERS = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
 
 #: Triangle indices that tile the four corners into two CCW triangles.
 TRIS = [0, 1, 2, 0, 2, 3]
+
+#: A particle spawned this far from its buffer's anchor moves the anchor (see
+#: the module's Anchor section): spawn positions stay within a couple of
+#: kilometres, a tenth of a millimetre of float32 precision.
+ANCHOR_REACH_M = 2000.0
 
 
 #: Billboard columns present in every particle format. vertex is the standard
@@ -256,6 +273,10 @@ class ParticleBuffer:
         gn.addGeom(geom)
 
         self.node_path = self.game.root_node.attachNewNode(gn)
+        # Spawn positions are relative to this world point (see the module's
+        # Anchor section)
+        self.anchor = np.array(self.game.render_origin.origin, dtype=float)
+        self.node_path.setPos(*self.game.render_origin.to_local(self.anchor))
 
         # --- Render state ---
         # IMPORTANT: setTransparency must come before setShader; otherwise
@@ -340,7 +361,9 @@ class ParticleBuffer:
 
         :param slot_index:    Index into slots / vertex buffer to overwrite.
         :param pos:           World-space spawn position (positional bias already
-                              applied by the caller).
+                              applied by the caller), float64 (a float32
+                              Point3 far from the world's origin would be
+                              rounded to the metre).
         :param spawn_delay:   Seconds before the particle becomes visible
                               (stored as spawn_time = time + spawn_delay, so
                               the shader's age is negative until then).
@@ -349,6 +372,11 @@ class ParticleBuffer:
         :param columns:       One value per effect column, keyed by column name.
                               Must include lifetime.
         """
+        pos = np.asarray(pos, dtype=float)
+        if np.linalg.norm(pos - self.anchor) > ANCHOR_REACH_M:
+            self.move_anchor(pos)
+        local = pos - self.anchor
+
         now = self.time
         base_v = slot_index * 4
         # spawn_time is stored as an absolute clock value. The shader computes
@@ -366,7 +394,7 @@ class ParticleBuffer:
             writer.setRow(base_v)
 
         for cx, cy in CORNERS:
-            w_vertex.addData3(pos)
+            w_vertex.addData3(local[0], local[1], local[2])
             w_corner.addData2(cx, cy)
             w_spawn.addData1(spawn_t)
             for name, value in columns.items():
@@ -376,6 +404,29 @@ class ParticleBuffer:
         # Reserve the slot for delay + lifetime so alloc_slot() does not reclaim
         # it before the particle has even appeared on screen.
         self.slots[slot_index] = (now, duration + spawn_delay)
+
+    def move_anchor(self, anchor: np.ndarray):
+        """
+        Move the buffer's anchor, keeping its live particles where they are in
+        the world: their spawn positions are rewritten relative to it.
+
+        :param anchor: The new anchor, world frame
+        """
+        anchor = np.asarray(anchor, dtype=float)
+        shift = self.anchor - anchor
+        now = self.time
+        rewriter = GeomVertexRewriter(self.vdata, "vertex")
+        for slot_index, slot in enumerate(self.slots):
+            if slot is None or now - slot[0] >= slot[1]:
+                continue  # dead: its position does not matter
+            rewriter.setRow(slot_index * 4)
+            for _ in CORNERS:
+                old = rewriter.getData3()
+                rewriter.setData3(
+                    old[0] + shift[0], old[1] + shift[1], old[2] + shift[2]
+                )
+        self.anchor = anchor
+        self.node_path.setPos(*self.game.render_origin.to_local(anchor))
 
     # ------------------------------------------------------------------
     # Per-frame update

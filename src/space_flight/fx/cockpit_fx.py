@@ -294,7 +294,9 @@ class CockpitFX:
         base_velocity = np.asarray(pawn.speed, dtype=float)
         count = min(_SPARK_COUNT[tier], len(self._emitters))
         for local_pos, local_normal in random.sample(self._emitters, count):
-            world_pos = np.array(mat.xformPoint(Point3(*local_pos)), dtype=float)
+            world_pos = self.game.render_origin.to_world(
+                mat.xformPoint(Point3(*local_pos))
+            )
             world_normal = np.array(mat.xformVec(Vec3(*local_normal)), dtype=float)
             # Reuse the shared hit-spark pool/shader, scaled down for close range.
             self.game.spark_fx_pool.spawn(

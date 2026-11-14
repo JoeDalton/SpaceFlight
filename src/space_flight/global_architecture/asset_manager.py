@@ -98,12 +98,38 @@ COMMON_ASSETS_TO_LOAD: dict[Path, dict[str, Any]] = {
     DATAFILES_PATH / "sounds/engines/a-wing/aw_ext_med.ogg": {"type": "3d_sound"},
     DATAFILES_PATH / "sounds/engines/x-wing/xw_ext_med.ogg": {"type": "3d_sound"},
     DATAFILES_PATH / "sounds/engines/y-wing/yw_ext_med.ogg": {"type": "3d_sound"},
-    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_high.ogg": {"type": "sound"},
-    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_med.ogg": {"type": "sound"},
-    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_low.ogg": {"type": "sound"},
-    DATAFILES_PATH / "sounds/engines/a-wing/aw_int_med.ogg": {"type": "sound"},
-    DATAFILES_PATH / "sounds/engines/x-wing/xw_int_med.ogg": {"type": "sound"},
-    DATAFILES_PATH / "sounds/engines/y-wing/yw_int_med.ogg": {"type": "sound"},
+    DATAFILES_PATH / "sounds/engines/common/jump_hyperspace.wav": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/common/abort_hyperspace.wav": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_high.ogg": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_med.ogg": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/tie_common/tie_int_low.ogg": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/a-wing/aw_int_med.ogg": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/x-wing/xw_int_med.ogg": {
+        "type": "sound",
+        "interior": True,
+    },
+    DATAFILES_PATH / "sounds/engines/y-wing/yw_int_med.ogg": {
+        "type": "sound",
+        "interior": True,
+    },
     # Planet sprite (large PNG — preload so the level build never blocks on it;
     # loadTexture caches by path, so Planet2D's own load becomes a cache hit)
     DATAFILES_PATH / "sprites/planets_2d/terran.png": {"type": "texture"},
@@ -143,6 +169,7 @@ class AssetManager:
         path: Path,
         pattern: str = "",
         flatten: bool | None = None,
+        interior: bool | None = None,
     ) -> Any:
         """
         Returns the cached asset for *path*, loading and caching it first if needed
@@ -154,6 +181,9 @@ class AssetManager:
             :meth:`load_single_asset`); None = its COMMON_ASSETS_TO_LOAD flag,
             True for a path not listed. A cached model is returned as it was
             cached: the path's flag decides it once.
+        :param interior: Whether a sound loaded now is a cockpit one (see
+            :meth:`load_single_asset`); None = its COMMON_ASSETS_TO_LOAD flag,
+            False for a path not listed
         :return: The model, cube map, :class:`TexturePool` or :class:`SoundPool`
         """
         try:
@@ -161,11 +191,17 @@ class AssetManager:
             asset = self.assets[path]
         except KeyError:
             # Load it, store it and return it
+            listed = COMMON_ASSETS_TO_LOAD.get(Path(path), {})
             if flatten is None:
-                listed = COMMON_ASSETS_TO_LOAD.get(Path(path), {})
                 flatten = listed.get("flatten", True)
+            if interior is None:
+                interior = listed.get("interior", False)
             self.load_single_asset(
-                asset_type=asset_type, path=path, pattern=pattern, flatten=flatten
+                asset_type=asset_type,
+                path=path,
+                pattern=pattern,
+                flatten=flatten,
+                interior=interior,
             )
             asset = self.assets[path]
         return asset
@@ -208,6 +244,7 @@ class AssetManager:
                 path=path,
                 pattern=spec.get("pattern", ""),
                 flatten=spec.get("flatten", True),
+                interior=spec.get("interior", False),
             )
         # Update progress
         progress = (
@@ -217,7 +254,12 @@ class AssetManager:
         return task.cont
 
     def load_single_asset(
-        self, asset_type: str, path: Path, pattern: str = "", flatten: bool = True
+        self,
+        asset_type: str,
+        path: Path,
+        pattern: str = "",
+        flatten: bool = True,
+        interior: bool = False,
     ):
         """
         Loads an asset from file into the cache
@@ -231,10 +273,16 @@ class AssetManager:
             for a ship drawn in several passes, but its inner nodes are gone:
             False for a model whose nodes are looked up or moved (a turret's
             joints, a GUI map's named parts)
+        :param interior: For a "sound", whether it is one of the player's
+            cockpit sounds, on SFX's interior manager (see SoundPool)
         """
         if asset_type in ("sound", "3d_sound"):
             self.assets[path] = SoundPool(
-                app=self.app, path=path, pattern=pattern, is_3d=asset_type == "3d_sound"
+                app=self.app,
+                path=path,
+                pattern=pattern,
+                is_3d=asset_type == "3d_sound",
+                interior=interior,
             )
         elif asset_type == "model":
             try:

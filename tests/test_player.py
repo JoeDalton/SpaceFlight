@@ -92,6 +92,7 @@ def make_player_for_head_physics(
 
     player.pawn = MagicMock()
     player.pawn.mass_kg = pawn_mass_kg
+    player.pawn.warp_target_speed_mps = None  # not warping
     player.pawn.state_dot = (
         np.zeros(10) if pawn_state_dot is None else pawn_state_dot.copy()
     )
@@ -598,6 +599,46 @@ def test_compute_head_acceleration_stores_result_on_player():
     assert not np.allclose(player.head_acceleration_mps2, np.zeros(3))
 
 
+def test_compute_head_acceleration_ignores_the_ship_while_warping():
+    """Warp accelerations would throw the head out of the cockpit."""
+    state_dot = np.zeros(10)
+    state_dot[7:10] = [0.0, 3.0e6, 0.0]
+    player = make_player_for_head_physics(pawn_state_dot=state_dot)
+    player.pawn.warp_target_speed_mps = 1.0e6
+
+    player.compute_head_acceleration()
+
+    np.testing.assert_allclose(player.head_acceleration_mps2, np.zeros(3))
+
+
+def test_compute_head_acceleration_still_feels_impacts_while_warping():
+    player = make_player_for_head_physics(
+        pawn_impact_force_n=np.array([500.0, 0.0, 0.0])
+    )
+    player.pawn.warp_target_speed_mps = 1.0e6
+
+    player.compute_head_acceleration()
+
+    assert player.head_acceleration_mps2[0] != 0.0
+
+
+def test_compute_head_acceleration_does_not_mutate_pawn_state_dot():
+    """
+    The amplified impact feeling is for the head only: the pawn's state
+    derivative, which the integrator consumes, must not be modified.
+    """
+    state_dot = np.zeros(10)
+    state_dot[7:10] = [1.0, 2.0, 3.0]
+    player = make_player_for_head_physics(
+        pawn_state_dot=state_dot,
+        pawn_impact_force_n=np.array([500.0, 0.0, 0.0]),
+    )
+
+    player.compute_head_acceleration()
+
+    np.testing.assert_array_equal(player.pawn.state_dot, state_dot)
+
+
 # ---------------------------
 # compute_head_position
 # ---------------------------
@@ -649,3 +690,68 @@ def test_compute_head_position_passes_correct_state_to_integrator():
     expected_derivative = np.concatenate([velocity, acceleration])
     np.testing.assert_array_equal(call_kwargs["state"], expected_state)
     np.testing.assert_array_equal(call_kwargs["state_derivative"], expected_derivative)
+
+
+# ---------------------------
+# Warp: flight commands within the drive's limits
+# ---------------------------
+
+
+def make_player_for_flight(warp_throttle=None, warp_turn_factor=1.0) -> Player:
+    """A Player stub flying with given commands and a stub warp drive."""
+    player = object.__new__(Player)
+    player.game = MagicMock()
+    player.game.headless = True
+    player.game.game_time.get_time_step.return_value = 0.02
+    player.has_ai = False
+    player._dying = MagicMock(is_dying=False)
+    player.record = False
+    player.pawn = MagicMock()
+    player.throttle = 0.9
+    player.yaw_rate = 0.4
+    player.pitch_rate = -0.8
+    player.roll_rate = 1.0
+    player.warp_key_held = True
+    player.warp_drive = MagicMock(
+        throttle=warp_throttle, turn_rate_factor=warp_turn_factor
+    )
+    return player
+
+
+def test_flight_commands_are_the_player_s_when_not_jumping():
+    player = make_player_for_flight()
+
+    assert player.flight_commands() == (0.9, 0.4, -0.8, 1.0)
+
+
+def test_flight_commands_are_limited_while_jumping():
+    player = make_player_for_flight(warp_throttle=0.5, warp_turn_factor=0.25)
+
+    throttle, yaw, pitch, roll = player.flight_commands()
+
+    assert throttle == 0.5
+    assert (yaw, pitch, roll) == pytest.approx((0.1, -0.2, 0.25))
+
+
+def test_move_player_updates_the_drive_before_the_ship_moves():
+    player = make_player_for_flight(warp_throttle=0.5, warp_turn_factor=0.25)
+    order = MagicMock()
+    player.warp_drive.update = order.update
+    player.pawn.move = order.move
+
+    player.move_player()
+
+    assert [c[0] for c in order.mock_calls] == ["update", "move"]
+    order.update.assert_called_once_with(key_held=True, dt=0.02)
+    assert order.move.call_args.kwargs["throttle"] == 0.5
+    assert order.move.call_args.kwargs["roll_rate"] == pytest.approx(0.25)
+
+
+def test_begin_death_stops_any_jump():
+    player = make_player_for_flight()
+    player._dying = MagicMock()
+    player._dying.begin.return_value = True
+
+    player.begin_death()
+
+    player.warp_drive.stop.assert_called_once_with()

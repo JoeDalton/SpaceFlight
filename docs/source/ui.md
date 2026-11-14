@@ -107,7 +107,11 @@ missile as the pause menu resumes the flight. Concrete contexts:
   `fire_secondary` (the selected bomb, rocket or missile launcher, while
   held), `cycle_secondary` (on press) and `drop_flare` (while held); held
   launches are paced by each launcher's reload, and a newly selected launcher
-  reloads before it can fire. Energy distribution (see
+  reloads before it can fire. `warp` is passed to the player while held (see
+  [`WarpDrive`](actors.md#warpdrive--the-players-local-warp)). While a jump
+  is under way, the weapons and boost are off, and the throttle is held at
+  cruise (`hold_throttle`). It stays there after the drop out until a throttle
+  control moves. Energy distribution (see
   [docs/actors.md](actors.md#energy-management)) is set on press by
   `energy_engines`, `energy_lasers`, `energy_shields` and `energy_balanced`
   (keyboard 1-4), or cycled by `cycle_energy` (gamepad, joystick): balanced,
@@ -184,7 +188,9 @@ missile as the pause menu resumes the flight. Concrete contexts:
   strength at its centre, absent on unshielded ships), engines (green, speed
   at its centre, or `OFFLINE` while the engines are dead, see
   [energy management](actors.md#energy-management)) and lasers (red, laser
-  charge at its centre). The gauge
+  charge at its centre). The speed is written in km/s from 10 km/s
+  (`format_speed`). The engine gauge blinks three times when a warp is refused
+  for want of altitude (`refused_warp_gauge_shown`). The gauge
   of the system power is redirected to is bigger, brighter and outlined in
   white. Its layout, colours, brightness and scale are module constants.
 - **`AimHUD`** — the aiming cues, placed each frame by projecting world

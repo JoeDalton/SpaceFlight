@@ -13,8 +13,10 @@ import pytest
 from energy_fakes import make_energy_system
 from panda3d.core import NodePath, PerspectiveLens, Point3, Vec3
 
+from space_flight import WARP_REFUSED_BLINK_PERIOD_S, WARP_REFUSED_BLINKS
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
 from space_flight.ai.missile.incoming_missile import IncomingMissile
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
     CHATTER,
@@ -33,6 +35,7 @@ from space_flight.ui.hud import (
     HINT,
     HINT_DISPLAY_S,
     HUD,
+    KMPS_FROM_MPS,
     MIN_PROJECTION_DEPTH,
     MISSILE_WARNING_MAX_BLINK_PERIOD_S,
     MISSILE_WARNING_MIN_BLINK_PERIOD_S,
@@ -47,12 +50,14 @@ from space_flight.ui.hud import (
     ObjectivesHUD,
     OrdnanceHUD,
     ScenarioText,
+    format_speed,
     gauge_brightness,
     is_on_screen,
     missile_warning_blink_period_s,
     missile_warning_text,
     pin_to_screen_edge,
     project_to_screen,
+    refused_warp_gauge_shown,
 )
 
 # ---------------------------
@@ -157,6 +162,7 @@ def make_aim_hud() -> AimHUD:
     """
     aim_hud = object.__new__(AimHUD)
     aim_hud.game = MagicMock()
+    aim_hud.game.render_origin = RenderOrigin(NodePath("root"))
     aim_hud.show_lead_indicator = True
     app = aim_hud.game.app
     app.camLens = PerspectiveLens()
@@ -345,6 +351,7 @@ def test_disabled_lead_indicator_is_never_shown():
 def test_aim_hud_reads_the_lead_indicator_setting(enabled):
     """The AimHUD reads whether to show the lead indicator once, when built."""
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.app.gameplay_settings.config = {"player": {"lead_indicator": enabled}}
 
     with (
@@ -440,6 +447,7 @@ def test_aim_hud_builds_hidden_and_cleans_up(spaceflight_app):
     1.5 times the lead indicator's size, and clean() removes its nodes.
     """
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.app.loader = spaceflight_app.loader
     aim_hud = AimHUD(game=game)
     missile_warning_line = aim_hud.missile_warning_line
@@ -679,7 +687,12 @@ def make_energy_hud(has_shields: bool = True) -> tuple[EnergyHUD, SimpleNamespac
         speed=np.array([0.0, 120.4, 0.0]),
         energy=make_energy_system(has_shields=has_shields),
     )
-    game = SimpleNamespace(player=SimpleNamespace(pawn=pawn))
+    game = SimpleNamespace(
+        player=SimpleNamespace(
+            pawn=pawn, warp_drive=SimpleNamespace(refused_at_s=None)
+        ),
+        game_time=SimpleNamespace(get_current_time=lambda: 10.0),
+    )
     return EnergyHUD(game=game, parent_node=NodePath("corner")), pawn
 
 
@@ -1098,8 +1111,51 @@ def test_fps_counter_text_is_only_set_when_it_changes(shown, set_again):
     hud.fps_counter = MagicMock()
     hud.fps_counter.getText.return_value = shown
     hud.game = MagicMock()
+    hud.game.render_origin = RenderOrigin(NodePath("root"))
     hud.game.game_time.get_average_frame_rate.return_value = 60.0
 
     hud.update_debug_hud()
 
     assert hud.fps_counter.setText.called is set_again
+
+
+# ---------------------------
+# Warp: speeds and refusals on the engine gauge
+# ---------------------------
+
+
+@pytest.mark.parametrize(
+    "speed_mps, text",
+    [(120.4, "120 m/s"), (KMPS_FROM_MPS - 1.0, "9999 m/s"), (88_564.0, "89 km/s")],
+)
+def test_engine_gauge_speed_turns_to_km_per_s_at_warp(speed_mps, text):
+    assert format_speed(speed_mps) == text
+
+
+def test_no_refusal_no_blink():
+    assert refused_warp_gauge_shown(None)
+
+
+def test_a_refused_warp_blinks_the_gauge_thrice():
+    period = WARP_REFUSED_BLINK_PERIOD_S
+    off_halves = [
+        t
+        for t in np.arange(0.0, (WARP_REFUSED_BLINKS + 2) * period, period / 4)
+        if not refused_warp_gauge_shown(t + period / 8)
+    ]
+    # Two samples in each off half, and only during the blinks
+    assert len(off_halves) == 2 * WARP_REFUSED_BLINKS
+    assert max(off_halves) < WARP_REFUSED_BLINKS * period
+
+
+def test_energy_hud_blinks_the_engine_gauge_on_a_refused_warp():
+    """Off at once (instant feedback), back on half a period later."""
+    hud, _ = make_energy_hud()
+    hud.game.player.warp_drive.refused_at_s = 10.0 - WARP_REFUSED_BLINK_PERIOD_S * 0.25
+
+    hud.update()
+    assert hud.engine_gauge.root.isHidden()
+
+    hud.game.player.warp_drive.refused_at_s = 10.0 - WARP_REFUSED_BLINK_PERIOD_S * 0.75
+    hud.update()
+    assert not hud.engine_gauge.root.isHidden()

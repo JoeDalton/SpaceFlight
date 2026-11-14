@@ -1,14 +1,16 @@
 from unittest.mock import MagicMock
 
 import pytest
-from panda3d.core import LVecBase2f
+from hyperspace_fakes import make_fake_sound
 
+from space_flight.fx.hyperspace_overlay import FADE_DURATION, MAX_DT
+from space_flight.game import hyperspace_loading_state as loading_state
 from space_flight.game.hyperspace_loading_state import (
-    MAX_DT,
+    INSIDE_MIN_DURATION,
+    INTO_DURATION,
     OUTOF_DURATION,
     REVEAL_START,
     HyperspaceLoadingState,
-    set_resolution,
 )
 
 
@@ -33,28 +35,31 @@ def test_request_jump_out_accepted_while_awaiting():
 
 
 # ---------------------------
-# outof phase: reveal and pop
+# Phase sequence (on a fake overlay)
 # ---------------------------
 
 
-def make_outof_state(on_reveal: MagicMock | None = None) -> HyperspaceLoadingState:
+@pytest.fixture
+def make_entered_state(fake_overlay_factory, monkeypatch):
     """
-    A state already settled on the outof phase (back quad visible, front
-    hidden, no cross-fade running), without enter()'s shader and quad setup.
+    Return a function making states as enter() leaves them, drawing on a fake
+    overlay, settled on a given phase.
     """
-    state = HyperspaceLoadingState(MagicMock(), on_reveal=on_reveal)
-    state._clock = MagicMock()
-    back, front = MagicMock(), MagicMock()
-    back.isHidden.return_value = False
-    front.isHidden.return_value = True
-    state._quads = [back, front]
-    state._quad_time = [0.0, 0.0]
-    state._back, state._front = 0, 1
-    state._transitioning = False
-    state._state = "outof"
-    state._revealing = False
-    state._popped = False
-    return state
+
+    def make(phase: str = "into", **kwargs) -> HyperspaceLoadingState:
+        overlay = fake_overlay_factory()
+        monkeypatch.setattr(
+            loading_state, "HyperspaceOverlay", lambda *args, **kw: overlay
+        )
+        sound = make_fake_sound()
+        monkeypatch.setattr(loading_state, "HyperspaceSound", lambda *args: sound)
+        state = HyperspaceLoadingState(MagicMock(), **kwargs)
+        state.enter()
+        state._clock = MagicMock()
+        overlay.show(phase)
+        return state
+
+    return make
 
 
 def run_frame(state: HyperspaceLoadingState, dt: float, task: MagicMock):
@@ -62,17 +67,85 @@ def run_frame(state: HyperspaceLoadingState, dt: float, task: MagicMock):
     return state._update(task)
 
 
-def test_outof_reveals_once_at_reveal_start():
+def run_for(state: HyperspaceLoadingState, seconds: float, task: MagicMock):
+    for _ in range(round(seconds / MAX_DT)):
+        run_frame(state, MAX_DT, task)
+
+
+def test_enter_starts_on_into(make_entered_state):
+    state = make_entered_state()
+
+    assert state._overlay.phase == "into"
+
+
+def test_into_cross_fades_to_inside(make_entered_state):
+    state = make_entered_state()
+    task = MagicMock()
+
+    run_for(state, INTO_DURATION + MAX_DT, task)
+    assert state._overlay.transitioning
+
+    run_for(state, FADE_DURATION + MAX_DT, task)
+    assert state._overlay.phase == "inside"
+
+
+def test_inside_builds_one_step_per_settled_frame(make_entered_state):
+    build_step = MagicMock(return_value=True)
+    state = make_entered_state("inside", build_step=build_step)
+    task = MagicMock()
+
+    run_for(state, 10 * MAX_DT, task)
+
+    assert build_step.call_count == 10
+
+
+def test_inside_drops_out_once_built_and_shown_long_enough(make_entered_state):
+    on_build_complete = MagicMock()
+    state = make_entered_state(
+        "inside",
+        build_step=MagicMock(return_value=False),
+        on_build_complete=on_build_complete,
+    )
+    task = MagicMock()
+
+    run_frame(state, MAX_DT, task)
+    on_build_complete.assert_called_once_with()
+    assert not state._overlay.transitioning
+
+    run_for(state, INSIDE_MIN_DURATION, task)
+    assert state._overlay._next_phase == "outof"
+
+
+def test_inside_waits_for_the_jump_key(make_entered_state):
+    state = make_entered_state("inside", wait_for_key=True)
+    task = MagicMock()
+
+    run_for(state, INSIDE_MIN_DURATION + 3.0, task)
+    assert state._awaiting_jump
+    assert not state._overlay.transitioning
+
+    assert state.request_jump_out()
+    run_frame(state, MAX_DT, task)
+    assert not state._awaiting_jump
+    assert state._overlay._next_phase == "outof"
+
+
+# ---------------------------
+# outof phase: reveal and pop
+# ---------------------------
+
+
+def test_outof_reveals_once_at_reveal_start(make_entered_state):
     """
     on_reveal fires once, on the first frame at or past REVEAL_START, while
     the overlay is still up, and never again.
     """
     on_reveal = MagicMock()
-    state = make_outof_state(on_reveal)
+    state = make_entered_state("outof", on_reveal=on_reveal)
     task = MagicMock()
     step = MAX_DT / 2
 
-    while state._quad_time[0] + step < REVEAL_START:
+    while state._overlay.phase_time + step < REVEAL_START:
         run_frame(state, step, task)
     on_reveal.assert_not_called()
 
@@ -84,9 +157,9 @@ def test_outof_reveals_once_at_reveal_start():
     on_reveal.assert_called_once_with()
 
 
-def test_outof_pops_at_outof_duration():
+def test_outof_pops_at_outof_duration(make_entered_state):
     """The overlay pops itself (once) when the outof phase ends."""
-    state = make_outof_state(MagicMock())
+    state = make_entered_state("outof", on_reveal=MagicMock())
     task = MagicMock()
 
     result = None
@@ -96,36 +169,45 @@ def test_outof_pops_at_outof_duration():
             break
 
     assert state._popped
-    assert state._quad_time[0] >= OUTOF_DURATION
+    assert state._overlay.phase_time >= OUTOF_DURATION
     assert result is task.done
     state.app.state_manager.pop.assert_called_once_with()
 
 
-def test_update_clamps_frame_time():
+def test_update_clamps_frame_time(make_entered_state):
     """
     A long stalled frame advances the animation by MAX_DT only, so it does
     not skip the rest of the outof dissolve and pop the overlay at once.
     """
-    state = make_outof_state(MagicMock())
+    state = make_entered_state("outof", on_reveal=MagicMock())
     task = MagicMock()
 
     run_frame(state, 5.0, task)
 
-    assert state._quad_time[0] == pytest.approx(MAX_DT)
+    assert state._overlay.phase_time == pytest.approx(MAX_DT)
     assert not state._popped
 
 
-def test_set_resolution_reads_the_output_size():
-    """The quads get the size of what they cover, a window or an offscreen
-    buffer alike (a buffer has no window properties)."""
-    buffer = MagicMock(spec=["getXSize", "getYSize"])
-    buffer.getXSize.return_value = 1600
-    buffer.getYSize.return_value = 900
-    quads = [MagicMock(), MagicMock()]
+def test_exit_destroys_the_overlay(make_entered_state):
+    state = make_entered_state()
+    quads = list(state._overlay._quads)
 
-    set_resolution(quads, buffer)
+    state.exit()
 
-    for quad in quads:
-        quad.setShaderInput.assert_called_once_with(
-            "iResolution", LVecBase2f(1600, 900)
-        )
+    assert all(quad.removed for quad in quads)
+
+
+def test_enter_plays_the_jump_sound(make_entered_state):
+    state = make_entered_state()
+
+    assert state._sound.jump_sound.playing
+
+
+def test_exit_releases_the_jump_sounds(make_entered_state):
+    state = make_entered_state()
+    pools = state._sound._jump_pool, state._sound._abort_pool
+
+    state.exit()
+
+    assert not state._sound.jump_sound.playing
+    assert not any(pool.in_use for pool in pools)

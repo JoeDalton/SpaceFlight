@@ -26,47 +26,77 @@ its [ocean](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/ocea
   (see [the floating render origin](game.md#the-floating-render-origin)), so
   `p3d_ModelMatrix`, `p3d_ViewMatrix` and `p3d_ViewProjectionMatrix` are
   relative to a frame that moves every frame. A shader must never combine them
-  with a position Python measured relative to `game.root_node`. The shaders
-  here stay consistent in one of three ways:
+  with a world position. The shaders here stay consistent in one of three
+  ways:
   - **Their own world matrix.** WorldBuilder's `ocean.vert` takes
     `uModelMatrix`, the plane's matrix relative to the ocean's base node, so
     its world position, `iCameraPos` and `uReflMVP` share that frame.
   - **One frame on the GPU.** `shield.frag` takes the eye from
     `p3d_ViewMatrixInverse`, in the same render space as its
     `p3d_ModelMatrix` position. `laser.vert` works in model space.
-  - **World geometry under `root_node`.** `spark.vert`, `explosion.vert` (and
-    WorldBuilder's `cloud.vert`) place vertices in world coordinates and project them with
-    `p3d_ModelViewProjectionMatrix`, whose model part carries the offset.
+  - **Model space, placed by the node.** `spark.vert` and `explosion.vert`
+    place vertices relative to their particle buffer's anchor, and project
+    them with `p3d_ModelViewProjectionMatrix`, whose model part carries the
+    anchor's place (see
+    [the floating render origin](game.md#the-floating-render-origin)).
+    WorldBuilder's `cloud.vert` places its own geometry around the camera.
 
-## Hyperspace loading-screen shaders
+## Hyperspace shaders
 
-Driven by
-[`game/hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py)
-(see [game.md](game.md)): one fullscreen fragment shader per phase of the
-jump, sharing the position-only passthrough
+Drawn by
+[`fx/hyperspace_overlay.py`](../../src/space_flight/fx/hyperspace_overlay.py)
+(see [fx.md](fx.md)), for both the loading screen and the in-flight warp: one
+fullscreen fragment shader per phase of the jump, sharing the position-only
+passthrough
 [`hyperspace.vert`](../../src/space_flight/datafiles/shaders/hyperspace.vert).
 
+What the three phases share lives in
+[`hyperspace_common.glsl`](../../src/space_flight/datafiles/shaders/hyperspace_common.glsl),
+pulled in with `#pragma include "hyperspace_common.glsl"` (Panda3D resolves it
+next to the including shader). That covers the uniforms, the screen point and
+mouse rotation, `rand`/`sdLine`, and `overlay_color`, the single place that
+turns an effect colour into the final fragment:
+
+- **Alpha is the larger of the background opacity and the colour's brightness.**
+  The black background can then go transparent while bright streaks and glows
+  stay visible.
+- **The colour is divided by alpha,** so it keeps its brightness when blended
+  over the scene.
+
+The loading screen and the warp differ only in their **look**, a few uniforms
+set from Python's `HyperspaceLook`:
+
+| Uniform | Effect | Loading | Warp |
+|---|---|---|---|
+| `iBackgroundOpacity` | opacity of the black background | 1 | 0 |
+| `iTunnelOpacity` | overall opacity of the inside tunnel | 1 | `WARP_TUNNEL_OPACITY` |
+| `iMaxWhiteout` | strength of the white flashes, and of the into flare's final swell over the screen | 1 | `WARP_MAX_WHITEOUT` (0: no flash) |
+| `iFlare` | strength of the star-like lens flare at the centre of into | 1 | 0 |
+
+With the loading look (all at 1) the output is exactly the original opaque
+effect. The warp look lets the scene show through everywhere but the streaks.
+
 - **[`hyperspace_into.frag`](../../src/space_flight/datafiles/shaders/hyperspace_into.frag)**
-  (entering hyperspace): star streaks converging into a central lens flare
-  that grows and whites out the screen. Streaks are procedural per-slice line
-  segments (`sdLine`) with offset/speed/length seeded per slice (`rand`). The
-  animation length is the `iIntoDuration` uniform, fed from Python's
-  `INTO_DURATION` so the whiteout always matches the Python phase. Time is
-  **clamped**, not wrapped, so the white frame holds for the cross-fade into
-  the tunnel instead of restarting the trails.
+  (entering hyperspace): star streaks converge into a central lens flare that
+  grows and whites out the screen.
+  - Streaks are procedural per-slice line segments (`sdLine`), with
+    offset/speed/length seeded per slice (`rand`).
+  - The animation length is the `iIntoDuration` uniform, fed from Python's
+    `INTO_DURATION`, so the whiteout always matches the Python phase.
+  - Time is **clamped**, not wrapped, so the white frame holds for the
+    cross-fade into the tunnel instead of restarting the trails.
 - **[`hyperspace_inside.frag`](../../src/space_flight/datafiles/shaders/hyperspace_inside.frag)**:
-  the seamlessly looping warp tunnel held while the level builds. A 3D
-  simplex-noise fBm (`loopFbm`) is sampled around a circle in depth-phase
-  space instead of tiled with `mod()`, so every octave is periodic over the
-  loop period `T_LOOP` and there is no seam.
+  the seamlessly looping warp tunnel. A 3D simplex-noise fBm (`loopFbm`) is
+  sampled around a circle in depth-phase space instead of tiled with `mod()`,
+  so every octave is periodic over the loop period `T_LOOP` and there is no
+  seam.
 - **[`hyperspace_outof.frag`](../../src/space_flight/datafiles/shaders/hyperspace_outof.frag)**
-  (dropping out): the reverse of `hyperspace_into.frag` — streaks collapsing
-  into the revealed level, fading from an initial whiteout. From 35% of its
-  loop the black background turns transparent, so the live scene shows
-  through while the streaks still play: alpha is the larger of that
-  background opacity and the streak brightness, and the colour is divided
-  by alpha so the streaks keep their brightness over the scene. The 35% must
-  match Python's `REVEAL_START`, which starts the simulation at that moment.
+  (dropping out): the reverse of `hyperspace_into.frag`. Streaks collapse into
+  the revealed scene, fading from an initial whiteout.
+  - From 35% of its loop, its background opacity falls to 0, so the live
+    scene shows through while the streaks still play.
+  - The 35% must match the loading screen's `REVEAL_START`, which starts the
+    simulation at that moment.
 
 `into` and `outof` are adapted from one ShaderToy source and `inside` from
 another (MIT); the header comments carry the credits.

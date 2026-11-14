@@ -80,7 +80,8 @@ class WaypointMarker:
         :param position: World-space position
         """
         self.position = np.asarray(position, dtype=float)
-        self.node.setPos(*self.position)
+        # Placed once, in the game root's frame (moved with it, see RenderOrigin)
+        self.node.setPos(*self.game.render_origin.to_local(self.position))
 
     def set_visible(self, visible: bool):
         """

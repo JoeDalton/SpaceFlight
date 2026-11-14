@@ -41,6 +41,13 @@ has the exact vertex-column layout and the render-state gotchas.
 - **`load_atlas()`** loads a sprite-atlas PNG and its JSON rect descriptor
   into a `(Texture, rects)` pair. The atlases are built by
   `scripts/build_particle_atlas.py`.
+- **Anchored spawn positions.** A buffer writes spawn positions relative to
+  its world `anchor`, its node placed there in the game root's frame (see
+  [the floating render origin](game.md#the-floating-render-origin)), so the
+  float32 vertex data stays small wherever the particles are. A spawn more than
+  `ANCHOR_REACH_M` (2 km) from the anchor moves it (`move_anchor`), rewriting
+  the live particles' positions to keep them in place. Positions are passed as
+  float64 world points.
 
 ## `fire_smoke_fx.py` — fire and smoke
 
@@ -176,10 +183,56 @@ in a box ahead of it: one geometry per dust colour, a billboard quad per mote
   new random place across (a hash of its seed and its lap).
 - `travel` is kept modulo `TRAVEL_WRAP_DEPTHS` depths, so the float stays
   precise.
-- The cloud's opacity scales with speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`),
-  through the root's alpha scale (`p3d_ColorScale` in `speed_dust.frag`).
+- The cloud's opacity scales with speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`,
+  capped there), through the root's alpha scale (`p3d_ColorScale` in
+  `speed_dust.frag`).
+- It is hidden while the player warps. The ship then covers more than the
+  cloud's depth each frame, so the motes would re-roll every frame and show
+  as noise.
 - With `defer_build=True`, `build()` is a generator (`yield from`) that makes
   one colour's geometry per step.
+
+## `hyperspace_overlay.py`: the hyperspace jump effect
+
+`HyperspaceOverlay` draws the three-phase jump animation (into, inside,
+outof) on two stacked fullscreen quads of `render2d`. It is used by the
+loading screen
+([`hyperspace_loading_state.py`](../../src/space_flight/game/hyperspace_loading_state.py))
+and by the in-flight warp.
+
+- **It only draws.** It knows nothing of level building, input or the state
+  stack. Its owner chooses the phases (`show`, `cross_fade_to`, `fade_out`)
+  and calls `update(dt)` every frame, on whichever clock suits it: the real
+  clock for the loading screen, game time for the warp (so pausing freezes
+  it). `dt` is clamped to `MAX_DT`, so a stall shows as a hitch instead of
+  skipping a phase.
+- **Cross-fades** last the look's `fade_duration` (1 s for loading,
+  `WARP_FADE_DURATION_S` for warp). They keep the settled phase on the back
+  quad and fade the incoming one in on top. A new cross-fade or fade-out requested mid-fade
+  first settles the running one. `phase` and `phase_time` always describe the
+  settled phase.
+- **Looks.** A `HyperspaceLook` sets the shader uniforms that make the effect
+  opaque (`LOADING_LOOK`, so the half-built world never shows) or see-through
+  (`WARP_LOOK`, tuned by `WARP_TUNNEL_OPACITY` and `WARP_MAX_WHITEOUT` in
+  `space_flight/__init__.py`). See [shaders.md](shaders.md#hyperspace-shaders).
+- **Window resizes** are picked up in `update`, which compares the window size
+  each frame. No `window-event` handler is needed.
+
+## `hyperspace_sound.py`: the hyperspace jump sounds
+
+`HyperspaceSound` is the overlay's counterpart for the ears, shared the same
+way by the loading screen and the warp.
+
+- `jump()` plays `jump_hyperspace.wav` from the top, with the into phase. It
+  rings on into the tunnel.
+- `abort()` cross-fades it into `abort_hyperspace.wav` over
+  `ABORT_CROSS_FADE_S`, for a warp called off while charging. Its owner calls
+  `update(dt)` every frame to run the fade, on game time for the warp.
+- Both are cockpit sounds (`interior` in `COMMON_ASSETS_TO_LOAD`), so a warp's
+  `mute_exterior` does not cut them. Each owner holds one sound from each pool
+  until `destroy()`.
+- The player's engine roaring through the jump is the ship's part
+  (`Ship.roar_engine_sound`, see [`Ship`](actors.md#ship--flight-physics-and-state)).
 
 ## `sfx.py` — 3D sound effects
 
@@ -211,10 +264,21 @@ sound:
   render origin — which is on the listener (see
   [the floating render origin](game.md#the-floating-render-origin)), giving a
   loud blip.
-- **Pause and level exit.** `pause()` silences the effects while the game is
-  frozen behind a menu (looping sounds are suspended until `resume()`,
-  one-shots stop), and `stop_level_sounds()` releases every pooled sound still
-  in use when the level exits (`SoundPool.in_use_sounds`/`release_all`).
+- **Two audio managers.** Every sound plays on Panda3D's sound-effects
+  manager (`sfxManagerList[0]`), except the player's cockpit sounds (its
+  engine loop, the hyperspace jump sounds), on SFX's `interior_manager`. Those are plain `"sound"`
+  assets flagged `interior` (in `COMMON_ASSETS_TO_LOAD`, or
+  `get_asset(interior=True)`). This is independent of `is_3d`, which picks the
+  loader: positional mono sounds rather than plain (e.g. stereo) ones.
+- **Pause, warp and level exit.**
+  - `pause()` silences both managers while the game is frozen behind a menu:
+    looping sounds are suspended until `resume()`, and one-shots stop.
+  - `mute_exterior(True)` silences the first manager only, so that while the
+    player warps, only the cockpit is heard (see
+    [`WarpDrive`](actors.md#warpdrive--the-players-local-warp)).
+  - The two combine: resuming from a pause mid-warp keeps the outside muted.
+  - `stop_level_sounds()` releases every pooled sound still in use when the
+    level exits (`SoundPool.in_use_sounds`/`release_all`).
 - **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` only log (see
   [subsystems.md](subsystems.md)).
 - **Update.** `update_task` calls `Audio3DManager.update()` from Panda3D's
@@ -245,7 +309,7 @@ sound:
   when approaching and less when receding. A 1 kHz source at 170 m/s gives
   1329 Hz approaching (1981 Hz at factor 1) and 801 Hz receding (669 Hz).
   OpenAL goes silent as a source's closing speed × Doppler factor nears the
-  speed of sound (686 m/s at 0.5), which nothing in the game reaches.
+  speed of sound (686 m/s at 0.5), which only a warping ship reaches.
 
 ## Where things live
 
