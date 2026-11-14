@@ -22,8 +22,11 @@ FLIGHT_MODEL = "airplane"  # "airplane", "space"
 THROTTLE_BOOST_VALUE = 2.0  # Throttle command when boosting (1.0 is full thrust)
 
 # Local warp (hyperspace jump in flight, see actors/warp_drive.py)
-WARP_TUNNEL_OPACITY = 0.15  # Opacity of the hyperspace tunnel over the scene, 0..1
-WARP_MAX_WHITEOUT = 0.6  # Strength of the white flashes entering/leaving, 0..1
+WARP_TUNNEL_OPACITY = 0.3  # Opacity of the hyperspace tunnel over the scene, 0..1
+WARP_MAX_WHITEOUT = 0.0  # Strength of the white flashes entering/leaving, 0..1
+# Cross-fades between the animation's phases. The tunnel starts fading in this
+# long before the charge ends, so that it is fully there as the ship jumps
+WARP_FADE_DURATION_S = 0.3
 WARP_TURN_RATE_FACTOR = 0.1  # Turn rates cap while charging, warping, dropping out
 WARP_CRUISE_THROTTLE = 0.5  # Throttle while charging, and after dropping out
 # Warp speed: this many m/s per metre of altitude above the nearest body's ground,

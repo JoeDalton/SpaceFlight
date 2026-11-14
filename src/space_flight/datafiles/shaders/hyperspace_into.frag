@@ -5,6 +5,7 @@
 #pragma include "hyperspace_common.glsl"
 
 uniform float iIntoDuration;  // animation length (s); == the Python INTO_DURATION
+uniform float iFlare;         // strength of the central lens flare, 0..1 (look)
 
 #define FLARE 1
 #define NUM_SLICES 125.0
@@ -83,8 +84,10 @@ void main()
         // Add the disk at the center to transition into the hyperspace
         // tunnel
         float flare_size = mix(0.0, 0.1, smoothstep(0.35, T_JUMP + 0.2, t));
-        flare_size += mix(0.0, 20.0, smoothstep(T_JUMP + 0.05, 1.0, t));
-        vec3 flare = flare_col * lensflare(v, vec3(0.0), flare_size, t);
+        // ...then swells over the whole screen: part of the white flash, so
+        // scaled by iMaxWhiteout like it
+        flare_size += iMaxWhiteout * mix(0.0, 20.0, smoothstep(T_JUMP + 0.05, 1.0, t));
+        vec3 flare = iFlare * flare_col * lensflare(v, vec3(0.0), flare_size, t);
         color += cc(flare, 0.5, 0.1);
         //color += flare;
         // Whiteout

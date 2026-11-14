@@ -30,7 +30,12 @@ from typing import TYPE_CHECKING
 
 from panda3d.core import LVecBase2f, Shader, Vec3
 
-from space_flight import DATAFILES_PATH, WARP_MAX_WHITEOUT, WARP_TUNNEL_OPACITY
+from space_flight import (
+    DATAFILES_PATH,
+    WARP_FADE_DURATION_S,
+    WARP_MAX_WHITEOUT,
+    WARP_TUNNEL_OPACITY,
+)
 from space_flight.fx import make_fullscreen_quad
 from space_flight.utils import clamp
 
@@ -76,12 +81,17 @@ class HyperspaceLook:
     :param tunnel_opacity: overall opacity of the inside tunnel, 0..1
     :param max_whiteout: strength of the white flashes at the end of into and
         the start of outof, 0..1
+    :param flare: strength of the star-like lens flare at the centre of into,
+        0..1
+    :param fade_duration: length of a cross-fade (or fade-out), seconds
     :param center_offset: tunnel vanishing point above the screen centre
     """
 
     background_opacity: float = 1.0
     tunnel_opacity: float = 1.0
     max_whiteout: float = 1.0
+    flare: float = 1.0
+    fade_duration: float = FADE_DURATION
     center_offset: float = CENTER_OFFSET
 
 
@@ -92,6 +102,8 @@ WARP_LOOK = HyperspaceLook(
     background_opacity=0.0,
     tunnel_opacity=WARP_TUNNEL_OPACITY,
     max_whiteout=WARP_MAX_WHITEOUT,
+    flare=0.0,
+    fade_duration=WARP_FADE_DURATION_S,
 )
 
 
@@ -159,6 +171,7 @@ class HyperspaceOverlay:
             quad.setShaderInput("iBackgroundOpacity", look.background_opacity)
             quad.setShaderInput("iTunnelOpacity", look.tunnel_opacity)
             quad.setShaderInput("iMaxWhiteout", look.max_whiteout)
+            quad.setShaderInput("iFlare", look.flare)
             quad.hide()
 
         # Per-quad elapsed time (each phase restarts its own clock from 0).
@@ -196,7 +209,8 @@ class HyperspaceOverlay:
 
     def cross_fade_to(self, phase: str):
         """
-        Fade a phase in over the current one, in FADE_DURATION. A cross-fade
+        Fade a phase in over the current one, in the look's fade_duration. A
+        cross-fade
         still running is completed at once first.
 
         :param phase: "into", "inside" or "outof"
@@ -212,7 +226,8 @@ class HyperspaceOverlay:
         self._show_shader(self._front, phase, alpha=0.0)
 
     def fade_out(self):
-        """Fade the current phase out, in FADE_DURATION, then hide everything."""
+        """Fade the current phase out, in the look's fade_duration, then hide
+        everything."""
         if self.transitioning:
             self._finish_transition()
         if self.phase is None:
@@ -246,14 +261,14 @@ class HyperspaceOverlay:
         if not self.transitioning:
             return
         self._fade_t += dt
-        progress = smoothstep(self._fade_t / FADE_DURATION)
+        progress = smoothstep(self._fade_t / self.look.fade_duration)
         if self._next_phase is None:
             # Fading out: the settled phase itself goes transparent
             self._quads[self._back].setShaderInput("iAlpha", 1.0 - progress)
         else:
             # Cross-fading: only the incoming phase changes, on top
             self._quads[self._front].setShaderInput("iAlpha", progress)
-        if self._fade_t >= FADE_DURATION:
+        if self._fade_t >= self.look.fade_duration:
             self._finish_transition()
 
     def destroy(self):

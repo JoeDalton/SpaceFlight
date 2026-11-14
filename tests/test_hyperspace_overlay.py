@@ -10,7 +10,7 @@ import pytest
 from hyperspace_fakes import make_win
 from panda3d.core import LVecBase2f
 
-from space_flight import WARP_MAX_WHITEOUT, WARP_TUNNEL_OPACITY
+from space_flight import WARP_FADE_DURATION_S, WARP_MAX_WHITEOUT, WARP_TUNNEL_OPACITY
 from space_flight.fx.hyperspace_overlay import (
     FADE_DURATION,
     LOADING_LOOK,
@@ -40,12 +40,16 @@ def test_loading_look_is_the_original_opaque_effect():
     assert LOADING_LOOK.background_opacity == 1.0
     assert LOADING_LOOK.tunnel_opacity == 1.0
     assert LOADING_LOOK.max_whiteout == 1.0
+    assert LOADING_LOOK.flare == 1.0
+    assert LOADING_LOOK.fade_duration == FADE_DURATION
 
 
 def test_warp_look_shows_the_scene_through():
     assert WARP_LOOK.background_opacity == 0.0
     assert WARP_LOOK.tunnel_opacity == WARP_TUNNEL_OPACITY
     assert WARP_LOOK.max_whiteout == WARP_MAX_WHITEOUT
+    assert WARP_LOOK.flare == 0.0  # no star at the end of the charge
+    assert WARP_LOOK.fade_duration == WARP_FADE_DURATION_S
 
 
 def test_look_is_fed_to_the_shaders(fake_overlay_factory):
@@ -55,6 +59,7 @@ def test_look_is_fed_to_the_shaders(fake_overlay_factory):
         assert quad.inputs["iBackgroundOpacity"] == WARP_LOOK.background_opacity
         assert quad.inputs["iTunnelOpacity"] == WARP_LOOK.tunnel_opacity
         assert quad.inputs["iMaxWhiteout"] == WARP_LOOK.max_whiteout
+        assert quad.inputs["iFlare"] == WARP_LOOK.flare
         assert quad.inputs["iCenterOffset"] == WARP_LOOK.center_offset
 
 
@@ -135,6 +140,17 @@ def test_cross_fade_settles_on_the_next_phase(fake_overlay_factory):
     assert quad.bin == ("fixed", 0)
     # The phase clock started with the fade
     assert overlay.phase_time == pytest.approx(FADE_DURATION + MAX_DT, abs=MAX_DT)
+
+
+def test_cross_fade_lasts_the_look_s_fade_duration(fake_overlay_factory):
+    overlay = fake_overlay_factory(look=WARP_LOOK)
+    overlay.show("into")
+
+    overlay.cross_fade_to("inside")
+    advance(overlay, WARP_LOOK.fade_duration + MAX_DT)
+
+    assert overlay.phase == "inside"
+    assert not overlay.transitioning
 
 
 def test_cross_fade_during_a_cross_fade_completes_the_first(fake_overlay_factory):

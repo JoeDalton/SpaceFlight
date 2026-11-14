@@ -303,7 +303,9 @@ def make_drive_ship(altitude_m: float = 100_000.0):
     ship.warp_target_speed_mps = None
     ship.engines_online = MagicMock(return_value=True)
     ship.cruise_speed_mps = MagicMock(return_value=CRUISE_MPS)
-    ship.game = SimpleNamespace(scene=MagicMock(), game_time=MagicMock())
+    ship.game = SimpleNamespace(
+        scene=MagicMock(), game_time=MagicMock(), app=MagicMock()
+    )
     ship.game.game_time.get_current_time.return_value = 42.0
     ship.game.scene.altitude_m.return_value = altitude_m
     return ship
@@ -495,6 +497,20 @@ def test_up_is_reckoned_again_after_a_jump():
     drive.ship.game.scene.forget_up.assert_called_once_with()
 
 
+def test_only_the_cockpit_is_heard_while_in_hyperspace():
+    drive = make_drive()
+    sfx = drive.ship.game.app.sfx
+    run(drive, CHARGE_DURATION_S / 2)
+    sfx.mute_exterior.assert_not_called()  # still in the fight
+
+    charge_and_go_inside(drive)
+    sfx.mute_exterior.assert_called_with(True)
+
+    drive.update(key_held=False, dt=DT)
+    run(drive, EXIT_DURATION_S + DT, key_held=False)
+    sfx.mute_exterior.assert_called_with(False)
+
+
 def test_too_close_to_a_body_drops_out_automatically():
     drive = make_drive()
     charge_and_go_inside(drive)
@@ -576,6 +592,42 @@ def test_drive_plays_the_phases(fake_overlay_factory):
     assert overlay._next_phase == "outof"
 
     run(drive, EXIT_DURATION_S + DT, key_held=False)
+    assert not overlay.visible
+
+
+def test_the_tunnel_is_fully_in_as_the_ship_jumps(fake_overlay_factory):
+    """The tunnel fades in during the last fade_duration of the charge: no
+    empty screen between the streaks flying off and the tunnel."""
+    overlay = fake_overlay_factory(look=WARP_LOOK)
+    drive = make_drive(overlay=overlay)
+    lead_s = WARP_LOOK.fade_duration
+
+    run(drive, CHARGE_DURATION_S - lead_s - 2 * DT)
+    assert overlay.phase == "into"
+    assert not overlay.transitioning
+
+    run(drive, 4 * DT)
+    assert drive.state is WarpState.CHARGING
+    assert overlay.transitioning
+    assert overlay._next_phase == "inside"
+
+    while drive.state is WarpState.CHARGING:
+        drive.update(key_held=True, dt=DT)
+    assert overlay.phase == "inside"
+    assert not overlay.transitioning
+
+
+def test_releasing_during_the_tunnel_fade_still_aborts(fake_overlay_factory):
+    overlay = fake_overlay_factory(look=WARP_LOOK)
+    drive = make_drive(overlay=overlay)
+    run(drive, CHARGE_DURATION_S - WARP_LOOK.fade_duration / 2)
+    assert overlay.transitioning
+
+    drive.update(key_held=False, dt=DT)
+
+    assert drive.state is WarpState.IDLE
+    assert not drive.ship.in_hyperspace
+    run(drive, WARP_LOOK.fade_duration + DT, key_held=False)
     assert not overlay.visible
 
 

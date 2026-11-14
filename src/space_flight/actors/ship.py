@@ -293,7 +293,8 @@ class Ship(Pawn):
         # _on_engines_online_changed)
         self.is_engine_sound_online = True
         # The player hears its interior loop, everyone else the exterior one
-        if self.parent.name == "player":
+        is_player = self.parent.name == "player"
+        if is_player:
             sound_key, asset_type, volume = "interior_engine_sound", "sound", 0.1
         elif "exterior_engine_sound" in self.conf:
             sound_key, asset_type, volume = "exterior_engine_sound", "3d_sound", 10.0
@@ -303,6 +304,9 @@ class Ship(Pawn):
             self.sound_pool = self.game.app.asset_manager.get_asset(
                 asset_type=asset_type,
                 path=DATAFILES_PATH / self.conf[sound_key],
+                # The player's loop is a cockpit sound, heard even while
+                # warping (see SFX)
+                interior=is_player,
             )
             self.sound = self.sound_pool.get_sound()
             self.sound.setLoop(True)

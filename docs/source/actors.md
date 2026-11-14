@@ -472,7 +472,9 @@ designer sees them.
 - **States.** `IDLE → CHARGING → INSIDE → EXITING → IDLE`, timed on game time,
   so pausing freezes them. Each plays a phase of the shared
   [hyperspace overlay](fx.md#hyperspace_overlaypy-the-hyperspace-jump-effect)
-  with its see-through `WARP_LOOK`.
+  with its see-through `WARP_LOOK`. The tunnel starts fading in one
+  `WARP_FADE_DURATION_S` before the charge ends, so it is fully there as the
+  ship jumps; the into streaks fly off just before the end.
 - **Physics keeps running.** From `INSIDE`, the ship is in the warp flight
   model, pulled to `warp_speed_at_altitude` (in
   [`scenes.py`](../../src/space_flight/scenes/scenes.py)). That speed is
@@ -490,6 +492,8 @@ designer sees them.
   (`mute_colliders`, shared with the bots' transit) except the hull, which
   hits terrain only (`WARPING_HULL_FROM`, see
   [collision layers](game.md#collisionsystem--layers-routing-and-physical-response)).
+  Only the cockpit is heard (`SFX.mute_exterior`, see
+  [sound effects](fx.md#sfxpy--3d-sound-effects)).
 - **Refusals.** A press too close to a body sets `refused_at_s`, which blinks
   the HUD's engine gauge `WARP_REFUSED_BLINKS` times.
 

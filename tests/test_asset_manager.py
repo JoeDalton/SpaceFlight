@@ -200,3 +200,55 @@ def test_get_asset_takes_the_listed_flag(spaceflight_app):
     manager = _fresh_manager(spaceflight_app)
     turret = manager.get_asset(asset_type="model", path=TURRET)
     assert not turret.find("**/heading_axis").is_empty()
+
+
+# ---------------------------
+# Cockpit (interior) sounds
+# ---------------------------
+
+
+def test_cockpit_engine_loops_are_listed_as_interior_plain_sounds():
+    """The player's engine loops: plain (stereo) sounds, on the interior
+    manager so they are still heard while warping."""
+    interior = {
+        path.name: spec
+        for path, spec in COMMON_ASSETS_TO_LOAD.items()
+        if spec.get("interior")
+    }
+    assert interior
+    for name, spec in interior.items():
+        assert "_int_" in name
+        assert spec["type"] == "sound"
+
+
+@pytest.mark.parametrize(
+    "listed, given, expected",
+    [(True, None, True), (False, None, False), (True, False, False)],
+)
+def test_get_asset_takes_the_listed_interior_flag(monkeypatch, listed, given, expected):
+    path = DATAFILES_PATH / "sounds/test_sound.ogg"
+    monkeypatch.setitem(
+        COMMON_ASSETS_TO_LOAD, path, {"type": "sound", "interior": listed}
+    )
+    manager = AssetManager(app=MagicMock())
+    manager.load_single_asset = MagicMock(
+        side_effect=lambda **kwargs: manager.assets.__setitem__(path, "pool")
+    )
+
+    manager.get_asset(asset_type="sound", path=path, interior=given)
+
+    assert manager.load_single_asset.call_args.kwargs["interior"] is expected
+
+
+def test_interior_sounds_load_on_the_interior_manager():
+    from space_flight.global_architecture.asset_pools import load_generic_sound
+
+    app = MagicMock()
+    path = DATAFILES_PATH / "sounds/test_sound.ogg"
+
+    load_generic_sound(app, path, interior=True)
+    app.loader.loadSound.assert_called_once_with(app.sfx.interior_manager, path)
+    app.loader.loadSfx.assert_not_called()
+
+    load_generic_sound(app, path)
+    app.loader.loadSfx.assert_called_once_with(path)

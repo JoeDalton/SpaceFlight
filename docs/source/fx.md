@@ -199,8 +199,9 @@ and by the in-flight warp.
   clock for the loading screen, game time for the warp (so pausing freezes
   it). `dt` is clamped to `MAX_DT`, so a stall shows as a hitch instead of
   skipping a phase.
-- **Cross-fades** keep the settled phase on the back quad and fade the
-  incoming one in on top. A new cross-fade or fade-out requested mid-fade
+- **Cross-fades** last the look's `fade_duration` (1 s for loading,
+  `WARP_FADE_DURATION_S` for warp). They keep the settled phase on the back
+  quad and fade the incoming one in on top. A new cross-fade or fade-out requested mid-fade
   first settles the running one. `phase` and `phase_time` always describe the
   settled phase.
 - **Looks.** A `HyperspaceLook` sets the shader uniforms that make the effect
@@ -240,10 +241,21 @@ sound:
   render origin — which is on the listener (see
   [the floating render origin](game.md#the-floating-render-origin)), giving a
   loud blip.
-- **Pause and level exit.** `pause()` silences the effects while the game is
-  frozen behind a menu (looping sounds are suspended until `resume()`,
-  one-shots stop), and `stop_level_sounds()` releases every pooled sound still
-  in use when the level exits (`SoundPool.in_use_sounds`/`release_all`).
+- **Two audio managers.** Every sound plays on Panda3D's sound-effects
+  manager (`sfxManagerList[0]`), except the player's cockpit sounds (its
+  engine loop), on SFX's `interior_manager`. Those are plain `"sound"`
+  assets flagged `interior` (in `COMMON_ASSETS_TO_LOAD`, or
+  `get_asset(interior=True)`). This is independent of `is_3d`, which picks the
+  loader: positional mono sounds rather than plain (e.g. stereo) ones.
+- **Pause, warp and level exit.**
+  - `pause()` silences both managers while the game is frozen behind a menu:
+    looping sounds are suspended until `resume()`, and one-shots stop.
+  - `mute_exterior(True)` silences the first manager only, so that while the
+    player warps, only the cockpit is heard (see
+    [`WarpDrive`](actors.md#warpdrive--the-players-local-warp)).
+  - The two combine: resuming from a pause mid-warp keeps the outside muted.
+  - `stop_level_sounds()` releases every pooled sound still in use when the
+    level exits (`SoundPool.in_use_sounds`/`release_all`).
 - **Placeholders.** `tractor_beam_grab`/`tractor_beam_release` only log (see
   [subsystems.md](subsystems.md)).
 - **Update.** `update_task` calls `Audio3DManager.update()` from Panda3D's

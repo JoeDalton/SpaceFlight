@@ -67,7 +67,8 @@ set from Python's `HyperspaceLook`:
 |---|---|---|---|
 | `iBackgroundOpacity` | opacity of the black background | 1 | 0 |
 | `iTunnelOpacity` | overall opacity of the inside tunnel | 1 | `WARP_TUNNEL_OPACITY` |
-| `iMaxWhiteout` | strength of the white flashes | 1 | `WARP_MAX_WHITEOUT` |
+| `iMaxWhiteout` | strength of the white flashes, and of the into flare's final swell over the screen | 1 | `WARP_MAX_WHITEOUT` (0: no flash) |
+| `iFlare` | strength of the star-like lens flare at the centre of into | 1 | 0 |
 
 With the loading look (all at 1) the output is exactly the original opaque
 effect. The warp look lets the scene show through everywhere but the streaks.

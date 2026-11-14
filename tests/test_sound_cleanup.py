@@ -59,6 +59,9 @@ def _make_sfx(assets: dict, camera: NodePath | None) -> SFX:
         sfxManagerList=[MagicMock()],
     )
     sfx.audio3d = MagicMock()
+    sfx.interior_manager = MagicMock()
+    sfx._paused = False
+    sfx._exterior_muted = False
     return sfx
 
 
@@ -99,8 +102,37 @@ def test_sfx_pause_and_resume_toggle_the_sound_effects_manager():
 
     sfx.pause()
     manager.setActive.assert_called_with(False)
+    sfx.interior_manager.setActive.assert_called_with(False)
     sfx.resume()
     manager.setActive.assert_called_with(True)
+    sfx.interior_manager.setActive.assert_called_with(True)
+
+
+def test_a_warp_cuts_every_sound_but_the_cockpit():
+    sfx = _make_sfx(assets={}, camera=None)
+    exterior = sfx.app.sfxManagerList[0]
+
+    sfx.mute_exterior(True)
+    exterior.setActive.assert_called_with(False)
+    sfx.interior_manager.setActive.assert_called_with(True)
+
+    sfx.mute_exterior(False)
+    exterior.setActive.assert_called_with(True)
+
+
+def test_resuming_from_a_pause_mid_warp_keeps_the_outside_cut():
+    sfx = _make_sfx(assets={}, camera=None)
+    exterior = sfx.app.sfxManagerList[0]
+    sfx.mute_exterior(True)
+
+    sfx.pause()
+    sfx.resume()
+
+    exterior.setActive.assert_called_with(False)
+    sfx.interior_manager.setActive.assert_called_with(True)
+
+    sfx.mute_exterior(False)
+    exterior.setActive.assert_called_with(True)
 
 
 def _make_pausable_flight_state() -> FlightState:

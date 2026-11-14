@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from direct.showbase import Audio3DManager
 from direct.task import Task
-from panda3d.core import AudioSound, NodePath, VBase3
+from panda3d.core import AudioManager, AudioSound, NodePath, VBase3
 
 from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.asset_pools import SoundPool
@@ -124,6 +124,14 @@ class SFX:
         self.audio3d.setDistanceFactor(DISTANCE_FACTOR)
         self.audio3d.attachListener(self.app.camera)
         self.app.taskMgr.add(self.update_task, "AudioUpdate")
+        # The player's cockpit sounds (its engine loop), on their own manager:
+        # still heard while warping, when every other sound is cut
+        self.interior_manager = AudioManager.createAudioManager()
+        self.app.addSfxManager(self.interior_manager)
+        # Why the sounds are off (see _apply_activity): a menu freezes the
+        # game, a warp cuts the outside world
+        self._paused = False
+        self._exterior_muted = False
 
     def attach_sound(
         self,
@@ -165,11 +173,29 @@ class SFX:
         looping sounds are suspended until :meth:`resume`, one-shots stop.
         Menus play no sound of their own (they would need their own manager).
         """
-        self.app.sfxManagerList[0].setActive(False)
+        self._paused = True
+        self._apply_activity()
 
     def resume(self):
         """Restart the looping sounds suspended by :meth:`pause`."""
-        self.app.sfxManagerList[0].setActive(True)
+        self._paused = False
+        self._apply_activity()
+
+    def mute_exterior(self, muted: bool):
+        """
+        Cut every sound but the player's cockpit ones (the interior manager),
+        e.g. while warping: looping sounds are suspended until unmuted,
+        one-shots stop, and new ones are not heard.
+
+        :param muted: Whether to cut them
+        """
+        self._exterior_muted = muted
+        self._apply_activity()
+
+    def _apply_activity(self):
+        """Turn the audio managers on or off, from the pause and the mute."""
+        self.app.sfxManagerList[0].setActive(not (self._paused or self._exterior_muted))
+        self.interior_manager.setActive(not self._paused)
 
     def stop_level_sounds(self):
         """

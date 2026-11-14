@@ -82,6 +82,8 @@ class WarpDrive:
         # before it can start another one
         self._needs_release = False
         self._key_was_held = False
+        # Whether the tunnel has started fading in (see _tunnel_lead_s)
+        self._tunnel_started = False
         # Game time of the last press refused for want of altitude, None if
         # none (the HUD blinks the engine gauge, see EnergyHUD)
         self.refused_at_s: float | None = None
@@ -127,6 +129,11 @@ class WarpDrive:
                 self._abort()
             elif self.state_time_s >= CHARGE_DURATION_S:
                 self._enter(WarpState.INSIDE)
+            elif (
+                not self._tunnel_started
+                and self.state_time_s >= CHARGE_DURATION_S - self._tunnel_lead_s()
+            ):
+                self._start_tunnel()
         elif self.state is WarpState.INSIDE:
             altitude_m = self.ship.game.scene.altitude_m(self.ship.position)
             if altitude_m < WARP_AUTO_EXIT_ALTITUDE_M or not self.allowed:
@@ -182,17 +189,30 @@ class WarpDrive:
         self.state = state
         self.state_time_s = 0.0
         if state is WarpState.CHARGING:
+            self._tunnel_started = False
             self._play("show", "into")
         elif state is WarpState.INSIDE:
             self._go_into_hyperspace()
             self._set_warp_speed()
-            self._play("cross_fade_to", "inside")
+            if not self._tunnel_started:
+                self._start_tunnel()
         elif state is WarpState.EXITING:
             # Slow down to cruise speed, still in the warp flight model
             self.ship.warp_target_speed_mps = self.ship.cruise_speed_mps(
                 WARP_CRUISE_THROTTLE
             )
             self._play("cross_fade_to", "outof")
+
+    def _tunnel_lead_s(self) -> float:
+        """How long before the end of the charge the tunnel starts fading in:
+        a whole cross-fade, so it is fully there as the ship jumps (the into
+        streaks fly off just before the end and leave the screen empty)."""
+        return 0.0 if self.overlay is None else self.overlay.look.fade_duration
+
+    def _start_tunnel(self):
+        """Fade the tunnel in."""
+        self._tunnel_started = True
+        self._play("cross_fade_to", "inside")
 
     def _abort(self):
         """Stop charging: the jump never happened."""
@@ -210,11 +230,14 @@ class WarpDrive:
 
     def _go_into_hyperspace(self):
         """
-        Out of every interaction (untargetable, see Interactions), and out of
-        every collision but with terrain.
+        Out of every interaction (untargetable, see Interactions), out of
+        every collision but with terrain, and out of earshot of everything but
+        the cockpit.
         """
         ship = self.ship
         ship.in_hyperspace = True
+        # Nothing from outside is heard any more, only the cockpit
+        ship.game.app.sfx.mute_exterior(True)
         self._muted_colliders = mute_colliders(ship.node)
         hull = getattr(ship, "collision_sphere_np", None)
         if hull is not None and not hull.isEmpty():
@@ -237,6 +260,7 @@ class WarpDrive:
         self._muted_colliders = []
         self.ship.in_hyperspace = False
         self.ship.warp_target_speed_mps = None
+        self.ship.game.app.sfx.mute_exterior(False)
         # "Up" is only reckoned once a second: the ship may be far from where
         # it was last reckoned
         self.ship.game.scene.forget_up()

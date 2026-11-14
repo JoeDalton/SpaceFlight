@@ -75,12 +75,31 @@ class SoundPool:
     """
 
     def __init__(
-        self, app: SpaceFlightSimulator, path: Path, pattern: str, is_3d: bool
+        self,
+        app: SpaceFlightSimulator,
+        path: Path,
+        pattern: str,
+        is_3d: bool,
+        interior: bool = False,
     ):
+        """
+        :param app: The ShowBase app
+        :param path: A sound file, or a directory of them
+        :param pattern: The glob pattern of the sound files, for a directory
+        :param is_3d: Whether to load positional (Audio3DManager) sounds: mono
+            files placed in space, rather than plain (e.g. stereo) ones
+        :param interior: For a plain sound, whether it is one of the player's
+            cockpit sounds, on SFX's interior manager (heard even while
+            warping)
+        """
         if path.is_dir():
             # path is a directory => Find all matching files
             self.pool = build_sound_pool(
-                app=app, directory=path, pattern=pattern, is_3d=is_3d
+                app=app,
+                directory=path,
+                pattern=pattern,
+                is_3d=is_3d,
+                interior=interior,
             )
         else:
             # Path is a single file => load it SOUND_POOL_LENGTH times
@@ -89,7 +108,9 @@ class SoundPool:
                 if is_3d:
                     sound = load_3d_sound(app=app, sound_file=path)
                 else:
-                    sound = load_generic_sound(app=app, sound_file=path)
+                    sound = load_generic_sound(
+                        app=app, sound_file=path, interior=interior
+                    )
                 self.pool.append(sound)
         self.in_use = set()
 
@@ -142,7 +163,11 @@ class SoundPool:
 
 
 def build_sound_pool(
-    app: SpaceFlightSimulator, directory: Path, pattern: str, is_3d: bool
+    app: SpaceFlightSimulator,
+    directory: Path,
+    pattern: str,
+    is_3d: bool,
+    interior: bool = False,
 ) -> list:
     """
     Builds a pool of SOUND_POOL_LENGTH sounds, each loaded from a random file
@@ -152,6 +177,8 @@ def build_sound_pool(
     :param directory: The directory to search
     :param pattern: The glob pattern to find the sound files
     :param is_3d: Whether to load positional (Audio3DManager) sounds
+    :param interior: For plain sounds, whether to load them on SFX's interior
+        manager (see SoundPool)
     :return: a sound list
     """
     sound_files = list(directory.glob(pattern))
@@ -162,7 +189,7 @@ def build_sound_pool(
         if is_3d:
             sound = load_3d_sound(app, sound_file)
         else:
-            sound = load_generic_sound(app, sound_file)
+            sound = load_generic_sound(app, sound_file, interior=interior)
         sound_pool.append(sound)
     return sound_pool
 
@@ -178,12 +205,19 @@ def load_3d_sound(app: SpaceFlightSimulator, sound_file: Path) -> AudioSound:
     return app.sfx.audio3d.loadSfx(sound_file)
 
 
-def load_generic_sound(app: SpaceFlightSimulator, sound_file: Path) -> AudioSound:
+def load_generic_sound(
+    app: SpaceFlightSimulator, sound_file: Path, interior: bool = False
+) -> AudioSound:
     """
     Loads a non-3d sound from file
 
     :param app: The ShowBase app
     :param sound_file: The sound file to load
+    :param interior: Whether it is one of the player's cockpit sounds, loaded on
+        SFX's interior manager (heard even while warping) rather than the
+        sound effects one
     :return: The sound object
     """
+    if interior:
+        return app.loader.loadSound(app.sfx.interior_manager, sound_file)
     return app.loader.loadSfx(sound_file)

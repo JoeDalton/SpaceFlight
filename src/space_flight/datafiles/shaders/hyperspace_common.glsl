@@ -16,7 +16,8 @@ uniform float iAlpha;         // cross-fade opacity, driven from Python
 uniform float iCenterOffset;  // tunnel vanishing point above the screen centre
 // --- Look uniforms ---
 uniform float iBackgroundOpacity;  // opacity of the black background, 0..1
-uniform float iMaxWhiteout;        // strength of the white flashes, 0..1
+uniform float iMaxWhiteout;        // strength of the white flashes (and the
+                                   // into flare's final swell), 0..1
 // ----------------------------------------------------------
 out vec4 p3d_FragColor;
 
