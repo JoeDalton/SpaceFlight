@@ -1,6 +1,7 @@
 """
 Tests for escorting the player through a local warp (issue #184): the Bot's
-escort states (align, jump to warp and park, drop back in).
+escort states (align, jump to warp and park, drop back in), and WarpEscort,
+which drives them from the player's warp drive.
 """
 
 import math
@@ -11,8 +12,16 @@ import numpy as np
 import pytest
 from panda3d.core import BitMask32, CollisionNode, CollisionSphere, NodePath
 
+from space_flight import WARP_ESCORT_SLOT_JITTER
 from space_flight.actors.bot import Bot
-from space_flight.actors.hyperspace import TRANSIT_DISTANCE_M, TRANSIT_DURATION_S
+from space_flight.actors.hyperspace import (
+    ARRIVAL_STAGGER_S,
+    TRANSIT_DISTANCE_M,
+    TRANSIT_DURATION_S,
+)
+from space_flight.actors.warp_drive import WarpState
+from space_flight.actors.warp_escort import WarpEscort
+from space_flight.ai.formation import Formation
 from space_flight.ai.think_scheduler import ThinkScheduler
 from space_flight.game.collisions import CollisionLayers
 from space_flight.utils.state_machine import DyingPhase
@@ -305,3 +314,227 @@ def test_arriving_without_having_jumped_is_a_no_op():
 
     assert bot.hyperspace_transit is None
     assert bot.pawn.held == []
+
+
+# ---------------------------------------------------------------------------
+# WarpEscort: the player's wingmen following its warps
+# ---------------------------------------------------------------------------
+
+SCALE_M = 40.0
+
+
+def make_ship(ship_id):
+    return SimpleNamespace(id=ship_id, formation=None)
+
+
+def make_wingman(ship_id, can_escort=True):
+    """A bot stand-in flying the pawn ship_id."""
+    bot = MagicMock(can_escort_warp=can_escort)
+    bot.pawn = make_ship(ship_id)
+    bot.pawn.parent = bot
+    return bot
+
+
+def make_player(wingmen=(), leads=True, extra_ids=()):
+    """
+    A player stand-in flying in a formation with the wingmen (leading it if
+    leads), axes along the world's, at a known pose and velocity.
+    """
+    pawn = SimpleNamespace(
+        id="player",
+        formation=None,
+        position=np.array([1000.0, 2000.0, 3000.0]),
+        orientation=np.array([0.5, 0.5, 0.5, 0.5]),
+        speed=np.array([0.0, 120.0, 0.0]),
+        right=np.array([1.0, 0.0, 0.0]),
+        forward=np.array([0.0, 1.0, 0.0]),
+        up=np.array([0.0, 0.0, 1.0]),
+    )
+    formation = Formation(scale_m=SCALE_M, shape="arrowhead")
+    other_leader = make_ship("other_leader")
+    if not leads:
+        formation.add_ship(other_leader, leader=True)
+    for bot in wingmen:
+        formation.add_ship(bot.pawn)
+    for ship_id in extra_ids:
+        formation.add_ship(make_ship(ship_id))
+    if leads:
+        formation.add_ship(pawn, leader=True)
+    else:
+        formation.add_ship(pawn)
+    actors = {bot.pawn.id: bot.pawn for bot in wingmen}
+    game = SimpleNamespace(
+        interactions=SimpleNamespace(find_actor=actors.get),
+    )
+    return SimpleNamespace(pawn=pawn, game=game)
+
+
+def make_escort(player):
+    return WarpEscort(player, rng=np.random.default_rng(184))
+
+
+def run_states(escort, *states):
+    for state in states:
+        escort.update(state)
+
+
+def test_the_wingmen_of_the_player_s_formation_align_as_the_jump_charges():
+    wingmen = [make_wingman("w1"), make_wingman("w2")]
+    player = make_player(wingmen)
+    escort = make_escort(player)
+
+    run_states(escort, WarpState.IDLE, WarpState.CHARGING, WarpState.CHARGING)
+
+    for bot in wingmen:
+        bot.begin_warp_alignment.assert_called_once_with(player.pawn)
+
+
+def test_only_live_bots_able_to_escort_are_taken():
+    able = make_wingman("able")
+    unable = make_wingman("unable", can_escort=False)
+    # "gone" is in the formation but no longer an interacting actor
+    player = make_player([able, unable], extra_ids=["gone"])
+    escort = make_escort(player)
+
+    run_states(escort, WarpState.CHARGING, WarpState.INSIDE)
+
+    able.jump_to_warp.assert_called_once_with()
+    unable.begin_warp_alignment.assert_not_called()
+    unable.jump_to_warp.assert_not_called()
+
+
+@pytest.mark.parametrize("case", ["wingman", "no_formation"])
+def test_nobody_follows_a_player_who_does_not_lead(case):
+    wingman = make_wingman("w1")
+    player = make_player([wingman], leads=False)
+    if case == "no_formation":
+        player.pawn.formation = None
+    escort = make_escort(player)
+
+    run_states(
+        escort, WarpState.CHARGING, WarpState.INSIDE, WarpState.EXITING, WarpState.IDLE
+    )
+
+    wingman.begin_warp_alignment.assert_not_called()
+    wingman.jump_to_warp.assert_not_called()
+    wingman.arrive_from_warp.assert_not_called()
+
+
+def test_a_called_off_jump_releases_the_wingmen():
+    wingman = make_wingman("w1")
+    escort = make_escort(make_player([wingman]))
+
+    run_states(escort, WarpState.CHARGING, WarpState.IDLE)
+
+    wingman.cancel_warp_alignment.assert_called_once_with()
+    wingman.jump_to_warp.assert_not_called()
+    wingman.arrive_from_warp.assert_not_called()
+
+
+def test_the_wingmen_jump_with_the_player_and_wait_until_it_drops_out():
+    wingman = make_wingman("w1")
+    escort = make_escort(make_player([wingman]))
+
+    run_states(escort, WarpState.CHARGING, WarpState.INSIDE)
+    wingman.jump_to_warp.assert_called_once_with()
+
+    run_states(escort, WarpState.INSIDE, WarpState.EXITING, WarpState.EXITING)
+    wingman.arrive_from_warp.assert_not_called()
+
+
+def test_the_wingmen_land_on_their_slots_around_the_player_a_little_scattered():
+    wingmen = [make_wingman(f"w{i}") for i in range(1, 5)]
+    player = make_player(wingmen)
+    escort = make_escort(player)
+    formation = player.pawn.formation
+
+    run_states(
+        escort, WarpState.CHARGING, WarpState.INSIDE, WarpState.EXITING, WarpState.IDLE
+    )
+
+    positions = []
+    for bot in wingmen:
+        kwargs = bot.arrive_from_warp.call_args.kwargs
+        slot = formation.relative_positions[formation.get_ship_index(bot.pawn.id)]
+        # The player's axes are the world's here
+        scatter = kwargs["position"] - player.pawn.position - slot
+        assert np.all(np.abs(scatter) <= WARP_ESCORT_SLOT_JITTER * SCALE_M)
+        np.testing.assert_allclose(kwargs["orientation"], player.pawn.orientation)
+        np.testing.assert_allclose(kwargs["velocity"], player.pawn.speed)
+        assert 0.0 <= kwargs["delay_s"] <= ARRIVAL_STAGGER_S
+        positions.append(kwargs["position"])
+    # Scattered, not lined up on the exact slots
+    assert any(
+        not np.allclose(
+            p - player.pawn.position,
+            formation.relative_positions[i + 1],
+        )
+        for i, p in enumerate(positions)
+    )
+
+
+def test_a_wingman_lost_on_the_way_frees_its_slot():
+    w1, w2 = make_wingman("w1"), make_wingman("w2")
+    player = make_player([w1, w2])
+    escort = make_escort(player)
+    formation = player.pawn.formation
+
+    run_states(escort, WarpState.CHARGING, WarpState.INSIDE)
+    formation.remove_ship("w1")
+    run_states(escort, WarpState.IDLE)
+
+    scatter = (
+        w2.arrive_from_warp.call_args.kwargs["position"]
+        - player.pawn.position
+        - formation.relative_positions[1]
+    )
+    assert np.all(np.abs(scatter) <= WARP_ESCORT_SLOT_JITTER * SCALE_M)
+
+
+def test_a_dying_player_releases_aligning_wingmen():
+    wingman = make_wingman("w1")
+    escort = make_escort(make_player([wingman]))
+    run_states(escort, WarpState.CHARGING)
+
+    escort.player_lost()
+    run_states(escort, WarpState.IDLE)
+
+    wingman.cancel_warp_alignment.assert_called_once_with()
+    wingman.arrive_from_warp.assert_not_called()
+
+
+def test_wingmen_in_hyperspace_stay_there_when_the_player_dies():
+    wingman = make_wingman("w1")
+    escort = make_escort(make_player([wingman]))
+    run_states(escort, WarpState.CHARGING, WarpState.INSIDE)
+
+    escort.player_lost()
+    run_states(escort, WarpState.IDLE)
+
+    wingman.arrive_from_warp.assert_not_called()
+
+
+def test_a_real_wingman_follows_the_player_through_a_whole_jump():
+    bot = make_bot()
+    bot.pawn.parent = bot
+    player = make_player([bot])
+    escort = make_escort(player)
+
+    escort.update(WarpState.CHARGING)
+    run(bot, 0.5)
+    assert bot._warp_leader is player.pawn
+
+    escort.update(WarpState.INSIDE)
+    run(bot, 3.0)
+    assert bot.parked_in_hyperspace
+
+    escort.update(WarpState.EXITING)
+    run(bot, 1.0)
+    escort.update(WarpState.IDLE)
+    run(bot, ARRIVAL_STAGGER_S + TRANSIT_DURATION_S["fighter"] + 0.1)
+
+    assert not bot.pawn.in_hyperspace
+    assert not bot.pawn.node.isHidden()
+    assert np.linalg.norm(bot.pawn.position - player.pawn.position) < 4 * SCALE_M
+    np.testing.assert_allclose(bot.pawn.orientation, player.pawn.orientation)
+    bot.tactician.think.assert_called()

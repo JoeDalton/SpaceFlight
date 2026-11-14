@@ -41,6 +41,9 @@ WARP_RELAX_TIME_S = 0.2  # Time constant of the ship's speed towards the warp sp
 WARP_RELAX_MIN_FRAMES = 1.5  # ...stretched to this many frames at low frame rates
 WARP_MIN_ALTITUDE_M = 10000.0  # A jump only starts above this altitude
 WARP_AUTO_EXIT_ALTITUDE_M = 5000.0  # Drop out automatically below this altitude
+# Wingmen dropping in after their leader's warp land this far from their slot at
+# most, along each axis, as a fraction of the formation's slot spacing
+WARP_ESCORT_SLOT_JITTER = 0.3
 # A jump refused for want of altitude blinks the engine gauge this many times
 WARP_REFUSED_BLINKS = 3
 WARP_REFUSED_BLINK_PERIOD_S = 0.3
