@@ -187,6 +187,15 @@ class Bot(Destructible):
         self._jump_at_s = None
         # Whether the ship left the level alive (see depart)
         self.has_departed = False
+        # Escorting the player through a local warp (see WarpEscort): the
+        # leader the ship aligns on while its warp charges, None otherwise
+        self._warp_leader = None
+        # The jump-out transit that parks the ship in hyperspace rather than
+        # making it depart (see jump_to_warp), kept until the ship drops back
+        # in (see arrive_from_warp): it holds the muted colliders
+        self._warp_departure = None
+        # Whether the ship waits, hidden, in hyperspace (see jump_to_warp)
+        self.parked_in_hyperspace = False
 
         self.add_task(method=self.move_bot_task)
 
@@ -216,6 +225,10 @@ class Bot(Destructible):
         # Gone, waiting to be torn down (see depart)
         if self.has_departed:
             return
+        # Escorting the player through a local warp: jumping out, then parked
+        if self._warp_departure is not None:
+            self._step_warp_departure()
+            return
         # While in a hyperspace transit, the AI waits and the ship is held
         if self.hyperspace_transit is not None:
             if self.hyperspace_transit.step():
@@ -227,6 +240,10 @@ class Bot(Destructible):
         # Spooling up the hyperdrive: fly straight until the jump
         if self._jump_at_s is not None:
             self._spool_hyperdrive()
+            return
+        # Its leader's warp charging: fly along with it, weapons cold
+        if self._warp_leader is not None:
+            self._align_on_warp_leader()
             return
         if self.bot_type == "fighter" or self.bot_type == "major_ship":
             if self.tactician is not None:
@@ -331,6 +348,11 @@ class Bot(Destructible):
             return
         if self.is_dying or self.has_departed or self._jump_at_s is not None:
             return
+        if self._warp_departure is not None:
+            # Already out of the level, escorting the player: gone for good
+            self.depart()
+            return
+        self._warp_leader = None
         if self.hyperspace_transit is not None:
             if not self.hyperspace_transit.arriving:
                 return
@@ -360,6 +382,142 @@ class Bot(Destructible):
         self.hyperspace_transit.begin()
         self.hyperspace_transit.step()
 
+    @property
+    def can_escort_warp(self) -> bool:
+        """
+        Whether the ship can follow its leader through a local warp: a
+        live, flying ship, not leaving the level nor already escorting.
+        """
+        return (
+            self.bot_type in TRANSIT_DISTANCE_M
+            and not self.is_dying
+            and not self.has_departed
+            and self._jump_at_s is None
+            and self._warp_departure is None
+        )
+
+    def begin_warp_alignment(self, leader):
+        """
+        The leader's warp charges: fly along its heading at its speed, weapons
+        cold, ready to jump with it (see :meth:`jump_to_warp`). A ship still
+        dropping in lands at once. A no-op if the ship cannot escort.
+
+        :param leader: The leader's pawn
+        """
+        if not self.can_escort_warp:
+            return
+        if self.hyperspace_transit is not None:
+            if not self.hyperspace_transit.arriving:
+                return
+            self._end_hyperspace_arrival()
+        self._warp_leader = leader
+
+    def cancel_warp_alignment(self):
+        """
+        The leader's jump was called off: back to the fight at once.
+        """
+        if self._warp_leader is None:
+            return
+        self._warp_leader = None
+        self._next_think_s = -math.inf
+
+    def jump_to_warp(self):
+        """
+        Jump out after the leader, at once: the ship streaks away along its
+        heading (see HyperspaceTransit), then waits hidden in hyperspace, out
+        of every interaction and collision, until :meth:`arrive_from_warp`. It
+        does not depart: it is still alive, in its wave and formation.
+
+        A no-op if the ship cannot escort.
+        """
+        self._warp_leader = None
+        if not self.can_escort_warp:
+            return
+        if self.hyperspace_transit is not None:
+            if not self.hyperspace_transit.arriving:
+                return
+            self._end_hyperspace_arrival()
+        self._deactivate_collision_sensor()
+        self._drop_as_players_target(self.pawn)
+        for actor in self._mounted_actors():
+            self._drop_as_players_target(getattr(actor, "pawn", actor))
+        self._warp_departure = self._make_transit(arriving=False)
+        self._warp_departure.begin()
+        self._warp_departure.step()
+
+    def arrive_from_warp(
+        self,
+        position: np.ndarray,
+        orientation: np.ndarray,
+        velocity: np.ndarray,
+        delay_s: float = 0.0,
+    ):
+        """
+        Drop back in from hyperspace after the leader, at a new pose (see
+        :meth:`begin_hyperspace_arrival`). A ship still streaking out drops
+        in all the same. A no-op if the ship did not jump to warp.
+
+        :param position: Where the ship lands
+        :param orientation: Its orientation quaternion (w, x, y, z)
+        :param velocity: Its velocity on landing
+        :param delay_s: Time to wait, hidden, before the drop starts
+        """
+        departure = self._warp_departure
+        if departure is None:
+            return
+        departure.end()
+        self._warp_departure = None
+        self.parked_in_hyperspace = False
+        self.pawn.hold_step(
+            position=np.array(position, dtype=float),
+            orientation=np.array(orientation, dtype=float),
+            speed=np.array(velocity, dtype=float),
+            offset_m=0.0,
+        )
+        self.begin_hyperspace_arrival(delay_s=delay_s)
+        # Drawn far behind (or hidden) from this frame on, never on the pose
+        self.hyperspace_transit.step()
+
+    def _align_on_warp_leader(self):
+        """
+        Fly along the leader's heading at its speed (see
+        begin_warp_alignment).
+        """
+        leader = self._warp_leader
+        if self._think_is_due() or self._commands is None:
+            self._commands = self.pilot.pilot(
+                target_direction=np.array(leader.forward, dtype=float),
+                desired_speed_mps=float(magnitude(leader.speed)),
+                up_reference=self.navigator.up_reference,
+                minimum_speed_mps=self.navigator.minimum_speed_mps,
+            )
+        self._schedule_sensor()
+        throttle, yaw_rate, pitch_rate, roll_rate = self._commands
+        self.pawn.move(
+            throttle=throttle,
+            yaw_rate=yaw_rate,
+            pitch_rate=pitch_rate,
+            roll_rate=roll_rate,
+        )
+
+    def _step_warp_departure(self):
+        """
+        Streak out after the leader, then wait parked: hidden, held at the
+        jump point (keeping the integrator slot valid).
+        """
+        departure = self._warp_departure
+        if not self.parked_in_hyperspace:
+            if departure.step():
+                self.parked_in_hyperspace = True
+                self.pawn.node.hide()
+            return
+        self.pawn.hold_step(
+            position=departure.position,
+            orientation=departure.orientation,
+            speed=departure.velocity,
+            offset_m=departure.distance_m,
+        )
+
     def depart(self):
         """
         Leave the level for good, alive: no explosion and no kill.
@@ -374,6 +532,9 @@ class Bot(Destructible):
         self.has_departed = True
         self.hyperspace_transit = None
         self._jump_at_s = None
+        self._warp_leader = None
+        self._warp_departure = None
+        self.parked_in_hyperspace = False
         self.pawn.node.hide()
         self.game.departed_ids.add(self.pawn.id)
         self._drop_as_players_target(self.pawn)
