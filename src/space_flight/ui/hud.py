@@ -1160,9 +1160,10 @@ class AimHUD:
         self._pin_on_screen(self.target_anchor, self._cam_space(target.position))
 
         # Find distance and write it below the box
-        distance = (
-            Point3(*target.position) - self.game.app.camera.getPos(self.game.root_node)
-        ).length()
+        camera_position = self.game.render_origin.to_world(
+            self.game.app.camera.getPos(self.game.root_node)
+        )
+        distance = float(np.linalg.norm(np.asarray(target.position) - camera_position))
         self.distance_label["text"] = f"{distance:.0f} m"
 
     def update_lock_tint(self) -> None:
@@ -1239,7 +1240,8 @@ class AimHUD:
     def _cam_space(self, world_position: np.ndarray) -> Point3:
         """:return: A world position, in camera space"""
         return self.game.app.cam.getRelativePoint(
-            self.game.root_node, Point3(*world_position)
+            self.game.root_node,
+            Point3(*self.game.render_origin.to_local(world_position)),
         )
 
     def _pin_on_screen(self, node: NodePath, cam_space_pos: Point3) -> None:

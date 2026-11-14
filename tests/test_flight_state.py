@@ -17,6 +17,7 @@ from panda3d.core import NodePath
 from space_flight import CAMERA_FAR_M
 from space_flight.game.flight_state import FlightState
 from space_flight.game.kills import DamageSource, KillLog, credit_hit
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.game.scenario import Mission
 
 
@@ -78,36 +79,50 @@ def test_end_level_tallies_the_players_kills_and_the_objectives():
     }
 
 
-# Far enough from the origin that float32 steps are ~8 mm
-_FAR_POSITION = np.array([123456.789, -98765.4321, 54321.123])
+# The moon's distance: float32 steps are a metre there
+_FAR_POSITION = np.array([3.0e6, -9.0e6, 1.234567e6])
 # A cockpit-like offset from the ship node, under a metre
 _COCKPIT_OFFSET = (0.0, 0.8, -0.2)
 
 
+class _FakePawn:
+    """A ship node written from the player's float64 position, as Ship does."""
+
+    def __init__(self, fs: FlightState, node: NodePath):
+        self.fs = fs
+        self.node = node
+        self.position = _FAR_POSITION.copy()
+
+    def sync_render_node(self):
+        self.node.setPos(*self.fs.render_origin.to_local(self.position))
+
+
 def _make_recentering_state():
     """
-    A FlightState with a render -> root_node -> ship -> cockpit chain, the ship
-    node written from the player's float64 position like Ship.move() does.
+    A FlightState with a render -> root_node -> ship -> cockpit chain and a
+    render origin still at the world's origin, the player far from it.
     """
     fs = object.__new__(FlightState)
     render = NodePath("render")
     fs.root_node = render.attachNewNode("game_root_node")
-    fs.player = MagicMock()
-    fs.player.pawn.position = _FAR_POSITION.copy()
+    fs.render_origin = RenderOrigin(fs.root_node)
     ship = fs.root_node.attachNewNode("ship")
-    ship.setPos(*fs.player.pawn.position)
     ship.setHpr(37.0, -12.0, 5.0)
     cockpit = ship.attachNewNode("cockpit")
     cockpit.setPos(*_COCKPIT_OFFSET)
+    fs.player = MagicMock()
+    fs.player.pawn = _FakePawn(fs, ship)
+    fs.player.pawn.sync_render_node()
     return fs, render, ship, cockpit
 
 
-def test_recenter_render_origin_offsets_root_by_minus_player_position():
+def test_recenter_render_origin_rebases_onto_the_player():
     fs, _, _, _ = _make_recentering_state()
+
     fs.recenter_render_origin()
-    np.testing.assert_allclose(
-        np.array(fs.root_node.getPos()), -_FAR_POSITION, rtol=1e-7
-    )
+
+    np.testing.assert_array_equal(fs.render_origin.origin, _FAR_POSITION)
+    assert tuple(fs.root_node.getPos()) == (0.0, 0.0, 0.0)
 
 
 def test_recenter_render_origin_puts_player_ship_exactly_at_render_origin():
@@ -120,21 +135,28 @@ def test_recenter_render_origin_gives_the_cockpit_a_precise_render_transform():
     fs, render, ship, cockpit = _make_recentering_state()
     expected = np.array(render.getRelativeVector(ship, _COCKPIT_OFFSET))
 
-    # Without recentering, the cockpit's net position is rounded at ~1e5 scale
+    # Without recentering, the cockpit's net position is rounded to the metre
     raw_error = np.abs(
         np.array(cockpit.getPos(render)) - _FAR_POSITION - expected
     ).max()
-    assert raw_error > 1e-4
+    assert raw_error > 1e-2
 
     fs.recenter_render_origin()
     np.testing.assert_allclose(np.array(cockpit.getPos(render)), expected, atol=1e-6)
 
 
-def test_recenter_render_origin_keeps_world_coordinates_relative_to_root():
+def test_recenter_render_origin_keeps_world_coordinates():
+    """Through the render origin, the scene graph still gives back world
+    positions, now to the millimetre."""
     fs, _, ship, _ = _make_recentering_state()
-    before = np.array(ship.getPos(fs.root_node))
     fs.recenter_render_origin()
-    np.testing.assert_array_equal(np.array(ship.getPos(fs.root_node)), before)
+    fs.player.pawn.position = _FAR_POSITION + np.array([1000.123, -2000.456, 3.789])
+    fs.player.pawn.sync_render_node()
+    fs.recenter_render_origin()
+
+    world = fs.render_origin.to_world(ship.getPos(fs.root_node))
+
+    np.testing.assert_allclose(world, fs.player.pawn.position, atol=1e-3)
 
 
 def test_only_the_first_ending_counts():

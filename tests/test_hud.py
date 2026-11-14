@@ -16,6 +16,7 @@ from panda3d.core import NodePath, PerspectiveLens, Point3, Vec3
 from space_flight import WARP_REFUSED_BLINK_PERIOD_S, WARP_REFUSED_BLINKS
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
 from space_flight.ai.missile.incoming_missile import IncomingMissile
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
     CHATTER,
@@ -161,6 +162,7 @@ def make_aim_hud() -> AimHUD:
     """
     aim_hud = object.__new__(AimHUD)
     aim_hud.game = MagicMock()
+    aim_hud.game.render_origin = RenderOrigin(NodePath("root"))
     aim_hud.show_lead_indicator = True
     app = aim_hud.game.app
     app.camLens = PerspectiveLens()
@@ -349,6 +351,7 @@ def test_disabled_lead_indicator_is_never_shown():
 def test_aim_hud_reads_the_lead_indicator_setting(enabled):
     """The AimHUD reads whether to show the lead indicator once, when built."""
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.app.gameplay_settings.config = {"player": {"lead_indicator": enabled}}
 
     with (
@@ -444,6 +447,7 @@ def test_aim_hud_builds_hidden_and_cleans_up(spaceflight_app):
     1.5 times the lead indicator's size, and clean() removes its nodes.
     """
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.app.loader = spaceflight_app.loader
     aim_hud = AimHUD(game=game)
     missile_warning_line = aim_hud.missile_warning_line
@@ -1107,6 +1111,7 @@ def test_fps_counter_text_is_only_set_when_it_changes(shown, set_again):
     hud.fps_counter = MagicMock()
     hud.fps_counter.getText.return_value = shown
     hud.game = MagicMock()
+    hud.game.render_origin = RenderOrigin(NodePath("root"))
     hud.game.game_time.get_average_frame_rate.return_value = 60.0
 
     hud.update_debug_hud()

@@ -6,7 +6,6 @@ from operator import attrgetter
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
-from panda3d.core import OmniBoundingVolume
 
 from space_flight import CAMERA_FAR_M, RECORD_GAME
 from space_flight.actors.fighter import Fighter
@@ -185,13 +184,6 @@ class Player:
                 self.game.app.render2d, self.game.app.win, look=WARP_LOOK
             )
         self.warp_drive = WarpDrive(ship=self.pawn, overlay=overlay)
-
-        # Never cull the player's own ship part by part: Panda3D culls in
-        # root_node's frame, where far from the world's origin (after a warp)
-        # positions are float32-rounded to a metre or more, and the cockpit's
-        # parts, closer to the camera than that, would blink in and out
-        self.pawn.node.node().setBounds(OmniBoundingVolume())
-        self.pawn.node.node().setFinal(True)
 
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)

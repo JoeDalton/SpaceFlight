@@ -41,6 +41,13 @@ has the exact vertex-column layout and the render-state gotchas.
 - **`load_atlas()`** loads a sprite-atlas PNG and its JSON rect descriptor
   into a `(Texture, rects)` pair. The atlases are built by
   `scripts/build_particle_atlas.py`.
+- **Anchored spawn positions.** A buffer writes spawn positions relative to
+  its world `anchor`, its node placed there in the game root's frame (see
+  [the floating render origin](game.md#the-floating-render-origin)), so the
+  float32 vertex data stays small wherever the particles are. A spawn more than
+  `ANCHOR_REACH_M` (2 km) from the anchor moves it (`move_anchor`), rewriting
+  the live particles' positions to keep them in place. Positions are passed as
+  float64 world points.
 
 ## `fire_smoke_fx.py` — fire and smoke
 

@@ -9,6 +9,7 @@ from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.actors.major_ship.targeting_system import TargetingSystem
 from space_flight.actors.major_ship.turret import Turret
 from space_flight.ai import Personality
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.global_architecture.gameplay_settings import auto_aim_params
 
 
@@ -155,6 +156,7 @@ def test_turret_is_a_subsystem_of_its_ship():
     game.destructibles.alive_objects = []
     game.method_lists = {}
     game.root_node = NodePath("root")
+    game.render_origin = RenderOrigin(game.root_node)
     ship = SimpleNamespace(
         team=2, node=NodePath("ship"), is_dead=False, speed=np.zeros(3)
     )

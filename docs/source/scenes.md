@@ -30,7 +30,8 @@ API is in the [code reference](apidocs/index.rst).
   every frame, so cheap geometry can stand for something arbitrarily
   distant. This is separate from the floating render origin (see
   [docs/game.md](game.md#the-floating-render-origin)); scene code works in world
-  coordinates under `game.root_node`.
+  coordinates, converted at the scene graph (`game.render_origin`) for nodes
+  under `game.root_node`.
 
 ## `scenes.py` — the `Scene` catalogue
 

@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from panda3d.core import NodePath
 
 from space_flight.actors.major_ship.shield import (
     _APPEARING,
@@ -24,6 +25,7 @@ from space_flight.actors.major_ship.shield import (
     _UP,
     Shield,
 )
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.utils.state_machine import Cooldown, StateMachine
 from space_flight.weapons import ION, ION_DAMAGE_FACTOR
 
@@ -101,6 +103,7 @@ def make_shield_without_init(
     shield.node = MagicMock()
     shield.node.isEmpty.return_value = False
     shield.game = MagicMock()
+    shield.game.render_origin = RenderOrigin(NodePath("root"))
     shield.game.game_time.get_current_time.side_effect = clock
     shield.game.game_time.get_time_step.return_value = time_step
     return shield
@@ -605,7 +608,7 @@ def make_shield_for_contains(shape_type, ship_pos=(0, 0, 0), ship_heading=0.0, *
     ship.setPos(*ship_pos)
     ship.setH(ship_heading)
     shield = object.__new__(Shield)
-    shield.game = SimpleNamespace(root_node=root)
+    shield.game = SimpleNamespace(root_node=root, render_origin=RenderOrigin(root))
     shield.node = ship.attachNewNode("shield_node")
     shield.model = SimpleNamespace(shape_type=shape_type, **dims)
     return shield

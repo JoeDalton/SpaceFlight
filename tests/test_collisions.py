@@ -34,6 +34,7 @@ from space_flight.game.collisions import (
     CollisionSystem,
     owners_share_vehicle,
 )
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
@@ -157,6 +158,24 @@ def test_owner_without_mounted_on_attribute_is_safe():
 # ---------------------------
 
 
+class PassThroughOrigin:
+    """
+    A render origin at the world's origin, handing points through unchanged:
+    the mocked collision entries' points may be mocks themselves. (The
+    conversions are tested in test_render_origin.py.)
+    """
+
+    origin = np.zeros(3)
+
+    @staticmethod
+    def to_world(point):
+        return point
+
+    @staticmethod
+    def to_local(point):
+        return point
+
+
 def make_collision_system_without_init() -> CollisionSystem:
     """
     Build a CollisionSystem that bypasses __init__ (no ShowBase/traverser) with
@@ -166,6 +185,7 @@ def make_collision_system_without_init() -> CollisionSystem:
     """
     system = object.__new__(CollisionSystem)
     system.game = MagicMock()
+    system.game.render_origin = PassThroughOrigin()
     system.game.game_time.get_average_frame_rate.return_value = 60.0
     system.player_collision_damage_multiplier = 1.0
     return system
@@ -296,6 +316,7 @@ def test_ship_into_subsystem_no_pushback_when_separating():
 def test_init_reads_the_players_collision_damage_multiplier():
     """The player's collision damage multiplier is read once, at level load."""
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.app.gameplay_settings.config = {
         "player": {"collision_damage_multiplier": 0.25}
     }
@@ -777,7 +798,7 @@ def traverse_munition_into_shield(system: CollisionSystem, munition, from_solid)
     shield.is_enabled = True
     shield.speed = None
     shield.mounted_on = SimpleNamespace(speed=np.zeros(3))
-    shield.game = SimpleNamespace(root_node=root)
+    shield.game = SimpleNamespace(root_node=root, render_origin=RenderOrigin(root))
     shield.node = root.attachNewNode("shield_node")
     shield.model = SimpleNamespace(
         shape_type="tube", point_a=point_a, point_b=point_b, radius_m=radius
@@ -1237,6 +1258,8 @@ def test_attach_collision_box_builds_a_tagged_box():
     from space_flight.game.collisions import attach_collision_box
 
     game = MagicMock()
+
+    game.render_origin = RenderOrigin(NodePath("root"))
     parent = NodePath("ship")
     owner = object()
 

@@ -14,6 +14,7 @@ from panda3d.core import NodePath
 
 from space_flight.actors.major_ship.sub_system import SubSystem
 from space_flight.fx import spark_fx
+from space_flight.game.render_origin import RenderOrigin
 from space_flight.weapons import (
     ION,
     ION_CAPACITY_HEALTH_FRACTION,
@@ -29,9 +30,11 @@ def make_game_and_parent(team: int = 2):
     (no loader/traverser needed: a subsystem collider is into-only).
     """
     game = MagicMock()
+    game.render_origin = RenderOrigin(NodePath("root"))
     game.destructibles.alive_objects = []
     game.method_lists = {}
     game.root_node = NodePath("root")
+    game.render_origin = RenderOrigin(game.root_node)
     parent = SimpleNamespace(
         team=team, node=NodePath("ship"), is_dead=False, speed=np.zeros(3)
     )
@@ -111,6 +114,7 @@ def test_handle_health_clamps_to_max_and_refreshes_position():
         parent=parent, max_health=1000.0, current_health=1200.0
     )
     sub_system.game = MagicMock()
+    sub_system.game.render_origin = RenderOrigin(NodePath("root"))
     sub_system.node = MagicMock()
     sub_system.node.getPos.return_value = (1.0, 2.0, 3.0)
 
@@ -182,6 +186,7 @@ def test_play_death_spawns_explosion_at_position():
     sub_system.position = np.array([10.0, 20.0, 30.0])
     sub_system.explosion_scale = 15.0
     sub_system.game = MagicMock()
+    sub_system.game.render_origin = RenderOrigin(NodePath("root"))
 
     sub_system.play_death()
 
@@ -215,6 +220,7 @@ def test_clean_removes_nodes_and_marks_dead():
     """
     sub_system = make_sub_system_without_init()
     sub_system.game = MagicMock()
+    sub_system.game.render_origin = RenderOrigin(NodePath("root"))
     sub_system.game.method_lists = {}
     collision_np = MagicMock()
     sub_system.collision_np = collision_np

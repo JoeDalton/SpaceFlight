@@ -240,7 +240,7 @@ class Ship(Pawn):
         # Create a dummy node to attach models
         self.node = NodePath("ship_node")
         self.node.reparentTo(self.game.root_node)
-        self.node.set_pos(*ini_position)
+        self.node.set_pos(*self.game.render_origin.to_local(ini_position))
         self.node.set_quat(Quat(*ini_orientation))
 
         # Setup state vector
@@ -759,9 +759,10 @@ class Ship(Pawn):
             partial_x_dot_previous=self.state_dot_previous,
         )
 
-    def _sync_render_node(self):
-        """Move the render node to the ship's pose."""
-        self.node.setPos(*self.position)
+    def sync_render_node(self):
+        """Move the render node to the ship's pose (in the game root's frame,
+        see RenderOrigin)."""
+        self.node.setPos(*self.game.render_origin.to_local(self.position))
         self.node.setQuat(Quat(*self.orientation))
 
     def _attach_hull_collider(self):
@@ -854,7 +855,7 @@ class Ship(Pawn):
         self.adjust_engine_pitch(throttle=throttle)
 
         # Update render
-        self._sync_render_node()
+        self.sync_render_node()
 
     @property
     def is_dying(self) -> bool:
@@ -912,7 +913,7 @@ class Ship(Pawn):
 
         # Same physics + render update as move(), without set_inputs.
         self.move_ship_physics()
-        self._sync_render_node()
+        self.sync_render_node()
 
     def hold_step(
         self,
@@ -948,7 +949,9 @@ class Ship(Pawn):
         self.state_dot = np.zeros(10)
         self.state_dot_previous = np.zeros(10)
         self._register_integrator()
-        self.node.setPos(*(self.position + offset_m * self.forward))
+        self.node.setPos(
+            *self.game.render_origin.to_local(self.position + offset_m * self.forward)
+        )
         self.node.setQuat(Quat(*self.orientation))
 
     def take_hit(

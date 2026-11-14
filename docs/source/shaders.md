@@ -26,17 +26,20 @@ its [ocean](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/ocea
   (see [the floating render origin](game.md#the-floating-render-origin)), so
   `p3d_ModelMatrix`, `p3d_ViewMatrix` and `p3d_ViewProjectionMatrix` are
   relative to a frame that moves every frame. A shader must never combine them
-  with a position Python measured relative to `game.root_node`. The shaders
-  here stay consistent in one of three ways:
+  with a world position. The shaders here stay consistent in one of three
+  ways:
   - **Their own world matrix.** WorldBuilder's `ocean.vert` takes
     `uModelMatrix`, the plane's matrix relative to the ocean's base node, so
     its world position, `iCameraPos` and `uReflMVP` share that frame.
   - **One frame on the GPU.** `shield.frag` takes the eye from
     `p3d_ViewMatrixInverse`, in the same render space as its
     `p3d_ModelMatrix` position. `laser.vert` works in model space.
-  - **World geometry under `root_node`.** `spark.vert`, `explosion.vert` (and
-    WorldBuilder's `cloud.vert`) place vertices in world coordinates and project them with
-    `p3d_ModelViewProjectionMatrix`, whose model part carries the offset.
+  - **Model space, placed by the node.** `spark.vert` and `explosion.vert`
+    place vertices relative to their particle buffer's anchor, and project
+    them with `p3d_ModelViewProjectionMatrix`, whose model part carries the
+    anchor's place (see
+    [the floating render origin](game.md#the-floating-render-origin)).
+    WorldBuilder's `cloud.vert` places its own geometry around the camera.
 
 ## Hyperspace shaders
 

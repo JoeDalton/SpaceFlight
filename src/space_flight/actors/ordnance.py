@@ -16,7 +16,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 import numpy as np
-from panda3d.core import NodePath, Point3, Vec3
+from panda3d.core import NodePath, Vec3
 
 from space_flight.actors.destructibles import Destructible
 from space_flight.actors.ship import Ship
@@ -214,11 +214,11 @@ class Ordnance(Ship):
             self.collision_sphere_np.setPythonTag("owner", None)
         self.health = 0.0
 
-    def impact_position(self) -> Point3:
+    def impact_position(self) -> np.ndarray:
         """
-        :return: The ordnance's current position, in the game root's frame
+        :return: The ordnance's current position, world frame (float64)
         """
-        return Point3(*self.position)
+        return np.array(self.position, dtype=float)
 
     def apply_damage(self, damage: float, damage_type: str):
         """

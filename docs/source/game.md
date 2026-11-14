@@ -65,62 +65,95 @@ HUD, and drives the per-frame update.
 
 ## The floating render origin
 
-The scene graph has two frames that are easy to confuse:
+The scene graph has three frames that are easy to confuse:
 
-- **`game.root_node` is the world frame.** It is the single child of
-  `render` created by `initialize_game_structure()`, and every gameplay node
-  hangs under it: ships, munitions, 2D planets. A position relative to
-  `root_node` is a world position, the same thing physics stores in
-  `pawn.position`. WorldBuilder's parts are the exception: a `World` (sky,
-  lights, planets) and an asteroid field hang under `render` and place
-  themselves around the camera in float64, from the player's world position.
+- **The world frame** is where gameplay lives: physics (`pawn.position`, in
+  float64 numpy), AI, missions, collision points as the handlers report them.
+- **`game.root_node`'s frame is local:** local = world −
+  `game.render_origin.origin`. `root_node` is the single child of `render`
+  created by `initialize_game_structure()`, and every gameplay node hangs under
+  it: ships, munitions, particle buffers, waypoints, 2D planets. WorldBuilder's
+  parts are the exception: a `World` (sky, lights, planets) and an asteroid
+  field hang under `render` and place themselves around the camera in float64,
+  from the player's world position.
 - **`render` is the frame Panda3D draws from.** The engine composes every
   node's net transform from `render` down, in float32.
 
-`FlightState.recenter_render_origin()` moves `root_node` inside `render` so
-that the player's ship sits at the render origin. It runs every frame right
-after the actors' updates (once `Ship.move()` has written and sanitised the
-player's pose), and once in `_on_build_complete` so the first frame is
-already centred.
+**Why.** A float32 world position only has a coarse grid far from the
+origin: about 1 mm at 10 km, 8 mm at 100 km, and 1 m at the moon's distance
+(10,000 km), which a warp now reaches. Everything placed in world coordinates
+would jitter by that much. That covers bolts, sparks and other ships, but also
+culling, which runs in `root_node`'s frame: cockpit parts closer to the camera
+than a grid step blink in and out.
 
-**Why.** Physics runs in float64 numpy, but a float32 world position only has
-a coarse grid far from the origin: about 1 mm at 10 km, 4 mm at 50 km and
-8 mm at 100 km. The camera and the cockpit are siblings under the player's
-ship node, so without the offset each gets its own large net transform,
-rounded independently, and the cockpit shakes against the camera by several
-pixels (issue #29). The ship node and the offset are rounded from the same
-float64 position, so their translations cancel exactly, and everything near
-the player gets small, precise render transforms. Nothing visibly moves: the
-whole world, camera included, shifts by the same amount, and rendering only
-depends on positions relative to the camera.
+[`RenderOrigin`](../../src/space_flight/game/render_origin.py) keeps every
+coordinate in the scene graph small:
+
+- **`origin`** is a float64 world point near the player.
+  `to_local(world)` / `to_world(local)` convert between the world and the
+  root's frame, in float64.
+- **`follow(player_position)`** runs every frame from
+  `FlightState.recenter_render_origin()`, right after the actors' updates, and
+  once before the level builds so it starts centred.
+  - When the player is more than `REBASE_DISTANCE_M` (5 km) from the origin,
+    it **re-bases**: the origin jumps onto the player, and the root's direct
+    children are shifted back by the jump. A node placed once (a waypoint, a
+    particle buffer) stays where it was in the world; a node placed every frame
+    (a ship) is placed afresh anyway. Subscribers (`subscribe`) are told the
+    shift.
+  - Then it offsets the root by −(player − origin), a small vector, so that
+    the player sits at render's origin. The ship node and that offset are
+    rounded from the same float64 value, so they cancel exactly: the camera and
+    the cockpit (siblings under the ship node) never shake against each other
+    (issue #29). After a re-base, `FlightState` places the player's ship again
+    from float64.
+- Render's origin is therefore always the player's world position, which is
+  what the scene's WorldBuilder world is given. It needs no change.
 
 **Rules for code that touches the scene graph:**
 
-- Read and write world positions relative to `game.root_node`
-  (`getPos(root_node)`, `getSurfacePoint(root_node)`,
-  `getRelativePoint(root_node, …)`), never relative to `render`. Parent new
-  world-space nodes under `root_node`. Local moves (`setPos()` with no
-  reference node) are unaffected.
-- Treat render-space positions as valid for the current frame only: `render`
-  space moves with the player every frame.
-- In shaders, Panda3D's `p3d_ModelMatrix`, `p3d_ViewMatrix` and
+- **Convert at the boundary.**
+  - World → node: `node.setPos(*game.render_origin.to_local(world))`.
+  - Node → world: `game.render_origin.to_world(node.getPos(game.root_node))`,
+    and the same for `getSurfacePoint(root_node)` and `getMat(root_node)`
+    transforms.
+  - Directions, normals and rotations need no conversion: the frames differ by
+    a translation only.
+  - A query that takes a point together with its frame (WorldBuilder's terrain
+    `material_at`, `velocity_at`) gets the local point with `root_node`.
+- **Keep world positions in float64.** A world point in a float32 `Point3`
+  is rounded to the metre far from the origin. `CollisionSystem._world_point`
+  and `impact_position` return float64 arrays.
+- **Parent new nodes under `root_node`.** Local moves (`setPos()` with no
+  reference node) are unaffected. A grandchild placed every frame relative to
+  its parent breaks on a re-base (only direct children are shifted): move the
+  direct child instead, as `Planet2D` does.
+- **Don't interpolate in the root's frame.** An interval would jump at a
+  re-base. Munitions coast instead: each frame, launch + velocity × time, in
+  float64 (`Munition.move`).
+- **Particle buffers write spawn positions relative to an anchor.** The
+  buffer's node is placed at the anchor. A spawn more than `ANCHOR_REACH_M`
+  from it moves the anchor, rewriting the live particles' positions (see
+  [docs/fx.md](fx.md)).
+- **Treat render-space positions as valid for the current frame only.**
+  `render` space moves with the player every frame.
+- **In shaders,** Panda3D's `p3d_ModelMatrix`, `p3d_ViewMatrix` and
   `p3d_ViewProjectionMatrix` are relative to `render`, not to the world. Don't
-  mix them with positions Python measured relative to `root_node`. See the
-  shader [mental model](shaders.md#mental-model) for how each shader deals
-  with it.
-- 3D audio (`Audio3DManager`) works in `render` space. That is fine because
+  mix them with world positions. See the shader
+  [mental model](shaders.md#mental-model) for how each shader deals with it.
+- **3D audio** (`Audio3DManager`) works in `render` space. That's fine because
   only positions relative to the listener matter, but a sound must be placed
   before it plays: see `SFX.attach_sound` in [docs/fx.md](fx.md).
 
-**What stays at world scale.** Collision traversal resolves in float32 world
-coordinates. Particle bursts (sparks, explosions, cockpit sparks) bake world
-positions into their vertex data, so they keep a few millimetres of GPU
-rounding far from the origin. World-anchored shader noise (the ocean swell)
-is sampled at world coordinates. None of these is visible in practice.
+**What stays at world scale:** world-anchored shader noise (the ocean swell)
+is sampled at world coordinates.
 
-The behaviour is pinned by the `recenter_render_origin` tests in
+The behaviour is pinned by [`tests/test_render_origin.py`](../../tests/test_render_origin.py)
+(conversions, re-basing, munitions and particles across a re-base, and a node
+placed to the millimetre at the moon's distance) and by the
+`recenter_render_origin` tests in
 [`tests/test_flight_state.py`](../../tests/test_flight_state.py), including one
-that shows the imprecision without the offset.
+that shows the imprecision without it.
 
 ## Split depth
 

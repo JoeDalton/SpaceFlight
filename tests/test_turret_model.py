@@ -14,6 +14,7 @@ import pytest
 from panda3d.core import NodePath
 
 from space_flight.actors.major_ship.turret_model import TurretModel
+from space_flight.game.render_origin import RenderOrigin
 
 
 @pytest.fixture
@@ -197,7 +198,10 @@ def test_each_turret_swivels_its_own_joints(spaceflight_app):
     one leaves the other's barrel where it was (instancing the model would share
     the swivelling joints between every turret of the type).
     """
-    game = SimpleNamespace(app=spaceflight_app, root_node=NodePath("root"))
+    root_node = NodePath("root")
+    game = SimpleNamespace(
+        app=spaceflight_app, root_node=root_node, render_origin=RenderOrigin(root_node)
+    )
     first = TurretModel(game=game, parent_node=NodePath("mount_1"))
     second = TurretModel(game=game, parent_node=NodePath("mount_2"))
     second.set_yaw(10.0)

@@ -28,8 +28,10 @@ class Planet2D:
         cm = CardMaker("planet_card")
         cm.setFrame(-1, 1, -1, 1)
 
+        # Rides with the player (see move_planet_task), the card at its offset
         root = NodePath("planet_node")
         root.reparentTo(game.root_node)
+        self.root = root
         root.setTransparency(TransparencyAttrib.MAlpha)
         root.setShaderOff()
         root.setLightOff()
@@ -59,8 +61,10 @@ class Planet2D:
         self.game.method_lists[self.id] = [self.move_planet_task]
 
     def move_planet_task(self):
-        new_position = self.position + self.game.player.pawn.position
-        self.planet.setPos(new_position[0], new_position[1], new_position[2])
+        """Keep the backdrop at its fixed offset from the player."""
+        self.root.setPos(
+            *self.game.render_origin.to_local(self.game.player.pawn.position)
+        )
 
     def clean(self):
         """
@@ -68,5 +72,6 @@ class Planet2D:
         """
         if self.game.method_lists:
             self.game.method_lists.pop(self.id, None)
-        self.planet.removeNode()
+        # The card goes with its parent
+        self.root.removeNode()
         self.game = None

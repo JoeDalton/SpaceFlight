@@ -80,7 +80,9 @@ class TrackingMount(SubSystem):
 
         # Orient the mounting base (SubSystem already positioned the node)
         self.node.set_quat(Quat(*base_orientation))
-        self.position = np.array(self.node.getPos(self.game.root_node))
+        self.position = self.game.render_origin.to_world(
+            self.node.getPos(self.game.root_node)
+        )
 
         # Agility and physical delay of the mount's aim
         self.inputs_filter_time_s = conf["inputs_filter_time_s"]

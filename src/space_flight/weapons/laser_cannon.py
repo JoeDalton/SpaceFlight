@@ -171,9 +171,9 @@ class LaserCannon(Weapon):
             shot_power *= self.energy.laser_damage_factor()
             self.energy.consume_laser_shot()
 
-        # Compute start position
-        start_position = self.cannon_nodes[self.current_next_cannon_idx].get_pos(
-            self.game.root_node
+        # Compute start position (world frame, float64, see RenderOrigin)
+        start_position = self.game.render_origin.to_world(
+            self.cannon_nodes[self.current_next_cannon_idx].get_pos(self.game.root_node)
         )
         # Get shot direction from auto-aim, if any
         try:
@@ -284,7 +284,14 @@ class LaserShot(Munition):
         # non-degenerate up_hint works.
         camera = self.game.app.camera
         if camera is not None:
-            to_camera_vector = camera.get_pos(self.game.root_node) - start_position
+            to_camera_vector = Vec3(
+                *(
+                    self.game.render_origin.to_world(
+                        camera.get_pos(self.game.root_node)
+                    )
+                    - np.asarray(start_position, dtype=float)
+                )
+            )
         else:
             to_camera_vector = Vec3(0, 0, 1)
         orientation_quat = build_axis_billboard_quat(
