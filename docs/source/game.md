@@ -348,7 +348,11 @@ see [scenario_scripting.md](scenario_scripting.md).
 description)`; the level selection menu reads it too. `FlightState` calls
 the level's upfront function in `enter()`; `_make_build_generator`
 builds the rest of the scene (`scene.build_decomposed()`) during the
-animation, then creates the level's `Mission` and starts its body.
+animation, loads the exterior models of every wave the level declares
+(`_preload_wave_models`: the `WaveSpec` constants of the mission's module,
+one model per build step), then creates the level's `Mission` and starts its
+body. A model first loaded when its wave spawned stalled the game for a
+second or two (the glTF importer's tangents).
 
 ## Mission scripting
 

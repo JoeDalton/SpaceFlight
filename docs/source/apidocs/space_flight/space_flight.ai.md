@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 3
 
-space_flight.ai.tracking_mount
 space_flight.ai.missile
+space_flight.ai.tracking_mount
 ```
 
 ## Submodules
@@ -23,12 +23,12 @@ space_flight.ai.missile
 :titlesonly:
 :maxdepth: 1
 
-space_flight.ai.interactions
-space_flight.ai.collision_sensor
-space_flight.ai.formation
 space_flight.ai.think_scheduler
-space_flight.ai.auto_aim
 space_flight.ai.target_lock
+space_flight.ai.auto_aim
+space_flight.ai.collision_sensor
+space_flight.ai.interactions
+space_flight.ai.formation
 ```
 
 ## Package Contents
@@ -151,18 +151,12 @@ space_flight.ai.target_lock
 
 ````
 
-`````{py:class} Intent(*args, **kwds)
+`````{py:class} Intent
 :canonical: space_flight.ai.Intent
 
 Bases: {py:obj}`enum.Enum`
 
 ```{autodoc2-docstring} space_flight.ai.Intent
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} space_flight.ai.Intent.__init__
 ```
 
 ````{py:attribute} ENGAGE
@@ -247,18 +241,12 @@ Bases: {py:obj}`enum.Enum`
 
 `````
 
-`````{py:class} AttackMode(*args, **kwds)
+`````{py:class} AttackMode
 :canonical: space_flight.ai.AttackMode
 
 Bases: {py:obj}`enum.Enum`
 
 ```{autodoc2-docstring} space_flight.ai.AttackMode
-```
-
-```{rubric} Initialization
-```
-
-```{autodoc2-docstring} space_flight.ai.AttackMode.__init__
 ```
 
 ````{py:attribute} PURSUIT

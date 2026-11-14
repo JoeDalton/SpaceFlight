@@ -198,6 +198,13 @@ compact target, a racetrack round a long one). **`MajorShipPilot`** only
 yaws/pitches toward the target and rolls to stay level with the scene (no
 roll-to-target).
 
+"Level with the scene" means level with `scene.up_at(position)`, the scene's
+"up" (see [scenes.md](scenes.md)): against the planet's gravity over a
+planet, world +Z in open space. Every pilot and navigator that needs a
+default up-reference (the fighter's light scene-levelling, the strafe and
+bomb runs without a surface normal, the capital ships' roll and orbit) reads
+it.
+
 ## Tracking-mount trio: turrets and tractor beams
 
 [`tracking_mount/`](https://github.com/JoeDalton/SpaceFlight/tree/main/src/space_flight/ai/tracking_mount/) is the AI for

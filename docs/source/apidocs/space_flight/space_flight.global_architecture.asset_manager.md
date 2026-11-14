@@ -49,8 +49,9 @@
 
 ````{py:data} COMMON_ASSETS_TO_LOAD
 :canonical: space_flight.global_architecture.asset_manager.COMMON_ASSETS_TO_LOAD
+:type: dict[pathlib.Path, dict[str, typing.Any]]
 :value: >
-   [('model',), ('model',), ('model',), ('model',), ('model',), ('model',), ('model',), ('texture',), (...
+   None
 
 ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.COMMON_ASSETS_TO_LOAD
 ```
@@ -69,7 +70,7 @@
 ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.AssetManager.__init__
 ```
 
-````{py:method} get_asset(asset_type: str, path: pathlib.Path, pattern: str = '') -> typing.Any
+````{py:method} get_asset(asset_type: str, path: pathlib.Path, pattern: str = '', flatten: bool | None = None) -> typing.Any
 :canonical: space_flight.global_architecture.asset_manager.AssetManager.get_asset
 
 ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.AssetManager.get_asset
@@ -93,7 +94,7 @@
 
 ````
 
-````{py:method} load_single_asset(asset_type: str, path: pathlib.Path, pattern: str)
+````{py:method} load_single_asset(asset_type: str, path: pathlib.Path, pattern: str = '', flatten: bool = True)
 :canonical: space_flight.global_architecture.asset_manager.AssetManager.load_single_asset
 
 ```{autodoc2-docstring} space_flight.global_architecture.asset_manager.AssetManager.load_single_asset

@@ -1072,3 +1072,34 @@ def test_hud_shows_hints_smaller_and_never_with_chatter(spaceflight_app):
         assert hud.hints.getText() == ""
     finally:
         hud.clean()
+
+
+def test_flare_line_text_is_only_set_when_it_changes():
+    """setText rebuilds the text's geometry: the same text is not set again."""
+    flares = launcher("FLARE", 7)
+    ordnance_hud = make_ordnance_hud(FakePawn([], flare_launcher=flares))
+    ordnance_hud.update()
+    line = MagicMock()
+    line.node.return_value.getText.return_value = "FLARE 7"
+    ordnance_hud.flare_line = line
+
+    ordnance_hud.update()
+    line.node.return_value.setText.assert_not_called()
+
+    flares.stock = 6
+    ordnance_hud.update()
+    line.node.return_value.setText.assert_called_once_with("FLARE 6")
+
+
+@pytest.mark.parametrize("shown, set_again", [("FPS = 60", False), ("FPS = 59", True)])
+def test_fps_counter_text_is_only_set_when_it_changes(shown, set_again):
+    hud = object.__new__(HUD)
+    hud.fps_counter_enabled = True
+    hud.fps_counter = MagicMock()
+    hud.fps_counter.getText.return_value = shown
+    hud.game = MagicMock()
+    hud.game.game_time.get_average_frame_rate.return_value = 60.0
+
+    hud.update_debug_hud()
+
+    assert hud.fps_counter.setText.called is set_again

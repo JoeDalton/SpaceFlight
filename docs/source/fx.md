@@ -12,8 +12,9 @@ tour; the per-class API is in the [code reference](apidocs/index.rst).
   shader reconstructs its position/size/alpha every frame from those spawn-time
   values. The CPU only updates three uniforms per buffer per frame (`uTime`,
   `uCamRight`, `uCamUp`), so hundreds of live particles are cheap.
-- The speed dust cloud is ordinary Panda3D nodes moved by a per-frame Python
-  task — fine at its much lower particle count.
+- The speed dust cloud is GPU-driven too: its motes are placed in the vertex
+  shader from the distance the ship has flown, the only value the CPU writes
+  each frame.
 - Sound (`SFX`) wraps Panda3D's `Audio3DManager`: sound pools per impact type,
   attached to nodes so 3D positioning and Doppler come for free.
 
@@ -164,13 +165,21 @@ builds it **only when not headless**. Everything keys off two health tiers
 ## `speed_dust_cloud.py` — engine speed feel
 
 [`speed_dust_cloud.py`](../../src/space_flight/fx/speed_dust_cloud.py)'s
-`SpeedDustCloud` is a fixed pool of small `setBillboardPointEye()` dust cards
-parented to the player's ship, in a box ahead of it. `dust_update` moves each
-card backward at the player's speed and recycles it ahead
-(`reset_particle`) once it passes behind; the cloud's opacity scales with
-speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`). With `defer_build=True`,
-`build()` is a generator (`yield from`) that spreads node creation across
-frames.
+`SpeedDustCloud` is a fixed set of dust motes parented to the player's ship,
+in a box ahead of it: one geometry per dust colour, a billboard quad per mote
+(the particle vertex format of `fx/__init__.py`, with each mote's `size` and
+`seed`).
+- **Moved on the GPU** (`speed_dust.vert`): `dust_update` adds the distance
+  flown this frame to `travel` and writes it into the `uTravel` input (bound
+  once as a `PTA_float`, so no new render state). The shader moves each mote
+  back by it; once a mote is behind the ship it comes back a depth ahead, at a
+  new random place across (a hash of its seed and its lap).
+- `travel` is kept modulo `TRAVEL_WRAP_DEPTHS` depths, so the float stays
+  precise.
+- The cloud's opacity scales with speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`),
+  through the root's alpha scale (`p3d_ColorScale` in `speed_dust.frag`).
+- With `defer_build=True`, `build()` is a generator (`yield from`) that makes
+  one colour's geometry per step.
 
 ## `sfx.py` — 3D sound effects
 

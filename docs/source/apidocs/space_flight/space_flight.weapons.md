@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 1
 
-space_flight.weapons.ordnance_launcher
 space_flight.weapons.laser_cannon
+space_flight.weapons.ordnance_launcher
 space_flight.weapons.loadout
 ```
 

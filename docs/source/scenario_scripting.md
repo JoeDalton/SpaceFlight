@@ -119,6 +119,7 @@ unknown field raises `TypeError`; a missing `size` for a single model, or a
 | `spawn_orientation` | `(0, 0, 0, 1)` | Quaternion `(w, x, y, z)`, passed straight to Panda3D — the default is a 180° turn about z, **not** the identity |
 | `formation` | `None` | `"arrowhead"`, `"diamond"`, `"around_diamond"`; `None` spawns in a centred line |
 | `formation_scale_m` | `30` | Slot spacing |
+| `formation_frame` | `(1, 0, 0, 0)` | Quaternion `(w, x, y, z)` of the axes the formation's spawn slots are written on (default: the world's), for a level whose up and north are not the world's (see [scenes.md](scenes.md#planet-world--from-worldbuilder)) |
 | `waypoints` | `()` | Route given to every ship |
 | `loop` | `True` | Whether the route loops |
 | `record` | `False` | Step-by-step-record every bot of the wave |

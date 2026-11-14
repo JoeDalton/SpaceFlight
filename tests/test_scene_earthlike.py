@@ -179,6 +179,9 @@ def test_the_world_is_built_with_the_scenes_look(monkeypatch):
     scene, world_class, _ = _scene(monkeypatch)
     scene.build_upfront()
 
+    # The light at the ships is reckoned every few frames (World.light_period)
+    assert scene.world.light_period == scenes.LIGHT_PERIOD_FRAMES
+
     args, kwargs = world_class.call_args
     assert args[0] is scene.game.app
     assert [body.name for body in args[1]] == ["planet", "moon"]

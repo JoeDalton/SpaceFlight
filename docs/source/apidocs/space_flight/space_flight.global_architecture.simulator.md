@@ -223,7 +223,7 @@
 
 `````
 
-`````{py:class} SpaceFlightSimulator(headless: bool = False)
+`````{py:class} SpaceFlightSimulator(headless: bool = False, interactive: bool = True)
 :canonical: space_flight.global_architecture.simulator.SpaceFlightSimulator
 
 Bases: {py:obj}`direct.showbase.ShowBase.ShowBase`

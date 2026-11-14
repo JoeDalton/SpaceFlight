@@ -46,7 +46,11 @@ two classes:
   is active. With `headless=True` there is no input reader, no `input_task`,
   no idle inhibitor and no splash: the stack stays empty for
   [`headless/harness.py`](../../src/space_flight/headless/harness.py) to push
-  a headless `FlightState` itself.
+  a headless `FlightState` itself. With `interactive=False` the app renders
+  as usual (a window or an offscreen buffer) but has no input reader, no idle
+  inhibitor and no splash either: scripted runs such as
+  [`scripts/bench_mission3.py`](../../scripts/bench_mission3.py) push a
+  drawn `FlightState` themselves (see [performance.md](performance.md)).
 
 Two module-level `loadPrcFileData` calls configure Panda3D: one silences
 ffmpeg (`notify-level-ffmpeg error`), the other disables the on-disk model
@@ -95,8 +99,28 @@ is preloaded at boot whatever the level (its inline comments say why some
 heavy assets, like capital ship glTFs, their turret and the cloud atlas, are
 on it: to avoid mid-level load stalls); `load_game_assets`/`load_assets_task` load it one
 asset per frame during the splash screen, updating its progress bar.
+
+`COMMON_ASSETS_TO_LOAD` is a dict keyed by path (the cache's key). Each entry
+gives the asset's `"type"` (`"model"`, `"texture"`, `"sound"` or
+`"3d_sound"`), a `"pattern"` for a directory (default `""`) and, for a model,
+`"flatten"` (default `True`):
+- **Flattened models.** `load_single_asset(..., flatten=True)` runs
+  `flatten_strong()` on a model once it is loaded: node transforms are baked
+  into the vertices and geoms sharing a state are merged (a cr-90 goes from
+  57 geoms to 14). A ship is drawn in several passes every frame, so that is
+  far fewer draw calls (see [performance.md](performance.md)).
+- **Models whose nodes are used** must say `"flatten": False`: flattening
+  removes their inner nodes. That is the turret, whose `heading_axis` and
+  `cannon_axis` nodes swivel, and the menus' `.egg` maps, whose parts are
+  found by name.
+- **On demand.** `get_asset(..., flatten=None)` takes the path's flag from
+  `COMMON_ASSETS_TO_LOAD`, `True` for a path not listed. A model is cached
+  as it was first loaded.
+
 `instantiate_3d_model_to_node` is how actors attach a model: it attaches a
 Panda3D *instance* of the cached model under the caller's node, not a copy.
+`copy_3d_model_to_node` attaches a copy instead, with nodes of its own, for a
+model whose parts move per copy (a turret's joints). It never flattens.
 
 [`asset_pools.py`](../../src/space_flight/global_architecture/asset_pools.py)
 holds the non-model asset kinds:
@@ -164,7 +188,10 @@ thing that acts on it. Scenes build their WorldBuilder objects with
   other resolution-dependent buffers (e.g. the ocean reflection) size off
   the internal render resolution rather than the window. `end_scene_render()`
   tears the pipeline down; `begin_scene_render()` calls it first, so
-  rebuilding is idempotent.
+  rebuilding is idempotent. It first removes the pipeline buffers' display
+  regions: `FilterManager.cleanup` leaves them on the camera, and the next
+  level's depth split would take the dead one for the camera's output, which
+  left everything past the split black.
 
 ## `gameplay_settings.py` — difficulty
 

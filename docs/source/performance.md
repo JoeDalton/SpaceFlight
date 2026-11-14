@@ -105,7 +105,9 @@ and the sea needs a window), so it is measured drawn, by
 size and render scale 1.0, warmed up until the first waves have spawned and the
 world has settled, then 600 frames each waiting for the GPU (CPU and GPU in
 series). `--pose fly`, `--toggle`, `--world SECTION.KNOB=VALUE`, `--profile` and
-`--pstats` as its docstring says.
+`--pstats` and `--prc` as its docstring says (`--toggle` turns a feature off:
+the mirror, the ships' shadows or model shader, the cirrus, the models'
+flattening).
 
 Two runs of the same tree differ by up to 0.8 ms: compare medians of runs
 interleaved, at least two each.
@@ -138,6 +140,7 @@ About 17 ms a frame, still:
 | The speed dust animated in its vertex shader (`speed_dust.vert`) | a Python loop over 100 nodes gone |
 | The Earth-like ground solid within 10 km (`TERRAIN_COLLISION_RANGE_M`; WorldBuilder's default is now 20 km) | fewer chunks checked each frame |
 | The cloud march's inputs bound once, the planet's rotation given only when it turns (WorldBuilder) | fewer render states made each frame |
+| Models flattened at load (`flatten_strong`; `"flatten": False` in `COMMON_ASSETS_TO_LOAD` for the turret and the menus' maps): a cr-90 goes from 57 geoms to 14, a gr-75 from 24 to 10 | 0.5-1.3 ms (median 14.9/14.0 ms still and 14.7 flying, against 14.9/15.0 and 16.0 unflattened; `--toggle flatten`) |
 
 Measured, no change: `transform-cache false` in the PRC (16.4/15.8 ms
 median without, 16.6/16.5 with).

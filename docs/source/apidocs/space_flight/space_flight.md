@@ -13,11 +13,11 @@
 :titlesonly:
 :maxdepth: 3
 
-space_flight.global_architecture
+space_flight.fx
+space_flight.ai
 space_flight.weapons
 space_flight.utils
-space_flight.ai
-space_flight.fx
+space_flight.global_architecture
 ```
 
 ## Submodules
