@@ -182,10 +182,18 @@ class SpeedDustCloud:
         start again ahead of it, in the shader). Its opacity increases with
         speed.
         """
+        pawn = self.game.player.pawn
+        if pawn.warp_target_speed_mps is not None:
+            # Warping: the motes would re-roll every frame (the ship covers more
+            # than the cloud's depth per frame), which only shows as noise
+            self.root.hide()
+            return
+        self.root.show()
         dt = self.game.game_time.get_time_step()
-        speed = magnitude(self.game.player.pawn.speed)
-        alpha = (
-            MIN_DUST_ALPHA + speed * (MAX_DUST_ALPHA - MIN_DUST_ALPHA) / self.max_speed
+        speed = magnitude(pawn.speed)
+        alpha = min(
+            MIN_DUST_ALPHA + speed * (MAX_DUST_ALPHA - MIN_DUST_ALPHA) / self.max_speed,
+            MAX_DUST_ALPHA,
         )
         self.root.setAlphaScale(alpha)
         self.travel = (self.travel + speed * dt) % (self.depth * TRAVEL_WRAP_DEPTHS)

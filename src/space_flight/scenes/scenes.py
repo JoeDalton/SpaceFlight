@@ -31,6 +31,7 @@ from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook
 from space_flight import (
     CAMERA_FAR_M,
     DATAFILES_PATH,
+    WARP_MAX_SPEED_MPS,
     WARP_MIN_SPEED_MPS,
     WARP_SPACE_SPEED_MPS,
     WARP_SPEED_PER_ALTITUDE,
@@ -146,7 +147,10 @@ def warp_speed_at_altitude(altitude_m: float) -> float:
     """
     if math.isinf(altitude_m):
         return WARP_SPACE_SPEED_MPS
-    return max(WARP_MIN_SPEED_MPS, WARP_SPEED_PER_ALTITUDE * altitude_m)
+    return min(
+        max(WARP_MIN_SPEED_MPS, WARP_SPEED_PER_ALTITUDE * altitude_m),
+        WARP_MAX_SPEED_MPS,
+    )
 
 
 class Scene:
@@ -187,6 +191,11 @@ class Scene:
             self._up = self._gravity_up(world, reference)
             self._up_time_s = now
         return self._up
+
+    def forget_up(self):
+        """Reckon "up" again on the next up_at, e.g. after a warp moved the
+        player far from where it was last reckoned."""
+        self._up = None
 
     def _gravity_up(self, world: World, position: Sequence[float]) -> np.ndarray:
         """:return: Against the bodies' gravity at *position*, or
@@ -413,10 +422,9 @@ class SceneEarthlike(Scene):
         )
         # Set after it is built: older WorldBuilders have no such parameter
         self.world.light_period = LIGHT_PERIOD_FRAMES
-        # Solid to ships, munitions and sensors, the sea surface included
+        # Every world body solid to ships, munitions and sensors
         self.world.enable_collision(
             CollisionLayers.TERRAIN_INTO,
-            bodies=["planet"],
             max_distance=self.TERRAIN_COLLISION_RANGE_M,
         )
 

@@ -92,6 +92,7 @@ def make_player_for_head_physics(
 
     player.pawn = MagicMock()
     player.pawn.mass_kg = pawn_mass_kg
+    player.pawn.warp_target_speed_mps = None  # not warping
     player.pawn.state_dot = (
         np.zeros(10) if pawn_state_dot is None else pawn_state_dot.copy()
     )
@@ -596,6 +597,29 @@ def test_compute_head_acceleration_stores_result_on_player():
     player.compute_head_acceleration()
 
     assert not np.allclose(player.head_acceleration_mps2, np.zeros(3))
+
+
+def test_compute_head_acceleration_ignores_the_ship_while_warping():
+    """Warp accelerations would throw the head out of the cockpit."""
+    state_dot = np.zeros(10)
+    state_dot[7:10] = [0.0, 3.0e6, 0.0]
+    player = make_player_for_head_physics(pawn_state_dot=state_dot)
+    player.pawn.warp_target_speed_mps = 1.0e6
+
+    player.compute_head_acceleration()
+
+    np.testing.assert_allclose(player.head_acceleration_mps2, np.zeros(3))
+
+
+def test_compute_head_acceleration_still_feels_impacts_while_warping():
+    player = make_player_for_head_physics(
+        pawn_impact_force_n=np.array([500.0, 0.0, 0.0])
+    )
+    player.pawn.warp_target_speed_mps = 1.0e6
+
+    player.compute_head_acceleration()
+
+    assert player.head_acceleration_mps2[0] != 0.0
 
 
 def test_compute_head_acceleration_does_not_mutate_pawn_state_dot():

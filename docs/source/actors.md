@@ -61,6 +61,13 @@ Key responsibilities:
   `DAMAGE_FORCE_APPLICATION_DURATION_S`, 0.1 s) and `external_force_n` (e.g.
   a tractor beam's pull, added via `apply_external_force` every frame it
   should act and zeroed by `compute_derivatives`).
+- **Warp flight model.** While `warp_target_speed_mps` is set (by a
+  [`WarpDrive`](#warpdrive--the-players-local-warp)), `compute_derivatives`
+  drops thrust, lift and drag. The velocity relaxes towards that speed
+  along the nose, with time constant `WARP_RELAX_TIME_S`, stretched to 1.5
+  frames at low frame rates to keep the integrator stable. Impacts and
+  external forces still apply, and the state is integrated as usual.
+  `_sanitize_state` no longer snaps the speed back to the top speed meanwhile.
 - **Damage is ship-type dependent.** `apply_damage` and `ship_handle_health`
   are `NotImplementedError` stubs overridden by each concrete ship type. A hit
   (`take_hit`) carries its [damage type](#damage-types-physical-and-ion); only
@@ -427,7 +434,12 @@ everything specific to being watched by a human:
 - **Camera rig.** A jolt/pivot node hierarchy anchors the camera to the
   ship, driven by a damped spring model (`compute_head_acceleration` /
   `compute_head_position`) so the head reacts to acceleration, impacts and
-  roll rate, plus the player's free-look input.
+  roll rate, plus the player's free-look input. While the ship is in the warp
+  flight model, only impacts move the head: warp accelerations would throw it
+  out of the cockpit.
+- **Warp.** The player owns a [`WarpDrive`](#warpdrive--the-players-local-warp),
+  fed the warp key's state every frame before the ship moves.
+  `flight_commands` applies its cruise throttle and turn-rate cap.
 - **Targeting.** `open_radial_target_menu` pushes a `RadialMenuState` over
   `TARGET_FILTERS` (All, Enemies, Capital ships, Subsystems, Turrets,
   Fighters, Waypoints, plus an empty slot); the chosen label becomes
@@ -449,6 +461,39 @@ than being cleaned up mid-session. It still plays the same spin-out: it
 composes a `DyingPhase` and, while dying, hands control (camera included) to
 the pawn's tumble until `death_spin_finished()`, when `FlightState` shows the
 level-end screen.
+
+## `WarpDrive` — the player's local warp
+
+[`warp_drive.py`](../../src/space_flight/actors/warp_drive.py) jumps the
+player's ship across inter-planetary distances while the warp key is held. See
+[mission scripting](scenario_scripting.md#player-warp) for the rules as a level
+designer sees them.
+
+- **States.** `IDLE → CHARGING → INSIDE → EXITING → IDLE`, timed on game time,
+  so pausing freezes them. Each plays a phase of the shared
+  [hyperspace overlay](fx.md#hyperspace_overlaypy-the-hyperspace-jump-effect)
+  with its see-through `WARP_LOOK`.
+- **Physics keeps running.** From `INSIDE`, the ship is in the warp flight
+  model, pulled to `warp_speed_at_altitude` (in
+  [`scenes.py`](../../src/space_flight/scenes/scenes.py)). That speed is
+  proportional to the altitude above the nearest body, or fixed in a scene
+  without bodies.
+  - The approach to a body is overdamped while
+    `WARP_SPEED_PER_ALTITUDE · WARP_RELAX_TIME_S < 0.25`.
+  - The speed is capped at `WARP_MAX_SPEED_MPS`: a ship that misses a body
+    would otherwise speed up without bound until its position overflowed.
+  - Below `WARP_AUTO_EXIT_ALTITUDE_M`, the drive drops out on its own. It also
+    drops out when the ship flies out past `WARP_MAX_RANGE_M` from the world's
+    origin; warping back in is allowed.
+  - `EXITING` slows the ship to its cruise speed before handing it back to
+    the normal flight model.
+- **Exposure.** While `INSIDE` and `EXITING`, the ship is `in_hyperspace`, so
+  interactions, targeting and missiles ignore it. Every collider is muted
+  (`mute_colliders`, shared with the bots' transit) except the hull, which
+  hits terrain only (`WARPING_HULL_FROM`, see
+  [collision layers](game.md#collisionsystem--layers-routing-and-physical-response)).
+- **Refusals.** A press too close to a body sets `refused_at_s`, which blinks
+  the HUD's engine gauge `WARP_REFUSED_BLINKS` times.
 
 ## `Trihedron`
 

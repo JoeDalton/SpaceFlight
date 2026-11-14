@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Local warp speed for the player #178
+
 ### Fixed
 
 - Cockpit head feedback into ship's physics #178
+- The moon is solid #178
 
 
 ## [0.5.0] - 2026-11-14

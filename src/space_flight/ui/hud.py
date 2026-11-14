@@ -20,7 +20,13 @@ from panda3d.core import (
     Vec3,
 )
 
-from space_flight import DATAFILES_PATH, DEBUG_HUD, EPSILON_TOLERANCE
+from space_flight import (
+    DATAFILES_PATH,
+    DEBUG_HUD,
+    EPSILON_TOLERANCE,
+    WARP_REFUSED_BLINK_PERIOD_S,
+    WARP_REFUSED_BLINKS,
+)
 from space_flight.actors.energy import ENGINES, LASERS, SHIELDS
 from space_flight.ai.missile.incoming_missile import nearest_incoming
 from space_flight.game.scenario.objectives import ACTIVE, COMPLETE, FAILED
@@ -769,6 +775,36 @@ class ObjectivesHUD:
         self.game = None
 
 
+#: Speeds from this one up are written in km/s (warp speeds)
+KMPS_FROM_MPS = 1e4
+
+
+def format_speed(speed_mps: float) -> str:
+    """
+    :param speed_mps: A speed, m/s
+    :return: It written for the engine gauge: in m/s, or in km/s when warping
+    """
+    if speed_mps >= KMPS_FROM_MPS:
+        return f"{speed_mps / 1000.0:.0f} km/s"
+    return f"{speed_mps:.0f} m/s"
+
+
+def refused_warp_gauge_shown(since_refusal_s: float | None) -> bool:
+    """
+    Whether the engine gauge shows, as it blinks WARP_REFUSED_BLINKS times
+    after a warp refused for want of altitude.
+
+    :param since_refusal_s: Time since the refusal, None if none
+    :return: False in the off half of each blink, True otherwise
+    """
+    if since_refusal_s is None or since_refusal_s < 0.0:
+        return True
+    blink = since_refusal_s / WARP_REFUSED_BLINK_PERIOD_S
+    if blink >= WARP_REFUSED_BLINKS:
+        return True
+    return blink % 1.0 >= 0.5
+
+
 def gauge_brightness(energy: EnergySystem, system: str) -> float:
     """
     :param energy: The ship's energy system
@@ -866,8 +902,19 @@ class EnergyHUD:
         if energy.is_engine_dead:
             self.engine_gauge.set_text(ENGINES_OFFLINE_TEXT)
         else:
-            self.engine_gauge.set_text(f"{magnitude(pawn.speed):.0f} m/s")
+            self.engine_gauge.set_text(format_speed(magnitude(pawn.speed)))
         self._show_power(self.engine_gauge, energy, ENGINES)
+        # A warp refused for want of altitude blinks it
+        refused_at_s = self.game.player.warp_drive.refused_at_s
+        since_refusal_s = (
+            None
+            if refused_at_s is None
+            else self.game.game_time.get_current_time() - refused_at_s
+        )
+        if refused_warp_gauge_shown(since_refusal_s):
+            self.engine_gauge.root.show()
+        else:
+            self.engine_gauge.root.hide()
 
         if energy.has_shields:
             self.shield_gauge.set_level(pawn.shield / pawn.max_shield)

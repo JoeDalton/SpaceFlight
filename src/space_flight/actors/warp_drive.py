@@ -9,8 +9,8 @@ The player holds the warp key:
       -> INSIDE    (key still held once charged: the see-through tunnel; the ship
                     warps, its speed growing with its altitude above the nearest
                     body; untargetable, only terrain stops it)
-      -> EXITING   (key released, or too close to a body: the "outof" animation;
-                    the ship slows down to cruise speed)
+      -> EXITING   (key released, too close to a body, or flying out of range: the
+                    "outof" animation; the ship slows down to cruise speed)
       -> IDLE
 
 Releasing the key while charging aborts the jump.
@@ -81,6 +81,10 @@ class WarpDrive:
         # Set when the drive stops a jump on its own: the key must be released
         # before it can start another one
         self._needs_release = False
+        self._key_was_held = False
+        # Game time of the last press refused for want of altitude, None if
+        # none (the HUD blinks the engine gauge, see EnergyHUD)
+        self.refused_at_s: float | None = None
         self._muted_colliders = []
 
     @property
@@ -112,8 +116,12 @@ class WarpDrive:
         if self.active and self._ship_lost():
             self.stop()
         elif self.state is WarpState.IDLE:
-            if key_held and self._can_start():
+            if key_held and self._ready() and self._high_enough():
                 self._enter(WarpState.CHARGING)
+            elif key_held and not self._key_was_held and self._ready():
+                # Pressed too close to a body: tell the player why nothing
+                # happens
+                self.refused_at_s = self.ship.game.game_time.get_current_time()
         elif self.state is WarpState.CHARGING:
             if not key_held or not self.allowed or not self.ship.engines_online():
                 self._abort()
@@ -134,6 +142,7 @@ class WarpDrive:
             if self.state_time_s >= EXIT_DURATION_S:
                 self._finish()
 
+        self._key_was_held = key_held
         if self.overlay is not None:
             self.overlay.update(dt)
 
@@ -155,16 +164,15 @@ class WarpDrive:
 
     # -- internals -----------------------------------------------------------
 
-    def _can_start(self) -> bool:
-        """Whether a jump can start: allowed, key freshly pressed, engines
-        running and far enough from any body ("in space")."""
-        return (
-            self.allowed
-            and not self._needs_release
-            and self.ship.engines_online()
-            and self.ship.game.scene.altitude_m(self.ship.position)
-            > WARP_MIN_ALTITUDE_M
-        )
+    def _ready(self) -> bool:
+        """Whether the drive can jump, wherever the ship is: allowed, the key
+        pressed afresh after a drop out by the drive, engines running."""
+        return self.allowed and not self._needs_release and self.ship.engines_online()
+
+    def _high_enough(self) -> bool:
+        """Whether the ship is far enough from any body to jump ("in space")."""
+        altitude_m = self.ship.game.scene.altitude_m(self.ship.position)
+        return altitude_m > WARP_MIN_ALTITUDE_M
 
     def _ship_lost(self) -> bool:
         return self.ship.is_dead or self.ship.is_dying
@@ -229,6 +237,9 @@ class WarpDrive:
         self._muted_colliders = []
         self.ship.in_hyperspace = False
         self.ship.warp_target_speed_mps = None
+        # "Up" is only reckoned once a second: the ship may be far from where
+        # it was last reckoned
+        self.ship.game.scene.forget_up()
 
     def _play(self, method: str, *args: str):
         """Call an overlay method, if there is an overlay."""

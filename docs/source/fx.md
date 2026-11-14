@@ -176,8 +176,12 @@ in a box ahead of it: one geometry per dust colour, a billboard quad per mote
   new random place across (a hash of its seed and its lap).
 - `travel` is kept modulo `TRAVEL_WRAP_DEPTHS` depths, so the float stays
   precise.
-- The cloud's opacity scales with speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`),
-  through the root's alpha scale (`p3d_ColorScale` in `speed_dust.frag`).
+- The cloud's opacity scales with speed (`MIN_DUST_ALPHA` → `MAX_DUST_ALPHA`,
+  capped there), through the root's alpha scale (`p3d_ColorScale` in
+  `speed_dust.frag`).
+- It is hidden while the player warps. The ship then covers more than the
+  cloud's depth each frame, so the motes would re-roll every frame and show
+  as noise.
 - With `defer_build=True`, `build()` is a generator (`yield from`) that makes
   one colour's geometry per step.
 
@@ -270,7 +274,9 @@ sound:
   when approaching and less when receding. A 1 kHz source at 170 m/s gives
   1329 Hz approaching (1981 Hz at factor 1) and 801 Hz receding (669 Hz).
   OpenAL goes silent as a source's closing speed × Doppler factor nears the
-  speed of sound (686 m/s at 0.5), which nothing in the game reaches.
+  speed of sound (686 m/s at 0.5). Only a warping ship goes that fast, so a
+  velocity source faster than its own `max_speed_mps` is heard at that speed
+  (direction kept).
 
 ## Where things live
 

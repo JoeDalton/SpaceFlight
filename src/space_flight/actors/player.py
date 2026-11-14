@@ -6,6 +6,7 @@ from operator import attrgetter
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
+from panda3d.core import OmniBoundingVolume
 
 from space_flight import CAMERA_FAR_M, RECORD_GAME
 from space_flight.actors.fighter import Fighter
@@ -185,6 +186,13 @@ class Player:
             )
         self.warp_drive = WarpDrive(ship=self.pawn, overlay=overlay)
 
+        # Never cull the player's own ship part by part: Panda3D culls in
+        # root_node's frame, where far from the world's origin (after a warp)
+        # positions are float32-rounded to a metre or more, and the cockpit's
+        # parts, closer to the camera than that, would blink in and out
+        self.pawn.node.node().setBounds(OmniBoundingVolume())
+        self.pawn.node.node().setFinal(True)
+
         # Add self to the interacting actors
         self.game.interactions.add_actor(self.pawn)
 
@@ -351,8 +359,13 @@ class Player:
         Compute head acceleration given ship movements and pilot neck strength
         with a simple damped spring system
         """
-        # Take ship acceleration into account
-        ship_acceleration_world_mps2 = self.pawn.state_dot[7:10].copy()
+        # Take ship acceleration into account, but while warping: the cockpit's
+        # anti-gravity module takes it all (millions of m/s² would throw the
+        # head out of the cockpit)
+        if self.pawn.warp_target_speed_mps is None:
+            ship_acceleration_world_mps2 = self.pawn.state_dot[7:10].copy()
+        else:
+            ship_acceleration_world_mps2 = np.zeros(3)
         # Special treatment for impacts that should be more sensible
         ship_acceleration_world_mps2 += (
             (IMPACT_FEELING_FACTOR - 1) * self.pawn.impact_force_n / self.pawn.mass_kg

@@ -14,6 +14,8 @@ from panda3d.core import BitMask32, CollisionNode, CollisionSphere, NodePath
 from space_flight import (
     WARP_AUTO_EXIT_ALTITUDE_M,
     WARP_CRUISE_THROTTLE,
+    WARP_MAX_RANGE_M,
+    WARP_MAX_SPEED_MPS,
     WARP_MIN_ALTITUDE_M,
     WARP_MIN_SPEED_MPS,
     WARP_RELAX_MIN_FRAMES,
@@ -172,6 +174,11 @@ def test_warp_speed_has_a_floor():
     assert warp_speed_at_altitude(0.0) == WARP_MIN_SPEED_MPS
 
 
+def test_warp_speed_has_a_ceiling():
+    """Missing a body must not run the speed away (it once overflowed)."""
+    assert warp_speed_at_altitude(1e12) == WARP_MAX_SPEED_MPS
+
+
 def test_warp_speed_without_bodies_is_fixed():
     assert warp_speed_at_altitude(np.inf) == WARP_SPACE_SPEED_MPS
 
@@ -290,13 +297,15 @@ def make_drive_ship(altitude_m: float = 100_000.0):
     ship.collision_sphere_np = add_collider(ship.node, "ship", HULL_FROM, HULL_INTO)
     ship.sensor_np = add_collider(ship.node, "sensor", SENSOR_FROM, BitMask32.allOff())
     ship.position = np.zeros(3)
+    ship.speed = np.zeros(3)
     ship.is_dead = False
     ship.is_dying = False
     ship.in_hyperspace = False
     ship.warp_target_speed_mps = None
     ship.engines_online = MagicMock(return_value=True)
     ship.cruise_speed_mps = MagicMock(return_value=CRUISE_MPS)
-    ship.game = SimpleNamespace(scene=MagicMock())
+    ship.game = SimpleNamespace(scene=MagicMock(), game_time=MagicMock())
+    ship.game.game_time.get_current_time.return_value = 42.0
     ship.game.scene.altitude_m.return_value = altitude_m
     return ship
 
@@ -361,6 +370,39 @@ def test_no_jump_when_it_cannot_start(setup):
     run(drive, 1.0)
 
     assert drive.state is WarpState.IDLE
+
+
+def test_pressing_too_low_is_refused_once_per_press():
+    drive = make_drive(altitude_m=WARP_MIN_ALTITUDE_M - 1.0)
+
+    drive.update(key_held=True, dt=DT)
+    assert drive.refused_at_s == 42.0
+    assert drive.state is WarpState.IDLE
+
+    # Held on: no new refusal; pressed again: one more
+    drive.refused_at_s = None
+    run(drive, 1.0)
+    assert drive.refused_at_s is None
+    drive.update(key_held=False, dt=DT)
+    drive.update(key_held=True, dt=DT)
+    assert drive.refused_at_s == 42.0
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        lambda drive: setattr(drive, "allowed", False),
+        lambda drive: drive.ship.engines_online.configure_mock(return_value=False),
+    ],
+    ids=["not allowed", "engines offline"],
+)
+def test_only_altitude_refusals_are_reported(setup):
+    drive = make_drive(altitude_m=WARP_MIN_ALTITUDE_M - 1.0)
+    setup(drive)
+
+    drive.update(key_held=True, dt=DT)
+
+    assert drive.refused_at_s is None
 
 
 def test_jump_starts_anywhere_in_a_scene_without_bodies():
@@ -444,6 +486,16 @@ def test_drop_out_ends_back_in_normal_flight():
     assert masks(ship.sensor_np) == (SENSOR_FROM, BitMask32.allOff())
 
 
+def test_up_is_reckoned_again_after_a_jump():
+    drive = make_drive()
+    charge_and_go_inside(drive)
+    drive.update(key_held=False, dt=DT)
+
+    run(drive, EXIT_DURATION_S + DT, key_held=False)
+
+    drive.ship.game.scene.forget_up.assert_called_once_with()
+
+
 def test_too_close_to_a_body_drops_out_automatically():
     drive = make_drive()
     charge_and_go_inside(drive)
@@ -468,6 +520,28 @@ def test_after_an_auto_drop_out_the_key_must_be_released():
     drive.update(key_held=True, dt=DT)
 
     assert drive.state is WarpState.CHARGING
+
+
+def test_flying_out_of_range_drops_out():
+    drive = make_drive()
+    charge_and_go_inside(drive)
+
+    drive.ship.position = np.array([WARP_MAX_RANGE_M + 1.0, 0.0, 0.0])
+    drive.ship.speed = np.array([1e6, 0.0, 0.0])
+    drive.update(key_held=True, dt=DT)
+
+    assert drive.state is WarpState.EXITING
+
+
+def test_warping_back_into_range_is_fine():
+    drive = make_drive()
+    drive.ship.position = np.array([WARP_MAX_RANGE_M + 1.0, 0.0, 0.0])
+    drive.ship.speed = np.array([-1e6, 0.0, 0.0])
+    charge_and_go_inside(drive)
+
+    drive.update(key_held=True, dt=DT)
+
+    assert drive.state is WarpState.INSIDE
 
 
 def test_disallowing_the_warp_mid_jump_drops_out():
