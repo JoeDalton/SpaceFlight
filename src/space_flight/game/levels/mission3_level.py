@@ -15,7 +15,7 @@ from space_flight.game.scenario.conditions import (
     damaged,
     reached_waypoint,
 )
-from space_flight.scenes.scenes import SceneEarthlike
+from space_flight.scenes.scenes import SceneSolarSystem
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -71,14 +71,14 @@ FIGHTER_CLEAR_LINES = {
 # After every enemy wave is down: the closing chatter, then the victory.
 ALL_CLEAR_VICTORY_DELAY_S = 7
 
-# Positions are written on the chart of the earth-like demo level (x metres
-# east, y metres north of its reference point, z metres above sea level) and
-# converted to world coordinates: the planet is not rotated, so these are not
-# the world's axes (see LevelFrame). The player starts at the demo's start
-# point (its `camera`, without the pitch), the convoy a few hundred metres
-# ahead; the coast is about 6 km north, the range to the south, the mesa
-# 3.5 km east of the first leg.
-FRAME = SceneEarthlike.level_frame()
+# Positions are written on the chart of the home planet of the three-planets
+# world (x metres east, y metres north of its reference point, z metres above
+# sea level) and converted to world coordinates: the planet is not rotated, so
+# these are not the world's axes (see LevelFrame). The player starts south of
+# the reference point, the convoy a few hundred metres ahead; the coast is
+# about 6 km north, the range to the south, the mesa 3.5 km east of the first
+# leg.
+FRAME = SceneSolarSystem.level_frame()
 NORTH_M = 1000.0
 
 
@@ -97,7 +97,7 @@ def facing_south(x: float, y: float, z: float) -> list[float]:
     return FRAME.orientation(at(x, y, z), at(x, y - NORTH_M, z)).tolist()
 
 
-# The demo's start point; the player flies level, parallel to the convoy.
+# The player's start point; it flies level, parallel to the convoy.
 PLAYER_POSITION = at(0, -4000, 1300)
 PLAYER_ORIENTATION = facing_north(0, -4000, 1300)
 
@@ -200,13 +200,13 @@ def build_mission3_upfront(game: FlightState):
 
     This is the player plus the scene's terrain (shaders, textures, worker
     processes); its ground is loaded during the animation. The whole mission
-    flies over the coast of the earth-like demo world.
+    flies over the coast of the home planet of the three-planets world.
 
     :param game: The game/flight state
     """
     build_upfront(
         game,
-        scene_name="earthlike_planet",
+        scene_name="solar_system",
         player_ship_type="a-wing",
         player_position=PLAYER_POSITION,
         player_orientation=PLAYER_ORIENTATION,

@@ -1,0 +1,20 @@
+# Three planets: the home planet and its moon, an ice planet 3000 km across and its ring.
+# A world file defines the objects and nothing about running them: no quality,
+# no camera. Bodies and fields are linked files of this folder; keys beside
+# `file` (name, position, axis) replace the file's.
+# Metres, world frame; the sun is one direction (toward it) and a colour.
+sun:
+  direction: [0.887774, 0.045991, -0.457976]
+  color: [2.6, 2.5, 2.35]
+  angular_radius: 0.009599310885968814
+sky: {file: sky.yaml}
+space_ambient: [0.025, 0.025, 0.03]
+bodies:
+  - {name: planet, file: kerbin.yaml, position: [0.0, 0.0, 0.0]}
+  - {name: moon, file: moon.yaml, position: [-1865003.832969, -1094191.249821, 20888382.086984]}
+  # - {name: ice, file: ice.yaml, position: [60000000.0, 15000000.0, 0.0]}
+  # - {name: desert, file: desert.yaml, position: [15000000.0, 60000000.0, 0.0]}
+  # - {name: forest, file: forest.yaml, position: [15000000.0, -60000000.0, 0.0]}
+# fields:
+#   # the ring's axis (its normal) is tilted off the world's z
+#   - {name: ring, file: ring.yaml, position: [60000000.0, 15000000.0, 0.0], axis: [0.25, 0.1, 1.0]}

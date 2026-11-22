@@ -1,0 +1,108 @@
+# A planet ring, 5000 to 10,000 km from its axis, 4 km thick: ringlets and a
+# gap in `radial_profile` (density from the inner rim to the outer, 0 to 1).
+# Where it is, and which way its axis points, is the world file's to say.
+spec:
+  shape:
+    type: annulus
+    inner: 5000000.0
+    outer: 10000000.0
+    thickness: 4000.0
+    edge: 1000.0
+    radial_edge: 500000.0
+    radial_profile: [0.7, 0.7084, 0.7302, 0.7563, 0.7751, 0.7757, 0.7524, 0.7062, 0.6459,
+      0.5854, 0.5409, 0.5255, 0.5464, 0.6016, 0.6808, 0.7671, 0.8414, 0.8874, 0.8952, 0.8642,
+      0.8027, 0.7259, 0.6517, 0.5962, 0.5693, 0.5733, 0.602, 0.6438, 0.6851, 0.7141, 0.7248,
+      0.7177, 0.7, 0.6823, 0.6752, 0.6859, 0.7149, 0.7562, 0.798, 0.03, 0.03, 0.03, 0.03,
+      0.03, 0.5973, 0.5358, 0.5048, 0.5126, 0.5586, 0.6329, 0.7192, 0.7984, 0.8536, 0.8745,
+      0.8591, 0.8146, 0.7541, 0.6938, 0.6476, 0.6243, 0.6249, 0.6437, 0.6698, 0.6916, 0.7,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.7984, 0.7192, 0.6329,
+      0.5586, 0.5126, 0.5048, 0.5358, 0.5973, 0.6741, 0.7483, 0.8038, 0.8307, 0.8267, 0.798,
+      0.1, 0.1, 0.6859, 0.6752, 0.6823, 0.7, 0.7177, 0.7248, 0.7141, 0.6851, 0.6438, 0.602,
+      0.5733, 0.5693, 0.5962, 0.6517, 0.7259, 0.8027, 0.8642, 0.8952, 0.8874, 0.8414, 0.7671,
+      0.6808, 0.6016, 0.5464, 0.5255, 0.5409, 0.5854, 0.6459, 0.7062, 0.7524, 0.7757, 0.7751,
+      0.7563, 0.7302, 0.7084, 0.7]
+  density:
+    count_per_km3: 2.0
+    clumping:
+      scale: 20000.0
+      coverage: 0.7
+      softness: 0.15
+      octaves: 4
+    dust: 0.03
+  sizes:
+    kind: power_law
+    q: 3.0
+    lo: 50.0
+    hi: 2000.0
+  spin:
+    rate:
+      kind: lognormal
+      median: 0.03
+      sigma: 0.6
+      lo: 0.003
+      hi: 0.3
+    axis:
+      type: around_axis
+      axis: [0.0, 0.0, 1.0]
+      kappa: 10.0
+    size_exponent: 1.5
+    tumble: null
+  shapes:
+    prototypes: 32
+    elongation:
+      kind: uniform
+      lo: 0.5
+      hi: 0.9
+    lumps: 0.16
+    lump_scale: 1.2
+    ridges: 0.02
+    craters: 10.0
+    crater_size:
+      kind: power_law
+      q: 2.5
+      lo: 0.06
+      hi: 0.5
+    crater_depth: 0.2
+    round_prototypes: 0.4
+    crooked_shares: [0.4, 0.35, 0.25]
+    round_share: [0.15, 0.85]
+    bulges: 0.18
+    crooked_elongation:
+      kind: uniform
+      lo: 0.35
+      hi: 0.6
+    lobe_ratio:
+      kind: uniform
+      lo: 0.45
+      hi: 0.8
+    lobe_overlap:
+      kind: uniform
+      lo: 0.2
+      hi: 0.35
+    bend:
+      kind: uniform
+      lo: 0.3
+      hi: 0.7
+    warp: 0.25
+    facets:
+      kind: uniform
+      lo: 4.0
+      hi: 7.99
+    facet_depth:
+      kind: uniform
+      lo: 0.45
+      hi: 0.75
+  material:
+    ice_fraction:
+      kind: uniform
+      lo: 0.6
+      hi: 1.0
+    patch_scale: 1.5
+  keep_outs: []
+  seed: 3
+  cell_factor: 8.0
+keep_outs: []
+ambient: null
+exposure: 0.9
+far: null
+haze: true

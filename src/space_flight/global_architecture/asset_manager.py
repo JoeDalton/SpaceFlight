@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import quaternion  # noqa: F401 - registers np.quaternion; needed before any use below
 from direct.showbase.ShowBase import ShowBase
-from world_builder.clouds.cloud import ATLAS_PNG as CLOUD_ATLAS_PNG
 
 from space_flight import DATAFILES_PATH, LOGGER
 from space_flight.global_architecture.asset_pools import SoundPool, TexturePool
@@ -133,10 +132,6 @@ COMMON_ASSETS_TO_LOAD: dict[Path, dict[str, Any]] = {
     # Planet sprite (large PNG — preload so the level build never blocks on it;
     # loadTexture caches by path, so Planet2D's own load becomes a cache hit)
     DATAFILES_PATH / "sprites/planets_2d/terran.png": {"type": "texture"},
-    # Cloud sprite atlas (loaded in CloudField's build preamble — preload so the
-    # cloud build doesn't block ~77ms on it; WorldBuilder's atlas loader goes
-    # through this asset manager, keyed by path)
-    CLOUD_ATLAS_PNG: {"type": "texture"},
     # Dust textures
     DATAFILES_PATH / "sprites/dust/dust_blue.png": {"type": "texture"},
     DATAFILES_PATH / "sprites/dust/dust_green.png": {"type": "texture"},

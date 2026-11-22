@@ -14,7 +14,6 @@ import numpy as np
 import pytest
 from panda3d.core import NodePath
 
-from space_flight import CAMERA_FAR_M
 from space_flight.game.flight_state import FlightState
 from space_flight.game.kills import DamageSource, KillLog, credit_hit
 from space_flight.game.render_origin import RenderOrigin
@@ -185,9 +184,6 @@ def test_world_update_moves_the_scene_after_the_render_origin():
     fs.player = MagicMock(is_dying=False)
     fs.player.pawn.health = 1.0
     fs.scene = order.scene
-    fs.scene.depth_ranges.return_value = (2000.0, 5e5)
-    fs.split_depth = order.split_depth
-    fs.translucent_volumes = set()
     fs.recenter_render_origin = order.recenter_render_origin
     task = SimpleNamespace(cont="cont")
 
@@ -195,32 +191,8 @@ def test_world_update_moves_the_scene_after_the_render_origin():
 
     assert [c[0] for c in order.mock_calls] == [
         "recenter_render_origin",
-        "scene.depth_ranges",
-        "split_depth.update",
         "scene.update_after_recenter",
     ]
-    order.split_depth.update.assert_called_once_with(
-        2000.0, 5e5, translucent=fs.translucent_volumes
-    )
-
-
-def test_without_split_cameras_the_scene_still_follows_the_origin():
-    """Headless there are no split cameras: the scene is updated all the same,
-    and its sky reaches the camera's whole range."""
-    fs = object.__new__(FlightState)
-    fs.split_depth = None
-    fs.recenter_render_origin = MagicMock()
-    fs.scene = MagicMock()
-    fs.follow_render_origin()
-    fs.scene.update_after_recenter.assert_called_once()
-    fs.scene.depth_ranges.assert_not_called()
-    assert fs.depth_far == CAMERA_FAR_M
-
-
-def test_depth_far_is_the_far_cameras():
-    fs = object.__new__(FlightState)
-    fs.split_depth = SimpleNamespace(far=123456.0)
-    assert fs.depth_far == 123456.0
 
 
 def test_headless_entry_centres_render_on_the_player_before_building():
@@ -254,21 +226,6 @@ def make_headless_entry_state():
     fs._on_build_complete = order.build_complete
     fs.resume = order.resume
     return fs, order
-
-
-def test_the_split_keeps_off_translucent_volumes():
-    """The split cameras get the scene's ranges and the translucent volumes
-    (shield bubbles) to keep the split off."""
-    fs = object.__new__(FlightState)
-    fs.scene = SimpleNamespace(depth_ranges=lambda: (2000.0, 6e5))
-    fs.split_depth = MagicMock()
-    fs.translucent_volumes = {"bubble"}
-
-    fs.update_split_depth()
-
-    fs.split_depth.update.assert_called_once_with(
-        2000.0, 6e5, translucent=fs.translucent_volumes
-    )
 
 
 def test_the_reveal_ends_the_loading_jump_engine_roar():

@@ -1,0 +1,232 @@
+# The home planet: a 600 km earthlike world, with its air, its
+# clouds (cumulus at 2200 m and the weather's cirrus above them) and its sea.
+# Stamps and paints are placed by latitude and longitude; images are relative
+# to this folder. `mass` is in the units of the gravity constant the game
+# gives World.gravity_field.
+planet:
+  name: earthlike
+  seed: 19
+  radius: 600000.0
+  reference_lat: 20.91
+  reference_lon: 30.4
+  has_ocean: true
+  has_vegetation: true
+  has_clouds: true
+  day_length_h: 6.0
+  stratification: 100.0
+  elevation:
+    warp_wavelength: 70000.0
+    warp_amplitude: 4200.0
+    continent_wavelength: 380000.0
+    continent_octaves: 5
+    ocean_fraction: 0.55
+    continent_curve:
+    - [-1.0, -5500.0]
+    - [-0.35, -4200.0]
+    - [-0.12, -2000.0]
+    - [-0.04, -120.0]
+    - [0.0, 0.0]
+    - [0.04, 30.0]
+    - [0.15, 180.0]
+    - [0.35, 700.0]
+    - [1.0, 1800.0]
+    mountain_wavelength: 40000.0
+    mountain_octaves: 8
+    mountain_height: 4800.0
+    mountain_mask_wavelength: 140000.0
+    mountain_coverage: 0.0
+    plates: 14
+    plate_warp_wavelength: 500000.0
+    plate_warp_amplitude: 30000.0
+    belt_width: 80000.0
+    plate_crust: 0.2
+    plate_uplift: 0.15
+    ridge_height: 1200.0
+    rift_depth: 500.0
+    character_wavelength: 250000.0
+    coast_wavelength: 200000.0
+    dunes: true
+    dune_scale: 1.0
+    dune_height: 200.0
+    tablelands: true
+    table_region_wavelength: 320000.0
+    stage_wavelength: 120000.0
+    table_cell: 4000.0
+    spire_cell: 1200.0
+    stack_height: [200.0, 700.0]
+    table_top_relief: 25.0
+    hills_wavelength: 14000.0
+    hills_octaves: 5
+    hills_height: 320.0
+    detail_wavelength: 900.0
+    detail_octaves: 8
+    detail_height: 35.0
+    feature_scale: null
+  climate:
+    temperature_mean: 14.0
+    temperature_spread: 9.0
+    temperature_latitude: 40.0
+    lapse_rate: 0.0065
+    humidity_mean: 0.5
+    humidity_spread: 0.35
+    temperature_wavelength: 140000.0
+    temperature_octaves: 4
+    humidity_wavelength: 105000.0
+    humidity_octaves: 4
+  stamps:
+  - heightmap: stamps/crater.png
+    placement:
+      lat: 20.670655126211866
+      lon: 29.940715883578648
+      width: 5000.0
+      height: 5000.0
+      rotation: 0.0
+    height_scale: 700.0
+    height_offset: -245.0
+    blend: add
+    falloff: 400.0
+  - heightmap: stamps/mesa.png
+    placement:
+      lat: 21.148358020009354
+      lon: 30.75836050540796
+      width: 4500.0
+      height: 4500.0
+      rotation: 20.0
+    height_scale: 750.0
+    height_offset: 0.0
+    blend: max
+    falloff: 300.0
+  - heightmap: stamps/pad.png
+    placement:
+      lat: 20.766755701874203
+      lon: 30.44085118469976
+      width: 1400.0
+      height: 700.0
+      rotation: 15.0
+    height_scale: 10.0
+    height_offset: 0.5
+    blend: flatten
+    falloff: 250.0
+  - heightmap: stamps/lake.png
+    placement:
+      lat: 21.148113519050103
+      lon: 29.939251284003443
+      width: 5000.0
+      height: 5000.0
+      rotation: 0.0
+    height_scale: 300.0
+    height_offset: -30.0
+    blend: replace
+    falloff: 700.0
+  paints:
+  - mask: stamps/crater_paint.png
+    placement:
+      lat: 20.670655126211866
+      lon: 29.940715883578648
+      width: 5000.0
+      height: 5000.0
+      rotation: 0.0
+    colors:
+    - ['#808080', rock]
+    - ['#e0c080', desert]
+    falloff: 120.0
+    strength: 1.0
+    tolerance: 0.12
+  - mask: stamps/pad_paint.png
+    placement:
+      lat: 20.766755701874203
+      lon: 30.44085118469976
+      width: 1400.0
+      height: 700.0
+      rotation: 15.0
+    colors:
+    - ['#ffe678', beach]
+    falloff: 30.0
+    strength: 1.0
+    tolerance: 0.12
+  - mask: stamps/lake_paint.png
+    placement:
+      lat: 21.148113519050103
+      lon: 29.939251284003443
+      width: 5000.0
+      height: 5000.0
+      rotation: 0.0
+    colors:
+    - ['#2e6b2e', forest]
+    falloff: 60.0
+    strength: 1.0
+    tolerance: 0.12
+  density_paints: []
+mass: 5.97e+24
+atmosphere:
+  height: 60000.0
+  rayleigh: [5.802e-06, 1.3558e-05, 3.31e-05]
+  rayleigh_height: 8000.0
+  mie: 3.996e-06
+  mie_extinction: 4.44e-06
+  mie_height: 1200.0
+  mie_g: 0.8
+  sun_intensity: 22.0
+  multiple_scattering: 1.0
+  ground_albedo: 0.3
+  ozone: [6.5e-07, 1.881e-06, 8.5e-08]
+  ozone_altitude: 25000.0
+  ozone_width: 15000.0
+  sunset_radius: 6371000.0
+clouds:
+  altitude: 2200.0
+  cloud_type: cumulus
+  cirrus: true
+  weather:
+    seed: 11
+    time_s: 0.0
+    systems: true
+    pins: []
+    zonal: null
+    season: 0.0
+    meso_wavelength: 160000.0
+    meso_strength: 0.4
+    dry_floor: 0.12
+    desert_clearing: 0.6
+    maritime: 0.08
+    orographic: 0.3
+    orographic_slope: 0.03
+    climate_wavelength: 60000.0
+    jets: null
+    jet_vortex: 0.8
+    cirrus_zonal: null
+    cirrus_shield: 1.0
+    cirrus_meso: 0.3
+    cloud_amount: 0.0
+    cloud_contrast: 0.1
+    cirrus_amount: 0.0
+  seed: 7
+  weather_seed: 11
+  sun_brightness: 2.8
+  sky_strength: 0.35
+  sky_occlusion: 0.55
+  exposure: 0.9
+  genera: null
+ocean:
+  water_color: [0.02, 0.06, 0.14]
+  ripple_strength: 0.02
+  wind_dir: [1.0, 0.0]
+  wind_strength: 0.5
+  swell_amplitude: 20.0
+  swell_scale: 0.004
+  swell_drift: 0.1
+  fm_depth: 0.2
+  shallow_color: [0.03, 0.16, 0.15]
+  shallow_depth: 8.0
+  foam_color: [0.8, 0.8, 0.8]
+  foam_depth: 2.5
+  foam_spacing: 0.6
+  foam_speed: 1.2
+  foam_strength: 0.85
+  swell_shallow: 5.0
+  swell_deep: 60.0
+  near_band: [12000.0, 18000.0]
+  anchor_range: 50000.0
+  tuned_elevation: 35.0
+ambient: [0.34, 0.44, 0.64]
+exposure: 0.9

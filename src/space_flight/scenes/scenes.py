@@ -3,33 +3,20 @@ from __future__ import annotations
 import functools
 import logging
 import math
+import tempfile
 import time
 from collections.abc import Callable, Generator, Sequence
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import replace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-from world_builder.asteroids.distributions import Distribution
-from world_builder.asteroids.field import AsteroidField
-from world_builder.asteroids.spec import (
-    Box,
-    Clumping,
-    Density,
-    FieldSpec,
-    KeepOut,
-    MaterialSpec,
-)
-from world_builder.atmosphere import AtmosphereParams
-from world_builder.clouds.cirrus import CirrusSpec
-from world_builder.clouds.genera import GeneraSpec
-from world_builder.clouds.weather import WeatherSpec
-from world_builder.depth import SplitDepthCameras
-from world_builder.terrain.level import load_level
-from world_builder.terrain.planet import PRESETS
-from world_builder.world import BodyLook, CloudLook, OceanLook, SkyLook, SunLook, World
+from world_builder import load_world, parse_world
+from world_builder.asteroids.spec import KeepOut
+from world_builder.world_file import world_to_yaml
 
 from space_flight import (
-    CAMERA_FAR_M,
     DATAFILES_PATH,
     WARP_MAX_SPEED_MPS,
     WARP_MIN_SPEED_MPS,
@@ -43,14 +30,14 @@ from space_flight.scenes.planet_2d import Planet2D
 
 if TYPE_CHECKING:
     from panda3d.core import NodePath
+    from world_builder.asteroids.field import AsteroidField
+    from world_builder.depth import SplitDepthCameras
+    from world_builder.world import World
+    from world_builder.world_file import GameWorld
 
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger(__name__)
-
-# The default depth split, metres: depth steps stay about 0.25 m just short of
-# it and about 10 m at the far plane (see Scene.depth_ranges)
-DEFAULT_DEPTH_SPLIT_M = 2000.0
 
 # The world counts as loaded once its loading flag has stayed False this long:
 # it turns on briefly whenever detail refines, so one quiet frame is not enough.
@@ -106,7 +93,7 @@ def wait_until_loaded(
 
 def scene_factory(
     game: FlightState, scene_name: str, keep_outs: Sequence[KeepOut] = ()
-) -> SceneAsteroids | SceneLavaPlanet | SceneEarthlike | SceneDebug:
+) -> SceneAsteroids | SceneLavaPlanet | SceneSolarSystem | SceneDebug:
     """
     :param game: The game/flight state
     :param scene_name: Which scene
@@ -117,8 +104,8 @@ def scene_factory(
         return SceneAsteroids(game=game, keep_outs=keep_outs)
     if scene_name == "lava_planet":
         return SceneLavaPlanet(game=game, keep_outs=keep_outs)
-    if scene_name == "earthlike_planet":
-        return SceneEarthlike(game=game)
+    if scene_name == "solar_system":
+        return SceneSolarSystem(game=game)
     if scene_name == "debug":
         return SceneDebug(game=game)
     raise NotImplementedError(f"Unknown scene {scene_name}")
@@ -154,6 +141,12 @@ def warp_speed_at_altitude(altitude_m: float) -> float:
 
 
 class Scene:
+    #: The depth split: a far camera drawing first what lies past a split
+    #: distance, the main camera the rest, each with the whole depth buffer,
+    #: so distant ground does not shimmer (see world_builder.depth). The
+    #: world's own, from the scene's build_upfront (None until then).
+    depth: SplitDepthCameras | None = None
+
     def __init__(
         self,
         game: FlightState,
@@ -274,26 +267,15 @@ class Scene:
             shader=self.MODELS_USE_WORLD_SHADER,
         )
 
-    def depth_ranges(self) -> tuple[float, float]:
+    def release_depth(self) -> None:
         """
-        The split cameras' ranges this frame (see FlightState.split_depth):
-        the main camera draws up to the split, a far camera beyond it, each
-        with the whole depth buffer.
-
-        By default a fixed split, past which a space level has only distant
-        things (the sky, 2D planets), and the camera's whole far range.
-
-        :return: (split, far), metres
+        Remove the scene's split cameras, if it has any. FlightState.exit
+        calls it before the render-scale / anti-aliasing pipeline goes: the
+        far camera draws into that pipeline's buffer.
         """
-        return DEFAULT_DEPTH_SPLIT_M, CAMERA_FAR_M
-
-    def use_split_depth(self, depth: SplitDepthCameras) -> None:
-        """
-        The game's split cameras, built once the scene's up-front objects
-        exist (see FlightState.enter). Nothing by default.
-
-        :param depth: The split cameras
-        """
+        if self.depth is not None:
+            self.depth.destroy()
+            self.depth = None
 
     def update_after_recenter(self):
         """
@@ -315,114 +297,129 @@ class Scene:
         return np.asarray(position, dtype=float)
 
 
-class SceneEarthlike(Scene):
+class SceneWorld(Scene):
     """
-    A copy of WorldBuilder's earth-like demo world around the player: the
-    planet (terrain, air, clouds, swell ocean), its moon, the sky and the sun.
+    A scene whose world is a WorldBuilder world file, loaded whole by
+    ``load_world``: its bodies, asteroid fields, sky, sun and lights, and the
+    split depth cameras.
 
-    WorldBuilder's World builds and updates them. What they look like is
-    decided here. The planet is not rotated: its centre is placed (see
-    LevelFrame) so that the level file's reference point is the world origin,
-    at sea level, with the file's east, north and up not the world's axes.
-    Positions are written on the file's chart and converted with
-    :meth:`level_frame`.
+    The file defines the objects and nothing about running them. The scene
+    decides how they are run: the quality, the game's clock, the light the
+    ships are given (LIGHT_SCALE) and what is solid.
+
+    A scene needs a window: ``load_world`` builds the depth cameras.
+
+    :ivar game_world: WorldBuilder's loaded world, once built (see
+        build_upfront)
+    :ivar world: its ``World``, which the scene's queries read
     """
 
-    LEVEL_PATH = DATAFILES_PATH / "worlds/earthlike_demo/demo.yaml"
+    #: The world file
+    WORLD_PATH: Path
+    #: Scales the Panda3D lights the world puts on render for the ships, which
+    #: use fixed-function lighting with no tone map
+    LIGHT_SCALE: float
+
+    def __init__(self, game: FlightState):
+        super().__init__(game=game)
+        self.game_world: GameWorld | None = None
+
+    def world_file(self) -> AbstractContextManager[Path]:
+        """:return: The world file to load, for as long as it is loaded
+        (a scene may make a variant of WORLD_PATH)"""
+        return nullcontext(self.WORLD_PATH)
+
+    def build_upfront(self):
+        """
+        Load the world (shaders, textures, worker processes, the ocean's
+        reflection buffer, the split cameras) on the black screen, before the
+        hyperspace animation starts. What loads over time (the ground, the
+        rocks) loads during the animation (see build_decomposed).
+        """
+        game = self.game
+        app = game.app
+        with self.world_file() as path:
+            self.game_world = load_world(
+                app,
+                path,
+                settings=app.graphics_settings.world_settings(),
+                clock=game.game_time.get_current_time,
+                light_scale=self.LIGHT_SCALE,
+                light_period=LIGHT_PERIOD_FRAMES,
+            )
+        self.world = self.game_world.world
+        self.depth = self.game_world.depth
+        self._spare_translucent_volumes(self.depth)
+
+    def _spare_translucent_volumes(self, depth: SplitDepthCameras) -> None:
+        """
+        Have the world's split cameras keep their split off the game's big
+        translucent volumes (shield bubbles: blended twice where the two
+        cameras overlap, they would show a ring), which GameWorld.update does
+        not know of.
+        """
+        update = depth.update
+
+        def update_sparing(split, far, translucent=()):
+            update(
+                split,
+                far,
+                translucent=(*translucent, *self.game.translucent_volumes),
+            )
+
+        depth.update = update_sparing
+
+    def update_after_recenter(self):
+        """Everything around the player, now at the render origin."""
+        self.game_world.update(self.game.player.pawn.position)
+
+    def clean(self):
+        """
+        Cleans the scene
+        """
+        # The split cameras first (GameWorld.destroy would remove them again)
+        self.release_depth()
+        self.world.destroy()  # its fields and worker pool too
+        self.world = None
+        self.game_world = None
+        self.game = None
+
+
+class SceneSolarSystem(SceneWorld):
+    """
+    The three-planets world (``datafiles/worlds/solar_system/``): the home
+    planet (terrain, air, clouds, sea), its moon, an ice planet and its ring,
+    the sky and the sun.
+
+    The planet is not rotated: levels write their positions on the chart of
+    its reference point and convert them with :meth:`level_frame` (see
+    LevelFrame).
+    """
+
+    WORLD_PATH = DATAFILES_PATH / "worlds/solar_system/solar_system.yaml"
+    LIGHT_SCALE = 0.4
+    #: The body levels fly over (its name in the world file)
+    PLANET = "planet"
     # The ground is solid within this of the player, metres: the fights stay a
     # few kilometres from it (each chunk farther costs a check every frame)
     TERRAIN_COLLISION_RANGE_M = 10_000.0
-    # Toward the sun, as (east, north, up) at the reference point: sunrise in the east.
-    # SunLook is given the world direction (see __init__).
-    SUN_ENU = (1.0, 0, 0.3)
-    SKY = SkyLook()
-    # The convective clouds above the convoy, which flies at 200-800 m (the
-    # stratus deck stays under their base). The genera (stratus, congestus,
-    # cumulonimbus, ...) are added in bodies(): they need the planet.
-    CLOUDS = CloudLook(altitude=2200.0, cirrus=CirrusSpec())
-    # The 20 m swell, calmed over the shallows (the atmosphere hazes the sea)
-    OCEAN = OceanLook()
-    # The moon: the demo's airless sand moon, this far from the planet's
-    # centre, this far from the vertical over the origin toward north (ahead
-    # of the convoy). Next to no sky light: a black sky.
-    MOON_DISTANCE_M = 10_000e3
-    MOON_ZENITH_ANGLE_DEG = 75.0
-    MOON_AMBIENT = (0.025, 0.025, 0.03)
-    # Masses in kg (for a gravity constant in SI units)
-    PLANET_MASS_KG = 5.97e24
-    MOON_MASS_KG = 7.35e22
-    # The ships are lit by Panda3D's fixed-function lights, with no tone map:
-    # the world's physical noon sun (about 2.4) is scaled to about white
-    LIGHT_SCALE = 0.4
 
     @classmethod
     @functools.cache
     def level_frame(cls) -> LevelFrame:
-        """:return: The frame of the level file (chart to world)"""
-        spec, _camera_pose = load_level(cls.LEVEL_PATH)
-        return LevelFrame(spec)
+        """:return: The chart frame of the body called PLANET in the world
+        file (chart to world)"""
+        bodies = parse_world(cls.WORLD_PATH).bodies
+        return LevelFrame.of(next(body for body in bodies if body.name == cls.PLANET))
 
     def __init__(self, game: FlightState):
         super().__init__(game=game)
-        frame = self.level_frame()
-        self.default_up_direction = frame.up
-        self.SUN = SunLook(direction=tuple(frame.vector(*self.SUN_ENU)))
-
-    def bodies(self) -> list[BodyLook]:
-        """:return: The planet (from LEVEL_PATH) and its moon"""
-        spec, _camera_pose = load_level(self.LEVEL_PATH)
-        frame = self.level_frame()
-        centre = frame.centre
-        angle = math.radians(self.MOON_ZENITH_ANGLE_DEG)
-        moon = centre + self.MOON_DISTANCE_M * (
-            math.sin(angle) * frame.north + math.cos(angle) * frame.up
-        )
-        clouds = replace(
-            self.CLOUDS,
-            genera=GeneraSpec(
-                WeatherSpec(spec), focus=(spec.reference_lat, spec.reference_lon)
-            ),
-        )
-        return [
-            BodyLook(
-                "planet",
-                spec,
-                position=tuple(centre),
-                atmosphere=AtmosphereParams(),
-                clouds=clouds,
-                ocean=self.OCEAN,
-                mass=self.PLANET_MASS_KG,
-            ),
-            BodyLook(
-                "moon",
-                replace(PRESETS["moon"], seed=7),
-                position=tuple(moon),
-                ambient=self.MOON_AMBIENT,
-                mass=self.MOON_MASS_KG,
-            ),
-        ]
+        self.default_up_direction = self.level_frame().up
 
     def build_upfront(self):
-        """
-        Build the world (shaders, textures, worker processes, the ocean's
-        reflection buffer) on the black screen, before the hyperspace
-        animation starts and before FlightState's split cameras: the ocean's
-        reflection copies the main lens. The ground loads during the
-        animation (see build_decomposed).
-        """
-        app = self.game.app
-        self.world = World(
-            app,
-            self.bodies(),
-            sun=self.SUN,
-            sky=self.SKY,
-            settings=app.graphics_settings.world_settings(),
-            light_scale=self.LIGHT_SCALE,
-            clock=self.game.game_time.get_current_time,
-        )
-        # Set after it is built: older WorldBuilders have no such parameter
-        self.world.light_period = LIGHT_PERIOD_FRAMES
-        # Every world body solid to ships, munitions and sensors
+        """Load the world, and make every body solid to ships, munitions and
+        sensors (the moon too, which a warp reaches)."""
+        super().build_upfront()
         self.world.enable_collision(
             CollisionLayers.TERRAIN_INTO,
             max_distance=self.TERRAIN_COLLISION_RANGE_M,
@@ -444,103 +441,69 @@ class SceneEarthlike(Scene):
             lambda: self.world.loading, self.game.follow_render_origin
         )
 
-    def depth_ranges(self) -> tuple[float, float]:
-        """:return: The split following the nearest ground, the far plane
-        reaching the farthest visible part of the planet and the moon"""
-        return self.world.depth_ranges(self.game.player.pawn.position)
-
-    def use_split_depth(self, depth: SplitDepthCameras) -> None:
-        """
-        Give the world the split cameras: the raymarched clouds (the
-        default renderer) draw their passes with them, and show nothing
-        in the sky until they have them.
-
-        :param depth: The split cameras
-        """
-        self.world.use_split_depth(depth)
-
-    def update_after_recenter(self):
-        """Everything around the player, now at the render origin."""
-        self.world.update(self.game.player.pawn.position, far=self.game.depth_far)
-
     def clean(self):
         """
-        Cleans the SceneEarthlike
+        Cleans the SceneSolarSystem
         """
-        self.world.destroy()
-        self.world = None
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
-        self.game = None
+        super().clean()
 
 
-class SceneSpace(Scene):
+class SceneSpace(SceneWorld):
     """
-    Open space: WorldBuilder's World with no planet, for its sky (stars, the
-    sun's disc, a nebula), its sun and Panda3D's lights for the ships.
-
-    The ships are lit by Panda3D's fixed-function lights, with no tone map:
-    the world's light is scaled down by LIGHT_SCALE, its sky light in open
-    space (AMBIENT) given before that scale.
+    Open space (``datafiles/worlds/space/empty.yaml``): no body, the sky (stars,
+    the sun's disc, a nebula), the sun, and Panda3D's lights for the ships.
     """
 
-    #: Toward the sun
-    SUN = SunLook(direction=(-0.42, -0.84, 0.35))
-    #: None: no sky (a scene with its own backdrop)
-    SKY: SkyLook | None = SkyLook()
-    #: The sky light in open space, before LIGHT_SCALE
-    AMBIENT = (0.5, 1.0, 2.0)
+    WORLD_PATH = DATAFILES_PATH / "worlds/space/empty.yaml"
     LIGHT_SCALE = 0.2
-
-    def build_upfront(self):
-        """Build the world (sky, lights, worker processes) on the black
-        screen, before the hyperspace animation starts."""
-        app = self.game.app
-        self.world = World(
-            app,
-            [],
-            sun=self.SUN,
-            sky=self.SKY,
-            settings=app.graphics_settings.world_settings(),
-            light_scale=self.LIGHT_SCALE,
-            clock=self.game.game_time.get_current_time,
-            space_ambient=self.AMBIENT,
-        )
-        # Set after it is built: older WorldBuilders have no such parameter
-        self.world.light_period = LIGHT_PERIOD_FRAMES
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """Nothing more by default."""
         yield from ()
 
-    def update_after_recenter(self):
-        """The sky and the lights around the player, now at the render origin."""
-        self.world.update(self.game.player.pawn.position, far=self.game.depth_far)
 
-    def clean(self):
-        """
-        Cleans the scene
-        """
-        self.world.destroy()
-        self.world = None
-        self.game = None
+@contextmanager
+def with_keep_outs(
+    path: Path, field: str, keep_outs: Sequence[KeepOut]
+) -> Generator[Path, None, None]:
+    """
+    A copy of a world file whose asteroid field has more room kept clear:
+    ``load_world`` has no argument for a level's keep-outs.
+
+    :param path: The world file
+    :param field: The name of its field
+    :param keep_outs: The room to keep clear, added to the field's own
+    :return: The copy (self-contained), for the duration of the block
+    """
+    world = parse_world(path)
+    fields = tuple(
+        replace(look, keep_outs=(*look.keep_outs, *keep_outs))
+        if look.name == field
+        else look
+        for look in world.fields
+    )
+    with tempfile.TemporaryDirectory() as folder:
+        copy = Path(folder) / path.name
+        copy.write_text(world_to_yaml(replace(world, fields=fields)))
+        yield copy
 
 
 class SceneAsteroids(SceneSpace):
     """
-    Missions 1 and 2's asteroid field (WorldBuilder's asteroids): a 15 km
-    cube of rock around the origin, patchy, its rocks from 50 m to 2 km
+    Missions 1 and 2's asteroid field (``datafiles/worlds/space/asteroids.yaml``):
+    a 15 km cube of rock around the origin, patchy, its rocks from 50 m to 2 km
     across in radius, turning with the game's clock. Its rocks are solid to
     ships, munitions and sensors as terrain is, and leave room around the
     level's spawn points and routes (``keep_outs``).
+
+    :ivar field: WorldBuilder's asteroid field, once built
     """
 
-    FIELD = FieldSpec(
-        shape=Box((7500.0, 7500.0, 7500.0), edge=500.0),
-        density=Density(3.0, Clumping(scale=4000.0, coverage=0.6, softness=0.12)),
-        sizes=Distribution.power_law(3.5, 50.0, 2000.0),
-        material=MaterialSpec(Distribution.uniform(0.0, 0.15)),
-    )
+    WORLD_PATH = DATAFILES_PATH / "worlds/space/asteroids.yaml"
+    #: The name of the asteroid field in the world file
+    FIELD = "field"
     #: Rocks farther than this from the player are not solid
     COLLISION_DISTANCE_M = 20_000.0
     #: How far clear_position looks for room
@@ -551,30 +514,21 @@ class SceneAsteroids(SceneSpace):
     def __init__(self, game: FlightState, keep_outs: Sequence[KeepOut] = ()):
         super().__init__(game=game)
         self.keep_outs = tuple(keep_outs)
+        self.field: AsteroidField | None = None
+
+    def world_file(self) -> AbstractContextManager[Path]:
+        """:return: The world file, with the level's keep-outs in its field"""
+        if not self.keep_outs:
+            return super().world_file()
+        return with_keep_outs(self.WORLD_PATH, self.FIELD, self.keep_outs)
 
     def build_upfront(self):
         """
-        Build the world, then the field on its worker pool: its rock shapes
-        are built by the workers during the hyperspace animation (see
-        build_decomposed).
+        Load the world; its field's rock shapes are built by the world's
+        workers during the hyperspace animation (see build_decomposed).
         """
         super().build_upfront()
-        app = self.game.app
-        scale = self.LIGHT_SCALE
-        self.field = AsteroidField(
-            app,
-            self.FIELD,
-            clock=self.game.game_time.get_current_time,
-            settings=app.graphics_settings.world_settings().asteroids,
-            keep_outs=self.keep_outs,
-            executor=self.world.executor,
-            sun_direction=self.SUN.direction,
-            sun_color=tuple(np.asarray(self.SUN.color) * scale),
-            ambient=tuple(np.asarray(self.AMBIENT) * scale),
-            exposure=1.0,
-            tonemap=False,  # as the ships' fixed-function lighting
-            far=CAMERA_FAR_M,
-        )
+        self.field = self.world.field(self.FIELD)
         # Solid as terrain: the same collision events and handlers
         self.field.enable_collision(
             CollisionLayers.TERRAIN_INTO,
@@ -590,9 +544,9 @@ class SceneAsteroids(SceneSpace):
         self.speed_dust_cloud = SpeedDustCloud(game=self.game, colors=self.DUST)
         yield "dust"
         yield from self._build_backdrop()
-        # The game loop is paused while loading: step the field as a frame does
+        # The game loop is paused while loading: step the world as a frame does
         yield from wait_until_loaded(
-            lambda: self.field.loading, self.game.follow_render_origin
+            lambda: self.world.loading, self.game.follow_render_origin
         )
 
     def _build_backdrop(self) -> Generator[str, None, None]:
@@ -600,20 +554,17 @@ class SceneAsteroids(SceneSpace):
         yield from ()
 
     def update_after_recenter(self):
-        """The sky, the lights and the field around the player: the main
-        camera and the rear-view mirror see it."""
+        """The world around the player, then the field again for the
+        rear-view mirror when it is shown: the world draws the field for the
+        main camera alone."""
         super().update_after_recenter()
+        mirror = getattr(self.game.player, "rear_view_mirror", None)
+        if mirror is None or not mirror.is_mirror_visible:
+            return
         camera_render = self.world.camera_render()
         camera_world = np.asarray(self.game.player.pawn.position) + camera_render
-        self.field.update(camera_world, camera_render, cameras=self._cameras())
-
-    def _cameras(self) -> list:
-        """:return: The views the rocks are drawn for"""
-        cameras = [getattr(self.game.app, "cam", None)]
-        mirror = getattr(self.game.player, "rear_view_mirror", None)
-        if mirror is not None:
-            cameras.append(mirror.mirror_np)
-        return [camera for camera in cameras if camera is not None]
+        cameras = [self.game.app.cam, mirror.mirror_np]
+        self.field.update(camera_world, camera_render, cameras=cameras)
 
     def clear_position(self, position: Sequence[float], radius: float) -> np.ndarray:
         """
@@ -632,8 +583,7 @@ class SceneAsteroids(SceneSpace):
         """
         Cleans the SceneAsteroids
         """
-        self.field.destroy()  # before the world, which owns the worker pool
-        self.field = None
+        self.field = None  # destroyed with the world
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None
         super().clean()
@@ -641,19 +591,11 @@ class SceneAsteroids(SceneSpace):
 
 class SceneLavaPlanet(SceneAsteroids):
     """
-    The Dev level's scene: a sparser field in a lava planet's orange light,
-    the planet a 2D backdrop, no sky.
+    The Dev level's scene (``datafiles/worlds/space/lava.yaml``): a sparser
+    field in a lava planet's orange light, the planet a 2D backdrop, no sky.
     """
 
-    FIELD = FieldSpec(
-        shape=Box((7500.0, 7500.0, 7500.0), edge=500.0),
-        density=Density(0.4),
-        sizes=Distribution.power_law(3.5, 50.0, 2000.0),
-        seed=1,
-    )
-    SUN = SunLook(direction=(0.0, 0.98, 0.2))  # from the planet
-    SKY = None
-    AMBIENT = (2.0, 1.0, 0.5)
+    WORLD_PATH = DATAFILES_PATH / "worlds/space/lava.yaml"
     DUST = ["orange", "pink", "yellow", "white"]
 
     def _build_backdrop(self) -> Generator[str, None, None]:

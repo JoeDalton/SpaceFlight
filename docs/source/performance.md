@@ -3,7 +3,8 @@
 This page is for developers profiling the game's CPU cost. It covers how to
 measure it, where the time currently goes, and which optimization levers are
 left, with their expected gain and trade-offs. Rendering (GPU) is out of scope:
-all figures come from headless runs, which don't render.
+all figures come from headless runs, which don't render (headless level runs
+are broken for now: see `WORLDBUILDER_WISHLIST.md`).
 
 ## Measuring
 
@@ -100,13 +101,13 @@ Each is worth a few percent at most.
 Mission 3 is the heaviest level: WorldBuilder's planet (terrain, raymarched
 clouds with genera and cirrus, swell ocean, shadows) and some 25 ships lit and
 shadowed by the world. The headless harness cannot run it (it draws nothing,
-and the sea needs a window), so it is measured drawn, by
+and `load_world` needs a window), so it is measured drawn, by
 `scripts/bench_mission3.py`: the real game in an offscreen buffer at a fixed
 size and render scale 1.0, warmed up until the first waves have spawned and the
 world has settled, then 600 frames each waiting for the GPU (CPU and GPU in
 series). `--pose fly`, `--toggle`, `--world SECTION.KNOB=VALUE`, `--profile` and
 `--pstats` and `--prc` as its docstring says (`--toggle` turns a feature off:
-the mirror, the ships' shadows or model shader, the cirrus, the models'
+the mirror, the ships' shadows or model shader, the models'
 flattening).
 
 Two runs of the same tree differ by up to 0.8 ms: compare medians of runs
@@ -124,7 +125,7 @@ About 17 ms a frame, still:
 - `World.update`, ~2 ms of Python, mostly the light at the camera and at the
   ships (`lights_at`, a CPU march through the clouds' shadow).
 - The bots, ~1.5 ms (flight model and thinking, see above).
-- The rear-view mirror, the cirrus and the ships' shadows each cost under
+- The rear-view mirror and the ships' shadows each cost under
   0.5 ms. Drawing the ships with Panda3D's lights instead of the world's
   model shader is *slower* (+2.5 ms): one light state per ship.
 

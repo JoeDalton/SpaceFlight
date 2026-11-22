@@ -2,22 +2,55 @@
 
 import numpy as np
 import pytest
-from world_builder.terrain.level import load_level
+from world_builder import parse_world
 
 from space_flight.scenes.level_frame import LevelFrame
-from space_flight.scenes.scenes import SceneEarthlike
+from space_flight.scenes.scenes import SceneSolarSystem
 from space_flight.utils import rotation_matrix_coefficients
 
 
 @pytest.fixture(scope="module")
 def frame() -> LevelFrame:
-    spec, _ = load_level(SceneEarthlike.LEVEL_PATH)
-    return LevelFrame(spec)
+    return SceneSolarSystem.level_frame()
 
 
-def test_the_reference_point_is_the_world_origin(frame):
-    assert frame.position(0, 0, 0) == pytest.approx([0, 0, 0])
-    assert frame.position(0, 0, 250) == pytest.approx(250 * frame.up)
+def test_the_reference_point_is_on_the_planets_sea_level(frame):
+    reference = frame.position(0, 0, 0)
+    assert np.linalg.norm(reference - frame.centre) == pytest.approx(frame.radius)
+    assert frame.position(0, 0, 250) == pytest.approx(reference + 250 * frame.up)
+
+
+def test_the_planet_may_be_anywhere():
+    spec = parse_world(SceneSolarSystem.WORLD_PATH).bodies[0].spec
+    shifted = LevelFrame(spec, centre=(1e6, -2e6, 3e6))
+    base = LevelFrame(spec, centre=(0, 0, 0))
+    assert shifted.position(300, 400, 50) == pytest.approx(
+        base.position(300, 400, 50) + [1e6, -2e6, 3e6]
+    )
+    assert shifted.up_at(shifted.position(300, 400, 50)) == pytest.approx(
+        base.up_at(base.position(300, 400, 50))
+    )
+
+
+def test_the_frame_is_made_of_the_planets_body():
+    """Radius and chart origin come from the planet, the centre from where the
+    world file puts the body: another body, another chart."""
+    world = parse_world(SceneSolarSystem.WORLD_PATH)
+    planet, moon = world.bodies
+    for body in (planet, moon):
+        frame = LevelFrame.of(body)
+        assert frame.radius == body.spec.radius
+        assert frame.centre == pytest.approx(body.position)
+        reference = frame.position(0, 0, 0)
+        assert np.linalg.norm(reference - frame.centre) == pytest.approx(
+            body.spec.radius
+        )
+    # The moon is another sphere in another place: the same chart position
+    # is not the same world position
+    assert not np.allclose(
+        LevelFrame.of(planet).position(100, 200, 0),
+        LevelFrame.of(moon).position(100, 200, 0),
+    )
 
 
 def test_axes_are_orthonormal(frame):

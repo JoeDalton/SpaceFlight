@@ -37,22 +37,26 @@ API is in the [code reference](apidocs/index.rst).
 
 | Name | Class | `build_upfront` | `build_decomposed` |
 |------|-------|-----------------|--------------------|
-| `asteroids` | `SceneAsteroids` | open space (`World` with no planet: sky, sun, lights) and Missions 1-2's asteroid field | dust, then waits for the field's rock shapes |
-| `lava_planet` | `SceneLavaPlanet` | open space without a sky, lava-toned light, a sparser field | dust, 2D lava planet, then waits for the field |
-| `earthlike_planet` | `SceneEarthlike` | WorldBuilder's `World`: planet (terrain, air, clouds, swell ocean), moon, sky, sun and lights | dust, then waits for the world to load |
-| `debug` | `SceneDebug` | open space: sky, sun, lights | nothing |
+| `asteroids` | `SceneAsteroids` | `space/asteroids.yaml`: open space (sky, sun, lights) and Missions 1-2's asteroid field | dust, then waits for the field's rock shapes |
+| `lava_planet` | `SceneLavaPlanet` | `space/lava.yaml`: open space without a sky, lava-toned light, a sparser field | dust, 2D lava planet, then waits for the field |
+| `solar_system` | `SceneSolarSystem` | `solar_system/solar_system.yaml`: home planet (terrain, air, clouds, sea), moon, ice planet and ring, sky, sun and lights | dust, then waits for the world to load |
+| `debug` | `SceneDebug` | `space/empty.yaml`: open space, sky, sun, lights | nothing |
 
-`clean()` tears the owned pieces down. `build_upfront` runs after the player
-exists, so a scene's ocean reflection camera can copy the player camera's
-lens.
+Every scene is a `SceneWorld`: its world is a WorldBuilder world file in
+`datafiles/worlds/`, loaded whole by `load_world` in `build_upfront` (see
+[the planet world](#planet-world-from-worldbuilder) for how), and `clean()`
+tears it down. The files define the objects and nothing about running them;
+the scene gives the quality, the game's clock and `LIGHT_SCALE`. `load_world`
+needs a window: no scene builds headless (see `WORLDBUILDER_WISHLIST.md`).
 
 Every frame, once the render origin has moved onto the player,
-`FlightState` asks the scene for two things:
-- `scene.depth_ranges()`: the split and far distances of its split depth
-  cameras (see [docs/game.md](game.md#split-depth)). By default the split is
-  at 2 km and the far plane at `CAMERA_FAR_M`.
-- `scene.update_after_recenter()`: updates what must follow the origin. It
-  is a no-op by default.
+`FlightState` calls `scene.update_after_recenter()`: it updates what must
+follow the origin (the world and the scene's split depth cameras, see
+[docs/game.md](game.md#split-depth)). It is a no-op by default.
+
+A scene owns its split cameras (`scene.depth`, the world's own, None until
+`build_upfront`), and `scene.release_depth()` removes them:
+`FlightState.exit` calls it before the render pipeline goes.
 
 Missions also ask it `scene.clear_position(position, radius)` for ships
 placed at run time relative to the player: the nearest place with room, the
@@ -81,34 +85,38 @@ has one:
 
 ## Open space and asteroid fields — from WorldBuilder
 
-`SceneSpace` is open space: WorldBuilder's `World` with no planet. It draws
-the sky (`SKY`: stars, the sun's disc, a violet nebula; None for none), and
-puts Panda3D's sun and ambient lights on render for the ships, from `SUN` and
-`AMBIENT` (the sky light in open space) scaled by `LIGHT_SCALE` (0.2: the
-ships' fixed-function lighting has no tone map). Every frame
-`update_after_recenter` is `world.update(player position, far=game.depth_far)`.
-`SceneDebug` is just that.
+`SceneSpace` is open space, `space/empty.yaml`: no body, the sky (stars, the
+sun's disc, a violet nebula), the sun and a strong blue sky light away from
+every body. `LIGHT_SCALE` (0.2) scales the Panda3D lights the world puts on
+render for the ships. `SceneDebug` is just that. Every frame
+`update_after_recenter` is `game_world.update(player position)`.
 
-`SceneAsteroids` adds Missions 1 and 2's field: a WorldBuilder
-`AsteroidField` (see
+`SceneAsteroids` (`space/asteroids.yaml`) adds Missions 1 and 2's field, a
+WorldBuilder `AsteroidField` (see
 [its asteroids page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/asteroids.md)),
-`FIELD` describing it.
+the world's field `FIELD` (`"field"`, `space/asteroid_field.yaml`).
+`SceneLavaPlanet` (`space/lava.yaml`) is the Dev level's: a sparser field
+(`sparse_field.yaml`), orange light and no sky, over a 2D planet backdrop.
 
 - **The field.** A 15 km cube around the origin, patchy, its rocks' radii
   from 50 m to 2 km (a power law: many small, few big), a little ice; about
   5,500 rocks. They turn, some tumbling, with the game's clock: a pause
   freezes them.
 - **Room.** The level's `keep_outs` (`common.route_keep_outs`: capsules
-  along its routes, balls at its spawn points) are empty of rocks. Ships
+  along its routes, balls at its spawn points) are empty of rocks.
+  `load_world` has no argument for them, so the scene loads a copy of the
+  world file with them added to its field (`with_keep_outs`). Ships
   spawned relative to the player (Mission 1's formation, Mission 2's
   smuggler and TIEs) go through `scene.clear_position`, the field's
   `find_clear`: the nearest place with room within 3 km.
 - **Drawn** by instancing, at levels of detail chosen by their pixel error,
-  for the main camera and the rear-view mirror. Its shapes are built in the
+  for the main camera (by the world) and the rear-view mirror (a second
+  field update while the mirror is shown). Its shapes are built in the
   world's worker processes during the hyperspace animation;
-  `build_decomposed` holds it until they are in (about 3 s). Lit by the same
-  sun and ambient light as the ships, with no tone map either.
-- **Solid** through `field.enable_collision(TERRAIN_INTO, name="terrain")`:
+  `build_decomposed` holds it until they are in (about 3 s). Lit by the
+  world's sun and sky light, tone mapped like the ships.
+- **Solid** through `field.enable_collision(TERRAIN_INTO, name="terrain")`
+  (the world's field, `world.field(FIELD)`):
   ships, munitions and sensors hit the drawn rocks through the terrain
   handlers. Its owner, WorldBuilder's `AsteroidSurface`, gives the material
   at a hit ("rock", or "snow" for an icy rock) and the speed of the turning
@@ -128,54 +136,53 @@ the clouds (sort 25).
 
 ## Planet world — from WorldBuilder
 
-`SceneEarthlike` (Mission 3) is a whole planetary world: the planet (terrain,
-air, clouds, swell ocean), its moon, the sky and the sun. WorldBuilder's
-`World` builds and updates it (see
-[its world page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/world.md)).
-The scene only says what it looks like.
+`SceneSolarSystem` (Mission 3 and Free Flight) is a whole planetary world
+loaded from a file by WorldBuilder's `load_world` (see
+[its world file page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/world_file.md)):
+the home planet (terrain, air, clouds, sea), its moon, an ice planet and its
+ring, the sky and the sun.
 
-**The look** (class attributes and `bodies()`):
-- **The planet** comes from `datafiles/worlds/earthlike_demo/`, an unchanged
-  copy of WorldBuilder's demo level (`terrain/levels/demo.yaml` and its
-  stamps): a coast with the sea to the north, a range to the south, a crater,
-  a mesa, a landing pad and a lake near the start. It has
-  `AtmosphereParams()`, `CLOUDS` (the convective clouds at 2.2 km, above the
-  convoy, by genus, with cirrus above them) and `OCEAN` (the 20 m swell,
-  hazed to the air's colour).
-- **The moon** is the demo's airless sand moon, 10,000 km away, in the
-  northern sky ahead of the convoy.
-- **The sun** is `SUN_ENU` (east, north, up at the level's reference point),
-  high in the south-east, turned into a world direction when the scene is
-  made; **the sky** is `SKY`,
-  WorldBuilder's star field.
-- **`LIGHT_SCALE`** scales the Panda3D lights `World` puts on render for the
-  ships, about 0.4. Ships use fixed-function lighting with no tone map, so the
-  world's physical noon sun would clip them to white.
+**The world file** is `datafiles/worlds/solar_system/solar_system.yaml`, a
+copy of WorldBuilder's shipped world with the body files it links
+(`kerbin.yaml`, `moon.yaml`, `ice.yaml`, `ring.yaml`, `sky.yaml`) and the
+`stamps/` images the home planet places: a coast with the sea to the north,
+a range to the south, a crater, a mesa, a landing pad and a lake near the
+start. It defines the objects and nothing about running them; to change what
+the world looks like or where things are, edit the file.
 
-There is no 2D planet: the sky, the moon and the lights are the world's.
+**What the scene decides** (class attributes): `WORLD_PATH`, `PLANET` (the
+body levels fly over), `LIGHT_SCALE` (about 0.4: it scales the Panda3D lights
+the world puts on render for the ships, which use fixed-function lighting
+with no tone map, so the world's physical noon sun would clip them to white)
+and `TERRAIN_COLLISION_RANGE_M`. There is no 2D planet: the sky, the moon and
+the lights are the world's.
 
 **How it runs:**
-- **Placement.** WorldBuilder never rotates a planet, so the level's place
-  is not at the planet's +z pole. `SceneEarthlike.level_frame()` (a
+- **Placement.** WorldBuilder never rotates a planet, so the chart's
+  reference point is not at the planet's +z pole.
+  `SceneSolarSystem.level_frame()` (a
   [`LevelFrame`](../../src/space_flight/scenes/level_frame.py), made once from
-  the level file) places the planet's centre so that the level file's
-  reference point is the world origin, at sea level.
-  - There, the level's east, north and up are not the world's x, y and z.
+  the planet's body in the file) converts chart coordinates around the
+  planet's centre, wherever the file puts it.
+  - There, the chart's east, north and up are not the world's x, y and z.
     `default_up_direction` is the frame's up, and the bots take "up" from
     gravity (see above).
-  - Levels write their positions on the level file's chart (x metres east,
-    y metres north of the reference point, z metres above sea level), and
+  - Levels write their positions on the chart (x metres east, y metres north
+    of the reference point, z metres above sea level), and
     `LevelFrame.position(x, y, z)` turns them into world positions, on the
     sphere. `LevelFrame.orientation(position, toward)` gives a level
     orientation facing a point.
-  - Mission 3 and Free Flight start at the demo's start point (its
-    `camera`), (0, -4000, 1300) on the chart: 900 m over the coastal plain,
-    facing north to the coast. Mission 3's waves, routes and formations are
-    written on the chart too (`WaveSpec.formation_frame` turns the
-    formation's slots to the level's axes).
-- **Build.** `build_upfront` builds the `World` on the black screen, about
-  5 s. It runs before `FlightState` creates the split cameras, because the
-  ocean's reflection copies the main lens.
+  - Mission 3 and Free Flight start at (0, -4000, 1300) on the chart: 900 m
+    over the coastal plain, facing north to the coast. Mission 3's waves,
+    routes and formations are written on the chart too
+    (`WaveSpec.formation_frame` turns the formation's slots to the level's
+    axes).
+- **Build.** `build_upfront` calls `load_world(app, WORLD_PATH, settings=...,
+  clock=..., light_scale=..., light_period=...)` on the black screen, about
+  5 s. It builds the world and its split depth cameras (`GameWorld.depth`,
+  `scene.depth`), after the player (whose camera the ocean's reflection
+  copies) and the render-scale pipeline (whose buffer the far camera draws
+  into). `scene.world` is the loaded `World`, which the scene's queries read.
 - **Loading.** `build_decomposed` ends with `wait_until_loaded`, which holds
   the hyperspace tunnel until `world.loading` (ground and clouds) has stayed
   False for half a second, at most a minute: about 11 s on this machine.
@@ -183,16 +190,16 @@ There is no 2D planet: the sky, the moon and the lights are the world's.
     `FlightState.follow_render_origin()`, as a frame would do.
   - `FlightState` centres render on the player as soon as the player exists,
     so the world loads around it.
-- **Every frame.**
-  - `depth_ranges()` is `world.depth_ranges(player position)`: the split
-    follows the nearest ground.
-  - `update_after_recenter()` is
-    `world.update(player position, far=game.depth_far)`.
+- **Every frame.** `update_after_recenter()` is
+  `game_world.update(player position)`: the split cameras follow the nearest
+  ground and the world is drawn around the player. The scene wraps the split
+  cameras' `update` so that the split stays off the game's translucent
+  volumes (shield bubbles), which `GameWorld.update` does not know of.
 - **Solid.** `world.enable_collision(CollisionLayers.TERRAIN_INTO,
-  bodies=["planet"])` adds an into-only `"terrain"` collision node, owned by
-  WorldBuilder's `TerrainSurface`. Ships, munitions and sensors hit it through
-  the usual terrain handlers (see [docs/game.md](game.md)), the sea surface
-  included.
+  max_distance=TERRAIN_COLLISION_RANGE_M)` adds an into-only `"terrain"`
+  collision node to every body, owned by WorldBuilder's `TerrainSurface`.
+  Ships, munitions and sensors hit it through the usual terrain handlers
+  (see [docs/game.md](game.md)), the sea surface included.
   - Only drawn chunks within `TERRAIN_COLLISION_RANGE_M` (10 km) of the
     player are solid, at the drawn level of detail, which is coarser away
     from the player. Every chunk within that range is checked each frame, and
@@ -200,10 +207,17 @@ There is no 2D planet: the sky, the moon and the lights are the world's.
   - Without the native collision library built for this Panda3D series,
     building the scene raises `NativeCollisionError`.
 - **Quality.** Every part is built with the `world` graphics settings.
+- **Shadows.** Every ship is tracked with `World.track_light(node,
+  cast=True, shader=True)` (see `Scene.track_model`): it is drawn by the
+  world's model shader, so it is shadowed per pixel by the mountains, the
+  clouds and the other bodies' eclipses, and it casts shadows on the terrain,
+  the sea and the other ships, as the `shadows` settings allow
+  (`object_shadows`, and the terrain and cloud map sizes: all on from the
+  `mid` preset up).
 - **Far plane.** `CAMERA_FAR_M` (in `space_flight/__init__.py`, applied by
-  `player.py`) is 600 km. It is set before the scene is built, because the
-  ocean's reflection camera copies the lens. Panda's default of 100 km would
-  clip the outermost cloud shell.
+  `player.py`) is 600 km, kept by the rear-view mirror. `load_world` sets the
+  main lens's far plane before the world is built, because the ocean's
+  reflection camera copies the lens.
 
 ## Where things live
 
@@ -211,6 +225,6 @@ There is no 2D planet: the sky, the moon and the lights are the world's.
 `wait_until_loaded` (which sleeps a few milliseconds per step while loading,
 so the worker processes' results get through a loading loop run flat out, as
 a headless build runs it). `level_frame.py` is the chart-to-world frame of a
-level built on a WorldBuilder level file. `planet_2d.py` is the 2D planet. The world, the
+planet of a WorldBuilder world file. `planet_2d.py` is the 2D planet. The world, the
 asteroid fields and their shaders are in WorldBuilder (`world_builder.world`,
 `world_builder.asteroids`).
