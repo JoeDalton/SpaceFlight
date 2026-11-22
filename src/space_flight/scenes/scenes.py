@@ -43,7 +43,7 @@ LOGGER = logging.getLogger(__name__)
 # it turns on briefly whenever detail refines, so one quiet frame is not enough.
 WORLD_QUIET_S = 0.5
 # Give up waiting for the world after this long (and say so)
-WORLD_TIMEOUT_S = 60.0
+WORLD_TIMEOUT_S = 360.0
 # Sleep this long after each step while the world loads: its worker
 # processes' results come back through a thread of this process, which a loop
 # that never sleeps starves (a headless build runs the loading loop flat out;
