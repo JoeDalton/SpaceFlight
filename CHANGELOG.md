@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.6.1] - 2026-11-22
+
+### Fixed
+
+- Fixed fullscreen on primary linux + multimonitor #193
+- Centerd splashscreen on primary monitor #193
+- Fixed test on github macos CI by increasing world loading timeout #193
+
 
 ## [0.6.0] - 2026-11-22
 
@@ -24,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Cockpit head feedback into ship's physics #178
 - The moon is solid #178
+
 
 
 ## [0.5.0] - 2026-11-14

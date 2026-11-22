@@ -3,6 +3,7 @@ from typing import Union
 
 import numpy as np
 import quaternion
+from screeninfo import get_monitors
 
 
 def rotate_single_vector(quat: np.quaternion, vector: np.ndarray):
@@ -356,3 +357,11 @@ def compute_next_power_of_2(x: float) -> float:
     :return: That power of 2, as an int (at least 1)
     """
     return 2 ** math.ceil(math.log2(max(x, 1)))
+
+
+def get_primary_monitor() -> tuple[float, float]:
+    """
+    Detects the primary monitor and returns it
+    """
+    monitors = get_monitors()
+    return next((m for m in monitors if m.is_primary), monitors[0])
