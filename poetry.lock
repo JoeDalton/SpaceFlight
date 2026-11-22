@@ -795,14 +795,14 @@ testing = ["hatch", "pre-commit", "pytest", "tox"]
 
 [[package]]
 name = "filelock"
-version = "4.2.12"
+version = "4.3.0"
 description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.11"
 groups = ["main", "dev"]
 files = [
-    {file = "filelock-4.2.12-py3-none-any.whl", hash = "sha256:21decfec02f116ed4c954433cdb31f28c3b346b784543177b6d7059da2702ee9"},
-    {file = "filelock-4.2.12.tar.gz", hash = "sha256:7e7da24d3ac39268b0f156e56870001de44886318f092f9d851e692f7114d6dd"},
+    {file = "filelock-4.3.0-py3-none-any.whl", hash = "sha256:f933f39f7e01249a4a49b9abab30edc6d4b874624c3de5dd0b0d137aa8adb979"},
+    {file = "filelock-4.3.0.tar.gz", hash = "sha256:143407310acf479e82d88068e3b9a6486f45fb410c0ed8729fe7359eaabeb6f1"},
 ]
 
 [[package]]
@@ -3136,14 +3136,14 @@ zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
 name = "virtualenv"
-version = "21.15.11"
+version = "21.15.12"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.9"
 groups = ["main", "dev"]
 files = [
-    {file = "virtualenv-21.15.11-py3-none-any.whl", hash = "sha256:0390c40275487b5e677a1e559e30204ff061db4c5fec39c81d0dff1b24d2b774"},
-    {file = "virtualenv-21.15.11.tar.gz", hash = "sha256:6ad11e129f546835ae81d47a27f48ed32dcc4e2a0776014a159bab8895cdb9ac"},
+    {file = "virtualenv-21.15.12-py3-none-any.whl", hash = "sha256:bbbf764388a18dee8c3532c77af7a29680cd8121911d6dcb3484335d76547323"},
+    {file = "virtualenv-21.15.12.tar.gz", hash = "sha256:a3976f886eb6019fcb1d137b223d160adaeff524ab0ad785c729a43c31cc158c"},
 ]
 
 [package.dependencies]
@@ -3155,14 +3155,14 @@ python-discovery = ">=1.6.1"
 
 [[package]]
 name = "world_builder"
-version = "0.4.1"
+version = "0.5.0"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"darwin\""
 files = [
-    {file = "world_builder-0.4.1-py3-none-macosx_11_0_universal2.whl", hash = "sha256:85f80af3c0a4f7c2ffa5acdb4d4fa77b7c374481936d1cab1956a71869db077b"},
+    {file = "world_builder-0.5.0-py3-none-macosx_11_0_universal2.whl", hash = "sha256:518cb9f86f23289e0573c86f10b8276ac52408cb01da159f8d6fe2d5951bac06"},
 ]
 
 [package.dependencies]
@@ -3173,18 +3173,18 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.4.1/world_builder-0.4.1-py3-none-macosx_11_0_universal2.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.5.0/world_builder-0.5.0-py3-none-macosx_11_0_universal2.whl"
 
 [[package]]
 name = "world_builder"
-version = "0.4.1"
+version = "0.5.0"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"linux\" and platform_machine == \"aarch64\""
 files = [
-    {file = "world_builder-0.4.1-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b3482d001113fc9acbfda2fb38d468ddf370435afbe25dcca69fcb5184427814"},
+    {file = "world_builder-0.5.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2e53952498b090da1abea3ea77df467470fae167bbd6eba3c12b20af17cb7913"},
 ]
 
 [package.dependencies]
@@ -3195,18 +3195,18 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.4.1/world_builder-0.4.1-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.5.0/world_builder-0.5.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"
 
 [[package]]
 name = "world_builder"
-version = "0.4.1"
+version = "0.5.0"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"linux\" and platform_machine == \"x86_64\""
 files = [
-    {file = "world_builder-0.4.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:879f67b04f198cfc1fd290748b03cc8b6d31b9a2616a8c767e0f86d7e36c5cae"},
+    {file = "world_builder-0.5.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:dd97c58c166477d8f0706891fa11b32af1b19d8f2d34bcc239b18934854fb28a"},
 ]
 
 [package.dependencies]
@@ -3217,18 +3217,18 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.4.1/world_builder-0.4.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.5.0/world_builder-0.5.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
 
 [[package]]
 name = "world_builder"
-version = "0.4.1"
+version = "0.5.0"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"win32\""
 files = [
-    {file = "world_builder-0.4.1-py3-none-win_amd64.whl", hash = "sha256:8b6545c863ded208d6abfd344f06cbc668db4e0a03bd8d9f55ccefb08acff192"},
+    {file = "world_builder-0.5.0-py3-none-win_amd64.whl", hash = "sha256:43d039ce72a0b4c47e7e09fa6ee60aad16509d3b023ef5e6197873c54aaaa7ec"},
 ]
 
 [package.dependencies]
@@ -3239,9 +3239,9 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.4.1/world_builder-0.4.1-py3-none-win_amd64.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.5.0/world_builder-0.5.0-py3-none-win_amd64.whl"
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "b9b578fc3587d1b481ea063b721a04f2b7a186ac934e018c9dab97b9a224e3ac"
+content-hash = "fdabb1506d1848e9ebf3a9a10b7e9349f935ec145c60291ff585d5a23b401c0d"
