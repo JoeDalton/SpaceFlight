@@ -6,20 +6,24 @@ from space_flight import DATAFILES_PATH
 from space_flight.global_architecture.base_state import BaseState
 from space_flight.menus.main_menu_state import MainMenuState
 from space_flight.menus.menu_utils import ProgressBar
+from space_flight.utils import get_primary_monitor
 
 
 class SplashState(BaseState):
     def enter(self):
+
+        splash_width, splash_height = 1280, 544
         props = WindowProperties()
         props.setUndecorated(True)  # Removes window border & title bar
-        props.setSize(1280, 544)  # Set splash size
-        props.setTitle("Splash")  # Optional
-        props.setOrigin(
-            (self.app.pipe.getDisplayWidth() - 1280) // 2,
-            (self.app.pipe.getDisplayHeight() - 544) // 2,
-        )
-        self.app.win.setClearColor((0, 0, 0, 0))
+        props.setSize(splash_width, splash_height)  # Set splash size
+        props.setTitle("Splash")
 
+        # Center window on primary monitor
+        monitor = get_primary_monitor()
+        x = monitor.x + (monitor.width - splash_width) // 2
+        y = monitor.y + (monitor.height - splash_height) // 2
+        props.setOrigin(x, y)
+        self.app.win.setClearColor((0, 0, 0, 0))
         self.app.win.requestProperties(props)
 
         tex = self.app.loader.loadTexture(
@@ -27,7 +31,7 @@ class SplashState(BaseState):
         )
         self.splash = OnscreenImage(
             image=tex,
-            scale=(1280 / 544, 1, 1),
+            scale=(splash_width / splash_height, 1, 1),
             parent=self.app.aspect2d,
         )
 
@@ -38,6 +42,7 @@ class SplashState(BaseState):
         self.splash.hide()
         self.force_render()
         self.splash.show()
+
         blurbs = [
             "Mustering crews",
             "Setting hyperspace coordinates",
