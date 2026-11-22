@@ -5,13 +5,13 @@ import pytest
 from world_builder import parse_world
 
 from space_flight.scenes.level_frame import LevelFrame
-from space_flight.scenes.scenes import SceneThreePlanets
+from space_flight.scenes.scenes import SceneSolarSystem
 from space_flight.utils import rotation_matrix_coefficients
 
 
 @pytest.fixture(scope="module")
 def frame() -> LevelFrame:
-    return SceneThreePlanets.level_frame()
+    return SceneSolarSystem.level_frame()
 
 
 def test_the_reference_point_is_on_the_planets_sea_level(frame):
@@ -21,7 +21,7 @@ def test_the_reference_point_is_on_the_planets_sea_level(frame):
 
 
 def test_the_planet_may_be_anywhere():
-    spec = parse_world(SceneThreePlanets.WORLD_PATH).bodies[0].spec
+    spec = parse_world(SceneSolarSystem.WORLD_PATH).bodies[0].spec
     shifted = LevelFrame(spec, centre=(1e6, -2e6, 3e6))
     base = LevelFrame(spec, centre=(0, 0, 0))
     assert shifted.position(300, 400, 50) == pytest.approx(
@@ -35,8 +35,8 @@ def test_the_planet_may_be_anywhere():
 def test_the_frame_is_made_of_the_planets_body():
     """Radius and chart origin come from the planet, the centre from where the
     world file puts the body: another body, another chart."""
-    world = parse_world(SceneThreePlanets.WORLD_PATH)
-    planet, moon, _ = world.bodies
+    world = parse_world(SceneSolarSystem.WORLD_PATH)
+    planet, moon = world.bodies
     for body in (planet, moon):
         frame = LevelFrame.of(body)
         assert frame.radius == body.spec.radius

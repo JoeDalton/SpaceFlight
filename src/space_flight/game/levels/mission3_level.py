@@ -15,7 +15,7 @@ from space_flight.game.scenario.conditions import (
     damaged,
     reached_waypoint,
 )
-from space_flight.scenes.scenes import SceneThreePlanets
+from space_flight.scenes.scenes import SceneSolarSystem
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -78,7 +78,7 @@ ALL_CLEAR_VICTORY_DELAY_S = 7
 # the reference point, the convoy a few hundred metres ahead; the coast is
 # about 6 km north, the range to the south, the mesa 3.5 km east of the first
 # leg.
-FRAME = SceneThreePlanets.level_frame()
+FRAME = SceneSolarSystem.level_frame()
 NORTH_M = 1000.0
 
 
@@ -206,7 +206,7 @@ def build_mission3_upfront(game: FlightState):
     """
     build_upfront(
         game,
-        scene_name="three_planets",
+        scene_name="solar_system",
         player_ship_type="a-wing",
         player_position=PLAYER_POSITION,
         player_orientation=PLAYER_ORIENTATION,

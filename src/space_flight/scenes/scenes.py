@@ -93,7 +93,7 @@ def wait_until_loaded(
 
 def scene_factory(
     game: FlightState, scene_name: str, keep_outs: Sequence[KeepOut] = ()
-) -> SceneAsteroids | SceneLavaPlanet | SceneThreePlanets | SceneDebug:
+) -> SceneAsteroids | SceneLavaPlanet | SceneSolarSystem | SceneDebug:
     """
     :param game: The game/flight state
     :param scene_name: Which scene
@@ -104,8 +104,8 @@ def scene_factory(
         return SceneAsteroids(game=game, keep_outs=keep_outs)
     if scene_name == "lava_planet":
         return SceneLavaPlanet(game=game, keep_outs=keep_outs)
-    if scene_name == "three_planets":
-        return SceneThreePlanets(game=game)
+    if scene_name == "solar_system":
+        return SceneSolarSystem(game=game)
     if scene_name == "debug":
         return SceneDebug(game=game)
     raise NotImplementedError(f"Unknown scene {scene_name}")
@@ -385,9 +385,9 @@ class SceneWorld(Scene):
         self.game = None
 
 
-class SceneThreePlanets(SceneWorld):
+class SceneSolarSystem(SceneWorld):
     """
-    The three-planets world (``datafiles/worlds/three_planets/``): the home
+    The three-planets world (``datafiles/worlds/solar_system/``): the home
     planet (terrain, air, clouds, sea), its moon, an ice planet and its ring,
     the sky and the sun.
 
@@ -396,7 +396,7 @@ class SceneThreePlanets(SceneWorld):
     LevelFrame).
     """
 
-    WORLD_PATH = DATAFILES_PATH / "worlds/three_planets/three_planets.yaml"
+    WORLD_PATH = DATAFILES_PATH / "worlds/solar_system/solar_system.yaml"
     LIGHT_SCALE = 0.4
     #: The body levels fly over (its name in the world file)
     PLANET = "planet"
@@ -443,7 +443,7 @@ class SceneThreePlanets(SceneWorld):
 
     def clean(self):
         """
-        Cleans the SceneThreePlanets
+        Cleans the SceneSolarSystem
         """
         self.speed_dust_cloud.clean()
         self.speed_dust_cloud = None

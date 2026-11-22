@@ -35,7 +35,7 @@ def build_free_flight_upfront(game: FlightState):
     """
     build_upfront(
         game,
-        scene_name="three_planets",
+        scene_name="solar_system",
         player_ship_type="a-wing",
         player_position=PLAYER_POSITION,
         player_orientation=PLAYER_ORIENTATION,

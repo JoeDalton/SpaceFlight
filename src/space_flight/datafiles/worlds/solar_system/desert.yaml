@@ -1,0 +1,128 @@
+# A dry 600 km world: sand seas, mesas and canyons, no sea. Air and clouds.
+# Earth's density.
+planet:
+  name: desert
+  seed: 1
+  radius: 600000.0
+  reference_lat: 42.0
+  reference_lon: 10.0
+  has_ocean: false
+  has_vegetation: true
+  has_clouds: true
+  day_length_h: 6.0
+  stratification: 100.0
+  elevation:
+    warp_wavelength: 70000.0
+    warp_amplitude: 4200.0
+    continent_wavelength: 380000.0
+    continent_octaves: 5
+    ocean_fraction: 0.3
+    continent_curve:
+    - [-1.0, -5500.0]
+    - [-0.35, -4200.0]
+    - [-0.12, -2000.0]
+    - [-0.04, -120.0]
+    - [0.0, 0.0]
+    - [0.04, 30.0]
+    - [0.15, 180.0]
+    - [0.35, 700.0]
+    - [1.0, 1800.0]
+    mountain_wavelength: 40000.0
+    mountain_octaves: 8
+    mountain_height: 2700.0
+    mountain_mask_wavelength: 140000.0
+    mountain_coverage: -0.1
+    plates: 14
+    plate_warp_wavelength: 500000.0
+    plate_warp_amplitude: 30000.0
+    belt_width: 80000.0
+    plate_crust: 0.2
+    plate_uplift: 0.15
+    ridge_height: 1200.0
+    rift_depth: 500.0
+    character_wavelength: 250000.0
+    coast_wavelength: 200000.0
+    dunes: true
+    dune_scale: 1.0
+    dune_height: 200.0
+    tablelands: true
+    table_region_wavelength: 320000.0
+    stage_wavelength: 120000.0
+    table_cell: 4000.0
+    spire_cell: 1200.0
+    stack_height: [200.0, 700.0]
+    table_top_relief: 25.0
+    hills_wavelength: 14000.0
+    hills_octaves: 5
+    hills_height: 220.0
+    detail_wavelength: 900.0
+    detail_octaves: 8
+    detail_height: 25.0
+    feature_scale: null
+  climate:
+    temperature_mean: 31.0
+    temperature_spread: 6.0
+    temperature_latitude: 20.0
+    lapse_rate: 0.0065
+    humidity_mean: 0.08
+    humidity_spread: 0.1
+    temperature_wavelength: 140000.0
+    temperature_octaves: 4
+    humidity_wavelength: 105000.0
+    humidity_octaves: 4
+  stamps: []
+  paints: []
+  density_paints: []
+density: 5514.0
+atmosphere:
+  height: 60000.0
+  rayleigh: [5.802e-06, 1.3558e-05, 3.31e-05]
+  rayleigh_height: 8000.0
+  mie: 3.996e-06
+  mie_extinction: 4.44e-06
+  mie_height: 1200.0
+  mie_g: 0.8
+  sun_intensity: 22.0
+  multiple_scattering: 1.0
+  ground_albedo: 0.3
+  ozone: [6.5e-07, 1.881e-06, 8.5e-08]
+  ozone_altitude: 25000.0
+  ozone_width: 15000.0
+  sunset_radius: 6371000.0
+clouds:
+  altitude: 2200.0
+  cloud_type: cumulus
+  cirrus: true
+  weather:
+    seed: 11
+    time_s: 0.0
+    systems: true
+    pins: []
+    zonal: null
+    season: 0.0
+    meso_wavelength: 160000.0
+    meso_strength: 0.4
+    dry_floor: 0.12
+    desert_clearing: 0.6
+    maritime: 0.08
+    orographic: 0.3
+    orographic_slope: 0.03
+    climate_wavelength: 60000.0
+    jets: null
+    jet_vortex: 0.8
+    cirrus_zonal: null
+    cirrus_shield: 1.0
+    cirrus_meso: 0.3
+    cloud_amount: 0.0
+    cloud_contrast: 0.1
+    cirrus_amount: 0.0
+  seed: 7
+  weather_seed: 11
+  sun_brightness: 2.8
+  sky_strength: 0.35
+  sky_occlusion: 0.55
+  exposure: 0.9
+  genera: null
+ocean: null
+ambient: [0.34, 0.44, 0.64]
+exposure: 0.9

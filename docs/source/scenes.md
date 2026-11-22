@@ -39,7 +39,7 @@ API is in the [code reference](apidocs/index.rst).
 |------|-------|-----------------|--------------------|
 | `asteroids` | `SceneAsteroids` | `space/asteroids.yaml`: open space (sky, sun, lights) and Missions 1-2's asteroid field | dust, then waits for the field's rock shapes |
 | `lava_planet` | `SceneLavaPlanet` | `space/lava.yaml`: open space without a sky, lava-toned light, a sparser field | dust, 2D lava planet, then waits for the field |
-| `three_planets` | `SceneThreePlanets` | `three_planets/three_planets.yaml`: home planet (terrain, air, clouds, sea), moon, ice planet and ring, sky, sun and lights | dust, then waits for the world to load |
+| `solar_system` | `SceneSolarSystem` | `solar_system/solar_system.yaml`: home planet (terrain, air, clouds, sea), moon, ice planet and ring, sky, sun and lights | dust, then waits for the world to load |
 | `debug` | `SceneDebug` | `space/empty.yaml`: open space, sky, sun, lights | nothing |
 
 Every scene is a `SceneWorld`: its world is a WorldBuilder world file in
@@ -136,13 +136,13 @@ the clouds (sort 25).
 
 ## Planet world — from WorldBuilder
 
-`SceneThreePlanets` (Mission 3 and Free Flight) is a whole planetary world
+`SceneSolarSystem` (Mission 3 and Free Flight) is a whole planetary world
 loaded from a file by WorldBuilder's `load_world` (see
 [its world file page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/world_file.md)):
 the home planet (terrain, air, clouds, sea), its moon, an ice planet and its
 ring, the sky and the sun.
 
-**The world file** is `datafiles/worlds/three_planets/three_planets.yaml`, a
+**The world file** is `datafiles/worlds/solar_system/solar_system.yaml`, a
 copy of WorldBuilder's shipped world with the body files it links
 (`kerbin.yaml`, `moon.yaml`, `ice.yaml`, `ring.yaml`, `sky.yaml`) and the
 `stamps/` images the home planet places: a coast with the sea to the north,
@@ -160,7 +160,7 @@ the lights are the world's.
 **How it runs:**
 - **Placement.** WorldBuilder never rotates a planet, so the chart's
   reference point is not at the planet's +z pole.
-  `SceneThreePlanets.level_frame()` (a
+  `SceneSolarSystem.level_frame()` (a
   [`LevelFrame`](../../src/space_flight/scenes/level_frame.py), made once from
   the planet's body in the file) converts chart coordinates around the
   planet's centre, wherever the file puts it.

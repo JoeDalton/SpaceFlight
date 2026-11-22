@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+
+## [0.6.0] - 2026-11-22
+
 ### Added
 
 - Local hyperspace jumps for the player #178
@@ -14,8 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rely on the new Worldbuilder loading interface
-- Headless runs of levels are broken until WorldBuilder's `load_world` supports them
+- Rely on the new Worldbuilder loading interface #189
+- Headless runs of levels are broken until WorldBuilder's `load_world` supports them #189
 
 ### Fixed
 
