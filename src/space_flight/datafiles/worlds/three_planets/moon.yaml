@@ -1,0 +1,80 @@
+# An airless sand moon: no atmosphere, clouds or sea (null), only starlight.
+planet:
+  name: moon
+  seed: 7
+  radius: 200000.0
+  reference_lat: 42.0
+  reference_lon: 10.0
+  has_ocean: false
+  has_vegetation: false
+  has_clouds: true
+  day_length_h: 6.0
+  stratification: 100.0
+  elevation:
+    warp_wavelength: 70000.0
+    warp_amplitude: 4200.0
+    continent_wavelength: 380000.0
+    continent_octaves: 5
+    ocean_fraction: 0.4
+    continent_curve:
+    - [-1.0, -5500.0]
+    - [-0.35, -4200.0]
+    - [-0.12, -2000.0]
+    - [-0.04, -120.0]
+    - [0.0, 0.0]
+    - [0.04, 30.0]
+    - [0.15, 180.0]
+    - [0.35, 700.0]
+    - [1.0, 1800.0]
+    mountain_wavelength: 40000.0
+    mountain_octaves: 8
+    mountain_height: 4800.0
+    mountain_mask_wavelength: 140000.0
+    mountain_coverage: -0.1
+    plates: 0
+    plate_warp_wavelength: 500000.0
+    plate_warp_amplitude: 30000.0
+    belt_width: 80000.0
+    plate_crust: 0.2
+    plate_uplift: 0.15
+    ridge_height: 1200.0
+    rift_depth: 500.0
+    character_wavelength: 250000.0
+    coast_wavelength: 200000.0
+    dunes: false
+    dune_scale: 1.0
+    dune_height: 200.0
+    tablelands: false
+    table_region_wavelength: 320000.0
+    stage_wavelength: 120000.0
+    table_cell: 4000.0
+    spire_cell: 1200.0
+    stack_height: [200.0, 700.0]
+    table_top_relief: 25.0
+    hills_wavelength: 14000.0
+    hills_octaves: 5
+    hills_height: 260.0
+    detail_wavelength: 900.0
+    detail_octaves: 8
+    detail_height: 30.0
+    feature_scale: null
+  climate:
+    temperature_mean: 30.0
+    temperature_spread: 0.0
+    temperature_latitude: 0.0
+    lapse_rate: 0.0
+    humidity_mean: 0.0
+    humidity_spread: 0.0
+    temperature_wavelength: 140000.0
+    temperature_octaves: 4
+    humidity_wavelength: 105000.0
+    humidity_octaves: 4
+  stamps: []
+  paints: []
+  density_paints: []
+mass: 7.35e+22
+atmosphere: null
+clouds: null
+ocean: null
+ambient: [0.025, 0.025, 0.03]
+exposure: 0.9

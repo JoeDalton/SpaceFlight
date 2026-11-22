@@ -1,0 +1,24 @@
+# The sky: a procedural star field, a violet nebula and the sun's radiance.
+# Shared by the shipped worlds (each links it with `sky: {file: sky.yaml}`).
+stars:
+  seed: 3
+  stars: 14000
+  galactic_pole: [0.25, -0.55, 0.8]
+  glow_size: 256
+  nebula_scale: 1.0
+  nebula_coverage: 0.5
+  red: 0.25
+  blue: 0.25
+star_intensity: 0.6
+star_brightness: 8.0
+nebula:
+  palette:
+  - [0.55, 0.2, 0.5]
+  - [0.85, 0.25, 0.35]
+  - [0.35, 0.25, 0.75]
+  intensity: 0.01
+  milky_way: [0.06, 0.057, 0.051]
+sun_radiance: [4000.0, 3800.0, 3500.0]
+exposure: 0.9
+star_hpr: [0.0, 0.0, 0.0]
+star_adaptation: 60.0

@@ -1,6 +1,6 @@
 """
-Unit tests for Mission 3's planet scene (space_flight.scenes.scenes:
-SceneEarthlike, wait_until_loaded).
+Unit tests for the planet scene of Mission 3 and Free Flight
+(space_flight.scenes.scenes: SceneThreePlanets, wait_until_loaded).
 
 The loading gate and the scene's wiring run on stand-ins; the ground heights
 under Mission 3 are queried from WorldBuilder's terrain (no window, no
@@ -9,7 +9,7 @@ WorldBuilder's World, loads its ground and traverses it.
 """
 
 import logging
-import math
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -22,8 +22,9 @@ from panda3d.core import (
     CollisionSegment,
     CollisionTraverser,
 )
+from world_builder import parse_world
+from world_builder.settings import WorldSettings
 from world_builder.terrain.biomes import BIOMES
-from world_builder.terrain.level import load_level
 from world_builder.terrain.planet import Planet
 from world_builder.terrain.query import TerrainQuery
 from world_builder.world import BodyLook, World
@@ -33,7 +34,7 @@ from space_flight.game.levels import mission3_level as mission3
 from space_flight.scenes import scenes
 from space_flight.scenes.scenes import (
     Scene,
-    SceneEarthlike,
+    SceneThreePlanets,
     scene_factory,
     wait_until_loaded,
 )
@@ -120,49 +121,68 @@ class TestWaitUntilLoaded:
 # ---------------------------------------------------------------------------
 
 
-def test_scene_factory_knows_the_earthlike_planet():
-    assert isinstance(scene_factory(game=None, scene_name="earthlike_planet"), Scene)
+def test_scene_factory_knows_the_three_planets():
+    assert isinstance(
+        scene_factory(game=None, scene_name="three_planets"), SceneThreePlanets
+    )
 
 
-def test_earthlike_level_file_is_a_world_builder_level():
-    spec, _pose = load_level(SceneEarthlike.LEVEL_PATH)
-    assert spec.name == "earthlike"
-    assert spec.has_ocean
+# ---------------------------------------------------------------------------
+# The world file
+# ---------------------------------------------------------------------------
 
 
-def test_the_planet_and_its_moon():
-    """The planet's centre is one radius below the level's reference point
-    (the origin), with air, clouds and the swell ocean; the airless moon hangs
-    in the northern sky there."""
-    planet, moon = SceneEarthlike(game=None).bodies()
-    radius = planet.spec.radius
-    assert planet.name == "planet"
-    frame = SceneEarthlike.level_frame()
-    assert planet.position == pytest.approx(tuple(frame.centre))
-    assert np.linalg.norm(frame.centre) == pytest.approx(radius)
+def test_the_world_file_is_the_three_planets():
+    """The home planet with its air, clouds and sea, its airless moon, an ice
+    planet and its ring: all defined by the file."""
+    world = parse_world(SceneThreePlanets.WORLD_PATH)
+    planet, moon, ice = world.bodies
+    assert [planet.name, moon.name, ice.name] == ["planet", "moon", "ice"]
+    assert [field.name for field in world.fields] == ["ring"]
     assert planet.atmosphere is not None
-    assert planet.clouds.altitude == SceneEarthlike.CLOUDS.altitude
-    assert planet.clouds.cirrus is not None  # the high cirrus
-    assert planet.clouds.genera is not None  # the low clouds by genus
-    assert planet.clouds.genera.weather.planet is planet.spec
-    assert planet.ocean is SceneEarthlike.OCEAN
+    assert planet.clouds is not None and planet.clouds.cirrus is not None
+    assert planet.ocean is not None and planet.spec.has_ocean
+    assert moon.atmosphere is None
+    assert world.sky is not None
 
-    assert moon.name == "moon" and moon.atmosphere is None
-    offset = np.array(moon.position) - planet.position
-    assert np.linalg.norm(offset) == pytest.approx(SceneEarthlike.MOON_DISTANCE_M)
-    assert math.degrees(math.acos(offset @ frame.up / np.linalg.norm(offset))) == (
-        pytest.approx(SceneEarthlike.MOON_ZENITH_ANGLE_DEG)
-    )
-    # north, ahead of the convoy
-    assert offset @ frame.north > 0.0 and offset @ frame.east == pytest.approx(
-        0.0, abs=1e-3
-    )
+
+def test_the_world_file_brings_every_file_it_needs():
+    """The linked body files and the stamps and paints images are all in the
+    world's folder (it moves as a whole)."""
+    folder = SceneThreePlanets.WORLD_PATH.parent
+    text = "".join(path.read_text() for path in folder.glob("*.yaml"))
+    linked = set(re.findall(r"file:\s*([\w.]+\.yaml)", text))
+    images = set(re.findall(r"(?:heightmap|mask):\s*(\S+\.png)", text))
+    assert linked >= {"kerbin.yaml", "moon.yaml", "ice.yaml", "ring.yaml", "sky.yaml"}
+    assert images
+    for name in linked | images:
+        assert (folder / name).is_file(), name
+
+
+def test_the_level_frame_is_the_planets():
+    """Chart positions are placed around the planet's centre, wherever the
+    file puts it."""
+    planet = parse_world(SceneThreePlanets.WORLD_PATH).bodies[0]
+    frame = SceneThreePlanets.level_frame()
+    assert frame.radius == planet.spec.radius
+    assert frame.centre == pytest.approx(planet.position)
+    reference = frame.position(0, 0, 0)
+    assert np.linalg.norm(reference - frame.centre) == pytest.approx(frame.radius)
+    assert SceneThreePlanets(game=None).default_up_direction == pytest.approx(frame.up)
+
+
+# ---------------------------------------------------------------------------
+# Scene
+# ---------------------------------------------------------------------------
 
 
 def _scene(monkeypatch):
-    """A SceneEarthlike over a stand-in game, its World a mock."""
-    world_class = MagicMock()
-    monkeypatch.setattr(scenes, "World", world_class)
+    """A SceneThreePlanets over a stand-in game, its loaded world a mock."""
+    game_world = SimpleNamespace(
+        world=MagicMock(), depth=MagicMock(), update=MagicMock()
+    )
+    load = MagicMock(return_value=game_world)
+    monkeypatch.setattr(scenes, "load_world", load)
     position = np.array([10.0, 20.0, 30.0])
     game = SimpleNamespace(
         app=SimpleNamespace(
@@ -170,49 +190,92 @@ def _scene(monkeypatch):
         ),
         game_time=SimpleNamespace(get_current_time=lambda: 4.0),
         player=SimpleNamespace(pawn=SimpleNamespace(position=position)),
-        depth_far=123456.0,
+        translucent_volumes={"bubble"},
     )
-    return SceneEarthlike(game=game), world_class, position
+    return SceneThreePlanets(game=game), load, position
 
 
-def test_the_world_is_built_with_the_scenes_look(monkeypatch):
-    scene, world_class, _ = _scene(monkeypatch)
+def test_the_world_is_loaded_from_its_file_as_the_game_runs_it(monkeypatch):
+    scene, load, _ = _scene(monkeypatch)
     scene.build_upfront()
 
-    # The light at the ships is reckoned every few frames (World.light_period)
-    assert scene.world.light_period == scenes.LIGHT_PERIOD_FRAMES
-
-    args, kwargs = world_class.call_args
-    assert args[0] is scene.game.app
-    assert [body.name for body in args[1]] == ["planet", "moon"]
-    assert kwargs["sun"] is scene.SUN
-    # (east, north, up) of the level's reference point, in world axes
-    frame = SceneEarthlike.level_frame()
-    assert kwargs["sun"].direction == pytest.approx(
-        tuple(frame.vector(*SceneEarthlike.SUN_ENU))
-    )
-    assert kwargs["sky"] is SceneEarthlike.SKY
+    args, kwargs = load.call_args
+    assert args == (scene.game.app, SceneThreePlanets.WORLD_PATH)
     assert kwargs["settings"] == "settings"
-    assert kwargs["light_scale"] == SceneEarthlike.LIGHT_SCALE
     assert kwargs["clock"]() == 4.0  # the game's clock
-    # Every body is solid: the moon too, which a warp reaches
+    assert kwargs["light_scale"] == SceneThreePlanets.LIGHT_SCALE
+    # The light at the ships is reckoned every few frames
+    assert kwargs["light_period"] == scenes.LIGHT_PERIOD_FRAMES
+    assert scene.world is scene.game_world.world
+    assert scene.depth is scene.game_world.depth
+    # Every world body is solid: the moon too, which a warp reaches
     scene.world.enable_collision.assert_called_once_with(
         CollisionLayers.TERRAIN_INTO,
-        max_distance=SceneEarthlike.TERRAIN_COLLISION_RANGE_M,
+        max_distance=SceneThreePlanets.TERRAIN_COLLISION_RANGE_M,
     )
 
 
 def test_the_world_follows_the_player(monkeypatch):
-    """Render's origin is the player: the world is updated around it, its sky
-    inside the far camera's range."""
+    """Render's origin is the player: the world (and its split cameras) is
+    updated around it."""
     scene, _, position = _scene(monkeypatch)
     scene.build_upfront()
 
     scene.update_after_recenter()
-    scene.depth_ranges()
 
-    scene.world.update.assert_called_once_with(position, far=123456.0)
-    scene.world.depth_ranges.assert_called_once_with(position)
+    scene.game_world.update.assert_called_once_with(position)
+
+
+def test_the_split_keeps_off_the_translucent_volumes(monkeypatch):
+    """GameWorld.update sets the split without knowing of the shield
+    bubbles: the scene adds the game's translucent volumes to it."""
+    scene, load, _ = _scene(monkeypatch)
+    update = load.return_value.depth.update  # the split cameras' own
+    scene.build_upfront()
+
+    scene.depth.update(2000.0, 5e5)
+    scene.depth.update(3000.0, 6e5, translucent=("other",))
+
+    assert update.call_args_list[0].args == (2000.0, 5e5)
+    assert update.call_args_list[0].kwargs == {"translucent": ("bubble",)}
+    assert update.call_args_list[1].kwargs == {"translucent": ("other", "bubble")}
+
+
+def test_cleaning_removes_the_split_cameras_once_before_the_world(monkeypatch):
+    scene, _, _ = _scene(monkeypatch)
+    scene.build_upfront()
+    scene.speed_dust_cloud = MagicMock()
+    order = []
+    depth, world = scene.depth, scene.world
+    depth.destroy.side_effect = lambda: order.append("depth")
+    world.destroy.side_effect = lambda: order.append("world")
+
+    scene.release_depth()  # FlightState.exit, before the render pipeline goes
+    scene.clean()
+
+    assert order == ["depth", "world"]
+    assert scene.world is None and scene.game_world is None
+
+
+def test_the_graphics_settings_light_the_world_with_every_shadow():
+    """The saved quality (high by default) draws the mountains', the clouds'
+    and the objects' shadows: a model tracked as the scene does receives
+    the terrain's, the clouds' and the bodies' shadows and casts its own."""
+    import yaml
+
+    from space_flight.global_architecture.graphics_settings import (
+        DEFAULT_GRAPHICS_FILE,
+    )
+
+    config = yaml.safe_load(DEFAULT_GRAPHICS_FILE.read_text())
+    settings = WorldSettings.from_dict(config["world"])
+    shadows = settings.shadows
+    assert shadows.terrain_map_size > 0
+    assert shadows.cloud_map_size > 0
+    assert shadows.cloud_shadow_steps > 0
+    assert shadows.object_shadows
+    assert SceneThreePlanets.MODELS_CAST_SHADOWS
+    assert SceneThreePlanets.MODELS_USE_WORLD_SHADER
 
 
 # ---------------------------------------------------------------------------
@@ -245,12 +308,13 @@ def _mission3_points() -> np.ndarray:
 def test_mission3_starts_clear_of_the_ground():
     """Every Mission 3 ship and route is above the ground and the sea, on the
     finest terrain level."""
-    spec, _pose = load_level(SceneEarthlike.LEVEL_PATH)
-    scenes_frame = SceneEarthlike.level_frame()
+    body = parse_world(SceneThreePlanets.WORLD_PATH).bodies[0]
+    spec = body.spec
+    scenes_frame = SceneThreePlanets.level_frame()
     planet = Planet(spec)
     query = TerrainQuery(planet, include_ocean=True, level=planet.grid.max_level)
     points = _mission3_points()
-    # World frame -> planet frame: the planet's centre is one radius below
+    # World frame -> planet frame
     planet_points = points - scenes_frame.centre
     altitude = np.linalg.norm(planet_points, axis=1) - spec.radius
     ground = query.height_at(planet_points)
@@ -262,13 +326,13 @@ def test_mission3_starts_clear_of_the_ground():
 # ---------------------------------------------------------------------------
 
 # Where the smoke test's player hovers (the sea under it is at z = 0)
-# 1000 m above the sea north-east of the demo's coast (chart metres)
-_HOVER = SceneEarthlike.level_frame().position(4000.0, 8000.0, 1000.0)
+# 1000 m above the sea north-east of the coast (chart metres)
+_HOVER = SceneThreePlanets.level_frame().position(4000.0, 8000.0, 1000.0)
 
 
 def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
     """
-    The planet's terrain, built by World as the scene does and loaded around
+    The planet's terrain, built by World as the world file defines it, loaded around
     the player, stops a laser-masked segment fired straight down: one
     "terrain" entry, on the low ground or sea under the origin, facing up,
     whose owner knows its material.
@@ -277,7 +341,7 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
     triangles put the ground a few metres off the finest level's.
     """
     native = pytest.importorskip("world_builder.terrain.native")
-    planet = SceneEarthlike(game=None).bodies()[0]
+    planet = parse_world(SceneThreePlanets.WORLD_PATH).bodies[0]
     bare = BodyLook(
         planet.name, planet.spec, position=planet.position, mass=planet.mass
     )
@@ -293,7 +357,7 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
         # The player is at the render origin: the sea is 1000 m below it
         root = spaceflight_app.render.attach_new_node("smoke_root")
         segment = CollisionNode("laser")
-        up = SceneEarthlike.level_frame().up_at(_HOVER)
+        up = SceneThreePlanets.level_frame().up_at(_HOVER)
         segment.add_solid(CollisionSegment(*(-900 * up), *(-1100 * up)))
         segment.set_from_collide_mask(CollisionLayers.MUNITION_FROM)
         segment.set_into_collide_mask(BitMask32.all_off())
@@ -314,18 +378,6 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
         root.remove_node()
     finally:
         world.destroy()
-
-
-def test_the_world_gets_the_split_cameras_for_its_raymarched_clouds():
-    """The default cloud renderer draws nothing until it has the game's split
-    cameras: the scene hands them to its world."""
-    scene = SceneEarthlike(game=None)
-    scene.world = MagicMock()
-    depth = object()
-
-    scene.use_split_depth(depth)
-
-    scene.world.use_split_depth.assert_called_once_with(depth)
 
 
 def test_scene_up_follows_minus_gravity_or_defaults_to_world_z():

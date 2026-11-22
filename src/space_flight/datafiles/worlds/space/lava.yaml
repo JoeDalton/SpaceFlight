@@ -1,0 +1,11 @@
+# The Dev level: open space in a lava planet's orange light, with a sparse
+# asteroid field and no sky (the level draws the planet as a backdrop).
+sun:
+  direction: [0.0, 0.98, 0.2]    # from the planet
+  color: [2.6, 2.5, 2.35]
+  angular_radius: 0.009599310885968814
+sky: null
+space_ambient: [2.0, 1.0, 0.5]
+bodies: []
+fields:
+  - {name: field, file: sparse_field.yaml, position: [0.0, 0.0, 0.0], axis: [0.0, 0.0, 1.0]}

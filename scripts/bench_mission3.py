@@ -11,14 +11,14 @@ two runs is a difference in work. See docs/source/performance.md.
 Usage:
     python scripts/bench_mission3.py [--pose still|fly] [--frames 600]
         [--warmup 45] [--size "2560 1440"] [--level "Mission 3: Escort"]
-        [--toggle mirror|shadows|model_shader|cirrus ...]
+        [--toggle mirror|shadows|model_shader|flatten ...]
         [--world SECTION.KNOB=VALUE ...] [--profile [FILE]] [--pstats]
         [--prc LINE ...] [--shot FILE]
 
     --pose      still: the player stays where it spawns; fly: it flies on at
                 a fixed throttle
     --toggle    turn a feature off, to measure what it costs: the rear-view
-                mirror, the ships' shadows, their model shader, the cirrus, the
+                mirror, the ships' shadows, their model shader, the
                 models' flattening at load
     --world     a WorldBuilder knob over the saved preset, as the graphics
                 settings store it (e.g. shadows.object_shadows=false)
@@ -42,7 +42,6 @@ import json
 import pstats
 import statistics
 import time
-from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -57,7 +56,7 @@ SPIKE_MS = 100.0
 #: The player's throttle in the "fly" pose
 FLY_THROTTLE = 0.6
 
-TOGGLES = ("mirror", "shadows", "model_shader", "cirrus", "flatten")
+TOGGLES = ("mirror", "shadows", "model_shader", "flatten")
 
 
 def parse_args() -> argparse.Namespace:
@@ -91,14 +90,12 @@ def world_overrides(pairs: list[str]) -> dict:
 def apply_toggles(toggles: list[str]) -> None:
     """Turn features off before the level is built (the mirror is turned off
     once the player exists, see turn_mirror_off)."""
-    from space_flight.scenes.scenes import Scene, SceneEarthlike
+    from space_flight.scenes.scenes import Scene
 
     if "shadows" in toggles:
         Scene.MODELS_CAST_SHADOWS = False
     if "model_shader" in toggles:
         Scene.MODELS_USE_WORLD_SHADER = False
-    if "cirrus" in toggles:
-        SceneEarthlike.CLOUDS = replace(SceneEarthlike.CLOUDS, cirrus=None)
     if "flatten" in toggles:
         from space_flight.global_architecture.asset_manager import AssetManager
 

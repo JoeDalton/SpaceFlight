@@ -162,8 +162,8 @@ away. With a 24-bit buffer and a 1 m near plane, two surfaces at 10 km must
 be about 6 m apart to be told apart, and distant ground and sea shimmer into
 each other.
 
-`FlightState.split_depth` is WorldBuilder's `SplitDepthCameras`, in every
-level, so the level scripts never deal with it:
+`Scene.depth` is WorldBuilder's `SplitDepthCameras`, in every drawn level,
+so the level scripts never deal with it:
 - A far camera draws everything past a **split** distance first.
 - The depth buffer is cleared.
 - The main camera (`app.cam`) then draws from 1 m to the split.
@@ -171,24 +171,22 @@ level, so the level scripts never deal with it:
 Each camera gets the whole buffer for its own range.
 
 **Lifecycle.**
-- It is built in `enter()`, right after the level's up-front build:
-  - after the render-scale / anti-aliasing pipeline, whose offscreen buffer
-    the far camera then draws into too;
-  - after the scene's up-front objects, because an ocean's reflection camera
-    copies the main lens once, before the split shortens it.
-- Each frame, `follow_render_origin()` sets its ranges from
-  `scene.depth_ranges()` (split and far distances, metres), then calls
-  `scene.update_after_recenter()`.
-- `depth_far` is the far camera's far distance this frame, for a scene's sky.
-- `exit()` destroys it before the render pipeline.
-- Headless there is none, and `depth_far` is `CAMERA_FAR_M`.
+- The scene builds it in `build_upfront`, so after the render-scale /
+  anti-aliasing pipeline, whose offscreen buffer the far camera then draws
+  into too. It is the loaded world's (`GameWorld.depth`, from WorldBuilder's
+  `load_world`).
+- Each frame, `follow_render_origin()` calls `scene.update_after_recenter()`,
+  which sets its ranges (split and far distances, metres) and draws the world
+  inside the far camera's range.
+- `exit()` has the scene remove it (`Scene.release_depth()`) before the render
+  pipeline.
+- No scene builds headless for now (`load_world` needs a window).
 
 **Ranges.**
-- By default, `Scene.depth_ranges()` splits at 2 km, which gives about
-  0.25 m depth steps there, and reaches `CAMERA_FAR_M`. The space levels'
-  sky and 2D planets lie beyond the split, so only the far camera draws
-  them.
-- A planet scene follows its ground instead.
+- The world chooses them (`World.depth_ranges`, inside `GameWorld.update`):
+  over a planet the split follows the ground; in open space it is at 2 km,
+  which gives about 0.25 m depth steps there. The sky and the 2D planets lie
+  beyond the split, so only the far camera draws them.
 
 **Translucent volumes.** The near camera reaches 2% past the split, so the
 two ranges never leave a gap. A big translucent volume with no depth write,
@@ -196,8 +194,8 @@ such as a shield bubble, would be blended twice in that band and show a ring
 at the split distance. So the split never cuts one:
 - owners register their volumes in `FlightState.translucent_volumes` (`Shield`
   does for its bubble);
-- `update_split_depth` hands them to `SplitDepthCameras.update(...,
-  translucent=...)`, which moves the split in front of any it would cut, or
+- the scene hands them to `SplitDepthCameras.update(..., translucent=...)`,
+  which moves the split in front of any it would cut, or
   past it from inside (see WorldBuilder's `world_builder.depth`).
 
 **What reads the lens.**
@@ -379,7 +377,7 @@ see [scenario_scripting.md](scenario_scripting.md).
 |-------|------|-------|---------|
 | Mission 1: Rookies | [`mission1_level.py`](../../src/space_flight/game/levels/mission1_level.py) | `asteroids` | Tutorial: target-filter menu, follow a formation, then race it |
 | Mission 2: Smugglers | [`mission2_level.py`](../../src/space_flight/game/levels/mission2_level.py) | `asteroids` | Patrol with a formation, scan passing transports, stop the gun-runner |
-| Mission 3: Escort | [`mission3_level.py`](../../src/space_flight/game/levels/mission3_level.py) | `earthlike_planet` | Escort a convoy past an enemy blockade |
+| Mission 3: Escort | [`mission3_level.py`](../../src/space_flight/game/levels/mission3_level.py) | `three_planets` | Escort a convoy past an enemy blockade |
 | Dev | [`dev_level.py`](../../src/space_flight/game/levels/dev_level.py) | `lava_planet` | Sandbox for the latest feature under development |
 
 `game/levels/__init__.py`'s `LEVELS` registry maps

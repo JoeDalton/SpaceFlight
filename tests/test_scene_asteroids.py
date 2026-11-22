@@ -3,10 +3,10 @@ Unit tests for the space scenes (space_flight.scenes.scenes: SceneSpace,
 SceneAsteroids, SceneLavaPlanet, SceneDebug) and Missions 1 and 2 in their
 asteroid field.
 
-The scenes' wiring runs on stand-ins (WorldBuilder's World and AsteroidField
-mocked); the missions' room in the field is checked against the field's own
-rocks (WorldBuilder's scatter: no window, no workers). One end-to-end test
-builds the real field and traverses it.
+The scenes' wiring runs on stand-ins (WorldBuilder's load_world mocked); the
+missions' room in the field is checked against the field's own rocks
+(WorldBuilder's scatter: no window, no workers). One end-to-end test builds the
+real field and traverses it.
 """
 
 from types import SimpleNamespace
@@ -21,9 +21,9 @@ from panda3d.core import (
     CollisionSegment,
     CollisionTraverser,
 )
+from world_builder import parse_world
 from world_builder.asteroids.scatter import Scatter
 
-from space_flight import CAMERA_FAR_M
 from space_flight.game.collisions import CollisionLayers
 from space_flight.game.levels import mission1_level as mission1
 from space_flight.game.levels import mission2_level as mission2
@@ -37,6 +37,9 @@ from space_flight.scenes.scenes import (
     SceneSpace,
     scene_factory,
 )
+
+# The asteroid field of Missions 1 and 2, as its world file defines it
+FIELD = parse_world(SceneAsteroids.WORLD_PATH).fields[0].spec
 
 # ---------------------------------------------------------------------------
 # Missions 1 and 2 in the field
@@ -84,7 +87,7 @@ def _mission2_points() -> list[np.ndarray]:
 def test_the_missions_routes_are_clear_of_rocks(mission, points):
     """Every spawn point and route of the mission is clear of the field's
     rocks, its keep-outs in place; rocks still stand near the routes."""
-    field = Scatter(SceneAsteroids.FIELD, keep_outs=tuple(mission.KEEP_OUTS))
+    field = Scatter(FIELD, keep_outs=tuple(mission.KEEP_OUTS))
     for point in points():
         assert field.is_clear(point, CLEARANCE_M), point
     near = sum(len(field.rocks_near(p, 1000.0)) for p in points())
@@ -93,7 +96,7 @@ def test_the_missions_routes_are_clear_of_rocks(mission, points):
 
 def test_without_keep_outs_the_routes_would_meet_rocks():
     """The keep-outs matter: the bare field has rocks on the routes."""
-    field = Scatter(SceneAsteroids.FIELD)
+    field = Scatter(FIELD)
     blocked = [p for p in _mission2_points() if not field.is_clear(p, CLEARANCE_M)]
     assert blocked
 
@@ -133,75 +136,112 @@ def test_a_scene_without_obstacles_keeps_positions():
     np.testing.assert_array_equal(position, [1.0, 2.0, 3.0])
 
 
-def _game(mirror: bool = True):
+def _game(mirror_visible: bool | None = True):
+    """A stand-in game; *mirror_visible* None: the player has no mirror."""
     position = np.array([10.0, 20.0, 30.0])
     player = SimpleNamespace(pawn=SimpleNamespace(position=position))
-    player.rear_view_mirror = SimpleNamespace(mirror_np="mirror") if mirror else None
-    world_settings = SimpleNamespace(asteroids="asteroid settings")
+    player.rear_view_mirror = (
+        None
+        if mirror_visible is None
+        else SimpleNamespace(mirror_np="mirror", is_mirror_visible=mirror_visible)
+    )
     return SimpleNamespace(
         app=SimpleNamespace(
-            graphics_settings=SimpleNamespace(world_settings=lambda: world_settings),
+            graphics_settings=SimpleNamespace(world_settings=lambda: "settings"),
             cam="main camera",
         ),
         game_time=SimpleNamespace(get_current_time=lambda: 4.0),
         player=player,
-        depth_far=123456.0,
+        translucent_volumes={"bubble"},
         follow_render_origin=MagicMock(),
     )
 
 
-def _mock_parts(monkeypatch):
-    world_class, field_class = MagicMock(), MagicMock()
-    monkeypatch.setattr(scenes, "World", world_class)
-    monkeypatch.setattr(scenes, "AsteroidField", field_class)
-    world_class.return_value.camera_render.return_value = np.array([0.0, 1.0, 0.0])
-    return world_class, field_class
+def _mock_world(monkeypatch):
+    """:return: (load_world mock, the loaded world's stand-in)"""
+    field = MagicMock()
+    world = MagicMock()
+    world.field.return_value = field
+    world.camera_render.return_value = np.array([0.0, 1.0, 0.0])
+    game_world = SimpleNamespace(world=world, depth=MagicMock(), update=MagicMock())
+    load = MagicMock(return_value=game_world)
+    monkeypatch.setattr(scenes, "load_world", load)
+    return load, game_world
 
 
-@pytest.mark.parametrize("kind", [SceneDebug, SceneAsteroids, SceneLavaPlanet])
-def test_space_is_a_world_without_bodies(monkeypatch, kind):
-    """The sky, the sun and the lights of WorldBuilder's World, no planet,
-    on the game's clock."""
-    world_class, _ = _mock_parts(monkeypatch)
+@pytest.mark.parametrize(
+    "kind, name",
+    [
+        (SceneDebug, "empty.yaml"),
+        (SceneAsteroids, "asteroids.yaml"),
+        (SceneLavaPlanet, "lava.yaml"),
+    ],
+)
+def test_every_space_scene_loads_its_world_file(monkeypatch, kind, name):
+    """The sky, the sun, the lights and the field are the file's; the scene
+    runs them on the game's clock, at the quality the game settings give."""
+    load, _ = _mock_world(monkeypatch)
     scene = kind(game=_game())
     scene.build_upfront()
 
-    args, kwargs = world_class.call_args
+    args, kwargs = load.call_args
     assert args[0] is scene.game.app
-    assert list(args[1]) == []
-    assert kwargs["sun"] is kind.SUN
-    assert kwargs["sky"] is kind.SKY
+    assert args[1].name == name and args[1].parent.name == "space"
+    assert kwargs["settings"] == "settings"
     assert kwargs["light_scale"] == kind.LIGHT_SCALE
-    assert kwargs["space_ambient"] == kind.AMBIENT
     assert kwargs["clock"]() == 4.0  # the game's clock
+    # The light at the ships is reckoned every few frames
+    assert kwargs["light_period"] == scenes.LIGHT_PERIOD_FRAMES
+    assert scene.depth is scene.game_world.depth
 
 
-def test_the_lava_planet_has_its_own_backdrop_not_a_sky():
-    assert SceneLavaPlanet.SKY is None and SceneAsteroids.SKY is not None
-    assert SceneLavaPlanet.FIELD != SceneAsteroids.FIELD
+def test_the_space_world_files_are_what_the_scenes_were():
+    """Without a body; the debug scene has no field, Missions 1 and 2's is
+    dense and clumped under a sky, the Dev level's sparse, under no sky."""
+    debug, asteroids, lava = (
+        parse_world(kind.WORLD_PATH)
+        for kind in (SceneDebug, SceneAsteroids, SceneLavaPlanet)
+    )
+    assert debug.bodies == asteroids.bodies == lava.bodies == ()
+    assert debug.fields == ()
+    assert [field.name for field in asteroids.fields] == [SceneAsteroids.FIELD]
+    assert [field.name for field in lava.fields] == [SceneLavaPlanet.FIELD]
+    assert debug.sky is not None and asteroids.sky is not None and lava.sky is None
+    dense, sparse = asteroids.fields[0].spec, lava.fields[0].spec
+    assert dense.density.count_per_km3 > sparse.density.count_per_km3
+    assert dense.density.clumping is not None and sparse.density.clumping is None
 
 
-def test_the_field_is_built_as_the_ships_are_lit(monkeypatch):
-    world_class, field_class = _mock_parts(monkeypatch)
-    keep_outs = route_keep_outs([[0, 0, 0]], 10.0)
+def test_the_levels_keep_outs_go_into_the_loaded_file(monkeypatch):
+    """load_world has no argument for them: the scene loads a copy of the
+    file with them in its field, and no copy without."""
+    load, _ = _mock_world(monkeypatch)
+    keep_outs = route_keep_outs([[0, 0, 0], [0, 1000, 0]], 10.0)
+    seen = []
+    load.side_effect = lambda app, path, **_: (
+        (seen.append(parse_world(path)) or load.return_value) and load.return_value
+    )
     scene = SceneAsteroids(game=_game(), keep_outs=keep_outs)
+
     scene.build_upfront()
 
-    args, kwargs = field_class.call_args
-    assert args == (scene.game.app, SceneAsteroids.FIELD)
-    assert kwargs["clock"]() == 4.0  # the game's clock: a pause stops the rocks
-    assert kwargs["settings"] == "asteroid settings"
-    assert kwargs["keep_outs"] == tuple(keep_outs)
-    assert kwargs["executor"] is world_class.return_value.executor  # one pool
-    assert kwargs["tonemap"] is False  # as Panda3D's fixed-function lights
-    scale = SceneAsteroids.LIGHT_SCALE
-    np.testing.assert_allclose(
-        kwargs["sun_color"], np.array(SceneAsteroids.SUN.color) * scale
-    )
-    np.testing.assert_allclose(
-        kwargs["ambient"], np.array(SceneAsteroids.AMBIENT) * scale
-    )
-    assert kwargs["far"] == CAMERA_FAR_M
+    (world,) = seen
+    assert world.fields[0].keep_outs == tuple(keep_outs)
+    assert load.call_args.args[1] != SceneAsteroids.WORLD_PATH  # a copy...
+    assert not load.call_args.args[1].exists()  # ...gone once loaded
+
+    load.reset_mock(side_effect=True)
+    SceneAsteroids(game=_game()).build_upfront()
+    assert load.call_args.args[1] == SceneAsteroids.WORLD_PATH
+
+
+def test_the_field_is_solid_as_terrain(monkeypatch):
+    load, game_world = _mock_world(monkeypatch)
+    scene = SceneAsteroids(game=_game())
+    scene.build_upfront()
+
+    assert scene.field is game_world.world.field.return_value
+    game_world.world.field.assert_called_once_with(SceneAsteroids.FIELD)
     scene.field.enable_collision.assert_called_once_with(
         CollisionLayers.TERRAIN_INTO,
         name="terrain",  # the terrain's collision events and handlers
@@ -209,43 +249,76 @@ def test_the_field_is_built_as_the_ships_are_lit(monkeypatch):
     )
 
 
-@pytest.mark.parametrize("mirror", [True, False])
-def test_the_field_follows_the_player_for_every_view(monkeypatch, mirror):
-    """Render's origin is the player: the sky and the field are updated
-    around the camera there, the field for the main view and the mirror's."""
-    world_class, _ = _mock_parts(monkeypatch)
-    scene = SceneAsteroids(game=_game(mirror=mirror))
+def test_the_world_follows_the_player(monkeypatch):
+    """Render's origin is the player: the world, its field and its split
+    cameras are updated around it."""
+    _, game_world = _mock_world(monkeypatch)
+    scene = SceneAsteroids(game=_game(mirror_visible=False))
+    scene.build_upfront()
+
+    scene.update_after_recenter()
+
+    game_world.update.assert_called_once_with(scene.game.player.pawn.position)
+    scene.field.update.assert_not_called()  # the world did it, for the camera
+
+
+def test_the_split_keeps_off_the_translucent_volumes(monkeypatch):
+    _, game_world = _mock_world(monkeypatch)
+    update = game_world.depth.update  # the split cameras' own
+    scene = SceneDebug(game=_game())
+    scene.build_upfront()
+
+    scene.depth.update(2000.0, 5e5)
+
+    assert update.call_args.args == (2000.0, 5e5)
+    assert update.call_args.kwargs == {"translucent": ("bubble",)}
+
+
+def test_the_field_is_drawn_again_for_the_visible_mirror(monkeypatch):
+    """The world draws the field for the main camera: the mirror, when it is
+    shown, sees the rocks behind the player through a second update."""
+    _, game_world = _mock_world(monkeypatch)
+    scene = SceneAsteroids(game=_game(mirror_visible=True))
     scene.build_upfront()
 
     scene.update_after_recenter()
 
     position = scene.game.player.pawn.position
-    scene.world.update.assert_called_once_with(position, far=123456.0)
     (camera_world, camera_render), kwargs = scene.field.update.call_args
     np.testing.assert_allclose(camera_world, position + [0.0, 1.0, 0.0])
     np.testing.assert_allclose(camera_render, [0.0, 1.0, 0.0])
-    expected = ["main camera", "mirror"] if mirror else ["main camera"]
-    assert kwargs["cameras"] == expected
+    assert kwargs["cameras"] == ["main camera", "mirror"]
+
+
+@pytest.mark.parametrize("mirror_visible", [False, None])
+def test_the_field_is_not_drawn_again_without_a_mirror(monkeypatch, mirror_visible):
+    _mock_world(monkeypatch)
+    scene = SceneAsteroids(game=_game(mirror_visible=mirror_visible))
+    scene.build_upfront()
+
+    scene.update_after_recenter()
+
+    scene.field.update.assert_not_called()
 
 
 def test_loading_waits_for_the_rock_shapes(monkeypatch):
-    _mock_parts(monkeypatch)
+    _, game_world = _mock_world(monkeypatch)
     monkeypatch.setattr(scenes, "SpeedDustCloud", MagicMock())
     monkeypatch.setattr(scenes, "WORLD_QUIET_S", 0.0)
     scene = SceneAsteroids(game=_game())
     scene.build_upfront()
     loading = iter([True, True, False])
-    type(scene.field).loading = property(lambda _: next(loading, False))
+    type(game_world.world).loading = property(lambda _: next(loading, False))
 
     steps = list(scene.build_decomposed())
 
     assert steps[0] == "dust"
-    assert steps.count("world") >= 2  # held while the field loads
+    assert steps.count("world") >= 2  # held while the world loads
     assert scene.game.follow_render_origin.call_count >= 3
 
 
 def test_ships_spawned_at_run_time_find_room(monkeypatch):
-    _mock_parts(monkeypatch)
+    _mock_world(monkeypatch)
     scene = SceneAsteroids(game=_game())
     scene.build_upfront()
     find_clear = scene.field.scatter.find_clear
@@ -264,20 +337,23 @@ def test_ships_spawned_at_run_time_find_room(monkeypatch):
     )
 
 
-def test_cleaning_destroys_the_field_before_the_world(monkeypatch):
-    """The world owns the worker pool the field's shapes are built on."""
-    _mock_parts(monkeypatch)
+def test_cleaning_removes_the_split_cameras_then_the_world_with_its_field(
+    monkeypatch,
+):
+    """The world owns the field and the worker pool its shapes are built on."""
+    _, game_world = _mock_world(monkeypatch)
     order = []
     scene = SceneAsteroids(game=_game())
     scene.build_upfront()
     scene.speed_dust_cloud = MagicMock()
-    scene.field.destroy.side_effect = lambda: order.append("field")
+    scene.depth.destroy.side_effect = lambda: order.append("depth")
     scene.world.destroy.side_effect = lambda: order.append("world")
 
+    scene.release_depth()  # FlightState.exit, before the render pipeline goes
     scene.clean()
 
-    assert order == ["field", "world"]
-    assert scene.field is None and scene.world is None
+    assert order == ["depth", "world"]
+    assert scene.field is None and scene.world is None and scene.depth is None
 
 
 def test_space_scenes_share_the_space_base():
@@ -304,11 +380,10 @@ def test_the_field_is_solid_to_a_laser(spaceflight_app):
     executor = ChunkExecutor(backend="inline", inline_budget=8)
     field = AsteroidField(
         spaceflight_app,
-        SceneAsteroids.FIELD,
+        FIELD,
         clock=lambda: 3.0,
         settings=AsteroidSettings.preset("low"),
         executor=executor,
-        tonemap=False,
     )
     root = None
     try:

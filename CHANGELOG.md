@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local hyperspace jumps for the player #178
 - The wingmen of a formation the player leads follow it through its local hyperspace jumps #184
 
+### Changed
+
+- Rely on the new Worldbuilder loading interface
+- Headless runs of levels are broken until WorldBuilder's `load_world` supports them
+
 ### Fixed
 
 - Cockpit head feedback into ship's physics #178

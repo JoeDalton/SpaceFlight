@@ -120,7 +120,7 @@ def build_dev_upfront(game: FlightState):
     """
     build_upfront(
         game,
-        # `asteroids` or `lava_planet` or `earthlike_planet` or `debug`
+        # `asteroids` or `lava_planet` or `three_planets` or `debug`
         scene_name="lava_planet",
         player_ship_type="a-wing",
         # player_ship_type="x-wing",

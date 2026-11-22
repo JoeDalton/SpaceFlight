@@ -43,7 +43,7 @@ class RearViewMirror:
         self.mirror_cam.setLens(self.game.app.camLens.makeCopy())
         # The whole range: the main lens only reaches the depth split while
         # split cameras exist, and keeps their last range after (see
-        # FlightState.split_depth)
+        # Scene.depth)
         self.mirror_cam.getLens().setNearFar(1.0, CAMERA_FAR_M)
         self.mirror_cam.getLens().setFov(MIRROR_FOV)  # Narrower = more realistic mirror
         self.mirror_cam.getLens().setAspectRatio(MIRROR_ASPECT_RATIO)

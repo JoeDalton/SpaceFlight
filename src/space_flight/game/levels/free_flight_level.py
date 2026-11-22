@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from space_flight.game.scenario import Mission
 
 
-# The earth-like demo's start point, flying level to the north (see mission 3)
+# Mission 3's start point over the home planet, flying level to the north
 PLAYER_POSITION = mission3.PLAYER_POSITION
 PLAYER_ORIENTATION = mission3.PLAYER_ORIENTATION
 
@@ -29,13 +29,13 @@ def build_free_flight_upfront(game: FlightState):
 
     This is the player plus the scene's terrain (shaders, textures, worker
     processes); its ground is loaded during the animation. The whole mission
-    flies over the shallow sea of the earth-like demo world.
+    flies over the shallow sea of the home planet of the three-planets world.
 
     :param game: The game/flight state
     """
     build_upfront(
         game,
-        scene_name="earthlike_planet",
+        scene_name="three_planets",
         player_ship_type="a-wing",
         player_position=PLAYER_POSITION,
         player_orientation=PLAYER_ORIENTATION,

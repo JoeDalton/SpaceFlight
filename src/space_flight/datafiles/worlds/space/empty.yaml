@@ -1,0 +1,9 @@
+# An empty sky, lit: Missions 1 and 2's open space with no asteroids.
+sun:
+  direction: [-0.42, -0.84, 0.35]
+  color: [2.6, 2.5, 2.35]
+  angular_radius: 0.009599310885968814
+sky: {file: sky.yaml}
+space_ambient: [0.5, 1.0, 2.0]
+bodies: []
+fields: []

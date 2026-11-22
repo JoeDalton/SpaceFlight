@@ -6,9 +6,7 @@ import sys
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
-from world_builder.depth import SplitDepthCameras
-
-from space_flight import CAMERA_FAR_M, DEBUG_DELETION, RECORD_GAME
+from space_flight import DEBUG_DELETION, RECORD_GAME
 from space_flight.actors.destructibles import Destructibles
 from space_flight.actors.ship_model import exterior_model_path
 from space_flight.ai.interactions import Interactions
@@ -68,15 +66,10 @@ class FlightState(BaseState):
         # The level's tally (kills, objectives), set with the outcome (see
         # compute_level_stats)
         self.level_stats: dict | None = None
-        # The depth split: a far camera drawing first what lies past the
-        # scene's split distance, the main camera the rest, each with the
-        # whole depth buffer, so distant ground does not shimmer. Built once
-        # the level's up-front objects exist; None headless.
-        self.split_depth: SplitDepthCameras | None = None
         # Big translucent volumes (shield bubbles) the depth split must not
         # cut: blended twice where the two cameras overlap, they would show a
         # ring there (see world_builder.depth). Their owners add and remove
-        # them.
+        # them; the scene's split cameras keep clear of them.
         self.translucent_volumes: set[NodePath] = set()
 
     def enter(self):
@@ -115,14 +108,6 @@ class FlightState(BaseState):
         # The player exists: centre render on it now, so a scene's loading
         # steps (see Scene.build_decomposed) already work around it
         self.recenter_render_origin()
-        # After the up-front objects: an ocean's reflection camera copies the
-        # main lens once, which the split then shortens to the near range.
-        # After the render-scale pipeline too, whose buffer it draws into.
-        self.split_depth = SplitDepthCameras(self.app)
-        self.update_split_depth()
-        # The scene's world needs them for its raymarched clouds
-        self.scene.use_split_depth(self.split_depth)
-
         # Phase 2 — play the hyperspace animation; the rest of the level is built
         # incrementally during its looping "inside" phase. The overlay declares
         # PAUSES_BELOW = False (so we stay alive) and pulls build steps via the
@@ -421,30 +406,10 @@ class FlightState(BaseState):
     def follow_render_origin(self):
         """
         Move the render origin onto the player, then what follows it: the
-        depth split's ranges (the scene's, for this camera position), then
-        the scene's own per-frame update, which may read :attr:`depth_far`.
+        scene's own per-frame update (its world and its depth split).
         """
         self.recenter_render_origin()
-        if self.split_depth is not None:
-            self.update_split_depth()
         self.scene.update_after_recenter()
-
-    def update_split_depth(self):
-        """
-        Set the split cameras' ranges for this frame: the scene's, the split
-        kept off the translucent volumes (see world_builder.depth).
-        """
-        self.split_depth.update(
-            *self.scene.depth_ranges(), translucent=self.translucent_volumes
-        )
-
-    @property
-    def depth_far(self) -> float:
-        """The far camera's far distance this frame, metres: the scene's
-        sky is drawn just inside it. The camera's whole range headless."""
-        if self.split_depth is None:
-            return CAMERA_FAR_M
-        return self.split_depth.far
 
     def end_level(self, outcome: str, text: str = ""):
         """
@@ -528,9 +493,7 @@ class FlightState(BaseState):
 
         # Remove the far camera first: it draws into the render-scale / AA
         # pipeline's buffer when there is one.
-        if self.split_depth is not None:
-            self.split_depth.destroy()
-            self.split_depth = None
+        self.scene.release_depth()
 
         # Tear down the render-scale / AA pipeline, restoring direct-to-window
         # rendering before the scene it was compositing is destroyed. There is

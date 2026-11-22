@@ -1,0 +1,13 @@
+# Missions 1 and 2: open space under a violet nebula, with the asteroid field.
+# A world file defines the objects and nothing about running them (no quality,
+# no camera, no clock). Metres, world frame; the sun is one direction (toward
+# it) and a colour. The sky light away from every body is strong and blue.
+sun:
+  direction: [-0.42, -0.84, 0.35]
+  color: [2.6, 2.5, 2.35]
+  angular_radius: 0.009599310885968814
+sky: {file: sky.yaml}
+space_ambient: [0.5, 1.0, 2.0]
+bodies: []
+fields:
+  - {name: field, file: asteroid_field.yaml, position: [0.0, 0.0, 0.0], axis: [0.0, 0.0, 1.0]}

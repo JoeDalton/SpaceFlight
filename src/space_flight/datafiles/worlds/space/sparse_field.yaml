@@ -1,0 +1,85 @@
+# The Dev level's field: the same 15 km cube, sparser (no clumping), its own seed.
+spec:
+  shape:
+    type: box
+    half_size: [7500.0, 7500.0, 7500.0]
+    edge: 500.0
+  density:
+    count_per_km3: 0.4
+    clumping: null
+    dust: 0.0
+  sizes:
+    kind: power_law
+    q: 3.5
+    lo: 50.0
+    hi: 2000.0
+  spin:
+    rate:
+      kind: lognormal
+      median: 0.05
+      sigma: 0.7
+      lo: 0.005
+      hi: 0.5
+    axis:
+      type: isotropic
+    size_exponent: 1.5
+    tumble: null
+  shapes:
+    prototypes: 32
+    elongation:
+      kind: uniform
+      lo: 0.5
+      hi: 0.9
+    lumps: 0.16
+    lump_scale: 1.2
+    ridges: 0.02
+    craters: 10.0
+    crater_size:
+      kind: power_law
+      q: 2.5
+      lo: 0.06
+      hi: 0.5
+    crater_depth: 0.2
+    round_prototypes: 0.4
+    crooked_shares: [0.4, 0.35, 0.25]
+    round_share: [0.15, 0.85]
+    bulges: 0.18
+    crooked_elongation:
+      kind: uniform
+      lo: 0.35
+      hi: 0.6
+    lobe_ratio:
+      kind: uniform
+      lo: 0.45
+      hi: 0.8
+    lobe_overlap:
+      kind: uniform
+      lo: 0.2
+      hi: 0.35
+    bend:
+      kind: uniform
+      lo: 0.3
+      hi: 0.7
+    warp: 0.25
+    facets:
+      kind: uniform
+      lo: 4.0
+      hi: 7.99
+    facet_depth:
+      kind: uniform
+      lo: 0.45
+      hi: 0.75
+  material:
+    ice_fraction:
+      kind: uniform
+      lo: 0.0
+      hi: 0.0
+    patch_scale: 1.5
+  keep_outs: []
+  seed: 1
+  cell_factor: 8.0
+keep_outs: []
+ambient: null
+exposure: 0.9
+far: null
+haze: true
