@@ -39,6 +39,7 @@ world_builder = [
   { url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.5.0/world_builder-0.5.0-py3-none-macosx_11_0_universal2.whl", markers = "sys_platform == 'darwin'" },
 ]
 screeninfo = "^0.8.1"
+python-xlib = {version = "^0.33", markers = "sys_platform == 'linux'"}
 
 [tool.poetry.group.dev.dependencies]
 cruft = "^2.15.0"
