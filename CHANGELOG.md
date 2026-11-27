@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Use WorldBuilder's unified reverse-Z camera instead of the old split depth duo #197
 
+### Fixed
+
+- Headless runs of levels work again (WorldBuilder's `load_world` without a
+  window: no depth camera, no sea) #189 #197
+
 
 
 ## [0.6.2] - 2026-11-26
@@ -40,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rely on the new Worldbuilder loading interface #189
+- Build against WorldBuilder 0.5.0 (new world loading interface) #189
 - Headless runs of levels are broken until WorldBuilder's `load_world` supports them #189
 
 ### Fixed

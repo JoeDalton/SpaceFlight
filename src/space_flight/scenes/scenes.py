@@ -360,8 +360,9 @@ class SceneWorld(Scene):
                 light_period=LIGHT_PERIOD_FRAMES,
             )
         self.world = self.game_world.world
-        self.depth = self.game_world.depth
-        self._mirror_depth_mode(self.depth.mode)
+        self.depth = self.game_world.depth  # None headless: no window
+        if self.depth is not None:
+            self._mirror_depth_mode(self.depth.mode)
 
     def update_after_recenter(self):
         """Everything around the player, now at the render origin."""

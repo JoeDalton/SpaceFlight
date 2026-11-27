@@ -172,7 +172,7 @@ MSAA). `app.cam`'s region is switched off meanwhile.
 **Clip control.** `simulator.py` sets `gl-depth-zero-to-one #t` before the
 window opens (OpenGL's 0-1 depth keeps the float precision); not on macOS,
 whose OpenGL has none: there the depth keeps about a 24-bit range's precision
-and its near plane follows the height over the ground.
+(far planets' depths may fight). The near plane stays at 1 m everywhere.
 
 **Lifecycle.**
 - The scene builds it in `build_upfront`, after the render-scale /

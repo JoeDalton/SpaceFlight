@@ -43,7 +43,7 @@ def test_the_mirror_follows_the_views_depth_mode(spaceflight_app):
     depth, as it was."""
     import math
 
-    from panda3d.core import DepthTestAttrib
+    from panda3d.core import BoundingSphere, BoundingVolume, DepthTestAttrib, Point3
     from world_builder.depth import DEPTH_REVERSED_01, DEPTH_STANDARD
 
     app = SimpleNamespace(
@@ -59,9 +59,12 @@ def test_the_mirror_follows_the_views_depth_mode(spaceflight_app):
         state = node.get_initial_state()
         assert state.get_attrib(DepthTestAttrib).get_mode() == DepthTestAttrib.M_greater
         mirror.mirror_buffer.setClearDepth.assert_called_with(0.0)
+        # culled at the mirror's reach, not at infinity
         bounds = node.get_cull_bounds()
-        reach = max(bounds.get_point(i).length() for i in range(8))
-        assert CAMERA_FAR_M <= reach < 4.0 * CAMERA_FAR_M
+        for distance, inside in ((0.99, True), (1.01, False)):
+            point = BoundingSphere(Point3(0.0, distance * CAMERA_FAR_M, 0.0), 1e-3)
+            reached = bounds.contains(point) != BoundingVolume.IF_no_intersection
+            assert reached == inside
         mirror.set_depth_mode(DEPTH_STANDARD)
         assert (lens.get_near(), lens.get_far()) == pytest.approx((1.0, CAMERA_FAR_M))
         assert not node.get_initial_state().has_attrib(DepthTestAttrib)
