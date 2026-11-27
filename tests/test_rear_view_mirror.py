@@ -34,3 +34,38 @@ def test_mirror_sees_the_whole_range_whatever_the_main_lens(spaceflight_app):
     finally:
         mirror.mirror_card.remove_node()
         mirror.mirror_np.remove_node()
+
+
+def test_the_mirror_follows_the_views_depth_mode(spaceflight_app):
+    """The world's reversed camera (WorldBuilder #57): the mirror's camera
+    is reversed too (or the sky, pinned at the reversed far plane, fails its
+    depth test there), culled to its standard range; back to the standard
+    depth, as it was."""
+    import math
+
+    from panda3d.core import DepthTestAttrib
+    from world_builder.depth import DEPTH_REVERSED_01, DEPTH_STANDARD
+
+    app = SimpleNamespace(
+        camLens=PerspectiveLens(),
+        win=MagicMock(),
+        graphics_settings=SimpleNamespace(config={"render": {"mirror_scale": 0.5}}),
+    )
+    mirror = RearViewMirror(SimpleNamespace(app=app), player_node=NodePath("ship"))
+    try:
+        node, lens = mirror.mirror_cam, mirror.mirror_cam.get_lens()
+        mirror.set_depth_mode(DEPTH_REVERSED_01)
+        assert math.isinf(lens.get_near()) and lens.get_far() == pytest.approx(1.0)
+        state = node.get_initial_state()
+        assert state.get_attrib(DepthTestAttrib).get_mode() == DepthTestAttrib.M_greater
+        mirror.mirror_buffer.setClearDepth.assert_called_with(0.0)
+        bounds = node.get_cull_bounds()
+        reach = max(bounds.get_point(i).length() for i in range(8))
+        assert CAMERA_FAR_M <= reach < 4.0 * CAMERA_FAR_M
+        mirror.set_depth_mode(DEPTH_STANDARD)
+        assert (lens.get_near(), lens.get_far()) == pytest.approx((1.0, CAMERA_FAR_M))
+        assert not node.get_initial_state().has_attrib(DepthTestAttrib)
+        mirror.mirror_buffer.setClearDepth.assert_called_with(1.0)
+    finally:
+        mirror.mirror_card.remove_node()
+        mirror.mirror_np.remove_node()

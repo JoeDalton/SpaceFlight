@@ -189,7 +189,6 @@ def _scene(monkeypatch):
         ),
         game_time=SimpleNamespace(get_current_time=lambda: 4.0),
         player=SimpleNamespace(pawn=SimpleNamespace(position=position)),
-        translucent_volumes={"bubble"},
     )
     return SceneSolarSystem(game=game), load, position
 
@@ -225,19 +224,30 @@ def test_the_world_follows_the_player(monkeypatch):
     scene.game_world.update.assert_called_once_with(position)
 
 
-def test_the_split_keeps_off_the_translucent_volumes(monkeypatch):
-    """GameWorld.update sets the split without knowing of the shield
-    bubbles: the scene adds the game's translucent volumes to it."""
+def test_the_scene_uses_the_worlds_depth_camera_as_it_is(monkeypatch):
+    """One reversed camera (WorldBuilder #57): nothing of the game's to add
+    to its update (no split to keep off the shield bubbles)."""
     scene, load, _ = _scene(monkeypatch)
-    update = load.return_value.depth.update  # the split cameras' own
+    update = load.return_value.depth.update
     scene.build_upfront()
 
-    scene.depth.update(2000.0, 5e5)
-    scene.depth.update(3000.0, 6e5, translucent=("other",))
+    assert scene.depth.update is update
 
-    assert update.call_args_list[0].args == (2000.0, 5e5)
-    assert update.call_args_list[0].kwargs == {"translucent": ("bubble",)}
-    assert update.call_args_list[1].kwargs == {"translucent": ("other", "bubble")}
+
+def test_the_mirror_takes_the_depth_cameras_convention(monkeypatch):
+    """The rear-view mirror draws the scene with its own camera: it takes
+    the world's camera's depth mode, and the standard one back when the
+    camera goes."""
+    from world_builder.depth import DEPTH_STANDARD
+
+    scene, load, _ = _scene(monkeypatch)
+    mirror = MagicMock()
+    scene.game.player.rear_view_mirror = mirror
+    scene.build_upfront()
+
+    mirror.set_depth_mode.assert_called_once_with(load.return_value.depth.mode)
+    scene.release_depth()
+    mirror.set_depth_mode.assert_called_with(DEPTH_STANDARD)
 
 
 def test_cleaning_removes_the_split_cameras_once_before_the_world(monkeypatch):

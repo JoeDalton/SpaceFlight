@@ -41,12 +41,13 @@ class RearViewMirror:
         self.mirror_np = NodePath(self.mirror_cam)
 
         self.mirror_cam.setLens(self.game.app.camLens.makeCopy())
-        # The whole range: the main lens only reaches the depth split while
-        # split cameras exist, and keeps their last range after (see
-        # Scene.depth)
+        # The whole range, whatever the main lens holds
         self.mirror_cam.getLens().setNearFar(1.0, CAMERA_FAR_M)
         self.mirror_cam.getLens().setFov(MIRROR_FOV)  # Narrower = more realistic mirror
         self.mirror_cam.getLens().setAspectRatio(MIRROR_ASPECT_RATIO)
+        # A finite copy to cull by (set_depth_mode can make the lens itself
+        # reversed and infinite)
+        self._cull_lens = self.mirror_cam.getLens().makeCopy()
 
         self.mirror_buffer.makeDisplayRegion().setCamera(self.mirror_np)
 
@@ -80,6 +81,35 @@ class RearViewMirror:
 
         self.mirror_buffer.setSort(-100)
         self.mirror_np.node().setCameraMask(BitMask32.bit(2))
+
+    def set_depth_mode(self, mode: int):
+        """
+        The view's depth convention (world_builder.depth), which the scene's
+        shaders follow: with the world's reversed camera the mirror's camera
+        is reversed too (an infinite lens, the "greater" test, depth cleared
+        to 0), or the sky, pinned at the reversed far plane, fails its depth
+        test here. Culled to the mirror's own standard range either way.
+        """
+        from panda3d.core import DepthTestAttrib
+        from world_builder.depth import (
+            DEPTH_STANDARD,
+            frustum_bounds,
+            reversed_lens,
+            view_test,
+        )
+
+        lens = self.mirror_cam.getLens()
+        state = self.mirror_cam.getInitialState()
+        if mode == DEPTH_STANDARD:
+            lens.setNearFar(1.0, CAMERA_FAR_M)
+            state = state.removeAttrib(DepthTestAttrib)
+            self.mirror_buffer.setClearDepth(1.0)
+        else:
+            reversed_lens(lens, 1.0)
+            state = state.setAttrib(DepthTestAttrib.make(view_test(mode)))
+            self.mirror_buffer.setClearDepth(0.0)
+        self.mirror_cam.setInitialState(state)
+        self.mirror_cam.setCullBounds(frustum_bounds(self._cull_lens))
 
     def toggle_mirror(self):
         """

@@ -190,8 +190,8 @@ thing that acts on it. Scenes build their WorldBuilder objects with
   tears the pipeline down; `begin_scene_render()` calls it first, so
   rebuilding is idempotent. It first removes the pipeline buffers' display
   regions: `FilterManager.cleanup` leaves them on the camera, and the next
-  level's depth split would take the dead one for the camera's output, which
-  left everything past the split black.
+  level's depth camera would take the dead one for the camera's output, which
+  left the view black.
 
 ## `gameplay_settings.py` — difficulty
 

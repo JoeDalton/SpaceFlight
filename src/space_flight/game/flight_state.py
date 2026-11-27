@@ -36,7 +36,6 @@ from space_flight.ui.input_context import (
 
 if TYPE_CHECKING:
     from direct.task import Task
-    from panda3d.core import NodePath
 
     from space_flight.game.levels import LevelEntry
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
@@ -66,11 +65,6 @@ class FlightState(BaseState):
         # The level's tally (kills, objectives), set with the outcome (see
         # compute_level_stats)
         self.level_stats: dict | None = None
-        # Big translucent volumes (shield bubbles) the depth split must not
-        # cut: blended twice where the two cameras overlap, they would show a
-        # ring there (see world_builder.depth). Their owners add and remove
-        # them; the scene's split cameras keep clear of them.
-        self.translucent_volumes: set[NodePath] = set()
 
     def enter(self):
         """
@@ -406,7 +400,7 @@ class FlightState(BaseState):
     def follow_render_origin(self):
         """
         Move the render origin onto the player, then what follows it: the
-        scene's own per-frame update (its world and its depth split).
+        scene's own per-frame update (its world and its depth camera).
         """
         self.recenter_render_origin()
         self.scene.update_after_recenter()
@@ -491,8 +485,8 @@ class FlightState(BaseState):
         if RECORD_GAME:
             self.record.save()
 
-        # Remove the far camera first: it draws into the render-scale / AA
-        # pipeline's buffer when there is one.
+        # Remove the depth camera first: it presents the view into the
+        # render-scale / AA pipeline's buffer when there is one.
         self.scene.release_depth()
 
         # Tear down the render-scale / AA pipeline, restoring direct-to-window

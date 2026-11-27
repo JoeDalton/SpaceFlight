@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Use WorldBuilder's unified reverse-Z camera instead of the old split depth duo #197
+
+
+
 ## [0.6.2] - 2026-11-26
 
 ### Fixed
 
 - Fixed linux python-xlib dependency #195
+
+
 
 ## [0.6.1] - 2026-11-22
 
@@ -20,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed fullscreen on primary linux + multimonitor #193
 - Centerd splashscreen on primary monitor #193
 - Fixed test on github macos CI by increasing world loading timeout #193
+
 
 
 ## [0.6.0] - 2026-11-22

@@ -269,3 +269,16 @@ class TestEndSceneRender:
         mgr, _app = _make_manager(_full_config())
         mgr.end_scene_render()  # no error
         assert mgr._filter_manager is None
+
+
+def test_the_game_asks_for_clip_control_but_on_macos():
+    """WorldBuilder's reversed camera keeps a float depth buffer's precision
+    with OpenGL's 0-1 depth (gl-depth-zero-to-one), set before the window
+    opens; macOS's OpenGL has none."""
+    import sys
+
+    from world_builder.depth import zero_to_one
+
+    import space_flight.global_architecture.simulator  # noqa: F401  (its PRC)
+
+    assert zero_to_one() == (sys.platform != "darwin")

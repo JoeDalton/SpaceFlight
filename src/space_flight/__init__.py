@@ -54,9 +54,9 @@ UP_BODY = np.array([0.0, 0.0, 1.0])
 EPSILON_TOLERANCE = 1.0e-5
 # The camera's far clip, in metres: clears the outermost cloud shell (512 km)
 # and keeps the curved ocean horizon in view up to ~28 km of altitude. In
-# flight the main camera only draws up to the depth split and a far camera the
-# rest (see Scene.depth); the rear-view mirror and the ocean's
-# reflection camera keep this whole range.
+# flight WorldBuilder's reversed camera draws the view to infinity, culled at
+# the world's far distance (see Scene.depth); the rear-view mirror and the
+# ocean's reflection camera keep this range.
 CAMERA_FAR_M = 600000.0
 
 LOGGER = logging.getLogger()

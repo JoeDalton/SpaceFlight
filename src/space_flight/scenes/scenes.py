@@ -31,7 +31,7 @@ from space_flight.scenes.planet_2d import Planet2D
 if TYPE_CHECKING:
     from panda3d.core import NodePath
     from world_builder.asteroids.field import AsteroidField
-    from world_builder.depth import SplitDepthCameras
+    from world_builder.depth import ReversedDepthCamera
     from world_builder.world import World
     from world_builder.world_file import GameWorld
 
@@ -141,11 +141,11 @@ def warp_speed_at_altitude(altitude_m: float) -> float:
 
 
 class Scene:
-    #: The depth split: a far camera drawing first what lies past a split
-    #: distance, the main camera the rest, each with the whole depth buffer,
-    #: so distant ground does not shimmer (see world_builder.depth). The
-    #: world's own, from the scene's build_upfront (None until then).
-    depth: SplitDepthCameras | None = None
+    #: The view's camera: one reversed-Z camera over the whole range, with a
+    #: float depth buffer's precision from the cockpit to orbit (see
+    #: world_builder.depth). The world's own, from the scene's build_upfront
+    #: (None until then).
+    depth: ReversedDepthCamera | None = None
 
     def __init__(
         self,
@@ -269,13 +269,25 @@ class Scene:
 
     def release_depth(self) -> None:
         """
-        Remove the scene's split cameras, if it has any. FlightState.exit
+        Remove the scene's depth camera, if it has one. FlightState.exit
         calls it before the render-scale / anti-aliasing pipeline goes: the
-        far camera draws into that pipeline's buffer.
+        camera presents its view into that pipeline's buffer. The mirror goes
+        back to the standard depth.
         """
         if self.depth is not None:
             self.depth.destroy()
             self.depth = None
+            from world_builder.depth import DEPTH_STANDARD
+
+            self._mirror_depth_mode(DEPTH_STANDARD)
+
+    def _mirror_depth_mode(self, mode: int) -> None:
+        """The rear-view mirror draws the scene with a camera of its own: the
+        view's depth convention for it too (world_builder.depth)."""
+        player = getattr(self.game, "player", None)
+        mirror = getattr(player, "rear_view_mirror", None)
+        if mirror is not None:
+            mirror.set_depth_mode(mode)
 
     def update_after_recenter(self):
         """
@@ -300,14 +312,14 @@ class Scene:
 class SceneWorld(Scene):
     """
     A scene whose world is a WorldBuilder world file, loaded whole by
-    ``load_world``: its bodies, asteroid fields, sky, sun and lights, and the
-    split depth cameras.
+    ``load_world``: its bodies, asteroid fields, sky, sun and lights, and its
+    depth camera.
 
     The file defines the objects and nothing about running them. The scene
     decides how they are run: the quality, the game's clock, the light the
     ships are given (LIGHT_SCALE) and what is solid.
 
-    A scene needs a window: ``load_world`` builds the depth cameras.
+    A scene needs a window: ``load_world`` builds the depth camera.
 
     :ivar game_world: WorldBuilder's loaded world, once built (see
         build_upfront)
@@ -332,7 +344,7 @@ class SceneWorld(Scene):
     def build_upfront(self):
         """
         Load the world (shaders, textures, worker processes, the ocean's
-        reflection buffer, the split cameras) on the black screen, before the
+        reflection buffer, the depth camera) on the black screen, before the
         hyperspace animation starts. What loads over time (the ground, the
         rocks) loads during the animation (see build_decomposed).
         """
@@ -349,25 +361,7 @@ class SceneWorld(Scene):
             )
         self.world = self.game_world.world
         self.depth = self.game_world.depth
-        self._spare_translucent_volumes(self.depth)
-
-    def _spare_translucent_volumes(self, depth: SplitDepthCameras) -> None:
-        """
-        Have the world's split cameras keep their split off the game's big
-        translucent volumes (shield bubbles: blended twice where the two
-        cameras overlap, they would show a ring), which GameWorld.update does
-        not know of.
-        """
-        update = depth.update
-
-        def update_sparing(split, far, translucent=()):
-            update(
-                split,
-                far,
-                translucent=(*translucent, *self.game.translucent_volumes),
-            )
-
-        depth.update = update_sparing
+        self._mirror_depth_mode(self.depth.mode)
 
     def update_after_recenter(self):
         """Everything around the player, now at the render origin."""
@@ -377,7 +371,7 @@ class SceneWorld(Scene):
         """
         Cleans the scene
         """
-        # The split cameras first (GameWorld.destroy would remove them again)
+        # The depth camera first (GameWorld.destroy would remove it again)
         self.release_depth()
         self.world.destroy()  # its fields and worker pool too
         self.world = None

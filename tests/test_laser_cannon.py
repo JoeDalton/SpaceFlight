@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 from energy_fakes import LASER_SHOT_COST, make_energy_system
-from panda3d.core import NodePath, Vec3
+from panda3d.core import NodePath, Point3, Vec3
 
 from space_flight.weapons import ION, PHYSICAL
 from space_flight.weapons.laser_cannon import (
@@ -553,3 +553,33 @@ def test_clean_clears_laser_color_reference(laser_cannon):
     laser_cannon.clean()
 
     assert laser_cannon.laser_color_rgb is None
+
+
+def test_the_bolts_depth_follows_the_views_convention():
+    """The bolt writes its own depth (laser.frag): through the world's
+    shared depth mode (WorldBuilder's depth_convention), 0-1 reversed or not."""
+    from pathlib import Path
+
+    from panda3d.core import NodePath
+    from world_builder.depth import depth_mode_input
+
+    from space_flight.weapons.laser_cannon import LaserShot
+
+    shot = object.__new__(LaserShot)
+    shot.color = Vec3(1.0, 0.0, 0.0)
+    shot.light_color = (1.0, 0.0, 0.0, 1.0)
+    shot.speed = np.array([0.0, 100.0, 0.0])
+    shot.game = MagicMock()
+    shot.game.root_node = NodePath("root")
+    shot.game.app.camera = None
+    node = shot._build_visual(Point3(0.0, 0.0, 0.0))
+    bound = node.get_shader_input("uDepthMode")
+    assert bound.get_name().get_name() == "uDepthMode"
+    assert depth_mode_input() is not None
+    import space_flight
+
+    frag = (
+        Path(space_flight.__file__).parent / "datafiles" / "shaders" / "laser.frag"
+    ).read_text()
+    assert "uniform int uDepthMode;" in frag
+    assert "gl_FragDepth = 0.5 * (clip.z / clip.w) + 0.5;" not in frag

@@ -143,7 +143,11 @@ def _game(mirror_visible: bool | None = True):
     player.rear_view_mirror = (
         None
         if mirror_visible is None
-        else SimpleNamespace(mirror_np="mirror", is_mirror_visible=mirror_visible)
+        else SimpleNamespace(
+            mirror_np="mirror",
+            is_mirror_visible=mirror_visible,
+            set_depth_mode=lambda mode: None,
+        )
     )
     return SimpleNamespace(
         app=SimpleNamespace(
@@ -152,7 +156,6 @@ def _game(mirror_visible: bool | None = True):
         ),
         game_time=SimpleNamespace(get_current_time=lambda: 4.0),
         player=player,
-        translucent_volumes={"bubble"},
         follow_render_origin=MagicMock(),
     )
 
@@ -262,16 +265,13 @@ def test_the_world_follows_the_player(monkeypatch):
     scene.field.update.assert_not_called()  # the world did it, for the camera
 
 
-def test_the_split_keeps_off_the_translucent_volumes(monkeypatch):
+def test_the_scene_uses_the_worlds_depth_camera_as_it_is(monkeypatch):
     _, game_world = _mock_world(monkeypatch)
-    update = game_world.depth.update  # the split cameras' own
+    update = game_world.depth.update
     scene = SceneDebug(game=_game())
     scene.build_upfront()
 
-    scene.depth.update(2000.0, 5e5)
-
-    assert update.call_args.args == (2000.0, 5e5)
-    assert update.call_args.kwargs == {"translucent": ("bubble",)}
+    assert scene.depth.update is update
 
 
 def test_the_field_is_drawn_again_for_the_visible_mirror(monkeypatch):

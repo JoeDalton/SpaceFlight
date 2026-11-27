@@ -51,11 +51,11 @@ needs a window: no scene builds headless (see `WORLDBUILDER_WISHLIST.md`).
 
 Every frame, once the render origin has moved onto the player,
 `FlightState` calls `scene.update_after_recenter()`: it updates what must
-follow the origin (the world and the scene's split depth cameras, see
-[docs/game.md](game.md#split-depth)). It is a no-op by default.
+follow the origin (the world and the scene's depth camera, see
+[docs/game.md](game.md#depth)). It is a no-op by default.
 
-A scene owns its split cameras (`scene.depth`, the world's own, None until
-`build_upfront`), and `scene.release_depth()` removes them:
+A scene owns its depth camera (`scene.depth`, the world's own, None until
+`build_upfront`), and `scene.release_depth()` removes it:
 `FlightState.exit` calls it before the render pipeline goes.
 
 Missions also ask it `scene.clear_position(position, radius)` for ships
@@ -179,10 +179,11 @@ the lights are the world's.
     axes).
 - **Build.** `build_upfront` calls `load_world(app, WORLD_PATH, settings=...,
   clock=..., light_scale=..., light_period=...)` on the black screen, about
-  5 s. It builds the world and its split depth cameras (`GameWorld.depth`,
+  5 s. It builds the world and its depth camera (`GameWorld.depth`,
   `scene.depth`), after the player (whose camera the ocean's reflection
-  copies) and the render-scale pipeline (whose buffer the far camera draws
-  into). `scene.world` is the loaded `World`, which the scene's queries read.
+  copies) and the render-scale pipeline (into whose buffer the camera
+  presents the view), and gives the camera's depth mode to the rear-view
+  mirror. `scene.world` is the loaded `World`, which the scene's queries read.
 - **Loading.** `build_decomposed` ends with `wait_until_loaded`, which holds
   the hyperspace tunnel until `world.loading` (ground and clouds) has stayed
   False for half a second, at most a minute: about 11 s on this machine.
@@ -191,10 +192,9 @@ the lights are the world's.
   - `FlightState` centres render on the player as soon as the player exists,
     so the world loads around it.
 - **Every frame.** `update_after_recenter()` is
-  `game_world.update(player position)`: the split cameras follow the nearest
-  ground and the world is drawn around the player. The scene wraps the split
-  cameras' `update` so that the split stays off the game's translucent
-  volumes (shield bubbles), which `GameWorld.update` does not know of.
+  `game_world.update(player position)`: the depth camera takes the world's
+  far distance and the height over the nearest ground, and the world is
+  drawn around the player.
 - **Solid.** `world.enable_collision(CollisionLayers.TERRAIN_INTO,
   max_distance=TERRAIN_COLLISION_RANGE_M)` adds an into-only `"terrain"`
   collision node to every body, owned by WorldBuilder's `TerrainSurface`.

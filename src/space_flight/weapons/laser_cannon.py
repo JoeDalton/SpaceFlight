@@ -18,6 +18,7 @@ from panda3d.core import (
     Quat,
     Vec3,
 )
+from world_builder.depth import depth_mode_input
 
 from space_flight import DATAFILES_PATH
 from space_flight.fx import load_glsl_shader
@@ -307,6 +308,9 @@ class LaserShot(Munition):
         shot.set_shader_input("uColor", self.color)
         shot.set_shader_input("uCoreRadius", CORE_RADIUS)
         shot.set_shader_input("uGlowRadius", GLOW_RADIUS)
+        # The view's depth convention, for the depth the shader writes
+        # (world_builder.depth: the world's reversed camera sets it)
+        shot.set_shader_input("uDepthMode", depth_mode_input())
 
         # Additive glow (ONE, ONE): order-independent w.r.t. other bolts and the
         # translucent shields / clouds it flies through, so no sorting needed.

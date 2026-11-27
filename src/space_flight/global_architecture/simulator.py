@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import atexit
 import logging
+import sys
 from typing import TYPE_CHECKING, Any
 
 from direct.showbase.ShowBase import ShowBase
@@ -37,6 +38,13 @@ LOGGER = logging.getLogger()
 
 
 loadPrcFileData("", "notify-level-ffmpeg error")
+
+# OpenGL's 0-1 depth (clip control), for WorldBuilder's reversed camera: its
+# float depth buffer keeps its precision from the cockpit to orbit (read when
+# the GL context is made). macOS's OpenGL has none: the world then works with
+# [-1, 1] depth (world_builder.depth).
+if sys.platform != "darwin":
+    loadPrcFileData("", "gl-depth-zero-to-one #t")
 
 # Disable Panda's on-disk model cache (and with it the compiled-shader cache):
 # it was implicated in glTF models failing to load on some systems.
