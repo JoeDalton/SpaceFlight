@@ -164,10 +164,6 @@ class SpaceFlightSimulator(ShowBase):
         ShowBase.__init__(self)
         self.disableMouse()
 
-        # Use Physical Based Rendering pipeline. Messes with the ocean for now
-        # import simplepbr
-        # simplepbr.init()
-
         self.graphics_settings = GraphicsSettings()
         self.gameplay_settings = GameplaySettings()
         self.graphics_manager = GraphicsManager(app=self)
