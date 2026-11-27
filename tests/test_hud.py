@@ -82,8 +82,9 @@ def test_project_to_screen_flags_points_behind():
 
 
 def test_project_to_screen_ignores_the_lens_depth_range():
-    """With split depth the main lens only reaches the split (2 km), yet a
-    marker 50 km away still lands where it would on the whole range."""
+    """The markers project through the app's lens, whatever its depth range
+    (the depth camera draws with a lens of its own): a marker 50 km away lands
+    where it would on any range."""
     near_only, whole = PerspectiveLens(), PerspectiveLens()
     near_only.set_near_far(1.0, 2000.0)
     whole.set_near_far(1.0, 600000.0)

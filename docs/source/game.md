@@ -180,11 +180,13 @@ whose OpenGL has none: there the depth keeps about a 24-bit range's precision
   world's (`GameWorld.depth`, from WorldBuilder's `load_world`), and the
   scene hands its depth mode to the rear-view mirror.
 - Each frame, `follow_render_origin()` calls `scene.update_after_recenter()`:
-  `GameWorld.update` gives the camera the world's far distance and the height
-  over the ground, and draws the world.
+  `GameWorld.update` gives the camera the world's far distance, and draws the
+  world.
 - `exit()` has the scene remove it (`Scene.release_depth()`, which also gives
   the mirror the standard depth back) before the render pipeline.
-- No scene builds headless for now (`load_world` needs a window).
+- Headless (no window), `load_world` builds no depth camera
+  (`GameWorld.depth` is None) and no sea: `build_upfront` then leaves the
+  mirror as it is.
 
 **What draws or reads depth.**
 - The HUD's markers (`project_to_screen`) project through `app.camLens`, which

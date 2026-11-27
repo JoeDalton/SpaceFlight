@@ -214,7 +214,7 @@ def test_the_world_is_loaded_from_its_file_as_the_game_runs_it(monkeypatch):
 
 
 def test_the_world_follows_the_player(monkeypatch):
-    """Render's origin is the player: the world (and its split cameras) is
+    """Render's origin is the player: the world (and its depth camera) is
     updated around it."""
     scene, _, position = _scene(monkeypatch)
     scene.build_upfront()
@@ -226,7 +226,7 @@ def test_the_world_follows_the_player(monkeypatch):
 
 def test_the_scene_uses_the_worlds_depth_camera_as_it_is(monkeypatch):
     """One reversed camera (WorldBuilder #57): nothing of the game's to add
-    to its update (no split to keep off the shield bubbles)."""
+    to its update (no split to keep clear of the shield bubbles any more)."""
     scene, load, _ = _scene(monkeypatch)
     update = load.return_value.depth.update
     scene.build_upfront()
@@ -250,7 +250,22 @@ def test_the_mirror_takes_the_depth_cameras_convention(monkeypatch):
     mirror.set_depth_mode.assert_called_with(DEPTH_STANDARD)
 
 
-def test_cleaning_removes_the_split_cameras_once_before_the_world(monkeypatch):
+def test_without_a_window_the_scene_has_no_depth_camera(monkeypatch):
+    """Headless (no window), load_world builds no depth camera: the scene
+    keeps none, leaves the mirror alone, and releases nothing."""
+    scene, load, _ = _scene(monkeypatch)
+    load.return_value.depth = None
+    mirror = MagicMock()
+    scene.game.player.rear_view_mirror = mirror
+    scene.build_upfront()
+
+    assert scene.depth is None
+    mirror.set_depth_mode.assert_not_called()
+    scene.release_depth()
+    mirror.set_depth_mode.assert_not_called()
+
+
+def test_cleaning_removes_the_depth_camera_once_before_the_world(monkeypatch):
     scene, _, _ = _scene(monkeypatch)
     scene.build_upfront()
     scene.speed_dust_cloud = MagicMock()

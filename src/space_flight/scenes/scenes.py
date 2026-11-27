@@ -319,7 +319,8 @@ class SceneWorld(Scene):
     decides how they are run: the quality, the game's clock, the light the
     ships are given (LIGHT_SCALE) and what is solid.
 
-    A scene needs a window: ``load_world`` builds the depth camera.
+    With a window ``load_world`` builds the depth camera; headless (no
+    window) none, nor the seas (:attr:`depth` is None).
 
     :ivar game_world: WorldBuilder's loaded world, once built (see
         build_upfront)

@@ -253,8 +253,8 @@ def test_the_field_is_solid_as_terrain(monkeypatch):
 
 
 def test_the_world_follows_the_player(monkeypatch):
-    """Render's origin is the player: the world, its field and its split
-    cameras are updated around it."""
+    """Render's origin is the player: the world, its field and its depth
+    camera are updated around it."""
     _, game_world = _mock_world(monkeypatch)
     scene = SceneAsteroids(game=_game(mirror_visible=False))
     scene.build_upfront()
@@ -337,7 +337,7 @@ def test_ships_spawned_at_run_time_find_room(monkeypatch):
     )
 
 
-def test_cleaning_removes_the_split_cameras_then_the_world_with_its_field(
+def test_cleaning_removes_the_depth_camera_then_the_world_with_its_field(
     monkeypatch,
 ):
     """The world owns the field and the worker pool its shapes are built on."""

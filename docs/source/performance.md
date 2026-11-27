@@ -3,8 +3,9 @@
 This page is for developers profiling the game's CPU cost. It covers how to
 measure it, where the time currently goes, and which optimization levers are
 left, with their expected gain and trade-offs. Rendering (GPU) is out of scope:
-all figures come from headless runs, which don't render (headless level runs
-are broken for now: see `WORLDBUILDER_WISHLIST.md`).
+all figures come from headless runs, which don't render (a level headless
+builds its world without the depth camera and seas: WorldBuilder's
+`load_world` without a window).
 
 ## Measuring
 
@@ -100,8 +101,8 @@ Each is worth a few percent at most.
 
 Mission 3 is the heaviest level: WorldBuilder's planet (terrain, raymarched
 clouds with genera and cirrus, swell ocean, shadows) and some 25 ships lit and
-shadowed by the world. The headless harness cannot run it (it draws nothing,
-and `load_world` needs a window), so it is measured drawn, by
+shadowed by the world. The headless harness draws nothing (its world has no
+depth camera, seas or GPU passes), so it is measured drawn, by
 `scripts/bench_mission3.py`: the real game in an offscreen buffer at a fixed
 size and render scale 1.0, warmed up until the first waves have spawned and the
 world has settled, then 600 frames each waiting for the GPU (CPU and GPU in

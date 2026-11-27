@@ -44,10 +44,10 @@ API is in the [code reference](apidocs/index.rst).
 
 Every scene is a `SceneWorld`: its world is a WorldBuilder world file in
 `datafiles/worlds/`, loaded whole by `load_world` in `build_upfront` (see
-[the planet world](#planet-world-from-worldbuilder) for how), and `clean()`
+[the planet world](#planet-world--from-worldbuilder) for how), and `clean()`
 tears it down. The files define the objects and nothing about running them;
-the scene gives the quality, the game's clock and `LIGHT_SCALE`. `load_world`
-needs a window: no scene builds headless (see `WORLDBUILDER_WISHLIST.md`).
+the scene gives the quality, the game's clock and `LIGHT_SCALE`. Headless (no
+window), `load_world` builds the world without its depth camera and seas.
 
 Every frame, once the render origin has moved onto the player,
 `FlightState` calls `scene.update_after_recenter()`: it updates what must
