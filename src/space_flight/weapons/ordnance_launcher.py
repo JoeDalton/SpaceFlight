@@ -131,6 +131,15 @@ class OrdnanceLauncher(Weapon):
         self.category = self.conf["type"]
         self.damage_type = self.conf["damage_type"]
         self.stock = stock
+        # Where it leaves the ship: [right, forward, up], metres, ship frame
+        self.position_m = np.asarray(
+            parent.conf["ordnance_launcher_position"], dtype=float
+        )
+        if self.position_m.shape != (3,):
+            raise ValueError(
+                f"{name}: ordnance_launcher_position must hold 3 numbers, "
+                f"got {parent.conf['ordnance_launcher_position']!r}"
+            )
         # Launch speed relative to the launching ship, along launch_direction
         self.speed_mps = self.conf["speed_mps"]
         self.launch_direction = self.conf["launch_direction"]
@@ -159,6 +168,21 @@ class OrdnanceLauncher(Weapon):
         if self.launch_direction == "down":
             return -np.asarray(self.parent.up, dtype=float)
         return -np.asarray(self.parent.forward, dtype=float)
+
+    def launch_position(self) -> np.ndarray:
+        """
+        :return: Where an ordnance launched now starts, in world coordinates:
+            the ship's ordnance launcher position, then the ordnance's own
+            launch offset along its launch direction
+        """
+        x, y, z = self.position_m
+        return (
+            np.asarray(self.parent.position, dtype=float)
+            + x * np.asarray(self.parent.right, dtype=float)
+            + y * np.asarray(self.parent.forward, dtype=float)
+            + z * np.asarray(self.parent.up, dtype=float)
+            + self.conf["launch_offset_m"] * self.launch_direction_vector()
+        )
 
     def initial_velocity(self) -> np.ndarray:
         """

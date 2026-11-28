@@ -257,7 +257,7 @@ All four share the same code; they differ only by their configuration,
 `ion_bomb` are the blue ion versions of the concussion missile, proton
 torpedo and proton bomb), `reload_s`, the launch
 (`launch_direction` — `forward`, `down` or `backward` — `speed_mps` relative to
-the launching ship, `launch_offset_m`), the placeholder look and collision
+the launching ship, `launch_offset_m`, added along the launch direction to the ship's `ordnance_launcher_position`), the placeholder look and collision
 (`visual_radius_m`, `collision_radius_m`, RGBA `color`), for missiles and
 rockets the targets they are fired at (`target_mobility`: `agile` or `slow`,
 see [the AI's weapon choice](ai.md)) and, for missiles, the turn rates, the

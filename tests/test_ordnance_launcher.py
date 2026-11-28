@@ -37,7 +37,9 @@ def make_launcher(
     game.game_time.get_current_time.return_value = 0.0
     ship = SimpleNamespace(
         node=MagicMock(),
+        conf={"ordnance_launcher_position": [0.0, 0.0, -1.0]},
         speed=np.array([0.0, 100.0, 0.0]),
+        right=np.array([1.0, 0.0, 0.0]),
         forward=np.array([0.0, 1.0, 0.0]),
         up=np.array([0.0, 0.0, 1.0]),
         parent=SimpleNamespace(name="ship"),
@@ -351,3 +353,34 @@ def test_restart_reload_holds_the_launcher_for_a_full_reload():
         assert launcher.launch() is None
         clock.return_value = 12.0
         assert launcher.launch() is not None
+
+
+def test_launch_position_is_the_ships_launcher_position_in_its_frame():
+    """
+    An ordnance starts at the ship's position plus its ordnance_launcher_position
+    along the ship's right / forward / up axes, plus the ordnance's own offset
+    along its launch direction.
+    """
+    launcher = make_launcher("flare")
+    launcher.parent.position = np.array([10.0, 20.0, 30.0])
+    # A ship rolled and yawed: right = +Y, forward = -X, up = +Z
+    launcher.parent.right = np.array([0.0, 1.0, 0.0])
+    launcher.parent.forward = np.array([-1.0, 0.0, 0.0])
+    launcher.position_m = np.array([2.0, 3.0, -1.0])
+    offset_m = launcher.conf["launch_offset_m"]
+
+    # Flares go backward: +X
+    np.testing.assert_allclose(
+        launcher.launch_position(), [10.0 - 3.0 + offset_m, 22.0, 29.0]
+    )
+
+
+@pytest.mark.parametrize(
+    "path", SHIP_CONFIGURATIONS, ids=[path.parent.name for path in SHIP_CONFIGURATIONS]
+)
+def test_fighters_launch_their_ordnance_from_below_the_hull(path):
+    with open(path) as f:
+        conf = yaml.safe_load(f)
+
+    if "loadout" in conf and "cannon_positions" in conf:
+        assert conf["ordnance_launcher_position"] == [0, 0, -1]

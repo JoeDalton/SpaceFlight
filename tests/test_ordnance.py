@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from panda3d.core import NodePath
+from panda3d.core import NodePath, ShaderAttrib
 
 from space_flight.actors.destructibles import Destructibles
 from space_flight.actors.ordnance import Ordnance, OrdnanceController
@@ -29,6 +29,8 @@ from space_flight.weapons.ordnance_launcher import (
 DT_S = 1 / 60
 # The smallest fighter hit box: closer than this to its centre is a hit
 TARGET_HIT_BOX_RADIUS_M = 5.0
+# Where the test ship's ordnance leaves it: [right, forward, up]
+LAUNCHER_POSITION_M = [0.5, 2.0, -1.0]
 
 
 class FakeGameTime:
@@ -113,6 +115,7 @@ def make_ship(position=(0.0, 0.0, 0.0), speed=(0.0, 100.0, 0.0), team=1):
         forward=np.array([0.0, 1.0, 0.0]),
         up=np.array([0.0, 0.0, 1.0]),
         node=NodePath("ship"),
+        conf={"ordnance_launcher_position": LAUNCHER_POSITION_M},
         parent=SimpleNamespace(name="launcher"),
     )
 
@@ -159,17 +162,18 @@ def launch(game, name, ship=None, target_id=None, damage_multiplier=1.0):
     "name, expected_offset, expected_velocity",
     [
         # Belly drop: the ship's velocity plus the launch speed along -up
-        ("proton_bomb", [0.0, 0.0, 0.0], [0.0, 100.0, -75.0]),
+        ("proton_bomb", [0.5, 2.0, -1.0], [0.0, 100.0, -75.0]),
         # Forward, on top of the ship's velocity
-        ("rocket", [0.0, 0.0, 0.0], [0.0, 500.0, 0.0]),
-        ("proton_torpedo", [0.0, 0.0, 0.0], [0.0, 350.0, 0.0]),
-        # Just behind the ship, drifting with its velocity
-        ("flare", [0.0, -12.0, 0.0], [0.0, 100.0, 0.0]),
+        ("rocket", [0.5, 2.0, -1.0], [0.0, 500.0, 0.0]),
+        ("proton_torpedo", [0.5, 2.0, -1.0], [0.0, 350.0, 0.0]),
+        # Just behind the launcher, drifting with the ship's velocity
+        ("flare", [0.5, -10.0, -1.0], [0.0, 100.0, 0.0]),
     ],
 )
 def test_launch_position_and_velocity(game, name, expected_offset, expected_velocity):
     """
-    Every ordnance starts at the ship (offset along its launch direction) with
+    Every ordnance starts at the ship's ordnance launcher position (then offset
+    along its launch direction) with
     the ship's velocity plus its launch speed along its launch direction.
     """
     ship = make_ship(position=(10.0, 20.0, 30.0))
@@ -342,7 +346,8 @@ def test_impact_position_is_the_ordnance_position(game):
     """
     pawn = launch(game, "rocket", ship=make_ship(position=(1.0, 2.0, 3.0))).pawn
 
-    assert tuple(pawn.impact_position()) == pytest.approx((1.0, 2.0, 3.0))
+    np.testing.assert_allclose(pawn.impact_position(), pawn.position)
+    assert tuple(pawn.impact_position()) == pytest.approx((1.5, 4.0, 2.0))
 
 
 # ---------------------------
@@ -582,3 +587,105 @@ def test_ion_damage_does_not_harm_ordnance():
     pawn.apply_damage(damage=50.0, damage_type=ION)
 
     assert pawn.health == 100.0
+
+
+# ---------------------------
+# glowing orb, engine trail, flare sparks
+# ---------------------------
+
+
+def test_orb_core_radius_is_the_visual_radius_but_a_fraction_of_a_flares_collider():
+    from space_flight.fx.ordnance_orb import (
+        FLARE_CORE_FRACTION_OF_COLLISION_RADIUS,
+        orb_core_radius_m,
+    )
+
+    rocket = load_ordnance_configuration("rocket")
+    flare = load_ordnance_configuration("flare")
+
+    assert orb_core_radius_m(rocket) == rocket["visual_radius_m"]
+    assert orb_core_radius_m(flare) == pytest.approx(
+        FLARE_CORE_FRACTION_OF_COLLISION_RADIUS * flare["collision_radius_m"]
+    )
+
+
+def test_ordnance_is_an_orb_card_removed_with_it(game):
+    controller = launch(game, "rocket")
+    pawn = controller.pawn
+    orb = pawn.model.model
+    assert orb.getParent() == pawn.node
+    assert orb.getState().hasAttrib(ShaderAttrib)
+
+    controller.pawn.health = 0.0
+    step(game, 2)
+
+    assert orb.isEmpty()
+
+
+@pytest.mark.parametrize(
+    "name, has_trail",
+    [
+        ("rocket", True),
+        ("proton_torpedo", True),
+        ("proton_bomb", False),
+        ("flare", False),
+    ],
+)
+def test_only_missiles_and_rockets_have_a_trail(game, name, has_trail):
+    assert (launch(game, name).trail is not None) is has_trail
+
+
+def test_trail_follows_the_ordnance_then_outlives_it_and_removes_itself(game):
+    from space_flight.fx.ordnance_trail import TRAIL_DURATION_S
+
+    controller = launch(game, "rocket")
+    trail = controller.trail
+    step(game, 30)
+    assert len(trail.points) > 5
+    newest = trail.points[-1][1]
+    assert np.linalg.norm(newest - controller.pawn.position) < 20.0
+
+    controller.pawn.health = 0.0
+    step(game, 1)
+    assert trail.following is False
+    node = trail.node
+    # Still there, fading
+    step(game, 5)
+    assert not node.isEmpty()
+    assert trail.id in game.method_lists
+
+    step(game, int(TRAIL_DURATION_S / DT_S) + 5)
+    assert node.isEmpty()
+    assert trail.id not in game.method_lists
+
+
+def test_trail_points_expire_after_the_trail_duration(game):
+    from space_flight.fx.ordnance_trail import TRAIL_DURATION_S
+
+    trail = launch(game, "rocket").trail
+    step(game, int(3 * TRAIL_DURATION_S / DT_S))
+
+    now = game.game_time.get_current_time()
+    assert all(now - t < TRAIL_DURATION_S for t, _ in trail.points)
+
+
+def test_flare_streams_sparks_at_the_configured_rate(game):
+    from space_flight.fx.spark_fx import FLARE_SPARK_RATE_PER_S
+
+    controller = launch(game, "flare")
+    pool = game.spark_fx_pool
+    step(game, 60)
+
+    emitted = sum(c.kwargs["count"] for c in pool.spawn_isotropic.call_args_list)
+    assert emitted == pytest.approx(FLARE_SPARK_RATE_PER_S, abs=1.5)
+    kwargs = pool.spawn_isotropic.call_args.kwargs
+    # Emitted from the flare's centre (as of the last frame)
+    assert np.linalg.norm(kwargs["position"] - controller.pawn.position) < 3.0
+    assert kwargs["preset"] is controller.spark_preset
+
+
+def test_only_flares_throw_sparks(game):
+    launch(game, "rocket")
+    step(game, 30)
+
+    game.spark_fx_pool.spawn_isotropic.assert_not_called()
