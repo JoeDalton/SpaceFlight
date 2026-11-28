@@ -273,11 +273,14 @@ class OrdnanceController(Destructible):
         game: FlightState,
         launcher: OrdnanceLauncher,
         target_id: uuid.UUID | None = None,
+        direction: np.ndarray | None = None,
     ):
         """
         :param game: The game/flight state
         :param launcher: The launcher firing it
         :param target_id: The target a missile pursues, None to fly straight
+        :param direction: The world launch direction (the launcher's nominal
+            one by default; a bomb may be aimed, see OrdnanceLauncher)
         """
         super().__init__(game=game)
         ship = launcher.parent
@@ -293,9 +296,9 @@ class OrdnanceController(Destructible):
             ordnance_name=launcher.name,
             ordnance_conf=launcher.conf,
             origin_ship=ship,
-            ini_position=launcher.launch_position(),
+            ini_position=launcher.launch_position(direction),
             ini_orientation=np.array(ship.orientation, dtype=float),
-            ini_speed=launcher.initial_velocity(),
+            ini_speed=launcher.initial_velocity(direction),
             team=ship.team,
         )
 

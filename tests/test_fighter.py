@@ -244,6 +244,8 @@ class FakeLauncher:
         self.targets = []
         self.target_lock = FakeLock() if category == "missile" else None
         self.reloads = 0
+        self.is_reloaded = True
+        self.target_in_assist_cone = False
         self.launched_pawn = SimpleNamespace(position=np.zeros(3))
 
     @property
@@ -252,6 +254,9 @@ class FakeLauncher:
 
     def restart_reload(self):
         self.reloads += 1
+
+    def is_target_in_assist_cone(self, target_id) -> bool:
+        return self.target_in_assist_cone
 
     def launch(self, target_id=None) -> SimpleNamespace | None:
         if self.stock <= 0:
@@ -419,6 +424,54 @@ def test_is_missile_locked_without_secondary_weapons():
     fighter = _fighter_with_loadout(FakeLauncher("flare", 10))
 
     assert fighter.is_missile_locked is False
+
+
+@pytest.mark.parametrize("reloaded, expected", [(True, True), (False, False)])
+def test_missile_lock_cue_drops_while_the_missile_launcher_reloads(reloaded, expected):
+    """
+    The lock cue (the red target box) is off while the launcher reloads after a
+    shot, and back once reloaded, as long as the lock still holds.
+    """
+    launcher = FakeLauncher("missile", 2)
+    launcher.target_lock.is_locked = True
+    launcher.is_reloaded = reloaded
+    fighter = _fighter_with_loadout(launcher)
+
+    assert fighter.is_missile_lock_cue is expected
+    # The lock itself (which the AI reads) is unaffected
+    assert fighter.is_missile_locked is True
+
+
+def test_missile_lock_cue_needs_the_lock():
+    launcher = FakeLauncher("missile", 2)
+    launcher.target_lock.is_locked = False
+    fighter = _fighter_with_loadout(launcher)
+
+    assert fighter.is_missile_lock_cue is False
+
+
+@pytest.mark.parametrize(
+    "category, stock, reloaded, in_cone, expected",
+    [
+        ("bomb", 2, True, True, True),
+        ("bomb", 2, False, True, False),  # reloading after a drop
+        ("bomb", 2, True, False, False),  # target out of the cone
+        ("bomb", 0, True, True, False),  # spent
+    ],
+)
+def test_bomb_assist_cue(category, stock, reloaded, in_cone, expected):
+    launcher = FakeLauncher(category, stock)
+    launcher.is_reloaded = reloaded
+    launcher.target_in_assist_cone = in_cone
+    fighter = _fighter_with_loadout(launcher)
+
+    assert fighter.is_bomb_assist_cue is expected
+
+
+def test_bomb_assist_cue_without_a_secondary_weapon():
+    fighter = _fighter_with_loadout(FakeLauncher("flare", 10))
+
+    assert fighter.is_bomb_assist_cue is False
 
 
 def test_fire_secondary_launches_the_selected_launcher():
@@ -807,6 +860,8 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     config["bots"]["deviation_deg"] = 1.5
     config["player"]["damage_multiplier"] = 2.0
     config["bots"]["damage_multiplier"] = 0.5
+    config["player"]["bomb_assist_angle_deg"] = 12.0
+    config["bots"]["bomb_assist_angle_deg"] = 3.0
     game.app.gameplay_settings.config = config
 
     with (
@@ -832,6 +887,9 @@ def test_init_tunes_its_guns_with_its_sides_gameplay_settings(is_cockpit, side):
     damage_multiplier = 2.0 if side == "player" else 0.5
     assert laser_cannon_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
     assert launcher_cls.call_args.kwargs["damage_multiplier"] == damage_multiplier
+    assert launcher_cls.call_args.kwargs["bomb_assist_angle_deg"] == (
+        12.0 if side == "player" else 3.0
+    )
 
 
 def test_init_arms_itself_with_the_given_loadout():

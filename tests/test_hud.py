@@ -19,6 +19,7 @@ from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.game.render_origin import RenderOrigin
 from space_flight.game.scenario import Mission
 from space_flight.ui.hud import (
+    BOMB_ASSIST_CUE_OFFSET_Z,
     CHATTER,
     CHATTER_DISPLAY_S,
     CROSSHAIR_COLOR,
@@ -172,6 +173,7 @@ def make_aim_hud() -> AimHUD:
     pawn = aim_hud.game.player.pawn
     pawn.forward = np.array([0.0, 1.0, 0.0])
     pawn.auto_aim.is_target_acquired = False
+    pawn.is_bomb_assist_cue = False
     pawn.target.is_dead = False
     pawn.auto_aim.predict_target_position.return_value = np.array([0.0, 100.0, 0.0])
     for node in (
@@ -182,6 +184,7 @@ def make_aim_hud() -> AimHUD:
         "name_label",
         "distance_label",
         "crosshair",
+        "bomb_assist_cue",
         "lead_indicator",
         "missile_warning_line",
         "missile_marker",
@@ -190,6 +193,36 @@ def make_aim_hud() -> AimHUD:
     aim_hud.missile_blink_phase = 0.0
     pawn.incoming_missiles = {}
     return aim_hud
+
+
+@pytest.mark.parametrize("cue, shown", [(True, True), (False, False)])
+def test_bomb_assist_cue_is_a_v_under_the_crosshair_while_a_bomb_would_be_aided(
+    cue, shown
+):
+    aim_hud = make_aim_hud()
+    aim_hud.game.player.pawn.is_bomb_assist_cue = cue
+
+    aim_hud.update_crosshair()
+
+    if shown:
+        x, _, z = aim_hud.bomb_assist_cue.setPos.call_args.args
+        assert x == pytest.approx(0.0)
+        assert z == pytest.approx(-BOMB_ASSIST_CUE_OFFSET_Z)
+        aim_hud.bomb_assist_cue.show.assert_called_once()
+    else:
+        aim_hud.bomb_assist_cue.hide.assert_called_once()
+        aim_hud.bomb_assist_cue.show.assert_not_called()
+
+
+def test_bomb_assist_cue_is_hidden_when_the_crosshair_is_off_screen():
+    aim_hud = make_aim_hud()
+    aim_hud.game.player.pawn.is_bomb_assist_cue = True
+    aim_hud.game.player.pawn.forward = np.array([0.0, -1.0, 0.0])
+
+    aim_hud.update_crosshair()
+
+    aim_hud.bomb_assist_cue.hide.assert_called_once()
+    aim_hud.bomb_assist_cue.show.assert_not_called()
 
 
 @pytest.mark.parametrize("auto_aim_locked", [True, False])
@@ -201,11 +234,12 @@ def test_target_box_is_red_only_while_missile_locked(
     missile_locked, color, auto_aim_locked
 ):
     """
-    The target box turns red while the armed missile is locked, white
-    otherwise, whatever the laser auto-aim lock.
+    The target box turns red while the armed missile is locked (and reloaded:
+    see Fighter.is_missile_lock_cue), white otherwise, whatever the laser
+    auto-aim lock.
     """
     aim_hud = make_aim_hud()
-    aim_hud.game.player.pawn.is_missile_locked = missile_locked
+    aim_hud.game.player.pawn.is_missile_lock_cue = missile_locked
     aim_hud.game.player.pawn.auto_aim.is_target_acquired = auto_aim_locked
 
     aim_hud.update_lock_tint()

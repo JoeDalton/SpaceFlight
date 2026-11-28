@@ -237,6 +237,7 @@ Each side — the player, and the bots (fighters, turrets, capital ships) — ha
 |---------|---------|--------|
 | `auto_aim.enabled`, `lock_delay_s`, `lock_angle_deg`, `assist_angle_deg` | `Fighter`, `Turret` → `AutoAim` (see [docs/ai.md](ai.md#autoaim)) | whether and how shots lead a locked target |
 | `deviation_deg` | `Fighter`, `Turret` → `LaserCannon` (see [docs/actors.md](actors.md#weapons-and-munitions)) | half-angle of the random cone around each laser shot |
+| `bomb_assist_angle_deg` | `Fighter` → `OrdnanceLauncher` (see [docs/actors.md](actors.md)) | bomb aim assist: the most a dropped bomb's course is bent from straight down toward its intercept with the target (0 = none) |
 | `damage_multiplier` | `Fighter`, `Turret` → their weapons | scales the damage of their bolts and ordnance |
 
 plus, for the player only, `collision_damage_multiplier` (read by

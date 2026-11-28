@@ -115,6 +115,15 @@ class Weapon:
         self.last_fire_time = self.game.game_time.get_current_time()
         self.damage_multiplier = damage_multiplier
 
+    @property
+    def is_reloaded(self) -> bool:
+        """
+        :return: Whether fire_delay has elapsed since the last shot (checking
+            does not consume the reload gate, see :meth:`_ready_to_fire`)
+        """
+        elapsed_s = self.game.game_time.get_current_time() - self.last_fire_time
+        return elapsed_s >= self.fire_delay
+
     def _ready_to_fire(self) -> bool:
         """
         Check-and-consume the reload gate.
@@ -123,10 +132,9 @@ class Weapon:
             that case, stamps the current time as the new last_fire_time so the
             caller can proceed to fire. False (without stamping) while reloading.
         """
-        current_time = self.game.game_time.get_current_time()
-        if current_time - self.last_fire_time < self.fire_delay:
+        if not self.is_reloaded:
             return False
-        self.last_fire_time = current_time
+        self.last_fire_time = self.game.game_time.get_current_time()
         return True
 
     def restart_reload(self):

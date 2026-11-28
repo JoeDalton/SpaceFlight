@@ -135,6 +135,14 @@ MISSILE_MARKER_HALF_SIZE = 1.5 * LEAD_INDICATOR_HALF_SIZE
 CROSSHAIR_COLOR = (1.0, 1.0, 1.0, 1.0)
 CROSSHAIR_LOCKED_COLOR = (1.0, 0.0, 0.0, 1.0)
 
+# Bomb aim assist cue (see AimHUD): a red "V" under the crosshair while a bomb
+# dropped now would be aided. Its text scale, and how far below the crosshair's
+# centre it sits, in aspect2d coordinates
+BOMB_ASSIST_CUE_COLOR = (1.0, 0.0, 0.0, 1.0)
+BOMB_ASSIST_CUE_TEXT = "V"
+BOMB_ASSIST_CUE_TEXT_SCALE = 0.05
+BOMB_ASSIST_CUE_OFFSET_Z = 0.07
+
 # Incoming missile warning (see AimHUD): the warning line below the screen centre,
 # in aspect2d coordinates, and the marker on the nearest missile, a violet ring
 # like the lead indicator's, only bigger
@@ -989,7 +997,8 @@ class AimHUD:
     - a target box with the target's name, distance and scan progress, pinned
       to the screen border when off screen. Red while missile locked.
     - a crosshair where the lasers go (where the nose points). Red while
-      auto-aim is locked.
+      auto-aim is locked. A red "V" under it while a bomb dropped now would be
+      aided (the target is within its aim assist cone).
     - a lead indicator where to aim to hit the target (see
       AutoAim.predict_target_position), shown only when on screen, and only if
       the gameplay settings enable it.
@@ -1066,6 +1075,11 @@ class AimHUD:
             loader.loadTexture(DATAFILES_PATH / "models/UI/crosshair.png"),
         )
         self.crosshair.reparentTo(self.root)
+        self.bomb_assist_cue = make_text_line(
+            self.root, "bombAssistCue", TextNode.ACenter
+        )
+        self.bomb_assist_cue.node().setText(BOMB_ASSIST_CUE_TEXT)
+        self.bomb_assist_cue.node().setTextColor(*BOMB_ASSIST_CUE_COLOR)
         lead_texture = loader.loadTexture(
             DATAFILES_PATH / "models/UI/lead_indicator.png"
         )
@@ -1100,6 +1114,7 @@ class AimHUD:
         self.target_anchor.hide()
         self.scan_bar.hide()
         self.crosshair.hide()
+        self.bomb_assist_cue.hide()
         self.lead_indicator.hide()
         self.missile_warning_line.hide()
         self.missile_marker.hide()
@@ -1113,6 +1128,10 @@ class AimHUD:
         aspect = self.game.app.getAspectRatio()
         self.target_aspect.setScale(1, 1, aspect)
         self.crosshair.setScale(1, 1, aspect)
+        # Text on the render2d root: squashed back to its proportions
+        self.bomb_assist_cue.setScale(
+            BOMB_ASSIST_CUE_TEXT_SCALE / aspect, 1, BOMB_ASSIST_CUE_TEXT_SCALE
+        )
         self.lead_indicator.setScale(1, 1, aspect)
         self.missile_marker.setScale(1, 1, aspect)
         self.update_target_box()
@@ -1169,9 +1188,10 @@ class AimHUD:
     def update_lock_tint(self) -> None:
         """
         Turn the target box red while the armed missile is locked on the target
-        (a missile launched now would be guided to it), white otherwise.
+        and reloaded (a missile launched now would be guided to it), white
+        otherwise.
         """
-        locked = self.game.player.pawn.is_missile_locked
+        locked = self.game.player.pawn.is_missile_lock_cue
         self.square.setColorScale(
             *(TARGET_BOX_MISSILE_LOCKED_COLOR if locked else TARGET_BOX_COLOR)
         )
@@ -1179,17 +1199,24 @@ class AimHUD:
     def update_crosshair(self) -> None:
         """
         Place the crosshair where the nose points (the cannons fire parallel to
-        it: a point at infinity), tinted by the auto-aim lock.
+        it: a point at infinity), tinted by the auto-aim lock, with the bomb
+        assist cue under it.
         """
         pawn = self.game.player.pawn
         nose = self.game.app.cam.getRelativeVector(
             self.game.root_node, Vec3(*pawn.forward)
         )
-        self._place_on_screen(self.crosshair, Point3(nose))
+        placed = self._place_on_screen(self.crosshair, Point3(nose))
         locked = pawn.auto_aim.is_target_acquired
         self.crosshair.setColorScale(
             *(CROSSHAIR_LOCKED_COLOR if locked else CROSSHAIR_COLOR)
         )
+        if placed is None or not pawn.is_bomb_assist_cue:
+            self.bomb_assist_cue.hide()
+        else:
+            x, z = placed
+            self.bomb_assist_cue.setPos(x, 0, z - BOMB_ASSIST_CUE_OFFSET_Z)
+            self.bomb_assist_cue.show()
 
     def update_lead_indicator(self) -> None:
         """
@@ -1254,16 +1281,21 @@ class AimHUD:
         )
         node.setPos(x, 0, z)
 
-    def _place_on_screen(self, card: NodePath, cam_space_pos: Point3) -> None:
+    def _place_on_screen(
+        self, card: NodePath, cam_space_pos: Point3
+    ) -> tuple[float, float] | None:
         """
         Place a card on a camera-space point, or hide it if that is off screen.
+
+        :return: Where it was placed (x, z), None if hidden
         """
         x, z, behind = project_to_screen(self.game.app.camLens, cam_space_pos)
         if not is_on_screen(x, z, behind):
             card.hide()
-            return
+            return None
         card.setPos(x, 0, z)
         card.show()
+        return x, z
 
     def clean(self) -> None:
         """

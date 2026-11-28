@@ -28,6 +28,7 @@ from space_flight.global_architecture.gameplay_settings import (
     CUSTOM_PRESET,
     DEFAULT_PRESET,
     LIMITS,
+    SIDES,
     GameplaySettings,
     gameplay_config,
     load_presets,
@@ -46,6 +47,7 @@ _VALID = {
             "assist_angle_deg": 8.0,
         },
         "deviation_deg": 1.0,
+        "bomb_assist_angle_deg": 4.0,
         "damage_multiplier": 2.0,
         "collision_damage_multiplier": 0.5,
         "lead_indicator": False,
@@ -58,6 +60,7 @@ _VALID = {
             "assist_angle_deg": 3.0,
         },
         "deviation_deg": 0.5,
+        "bomb_assist_angle_deg": 4.0,
         "damage_multiplier": 0.5,
     },
 }
@@ -72,6 +75,7 @@ _NORMAL = {
             "assist_angle_deg": 5.0,
         },
         "deviation_deg": 0.0,
+        "bomb_assist_angle_deg": 0.0,
         "damage_multiplier": 1.0,
         "collision_damage_multiplier": 1.0,
         "lead_indicator": True,
@@ -84,12 +88,21 @@ _NORMAL = {
             "assist_angle_deg": 5.0,
         },
         "deviation_deg": 0.0,
+        "bomb_assist_angle_deg": 0.0,
         "damage_multiplier": 1.0,
     },
 }
 
 # Test presets: "hard" is _VALID
 _PRESETS = {"easy": _NORMAL, DEFAULT_PRESET: _NORMAL, "hard": _VALID}
+
+
+def _without_bomb_assist(values: dict) -> dict:
+    """:return: A copy of the settings without their bomb aim assist."""
+    values = copy.deepcopy(values)
+    for side in SIDES:
+        values[side].pop("bomb_assist_angle_deg")
+    return values
 
 
 def _get(section: dict, path: tuple):
@@ -390,7 +403,9 @@ class TestShippedPresets:
         spread, unscaled damage, lead indicator on.
         """
         normal = load_presets()[DEFAULT_PRESET]
-        assert normal == _NORMAL
+        # The bomb aim assist is a new feature, tuned freely: not part of the
+        # untuned game
+        assert _without_bomb_assist(normal) == _without_bomb_assist(_NORMAL)
         params = inspect.signature(AutoAim.__init__).parameters
         for side in ("player", "bots"):
             auto_aim = normal[side]["auto_aim"]

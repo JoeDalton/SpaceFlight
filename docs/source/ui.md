@@ -199,7 +199,11 @@ missile as the pause menu resumes the flight. Concrete contexts:
   - a **crosshair** where the lasers go: the ship's nose direction, projected
     as a point at infinity (the cannons fire parallel to it), so it stays true
     when the head is jolted or turned. It turns red while auto-aim is locked
-    (shots lead the target).
+    (shots lead the target). A red **"V"** sits under it while a bomb dropped
+    now would be aided: the armed weapon is a reloaded bomb launcher, with
+    stock left, and the target is within its aim assist cone
+    (`Fighter.is_bomb_assist_cue`). It drops as the bomb is dropped and comes
+    back once the launcher has reloaded, if the target is still in the cone.
   - a **lead indicator** where to aim to hit the target: auto-aim's predicted
     position (`AutoAim.predict_target_position`, see
     [docs/ai.md](ai.md#autoaim)). Shown only with a target and when that point
@@ -208,7 +212,9 @@ missile as the pause menu resumes the flight. Concrete contexts:
     is on (read once, when the HUD is built).
   - a **target box** with distance/name labels. In view, the box encircles the
     target. It turns red while the armed missile is locked on the target
-    (`Fighter.is_missile_locked`): a missile launched then is guided to it.
+    and reloaded (`Fighter.is_missile_lock_cue`): a missile launched then is
+    guided to it. Like the bomb cue, it drops as the missile is fired and comes
+    back once reloaded, if the lock still holds.
     It is updated first, as it drops a target that has just died. Off-screen
     (outside the FoV *or* behind the camera) it is pinned to the screen border
     along the true bearing, by scaling the projected vector to meet the edge

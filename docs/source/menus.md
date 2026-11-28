@@ -182,8 +182,8 @@ level end).
   values into the working copy and rebuilds the rows; picking *Custom* keeps
   the current values. `make_row_data()` emits one header per side (Player,
   Bots), each listing the settings that side has, in `_ROW_ORDER`: sliders
-  (`_SLIDERS`: lock delay, lock angle, assist angle, shot deviation, damage
-  multipliers) and checkboxes (`_CHECKBOXES`: auto-aim, lead indicator).
+  (`_SLIDERS`: lock delay, lock angle, assist angle, shot deviation, bomb assist angle,
+  damage multipliers) and checkboxes (`_CHECKBOXES`: auto-aim, lead indicator).
   Editing any of them switches the drop-down to *Custom* (`mark_custom`).
   Navigation goes from the drop-down through the rows to *Cancel* / *Save*,
   each slider stepping by its `_SLIDERS` step.

@@ -13,6 +13,7 @@ import pytest
 import yaml
 
 from space_flight import DATAFILES_PATH
+from space_flight.ai.aim_assist import AssistCone
 from space_flight.weapons import DAMAGE_TYPES, ordnance_launcher
 from space_flight.weapons.loadout import Loadout
 from space_flight.weapons.ordnance_launcher import (
@@ -384,3 +385,125 @@ def test_fighters_launch_their_ordnance_from_below_the_hull(path):
 
     if "loadout" in conf and "cannon_positions" in conf:
         assert conf["ordnance_launcher_position"] == [0, 0, -1]
+
+
+# ---------------------------
+# bomb aim assist
+# ---------------------------
+
+SHIP_POSITION_M = np.array([0.0, 0.0, 0.0])
+
+
+def _aimed_launcher(name="proton_bomb", assist_deg=20.0, target=None):
+    """
+    A launcher on a stationary ship whose single target is described by
+    (position, velocity) relative to the ship (or None: no interaction).
+    """
+    launcher = make_launcher(name)
+    launcher.parent.position = SHIP_POSITION_M
+    launcher.parent.id = "ship"
+    launcher.bomb_assist_cone = AssistCone(assist_deg)
+    if target is None:
+        launcher.game.interactions = MagicMock()
+        return launcher
+    position, velocity = (np.array(v, dtype=float) for v in target)
+    distance = np.linalg.norm(position)
+    interactions = MagicMock()
+    interactions.get_actor_index_from_id.side_effect = lambda actor_id: (
+        0 if actor_id == "ship" else 1
+    )
+    interactions.distances = np.array([[0.0, distance], [distance, 0.0]])
+    directions = np.zeros((2, 2, 3))
+    directions[0, 1] = position / distance
+    interactions.directions = directions
+    rel_velocities = np.zeros((2, 2, 3))
+    rel_velocities[0, 1] = velocity
+    interactions.rel_velocities = rel_velocities
+    launcher.game.interactions = interactions
+    return launcher
+
+
+def test_aimed_bomb_is_bent_toward_the_target_within_the_assist_angle():
+    launcher = _aimed_launcher(
+        assist_deg=20.0, target=((60.0, 0.0, -200.0), (0.0, 0.0, 0.0))
+    )
+
+    direction = launcher.aimed_direction("target")
+
+    nominal = np.array([0.0, 0.0, -1.0])
+    angle = np.degrees(np.arccos(direction @ nominal))
+    # The target is ~16.7 deg off the nose: within the 20 deg assist
+    assert angle == pytest.approx(np.degrees(np.arctan2(60.0, 200.0)), abs=0.5)
+    assert direction[0] > 0
+
+
+def test_aimed_bomb_is_clamped_to_the_assist_angle():
+    launcher = _aimed_launcher(
+        assist_deg=5.0, target=((300.0, 0.0, -100.0), (0.0, 0.0, 0.0))
+    )
+
+    direction = launcher.aimed_direction("target")
+
+    assert np.degrees(np.arccos(direction @ np.array([0.0, 0.0, -1.0]))) == (
+        pytest.approx(5.0)
+    )
+
+
+@pytest.mark.parametrize(
+    "name, assist_deg, target_id",
+    [
+        ("proton_bomb", 0.0, "target"),  # assist off
+        ("proton_bomb", 20.0, None),  # no target
+        ("rocket", 20.0, "target"),  # only bombs are aided
+        ("concussion_missile", 20.0, "target"),
+    ],
+)
+def test_no_aim_assist_goes_along_the_launch_direction(name, assist_deg, target_id):
+    launcher = _aimed_launcher(
+        name=name,
+        assist_deg=assist_deg,
+        target=((60.0, 0.0, -200.0), (0.0, 0.0, 0.0)),
+    )
+
+    np.testing.assert_allclose(
+        launcher.aimed_direction(target_id), launcher.launch_direction_vector()
+    )
+
+
+def test_aim_assist_ignores_an_unknown_target():
+    launcher = _aimed_launcher(assist_deg=20.0)
+    launcher.game.interactions.get_actor_index_from_id.side_effect = None
+    launcher.game.interactions.get_actor_index_from_id.return_value = 0
+
+    with patch("space_flight.ai.aim_assist.pair_geometry", return_value=None):
+        np.testing.assert_allclose(launcher.aimed_direction("gone"), [0.0, 0.0, -1.0])
+
+
+@pytest.mark.parametrize(
+    "assist_deg, target_x, in_cone",
+    [(20.0, 60.0, True), (5.0, 300.0, False), (0.0, 60.0, False)],
+)
+def test_target_in_assist_cone(assist_deg, target_x, in_cone):
+    launcher = _aimed_launcher(
+        assist_deg=assist_deg, target=((target_x, 0.0, -200.0), (0.0, 0.0, 0.0))
+    )
+
+    assert launcher.is_target_in_assist_cone("target") is in_cone
+
+
+def test_no_target_is_not_in_the_assist_cone():
+    assert _aimed_launcher(assist_deg=20.0).is_target_in_assist_cone(None) is False
+
+
+def test_is_reloaded_follows_the_reload_gate_without_consuming_it():
+    launcher = make_launcher("proton_bomb")
+    launcher.game.game_time.get_current_time.return_value = 0.0
+    launcher.last_fire_time = 0.0
+    launcher.fire_delay = 2.0
+
+    assert launcher.is_reloaded is False
+    launcher.game.game_time.get_current_time.return_value = 2.0
+    assert launcher.is_reloaded is True
+    # Checking did not consume it
+    assert launcher.is_reloaded is True
+    assert launcher.last_fire_time == 0.0
