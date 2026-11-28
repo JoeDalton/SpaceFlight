@@ -184,9 +184,10 @@ the lights are the world's.
   copies) and the render-scale pipeline (into whose buffer the camera
   presents the view), and gives the camera's depth mode to the rear-view
   mirror. `scene.world` is the loaded `World`, which the scene's queries read.
-- **Loading.** `build_decomposed` ends with `wait_until_loaded`, which holds
-  the hyperspace tunnel until `world.loading` (ground and clouds) has stayed
-  False for half a second, at most a minute: about 11 s on this machine.
+- **Loading.** `build_decomposed` ends with `hold_loading`, which runs
+  WorldBuilder's `GameWorld.load_steps` to hold the hyperspace tunnel until
+  `world.loading` (ground and clouds) has stayed False for half a second, at
+  most `WORLD_TIMEOUT_S`: about 11 s on this machine.
   - The game loop is paused then, so each step is a
     `FlightState.follow_render_origin()`, as a frame would do.
   - `FlightState` centres render on the player as soon as the player exists,
@@ -223,10 +224,10 @@ the lights are the world's.
 
 ## Where things live
 
-`Scene` and its subclasses are in `scenes.py`, with the loading gate
-`wait_until_loaded` (which sleeps a few milliseconds per step while loading,
-so the worker processes' results get through a loading loop run flat out, as
-a headless build runs it). `level_frame.py` is the chart-to-world frame of a
+`Scene` and its subclasses are in `scenes.py` (the loading gate is
+WorldBuilder's `GameWorld.load_steps`, which sleeps a few milliseconds per
+step while loading, so the worker processes' results get through a loading
+loop run flat out, as a headless build runs it). `level_frame.py` is the chart-to-world frame of a
 planet of a WorldBuilder world file. `planet_2d.py` is the 2D planet. The world, the
 asteroid fields and their shaders are in WorldBuilder (`world_builder.world`,
 `world_builder.asteroids`).

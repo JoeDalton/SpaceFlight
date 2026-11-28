@@ -167,7 +167,11 @@ def _mock_world(monkeypatch):
     world.field.return_value = field
     world.camera_render.return_value = np.array([0.0, 1.0, 0.0])
     game_world = SimpleNamespace(
-        world=world, depth=MagicMock(), update=MagicMock(), views=[]
+        world=world,
+        depth=MagicMock(),
+        update=MagicMock(),
+        views=[],
+        load_steps=MagicMock(side_effect=lambda *a, **k: iter([None, None])),
     )
     load = MagicMock(return_value=game_world)
     monkeypatch.setattr(scenes, "load_world", load)
@@ -292,20 +296,20 @@ def test_no_view_without_a_shown_mirror(monkeypatch, mirror_visible):
     assert game_world.views == []
 
 
-def test_loading_waits_for_the_rock_shapes(monkeypatch):
+def test_loading_waits_for_the_world(monkeypatch):
+    """The loading animation is held by the game world's load_steps, a frame
+    of the paused game per step, for as long as the game gives."""
     _, game_world = _mock_world(monkeypatch)
     monkeypatch.setattr(scenes, "SpeedDustCloud", MagicMock())
-    monkeypatch.setattr(scenes, "WORLD_QUIET_S", 0.0)
     scene = SceneAsteroids(game=_game())
     scene.build_upfront()
-    loading = iter([True, True, False])
-    type(game_world.world).loading = property(lambda _: next(loading, False))
 
     steps = list(scene.build_decomposed())
 
-    assert steps[0] == "dust"
-    assert steps.count("world") >= 2  # held while the world loads
-    assert scene.game.follow_render_origin.call_count >= 3
+    assert steps == ["dust", "world", "world"]
+    args, kwargs = game_world.load_steps.call_args
+    assert args == (scene.game.follow_render_origin,)
+    assert kwargs == {"timeout_s": scenes.WORLD_TIMEOUT_S}
 
 
 def test_ships_spawned_at_run_time_find_room(monkeypatch):

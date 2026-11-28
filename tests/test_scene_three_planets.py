@@ -1,15 +1,15 @@
 """
 Unit tests for the planet scene of Mission 3 and Free Flight
-(space_flight.scenes.scenes: SceneSolarSystem, wait_until_loaded).
+(space_flight.scenes.scenes: SceneSolarSystem).
 
-The loading gate and the scene's wiring run on stand-ins; the ground heights
+The scene's wiring runs on stand-ins; the ground heights
 under Mission 3 are queried from WorldBuilder's terrain (no window, no
 workers). One end-to-end test builds the real planet terrain through
 WorldBuilder's World, loads its ground and traverses it.
 """
 
-import logging
 import re
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -36,85 +36,7 @@ from space_flight.scenes.scenes import (
     Scene,
     SceneSolarSystem,
     scene_factory,
-    wait_until_loaded,
 )
-
-
-class FakeClock:
-    """A clock advanced by hand."""
-
-    def __init__(self):
-        self.now = 0.0
-
-    def __call__(self) -> float:
-        return self.now
-
-
-def _gate(loading: list[bool], clock: FakeClock, dt: float = 0.125):
-    """
-    A loading gate over a world whose loading flag follows *loading*, one
-    value per step (the last repeats), the clock advancing *dt* each.
-
-    :return: (the steps it yields, the number of steps taken)
-    """
-    states = iter(loading)
-    world = SimpleNamespace(loading=True, steps=0)
-
-    def step():
-        world.steps += 1
-        world.loading = next(states, loading[-1])
-        clock.now += dt
-
-    pauses = []
-    yielded = sum(
-        1 for _ in wait_until_loaded(lambda: world.loading, step, clock, pauses.append)
-    )
-    world.pauses = pauses
-    return yielded, world.steps
-
-
-# ---------------------------------------------------------------------------
-# Loading gate
-# ---------------------------------------------------------------------------
-
-
-class TestWaitUntilLoaded:
-    def test_ends_once_quiet_for_the_quiet_time(self):
-        clock = FakeClock()
-        yielded, steps = _gate([True, True, False], clock)
-        # Two loading steps, then quiet from the third (0.375 s) on
-        assert clock.now == 0.375 + scenes.WORLD_QUIET_S
-        assert yielded == steps - 1
-
-    def test_one_quiet_frame_is_not_enough(self):
-        clock = FakeClock()
-        _gate([False, True, True, False], clock)
-        # Quiet again from the fourth step (0.5 s) on
-        assert clock.now == 0.5 + scenes.WORLD_QUIET_S
-
-    def test_yields_to_the_workers_while_loading(self):
-        """A step still loading sleeps a little (the workers' results come
-        back through this process); once quiet, no more."""
-        clock = FakeClock()
-        states = iter([True, True, False])
-        world = SimpleNamespace(loading=True)
-        pauses = []
-
-        def step():
-            world.loading = next(states, False)
-            clock.now += 0.125
-
-        for _ in wait_until_loaded(lambda: world.loading, step, clock, pauses.append):
-            pass
-        assert pauses == [scenes.LOADING_YIELD_S] * 2
-
-    def test_gives_up_after_the_timeout(self, caplog):
-        clock = FakeClock()
-        with caplog.at_level(logging.WARNING):
-            _gate([True], clock, dt=1.0)
-        assert clock.now == pytest.approx(scenes.WORLD_TIMEOUT_S)
-        assert "still loading" in caplog.text
-
 
 # ---------------------------------------------------------------------------
 # Scene
@@ -178,7 +100,10 @@ def test_the_level_frame_is_the_planets():
 def _scene(monkeypatch):
     """A SceneSolarSystem over a stand-in game, its loaded world a mock."""
     game_world = SimpleNamespace(
-        world=MagicMock(), depth=MagicMock(), update=MagicMock()
+        world=MagicMock(),
+        depth=MagicMock(),
+        update=MagicMock(),
+        load_steps=MagicMock(side_effect=lambda *a, **k: iter([None, None])),
     )
     load = MagicMock(return_value=game_world)
     monkeypatch.setattr(scenes, "load_world", load)
@@ -367,14 +292,25 @@ def test_planet_terrain_is_solid_to_a_laser(spaceflight_app):
     bare = BodyLook(
         planet.name, planet.spec, position=planet.position, mass=planet.mass
     )
-    world = World(spaceflight_app, [bare], lights=False)
     try:
-        try:
-            world.enable_collision(CollisionLayers.TERRAIN_INTO)
-        except native.NativeCollisionError as error:
-            pytest.skip(f"No native terrain collision: {error}")
-        for _ in wait_until_loaded(lambda: world.loading, lambda: world.update(_HOVER)):
-            pass
+        world = World(
+            spaceflight_app,
+            [bare],
+            lights=False,
+            collision_mask=CollisionLayers.TERRAIN_INTO,
+        )
+    except native.NativeCollisionError as error:
+        pytest.skip(f"No native terrain collision: {error}")
+    try:
+        quiet_since, deadline = None, time.monotonic() + 120.0
+        while quiet_since is None or time.monotonic() - quiet_since < 0.5:
+            assert time.monotonic() < deadline, "the ground did not load"
+            world.update(_HOVER)
+            time.sleep(0.005)
+            if world.loading:
+                quiet_since = None
+            elif quiet_since is None:
+                quiet_since = time.monotonic()
 
         # The player is at the render origin: the sea is 1000 m below it
         root = spaceflight_app.render.attach_new_node("smoke_root")

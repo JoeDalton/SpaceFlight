@@ -4,7 +4,7 @@ import functools
 import logging
 import math
 import time
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,56 +35,9 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
-# The world counts as loaded once its loading flag has stayed False this long:
-# it turns on briefly whenever detail refines, so one quiet frame is not enough.
-WORLD_QUIET_S = 0.5
-# Give up waiting for the world after this long (and say so)
+# Give up waiting for the world after this long (and say so): a slow machine
+# takes a while to build the ground around the player
 WORLD_TIMEOUT_S = 360.0
-# Sleep this long after each step while the world loads: its worker
-# processes' results come back through a thread of this process, which a loop
-# that never sleeps starves (a headless build runs the loading loop flat out;
-# an animated one's frames leave it the time already).
-LOADING_YIELD_S = 0.005
-
-
-def wait_until_loaded(
-    loading: Callable[[], bool],
-    step: Callable[[], None],
-    clock: Callable[[], float] = time.monotonic,
-    pause: Callable[[float], None] = time.sleep,
-) -> Generator[str, None, None]:
-    """
-    Hold the level's loading until a world has loaded around the player:
-    step it once per frame until *loading* has stayed False for
-    :data:`WORLD_QUIET_S` (ground not drawn yet is not solid), or for at most
-    :data:`WORLD_TIMEOUT_S`.
-
-    :param loading: Whether the world still loads
-    :param step: Advance the world by a frame (the game loop is paused while
-        loading)
-    :param clock: Real time, in seconds
-    :param pause: Sleeps for a duration, seconds (LOADING_YIELD_S each step
-        while loading)
-    :return: A generator to advance once per frame
-    """
-    start = clock()
-    quiet_since = None
-    while True:
-        step()
-        now = clock()
-        if loading():
-            quiet_since = None
-            pause(LOADING_YIELD_S)
-        elif quiet_since is None:
-            quiet_since = now
-        elif now - quiet_since >= WORLD_QUIET_S:
-            return
-        if now - start >= WORLD_TIMEOUT_S:
-            LOGGER.warning(
-                f"World still loading after {WORLD_TIMEOUT_S:.0f} s: starting anyway"
-            )
-            return
-        yield "world"
 
 
 def scene_factory(
@@ -363,6 +316,16 @@ class SceneWorld(Scene):
         if self.depth is not None:
             self._mirror_depth_mode(self.depth.mode)
 
+    def hold_loading(self) -> Generator[str, None, None]:
+        """Hold the loading animation until the world has loaded around the
+        player: ground not drawn yet is not solid. The game loop is paused
+        while loading: each step is a frame, as the game loop would run it."""
+        steps = self.game_world.load_steps(
+            self.game.follow_render_origin, timeout_s=WORLD_TIMEOUT_S
+        )
+        for _ in steps:
+            yield "world"
+
     def update_after_recenter(self):
         """Everything around the player, now at the render origin."""
         self.game_world.update(self.game.player.pawn.position)
@@ -418,10 +381,7 @@ class SceneSolarSystem(SceneWorld):
         )
         yield from self.speed_dust_cloud.build()
 
-        # The game loop is paused while loading: step the world as a frame does
-        yield from wait_until_loaded(
-            lambda: self.world.loading, self.game.follow_render_origin
-        )
+        yield from self.hold_loading()
 
     def clean(self):
         """
@@ -490,10 +450,7 @@ class SceneAsteroids(SceneSpace):
         self.speed_dust_cloud = SpeedDustCloud(game=self.game, colors=self.DUST)
         yield "dust"
         yield from self._build_backdrop()
-        # The game loop is paused while loading: step the world as a frame does
-        yield from wait_until_loaded(
-            lambda: self.world.loading, self.game.follow_render_origin
-        )
+        yield from self.hold_loading()
 
     def _build_backdrop(self) -> Generator[str, None, None]:
         """Scene-specific set dressing (none here)."""
