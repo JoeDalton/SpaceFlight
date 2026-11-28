@@ -173,6 +173,34 @@ def test_the_mirror_takes_the_depth_cameras_convention(monkeypatch):
     mirror.set_depth_mode.assert_called_with(DEPTH_STANDARD)
 
 
+def test_shields_and_effects_behind_clouds_and_the_mirror(monkeypatch):
+    """Translucent surfaces (shields, fire, smoke, sparks) are tracked by the
+    world (the clouds in front of them hide them); the mirror's view has no
+    cover (the clouds are marched for the main view)."""
+    scene, load, _ = _scene(monkeypatch)
+    mirror = MagicMock()
+    scene.game.player.rear_view_mirror = mirror
+    from panda3d.core import NodePath
+
+    nodes = [NodePath(name) for name in ("fire", "smoke", "sparks")]
+    fire, smoke, sparks = (SimpleNamespace(node_path=node) for node in nodes)
+    scene.game.fire_smoke_pool = SimpleNamespace(fire=fire, smoke=smoke)
+    scene.game.spark_fx_pool = sparks
+    scene.build_upfront()
+    world = load.return_value.world
+    world.cover_off_in.assert_called_once_with(mirror.mirror_np)
+    # The game's effects, made before the scene, are hidden by clouds too
+    tracked = [call.args[0] for call in world.track_translucent.call_args_list]
+    assert tracked == nodes
+    world.track_translucent.reset_mock()
+
+    bubble = NodePath("bubble")
+    scene.track_translucent(bubble)
+    world.track_translucent.assert_called_once_with(bubble)
+    scene.untrack_translucent(bubble)
+    world.untrack_translucent.assert_called_once_with(bubble)
+
+
 def test_without_a_window_the_scene_has_no_depth_camera(monkeypatch):
     """Headless (no window), load_world builds no depth camera: the scene
     keeps none, leaves the mirror alone, and releases nothing."""

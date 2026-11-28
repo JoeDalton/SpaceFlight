@@ -14,6 +14,11 @@
 //   edge of a receding liquid film. It's a pure per-fragment mask on top of the
 //   living shader — no mesh changes.
 
+// The clouds in front of the bubble (WorldBuilder's cloud_cover.glsl, on
+// Panda's model path): the clouds write no depth, so the bubble, drawn after
+// them, fades itself by the cloud in front of each fragment.
+#pragma include "cloud_cover.glsl"
+
 // --- Per-frame / scene uniforms --------------------------------------------
 uniform float iTime;
 // View -> render space; column 3 is the eye, in the same space as vWorldPos
@@ -205,6 +210,11 @@ void main() {
         col   *= finalFade;
         alpha *= finalFade;
     }
+
+    // A cloud between the camera and the bubble hides it (a thin one in part)
+    float cover = cloudCoverBefore(
+        gl_FragCoord.xy, length(vWorldPos - p3d_ViewMatrixInverse[3].xyz));
+    alpha *= 1.0 - cover;
 
     p3d_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
 }

@@ -195,6 +195,25 @@ class Scene:
             shader=self.MODELS_USE_WORLD_SHADER,
         )
 
+    def track_translucent(self, node: NodePath) -> None:
+        """
+        Have a translucent surface that writes no depth (a shield bubble) be
+        hidden by the clouds in front of it (WorldBuilder's
+        World.track_translucent; its shader includes cloud_cover.glsl), for
+        the scenes that have a World.
+
+        :param node: The surface
+        """
+        world = getattr(self, "world", None)
+        if world is not None and not node.is_empty():
+            world.track_translucent(node)
+
+    def untrack_translucent(self, node: NodePath) -> None:
+        """Undo track_translucent (before the node goes)."""
+        world = getattr(self, "world", None)
+        if world is not None:
+            world.untrack_translucent(node)
+
     def release_depth(self) -> None:
         """
         Remove the scene's depth camera, if it has one, with its scene buffer
@@ -294,6 +313,21 @@ class SceneWorld(Scene):
         self.depth = self.game_world.depth  # None headless: no window
         if self.depth is not None:
             self._mirror_depth_mode(self.depth.mode)
+        # The clouds are marched for the main view: no cloud cover on the
+        # shields the mirror draws
+        mirror = getattr(getattr(game, "player", None), "rear_view_mirror", None)
+        if mirror is not None:
+            self.world.cover_off_in(mirror.mirror_np)
+        # The game's effects (fire, smoke, sparks) are hidden by the clouds in
+        # front of them; the shields, lasers and speed dust track themselves
+        for pool in (
+            getattr(getattr(game, "fire_smoke_pool", None), "fire", None),
+            getattr(getattr(game, "fire_smoke_pool", None), "smoke", None),
+            getattr(game, "spark_fx_pool", None),
+        ):
+            node = getattr(pool, "node_path", None)
+            if node is not None:
+                self.track_translucent(node)
 
     def hold_loading(self) -> Generator[str, None, None]:
         """Hold the loading animation until the world has loaded around the

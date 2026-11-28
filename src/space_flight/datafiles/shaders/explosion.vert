@@ -15,6 +15,7 @@ in float lifetime;     // particle lifetime (seconds)
 in vec4  tile_rect;    // atlas tile (u, v, uw, vh) in UV space
 
 uniform mat4  p3d_ModelViewProjectionMatrix;
+uniform mat4  p3d_ModelViewMatrix;
 uniform float uTime;      // game time (game.game_time.get_current_time())
 uniform vec3  uCamRight;  // world-space camera right axis (billboard)
 uniform vec3  uCamUp;     // world-space camera up    axis (billboard)
@@ -22,7 +23,8 @@ uniform float uFadein;    // fraction of lifetime over which alpha ramps 0 → 1
 
 out vec2  vUV;       // [0,1] corner UV within the billboard quad
 out vec4  vTileRect; // atlas rect, forwarded to the fragment shader
-out float vAlpha;    // combined fade-out * fade-in * alive gate
+out float vAlpha;
+out float vDistance; // from the camera, metres (the clouds in front)    // combined fade-out * fade-in * alive gate
 
 void main() {
     // --- Particle age ---
@@ -51,6 +53,7 @@ void main() {
     // --- Billboard: project the rotated corner onto the camera axes ---
     pos += uCamRight * rot.x * sz + uCamUp * rot.y * sz;
 
+    vDistance = length((p3d_ModelViewMatrix * vec4(pos, 1.0)).xyz);
     gl_Position = p3d_ModelViewProjectionMatrix * vec4(pos, 1.0);
 
     // Remap corner [-1,1] → [0,1] for UV interpolation in the fragment shader.

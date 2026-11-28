@@ -130,6 +130,15 @@ Driven by
     (`_IMPACT_RADIUS_M`) converted to the geometry's local units, so a hit
     leaves the same mark on any bubble; the pattern and death scales instead
     follow the bubble's size.
+  - **Behind a cloud.** The clouds write no depth, and the bubble (depth
+    write off, bin `fixed` 60) is drawn after them: it includes WorldBuilder's
+    `cloud_cover.glsl` and scales its alpha by `1 - cloudCoverBefore(...)` at
+    its distance from the eye, so a cloud in front hides it (a thin one in
+    part) and one behind stays behind. The scene tracks the bubble
+    (`Scene.track_translucent`, WorldBuilder's `World.track_translucent`),
+    which sets its inputs every frame; `no_cover` gives it inputs with no
+    cloud until then, and the rear-view mirror and the sea's reflection draw
+    it without cover (the clouds are marched for the main view).
   - **Death/appearance animation** — "fluid retracting into random points" —
     is a per-fragment mask over the living look, driven by `uDeath`, which
     Python ramps 0 → 1 to die or 1 → 0 to reappear (no mesh changes). Material
@@ -220,6 +229,23 @@ player firing forward), where it is a bright disc rather than a flat sliver.
   with depth write off; it writes `gl_FragDepth` at the ray point nearest the
   core, so opaque geometry occludes bolts while bolts never occlude each other
   or translucent geometry.
+
+## Behind the clouds
+
+The world's clouds write no depth, and every translucent effect drawn in the
+world (the shield bubbles, fire and smoke `explosion.frag`, `spark.frag`,
+`laser.frag`, `speed_dust.frag`) is drawn after them with depth write off: on
+its own it would be laid over a cloud in front of it. Each includes
+WorldBuilder's `cloud_cover.glsl` (`load_glsl_shader` puts its folder on Panda's
+model path) and fades by `cloudCoverBefore(gl_FragCoord.xy, distance)`, the
+opacity of the cloud between the eye and the fragment: the alpha for the
+straight-alpha and alpha-weighted additive ones, the colour for the laser's
+`ONE, ONE` glow. Their nodes are tracked by the scene's world
+(`Scene.track_translucent`: the fire, smoke and spark pools in
+`SceneWorld.build_upfront`, the shields, laser bolts and speed dust as they are
+made), and get no-cloud inputs (`no_cover`) until then. The rear-view mirror
+draws them without cover (`World.cover_off_in`). The ordnance spheres are
+fixed-function and not covered.
 
 ## Cockpit damage overlay shaders
 

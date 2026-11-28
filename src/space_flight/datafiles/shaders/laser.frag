@@ -1,4 +1,9 @@
 #version 140
+
+// The clouds in front (WorldBuilder's cloud_cover.glsl, on Panda's model
+// path): the clouds write no depth, so this, drawn after them, fades itself
+// by the cloud between the camera and each fragment.
+#pragma include "cloud_cover.glsl"
 // Laser bolt fragment shader: an analytic "capsule impostor".
 //
 // Every fragment of the camera-facing card shoots a ray from the eye through
@@ -65,6 +70,8 @@ void main() {
     vec3 col = uColor * glow + vec3(1.0) * core;
 
     if (max(col.r, max(col.g, col.b)) < 0.004) discard;
+    // Additive (ONE, ONE): the colour alone. The bolt's model units are metres.
+    col *= 1.0 - cloudCoverBefore(gl_FragCoord.xy, length(pRay - eye));
 
     // Depth of the ray point nearest the core, so OPAQUE geometry occludes the
     // bolt correctly. Depth WRITE is disabled from Python (additive glow), so

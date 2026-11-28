@@ -18,6 +18,7 @@ from panda3d.core import (
     Quat,
     Vec3,
 )
+from world_builder.clouds.cover import no_cover
 from world_builder.depth import depth_mode_input
 
 from space_flight import DATAFILES_PATH
@@ -311,9 +312,16 @@ class LaserShot(Munition):
         # The view's depth convention, for the depth the shader writes
         # (world_builder.depth: the world's reversed camera sets it)
         shot.set_shader_input("uDepthMode", depth_mode_input())
+        # Hidden by the clouds in front of it (cloud_cover.glsl): the scene's
+        # world sets their inputs, none without one (a removed shot drops out)
+        no_cover(shot)
+        scene = getattr(self.game, "scene", None)
+        if scene is not None:
+            scene.track_translucent(shot)
 
         # Additive glow (ONE, ONE): order-independent w.r.t. other bolts and the
-        # translucent shields / clouds it flies through, so no sorting needed.
+        # translucent shields it flies through, so no sorting needed; a cloud
+        # in front hides it through the shader (cloud_cover.glsl).
         shot.set_attrib(
             ColorBlendAttrib.make(
                 ColorBlendAttrib.MAdd, ColorBlendAttrib.OOne, ColorBlendAttrib.OOne
@@ -324,8 +332,8 @@ class LaserShot(Munition):
         shot.set_attrib(CullFaceAttrib.make(CullFaceAttrib.MCullNone))
         shot.set_light_off()
         shot.set_depth_write(False)
-        # After the sorted "transparent" bin, and so also after the clouds, which
-        # the additive blend then composites over harmlessly either way.
+        # After the sorted "transparent" bin, and so also after the clouds,
+        # which hide it through the shader where they are in front.
         shot.set_bin("fixed", 20)
 
         # The vertex shader expands the unit card to half_size, so give the node

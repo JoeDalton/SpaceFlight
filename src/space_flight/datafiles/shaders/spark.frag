@@ -1,4 +1,9 @@
 #version 140
+
+// The clouds in front (WorldBuilder's cloud_cover.glsl, on Panda's model
+// path): the clouds write no depth, so this, drawn after them, fades itself
+// by the cloud between the camera and each fragment.
+#pragma include "cloud_cover.glsl"
 // Spark particle fragment shader (hit sparks).
 //
 // Renders each quad as a round, glowing spark: an SDF circle discards the
@@ -10,7 +15,8 @@ uniform sampler2D p3d_Texture0;  // spark sprite (auto-bound via default Texture
 
 in vec2  vCorner;  // [-1,1] position within the billboard quad
 in vec4  vColor;   // per-spark tint
-in float vAlpha;   // combined opacity from the vertex shader
+in float vAlpha;
+in float vDistance;   // combined opacity from the vertex shader
 
 out vec4 fragColor;
 
@@ -29,5 +35,6 @@ void main() {
     float core  = 1.0 - smoothstep(0.0, 0.15, d);
     float shape = clamp(max(tex.r * tex.a, glow + core * 0.8), 0.0, 1.0);
 
-    fragColor = vec4(vColor.rgb * shape, vAlpha * shape);
+    float cover = cloudCoverBefore(gl_FragCoord.xy, vDistance);
+    fragColor = vec4(vColor.rgb * shape, vAlpha * shape * (1.0 - cover));
 }

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Headless runs of levels work again (WorldBuilder's `load_world` without a
   window: no depth camera, no sea) #189 #197
+- Interaction between clouds and translucent objects #197
 
 
 

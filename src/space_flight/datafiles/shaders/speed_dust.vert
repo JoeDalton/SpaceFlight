@@ -16,6 +16,7 @@ uniform float uDepth;   // the dust's depth ahead of the ship, metres
 uniform float uSpread;  // its half-width across, metres
 
 out vec2 vUV;
+out float vDistance; // from the camera, metres (the clouds in front)
 
 float hash(float n) {
     return fract(sin(n) * 43758.5453);
@@ -34,6 +35,7 @@ void main() {
     vec4 centre = p3d_ModelViewMatrix * vec4(across.x, y, across.y, 1.0);
     // Facing the eye: the corner offset in view space
     centre.xy += corner * size;
+    vDistance = length(centre.xyz);
     gl_Position = p3d_ProjectionMatrix * centre;
     vUV = corner * 0.5 + 0.5;
 }

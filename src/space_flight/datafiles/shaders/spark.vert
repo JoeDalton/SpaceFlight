@@ -15,6 +15,7 @@ in float gravity;       // downward acceleration (world units / s²)
 in vec4  spark_color;   // premixed RGBA tint for this spark
 
 uniform mat4  p3d_ModelViewProjectionMatrix;
+uniform mat4  p3d_ModelViewMatrix;
 uniform float uTime;      // game time (game.game_time.get_current_time())
 uniform vec3  uCamRight;  // world-space camera right axis (billboard)
 uniform vec3  uCamUp;     // world-space camera up    axis (billboard)
@@ -22,6 +23,7 @@ uniform vec3  uCamUp;     // world-space camera up    axis (billboard)
 out vec2 vCorner;  // [-1,1] corner, forwarded to the fragment shader for the SDF
 out vec4 vColor;   // per-spark tint
 out float vAlpha;
+out float vDistance; // from the camera, metres (the clouds in front)
 
 void main() {
     float t     = uTime - spawn_time;
@@ -36,6 +38,7 @@ void main() {
     float sz = size * (0.3 + 0.7 * (1.0 - frac)) * alive;
 
     pos += uCamRight * corner.x * sz + uCamUp * corner.y * sz;
+    vDistance = length((p3d_ModelViewMatrix * vec4(pos, 1.0)).xyz);
     gl_Position = p3d_ModelViewProjectionMatrix * vec4(pos, 1.0);
 
     vCorner = corner;

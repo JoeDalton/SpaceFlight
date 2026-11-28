@@ -20,6 +20,7 @@ from panda3d.core import (
     TextureStage,
     TransparencyAttrib,
 )
+from world_builder.clouds.cover import no_cover, use_glsl_dir
 
 from space_flight import DATAFILES_PATH
 from space_flight.fx import CORNERS, TRIS, make_particle_format
@@ -41,6 +42,7 @@ _SHADERS = DATAFILES_PATH / "shaders"
 
 @functools.cache
 def _dust_shader() -> Shader:
+    use_glsl_dir()  # it includes WorldBuilder's cloud_cover.glsl
     return Shader.load(
         Shader.SL_GLSL,
         vertex=_SHADERS / "speed_dust.vert",
@@ -82,6 +84,12 @@ class SpeedDustCloud:
         # Make that dust independent from scene lighting
         self.root.setLightOff()
         self.root.setShader(_dust_shader())
+        # Hidden by the clouds in front (cloud_cover.glsl): the scene's world
+        # sets their inputs, none without one
+        no_cover(self.root)
+        scene = getattr(self.game, "scene", None)
+        if scene is not None:
+            scene.track_translucent(self.root)
         # Bound once, written in place each frame: no new render state
         self._travel_input = PTA_float.empty_array(1)
         self.root.setShaderInputs(

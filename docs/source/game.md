@@ -195,8 +195,9 @@ whose OpenGL has none: there the depth keeps about a 24-bit range's precision
 - The rear-view mirror draws the scene with a camera of its own: reversed too
   (`RearViewMirror.set_depth_mode`), or the sky, pinned at the reversed far
   plane, fails its depth test there.
-- Translucent volumes (shield bubbles) need nothing: one camera draws them
-  once (the split cameras blended them twice where their ranges met).
+- Translucent volumes (shield bubbles) are drawn once by the one camera. A
+  cloud in front of one hides it through its shader (WorldBuilder's
+  `cloud_cover.glsl`, see [shaders.md](shaders.md)).
 
 ## Time keeping
 

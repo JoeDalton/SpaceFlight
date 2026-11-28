@@ -147,6 +147,10 @@ class Shield(Destructible):
             shape=shape,
             model=model,
         )
+        # Hidden by the clouds in front of it (a no-op without a world)
+        scene = getattr(game, "scene", None)
+        if scene is not None:
+            scene.track_translucent(self.model.visual)
         # Collision solid coinciding with the visible bubble.
         self.collision_np = None
         self._build_collision(model=model)
@@ -504,6 +508,9 @@ class Shield(Destructible):
                 self.node.removeNode()
                 self.node = None
             if self.model is not None:
+                scene = getattr(self.game, "scene", None)
+                if scene is not None:
+                    scene.untrack_translucent(self.model.visual)
                 self.model.clean()
                 self.model = None
             self.collision_np = None
