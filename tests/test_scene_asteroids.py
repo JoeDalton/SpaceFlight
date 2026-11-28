@@ -215,27 +215,19 @@ def test_the_space_world_files_are_what_the_scenes_were():
     assert dense.density.clumping is not None and sparse.density.clumping is None
 
 
-def test_the_levels_keep_outs_go_into_the_loaded_file(monkeypatch):
-    """load_world has no argument for them: the scene loads a copy of the
-    file with them in its field, and no copy without."""
+def test_the_levels_keep_outs_go_to_load_world(monkeypatch):
+    """load_world adds them to the file's field: the scene only names them."""
     load, _ = _mock_world(monkeypatch)
     keep_outs = route_keep_outs([[0, 0, 0], [0, 1000, 0]], 10.0)
-    seen = []
-    load.side_effect = lambda app, path, **_: (
-        (seen.append(parse_world(path)) or load.return_value) and load.return_value
-    )
-    scene = SceneAsteroids(game=_game(), keep_outs=keep_outs)
-
-    scene.build_upfront()
-
-    (world,) = seen
-    assert world.fields[0].keep_outs == tuple(keep_outs)
-    assert load.call_args.args[1] != SceneAsteroids.WORLD_PATH  # a copy...
-    assert not load.call_args.args[1].exists()  # ...gone once loaded
-
-    load.reset_mock(side_effect=True)
-    SceneAsteroids(game=_game()).build_upfront()
+    SceneAsteroids(game=_game(), keep_outs=keep_outs).build_upfront()
     assert load.call_args.args[1] == SceneAsteroids.WORLD_PATH
+    assert load.call_args.kwargs["keep_outs"] == {
+        SceneAsteroids.FIELD: tuple(keep_outs)
+    }
+
+    load.reset_mock()
+    SceneAsteroids(game=_game()).build_upfront()
+    assert load.call_args.kwargs["keep_outs"] == {}
 
 
 def test_the_field_is_solid_as_terrain(monkeypatch):

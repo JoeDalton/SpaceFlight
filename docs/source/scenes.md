@@ -104,8 +104,8 @@ the world's field `FIELD` (`"field"`, `space/asteroid_field.yaml`).
   freezes them.
 - **Room.** The level's `keep_outs` (`common.route_keep_outs`: capsules
   along its routes, balls at its spawn points) are empty of rocks.
-  `load_world` has no argument for them, so the scene loads a copy of the
-  world file with them added to its field (`with_keep_outs`). Ships
+  The scene passes them to `load_world(keep_outs={field: [...]})`, which adds
+  them to the field's own. Ships
   spawned relative to the player (Mission 1's formation, Mission 2's
   smuggler and TIEs) go through `scene.clear_position`, the field's
   `find_clear`: the nearest place with room within 3 km.

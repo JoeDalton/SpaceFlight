@@ -3,18 +3,14 @@ from __future__ import annotations
 import functools
 import logging
 import math
-import tempfile
 import time
 from collections.abc import Callable, Generator, Sequence
-from contextlib import AbstractContextManager, contextmanager, nullcontext
-from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from world_builder import load_world, parse_world
 from world_builder.asteroids.spec import KeepOut
-from world_builder.world_file import world_to_yaml
 
 from space_flight import (
     DATAFILES_PATH,
@@ -336,10 +332,10 @@ class SceneWorld(Scene):
         super().__init__(game=game)
         self.game_world: GameWorld | None = None
 
-    def world_file(self) -> AbstractContextManager[Path]:
-        """:return: The world file to load, for as long as it is loaded
-        (a scene may make a variant of WORLD_PATH)"""
-        return nullcontext(self.WORLD_PATH)
+    def level_keep_outs(self) -> dict[str, Sequence[KeepOut]]:
+        """:return: The room the level keeps clear, by field name, added to
+        the world file's (none by default)"""
+        return {}
 
     def build_upfront(self):
         """
@@ -350,15 +346,15 @@ class SceneWorld(Scene):
         """
         game = self.game
         app = game.app
-        with self.world_file() as path:
-            self.game_world = load_world(
-                app,
-                path,
-                settings=app.graphics_settings.world_settings(),
-                clock=game.game_time.get_current_time,
-                light_scale=self.LIGHT_SCALE,
-                light_period=LIGHT_PERIOD_FRAMES,
-            )
+        self.game_world = load_world(
+            app,
+            self.WORLD_PATH,
+            keep_outs=self.level_keep_outs(),
+            settings=app.graphics_settings.world_settings(),
+            clock=game.game_time.get_current_time,
+            light_scale=self.LIGHT_SCALE,
+            light_period=LIGHT_PERIOD_FRAMES,
+        )
         self.world = self.game_world.world
         self.depth = self.game_world.depth  # None headless: no window
         if self.depth is not None:
@@ -459,32 +455,6 @@ class SceneSpace(SceneWorld):
         yield from ()
 
 
-@contextmanager
-def with_keep_outs(
-    path: Path, field: str, keep_outs: Sequence[KeepOut]
-) -> Generator[Path, None, None]:
-    """
-    A copy of a world file whose asteroid field has more room kept clear:
-    ``load_world`` has no argument for a level's keep-outs.
-
-    :param path: The world file
-    :param field: The name of its field
-    :param keep_outs: The room to keep clear, added to the field's own
-    :return: The copy (self-contained), for the duration of the block
-    """
-    world = parse_world(path)
-    fields = tuple(
-        replace(look, keep_outs=(*look.keep_outs, *keep_outs))
-        if look.name == field
-        else look
-        for look in world.fields
-    )
-    with tempfile.TemporaryDirectory() as folder:
-        copy = Path(folder) / path.name
-        copy.write_text(world_to_yaml(replace(world, fields=fields)))
-        yield copy
-
-
 class SceneAsteroids(SceneSpace):
     """
     Missions 1 and 2's asteroid field (``datafiles/worlds/space/asteroids.yaml``):
@@ -511,11 +481,9 @@ class SceneAsteroids(SceneSpace):
         self.keep_outs = tuple(keep_outs)
         self.field: AsteroidField | None = None
 
-    def world_file(self) -> AbstractContextManager[Path]:
-        """:return: The world file, with the level's keep-outs in its field"""
-        if not self.keep_outs:
-            return super().world_file()
-        return with_keep_outs(self.WORLD_PATH, self.FIELD, self.keep_outs)
+    def level_keep_outs(self) -> dict[str, Sequence[KeepOut]]:
+        """:return: The level's keep-outs, for the field"""
+        return {self.FIELD: self.keep_outs} if self.keep_outs else {}
 
     def build_upfront(self):
         """
