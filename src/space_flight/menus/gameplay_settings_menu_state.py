@@ -49,6 +49,7 @@ _SLIDERS = {
     ("auto_aim", "lock_angle_deg"): ("Lock Angle", 1.0, "{:.0f} deg"),
     ("auto_aim", "assist_angle_deg"): ("Assist Angle", 0.5, "{:.1f} deg"),
     ("deviation_deg",): ("Shot Deviation", 0.1, "{:.1f} deg"),
+    ("bomb_assist_angle_deg",): ("Bomb Assist Angle", 0.5, "{:.1f} deg"),
     ("damage_multiplier",): ("Damage Dealt", 0.05, "x{:.2f}"),
     ("collision_damage_multiplier",): ("Collision Damage Taken", 0.05, "x{:.2f}"),
 }
@@ -67,6 +68,7 @@ _ROW_ORDER = (
     ("auto_aim", "lock_angle_deg"),
     ("auto_aim", "assist_angle_deg"),
     ("deviation_deg",),
+    ("bomb_assist_angle_deg",),
     ("damage_multiplier",),
     ("collision_damage_multiplier",),
     ("lead_indicator",),

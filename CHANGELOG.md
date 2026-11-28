@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+
+
+## [0.7.0] - 2026-11-28
+
+### Added
+
+- Bomb aim assist, shared with laser cannons #160
+- Ordnance are shader-based glowing orbs with sparks for flares and trails for missiles #160
+
 ### Changed
 
 - Use WorldBuilder's unified reverse-Z camera instead of the old split depth duo #197

@@ -230,11 +230,42 @@ player firing forward), where it is a bright disc rather than a flat sliver.
   core, so opaque geometry occludes bolts while bolts never occlude each other
   or translucent geometry.
 
+## Ordnance orb and trail shaders
+
+Driven by [`fx/ordnance_orb.py`](../../src/space_flight/fx/ordnance_orb.py) and
+[`fx/ordnance_trail.py`](../../src/space_flight/fx/ordnance_trail.py) (see
+[actors.md](actors.md)). Both blend additively with depth write off, in the
+`fixed` bin 20, and are hidden by the clouds in front of them
+([Behind the clouds](#behind-the-clouds)). Every look number is a header
+constant of the Python module, fed in as a uniform.
+
+- **`ordnance_orb.vert/.frag`**: every ordnance is a card centred on its node
+  and expanded in view space (so it faces whatever camera draws the pass). The
+  fragment shader measures the distance from the centre in core radii: a
+  white-hot core (`ORB_CORE_*`) and a gaussian halo (`ORB_HALO_*`) in the
+  ordnance's colour, its alpha scaling the brightness. The core radius is the
+  `visual_radius_m`, except for a flare, whose core is
+  `FLARE_CORE_FRACTION_OF_COLLISION_RADIUS` of its collision sphere.
+- **`ordnance_trail.vert/.frag`**: the engine trail of a missile or rocket
+  (`TRAIL_CATEGORIES`), a ribbon through the ordnance's last
+  `TRAIL_DURATION_S` seconds. Python records float64 points and rewrites the
+  ribbon's vertices each frame (position, a point ahead along the trail,
+  side, half-width, alpha: taper and fade follow the point's age); the vertex
+  shader expands it across its direction in view space. The direction is a
+  consistent forward tangent at every point (central differences, the last
+  valid one carried over coincident points), and the head is not duplicated
+  onto a point recorded the same frame: a flipped or arbitrary direction would
+  twist the ribbon. The fragment shader shades it as a **cylinder**: the glow
+  across it follows `sqrt(1 - side^2)`, with a **hot core** turning white where
+  thick and still bright, dying faster along the trail than the glow
+  (`TRAIL_CYLINDER_POWER`, `TRAIL_CORE_*`). The trail outlives its ordnance and removes
+  itself once faded.
+
 ## Behind the clouds
 
 The world's clouds write no depth, and every translucent effect drawn in the
 world (the shield bubbles, fire and smoke `explosion.frag`, `spark.frag`,
-`laser.frag`, `speed_dust.frag`) is drawn after them with depth write off: on
+`laser.frag`, `speed_dust.frag`, the ordnance orbs and trails) is drawn after them with depth write off: on
 its own it would be laid over a cloud in front of it. Each includes
 WorldBuilder's `cloud_cover.glsl` (`load_glsl_shader` puts its folder on Panda's
 model path) and fades by `cloudCoverBefore(gl_FragCoord.xy, distance)`, the
@@ -242,10 +273,9 @@ opacity of the cloud between the eye and the fragment: the alpha for the
 straight-alpha and alpha-weighted additive ones, the colour for the laser's
 `ONE, ONE` glow. Their nodes are tracked by the scene's world
 (`Scene.track_translucent`: the fire, smoke and spark pools in
-`SceneWorld.build_upfront`, the shields, laser bolts and speed dust as they are
+`SceneWorld.build_upfront`, the shields, laser bolts, speed dust, ordnance orbs and trails as they are
 made), and get no-cloud inputs (`no_cover`) until then. The rear-view mirror
-draws them without cover (`World.cover_off_in`). The ordnance spheres are
-fixed-function and not covered.
+draws them without cover (`World.cover_off_in`).
 
 ## Cockpit damage overlay shaders
 

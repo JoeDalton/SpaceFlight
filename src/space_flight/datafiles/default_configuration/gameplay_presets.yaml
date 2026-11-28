@@ -16,6 +16,9 @@
 #                              toward the lead
 #   deviation_deg              Half-angle of the random cone around each laser
 #                              shot (0 = perfectly accurate)
+#   bomb_assist_angle_deg      Bomb aim assist: the most a dropped bomb's course
+#                              may be bent from straight down toward where it
+#                              meets the target (0 = bombs fall straight)
 #   damage_multiplier          Scales the damage dealt by their weapons
 # Player only:
 #   collision_damage_multiplier  Scales the damage the player's ship takes in
@@ -30,6 +33,7 @@ easy:
       lock_angle_deg: 45.0
       assist_angle_deg: 10.0
     deviation_deg: 0.0
+    bomb_assist_angle_deg: 20.0
     damage_multiplier: 1.5
     collision_damage_multiplier: 0.5
     lead_indicator: true
@@ -40,6 +44,7 @@ easy:
       lock_angle_deg: 20.0
       assist_angle_deg: 3.0
     deviation_deg: 1.5
+    bomb_assist_angle_deg: 5.0
     damage_multiplier: 0.5
 
 normal:
@@ -50,6 +55,7 @@ normal:
       lock_angle_deg: 30.0
       assist_angle_deg: 5.0
     deviation_deg: 0.0
+    bomb_assist_angle_deg: 10.0
     damage_multiplier: 1.0
     collision_damage_multiplier: 1.0
     lead_indicator: true
@@ -60,6 +66,7 @@ normal:
       lock_angle_deg: 30.0
       assist_angle_deg: 5.0
     deviation_deg: 0.0
+    bomb_assist_angle_deg: 10.0
     damage_multiplier: 1.0
 
 hard:
@@ -70,6 +77,7 @@ hard:
       lock_angle_deg: 20.0
       assist_angle_deg: 3.0
     deviation_deg: 0.5
+    bomb_assist_angle_deg: 5.0
     damage_multiplier: 1.0
     collision_damage_multiplier: 1.5
     lead_indicator: true
@@ -80,6 +88,7 @@ hard:
       lock_angle_deg: 30.0
       assist_angle_deg: 6.0
     deviation_deg: 0.0
+    bomb_assist_angle_deg: 10.0
     damage_multiplier: 1.25
 
 ace:
@@ -90,6 +99,7 @@ ace:
       lock_angle_deg: 15.0
       assist_angle_deg: 2.0
     deviation_deg: 0.5
+    bomb_assist_angle_deg: 0.0
     damage_multiplier: 1.0
     collision_damage_multiplier: 2.0
     lead_indicator: false
@@ -100,4 +110,5 @@ ace:
       lock_angle_deg: 30.0
       assist_angle_deg: 8.0
     deviation_deg: 0.0
+    bomb_assist_angle_deg: 20.0
     damage_multiplier: 1.5

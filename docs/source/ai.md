@@ -271,7 +271,10 @@ driven from `Fighter.move()` / `Turret._operate()` and `LaserCannon.fire()`,
 not `Bot`. Once its `TargetLock` holds (`target_lock_delay_s` in an
 acquisition cone), `compute_shot_direction` aims each shot at
 `predict_target_position()`, clamped to a maximum assist angle around the
-barrel (a "nudge", not a snap); the cannon then adds its random shot deviation
+barrel (a "nudge", not a snap). The lead and the clamp are generic
+([`aim_assist.py`](../../src/space_flight/ai/aim_assist.py): `AssistCone`,
+`target_kinematics`, `aim_toward`), shared with the bomb launchers' aim assist
+(see [weapons](actors.md#weapons-and-munitions)); the cannon then adds its random shot deviation
 (see [weapons](actors.md#weapons-and-munitions)). With `enabled` off, the
 target is never locked (the crosshair never shows a lock) and shots go
 straight ahead, but the lead is still computed for the lead indicator.

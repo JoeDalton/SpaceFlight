@@ -52,3 +52,58 @@ def test_crackle_waits_until_the_next_burst_is_due():
     crackle.update(game, np.zeros(3), radius_m=1.0, velocity=np.zeros(3))
 
     game.spark_fx_pool.spawn.assert_not_called()
+
+
+def test_flare_spark_preset_reaches_at_most_the_configured_radii():
+    flare_radius_m = 8.0
+    color = (1.0, 0.5, 0.2, 0.5)
+
+    preset = spark_fx.flare_spark_preset(color, flare_radius_m)
+
+    max_reach_m = (
+        preset.speed * spark_fx.SPARK_SPEED_SCALE * preset.lifetime
+    )  # the fastest, longest-lived spark
+    assert max_reach_m == pytest.approx(
+        spark_fx.FLARE_SPARK_REACH_FACTOR * flare_radius_m
+    )
+    assert preset.gravity == 0.0
+    # The flare's colour (the smallest sparks dimmer)
+    np.testing.assert_allclose(preset.color_inner[:3], color[:3])
+    np.testing.assert_allclose(
+        preset.color_outer[:3], np.array(color[:3]) * spark_fx.FLARE_SPARK_OUTER_DIM
+    )
+
+
+def test_isotropic_spawn_covers_the_whole_sphere():
+    pool = object.__new__(spark_fx.SparkPool)
+    directions = []
+
+    def fake_emit(pos, direction, base_velocity, preset, *args):
+        directions.append(direction)
+        return True
+
+    pool._emit = fake_emit
+    np.random.seed(0)
+
+    pool.spawn_isotropic(
+        position=(0.0, 0.0, 0.0), base_velocity=None, preset=spark_fx.METAL, count=4000
+    )
+
+    d = np.array(directions)
+    assert len(d) == 4000
+    np.testing.assert_allclose(np.linalg.norm(d, axis=1), 1.0)
+    # Isotropic: no mean direction, and both poles reached
+    assert np.all(np.abs(d.mean(axis=0)) < 0.05)
+    assert d[:, 2].max() > 0.99 and d[:, 2].min() < -0.99
+
+
+def test_isotropic_spawn_stops_when_the_pool_is_full():
+    pool = object.__new__(spark_fx.SparkPool)
+    calls = []
+    pool._emit = lambda *a, **k: calls.append(1) or len(calls) < 3
+
+    pool.spawn_isotropic(
+        position=(0.0, 0.0, 0.0), base_velocity=None, preset=spark_fx.METAL, count=50
+    )
+
+    assert len(calls) == 3

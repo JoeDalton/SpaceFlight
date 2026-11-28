@@ -24,10 +24,21 @@ from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.ai.missile.missile_navigator import MissileNavigator
+from space_flight.fx.ordnance_orb import (
+    build_ordnance_orb,
+    orb_core_radius_m,
+    remove_ordnance_orb,
+)
+from space_flight.fx.ordnance_trail import TRAIL_CATEGORIES, OrdnanceTrail
+from space_flight.fx.spark_fx import (
+    FLARE_SPARK_MAX_DT_S,
+    FLARE_SPARK_RATE_PER_S,
+    flare_spark_preset,
+)
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.game.kills import DamageSource
 from space_flight.utils import magnitude, rotation_matrix_coefficients
-from space_flight.weapons import ION, PHYSICAL, build_ordnance_sphere
+from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -59,7 +70,8 @@ COAST_COMMANDS = (0.0, 0.0, 0.0, 0.0)
 
 class OrdnanceModel:
     """
-    The placeholder render of an ordnance: a coloured sphere. Same interface as
+    The render of an ordnance: a shader-based glowing orb (see
+    :mod:`space_flight.fx.ordnance_orb`). Same interface as
     :class:`~space_flight.actors.ship_model.ShipModel`.
     """
 
@@ -67,19 +79,22 @@ class OrdnanceModel:
         self,
         game: FlightState,
         parent_node: NodePath,
-        radius_m: float,
+        core_radius_m: float,
         color: tuple[float, float, float, float],
     ):
         self.game = game
-        self.model = build_ordnance_sphere(
-            game=game, parent_node=parent_node, radius_m=radius_m, color=color
+        self.model = build_ordnance_orb(
+            game=game,
+            parent_node=parent_node,
+            core_radius_m=core_radius_m,
+            color=color,
         )
 
     def clean(self):
         """
         Cleans the OrdnanceModel object
         """
-        self.model.removeNode()
+        remove_ordnance_orb(self.game, self.model)
         self.model = None
         self.game = None
 
@@ -174,7 +189,7 @@ class Ordnance(Ship):
         return OrdnanceModel(
             game=self.game,
             parent_node=self.node,
-            radius_m=self.conf["visual_radius_m"],
+            core_radius_m=orb_core_radius_m(self.conf),
             color=tuple(self.conf["color"]),
         )
 
@@ -258,11 +273,14 @@ class OrdnanceController(Destructible):
         game: FlightState,
         launcher: OrdnanceLauncher,
         target_id: uuid.UUID | None = None,
+        direction: np.ndarray | None = None,
     ):
         """
         :param game: The game/flight state
         :param launcher: The launcher firing it
         :param target_id: The target a missile pursues, None to fly straight
+        :param direction: The world launch direction (the launcher's nominal
+            one by default; a bomb may be aimed, see OrdnanceLauncher)
         """
         super().__init__(game=game)
         ship = launcher.parent
@@ -272,16 +290,15 @@ class OrdnanceController(Destructible):
         self.life_time_s = launcher.conf["life_time_s"]
         self.launch_time_s = self.game.game_time.get_current_time()
 
-        direction = launcher.launch_direction_vector()
         self.pawn = Ordnance(
             game=self.game,
             parent=self,
             ordnance_name=launcher.name,
             ordnance_conf=launcher.conf,
             origin_ship=ship,
-            ini_position=ship.position + launcher.conf["launch_offset_m"] * direction,
+            ini_position=launcher.launch_position(direction),
             ini_orientation=np.array(ship.orientation, dtype=float),
-            ini_speed=launcher.initial_velocity(),
+            ini_speed=launcher.initial_velocity(direction),
             team=ship.team,
         )
 
@@ -299,7 +316,47 @@ class OrdnanceController(Destructible):
             # Piloted every frame: an ordnance is fast and short-lived
             self.pilot.sample_externally()
 
+        # Engine trail of a missile or rocket: it outlives the ordnance
+        self.trail = None
+        if self.pawn.category in TRAIL_CATEGORIES:
+            self.trail = OrdnanceTrail(
+                game=self.game,
+                ordnance=self.pawn,
+                color=tuple(self.pawn.conf["color"]),
+                half_width_m=self.pawn.conf["visual_radius_m"],
+            )
+        # A flare throws a continuous stream of sparks of its colour
+        self.spark_preset = None
+        self.spark_debt = 0.0
+        self.last_spark_time_s = self.launch_time_s
+        if self.pawn.category == "flare":
+            self.spark_preset = flare_spark_preset(
+                color=self.pawn.conf["color"],
+                collision_radius_m=self.pawn.conf["collision_radius_m"],
+            )
+
         self.add_task(method=self.move_ordnance_task)
+
+    def _emit_flare_sparks(self):
+        """
+        Throw the sparks due since the last frame, isotropically from the
+        flare's centre (a fractional count carries over, so the stream does not
+        depend on the frame rate).
+        """
+        now_s = self.game.game_time.get_current_time()
+        dt_s = min(max(now_s - self.last_spark_time_s, 0.0), FLARE_SPARK_MAX_DT_S)
+        self.last_spark_time_s = now_s
+        self.spark_debt += FLARE_SPARK_RATE_PER_S * dt_s
+        count = int(self.spark_debt)
+        if count == 0:
+            return
+        self.spark_debt -= count
+        self.game.spark_fx_pool.spawn_isotropic(
+            position=self.pawn.position,
+            base_velocity=Vec3(*self.pawn.speed),
+            preset=self.spark_preset,
+            count=count,
+        )
 
     def move_ordnance_task(self):
         """
@@ -312,6 +369,9 @@ class OrdnanceController(Destructible):
         if elapsed_s >= self.life_time_s:
             self.pawn.health = 0.0
             return
+
+        if self.spark_preset is not None:
+            self._emit_flare_sparks()
 
         commands = COAST_COMMANDS
         if self.navigator is not None:
@@ -432,5 +492,9 @@ class OrdnanceController(Destructible):
         Remove every child
         """
         self._drop_guidance()
+        if self.trail is not None:
+            # It keeps fading out on its own
+            self.trail.detach()
+            self.trail = None
         self.pawn.clean()
         self.pawn = None

@@ -41,6 +41,21 @@ SPARK_SPEED_SCALE = 10.0
 #: Scales the emission-cone (jet) half-angle (> 1 = wider spray, < 1 = tighter).
 SPARK_JET_ANGLE_SCALE = 1.0
 
+#: Flare sparks: a continuous isotropic stream from the flare's centre.
+#: Sparks fly this many collision-sphere radii at most
+FLARE_SPARK_REACH_FACTOR = 1.5
+#: Sparks emitted per second
+FLARE_SPARK_RATE_PER_S = 40.0
+#: Longest life of a flare spark, seconds (the shortest is 0.4 times this)
+FLARE_SPARK_LIFETIME_S = 0.8
+#: Largest half-size of a flare spark, metres
+FLARE_SPARK_SIZE_M = 0.5
+#: Colour of the smallest sparks, as a fraction of the flare's colour
+FLARE_SPARK_OUTER_DIM = 0.5
+#: Longest time a frame's emission accounts for, seconds (after a hitch the
+#: stream does not catch up with a burst)
+FLARE_SPARK_MAX_DT_S = 0.1
+
 #: Per-particle vertex columns for the spark effect, appended to the shared
 #: billboard columns owned by :class:`ParticleBuffer`.
 _SPARK_COLUMNS = [
@@ -150,6 +165,35 @@ ROCK = SparkPreset(
 )
 
 
+def flare_spark_preset(color: tuple, collision_radius_m: float) -> SparkPreset:
+    """
+    The sparks a flare throws: its colour, no gravity, and as fast and long-lived
+    as it takes to fly FLARE_SPARK_REACH_FACTOR collision radii at most. The
+    pool scales every spark's speed and size by its global scales, divided out
+    here.
+
+    :param color: The flare's RGBA colour
+    :param collision_radius_m: The flare's collision-sphere radius
+    :return: The preset (its count is unused: see SparkPool.spawn_isotropic)
+    """
+    rgb = np.array(color[:3], dtype=float)
+    outer = rgb * FLARE_SPARK_OUTER_DIM
+    max_speed_mps = (
+        FLARE_SPARK_REACH_FACTOR * collision_radius_m / FLARE_SPARK_LIFETIME_S
+    )
+    return SparkPreset(
+        color_inner=(*rgb, 1.0),
+        color_outer=(*outer, 1.0),
+        count=0,
+        speed=max_speed_mps / SPARK_SPEED_SCALE,
+        spread=1.0,
+        gravity=0.0,
+        lifetime=FLARE_SPARK_LIFETIME_S,
+        # The largest spark is 1.8 times the base size
+        size=FLARE_SPARK_SIZE_M / (1.8 * SPARK_SIZE_SCALE),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Spark pool
 # ---------------------------------------------------------------------------
@@ -207,45 +251,86 @@ class SparkPool(ParticleBuffer):
         normal_np, tangent, bitangent = build_orthogonal_basis(normal_np)
 
         half_angle = preset.spread * (np.pi * 0.5) * SPARK_JET_ANGLE_SCALE
-        base_size = preset.size * SPARK_SIZE_SCALE * size_scale
-        base_speed = preset.speed * SPARK_SPEED_SCALE * speed_scale
-        max_size = base_size * 1.8
-        inner = np.array(preset.color_inner)
-        outer = np.array(preset.color_outer)
         # Every spark in the burst starts at the same point (world, float64:
         # write_slot makes it relative to the buffer's anchor)
         pos = np.array([position[0], position[1], position[2]], dtype=float)
-
         for _ in range(preset.count):
-            slot_index = self.alloc_slot()
-            if slot_index is None:
-                break  # pool full — drop the rest of the burst
-
             direction = sample_direction_in_cone(
                 normal=normal_np,
                 tangent=tangent,
                 bitangent=bitangent,
                 half_angle_rad=half_angle,
             )
-            velocity = (
-                direction * random.uniform(base_speed * 0.3, base_speed) + base_velocity
-            )
-            size = base_size * random.uniform(0.5, 1.8)
-            lifetime = random.uniform(preset.lifetime * 0.4, preset.lifetime)
-            # Larger sparks get the "hot" inner colour (size is independent of
-            # launch speed).
-            hot = min(size / max_size, 1.0)
-            color = outer + (inner - outer) * hot
+            if not self._emit(
+                pos, direction, base_velocity, preset, size_scale, speed_scale
+            ):
+                break  # pool full — drop the rest of the burst
 
-            self.write_slot(
-                slot_index,
-                pos=pos,
-                velocity=velocity,
-                size=float(size),
-                lifetime=float(lifetime),
-                gravity=preset.gravity,
-                spark_color=color,
-            )
+    def spawn_isotropic(
+        self,
+        position: Point3,
+        base_velocity: Vec3,
+        preset: SparkPreset,
+        count: int,
+    ):
+        """
+        Emit *count* sparks in uniformly random directions over the whole sphere
+        (the cone sampler of :meth:`spawn` is not isotropic past a hemisphere).
+
+        :param position:      World-space emission point.
+        :param base_velocity: World velocity of the emitter, added to every spark.
+        :param preset:        Look + emission parameters (its count is unused).
+        :param count:         Number of sparks to emit.
+        """
+        pos = np.array([position[0], position[1], position[2]], dtype=float)
+        for _ in range(count):
+            direction = np.random.normal(size=3)
+            norm = np.linalg.norm(direction)
+            if norm < 1e-9:
+                continue
+            if not self._emit(pos, direction / norm, base_velocity, preset):
+                break  # pool full
+
+    def _emit(
+        self,
+        pos: np.ndarray,
+        direction: np.ndarray,
+        base_velocity: Vec3,
+        preset: SparkPreset,
+        size_scale: float = 1.0,
+        speed_scale: float = 1.0,
+    ) -> bool:
+        """
+        Write one spark.
+
+        :return: False if the pool is full (nothing written)
+        """
+        slot_index = self.alloc_slot()
+        if slot_index is None:
+            return False
+        base_size = preset.size * SPARK_SIZE_SCALE * size_scale
+        base_speed = preset.speed * SPARK_SPEED_SCALE * speed_scale
+        max_size = base_size * 1.8
+        velocity = (
+            direction * random.uniform(base_speed * 0.3, base_speed) + base_velocity
+        )
+        size = base_size * random.uniform(0.5, 1.8)
+        lifetime = random.uniform(preset.lifetime * 0.4, preset.lifetime)
+        # Larger sparks get the "hot" inner colour (size is independent of
+        # launch speed).
+        hot = min(size / max_size, 1.0)
+        inner = np.array(preset.color_inner)
+        outer = np.array(preset.color_outer)
+        self.write_slot(
+            slot_index,
+            pos=pos,
+            velocity=velocity,
+            size=float(size),
+            lifetime=float(lifetime),
+            gravity=preset.gravity,
+            spark_color=outer + (inner - outer) * hot,
+        )
+        return True
 
 
 # ---------------------------------------------------------------------------

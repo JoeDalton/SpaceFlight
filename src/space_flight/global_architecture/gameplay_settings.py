@@ -48,6 +48,8 @@ LIMITS = {
     # Strictly positive: the assist clamp divides by its tangent
     ("auto_aim", "assist_angle_deg"): (0.5, 20.0),
     ("deviation_deg",): (0.0, 2.0),
+    # 0 = no assist: bombs fall straight
+    ("bomb_assist_angle_deg",): (0.0, 45.0),
     ("damage_multiplier",): (0.1, 3.0),
     ("collision_damage_multiplier",): (0.0, 2.0),
 }

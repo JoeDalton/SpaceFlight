@@ -128,6 +128,7 @@ class Fighter(Ship):
                 name=name,
                 stock=stock,
                 damage_multiplier=settings["damage_multiplier"],
+                bomb_assist_angle_deg=settings["bomb_assist_angle_deg"],
             )
             for name, stock in self.loadout.ordnance.items()
         ]
@@ -255,6 +256,32 @@ class Fighter(Ship):
         """Whether a missile launched now would be guided to the target."""
         armed_missile = self._armed_missile()
         return armed_missile is not None and armed_missile.is_locked
+
+    @property
+    def is_missile_lock_cue(self) -> bool:
+        """
+        Whether to cue the player that a missile launched now would be guided to
+        the target: it is locked, and the launcher has reloaded (the cue drops
+        as the missile is fired and comes back once it has reloaded, if the
+        lock still holds).
+        """
+        return self.is_missile_locked and self.selected_secondary.is_reloaded
+
+    @property
+    def is_bomb_assist_cue(self) -> bool:
+        """
+        Whether to cue the player that a bomb dropped now would be aided: the
+        armed secondary weapon is a bomb launcher with stock left and reloaded
+        (the cue drops as the bomb is dropped and comes back once it has
+        reloaded), and the target is within its assist cone.
+        """
+        launcher = self.selected_secondary
+        return (
+            launcher is not None
+            and launcher.stock > 0
+            and launcher.is_reloaded
+            and launcher.is_target_in_assist_cone(self.target_id)
+        )
 
     def secondary_cycle(self) -> list[OrdnanceLauncher]:
         """

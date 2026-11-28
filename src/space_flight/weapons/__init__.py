@@ -29,7 +29,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from panda3d.core import NodePath, Point3, TransparencyAttrib
+from panda3d.core import NodePath, Point3
 
 from space_flight import DEBUG_DELETION
 from space_flight.game.kills import DamageSource
@@ -78,33 +78,6 @@ def is_ion_vulnerable(target: Any) -> bool:
     return False
 
 
-def build_ordnance_sphere(
-    game: FlightState,
-    parent_node: NodePath,
-    radius_m: float,
-    color: tuple[float, float, float, float],
-) -> NodePath:
-    """
-    Placeholder ordnance visual: a flat-shaded coloured sphere, semi-transparent
-    when the colour's alpha is below 1.
-
-    :param game: The game/flight state
-    :param parent_node: The node to attach the sphere to
-    :param radius_m: The sphere's radius
-    :param color: Its RGBA colour
-    :return: The sphere's node path
-    """
-    sphere = game.app.loader.loadModel("models/misc/sphere")
-    sphere.reparent_to(parent_node)
-    sphere.set_scale(radius_m)
-    sphere.set_light_off()
-    sphere.set_color(*color)
-    if color[3] < 1.0:
-        sphere.set_transparency(TransparencyAttrib.MAlpha)
-        sphere.set_depth_write(False)
-    return sphere
-
-
 class Weapon:
     """
     Base class for ship weapons that spawn munitions.
@@ -142,6 +115,15 @@ class Weapon:
         self.last_fire_time = self.game.game_time.get_current_time()
         self.damage_multiplier = damage_multiplier
 
+    @property
+    def is_reloaded(self) -> bool:
+        """
+        :return: Whether fire_delay has elapsed since the last shot (checking
+            does not consume the reload gate, see :meth:`_ready_to_fire`)
+        """
+        elapsed_s = self.game.game_time.get_current_time() - self.last_fire_time
+        return elapsed_s >= self.fire_delay
+
     def _ready_to_fire(self) -> bool:
         """
         Check-and-consume the reload gate.
@@ -150,10 +132,9 @@ class Weapon:
             that case, stamps the current time as the new last_fire_time so the
             caller can proceed to fire. False (without stamping) while reloading.
         """
-        current_time = self.game.game_time.get_current_time()
-        if current_time - self.last_fire_time < self.fire_delay:
+        if not self.is_reloaded:
             return False
-        self.last_fire_time = current_time
+        self.last_fire_time = self.game.game_time.get_current_time()
         return True
 
     def restart_reload(self):

@@ -257,7 +257,7 @@ All four share the same code; they differ only by their configuration,
 `ion_bomb` are the blue ion versions of the concussion missile, proton
 torpedo and proton bomb), `reload_s`, the launch
 (`launch_direction` — `forward`, `down` or `backward` — `speed_mps` relative to
-the launching ship, `launch_offset_m`), the placeholder look and collision
+the launching ship, `launch_offset_m`, added along the launch direction to the ship's `ordnance_launcher_position`), the placeholder look and collision
 (`visual_radius_m`, `collision_radius_m`, RGBA `color`), for missiles and
 rockets the targets they are fired at (`target_mobility`: `agile` or `slow`,
 see [the AI's weapon choice](ai.md)) and, for missiles, the turn rates, the
@@ -274,6 +274,15 @@ target lock (`lock_delay_s`, `lock_cone_angle_deg`) and how flares decoy them
   as well. `launch(target_id)` spends one unit only on an actual launch
   (returning the ordnance's controller, None otherwise), and only a missile
   locked on the target (`is_locked`, its `target_lock`) keeps it.
+- **Bomb aim assist.** `OrdnanceLauncher.aimed_direction(target_id)` aims a
+  **bomb** at its target's lead position, within a cone around its launch
+  direction (straight down by default) of at most the `bomb_assist_angle_deg`
+  [gameplay setting](global_architecture.md#gameplay_settingspy--difficulty)
+  (0 = off). It shares the lead and the cone with the laser cannons' auto-aim
+  ([`ai/aim_assist.py`](../../src/space_flight/ai/aim_assist.py), see
+  [docs/ai.md](ai.md#autoaim)). Rockets, missiles and flares, and bombs with no
+  target, go along their launch direction. `is_target_in_assist_cone` tells
+  whether the target is within the cone, for the HUD's cue.
 - **`Ordnance`** ([`actors/ordnance.py`](../../src/space_flight/actors/ordnance.py))
   is a `Ship` flying at a constant speed: its velocity is frozen in its body
   axes (no engine, no aerodynamics), so it flies straight unless it turns —

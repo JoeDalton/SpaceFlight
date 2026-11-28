@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from space_flight.ai.aim_assist import AssistCone
 from space_flight.ai.auto_aim import LEAD_SMOOTHING_TIME_S, AutoAim
 from space_flight.ai.target_lock import TargetLock
 from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
@@ -53,8 +54,7 @@ def make_auto_aim(
         lock_delay_s=target_lock_delay_s,
         cone_angle_deg=acquisition_cone_angle_deg,
     )
-    auto_aim.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
-    auto_aim.inv_max_assist_tan_angle = 1.0 / np.tan(np.deg2rad(max_assist_angle_deg))
+    auto_aim.assist_cone = AssistCone(max_assist_angle_deg)
     auto_aim.max_assist_distance_m = 1000.0
     auto_aim.enabled = enabled
     auto_aim.lead_offset_m = None
@@ -399,10 +399,7 @@ def test_configure_recomputes_derived_thresholds():
     assert auto_aim.target_lock.lock_delay_s == pytest.approx(0.5)
     assert auto_aim.max_assist_distance_m == pytest.approx(1500.0)
     assert auto_aim.target_lock.min_alignment == pytest.approx(np.cos(np.deg2rad(45.0)))
-    assert auto_aim.min_assist_alignment == pytest.approx(np.cos(np.deg2rad(10.0)))
-    assert auto_aim.inv_max_assist_tan_angle == pytest.approx(
-        1.0 / np.tan(np.deg2rad(10.0))
-    )
+    assert auto_aim.assist_cone.min_alignment == pytest.approx(np.cos(np.deg2rad(10.0)))
 
 
 def test_configure_tighter_assist_raises_alignment_threshold():
@@ -413,9 +410,9 @@ def test_configure_tighter_assist_raises_alignment_threshold():
     auto_aim = make_auto_aim()
 
     auto_aim.configure(max_assist_angle_deg=3.0)
-    tight = auto_aim.min_assist_alignment
+    tight = auto_aim.assist_cone.min_alignment
     auto_aim.configure(max_assist_angle_deg=10.0)
-    loose = auto_aim.min_assist_alignment
+    loose = auto_aim.assist_cone.min_alignment
 
     assert tight > loose
 

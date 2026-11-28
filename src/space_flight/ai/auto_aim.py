@@ -6,12 +6,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from space_flight import DEBUG_DELETION
-from space_flight.ai.interactions import pair_geometry
+from space_flight.ai.aim_assist import AssistCone, aim_toward, target_kinematics
 from space_flight.ai.target_lock import TargetLock
 from space_flight.utils import (
     low_pass_filter_first_order,
-    magnitude,
-    rotate_single_vector,
 )
 from space_flight.weapons.laser_cannon import LASER_SPEED_MPS
 
@@ -91,8 +89,7 @@ class AutoAim:
             lock_delay_s=target_lock_delay_s,
             cone_angle_deg=acquisition_cone_angle_deg,
         )
-        self.min_assist_alignment = np.cos(np.deg2rad(max_assist_angle_deg))
-        self.inv_max_assist_tan_angle = 1 / np.tan(np.deg2rad(max_assist_angle_deg))
+        self.assist_cone = AssistCone(max_assist_angle_deg)
         self.max_assist_distance_m = max_assist_distance_m
         self.enabled = enabled
 
@@ -103,23 +100,13 @@ class AutoAim:
             velocity), during a bolt's time of flight. None if the parent or its
             target is not in the interactions.
         """
-        try:
-            geometry = pair_geometry(
-                self.game.interactions, self.parent.id, self.parent.target_id
-            )
-        except ValueError:
-            # Parent has died during this frame
-            return None
-        if geometry is None:
-            # Parent has no target
-            return None
-        distance_m, direction, relative_speed_vector = geometry
-
-        # Impact time is assumed to be the distance between target and self
-        # divided by laser speed
-        impact_time_s = distance_m / LASER_SPEED_MPS
-        target_current_position = self.parent.position + distance_m * direction
-        return target_current_position, relative_speed_vector * impact_time_s
+        return target_kinematics(
+            self.game.interactions,
+            self.parent.id,
+            self.parent.position,
+            self.parent.target_id,
+            LASER_SPEED_MPS,
+        )
 
     def update_lead(self):
         """
@@ -176,52 +163,18 @@ class AutoAim:
             # No acquisition: fire straight ahead
             shot_dir = self.parent.forward
         else:
-            # Target locked: fire at its predicted position, if it still exists
+            # Target locked: fire at its predicted position, if it still exists,
+            # within the assist cone
             target_predicted_position = self.predict_target_position()
             if target_predicted_position is None:
-                desired_shot_dir = self.parent.forward
+                shot_dir = self.parent.forward
             else:
-                predicted_direction = target_predicted_position - start_position
-                norm = magnitude(predicted_direction)
-                if norm < 1e-4:
-                    # Better safe than sorry
-                    desired_shot_dir = self.parent.forward
-                else:
-                    desired_shot_dir = predicted_direction / norm
-
-            # Constrain assist inside assist cone
-            if (
-                np.dot(desired_shot_dir, self.parent.forward)
-                < self.min_assist_alignment
-            ):
-                # In parent coordinates, stretch the forward component so the
-                # direction lies on the assist cone with the same lateral component,
-                # normalise, and transform back to world coordinates
-                quat = np.quaternion(*self.parent.orientation)
-                desired_shot_dir_body = rotate_single_vector(
-                    quat.conjugate(), desired_shot_dir
+                shot_dir, _ = aim_toward(
+                    self.assist_cone,
+                    self.parent.forward,
+                    start_position,
+                    target_predicted_position,
                 )
-                lateral_amplitude = np.sqrt(  # Remove forward (Y) component
-                    desired_shot_dir_body[0] ** 2 + desired_shot_dir_body[2] ** 2
-                )
-                forward_component = lateral_amplitude * self.inv_max_assist_tan_angle
-                clipped_dir_body = np.array(
-                    [
-                        desired_shot_dir_body[0],
-                        forward_component,
-                        desired_shot_dir_body[2],
-                    ]
-                )
-                norm = magnitude(clipped_dir_body)
-                if norm < 1e-4:
-                    # Should not happen since the lateral component is significant,
-                    # but better safe than sorry
-                    shot_dir = self.parent.forward
-                else:
-                    clipped_dir_body /= norm
-                    shot_dir = rotate_single_vector(quat, clipped_dir_body)
-            else:
-                shot_dir = desired_shot_dir
 
         # A copy, so callers may modify it without touching the parent's forward
         return np.array(shot_dir, dtype=float)
