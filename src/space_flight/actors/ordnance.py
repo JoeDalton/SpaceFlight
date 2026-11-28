@@ -24,10 +24,15 @@ from space_flight.ai import Personality
 from space_flight.ai.fighter.fighter_pilot import FighterPilot
 from space_flight.ai.missile.incoming_missile import IncomingMissile
 from space_flight.ai.missile.missile_navigator import MissileNavigator
+from space_flight.fx.ordnance_orb import (
+    build_ordnance_orb,
+    orb_core_radius_m,
+    remove_ordnance_orb,
+)
 from space_flight.game.collisions import attach_collision_sphere
 from space_flight.game.kills import DamageSource
 from space_flight.utils import magnitude, rotation_matrix_coefficients
-from space_flight.weapons import ION, PHYSICAL, build_ordnance_sphere
+from space_flight.weapons import ION, PHYSICAL
 
 if TYPE_CHECKING:
     from space_flight.game.flight_state import FlightState
@@ -59,7 +64,8 @@ COAST_COMMANDS = (0.0, 0.0, 0.0, 0.0)
 
 class OrdnanceModel:
     """
-    The placeholder render of an ordnance: a coloured sphere. Same interface as
+    The render of an ordnance: a shader-based glowing orb (see
+    :mod:`space_flight.fx.ordnance_orb`). Same interface as
     :class:`~space_flight.actors.ship_model.ShipModel`.
     """
 
@@ -67,19 +73,22 @@ class OrdnanceModel:
         self,
         game: FlightState,
         parent_node: NodePath,
-        radius_m: float,
+        core_radius_m: float,
         color: tuple[float, float, float, float],
     ):
         self.game = game
-        self.model = build_ordnance_sphere(
-            game=game, parent_node=parent_node, radius_m=radius_m, color=color
+        self.model = build_ordnance_orb(
+            game=game,
+            parent_node=parent_node,
+            core_radius_m=core_radius_m,
+            color=color,
         )
 
     def clean(self):
         """
         Cleans the OrdnanceModel object
         """
-        self.model.removeNode()
+        remove_ordnance_orb(self.game, self.model)
         self.model = None
         self.game = None
 
@@ -174,7 +183,7 @@ class Ordnance(Ship):
         return OrdnanceModel(
             game=self.game,
             parent_node=self.node,
-            radius_m=self.conf["visual_radius_m"],
+            core_radius_m=orb_core_radius_m(self.conf),
             color=tuple(self.conf["color"]),
         )
 

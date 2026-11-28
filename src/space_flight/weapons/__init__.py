@@ -29,7 +29,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from panda3d.core import NodePath, Point3, TransparencyAttrib
+from panda3d.core import NodePath, Point3
 
 from space_flight import DEBUG_DELETION
 from space_flight.game.kills import DamageSource
@@ -76,33 +76,6 @@ def is_ion_vulnerable(target: Any) -> bool:
     if category == "sub_system":
         return not target.is_disabled
     return False
-
-
-def build_ordnance_sphere(
-    game: FlightState,
-    parent_node: NodePath,
-    radius_m: float,
-    color: tuple[float, float, float, float],
-) -> NodePath:
-    """
-    Placeholder ordnance visual: a flat-shaded coloured sphere, semi-transparent
-    when the colour's alpha is below 1.
-
-    :param game: The game/flight state
-    :param parent_node: The node to attach the sphere to
-    :param radius_m: The sphere's radius
-    :param color: Its RGBA colour
-    :return: The sphere's node path
-    """
-    sphere = game.app.loader.loadModel("models/misc/sphere")
-    sphere.reparent_to(parent_node)
-    sphere.set_scale(radius_m)
-    sphere.set_light_off()
-    sphere.set_color(*color)
-    if color[3] < 1.0:
-        sphere.set_transparency(TransparencyAttrib.MAlpha)
-        sphere.set_depth_write(False)
-    return sphere
 
 
 class Weapon:
