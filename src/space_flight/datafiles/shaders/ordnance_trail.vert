@@ -1,11 +1,13 @@
 #version 140
 // Ordnance engine trail (fx/ordnance_trail.py): a ribbon through the ordnance's
 // past positions, expanded across its direction in view space (so it faces
-// whatever camera draws the pass). The CPU writes each point's neighbour, side,
-// half-width and alpha (they follow its age).
+// whatever camera draws the pass). The CPU writes each point's direction (a
+// point ahead of it toward the head, always the same way round: a direction
+// that flipped would swap the ribbon's sides and twist it), side, half-width
+// and alpha (they follow its age).
 
 in vec4 p3d_Vertex;  // the point, relative to the trail's node
-in vec3 other;       // the neighbouring point, same frame (gives the direction)
+in vec3 other;       // a point ahead of this one along the trail, same frame
 in vec3 ribbon;      // (side +-1, half-width in metres, alpha)
 
 uniform mat4 p3d_ModelViewMatrix;

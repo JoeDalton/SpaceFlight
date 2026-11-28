@@ -689,3 +689,62 @@ def test_only_flares_throw_sparks(game):
     step(game, 30)
 
     game.spark_fx_pool.spawn_isotropic.assert_not_called()
+
+
+def _curved_trail_points(n=40):
+    """A corkscrew-ish path, as a rolling missile that turns might fly."""
+    t = np.linspace(0.0, 1.0, n)
+    return [
+        (
+            float(i) / 60,
+            np.array([30.0 * np.sin(4 * a), 400.0 * a, 20.0 * np.cos(4 * a)]),
+        )
+        for i, a in enumerate(t)
+    ]
+
+
+def test_trail_directions_are_unit_forward_and_never_flip(game):
+    """
+    The ribbon is expanded across each point's direction: it must be a unit
+    vector pointing the same way along the whole trail (no flip at the head), or
+    the ribbon twists.
+    """
+    trail = launch(game, "rocket").trail
+    points = _curved_trail_points()
+    # A point recorded the same frame as the head: a duplicate position
+    points.append((points[-1][0], points[-1][1].copy()))
+
+    tangents = trail._tangents(np.array([p for _, p in points]))
+
+    np.testing.assert_allclose(np.linalg.norm(tangents, axis=1), 1.0)
+    # Consecutive directions stay within a gentle turn of each other
+    assert np.all(np.sum(tangents[1:] * tangents[:-1], axis=1) > 0.5)
+    # And all point toward the head: along the trail's general travel
+    assert np.all(tangents @ np.array([0.0, 1.0, 0.0]) > 0.0)
+
+
+def test_trail_direction_with_a_single_point_is_the_ordnances_heading(game):
+    controller = launch(game, "rocket")
+    trail = controller.trail
+
+    tangents = trail._tangents(np.zeros((1, 3)))
+
+    np.testing.assert_allclose(tangents[0], controller.pawn.forward)
+
+
+def test_trail_does_not_duplicate_its_head_onto_a_recorded_point(game):
+    controller = launch(game, "rocket")
+    trail = controller.trail
+    captured = []
+    original = trail._build_vertices
+    trail._build_vertices = lambda points, now: (
+        captured.append(points),
+        original(points, now),
+    )[1]
+
+    # Frames until a point is recorded on the very frame of the update
+    step(game, 30)
+
+    for points in captured:
+        for (_, a), (_, b) in zip(points, points[1:]):
+            assert np.linalg.norm(a - b) > 1e-6

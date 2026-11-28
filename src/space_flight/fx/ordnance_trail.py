@@ -53,6 +53,8 @@ TRAIL_CATEGORIES = ("missile", "rocket")
 #: How long a point of the trail lasts, seconds: the trail's length is this
 #: times the ordnance's speed
 TRAIL_DURATION_S = 2.0
+#: Two points closer than this (metres) are one (no direction between them)
+_SAME_POINT_M = 1e-6
 #: Time between two recorded points, seconds (the live head point is added on
 #: top, every frame)
 TRAIL_SAMPLE_INTERVAL_S = 1 / 30
@@ -64,15 +66,25 @@ TRAIL_TAPER_POWER = 1.0
 TRAIL_ALPHA = 0.8
 #: How the brightness drops along the trail: (1 - age / duration) ** power
 TRAIL_FADE_POWER = 1.5
-#: Where the ribbon's soft edge starts, as a fraction of its half-width
-#: (1 = a hard edge)
-TRAIL_EDGE_START = 0.0
+#: Cylinder shading: the glow across the ribbon follows the thickness a view
+#: ray crosses in a cylinder, sqrt(1 - side^2), to this power (1 = a plain
+#: cylinder, more = a thinner, sharper glow)
+TRAIL_CYLINDER_POWER = 1.0
+#: Hot core: where the cylinder's thickness exceeds this (0..1, 1 = never) the
+#: colour turns toward white
+TRAIL_CORE_START = 0.6
+#: How white the core gets at full thickness and full brightness (0 = none)
+TRAIL_CORE_WHITE_MIX = 0.8
+#: How fast the core dies along the trail, relative to the trail's own
+#: fade: the core is (remaining brightness) ** power (more = a shorter core)
+TRAIL_CORE_FADE_POWER = 3.0
 #: Draw order in the "fixed" bin (the orbs', the lasers')
 TRAIL_BIN_ORDER = 20
 
 #: Most points a trail ever holds: the recorded ones, the head, a spare
 _MAX_POINTS = math.ceil(TRAIL_DURATION_S / TRAIL_SAMPLE_INTERVAL_S) + 3
-#: Floats per vertex: position, neighbour position, (side, half-width, alpha)
+#: Floats per vertex: position, a point ahead of it along the trail (gives the
+#: direction), (side, half-width, alpha)
 _FLOATS_PER_VERTEX = 9
 
 
@@ -117,6 +129,9 @@ class OrdnanceTrail:
         self.anchor = self.head.copy()
         self.following = True
         self.is_done = False
+        # The last known direction of the trail, toward the head (the ordnance's
+        # heading, until it has moved)
+        self.last_tangent = np.array(ordnance.forward, dtype=float)
 
         vdata = GeomVertexData("ordnance_trail", _trail_format(), Geom.UHDynamic)
         vdata.setNumRows(_MAX_POINTS * 2)
@@ -136,7 +151,11 @@ class OrdnanceTrail:
         node.setShader(load_glsl_shader("ordnance_trail.vert", "ordnance_trail.frag"))
         node.setShaderInputs(
             uColor=Vec3(*color[:3]),
-            uEdgeStart=TRAIL_EDGE_START,
+            uBrightness=self.brightness,
+            uCylinderPower=TRAIL_CYLINDER_POWER,
+            uCoreStart=TRAIL_CORE_START,
+            uCoreWhiteMix=TRAIL_CORE_WHITE_MIX,
+            uCoreFadePower=TRAIL_CORE_FADE_POWER,
         )
         # Hidden by the clouds in front of it: the scene's world sets their
         # inputs, none without one
@@ -190,7 +209,12 @@ class OrdnanceTrail:
             return
 
         points = list(self.points)
-        if self.following:
+        # The head joins the recorded points, unless it is the last of them
+        # (a point recorded this very frame): two identical points have no
+        # direction between them
+        if self.following and (
+            not points or np.linalg.norm(self.head - points[-1][1]) > _SAME_POINT_M
+        ):
             points.append((now, self.head))
         self._write(self._build_vertices(points, now))
 
@@ -205,14 +229,11 @@ class OrdnanceTrail:
         positions = np.array([p for _, p in points]) - self.anchor
         ages = np.array([now - t for t, _ in points])
         life_left = np.clip(1.0 - ages / TRAIL_DURATION_S, 0.0, 1.0)
-        # The neighbour gives the direction: the next point, the previous for
-        # the last
-        neighbours = np.empty_like(positions)
-        if count > 1:
-            neighbours[:-1] = positions[1:]
-            neighbours[-1] = positions[-2]
-        else:
-            neighbours[:] = positions
+        # The direction is a point ahead, along the trail's own direction at each
+        # point (central differences, one-sided at the ends), always pointing the
+        # same way: the ribbon is expanded across it, so a direction that flipped
+        # at the head, or fell back on an arbitrary one, would twist the ribbon.
+        ahead = positions + self._tangents(positions)
         half_widths = self.half_width_m * life_left**TRAIL_TAPER_POWER
         alphas = self.brightness * life_left**TRAIL_FADE_POWER
 
@@ -224,11 +245,45 @@ class OrdnanceTrail:
         for side, offset in ((-1.0, 0), (1.0, 1)):
             rows = slice(offset, 2 * count, 2)
             out[rows, 0:3] = positions[-count:]
-            out[rows, 3:6] = neighbours[-count:]
+            out[rows, 3:6] = ahead[-count:]
             out[rows, 6] = side
             out[rows, 7] = half_widths[-count:]
             out[rows, 8] = alphas[-count:]
         return out
+
+    def _tangents(self, positions: np.ndarray) -> np.ndarray:
+        """
+        :param positions: The trail's points relative to the anchor, oldest first
+        :return: A unit tangent at each, pointing toward the head. Where the
+            points do not tell (a single point, or coincident ones) the last
+            valid tangent carries over, from the head backwards too, else the
+            previous frame's.
+        """
+        count = len(positions)
+        tangents = np.zeros_like(positions)
+        if count > 1:
+            tangents[1:-1] = positions[2:] - positions[:-2]
+            tangents[0] = positions[1] - positions[0]
+            tangents[-1] = positions[-1] - positions[-2]
+        norms = np.linalg.norm(tangents, axis=1)
+        valid = norms > _SAME_POINT_M
+        tangents[valid] /= norms[valid, None]
+        # Carry the nearest valid tangent over the invalid ones: first from the
+        # tail toward the head, then, for leading ones, back
+        last = self.last_tangent
+        for i in range(count):
+            if valid[i]:
+                last = tangents[i]
+            else:
+                tangents[i] = last
+        for i in range(count - 1, -1, -1):
+            if valid[i]:
+                last = tangents[i]
+            elif not np.any(tangents[i]):
+                tangents[i] = last
+        if valid.any():
+            self.last_tangent = tangents[-1].copy()
+        return tangents
 
     def _write(self, vertices: np.ndarray) -> None:
         """

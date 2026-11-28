@@ -249,9 +249,16 @@ constant of the Python module, fed in as a uniform.
 - **`ordnance_trail.vert/.frag`**: the engine trail of a missile or rocket
   (`TRAIL_CATEGORIES`), a ribbon through the ordnance's last
   `TRAIL_DURATION_S` seconds. Python records float64 points and rewrites the
-  ribbon's vertices each frame (position, neighbour, side, half-width, alpha:
-  taper and fade follow the point's age); the vertex shader expands it across
-  its direction in view space. The trail outlives its ordnance and removes
+  ribbon's vertices each frame (position, a point ahead along the trail,
+  side, half-width, alpha: taper and fade follow the point's age); the vertex
+  shader expands it across its direction in view space. The direction is a
+  consistent forward tangent at every point (central differences, the last
+  valid one carried over coincident points), and the head is not duplicated
+  onto a point recorded the same frame: a flipped or arbitrary direction would
+  twist the ribbon. The fragment shader shades it as a **cylinder**: the glow
+  across it follows `sqrt(1 - side^2)`, with a **hot core** turning white where
+  thick and still bright, dying faster along the trail than the glow
+  (`TRAIL_CYLINDER_POWER`, `TRAIL_CORE_*`). The trail outlives its ordnance and removes
   itself once faded.
 
 ## Behind the clouds
