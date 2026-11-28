@@ -45,7 +45,7 @@ ORB_HALO_INTENSITY = 0.8
 #: Draw order: after the sorted "transparent" bin, and so after the clouds
 ORB_BIN_ORDER = 20
 #: A flare's core radius, as a fraction of its collision-sphere radius
-FLARE_CORE_FRACTION_OF_COLLISION_RADIUS = 2.0 / 3.0
+FLARE_CORE_FRACTION_OF_COLLISION_RADIUS = 0.2
 
 
 def orb_core_radius_m(ordnance_conf: dict) -> float:
