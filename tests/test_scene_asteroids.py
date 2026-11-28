@@ -166,7 +166,9 @@ def _mock_world(monkeypatch):
     world = MagicMock()
     world.field.return_value = field
     world.camera_render.return_value = np.array([0.0, 1.0, 0.0])
-    game_world = SimpleNamespace(world=world, depth=MagicMock(), update=MagicMock())
+    game_world = SimpleNamespace(
+        world=world, depth=MagicMock(), update=MagicMock(), views=[]
+    )
     load = MagicMock(return_value=game_world)
     monkeypatch.setattr(scenes, "load_world", load)
     return load, game_world
@@ -266,31 +268,30 @@ def test_the_scene_uses_the_worlds_depth_camera_as_it_is(monkeypatch):
     assert scene.depth.update is update
 
 
-def test_the_field_is_drawn_again_for_the_visible_mirror(monkeypatch):
-    """The world draws the field for the main camera: the mirror, when it is
-    shown, sees the rocks behind the player through a second update."""
+def test_the_visible_mirror_is_a_view_of_the_game_world(monkeypatch):
+    """The world draws the field for the main camera and its views: the
+    mirror, when it is shown, is one (no second field update)."""
     _, game_world = _mock_world(monkeypatch)
     scene = SceneAsteroids(game=_game(mirror_visible=True))
     scene.build_upfront()
 
     scene.update_after_recenter()
 
-    position = scene.game.player.pawn.position
-    (camera_world, camera_render), kwargs = scene.field.update.call_args
-    np.testing.assert_allclose(camera_world, position + [0.0, 1.0, 0.0])
-    np.testing.assert_allclose(camera_render, [0.0, 1.0, 0.0])
-    assert kwargs["cameras"] == ["main camera", "mirror"]
+    assert game_world.views == ["mirror"]
+    game_world.update.assert_called_once()
+    scene.field.update.assert_not_called()
 
 
 @pytest.mark.parametrize("mirror_visible", [False, None])
-def test_the_field_is_not_drawn_again_without_a_mirror(monkeypatch, mirror_visible):
-    _mock_world(monkeypatch)
+def test_no_view_without_a_shown_mirror(monkeypatch, mirror_visible):
+    _, game_world = _mock_world(monkeypatch)
     scene = SceneAsteroids(game=_game(mirror_visible=mirror_visible))
     scene.build_upfront()
+    game_world.views.append("stale")
 
     scene.update_after_recenter()
 
-    scene.field.update.assert_not_called()
+    assert game_world.views == []
 
 
 def test_loading_waits_for_the_rock_shapes(monkeypatch):

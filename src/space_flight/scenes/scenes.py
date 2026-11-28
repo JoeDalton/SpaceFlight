@@ -517,17 +517,16 @@ class SceneAsteroids(SceneSpace):
         yield from ()
 
     def update_after_recenter(self):
-        """The world around the player, then the field again for the
-        rear-view mirror when it is shown: the world draws the field for the
-        main camera alone."""
-        super().update_after_recenter()
+        """
+        The world around the player; the field is drawn for the rear-view
+        mirror too while it is shown (a view of the game world).
+        """
         mirror = getattr(self.game.player, "rear_view_mirror", None)
-        if mirror is None or not mirror.is_mirror_visible:
-            return
-        camera_render = self.world.camera_render()
-        camera_world = np.asarray(self.game.player.pawn.position) + camera_render
-        cameras = [self.game.app.cam, mirror.mirror_np]
-        self.field.update(camera_world, camera_render, cameras=cameras)
+        views = self.game_world.views
+        views.clear()
+        if mirror is not None and mirror.is_mirror_visible:
+            views.append(mirror.mirror_np)
+        super().update_after_recenter()
 
     def clear_position(self, position: Sequence[float], radius: float) -> np.ndarray:
         """

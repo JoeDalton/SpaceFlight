@@ -110,8 +110,8 @@ the world's field `FIELD` (`"field"`, `space/asteroid_field.yaml`).
   smuggler and TIEs) go through `scene.clear_position`, the field's
   `find_clear`: the nearest place with room within 3 km.
 - **Drawn** by instancing, at levels of detail chosen by their pixel error,
-  for the main camera (by the world) and the rear-view mirror (a second
-  field update while the mirror is shown). Its shapes are built in the
+  for the main camera and the rear-view mirror (the mirror's camera is in
+  `GameWorld.views` while it is shown: one field update). Its shapes are built in the
   world's worker processes during the hyperspace animation;
   `build_decomposed` holds it until they are in (about 3 s). Lit by the
   world's sun and sky light, tone mapped like the ships.
