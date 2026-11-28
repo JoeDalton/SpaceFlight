@@ -350,6 +350,9 @@ class SceneWorld(Scene):
             app,
             self.WORLD_PATH,
             keep_outs=self.level_keep_outs(),
+            # Every terrain is solid (WorldBuilder): the same collision
+            # events and handlers
+            collision_mask=CollisionLayers.TERRAIN_INTO,
             settings=app.graphics_settings.world_settings(),
             clock=game.game_time.get_current_time,
             light_scale=self.LIGHT_SCALE,
@@ -391,9 +394,6 @@ class SceneSolarSystem(SceneWorld):
     LIGHT_SCALE = 0.4
     #: The body levels fly over (its name in the world file)
     PLANET = "planet"
-    # The ground is solid within this of the player, metres: the fights stay a
-    # few kilometres from it (each chunk farther costs a check every frame)
-    TERRAIN_COLLISION_RANGE_M = 10_000.0
 
     @classmethod
     @functools.cache
@@ -406,15 +406,6 @@ class SceneSolarSystem(SceneWorld):
     def __init__(self, game: FlightState):
         super().__init__(game=game)
         self.default_up_direction = self.level_frame().up
-
-    def build_upfront(self):
-        """Load the world, and make every body solid to ships, munitions and
-        sensors (the moon too, which a warp reaches)."""
-        super().build_upfront()
-        self.world.enable_collision(
-            CollisionLayers.TERRAIN_INTO,
-            max_distance=self.TERRAIN_COLLISION_RANGE_M,
-        )
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """
@@ -469,8 +460,6 @@ class SceneAsteroids(SceneSpace):
     WORLD_PATH = DATAFILES_PATH / "worlds/space/asteroids.yaml"
     #: The name of the asteroid field in the world file
     FIELD = "field"
-    #: Rocks farther than this from the player are not solid
-    COLLISION_DISTANCE_M = 20_000.0
     #: How far clear_position looks for room
     CLEAR_SEARCH_M = 3000.0
     #: Speed dust colours
@@ -492,12 +481,6 @@ class SceneAsteroids(SceneSpace):
         """
         super().build_upfront()
         self.field = self.world.field(self.FIELD)
-        # Solid as terrain: the same collision events and handlers
-        self.field.enable_collision(
-            CollisionLayers.TERRAIN_INTO,
-            name="terrain",
-            max_distance=self.COLLISION_DISTANCE_M,
-        )
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """

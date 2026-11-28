@@ -206,11 +206,9 @@ def test_the_world_is_loaded_from_its_file_as_the_game_runs_it(monkeypatch):
     assert kwargs["light_period"] == scenes.LIGHT_PERIOD_FRAMES
     assert scene.world is scene.game_world.world
     assert scene.depth is scene.game_world.depth
-    # Every world body is solid: the moon too, which a warp reaches
-    scene.world.enable_collision.assert_called_once_with(
-        CollisionLayers.TERRAIN_INTO,
-        max_distance=SceneSolarSystem.TERRAIN_COLLISION_RANGE_M,
-    )
+    # Every terrain is solid (the moon and the ring too), WorldBuilder's doing
+    assert load.call_args.kwargs["collision_mask"] == CollisionLayers.TERRAIN_INTO
+    scene.world.enable_collision.assert_not_called()
 
 
 def test_the_world_follows_the_player(monkeypatch):

@@ -115,8 +115,8 @@ the world's field `FIELD` (`"field"`, `space/asteroid_field.yaml`).
   world's worker processes during the hyperspace animation;
   `build_decomposed` holds it until they are in (about 3 s). Lit by the
   world's sun and sky light, tone mapped like the ships.
-- **Solid** through `field.enable_collision(TERRAIN_INTO, name="terrain")`
-  (the world's field, `world.field(FIELD)`):
+- **Solid** through `load_world`'s `collision_mask` (WorldBuilder makes every
+  field's rocks solid, 20 km around the player; `world.field(FIELD)`):
   ships, munitions and sensors hit the drawn rocks through the terrain
   handlers. Its owner, WorldBuilder's `AsteroidSurface`, gives the material
   at a hit ("rock", or "snow" for an icy rock) and the speed of the turning
@@ -154,7 +154,7 @@ the world looks like or where things are, edit the file.
 body levels fly over), `LIGHT_SCALE` (about 0.4: it scales the Panda3D lights
 the world puts on render for the ships, which use fixed-function lighting
 with no tone map, so the world's physical noon sun would clip them to white)
-and `TERRAIN_COLLISION_RANGE_M`. There is no 2D planet: the sky, the moon and
+and nothing about collisions (see below). There is no 2D planet: the sky, the moon and
 the lights are the world's.
 
 **How it runs:**
@@ -195,12 +195,14 @@ the lights are the world's.
   `game_world.update(player position)`: the depth camera takes the world's
   far distance and the height over the nearest ground, and the world is
   drawn around the player.
-- **Solid.** `world.enable_collision(CollisionLayers.TERRAIN_INTO,
-  max_distance=TERRAIN_COLLISION_RANGE_M)` adds an into-only `"terrain"`
-  collision node to every body, owned by WorldBuilder's `TerrainSurface`.
+- **Solid.** `load_world(..., collision_mask=CollisionLayers.TERRAIN_INTO)`
+  is all the scene says: WorldBuilder adds an into-only `"terrain"` collision
+  node to every body and every field, the ring's rocks included, owned by
+  WorldBuilder's `TerrainSurface` (`AsteroidSurface` for rocks).
   Ships, munitions and sensors hit it through the usual terrain handlers
   (see [docs/game.md](game.md)), the sea surface included.
-  - Only drawn chunks within `TERRAIN_COLLISION_RANGE_M` (10 km) of the
+  - Only drawn chunks within `COLLISION_RANGE_BODIES_M` (10 km, WorldBuilder's)
+    of the
     player are solid, at the drawn level of detail, which is coarser away
     from the player. Every chunk within that range is checked each frame, and
     the fights stay a few kilometres from the player.

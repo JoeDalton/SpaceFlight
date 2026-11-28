@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use WorldBuilder's unified reverse-Z camera instead of the old split depth duo #197
 - Easier keep-outs from WorldBuilder #197
 - Single asteroid field draw per frame #197
+- WorldBuilder handles terrain collision form A to Z, under TERRAIN_INTO mask #197
 - Render pipeline is now completed handled by WorldBuilder 0.6.0. AMD FSR1 is implemented as a bonus (compatible with all hardware) #197
 
 ### Fixed

@@ -239,11 +239,9 @@ def test_the_field_is_solid_as_terrain(monkeypatch):
 
     assert scene.field is game_world.world.field.return_value
     game_world.world.field.assert_called_once_with(SceneAsteroids.FIELD)
-    scene.field.enable_collision.assert_called_once_with(
-        CollisionLayers.TERRAIN_INTO,
-        name="terrain",  # the terrain's collision events and handlers
-        max_distance=SceneAsteroids.COLLISION_DISTANCE_M,
-    )
+    # WorldBuilder makes it solid, under the game's mask
+    assert load.call_args.kwargs["collision_mask"] == CollisionLayers.TERRAIN_INTO
+    game_world.world.enable_collision.assert_not_called()
 
 
 def test_the_world_follows_the_player(monkeypatch):

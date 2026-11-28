@@ -140,7 +140,7 @@ About 17 ms a frame, still:
 | The model shader's attrib set only when it changes; the bodies' arrays and the casters' bookkeeping kept between frames (WorldBuilder) | fewer render states made each frame |
 | The HUD's FPS and flare lines set only when their text changes | |
 | The speed dust animated in its vertex shader (`speed_dust.vert`) | a Python loop over 100 nodes gone |
-| The Earth-like ground solid within 10 km (`TERRAIN_COLLISION_RANGE_M`; WorldBuilder's default is now 20 km) | fewer chunks checked each frame |
+| The ground solid within 10 km (WorldBuilder's `COLLISION_RANGE_BODIES_M`) | fewer chunks checked each frame |
 | The cloud march's inputs bound once, the planet's rotation given only when it turns (WorldBuilder) | fewer render states made each frame |
 | Models flattened at load (`flatten_strong`; `"flatten": False` in `COMMON_ASSETS_TO_LOAD` for the turret and the menus' maps): a cr-90 goes from 57 geoms to 14, a gr-75 from 24 to 10 | 0.5-1.3 ms (median 14.9/14.0 ms still and 14.7 flying, against 14.9/15.0 and 16.0 unflattened; `--toggle flatten`) |
 
