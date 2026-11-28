@@ -143,7 +143,11 @@ def _game(mirror_visible: bool | None = True):
     player.rear_view_mirror = (
         None
         if mirror_visible is None
-        else SimpleNamespace(mirror_np="mirror", is_mirror_visible=mirror_visible)
+        else SimpleNamespace(
+            mirror_np="mirror",
+            is_mirror_visible=mirror_visible,
+            set_depth_mode=lambda mode: None,
+        )
     )
     return SimpleNamespace(
         app=SimpleNamespace(
@@ -152,7 +156,6 @@ def _game(mirror_visible: bool | None = True):
         ),
         game_time=SimpleNamespace(get_current_time=lambda: 4.0),
         player=player,
-        translucent_volumes={"bubble"},
         follow_render_origin=MagicMock(),
     )
 
@@ -163,7 +166,13 @@ def _mock_world(monkeypatch):
     world = MagicMock()
     world.field.return_value = field
     world.camera_render.return_value = np.array([0.0, 1.0, 0.0])
-    game_world = SimpleNamespace(world=world, depth=MagicMock(), update=MagicMock())
+    game_world = SimpleNamespace(
+        world=world,
+        depth=MagicMock(),
+        update=MagicMock(),
+        views=[],
+        load_steps=MagicMock(side_effect=lambda *a, **k: iter([None, None])),
+    )
     load = MagicMock(return_value=game_world)
     monkeypatch.setattr(scenes, "load_world", load)
     return load, game_world
@@ -212,27 +221,19 @@ def test_the_space_world_files_are_what_the_scenes_were():
     assert dense.density.clumping is not None and sparse.density.clumping is None
 
 
-def test_the_levels_keep_outs_go_into_the_loaded_file(monkeypatch):
-    """load_world has no argument for them: the scene loads a copy of the
-    file with them in its field, and no copy without."""
+def test_the_levels_keep_outs_go_to_load_world(monkeypatch):
+    """load_world adds them to the file's field: the scene only names them."""
     load, _ = _mock_world(monkeypatch)
     keep_outs = route_keep_outs([[0, 0, 0], [0, 1000, 0]], 10.0)
-    seen = []
-    load.side_effect = lambda app, path, **_: (
-        (seen.append(parse_world(path)) or load.return_value) and load.return_value
-    )
-    scene = SceneAsteroids(game=_game(), keep_outs=keep_outs)
-
-    scene.build_upfront()
-
-    (world,) = seen
-    assert world.fields[0].keep_outs == tuple(keep_outs)
-    assert load.call_args.args[1] != SceneAsteroids.WORLD_PATH  # a copy...
-    assert not load.call_args.args[1].exists()  # ...gone once loaded
-
-    load.reset_mock(side_effect=True)
-    SceneAsteroids(game=_game()).build_upfront()
+    SceneAsteroids(game=_game(), keep_outs=keep_outs).build_upfront()
     assert load.call_args.args[1] == SceneAsteroids.WORLD_PATH
+    assert load.call_args.kwargs["keep_outs"] == {
+        SceneAsteroids.FIELD: tuple(keep_outs)
+    }
+
+    load.reset_mock()
+    SceneAsteroids(game=_game()).build_upfront()
+    assert load.call_args.kwargs["keep_outs"] == {}
 
 
 def test_the_field_is_solid_as_terrain(monkeypatch):
@@ -242,16 +243,14 @@ def test_the_field_is_solid_as_terrain(monkeypatch):
 
     assert scene.field is game_world.world.field.return_value
     game_world.world.field.assert_called_once_with(SceneAsteroids.FIELD)
-    scene.field.enable_collision.assert_called_once_with(
-        CollisionLayers.TERRAIN_INTO,
-        name="terrain",  # the terrain's collision events and handlers
-        max_distance=SceneAsteroids.COLLISION_DISTANCE_M,
-    )
+    # WorldBuilder makes it solid, under the game's mask
+    assert load.call_args.kwargs["collision_mask"] == CollisionLayers.TERRAIN_INTO
+    game_world.world.enable_collision.assert_not_called()
 
 
 def test_the_world_follows_the_player(monkeypatch):
-    """Render's origin is the player: the world, its field and its split
-    cameras are updated around it."""
+    """Render's origin is the player: the world, its field and its depth
+    camera are updated around it."""
     _, game_world = _mock_world(monkeypatch)
     scene = SceneAsteroids(game=_game(mirror_visible=False))
     scene.build_upfront()
@@ -262,59 +261,55 @@ def test_the_world_follows_the_player(monkeypatch):
     scene.field.update.assert_not_called()  # the world did it, for the camera
 
 
-def test_the_split_keeps_off_the_translucent_volumes(monkeypatch):
+def test_the_scene_uses_the_worlds_depth_camera_as_it_is(monkeypatch):
     _, game_world = _mock_world(monkeypatch)
-    update = game_world.depth.update  # the split cameras' own
+    update = game_world.depth.update
     scene = SceneDebug(game=_game())
     scene.build_upfront()
 
-    scene.depth.update(2000.0, 5e5)
-
-    assert update.call_args.args == (2000.0, 5e5)
-    assert update.call_args.kwargs == {"translucent": ("bubble",)}
+    assert scene.depth.update is update
 
 
-def test_the_field_is_drawn_again_for_the_visible_mirror(monkeypatch):
-    """The world draws the field for the main camera: the mirror, when it is
-    shown, sees the rocks behind the player through a second update."""
+def test_the_visible_mirror_is_a_view_of_the_game_world(monkeypatch):
+    """The world draws the field for the main camera and its views: the
+    mirror, when it is shown, is one (no second field update)."""
     _, game_world = _mock_world(monkeypatch)
     scene = SceneAsteroids(game=_game(mirror_visible=True))
     scene.build_upfront()
 
     scene.update_after_recenter()
 
-    position = scene.game.player.pawn.position
-    (camera_world, camera_render), kwargs = scene.field.update.call_args
-    np.testing.assert_allclose(camera_world, position + [0.0, 1.0, 0.0])
-    np.testing.assert_allclose(camera_render, [0.0, 1.0, 0.0])
-    assert kwargs["cameras"] == ["main camera", "mirror"]
-
-
-@pytest.mark.parametrize("mirror_visible", [False, None])
-def test_the_field_is_not_drawn_again_without_a_mirror(monkeypatch, mirror_visible):
-    _mock_world(monkeypatch)
-    scene = SceneAsteroids(game=_game(mirror_visible=mirror_visible))
-    scene.build_upfront()
-
-    scene.update_after_recenter()
-
+    assert game_world.views == ["mirror"]
+    game_world.update.assert_called_once()
     scene.field.update.assert_not_called()
 
 
-def test_loading_waits_for_the_rock_shapes(monkeypatch):
+@pytest.mark.parametrize("mirror_visible", [False, None])
+def test_no_view_without_a_shown_mirror(monkeypatch, mirror_visible):
+    _, game_world = _mock_world(monkeypatch)
+    scene = SceneAsteroids(game=_game(mirror_visible=mirror_visible))
+    scene.build_upfront()
+    game_world.views.append("stale")
+
+    scene.update_after_recenter()
+
+    assert game_world.views == []
+
+
+def test_loading_waits_for_the_world(monkeypatch):
+    """The loading animation is held by the game world's load_steps, a frame
+    of the paused game per step, for as long as the game gives."""
     _, game_world = _mock_world(monkeypatch)
     monkeypatch.setattr(scenes, "SpeedDustCloud", MagicMock())
-    monkeypatch.setattr(scenes, "WORLD_QUIET_S", 0.0)
     scene = SceneAsteroids(game=_game())
     scene.build_upfront()
-    loading = iter([True, True, False])
-    type(game_world.world).loading = property(lambda _: next(loading, False))
 
     steps = list(scene.build_decomposed())
 
-    assert steps[0] == "dust"
-    assert steps.count("world") >= 2  # held while the world loads
-    assert scene.game.follow_render_origin.call_count >= 3
+    assert steps == ["dust", "world", "world"]
+    args, kwargs = game_world.load_steps.call_args
+    assert args == (scene.game.follow_render_origin,)
+    assert kwargs == {"timeout_s": scenes.WORLD_TIMEOUT_S}
 
 
 def test_ships_spawned_at_run_time_find_room(monkeypatch):
@@ -337,7 +332,7 @@ def test_ships_spawned_at_run_time_find_room(monkeypatch):
     )
 
 
-def test_cleaning_removes_the_split_cameras_then_the_world_with_its_field(
+def test_cleaning_removes_the_depth_camera_then_the_world_with_its_field(
     monkeypatch,
 ):
     """The world owns the field and the worker pool its shapes are built on."""

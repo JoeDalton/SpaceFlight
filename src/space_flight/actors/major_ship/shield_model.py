@@ -42,6 +42,7 @@ from panda3d.core import (
     TransparencyAttrib,
     Vec3,
 )
+from world_builder.clouds.cover import no_cover
 
 from space_flight.fx import load_glsl_shader
 
@@ -292,10 +293,10 @@ class ShieldModel:
         v.setTwoSided(True)
         v.setDepthWrite(False)
         # Drawn after the clouds, which sit in their own bin between "opaque" and
-        # "transparent" (see world_builder.clouds.field), so the translucent shield
-        # composites *over* a cloud behind it. Note the converse does NOT hold:
-        # the clouds write no depth, so a dense cloud in FRONT of the shield does
-        # not hide it.
+        # "transparent", so the translucent shield composites *over* a cloud
+        # behind it. The clouds write no depth: a cloud in FRONT of the shield
+        # hides it through the shader (WorldBuilder's cloud_cover.glsl, the
+        # bubble tracked by Scene.track_translucent).
         v.setBin("fixed", 60)
         v.reparentTo(parent)
 
@@ -354,7 +355,11 @@ class ShieldModel:
         base_alpha = color[3] if len(color) > 3 else _SHIELD_COLOR[3]
 
         v = self.visual
+        # The shader includes WorldBuilder's cloud_cover.glsl: its inputs with
+        # no cloud until the scene's world tracks the bubble
+        # (Scene.track_translucent)
         v.setShader(load_glsl_shader("shield.vert", "shield.frag"))
+        no_cover(v)
         # Look knobs
         v.setShaderInput("uColorFull", Vec3(r, g, b))
         v.setShaderInput("uColorMid", Vec3(*_SHIELD_COLOR_MID))

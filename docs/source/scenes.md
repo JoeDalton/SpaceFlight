@@ -44,18 +44,18 @@ API is in the [code reference](apidocs/index.rst).
 
 Every scene is a `SceneWorld`: its world is a WorldBuilder world file in
 `datafiles/worlds/`, loaded whole by `load_world` in `build_upfront` (see
-[the planet world](#planet-world-from-worldbuilder) for how), and `clean()`
+[the planet world](#planet-world--from-worldbuilder) for how), and `clean()`
 tears it down. The files define the objects and nothing about running them;
-the scene gives the quality, the game's clock and `LIGHT_SCALE`. `load_world`
-needs a window: no scene builds headless (see `WORLDBUILDER_WISHLIST.md`).
+the scene gives the quality, the game's clock and `LIGHT_SCALE`. Headless (no
+window), `load_world` builds the world without its depth camera and seas.
 
 Every frame, once the render origin has moved onto the player,
 `FlightState` calls `scene.update_after_recenter()`: it updates what must
-follow the origin (the world and the scene's split depth cameras, see
-[docs/game.md](game.md#split-depth)). It is a no-op by default.
+follow the origin (the world and the scene's depth camera, see
+[docs/game.md](game.md#depth)). It is a no-op by default.
 
-A scene owns its split cameras (`scene.depth`, the world's own, None until
-`build_upfront`), and `scene.release_depth()` removes them:
+A scene owns its depth camera (`scene.depth`, the world's own, None until
+`build_upfront`), and `scene.release_depth()` removes it:
 `FlightState.exit` calls it before the render pipeline goes.
 
 Missions also ask it `scene.clear_position(position, radius)` for ships
@@ -65,9 +65,9 @@ position itself in a scene without obstacles.
 Two more services every scene gives, through its WorldBuilder `World` when it
 has one:
 - **"Up"**: `scene.up_at(position)` is what the bots level their wings to
-  (see [ai.md](ai.md)). It points against the gravity of the world's bodies,
+  (see [ai.md](ai.md)). It is WorldBuilder's `World.up_at`: against the gravity of the world's bodies,
   or is `default_up_direction` (world +Z) where there is none or it is
-  negligible (`MIN_GRAVITY_NORM`). It is reckoned at the player's position at
+  negligible (WorldBuilder's `MIN_GRAVITY_NORM`). It is reckoned at the player's position at
   most every `UP_REFRESH_S` (1 s) and given for every position meanwhile: the
   ships stay a few kilometres from the player, and over that distance a
   planet's up turns by a fraction of a degree.
@@ -104,19 +104,19 @@ the world's field `FIELD` (`"field"`, `space/asteroid_field.yaml`).
   freezes them.
 - **Room.** The level's `keep_outs` (`common.route_keep_outs`: capsules
   along its routes, balls at its spawn points) are empty of rocks.
-  `load_world` has no argument for them, so the scene loads a copy of the
-  world file with them added to its field (`with_keep_outs`). Ships
+  The scene passes them to `load_world(keep_outs={field: [...]})`, which adds
+  them to the field's own. Ships
   spawned relative to the player (Mission 1's formation, Mission 2's
   smuggler and TIEs) go through `scene.clear_position`, the field's
   `find_clear`: the nearest place with room within 3 km.
 - **Drawn** by instancing, at levels of detail chosen by their pixel error,
-  for the main camera (by the world) and the rear-view mirror (a second
-  field update while the mirror is shown). Its shapes are built in the
+  for the main camera and the rear-view mirror (the mirror's camera is in
+  `GameWorld.views` while it is shown: one field update). Its shapes are built in the
   world's worker processes during the hyperspace animation;
   `build_decomposed` holds it until they are in (about 3 s). Lit by the
   world's sun and sky light, tone mapped like the ships.
-- **Solid** through `field.enable_collision(TERRAIN_INTO, name="terrain")`
-  (the world's field, `world.field(FIELD)`):
+- **Solid** through `load_world`'s `collision_mask` (WorldBuilder makes every
+  field's rocks solid, 20 km around the player; `world.field(FIELD)`):
   ships, munitions and sensors hit the drawn rocks through the terrain
   handlers. Its owner, WorldBuilder's `AsteroidSurface`, gives the material
   at a hit ("rock", or "snow" for an icy rock) and the speed of the turning
@@ -154,14 +154,14 @@ the world looks like or where things are, edit the file.
 body levels fly over), `LIGHT_SCALE` (about 0.4: it scales the Panda3D lights
 the world puts on render for the ships, which use fixed-function lighting
 with no tone map, so the world's physical noon sun would clip them to white)
-and `TERRAIN_COLLISION_RANGE_M`. There is no 2D planet: the sky, the moon and
+and nothing about collisions (see below). There is no 2D planet: the sky, the moon and
 the lights are the world's.
 
 **How it runs:**
 - **Placement.** WorldBuilder never rotates a planet, so the chart's
   reference point is not at the planet's +z pole.
-  `SceneSolarSystem.level_frame()` (a
-  [`LevelFrame`](../../src/space_flight/scenes/level_frame.py), made once from
+  `SceneSolarSystem.level_frame()` (
+  WorldBuilder's `BodyChart`, `WorldSpec.chart(PLANET)`, made once from
   the planet's body in the file) converts chart coordinates around the
   planet's centre, wherever the file puts it.
   - There, the chart's east, north and up are not the world's x, y and z.
@@ -169,8 +169,8 @@ the lights are the world's.
     gravity (see above).
   - Levels write their positions on the chart (x metres east, y metres north
     of the reference point, z metres above sea level), and
-    `LevelFrame.position(x, y, z)` turns them into world positions, on the
-    sphere. `LevelFrame.orientation(position, toward)` gives a level
+    `BodyChart.position(x, y, z)` turns them into world positions, on the
+    sphere. `BodyChart.orientation(position, toward)` gives a level
     orientation facing a point.
   - Mission 3 and Free Flight start at (0, -4000, 1300) on the chart: 900 m
     over the coastal plain, facing north to the coast. Mission 3's waves,
@@ -179,28 +179,31 @@ the lights are the world's.
     axes).
 - **Build.** `build_upfront` calls `load_world(app, WORLD_PATH, settings=...,
   clock=..., light_scale=..., light_period=...)` on the black screen, about
-  5 s. It builds the world and its split depth cameras (`GameWorld.depth`,
+  5 s. It builds the world and its depth camera (`GameWorld.depth`,
   `scene.depth`), after the player (whose camera the ocean's reflection
-  copies) and the render-scale pipeline (whose buffer the far camera draws
-  into). `scene.world` is the loaded `World`, which the scene's queries read.
-- **Loading.** `build_decomposed` ends with `wait_until_loaded`, which holds
-  the hyperspace tunnel until `world.loading` (ground and clouds) has stayed
-  False for half a second, at most a minute: about 11 s on this machine.
+  copies) and the render-scale pipeline (into whose buffer the camera
+  presents the view), and gives the camera's depth mode to the rear-view
+  mirror. `scene.world` is the loaded `World`, which the scene's queries read.
+- **Loading.** `build_decomposed` ends with `hold_loading`, which runs
+  WorldBuilder's `GameWorld.load_steps` to hold the hyperspace tunnel until
+  `world.loading` (ground and clouds) has stayed False for half a second, at
+  most `WORLD_TIMEOUT_S`: about 11 s on this machine.
   - The game loop is paused then, so each step is a
     `FlightState.follow_render_origin()`, as a frame would do.
   - `FlightState` centres render on the player as soon as the player exists,
     so the world loads around it.
 - **Every frame.** `update_after_recenter()` is
-  `game_world.update(player position)`: the split cameras follow the nearest
-  ground and the world is drawn around the player. The scene wraps the split
-  cameras' `update` so that the split stays off the game's translucent
-  volumes (shield bubbles), which `GameWorld.update` does not know of.
-- **Solid.** `world.enable_collision(CollisionLayers.TERRAIN_INTO,
-  max_distance=TERRAIN_COLLISION_RANGE_M)` adds an into-only `"terrain"`
-  collision node to every body, owned by WorldBuilder's `TerrainSurface`.
+  `game_world.update(player position)`: the depth camera takes the world's
+  far distance and the height over the nearest ground, and the world is
+  drawn around the player.
+- **Solid.** `load_world(..., collision_mask=CollisionLayers.TERRAIN_INTO)`
+  is all the scene says: WorldBuilder adds an into-only `"terrain"` collision
+  node to every body and every field, the ring's rocks included, owned by
+  WorldBuilder's `TerrainSurface` (`AsteroidSurface` for rocks).
   Ships, munitions and sensors hit it through the usual terrain handlers
   (see [docs/game.md](game.md)), the sea surface included.
-  - Only drawn chunks within `TERRAIN_COLLISION_RANGE_M` (10 km) of the
+  - Only drawn chunks within `COLLISION_RANGE_BODIES_M` (10 km, WorldBuilder's)
+    of the
     player are solid, at the drawn level of detail, which is coarser away
     from the player. Every chunk within that range is checked each frame, and
     the fights stay a few kilometres from the player.
@@ -221,10 +224,10 @@ the lights are the world's.
 
 ## Where things live
 
-`Scene` and its subclasses are in `scenes.py`, with the loading gate
-`wait_until_loaded` (which sleeps a few milliseconds per step while loading,
-so the worker processes' results get through a loading loop run flat out, as
-a headless build runs it). `level_frame.py` is the chart-to-world frame of a
+`Scene` and its subclasses are in `scenes.py` (the loading gate is
+WorldBuilder's `GameWorld.load_steps`, which sleeps a few milliseconds per
+step while loading, so the worker processes' results get through a loading
+loop run flat out, as a headless build runs it). `level_frame.py` is the chart-to-world frame of a
 planet of a WorldBuilder world file. `planet_2d.py` is the 2D planet. The world, the
 asteroid fields and their shaders are in WorldBuilder (`world_builder.world`,
 `world_builder.asteroids`).

@@ -147,10 +147,11 @@ def main():
     apply_toggles(args.toggle)
     app = SpaceFlightSimulator(interactive=False)
     config = app.graphics_settings.config
-    config["render"]["scale"] = 1.0
-    config["antialiasing"].update(msaa=0, fxaa=False)
     world = dict(config.get("world") or {})
     overrides = dict(world.get("overrides") or {})
+    # The view at the window's size, no anti-aliasing (WorldBuilder's render
+    # section's defaults), whatever the user's settings; --world may set it.
+    overrides.pop("render", None)
     for section, knobs in world_overrides(args.world).items():
         overrides[section] = {**overrides.get(section, {}), **knobs}
     config["world"] = {**world, "overrides": overrides}

@@ -7,11 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Use WorldBuilder's unified reverse-Z camera instead of the old split depth duo #197
+- Easier keep-outs from WorldBuilder #197
+- Single asteroid field draw per frame #197
+- WorldBuilder handles terrain collision form A to Z, under TERRAIN_INTO mask #197
+- WorldBuilder handles the world loading gate #197
+- level chart from WorldBuilder #197
+- Render pipeline is now completed handled by WorldBuilder 0.6.0. AMD FSR1 is implemented as a bonus (compatible with all hardware) #197
+
+### Fixed
+
+- Headless runs of levels work again (WorldBuilder's `load_world` without a
+  window: no depth camera, no sea) #189 #197
+- Interaction between clouds and translucent objects #197
+
+
+
 ## [0.6.2] - 2026-11-26
 
 ### Fixed
 
 - Fixed linux python-xlib dependency #195
+
+
 
 ## [0.6.1] - 2026-11-22
 
@@ -20,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed fullscreen on primary linux + multimonitor #193
 - Centerd splashscreen on primary monitor #193
 - Fixed test on github macos CI by increasing world loading timeout #193
+
 
 
 ## [0.6.0] - 2026-11-22
@@ -31,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rely on the new Worldbuilder loading interface #189
+- Build against WorldBuilder 0.5.0 (new world loading interface) #189
 - Headless runs of levels are broken until WorldBuilder's `load_world` supports them #189
 
 ### Fixed

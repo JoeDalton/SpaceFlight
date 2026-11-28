@@ -18,9 +18,9 @@ its [ocean](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/ocea
   (`hash`/`smoothNoise` and a variant `fbm`), from the same lineage as
   WorldBuilder's ocean shaders.
 - Shaders that sample an offscreen render target correct for Panda3D padding
-  it up to a power of two: the composite samples only the `texScale` fraction
-  of the scene texture (WorldBuilder's ocean does the same for its reflection,
-  with `uReflUVScale`). (The hyperspace shaders work from
+  it up to a power of two (WorldBuilder's ocean samples only the
+  `uReflUVScale` fraction of its reflection; the rear-view mirror's card
+  takes its texture's tex scale). (The hyperspace shaders work from
   `gl_FragCoord`/`iResolution` on plain render2d cards and don't need this.)
 - **Render space is not world space.** The render origin stays on the player
   (see [the floating render origin](game.md#the-floating-render-origin)), so
@@ -101,24 +101,12 @@ effect. The warp look lets the scene show through everywhere but the streaks.
 `into` and `outof` are adapted from one ShaderToy source and `inside` from
 another (MIT); the header comments carry the credits.
 
-## Render-scale / anti-aliasing pipeline shaders
+## Render scale, anti-aliasing and FSR 1
 
-Driven by
-[`GraphicsManager.begin_scene_render`](../../src/space_flight/global_architecture/graphics_manager.py)
-(see [global_architecture.md](global_architecture.md)) to composite the
-(possibly downscaled) offscreen 3D render onto the window. Both fragment
-shaders share the fullscreen-quad passthrough
-[`composite.vert`](../../src/space_flight/datafiles/shaders/composite.vert).
-
-- **[`blit.frag`](../../src/space_flight/datafiles/shaders/blit.frag)** (FXAA
-  off) samples the scene texture, scaled by `texScale`, and lets GPU texture
-  filtering do any upscaling.
-- **[`fxaa.frag`](../../src/space_flight/datafiles/shaders/fxaa.frag)** (FXAA
-  on) is a simplified port of Timothy Lottes' FXAA3: it estimates an edge
-  direction from the luma of the four diagonal neighbours, blends two taps
-  along it (`rgbA`) and two more further out (`rgbB`), and outputs `rgbB`
-  unless its luma leaves the local range (`lumaMin`/`lumaMax`), in which case
-  it falls back to `rgbA`.
+The game has no post-process shaders of its own any more: the view's way to
+the screen (render scale, MSAA, FXAA, FSR 1's EASU and RCAS) is WorldBuilder's
+(`world_builder.post`), drawn by the world's depth camera and by the rear-view
+mirror's chain.
 
 ## Shield shaders
 
@@ -142,6 +130,15 @@ Driven by
     (`_IMPACT_RADIUS_M`) converted to the geometry's local units, so a hit
     leaves the same mark on any bubble; the pattern and death scales instead
     follow the bubble's size.
+  - **Behind a cloud.** The clouds write no depth, and the bubble (depth
+    write off, bin `fixed` 60) is drawn after them: it includes WorldBuilder's
+    `cloud_cover.glsl` and scales its alpha by `1 - cloudCoverBefore(...)` at
+    its distance from the eye, so a cloud in front hides it (a thin one in
+    part) and one behind stays behind. The scene tracks the bubble
+    (`Scene.track_translucent`, WorldBuilder's `World.track_translucent`),
+    which sets its inputs every frame; `no_cover` gives it inputs with no
+    cloud until then, and the rear-view mirror and the sea's reflection draw
+    it without cover (the clouds are marched for the main view).
   - **Death/appearance animation** — "fluid retracting into random points" —
     is a per-fragment mask over the living look, driven by `uDeath`, which
     Python ramps 0 → 1 to die or 1 → 0 to reappear (no mesh changes). Material
@@ -232,6 +229,23 @@ player firing forward), where it is a bright disc rather than a flat sliver.
   with depth write off; it writes `gl_FragDepth` at the ray point nearest the
   core, so opaque geometry occludes bolts while bolts never occlude each other
   or translucent geometry.
+
+## Behind the clouds
+
+The world's clouds write no depth, and every translucent effect drawn in the
+world (the shield bubbles, fire and smoke `explosion.frag`, `spark.frag`,
+`laser.frag`, `speed_dust.frag`) is drawn after them with depth write off: on
+its own it would be laid over a cloud in front of it. Each includes
+WorldBuilder's `cloud_cover.glsl` (`load_glsl_shader` puts its folder on Panda's
+model path) and fades by `cloudCoverBefore(gl_FragCoord.xy, distance)`, the
+opacity of the cloud between the eye and the fragment: the alpha for the
+straight-alpha and alpha-weighted additive ones, the colour for the laser's
+`ONE, ONE` glow. Their nodes are tracked by the scene's world
+(`Scene.track_translucent`: the fire, smoke and spark pools in
+`SceneWorld.build_upfront`, the shields, laser bolts and speed dust as they are
+made), and get no-cloud inputs (`no_cover`) until then. The rear-view mirror
+draws them without cover (`World.cover_off_in`). The ordnance spheres are
+fixed-function and not covered.
 
 ## Cockpit damage overlay shaders
 

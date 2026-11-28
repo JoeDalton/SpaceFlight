@@ -105,6 +105,7 @@ from panda3d.core import (
     TransparencyAttrib,
     Vec3,
 )
+from world_builder.clouds.cover import no_cover, use_glsl_dir
 
 from space_flight import DATAFILES_PATH
 
@@ -284,6 +285,9 @@ class ParticleBuffer:
         # the custom shader.
         self.node_path.setTransparency(TransparencyAttrib.MAlpha)
         self.node_path.setShader(shader)
+        # Its shader fades by the clouds in front (cloud_cover.glsl): no cloud
+        # until the scene's world tracks it (Scene.track_translucent)
+        no_cover(self.node_path)
         if texture is not None:
             # Binding to the default TextureStage makes the texture accessible
             # as p3d_Texture0 in the shader without any manual sampler setup.
@@ -513,6 +517,8 @@ def load_glsl_shader(vertex: str, fragment: str) -> Shader:
     :param fragment: The fragment shader file name, in datafiles/shaders
     :return: The shared :class:`Shader`
     """
+    # The world's effects include WorldBuilder's cloud_cover.glsl
+    use_glsl_dir()
     return Shader.load(
         Shader.SL_GLSL,
         vertex=DATAFILES_PATH / "shaders" / vertex,

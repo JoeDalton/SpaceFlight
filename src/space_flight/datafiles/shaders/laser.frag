@@ -1,4 +1,9 @@
 #version 140
+
+// The clouds in front (WorldBuilder's cloud_cover.glsl, on Panda's model
+// path): the clouds write no depth, so this, drawn after them, fades itself
+// by the cloud between the camera and each fragment.
+#pragma include "cloud_cover.glsl"
 // Laser bolt fragment shader: an analytic "capsule impostor".
 //
 // Every fragment of the camera-facing card shoots a ray from the eye through
@@ -14,6 +19,9 @@
 // the bolt renders correctly in the main view, the mirrors and the reflection
 // alike, with no per-pass uniforms.
 
+// WorldBuilder's shared depth mode (world_builder.depth.depth_mode_input)
+uniform int uDepthMode;
+const int DEPTH_REVERSED_01 = 1;  // world_builder.depth.DEPTH_REVERSED_01
 uniform mat4 p3d_ModelViewProjectionMatrix;   // model -> clip
 uniform mat4 p3d_ModelMatrixInverse;          // world -> model
 uniform mat4 p3d_ViewMatrixInverse;           // view  -> world (column 3 = eye)
@@ -62,12 +70,18 @@ void main() {
     vec3 col = uColor * glow + vec3(1.0) * core;
 
     if (max(col.r, max(col.g, col.b)) < 0.004) discard;
+    // Additive (ONE, ONE): the colour alone. The bolt's model units are metres.
+    col *= 1.0 - cloudCoverBefore(gl_FragCoord.xy, length(pRay - eye));
 
     // Depth of the ray point nearest the core, so OPAQUE geometry occludes the
     // bolt correctly. Depth WRITE is disabled from Python (additive glow), so
     // this value only feeds the depth TEST.
+    // In the view's depth convention (WorldBuilder's depth_convention.glsl):
+    // under clip control (DEPTH_REVERSED_01) p3d's matrices already hold the
+    // 0-1 remap; otherwise OpenGL's window remap of [-1, 1].
     vec4 clip = p3d_ModelViewProjectionMatrix * vec4(pRay, 1.0);
-    gl_FragDepth = 0.5 * (clip.z / clip.w) + 0.5;
+    float ndc = clip.z / clip.w;
+    gl_FragDepth = uDepthMode == DEPTH_REVERSED_01 ? ndc : 0.5 * ndc + 0.5;
 
     // Additive blend (ONE, ONE) is set from Python: rgb is the light deposited,
     // so bolts are order-independent w.r.t. each other and translucent geometry.

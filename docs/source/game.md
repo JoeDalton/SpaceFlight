@@ -49,10 +49,10 @@ HUD, and drives the per-frame update.
   → kill destructibles whose health hit zero → resolve collisions →
   recompute actor interactions → integrate physics → run every actor's
   registered update methods (`game.method_lists`) → re-centre the render
-  origin on the player, then the depth split and the scene follow it
+  origin on the player, then the depth camera and the scene follow it
   (`follow_render_origin`, see
   [The floating render origin](#the-floating-render-origin) and
-  [Split depth](#split-depth)) → check player death. **`update_mission_task`** separately advances `game.mission`. Both
+  [Depth](#depth)) → check player death. **`update_mission_task`** separately advances `game.mission`. Both
   are no-ops while `is_paused`.
 - **`initialize_game_structure()`** builds the session-scoped objects in
   dependency order; **`exit()`** tears them down in roughly reverse order
@@ -155,57 +155,49 @@ placed to the millimetre at the moon's distance) and by the
 [`tests/test_flight_state.py`](../../tests/test_flight_state.py), including one
 that shows the imprecision without it.
 
-## Split depth
+## Depth
 
-One depth buffer cannot cover a cockpit a metre away and a horizon 600 km
-away. With a 24-bit buffer and a 1 m near plane, two surfaces at 10 km must
-be about 6 m apart to be told apart, and distant ground and sea shimmer into
-each other.
+One standard depth buffer cannot cover a cockpit a metre away and a horizon
+600 km away: with a 24-bit buffer and a 1 m near plane, two surfaces at 10 km
+must be about 6 m apart to be told apart.
 
-`Scene.depth` is WorldBuilder's `SplitDepthCameras`, in every drawn level,
-so the level scripts never deal with it:
-- A far camera draws everything past a **split** distance first.
-- The depth buffer is cleared.
-- The main camera (`app.cam`) then draws from 1 m to the split.
+`Scene.depth` is WorldBuilder's `ReversedDepthCamera` (WorldBuilder #57), in
+every drawn level, so the level scripts never deal with it: one camera with a
+reversed, infinite projection (near at 1, infinity at 0) and a 32-bit float
+depth buffer, about 1e-7 of the distance at every range. It draws the view
+into a scene buffer of its own, at the world's render scale and with its MSAA
+(the graphics settings' `world.render`), and shows it in the window where
+`app.cam` drew, through WorldBuilder's post chain (a copy, FXAA, or FSR 1).
+`app.cam`'s region is switched off meanwhile.
 
-Each camera gets the whole buffer for its own range.
+**Clip control.** `simulator.py` sets `gl-depth-zero-to-one #t` before the
+window opens (OpenGL's 0-1 depth keeps the float precision); not on macOS,
+whose OpenGL has none: there the depth keeps about a 24-bit range's precision
+(far planets' depths may fight). The near plane stays at 1 m everywhere.
 
 **Lifecycle.**
-- The scene builds it in `build_upfront`, so after the render-scale /
-  anti-aliasing pipeline, whose offscreen buffer the far camera then draws
-  into too. It is the loaded world's (`GameWorld.depth`, from WorldBuilder's
-  `load_world`).
-- Each frame, `follow_render_origin()` calls `scene.update_after_recenter()`,
-  which sets its ranges (split and far distances, metres) and draws the world
-  inside the far camera's range.
-- `exit()` has the scene remove it (`Scene.release_depth()`) before the render
-  pipeline.
-- No scene builds headless for now (`load_world` needs a window).
+- The scene builds it in `build_upfront`. It is the loaded world's (`GameWorld.depth`, from WorldBuilder's `load_world`), and the
+  scene hands its depth mode to the rear-view mirror.
+- Each frame, `follow_render_origin()` calls `scene.update_after_recenter()`:
+  `GameWorld.update` gives the camera the world's far distance, and draws the
+  world.
+- `exit()` has the scene remove it (`Scene.release_depth()`, which also gives
+  the mirror the standard depth back) first.
+- Headless (no window), `load_world` builds no depth camera
+  (`GameWorld.depth` is None) and no sea: `build_upfront` then leaves the
+  mirror as it is.
 
-**Ranges.**
-- The world chooses them (`World.depth_ranges`, inside `GameWorld.update`):
-  over a planet the split follows the ground; in open space it is at 2 km,
-  which gives about 0.25 m depth steps there. The sky and the 2D planets lie
-  beyond the split, so only the far camera draws them.
-
-**Translucent volumes.** The near camera reaches 2% past the split, so the
-two ranges never leave a gap. A big translucent volume with no depth write,
-such as a shield bubble, would be blended twice in that band and show a ring
-at the split distance. So the split never cuts one:
-- owners register their volumes in `FlightState.translucent_volumes` (`Shield`
-  does for its bubble);
-- the scene hands them to `SplitDepthCameras.update(..., translucent=...)`,
-  which moves the split in front of any it would cut, or
-  past it from inside (see WorldBuilder's `world_builder.depth`).
-
-**What reads the lens.**
-- The main lens (`app.camLens`) now ends at the split. Its near and far do not
-  change where a point lands on screen, so the HUD's markers
-  (`project_to_screen`) are unaffected.
-- The laser shader's depth uses Panda's per-camera
-  `p3d_ModelViewProjectionMatrix`, right in both passes.
-- The rear-view mirror copies the lens but sets its own range back to
-  `CAMERA_FAR_M`.
+**What draws or reads depth.**
+- The HUD's markers (`project_to_screen`) project through `app.camLens`, which
+  stays a standard lens: unaffected.
+- The laser writes its own depth (`laser.frag`): through WorldBuilder's shared
+  depth mode (`uDepthMode`, `world_builder.depth.depth_mode_input`).
+- The rear-view mirror draws the scene with a camera of its own: reversed too
+  (`RearViewMirror.set_depth_mode`), or the sky, pinned at the reversed far
+  plane, fails its depth test there.
+- Translucent volumes (shield bubbles) are drawn once by the one camera. A
+  cloud in front of one hides it through its shader (WorldBuilder's
+  `cloud_cover.glsl`, see [shaders.md](shaders.md)).
 
 ## Time keeping
 

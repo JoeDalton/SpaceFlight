@@ -3,8 +3,9 @@
 This page is for developers profiling the game's CPU cost. It covers how to
 measure it, where the time currently goes, and which optimization levers are
 left, with their expected gain and trade-offs. Rendering (GPU) is out of scope:
-all figures come from headless runs, which don't render (headless level runs
-are broken for now: see `WORLDBUILDER_WISHLIST.md`).
+all figures come from headless runs, which don't render (a level headless
+builds its world without the depth camera and seas: WorldBuilder's
+`load_world` without a window).
 
 ## Measuring
 
@@ -100,8 +101,8 @@ Each is worth a few percent at most.
 
 Mission 3 is the heaviest level: WorldBuilder's planet (terrain, raymarched
 clouds with genera and cirrus, swell ocean, shadows) and some 25 ships lit and
-shadowed by the world. The headless harness cannot run it (it draws nothing,
-and `load_world` needs a window), so it is measured drawn, by
+shadowed by the world. The headless harness draws nothing (its world has no
+depth camera, seas or GPU passes), so it is measured drawn, by
 `scripts/bench_mission3.py`: the real game in an offscreen buffer at a fixed
 size and render scale 1.0, warmed up until the first waves have spawned and the
 world has settled, then 600 frames each waiting for the GPU (CPU and GPU in
@@ -139,7 +140,7 @@ About 17 ms a frame, still:
 | The model shader's attrib set only when it changes; the bodies' arrays and the casters' bookkeeping kept between frames (WorldBuilder) | fewer render states made each frame |
 | The HUD's FPS and flare lines set only when their text changes | |
 | The speed dust animated in its vertex shader (`speed_dust.vert`) | a Python loop over 100 nodes gone |
-| The Earth-like ground solid within 10 km (`TERRAIN_COLLISION_RANGE_M`; WorldBuilder's default is now 20 km) | fewer chunks checked each frame |
+| The ground solid within 10 km (WorldBuilder's `COLLISION_RANGE_BODIES_M`) | fewer chunks checked each frame |
 | The cloud march's inputs bound once, the planet's rotation given only when it turns (WorldBuilder) | fewer render states made each frame |
 | Models flattened at load (`flatten_strong`; `"flatten": False` in `COMMON_ASSETS_TO_LOAD` for the turret and the menus' maps): a cr-90 goes from 57 geoms to 14, a gr-75 from 24 to 10 | 0.5-1.3 ms (median 14.9/14.0 ms still and 14.7 flying, against 14.9/15.0 and 16.0 unflattened; `--toggle flatten`) |
 

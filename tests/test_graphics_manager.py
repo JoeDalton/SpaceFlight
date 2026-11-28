@@ -2,14 +2,9 @@
 Unit tests for
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
 
-These cover the parts that can run headless (no GSG / FilterManager):
-- :meth:`get_render_size` — window vs render-scale buffer size
-- :meth:`_build_window_props` — WindowProperties from settings
-- :meth:`_update_pipeline_uniforms` — pad-correction uniform feed
-- :meth:`begin_scene_render` — the no-op fast path (scale 1.0, no AA)
-
-The full render-to-texture pipeline needs a real GraphicsStateGuardian and is
-exercised separately (manual / integration), not here.
+These cover the window's settings (:meth:`_build_window_props`, the delayed
+fullscreen). Render scale and anti-aliasing are WorldBuilder's (the world's
+``render`` settings, tested there).
 """
 
 from types import SimpleNamespace
@@ -31,30 +26,11 @@ def _full_config(**overrides):
     """A complete, valid settings dict with optional per-section overrides."""
     cfg = {
         "display": {"mode": "fullscreen", "windowed_size": [1280, 720]},
-        "render": {"scale": 1.0, "mirror_scale": 1.0},
-        "antialiasing": {"msaa": 0, "fxaa": False},
+        "mirror": {"scale": 1.0, "msaa": 0, "fxaa": False, "fsr": False},
     }
     for section, values in overrides.items():
         cfg[section].update(values)
     return cfg
-
-
-# ---------------------------------------------------------------------------
-# get_render_size
-# ---------------------------------------------------------------------------
-
-
-class TestGetRenderSize:
-    def test_returns_window_size_when_pipeline_inactive(self):
-        mgr, app = _make_manager(_full_config())
-        app.win.getXSize.return_value = 1920
-        app.win.getYSize.return_value = 1080
-        assert mgr.get_render_size() == (1920, 1080)
-
-    def test_returns_buffer_size_when_pipeline_active(self):
-        mgr, _ = _make_manager(_full_config())
-        mgr._render_size = (800, 600)
-        assert mgr.get_render_size() == (800, 600)
 
 
 # ---------------------------------------------------------------------------
@@ -171,101 +147,14 @@ class TestGoFullScreenTask:
         assert props.getFullscreen() is True
 
 
-# ---------------------------------------------------------------------------
-# _update_pipeline_uniforms
-# ---------------------------------------------------------------------------
+def test_the_game_asks_for_clip_control_but_on_macos():
+    """WorldBuilder's reversed camera keeps a float depth buffer's precision
+    with OpenGL's 0-1 depth (gl-depth-zero-to-one), set before the window
+    opens; macOS's OpenGL has none."""
+    import sys
 
+    from world_builder.depth import zero_to_one
 
-class TestUpdatePipelineUniforms:
-    def test_feeds_texscale_and_rcpframe_from_texture(self):
-        mgr, _ = _make_manager(_full_config())
-        mgr._scene_quad = MagicMock()
-        mgr._scene_tex = MagicMock()
-        mgr._scene_tex.getTexScale.return_value = (0.5, 0.75)
-        mgr._render_size = (800, 600)
-        task = MagicMock()
+    import space_flight.global_architecture.simulator  # noqa: F401  (its PRC)
 
-        result = mgr._update_pipeline_uniforms(task)
-
-        assert result == task.cont
-        calls = {
-            c.args[0]: c.args[1] for c in mgr._scene_quad.setShaderInput.call_args_list
-        }
-        assert calls["texScale"] == (0.5, 0.75)
-        assert calls["rcpFrame"] == pytest.approx((0.5 / 800, 0.75 / 600))
-
-    def test_returns_done_when_pipeline_torn_down(self):
-        mgr, _ = _make_manager(_full_config())
-        mgr._scene_quad = None
-        task = MagicMock()
-        assert mgr._update_pipeline_uniforms(task) == task.done
-
-
-# ---------------------------------------------------------------------------
-# begin_scene_render — no-op fast path
-# ---------------------------------------------------------------------------
-
-
-class TestBeginSceneRenderNoOp:
-    def test_vanilla_settings_skip_pipeline(self):
-        mgr, app = _make_manager(_full_config())
-        mgr.begin_scene_render()
-        # No offscreen pipeline created; render size falls back to the window.
-        assert mgr._render_size is None
-        assert mgr._filter_manager is None
-        # The window/camera were never rerouted.
-        app.cam.assert_not_called()
-
-    def test_pipeline_built_when_scale_below_one(self, monkeypatch):
-        # Stop before touching the GSG: assert we get past the early-return guard
-        # by having FilterManager raise, which we catch as "attempted to build".
-        mgr, app = _make_manager(_full_config(render={"scale": 0.5}))
-        built = {}
-
-        class _Boom(Exception):
-            pass
-
-        def _fake_fm(*a, **k):
-            built["called"] = True
-            raise _Boom()
-
-        monkeypatch.setattr(
-            "space_flight.global_architecture.graphics_manager.FilterManager",
-            _fake_fm,
-        )
-        app.win.getXSize.return_value = 1000
-        app.win.getYSize.return_value = 800
-        with pytest.raises(_Boom):
-            mgr.begin_scene_render()
-        assert built.get("called") is True
-        assert mgr._render_size == (500, 400)
-
-
-# end_scene_render — the pipeline's buffers
-# ---------------------------------------------------------------------------
-
-
-class TestEndSceneRender:
-    def test_buffers_lose_their_display_regions(self):
-        """FilterManager.cleanup leaves the buffers' display regions on the
-        camera: the next level's depth split would take the dead one and draw
-        its far camera into a buffer that no longer exists (everything past
-        the split black). They are removed before the cleanup."""
-        mgr, _app = _make_manager(_full_config())
-        calls = []
-        buffer = MagicMock()
-        buffer.remove_all_display_regions.side_effect = lambda: calls.append("regions")
-        manager = MagicMock()
-        manager.buffers = [buffer]
-        manager.cleanup.side_effect = lambda: calls.append("cleanup")
-        mgr._filter_manager = manager
-
-        mgr.end_scene_render()
-
-        assert calls == ["regions", "cleanup"]
-        assert mgr._filter_manager is None
-
-    def test_without_a_pipeline_nothing_happens(self):
-        mgr, _app = _make_manager(_full_config())
-        mgr.end_scene_render()  # no error
-        assert mgr._filter_manager is None
+    assert zero_to_one() == (sys.platform != "darwin")

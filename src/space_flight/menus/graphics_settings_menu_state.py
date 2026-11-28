@@ -11,7 +11,14 @@ other setting is read on the next level load (hence the warning shown above
 the Save button). See
 :class:`~space_flight.global_architecture.graphics_manager.GraphicsManager`.
 
-The WorldBuilder rows (terrain, air, sky, clouds, ocean) are generated from
+Near the top: the display (its mode, then WorldBuilder's frame cap), the
+view's render scale, MSAA, FXAA and FSR 1 (WorldBuilder's render section, its
+upscaler shown as an FSR 1 checkbox), then the rear-view mirror's resolution,
+MSAA, FXAA and FSR 1 (the game's ``mirror`` section). Both resolutions are
+drop-downs over the render scale presets (native, AMD's FSR 1 modes, ultra
+performance: ``world_builder.post.SCALE_PRESETS``).
+
+The WorldBuilder rows (terrain, air, sky, clouds, ocean, render) are generated from
 :meth:`WorldSettings.schema`, so this menu names none of their knobs: a
 "World" preset drop-down, then per section a preset drop-down and one row per
 knob. They edit ``working_config["world"]`` through :class:`WorldSettings`,
@@ -23,14 +30,11 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from world_builder.post import BILINEAR, FSR1, SCALE_PRESETS, RenderSettings
 from world_builder.settings import WorldSettings
 
 from space_flight.global_architecture.graphics_settings import (
-    _MAX_MIRROR,
-    _MAX_SCALE,
-    _MIN_MIRROR,
-    _MIN_SCALE,
-    _VALID_MSAA,
+    _VALID_MIRROR_MSAA,
     DEFAULT_GRAPHICS_FILE,
     GraphicsSettings,
 )
@@ -54,22 +58,34 @@ if TYPE_CHECKING:
 # Display mode is a small fixed button group.
 _MODE_OPTIONS = [("Fullscreen", "fullscreen"), ("Windowed", "windowed")]
 
-# Continuous quality sliders: path -> (label, (min, max)). The ranges are the
-# ones sanitise() clamps to.
-_SCALE_SLIDERS = {
-    ("render", "scale"): ("Render Scale", (_MIN_SCALE, _MAX_SCALE)),
-    ("render", "mirror_scale"): ("Mirror Quality", (_MIN_MIRROR, _MAX_MIRROR)),
+# Resolution drop-downs over the render scale presets: path -> label. The
+# view's (WorldBuilder's render scale) and the mirror's (of its card's size).
+_SCALE_PRESET_ROWS = {
+    ("world", "render", "scale"): "Render Resolution",
+    ("mirror", "scale"): "Mirror Resolution",
 }
 
-# Sliders over discrete stops: path -> (label, values, value labels). Cheapest
-# first, so dragging right costs more, like every other slider here.
+# Sliders over discrete stops (on_discrete_slider), cheapest first so dragging
+# right costs more, like every other slider here: path -> (label, values,
+# value labels). The view's MSAA (a WorldBuilder choice, stored by its label)
+# and the mirror's.
 _DISCRETE_SLIDERS = {
-    ("antialiasing", "msaa"): ("MSAA", _VALID_MSAA, ("Off", "2x", "4x", "8x")),
+    ("world", "render", "msaa"): (
+        "MSAA",
+        tuple(dict(RenderSettings.knobs())["msaa"].choices),
+        tuple(dict(RenderSettings.knobs())["msaa"].choices),
+    ),
+    ("mirror", "msaa"): (
+        "Mirror MSAA",
+        _VALID_MIRROR_MSAA,
+        tuple("Off" if n == 0 else f"{n}x" for n in _VALID_MIRROR_MSAA),
+    ),
 }
 
 # Checkbox toggles: path -> label.
 _CHECKBOXES = {
-    ("antialiasing", "fxaa"): "FXAA",
+    ("mirror", "fxaa"): "Mirror FXAA",
+    ("mirror", "fsr"): "Mirror FSR 1",
     ("compatibility", "alternate_model_orientation"): "Alternate Model Orientation",
     ("hud", "fps_counter"): "FPS Counter",
 }
@@ -78,11 +94,20 @@ _CHECKBOXES = {
 # in the order they appear there; override only where title-casing the key
 # reads oddly. The "world" section is listed apart: its rows come from
 # WorldBuilder's schema (see make_world_rows).
-_SECTIONS = ("display", "render", "antialiasing", "compatibility", "hud")
+_SECTIONS = ("display", "mirror", "compatibility", "hud")
 _SECTION_LABELS = {"hud": "HUD"}
 
 # The world rows' widget paths start with this key, like the config's section
 _WORLD = "world"
+# WorldBuilder's sections shown near the top instead of among the world's:
+# its display's (the frame cap) under the game's display header, then the
+# view's render scale and anti-aliasing
+_DISPLAY_SECTION = "display"
+_TOP_SECTION = "render"
+# Its upscaler, shown as an FSR 1 checkbox: (checked, unchecked) choice labels
+_UPSCALER = (_WORLD, _TOP_SECTION, "upscaler")
+_UPSCALER_KNOB = dict(RenderSettings.knobs())["upscaler"]
+_FSR_SWITCH = (_UPSCALER_KNOB.label_of(FSR1), _UPSCALER_KNOB.label_of(BILINEAR))
 # A preset drop-down's extra option: the values are no preset's
 _CUSTOM = "custom"
 
@@ -107,6 +132,22 @@ def _section_label(name: str) -> str:
 def _pct(value: float) -> str:
     """Format a fraction as a rounded percentage string."""
     return f"{round(value * 100)}%"
+
+
+def _scale_options(value: float) -> list[tuple[str, float]]:
+    """
+    :param value: The current scale (a saved one may be no preset's)
+    :return: A resolution drop-down's (label, scale) options, best first:
+        "Native (100%)" ... "Ultra Performance (33%)", then "Custom (75%)"
+        when *value* is no preset's
+    """
+    options = [
+        (f"{name.title()} ({_pct(scale)})", scale)
+        for name, scale in SCALE_PRESETS.items()
+    ]
+    if all(abs(scale - value) > 1e-6 for _, scale in options):
+        options.append((f"Custom ({_pct(value)})", value))
+    return options
 
 
 def _knob_decimals(knob: dict) -> int:
@@ -241,16 +282,16 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             if kind == "mode":
                 self.add_mode_row(y)
                 widgets = [btn for _, btn in self.mode_buttons]
-            elif kind == "slider":
-                self.add_slider_row(row["path"], y)
-                widgets = [self.sliders[row["path"]]]
-            elif kind == "discrete":
-                self.add_discrete_row(row["path"], y)
-                widgets = [self.sliders[row["path"]]]
+            elif kind == "scale_preset":
+                widgets = [self.add_scale_preset_row(row["path"], y)]
             elif kind == "world_level":
                 widgets = [self.add_world_level_row(row["path"], row["label"], y)]
             elif kind == "world_knob":
                 widgets = [self.add_world_knob_row(row["path"], row["knob"], y)]
+            elif kind == "world_switch":
+                widgets = [self.add_world_switch_row(row["path"], row["label"], y)]
+            elif kind == "discrete":
+                widgets = [self.add_discrete_row(row["path"], y)]
             else:
                 self.add_checkbox_row(row["path"], row["label"], y)
                 widgets = [self.checkboxes[row["path"]]]
@@ -291,29 +332,63 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             text, _VALUE_LABEL_X, y
         )
 
-    def add_slider_row(self, path: tuple, y: float):
-        """Add a continuous quality slider row (label, slider, % value)."""
-        label, value_range = _SCALE_SLIDERS[path]
-        self.scroll_list.add_row_label(label, y)
-        value = get_by_path(self.working_config, path)
-        self.sliders[path] = CustomSlider(
+    def add_checkbox_row(self, path: tuple, label: str, y: float):
+        """Add a boolean setting label and checkbox to the scroll canvas."""
+        self.checkboxes[path] = self.scroll_list.add_checkbox_row(
+            label,
+            y,
+            get_by_path(self.working_config, path),
+            self.on_checkbox_toggle,
+            extraArgs=[path],
+        )
+
+    def add_scale_preset_row(self, path: tuple, y: float):
+        """
+        Add a resolution drop-down over the render scale presets
+        (:data:`_SCALE_PRESET_ROWS`).
+
+        :return: The drop-down
+        """
+        self.scroll_list.add_row_label(_SCALE_PRESET_ROWS[path], y)
+        value = self.scale_value(path)
+        self.drop_downs[path] = CustomDropDown(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
+            options=_scale_options(value),
             value=value,
-            value_range=value_range,
-            command=self.on_scale_slider,
-            extraArgs=[path],
-            scale=_SLIDER_SCALE,
+            command=lambda scale: self.set_scale_value(path, scale),
             parent=self.scroll_list.content,
+            scale=_DROP_DOWN_SCALE,
         )
-        self._add_value_label(path, _pct(value), y)
+        return self.drop_downs[path]
+
+    def scale_value(self, path: tuple) -> float:
+        """:return: A resolution row's scale: the world's render scale, or the
+        mirror's"""
+        if path[0] == _WORLD:
+            return self.world_value(path)
+        return get_by_path(self.working_config, path)
+
+    def set_scale_value(self, path: tuple, scale: float):
+        """Store a resolution row's scale (an unchanged one stores nothing)."""
+        if abs(scale - self.scale_value(path)) < 1e-6:
+            return
+        if path[0] == _WORLD:
+            self.set_world_value(path, scale)
+        else:
+            set_by_path(self.working_config, path, scale)
 
     def add_discrete_row(self, path: tuple, y: float):
-        """Add a slider row over the discrete stops in :data:`_DISCRETE_SLIDERS`."""
+        """
+        Add a slider row over the discrete stops in :data:`_DISCRETE_SLIDERS`
+        (see :meth:`on_discrete_slider`).
+
+        :return: The slider
+        """
         label, values, labels = _DISCRETE_SLIDERS[path]
         self.scroll_list.add_row_label(label, y)
-        # sanitise() guarantees a known value, so this cannot raise.
-        idx = values.index(get_by_path(self.working_config, path))
+        # sanitise() and WorldSettings guarantee a known value
+        idx = values.index(self.discrete_value(path))
         self.sliders[path] = CustomSlider(
             app=self.app,
             pos=(_SLIDER_X, 0, y),
@@ -326,16 +401,40 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             step=1,
         )
         self._add_value_label(path, labels[idx], y)
+        return self.sliders[path]
 
-    def add_checkbox_row(self, path: tuple, label: str, y: float):
-        """Add a boolean setting label and checkbox to the scroll canvas."""
+    def discrete_value(self, path: tuple):
+        """:return: A discrete slider's stored value: a world knob's (by its
+        label), or the game config's"""
+        if path[0] == _WORLD:
+            return self.world_value(path)
+        return get_by_path(self.working_config, path)
+
+    def set_discrete_value(self, path: tuple, value):
+        """Store a discrete slider's value: a world knob's (an unchanged one
+        stores nothing, so building the slider cannot make a preset Custom),
+        or the game config's."""
+        if path[0] == _WORLD:
+            if value != self.world_value(path):
+                self.set_world_value(path, value)
+            return
+        set_by_path(self.working_config, path, value)
+
+    def add_world_switch_row(self, path: tuple, label: str, y: float):
+        """
+        Add a checkbox for a two-way WorldBuilder choice: the upscaler, FSR 1
+        or bilinear (:data:`_FSR_SWITCH`).
+
+        :return: The checkbox
+        """
         self.checkboxes[path] = self.scroll_list.add_checkbox_row(
             label,
             y,
-            get_by_path(self.working_config, path),
+            self.world_value(path) == _FSR_SWITCH[0],
             self.on_checkbox_toggle,
             extraArgs=[path],
         )
+        return self.checkboxes[path]
 
     def add_world_level_row(self, path: tuple, label: str, y: float):
         """
@@ -419,14 +518,17 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
 
         - "header" — section separator with a "text" key.
         - "mode" — the display-mode button group (no extra keys).
-        - "slider" — continuous quality slider with a "path" key (see
-          :data:`_SCALE_SLIDERS`).
+        - "scale_preset" — a resolution drop-down over the render scale
+          presets, with a "path" key (see :data:`_SCALE_PRESET_ROWS`).
         - "discrete" — slider over fixed stops with a "path" key (see
           :data:`_DISCRETE_SLIDERS`).
         - "checkbox" — boolean toggle with "path" and "label" keys.
 
         One header precedes each top-level section of
-        datafiles/default_configuration/default_graphics.yaml, in file order.
+        datafiles/default_configuration/default_graphics.yaml, in file order;
+        WorldBuilder's display knobs (the frame cap) join the display's rows,
+        its render section (:data:`_TOP_SECTION`) follows them, and the
+        world's other sections come last.
 
         :return: Ordered list of row descriptor dicts.
         """
@@ -436,23 +538,70 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             rows.append({"kind": "header", "text": _section_label(section)})
             if section == "display":
                 rows.append({"kind": "mode"})
-            for path in _SCALE_SLIDERS:
+            for path in _SCALE_PRESET_ROWS:
                 if path[0] == section:
-                    rows.append({"kind": "slider", "path": path})
+                    rows.append({"kind": "scale_preset", "path": path})
             for path in _DISCRETE_SLIDERS:
                 if path[0] == section:
                     rows.append({"kind": "discrete", "path": path})
             for path, label in _CHECKBOXES.items():
                 if path[0] == section:
                     rows.append({"kind": "checkbox", "path": path, "label": label})
+            if section == "display":
+                display = self._world_section(_DISPLAY_SECTION)
+                rows += self.make_world_section_rows(display)[1:]  # no header
+                rows += self.make_world_section_rows(self._world_section(_TOP_SECTION))
 
         return rows + self.make_world_rows()
+
+    def _world_section(self, section_id: str) -> dict:
+        """:return: One section of WorldBuilder's schema"""
+        return next(
+            section
+            for section in self.world_schema["sections"]
+            if section["id"] == section_id
+        )
+
+    def make_world_section_rows(self, section: dict) -> list[dict]:
+        """
+        One WorldBuilder section's rows: a header, its preset (for a section
+        with levels), and one row per knob in the schema's order; the
+        upscaler as an FSR 1 checkbox ("world_switch").
+
+        :param section: The section's schema entry
+        :return: Ordered list of row descriptor dicts.
+        """
+        rows = [{"kind": "header", "text": section["label"]}]
+        if section["levelled"]:
+            rows.append(
+                {
+                    "kind": "world_level",
+                    "path": (_WORLD, section["id"]),
+                    "label": "Preset",
+                }
+            )
+        for knob in section["knobs"]:
+            path = (_WORLD, section["id"], knob["id"])
+            if path == _UPSCALER:
+                rows.append({"kind": "world_switch", "path": path, "label": "FSR 1"})
+                continue
+            if path in _SCALE_PRESET_ROWS:
+                rows.append({"kind": "scale_preset", "path": path})
+                continue
+            if path in _DISCRETE_SLIDERS:
+                rows.append({"kind": "discrete", "path": path})
+                continue
+            rows.append({"kind": "world_knob", "path": path, "knob": knob})
+        return rows
 
     def make_world_rows(self) -> list[dict]:
         """
         Build the WorldBuilder rows from its schema: a "World" header and the
-        whole world's preset, then per section a header, its preset, and one
-        row per knob (advanced ones included), in the schema's order.
+        whole world's preset, then per section (but the display's and
+        :data:`_TOP_SECTION`, shown near the top)
+        :meth:`make_world_section_rows`: a header, its preset (sections with
+        levels), and one row per knob (advanced ones included), in the
+        schema's order.
 
         Adds two row kinds to :meth:`make_row_data`'s:
 
@@ -468,22 +617,8 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
             {"kind": "world_level", "path": (_WORLD,), "label": "Preset"},
         ]
         for section in self.world_schema["sections"]:
-            rows.append({"kind": "header", "text": section["label"]})
-            rows.append(
-                {
-                    "kind": "world_level",
-                    "path": (_WORLD, section["id"]),
-                    "label": "Preset",
-                }
-            )
-            for knob in section["knobs"]:
-                rows.append(
-                    {
-                        "kind": "world_knob",
-                        "path": (_WORLD, section["id"], knob["id"]),
-                        "knob": knob,
-                    }
-                )
+            if section["id"] not in (_DISPLAY_SECTION, _TOP_SECTION):
+                rows += self.make_world_section_rows(section)
         return rows
 
     # ------------------------------------------------------------------
@@ -532,7 +667,7 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
     def refresh_world_levels(self):
         """Show the presets the values are at, or Custom, in the drop-downs."""
         for path, drop_down in self.drop_downs.items():
-            if len(path) < 3:
+            if path[0] == _WORLD and len(path) < 3:
                 drop_down.set_value(self.world_level(path))
 
     def select_world_level(self, path: tuple, level: str):
@@ -583,14 +718,11 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
         self.working_config["display"]["mode"] = value
         self.refresh_mode_buttons()
 
-    def on_scale_slider(self, path: tuple):
-        """Store a continuous slider's value and refresh its % label."""
-        value = self.sliders[path].get_value()
-        set_by_path(self.working_config, path, value)
-        self.slider_value_labels[path]["text"] = _pct(value)
-
     def on_discrete_slider(self, path: tuple):
         """Map a discrete slider to the nearest stop and store that stop's value.
+
+        Generic over :data:`_DISCRETE_SLIDERS`: the stop is stored through
+        :meth:`set_discrete_value` (a world knob, or the game config).
 
         The thumb is *not* written back here: PGSliderBar throws its ADJUST
         event asynchronously, so re-setting the value from inside this handler
@@ -601,12 +733,18 @@ class GraphicsSettingsMenuState(ScrollingSettingsMenuState):
         _label, values, labels = _DISCRETE_SLIDERS[path]
         idx = int(round(self.sliders[path].get_value()))
         idx = max(0, min(len(values) - 1, idx))
-        set_by_path(self.working_config, path, values[idx])
+        self.set_discrete_value(path, values[idx])
         self.slider_value_labels[path]["text"] = labels[idx]
 
     def on_checkbox_toggle(self, status: int, path: tuple):
         """Store a toggled checkbox value straight into :attr:`working_config`,
         or into the world settings for a WorldBuilder knob."""
+        if path == _UPSCALER:
+            on, off = _FSR_SWITCH
+            choice = on if status else off
+            if choice != self.world_value(path):
+                self.set_world_value(path, choice)
+            return
         if path[0] == _WORLD:
             if bool(status) != self.world_value(path):
                 self.set_world_value(path, bool(status))

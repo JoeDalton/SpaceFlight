@@ -183,11 +183,12 @@ def test_level_exit_leaves_no_sound_in_use(spaceflight_app):
     """
     Each major ship takes a single engine sound, and none of the level's
     pooled sounds stays in use once it exits ("Dev" spawns 2 major ships
-    after 2s; their engine sounds start 0.5s later).
+    2s after the player's squadron has joined, about 19s in; their engine
+    sounds start 0.5s later).
     """
     harness = HeadlessHarness(app=spaceflight_app)
 
-    with harness.run_level("Dev", max_steps=4 * 60) as flight_state:
+    with harness.run_level("Dev", max_steps=25 * 60) as flight_state:
         capital_ships = [
             actor
             for actor in flight_state.interactions.live_actors

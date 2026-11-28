@@ -3,18 +3,15 @@ from __future__ import annotations
 import functools
 import logging
 import math
-import tempfile
 import time
-from collections.abc import Callable, Generator, Sequence
-from contextlib import AbstractContextManager, contextmanager, nullcontext
-from dataclasses import replace
+from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from world_builder import load_world, parse_world
 from world_builder.asteroids.spec import KeepOut
-from world_builder.world_file import world_to_yaml
+from world_builder.terrain.chart import BodyChart
 
 from space_flight import (
     DATAFILES_PATH,
@@ -25,70 +22,21 @@ from space_flight import (
 )
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
-from space_flight.scenes.level_frame import LevelFrame
 from space_flight.scenes.planet_2d import Planet2D
 
 if TYPE_CHECKING:
     from panda3d.core import NodePath
     from world_builder.asteroids.field import AsteroidField
-    from world_builder.depth import SplitDepthCameras
-    from world_builder.world import World
+    from world_builder.depth import ReversedDepthCamera
     from world_builder.world_file import GameWorld
 
     from space_flight.game.flight_state import FlightState
 
 LOGGER = logging.getLogger(__name__)
 
-# The world counts as loaded once its loading flag has stayed False this long:
-# it turns on briefly whenever detail refines, so one quiet frame is not enough.
-WORLD_QUIET_S = 0.5
-# Give up waiting for the world after this long (and say so)
+# Give up waiting for the world after this long (and say so): a slow machine
+# takes a while to build the ground around the player
 WORLD_TIMEOUT_S = 360.0
-# Sleep this long after each step while the world loads: its worker
-# processes' results come back through a thread of this process, which a loop
-# that never sleeps starves (a headless build runs the loading loop flat out;
-# an animated one's frames leave it the time already).
-LOADING_YIELD_S = 0.005
-
-
-def wait_until_loaded(
-    loading: Callable[[], bool],
-    step: Callable[[], None],
-    clock: Callable[[], float] = time.monotonic,
-    pause: Callable[[float], None] = time.sleep,
-) -> Generator[str, None, None]:
-    """
-    Hold the level's loading until a world has loaded around the player:
-    step it once per frame until *loading* has stayed False for
-    :data:`WORLD_QUIET_S` (ground not drawn yet is not solid), or for at most
-    :data:`WORLD_TIMEOUT_S`.
-
-    :param loading: Whether the world still loads
-    :param step: Advance the world by a frame (the game loop is paused while
-        loading)
-    :param clock: Real time, in seconds
-    :param pause: Sleeps for a duration, seconds (LOADING_YIELD_S each step
-        while loading)
-    :return: A generator to advance once per frame
-    """
-    start = clock()
-    quiet_since = None
-    while True:
-        step()
-        now = clock()
-        if loading():
-            quiet_since = None
-            pause(LOADING_YIELD_S)
-        elif quiet_since is None:
-            quiet_since = now
-        elif now - quiet_since >= WORLD_QUIET_S:
-            return
-        if now - start >= WORLD_TIMEOUT_S:
-            LOGGER.warning(
-                f"World still loading after {WORLD_TIMEOUT_S:.0f} s: starting anyway"
-            )
-            return
-        yield "world"
 
 
 def scene_factory(
@@ -111,8 +59,6 @@ def scene_factory(
     raise NotImplementedError(f"Unknown scene {scene_name}")
 
 
-#: A gravity weaker than this (norm of the raw vector) gives no "up"
-MIN_GRAVITY_NORM = 1e-1
 #: "Up" is reckoned again this often, seconds: at the player, for every ship
 #: (the ships stay a few kilometres from it: on a planet of hundreds of
 #: kilometres, its "up" turns by a fraction of a degree over that, or in a
@@ -141,11 +87,11 @@ def warp_speed_at_altitude(altitude_m: float) -> float:
 
 
 class Scene:
-    #: The depth split: a far camera drawing first what lies past a split
-    #: distance, the main camera the rest, each with the whole depth buffer,
-    #: so distant ground does not shimmer (see world_builder.depth). The
-    #: world's own, from the scene's build_upfront (None until then).
-    depth: SplitDepthCameras | None = None
+    #: The view's camera: one reversed-Z camera over the whole range, with a
+    #: float depth buffer's precision from the cockpit to orbit (see
+    #: world_builder.depth). The world's own, from the scene's build_upfront
+    #: (None until then).
+    depth: ReversedDepthCamera | None = None
 
     def __init__(
         self,
@@ -153,7 +99,6 @@ class Scene:
     ):
         self.game = game
         self.default_up_direction = np.array([0, 0, 1])
-        self._gravity = None
         # The last "up" reckoned, and when (see up_at)
         self._up: np.ndarray | None = None
         self._up_time_s = -math.inf
@@ -161,8 +106,8 @@ class Scene:
     def up_at(self, position: Sequence[float]) -> np.ndarray:
         """
         Returns the "up" direction at a given location in the world.
-        If there is significant gravity, up is its opposite.
-        Else, the (0.0.1) is used
+        If there is significant gravity, up is its opposite
+        (``World.up_at``). Else, the (0.0.1) is used
 
         It is reckoned at the player (at *position* without one) at most
         every UP_REFRESH_S and used for every position meanwhile: a gravity
@@ -170,8 +115,8 @@ class Scene:
 
         :param position: A world position
         :return: "Up" there: against the gravity of the scene's WorldBuilder
-            bodies when it is not negligible, else the scene's up_direction
-            (world +Z)
+            bodies when it is not negligible (WorldBuilder's
+            ``MIN_GRAVITY_NORM``), else the scene's up_direction (world +Z)
         """
         world = getattr(self, "world", None)
         if world is None or not world.bodies:
@@ -181,7 +126,8 @@ class Scene:
             player = getattr(self.game, "player", None)
             pawn = getattr(player, "pawn", None)
             reference = position if pawn is None else pawn.position
-            self._up = self._gravity_up(world, reference)
+            up = world.up_at(reference)
+            self._up = self.default_up_direction if up is None else up
             self._up_time_s = now
         return self._up
 
@@ -190,35 +136,17 @@ class Scene:
         player far from where it was last reckoned."""
         self._up = None
 
-    def _gravity_up(self, world: World, position: Sequence[float]) -> np.ndarray:
-        """:return: Against the bodies' gravity at *position*, or
-        default_up_direction where it is negligible"""
-        if self._gravity is None:
-            self._gravity = world.gravity_field()
-        gravity = self._gravity.acceleration(np.asarray(position, dtype=np.float64))
-        norm = float(np.linalg.norm(gravity))
-        if not np.isfinite(norm) or norm < MIN_GRAVITY_NORM:
-            return self.default_up_direction
-        return -gravity / norm
-
     def altitude_m(self, position: Sequence[float]) -> float:
         """
         Height above the ground of the nearest of the scene's WorldBuilder
-        bodies (the one whose sea level is nearest).
+        bodies (``World.altitude_at``).
 
         :param position: A world position
         :return: The height, metres (0 under the ground), infinite in a scene
             without bodies
         """
         world = getattr(self, "world", None)
-        if world is None or not world.bodies:
-            return math.inf
-        point = np.asarray(position, dtype=np.float64)
-        body = world.nearest(point)
-        relative = point - body.position
-        # Only what is already generated: a query must not stall the frame
-        ground_m = float(body.terrain.query.height_at(relative, generate=False))
-        return max(float(np.linalg.norm(relative)) - body.radius - ground_m, 0.0)
+        return math.inf if world is None else world.altitude_at(position)
 
     def warp_speed_mps(self, position: Sequence[float]) -> float:
         """
@@ -267,15 +195,45 @@ class Scene:
             shader=self.MODELS_USE_WORLD_SHADER,
         )
 
+    def track_translucent(self, node: NodePath) -> None:
+        """
+        Have a translucent surface that writes no depth (a shield bubble) be
+        hidden by the clouds in front of it (WorldBuilder's
+        World.track_translucent; its shader includes cloud_cover.glsl), for
+        the scenes that have a World.
+
+        :param node: The surface
+        """
+        world = getattr(self, "world", None)
+        if world is not None and not node.is_empty():
+            world.track_translucent(node)
+
+    def untrack_translucent(self, node: NodePath) -> None:
+        """Undo track_translucent (before the node goes)."""
+        world = getattr(self, "world", None)
+        if world is not None:
+            world.untrack_translucent(node)
+
     def release_depth(self) -> None:
         """
-        Remove the scene's split cameras, if it has any. FlightState.exit
-        calls it before the render-scale / anti-aliasing pipeline goes: the
-        far camera draws into that pipeline's buffer.
+        Remove the scene's depth camera, if it has one, with its scene buffer
+        and post chain (render scale, anti-aliasing, FSR 1): FlightState.exit
+        calls it first. The mirror goes back to the standard depth.
         """
         if self.depth is not None:
             self.depth.destroy()
             self.depth = None
+            from world_builder.depth import DEPTH_STANDARD
+
+            self._mirror_depth_mode(DEPTH_STANDARD)
+
+    def _mirror_depth_mode(self, mode: int) -> None:
+        """The rear-view mirror draws the scene with a camera of its own: the
+        view's depth convention for it too (world_builder.depth)."""
+        player = getattr(self.game, "player", None)
+        mirror = getattr(player, "rear_view_mirror", None)
+        if mirror is not None:
+            mirror.set_depth_mode(mode)
 
     def update_after_recenter(self):
         """
@@ -300,14 +258,15 @@ class Scene:
 class SceneWorld(Scene):
     """
     A scene whose world is a WorldBuilder world file, loaded whole by
-    ``load_world``: its bodies, asteroid fields, sky, sun and lights, and the
-    split depth cameras.
+    ``load_world``: its bodies, asteroid fields, sky, sun and lights, and its
+    depth camera.
 
     The file defines the objects and nothing about running them. The scene
     decides how they are run: the quality, the game's clock, the light the
     ships are given (LIGHT_SCALE) and what is solid.
 
-    A scene needs a window: ``load_world`` builds the depth cameras.
+    With a window ``load_world`` builds the depth camera; headless (no
+    window) none, nor the seas (:attr:`depth` is None).
 
     :ivar game_world: WorldBuilder's loaded world, once built (see
         build_upfront)
@@ -324,50 +283,61 @@ class SceneWorld(Scene):
         super().__init__(game=game)
         self.game_world: GameWorld | None = None
 
-    def world_file(self) -> AbstractContextManager[Path]:
-        """:return: The world file to load, for as long as it is loaded
-        (a scene may make a variant of WORLD_PATH)"""
-        return nullcontext(self.WORLD_PATH)
+    def level_keep_outs(self) -> dict[str, Sequence[KeepOut]]:
+        """:return: The room the level keeps clear, by field name, added to
+        the world file's (none by default)"""
+        return {}
 
     def build_upfront(self):
         """
         Load the world (shaders, textures, worker processes, the ocean's
-        reflection buffer, the split cameras) on the black screen, before the
+        reflection buffer, the depth camera) on the black screen, before the
         hyperspace animation starts. What loads over time (the ground, the
         rocks) loads during the animation (see build_decomposed).
         """
         game = self.game
         app = game.app
-        with self.world_file() as path:
-            self.game_world = load_world(
-                app,
-                path,
-                settings=app.graphics_settings.world_settings(),
-                clock=game.game_time.get_current_time,
-                light_scale=self.LIGHT_SCALE,
-                light_period=LIGHT_PERIOD_FRAMES,
-            )
+        self.game_world = load_world(
+            app,
+            self.WORLD_PATH,
+            keep_outs=self.level_keep_outs(),
+            # Every terrain is solid (WorldBuilder): the same collision
+            # events and handlers
+            collision_mask=CollisionLayers.TERRAIN_INTO,
+            settings=app.graphics_settings.world_settings(),
+            clock=game.game_time.get_current_time,
+            light_scale=self.LIGHT_SCALE,
+            light_period=LIGHT_PERIOD_FRAMES,
+        )
         self.world = self.game_world.world
-        self.depth = self.game_world.depth
-        self._spare_translucent_volumes(self.depth)
+        self.depth = self.game_world.depth  # None headless: no window
+        if self.depth is not None:
+            self._mirror_depth_mode(self.depth.mode)
+        # The clouds are marched for the main view: no cloud cover on the
+        # shields the mirror draws
+        mirror = getattr(getattr(game, "player", None), "rear_view_mirror", None)
+        if mirror is not None:
+            self.world.cover_off_in(mirror.mirror_np)
+        # The game's effects (fire, smoke, sparks) are hidden by the clouds in
+        # front of them; the shields, lasers and speed dust track themselves
+        for pool in (
+            getattr(getattr(game, "fire_smoke_pool", None), "fire", None),
+            getattr(getattr(game, "fire_smoke_pool", None), "smoke", None),
+            getattr(game, "spark_fx_pool", None),
+        ):
+            node = getattr(pool, "node_path", None)
+            if node is not None:
+                self.track_translucent(node)
 
-    def _spare_translucent_volumes(self, depth: SplitDepthCameras) -> None:
-        """
-        Have the world's split cameras keep their split off the game's big
-        translucent volumes (shield bubbles: blended twice where the two
-        cameras overlap, they would show a ring), which GameWorld.update does
-        not know of.
-        """
-        update = depth.update
-
-        def update_sparing(split, far, translucent=()):
-            update(
-                split,
-                far,
-                translucent=(*translucent, *self.game.translucent_volumes),
-            )
-
-        depth.update = update_sparing
+    def hold_loading(self) -> Generator[str, None, None]:
+        """Hold the loading animation until the world has loaded around the
+        player: ground not drawn yet is not solid. The game loop is paused
+        while loading: each step is a frame, as the game loop would run it."""
+        steps = self.game_world.load_steps(
+            self.game.follow_render_origin, timeout_s=WORLD_TIMEOUT_S
+        )
+        for _ in steps:
+            yield "world"
 
     def update_after_recenter(self):
         """Everything around the player, now at the render origin."""
@@ -377,7 +347,7 @@ class SceneWorld(Scene):
         """
         Cleans the scene
         """
-        # The split cameras first (GameWorld.destroy would remove them again)
+        # The depth camera first (GameWorld.destroy would remove it again)
         self.release_depth()
         self.world.destroy()  # its fields and worker pool too
         self.world = None
@@ -393,37 +363,24 @@ class SceneSolarSystem(SceneWorld):
 
     The planet is not rotated: levels write their positions on the chart of
     its reference point and convert them with :meth:`level_frame` (see
-    LevelFrame).
+    BodyChart).
     """
 
     WORLD_PATH = DATAFILES_PATH / "worlds/solar_system/solar_system.yaml"
     LIGHT_SCALE = 0.4
     #: The body levels fly over (its name in the world file)
     PLANET = "planet"
-    # The ground is solid within this of the player, metres: the fights stay a
-    # few kilometres from it (each chunk farther costs a check every frame)
-    TERRAIN_COLLISION_RANGE_M = 10_000.0
 
     @classmethod
     @functools.cache
-    def level_frame(cls) -> LevelFrame:
-        """:return: The chart frame of the body called PLANET in the world
-        file (chart to world)"""
-        bodies = parse_world(cls.WORLD_PATH).bodies
-        return LevelFrame.of(next(body for body in bodies if body.name == cls.PLANET))
+    def level_frame(cls) -> BodyChart:
+        """:return: The chart of the body called PLANET in the world file
+        (chart to world)"""
+        return parse_world(cls.WORLD_PATH).chart(cls.PLANET)
 
     def __init__(self, game: FlightState):
         super().__init__(game=game)
         self.default_up_direction = self.level_frame().up
-
-    def build_upfront(self):
-        """Load the world, and make every body solid to ships, munitions and
-        sensors (the moon too, which a warp reaches)."""
-        super().build_upfront()
-        self.world.enable_collision(
-            CollisionLayers.TERRAIN_INTO,
-            max_distance=self.TERRAIN_COLLISION_RANGE_M,
-        )
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """
@@ -436,10 +393,7 @@ class SceneSolarSystem(SceneWorld):
         )
         yield from self.speed_dust_cloud.build()
 
-        # The game loop is paused while loading: step the world as a frame does
-        yield from wait_until_loaded(
-            lambda: self.world.loading, self.game.follow_render_origin
-        )
+        yield from self.hold_loading()
 
     def clean(self):
         """
@@ -464,32 +418,6 @@ class SceneSpace(SceneWorld):
         yield from ()
 
 
-@contextmanager
-def with_keep_outs(
-    path: Path, field: str, keep_outs: Sequence[KeepOut]
-) -> Generator[Path, None, None]:
-    """
-    A copy of a world file whose asteroid field has more room kept clear:
-    ``load_world`` has no argument for a level's keep-outs.
-
-    :param path: The world file
-    :param field: The name of its field
-    :param keep_outs: The room to keep clear, added to the field's own
-    :return: The copy (self-contained), for the duration of the block
-    """
-    world = parse_world(path)
-    fields = tuple(
-        replace(look, keep_outs=(*look.keep_outs, *keep_outs))
-        if look.name == field
-        else look
-        for look in world.fields
-    )
-    with tempfile.TemporaryDirectory() as folder:
-        copy = Path(folder) / path.name
-        copy.write_text(world_to_yaml(replace(world, fields=fields)))
-        yield copy
-
-
 class SceneAsteroids(SceneSpace):
     """
     Missions 1 and 2's asteroid field (``datafiles/worlds/space/asteroids.yaml``):
@@ -504,8 +432,6 @@ class SceneAsteroids(SceneSpace):
     WORLD_PATH = DATAFILES_PATH / "worlds/space/asteroids.yaml"
     #: The name of the asteroid field in the world file
     FIELD = "field"
-    #: Rocks farther than this from the player are not solid
-    COLLISION_DISTANCE_M = 20_000.0
     #: How far clear_position looks for room
     CLEAR_SEARCH_M = 3000.0
     #: Speed dust colours
@@ -516,11 +442,9 @@ class SceneAsteroids(SceneSpace):
         self.keep_outs = tuple(keep_outs)
         self.field: AsteroidField | None = None
 
-    def world_file(self) -> AbstractContextManager[Path]:
-        """:return: The world file, with the level's keep-outs in its field"""
-        if not self.keep_outs:
-            return super().world_file()
-        return with_keep_outs(self.WORLD_PATH, self.FIELD, self.keep_outs)
+    def level_keep_outs(self) -> dict[str, Sequence[KeepOut]]:
+        """:return: The level's keep-outs, for the field"""
+        return {self.FIELD: self.keep_outs} if self.keep_outs else {}
 
     def build_upfront(self):
         """
@@ -529,12 +453,6 @@ class SceneAsteroids(SceneSpace):
         """
         super().build_upfront()
         self.field = self.world.field(self.FIELD)
-        # Solid as terrain: the same collision events and handlers
-        self.field.enable_collision(
-            CollisionLayers.TERRAIN_INTO,
-            name="terrain",
-            max_distance=self.COLLISION_DISTANCE_M,
-        )
 
     def build_decomposed(self) -> Generator[str | None, None, None]:
         """
@@ -544,27 +462,23 @@ class SceneAsteroids(SceneSpace):
         self.speed_dust_cloud = SpeedDustCloud(game=self.game, colors=self.DUST)
         yield "dust"
         yield from self._build_backdrop()
-        # The game loop is paused while loading: step the world as a frame does
-        yield from wait_until_loaded(
-            lambda: self.world.loading, self.game.follow_render_origin
-        )
+        yield from self.hold_loading()
 
     def _build_backdrop(self) -> Generator[str, None, None]:
         """Scene-specific set dressing (none here)."""
         yield from ()
 
     def update_after_recenter(self):
-        """The world around the player, then the field again for the
-        rear-view mirror when it is shown: the world draws the field for the
-        main camera alone."""
-        super().update_after_recenter()
+        """
+        The world around the player; the field is drawn for the rear-view
+        mirror too while it is shown (a view of the game world).
+        """
         mirror = getattr(self.game.player, "rear_view_mirror", None)
-        if mirror is None or not mirror.is_mirror_visible:
-            return
-        camera_render = self.world.camera_render()
-        camera_world = np.asarray(self.game.player.pawn.position) + camera_render
-        cameras = [self.game.app.cam, mirror.mirror_np]
-        self.field.update(camera_world, camera_render, cameras=cameras)
+        views = self.game_world.views
+        views.clear()
+        if mirror is not None and mirror.is_mirror_visible:
+            views.append(mirror.mirror_np)
+        super().update_after_recenter()
 
     def clear_position(self, position: Sequence[float], radius: float) -> np.ndarray:
         """

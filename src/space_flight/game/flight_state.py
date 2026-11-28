@@ -36,7 +36,6 @@ from space_flight.ui.input_context import (
 
 if TYPE_CHECKING:
     from direct.task import Task
-    from panda3d.core import NodePath
 
     from space_flight.game.levels import LevelEntry
     from space_flight.global_architecture.simulator import SpaceFlightSimulator
@@ -66,24 +65,14 @@ class FlightState(BaseState):
         # The level's tally (kills, objectives), set with the outcome (see
         # compute_level_stats)
         self.level_stats: dict | None = None
-        # Big translucent volumes (shield bubbles) the depth split must not
-        # cut: blended twice where the two cameras overlap, they would show a
-        # ring there (see world_builder.depth). Their owners add and remove
-        # them; the scene's split cameras keep clear of them.
-        self.translucent_volumes: set[NodePath] = set()
 
     def enter(self):
         """
-        Enter the flight state: apply this session's graphics settings, build
-        the level, and run its reveal animation (skipped headless).
+        Enter the flight state: build the level, and run its reveal animation
+        (skipped headless). The graphics settings (render scale and
+        anti-aliasing among the world's) are applied by the scene's world as
+        it loads.
         """
-        if not self.headless:
-            # Apply the saved render-scale / anti-aliasing settings for this
-            # session (no-op when scale is 1.0 and AA is off). Done before any
-            # scene rendering so the offscreen buffer and reflection sizing are
-            # in place.
-            self.app.graphics_manager.begin_scene_render()
-
         # Initialize mandatory game elements (cheap; done up front).
         self.initialize_game_structure()
         self.flight_context = None
@@ -406,7 +395,7 @@ class FlightState(BaseState):
     def follow_render_origin(self):
         """
         Move the render origin onto the player, then what follows it: the
-        scene's own per-frame update (its world and its depth split).
+        scene's own per-frame update (its world and its depth camera).
         """
         self.recenter_render_origin()
         self.scene.update_after_recenter()
@@ -491,15 +480,9 @@ class FlightState(BaseState):
         if RECORD_GAME:
             self.record.save()
 
-        # Remove the far camera first: it draws into the render-scale / AA
-        # pipeline's buffer when there is one.
+        # Remove the depth camera first, with its scene buffer and post chain:
+        # the app camera draws into the window again.
         self.scene.release_depth()
-
-        # Tear down the render-scale / AA pipeline, restoring direct-to-window
-        # rendering before the scene it was compositing is destroyed. There is
-        # no pipeline to tear down headless (it was never built).
-        if not self.headless:
-            self.app.graphics_manager.end_scene_render()
 
         # Remove HUD elements (may not exist if exiting before build finished)
         for name in ("hud", "aim_hud"):

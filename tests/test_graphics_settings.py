@@ -9,16 +9,20 @@ Covers:
 - :meth:`GraphicsSettings.load` — defaults + user overlay + sanitise
 - :meth:`GraphicsSettings.save` — round-trip to disk
 - :func:`_migrate_legacy` — old cloud / reflection keys into ``world``
+- :func:`_migrate_render` — the old render scale and anti-aliasing into
+  ``world``'s render section
 """
 
 import pytest
 import yaml
+from world_builder.post import FSR1, RenderSettings
 from world_builder.settings import WorldSettings
 
 from space_flight.global_architecture import graphics_settings as gs
 from space_flight.global_architecture.graphics_settings import (
     GraphicsSettings,
     _deep_merge,
+    _get_render_settings,
     _migrate_legacy,
 )
 from space_flight.global_architecture.yaml_files import load_yaml
@@ -28,14 +32,16 @@ from space_flight.global_architecture.yaml_files import load_yaml
 # here -- otherwise adding a section looks like a test failure.
 _VALID = {
     "display": {"mode": "windowed", "windowed_size": [1280, 720]},
-    "render": {"scale": 0.75, "mirror_scale": 1.0},
-    "antialiasing": {"msaa": 4, "fxaa": True},
+    "mirror": {"scale": 1.0, "msaa": 4, "fxaa": False, "fsr": True},
     "compatibility": {"alternate_model_orientation": False},
     "hud": {"fps_counter": False},
     "world": {
         "version": 1,
         "preset": "mid",
-        "overrides": {"terrain": {"detail_far": 3000.0}},
+        "overrides": {
+            "terrain": {"detail_far": 3000.0},
+            "render": {"scale": 0.67, "msaa": "4x", "upscaler": "FSR 1"},
+        },
     },
 }
 
@@ -89,9 +95,9 @@ class TestSanitise:
         assert GraphicsSettings.sanitise(_VALID) == _VALID
 
     def test_does_not_mutate_input(self):
-        src = {"render": {"scale": 5.0}}
+        src = {"render": {"mirror_scale": 5.0}, "antialiasing": {"msaa": 4}}
         GraphicsSettings.sanitise(src)
-        assert src["render"]["scale"] == 5.0  # untouched
+        assert src == {"render": {"mirror_scale": 5.0}, "antialiasing": {"msaa": 4}}
 
     def test_invalid_mode_defaults_to_fullscreen(self):
         out = GraphicsSettings.sanitise({"display": {"mode": "bogus"}})
@@ -116,41 +122,38 @@ class TestSanitise:
 
     @pytest.mark.parametrize(
         "raw,expected",
-        [(5.0, 1.0), (0.0, 0.25), (0.6, 0.6), (1.0, 1.0), (0.25, 0.25)],
-    )
-    def test_scale_clamped(self, raw, expected):
-        out = GraphicsSettings.sanitise({"render": {"scale": raw}})
-        assert out["render"]["scale"] == pytest.approx(expected)
-
-    def test_scale_non_numeric_falls_back(self):
-        out = GraphicsSettings.sanitise({"render": {"scale": "big"}})
-        assert out["render"]["scale"] == 1.0
-
-    @pytest.mark.parametrize(
-        "raw,expected",
-        [(0.1, 0.25), (9.0, 1.0), (0.5, 0.5)],
+        [(0.1, 0.33), (9.0, 1.0), (0.5, 0.5)],
     )
     def test_mirror_scale_clamped(self, raw, expected):
-        out = GraphicsSettings.sanitise({"render": {"mirror_scale": raw}})
-        assert out["render"]["mirror_scale"] == pytest.approx(expected)
+        out = GraphicsSettings.sanitise({"mirror": {"scale": raw}})
+        assert out["mirror"]["scale"] == pytest.approx(expected)
 
-    @pytest.mark.parametrize("msaa", [0, 2, 4, 8])
-    def test_valid_msaa_preserved(self, msaa):
-        out = GraphicsSettings.sanitise({"antialiasing": {"msaa": msaa}})
-        assert out["antialiasing"]["msaa"] == msaa
+    @pytest.mark.parametrize("msaa", [0, 2, 4, 8, 16])
+    def test_valid_mirror_msaa_preserved(self, msaa):
+        out = GraphicsSettings.sanitise({"mirror": {"msaa": msaa}})
+        assert out["mirror"]["msaa"] == msaa
 
-    @pytest.mark.parametrize("msaa", [1, 3, 16, "x", None])
-    def test_invalid_msaa_defaults_to_zero(self, msaa):
-        out = GraphicsSettings.sanitise({"antialiasing": {"msaa": msaa}})
-        assert out["antialiasing"]["msaa"] == 0
+    @pytest.mark.parametrize("msaa", [1, 3, 32, "x", None])
+    def test_invalid_mirror_msaa_is_off(self, msaa):
+        out = GraphicsSettings.sanitise({"mirror": {"msaa": msaa}})
+        assert out["mirror"]["msaa"] == 0
 
+    @pytest.mark.parametrize("key", ["fxaa", "fsr"])
     @pytest.mark.parametrize(
-        "raw,expected",
-        [(True, True), (False, False), (1, True), (0, False), ("y", True)],
+        "raw,expected", [(True, True), (0, False), ("y", True), (None, False)]
     )
-    def test_fxaa_coerced_to_bool(self, raw, expected):
-        out = GraphicsSettings.sanitise({"antialiasing": {"fxaa": raw}})
-        assert out["antialiasing"]["fxaa"] is expected
+    def test_mirror_switches_coerced_to_bool(self, key, raw, expected):
+        out = GraphicsSettings.sanitise({"mirror": {key: raw}})
+        assert out["mirror"][key] is expected
+
+    def test_old_mirror_scale_becomes_the_mirrors(self):
+        """render.mirror_scale (older files): the mirror section's scale,
+        over whatever the defaults had there; render is gone."""
+        out = GraphicsSettings.sanitise(
+            {"render": {"mirror_scale": 0.75}, "mirror": {"scale": 0.5}}
+        )
+        assert out["mirror"]["scale"] == 0.75
+        assert "render" not in out
 
     @pytest.mark.parametrize(
         "raw,expected",
@@ -200,15 +203,14 @@ class TestSanitise:
             {"clouds": {"quality": "low"}, "render": {"reflection_scale": 0.3}}
         )
         assert "clouds" not in out
-        assert "reflection_scale" not in out["render"]
+        assert "render" not in out
 
     def test_empty_config_produces_full_defaults(self):
         out = GraphicsSettings.sanitise({})
         assert out["display"]["mode"] == "fullscreen"
-        assert out["render"]["scale"] == 1.0
-        assert out["render"]["mirror_scale"] == 1.0
-        assert out["antialiasing"]["msaa"] == 0
-        assert out["antialiasing"]["fxaa"] is False
+        assert out["mirror"] == {"scale": 1.0, "msaa": 0, "fxaa": False, "fsr": False}
+        assert "render" not in out
+        assert "antialiasing" not in out
         assert out["compatibility"]["alternate_model_orientation"] is False
         assert out["hud"]["fps_counter"] is True
         assert out["world"] == _HIGH
@@ -238,15 +240,16 @@ class TestLoadFile:
 class TestLoad:
     def test_user_file_overlays_defaults(self, tmp_path, monkeypatch):
         default = _write_yaml(tmp_path / "default.yaml", _VALID)
-        user = _write_yaml(tmp_path / "user.yaml", {"render": {"scale": 0.5}})
+        user = _write_yaml(tmp_path / "user.yaml", {"mirror": {"scale": 0.5}})
         monkeypatch.setattr(gs, "DEFAULT_GRAPHICS_FILE", default)
         monkeypatch.setattr(gs, "GRAPHICS_FILE", user)
 
         cfg = GraphicsSettings().config
         # Overridden by user...
-        assert cfg["render"]["scale"] == 0.5
+        assert cfg["mirror"]["scale"] == 0.5
+        assert cfg["mirror"]["msaa"] == 4
         # ...everything else from defaults.
-        assert cfg["antialiasing"]["msaa"] == 4
+        assert cfg["world"] == _VALID["world"]
         assert cfg["display"]["mode"] == "windowed"
 
     def test_missing_user_file_uses_defaults(self, tmp_path, monkeypatch):
@@ -257,10 +260,10 @@ class TestLoad:
 
     def test_result_is_sanitised(self, tmp_path, monkeypatch):
         default = _write_yaml(tmp_path / "default.yaml", _VALID)
-        user = _write_yaml(tmp_path / "user.yaml", {"render": {"scale": 99.0}})
+        user = _write_yaml(tmp_path / "user.yaml", {"mirror": {"scale": 99.0}})
         monkeypatch.setattr(gs, "DEFAULT_GRAPHICS_FILE", default)
         monkeypatch.setattr(gs, "GRAPHICS_FILE", user)
-        assert GraphicsSettings().config["render"]["scale"] == 1.0
+        assert GraphicsSettings().config["mirror"]["scale"] == 1.0
 
     def test_malformed_user_file_falls_back_to_defaults(self, tmp_path, monkeypatch):
         default = _write_yaml(tmp_path / "default.yaml", _VALID)
@@ -285,11 +288,11 @@ class TestSave:
         monkeypatch.setattr(gs, "GRAPHICS_FILE", target)
 
         settings = GraphicsSettings()
-        settings.save({"render": {"scale": 99.0}})  # out-of-range -> clamped
+        settings.save({"mirror": {"scale": 99.0}})  # out-of-range -> clamped
 
         on_disk = yaml.safe_load(target.read_text())
-        assert on_disk["render"]["scale"] == 1.0
-        assert settings.config["render"]["scale"] == 1.0
+        assert on_disk["mirror"]["scale"] == 1.0
+        assert settings.config["mirror"]["scale"] == 1.0
 
     def test_save_then_load_round_trips(self, tmp_path, monkeypatch):
         default = _write_yaml(tmp_path / "default.yaml", _VALID)
@@ -336,6 +339,79 @@ class TestMigrateLegacy:
         world = GraphicsSettings().world_settings()
         assert world.section_level("clouds").value == "ultra"
         assert "clouds" not in GraphicsSettings().config
+
+
+class TestMigrateRender:
+    """The render scale and anti-aliasing older files kept outside world
+    (render.scale, antialiasing) go to WorldBuilder's render section."""
+
+    def test_old_keys_become_the_render_section(self):
+        out = GraphicsSettings.sanitise(
+            {
+                "render": {"scale": 0.75, "mirror_scale": 0.5},
+                "antialiasing": {"msaa": 4, "fxaa": True},
+            }
+        )
+        assert out["mirror"]["scale"] == 0.5
+        assert "render" not in out and "antialiasing" not in out
+        world = WorldSettings.from_dict(out["world"])
+        assert world.render == RenderSettings(scale=0.75, msaa=4, fxaa=True)
+
+    def test_the_old_defaults_override_nothing(self):
+        config = {
+            "render": {"scale": 1.0},
+            "antialiasing": {"msaa": 0, "fxaa": False},
+            "world": dict(_HIGH),
+        }
+        _get_render_settings(config)
+        assert config["world"] == _HIGH
+
+    def test_a_scale_below_worldbuilders_is_clamped(self):
+        out = GraphicsSettings.sanitise({"render": {"scale": 0.25}})
+        assert WorldSettings.from_dict(out["world"]).render.scale == 0.33
+
+    def test_an_unusable_msaa_keeps_the_worlds(self):
+        out = GraphicsSettings.sanitise({"antialiasing": {"msaa": 3}})
+        assert WorldSettings.from_dict(out["world"]).render.msaa == 0
+
+    def test_the_world_sections_own_values_win(self):
+        world = {
+            "preset": "high",
+            "overrides": {"render": {"msaa": "8x", "upscaler": "FSR 1"}},
+        }
+        out = GraphicsSettings.sanitise(
+            {"render": {"scale": 0.67}, "antialiasing": {"msaa": 2}, "world": world}
+        )
+        render = WorldSettings.from_dict(out["world"]).render
+        assert render == RenderSettings(scale=0.67, msaa=8, upscaler=FSR1)
+
+    def test_load_migrates_an_old_user_file(self, tmp_path, monkeypatch):
+        """Merged over defaults with a world section (and no old keys), as the
+        shipped ones: no render override there."""
+        default = _write_yaml(tmp_path / "default.yaml", {**_VALID, "world": _HIGH})
+        user = _write_yaml(
+            tmp_path / "user.yaml",
+            {"render": {"scale": 0.5}, "antialiasing": {"fxaa": True}},
+        )
+        monkeypatch.setattr(gs, "DEFAULT_GRAPHICS_FILE", default)
+        monkeypatch.setattr(gs, "GRAPHICS_FILE", user)
+        render = GraphicsSettings().world_settings().render
+        assert render == RenderSettings(scale=0.5, fxaa=True)
+
+
+def test_mirror_render_settings_take_the_mirror_section(tmp_path, monkeypatch):
+    """The mirror's own MSAA, FXAA and FSR 1, the main view's sharpness."""
+    config = {
+        **_VALID,
+        "mirror": {"scale": 0.5, "msaa": 8, "fxaa": True, "fsr": True},
+        "world": {"preset": "high", "overrides": {"render": {"sharpness": 0.4}}},
+    }
+    monkeypatch.setattr(
+        gs, "DEFAULT_GRAPHICS_FILE", _write_yaml(tmp_path / "d", config)
+    )
+    monkeypatch.setattr(gs, "GRAPHICS_FILE", tmp_path / "does_not_exist.yaml")
+    render = GraphicsSettings().mirror_render_settings()
+    assert render == RenderSettings(msaa=8, fxaa=True, upscaler=FSR1, sharpness=0.4)
 
 
 def test_world_settings_reads_the_world_section(tmp_path, monkeypatch):
