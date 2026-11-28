@@ -3293,14 +3293,14 @@ python-discovery = ">=1.6.1"
 
 [[package]]
 name = "world_builder"
-version = "0.6.0"
+version = "0.6.1"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"darwin\""
 files = [
-    {file = "world_builder-0.6.0-py3-none-macosx_11_0_universal2.whl", hash = "sha256:8b072be5a25b8c9731229cc8dd8d819af656a1545fee2f8938173bda6b6737a2"},
+    {file = "world_builder-0.6.1-py3-none-macosx_11_0_universal2.whl", hash = "sha256:dbf6cb4dc6b9b0e5dd31fcb8a0c3963a5c0cd6e43f0d5c56048941ec0a6f7d05"},
 ]
 
 [package.dependencies]
@@ -3311,18 +3311,18 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.0/world_builder-0.6.0-py3-none-macosx_11_0_universal2.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.1/world_builder-0.6.1-py3-none-macosx_11_0_universal2.whl"
 
 [[package]]
 name = "world_builder"
-version = "0.6.0"
+version = "0.6.1"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"linux\" and platform_machine == \"aarch64\""
 files = [
-    {file = "world_builder-0.6.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:8bd1c75111872e6d049ab17b9dbd30610a6c29de78b4fd2a6d8ce5d0b2e202b9"},
+    {file = "world_builder-0.6.1-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:84814a534f98e2b3f481d6395177a42d8f9ed50b47f5e6df9e89d5713c52779d"},
 ]
 
 [package.dependencies]
@@ -3333,18 +3333,18 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.0/world_builder-0.6.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.1/world_builder-0.6.1-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl"
 
 [[package]]
 name = "world_builder"
-version = "0.6.0"
+version = "0.6.1"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"linux\" and platform_machine == \"x86_64\""
 files = [
-    {file = "world_builder-0.6.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9bde4cb23992a8a6864afe680201059dc43102a3b3b023f7f60a7fb5a03d12a8"},
+    {file = "world_builder-0.6.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:df0556488e0e366fb60a9884fdc6c0eb8ec91cc19d91a2c483ef5a9f8abfe2a1"},
 ]
 
 [package.dependencies]
@@ -3355,18 +3355,18 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.0/world_builder-0.6.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.1/world_builder-0.6.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
 
 [[package]]
 name = "world_builder"
-version = "0.6.0"
+version = "0.6.1"
 description = "Procedural planetary terrain, ocean and volumetric clouds for Panda3D"
 optional = false
 python-versions = ">=3.12,<3.15"
 groups = ["main"]
 markers = "sys_platform == \"win32\""
 files = [
-    {file = "world_builder-0.6.0-py3-none-win_amd64.whl", hash = "sha256:ccab0d385a56fc5ee0a1d95fe6fb7cf38c1b56934cdba6ba6c908d175c6ad6b2"},
+    {file = "world_builder-0.6.1-py3-none-win_amd64.whl", hash = "sha256:26d2d97a876b796d913d8a5f7f9ee547080f6adb295144ad737909d0b3cefd75"},
 ]
 
 [package.dependencies]
@@ -3377,9 +3377,9 @@ scipy = ">=1.13.1,<2.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.0/world_builder-0.6.0-py3-none-win_amd64.whl"
+url = "https://github.com/JoeDalton/WorldBuilder/releases/download/0.6.1/world_builder-0.6.1-py3-none-win_amd64.whl"
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "c1724228aadaed795bcca76ca673e16d5776da4423bb12898126114d2bffe0cd"
+content-hash = "6b8f3e9d40b8d6070ddd886657d42d076bf90d04602c9a6484e964488b8156cb"
