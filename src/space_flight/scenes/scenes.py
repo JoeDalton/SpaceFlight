@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from world_builder import load_world, parse_world
 from world_builder.asteroids.spec import KeepOut
+from world_builder.terrain.chart import BodyChart
 
 from space_flight import (
     DATAFILES_PATH,
@@ -21,14 +22,12 @@ from space_flight import (
 )
 from space_flight.fx.speed_dust_cloud import SpeedDustCloud
 from space_flight.game.collisions import CollisionLayers
-from space_flight.scenes.level_frame import LevelFrame
 from space_flight.scenes.planet_2d import Planet2D
 
 if TYPE_CHECKING:
     from panda3d.core import NodePath
     from world_builder.asteroids.field import AsteroidField
     from world_builder.depth import ReversedDepthCamera
-    from world_builder.world import World
     from world_builder.world_file import GameWorld
 
     from space_flight.game.flight_state import FlightState
@@ -60,8 +59,6 @@ def scene_factory(
     raise NotImplementedError(f"Unknown scene {scene_name}")
 
 
-#: A gravity weaker than this (norm of the raw vector) gives no "up"
-MIN_GRAVITY_NORM = 1e-1
 #: "Up" is reckoned again this often, seconds: at the player, for every ship
 #: (the ships stay a few kilometres from it: on a planet of hundreds of
 #: kilometres, its "up" turns by a fraction of a degree over that, or in a
@@ -102,7 +99,6 @@ class Scene:
     ):
         self.game = game
         self.default_up_direction = np.array([0, 0, 1])
-        self._gravity = None
         # The last "up" reckoned, and when (see up_at)
         self._up: np.ndarray | None = None
         self._up_time_s = -math.inf
@@ -110,8 +106,8 @@ class Scene:
     def up_at(self, position: Sequence[float]) -> np.ndarray:
         """
         Returns the "up" direction at a given location in the world.
-        If there is significant gravity, up is its opposite.
-        Else, the (0.0.1) is used
+        If there is significant gravity, up is its opposite
+        (``World.up_at``). Else, the (0.0.1) is used
 
         It is reckoned at the player (at *position* without one) at most
         every UP_REFRESH_S and used for every position meanwhile: a gravity
@@ -119,8 +115,8 @@ class Scene:
 
         :param position: A world position
         :return: "Up" there: against the gravity of the scene's WorldBuilder
-            bodies when it is not negligible, else the scene's up_direction
-            (world +Z)
+            bodies when it is not negligible (WorldBuilder's
+            ``MIN_GRAVITY_NORM``), else the scene's up_direction (world +Z)
         """
         world = getattr(self, "world", None)
         if world is None or not world.bodies:
@@ -130,7 +126,8 @@ class Scene:
             player = getattr(self.game, "player", None)
             pawn = getattr(player, "pawn", None)
             reference = position if pawn is None else pawn.position
-            self._up = self._gravity_up(world, reference)
+            up = world.up_at(reference)
+            self._up = self.default_up_direction if up is None else up
             self._up_time_s = now
         return self._up
 
@@ -139,35 +136,17 @@ class Scene:
         player far from where it was last reckoned."""
         self._up = None
 
-    def _gravity_up(self, world: World, position: Sequence[float]) -> np.ndarray:
-        """:return: Against the bodies' gravity at *position*, or
-        default_up_direction where it is negligible"""
-        if self._gravity is None:
-            self._gravity = world.gravity_field()
-        gravity = self._gravity.acceleration(np.asarray(position, dtype=np.float64))
-        norm = float(np.linalg.norm(gravity))
-        if not np.isfinite(norm) or norm < MIN_GRAVITY_NORM:
-            return self.default_up_direction
-        return -gravity / norm
-
     def altitude_m(self, position: Sequence[float]) -> float:
         """
         Height above the ground of the nearest of the scene's WorldBuilder
-        bodies (the one whose sea level is nearest).
+        bodies (``World.altitude_at``).
 
         :param position: A world position
         :return: The height, metres (0 under the ground), infinite in a scene
             without bodies
         """
         world = getattr(self, "world", None)
-        if world is None or not world.bodies:
-            return math.inf
-        point = np.asarray(position, dtype=np.float64)
-        body = world.nearest(point)
-        relative = point - body.position
-        # Only what is already generated: a query must not stall the frame
-        ground_m = float(body.terrain.query.height_at(relative, generate=False))
-        return max(float(np.linalg.norm(relative)) - body.radius - ground_m, 0.0)
+        return math.inf if world is None else world.altitude_at(position)
 
     def warp_speed_mps(self, position: Sequence[float]) -> float:
         """
@@ -350,7 +329,7 @@ class SceneSolarSystem(SceneWorld):
 
     The planet is not rotated: levels write their positions on the chart of
     its reference point and convert them with :meth:`level_frame` (see
-    LevelFrame).
+    BodyChart).
     """
 
     WORLD_PATH = DATAFILES_PATH / "worlds/solar_system/solar_system.yaml"
@@ -360,11 +339,10 @@ class SceneSolarSystem(SceneWorld):
 
     @classmethod
     @functools.cache
-    def level_frame(cls) -> LevelFrame:
-        """:return: The chart frame of the body called PLANET in the world
-        file (chart to world)"""
-        bodies = parse_world(cls.WORLD_PATH).bodies
-        return LevelFrame.of(next(body for body in bodies if body.name == cls.PLANET))
+    def level_frame(cls) -> BodyChart:
+        """:return: The chart of the body called PLANET in the world file
+        (chart to world)"""
+        return parse_world(cls.WORLD_PATH).chart(cls.PLANET)
 
     def __init__(self, game: FlightState):
         super().__init__(game=game)

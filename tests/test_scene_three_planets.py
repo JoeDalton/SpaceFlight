@@ -347,16 +347,12 @@ def test_scene_up_follows_minus_gravity_or_defaults_to_world_z():
     default = np.array([0, 0, 1])
     # No world, or no bodies: world +Z
     assert np.array_equal(scene.up_at([5.0, 5.0, 5.0]), default)
-    scene.world = SimpleNamespace(
-        bodies=[1],
-        gravity_field=lambda: SimpleNamespace(
-            acceleration=lambda p: -np.asarray(p) * 20
-        ),
-    )
+    unit = lambda p: np.asarray(p, dtype=float) / np.linalg.norm(p)  # noqa: E731
+    scene.world = SimpleNamespace(bodies=[1], up_at=lambda p: unit(p))
     up = scene.up_at([3.0, 0.0, 4.0])
     assert np.allclose(up, [0.6, 0.0, 0.8])
-    # Negligible gravity: world +Z
-    scene._gravity = SimpleNamespace(acceleration=lambda p: np.zeros(3))
+    # Negligible gravity (the world gives no "up"): world +Z
+    scene.world = SimpleNamespace(bodies=[1], up_at=lambda p: None)
     scene._up = None  # reckoned again
     assert np.array_equal(scene.up_at([3.0, 0.0, 4.0]), default)
 
@@ -374,13 +370,11 @@ def test_scene_up_is_reckoned_at_the_player_and_kept_a_while(monkeypatch):
     scene = Scene(game=SimpleNamespace(player=SimpleNamespace(pawn=pawn)))
     calls = []
 
-    def acceleration(p):
+    def up_at(p):
         calls.append(np.array(p))
-        return -np.asarray(p, dtype=float)
+        return np.asarray(p, dtype=float) / np.linalg.norm(p)
 
-    scene.world = SimpleNamespace(
-        bodies=[1], gravity_field=lambda: SimpleNamespace(acceleration=acceleration)
-    )
+    scene.world = SimpleNamespace(bodies=[1], up_at=up_at)
     # Anywhere: the player's up
     assert np.allclose(scene.up_at([10.0, 0.0, 0.0]), [0.0, 0.0, 1.0])
     assert np.allclose(scene.up_at([0.0, 10.0, 0.0]), [0.0, 0.0, 1.0])

@@ -65,9 +65,9 @@ position itself in a scene without obstacles.
 Two more services every scene gives, through its WorldBuilder `World` when it
 has one:
 - **"Up"**: `scene.up_at(position)` is what the bots level their wings to
-  (see [ai.md](ai.md)). It points against the gravity of the world's bodies,
+  (see [ai.md](ai.md)). It is WorldBuilder's `World.up_at`: against the gravity of the world's bodies,
   or is `default_up_direction` (world +Z) where there is none or it is
-  negligible (`MIN_GRAVITY_NORM`). It is reckoned at the player's position at
+  negligible (WorldBuilder's `MIN_GRAVITY_NORM`). It is reckoned at the player's position at
   most every `UP_REFRESH_S` (1 s) and given for every position meanwhile: the
   ships stay a few kilometres from the player, and over that distance a
   planet's up turns by a fraction of a degree.
@@ -160,8 +160,8 @@ the lights are the world's.
 **How it runs:**
 - **Placement.** WorldBuilder never rotates a planet, so the chart's
   reference point is not at the planet's +z pole.
-  `SceneSolarSystem.level_frame()` (a
-  [`LevelFrame`](../../src/space_flight/scenes/level_frame.py), made once from
+  `SceneSolarSystem.level_frame()` (
+  WorldBuilder's `BodyChart`, `WorldSpec.chart(PLANET)`, made once from
   the planet's body in the file) converts chart coordinates around the
   planet's centre, wherever the file puts it.
   - There, the chart's east, north and up are not the world's x, y and z.
@@ -169,8 +169,8 @@ the lights are the world's.
     gravity (see above).
   - Levels write their positions on the chart (x metres east, y metres north
     of the reference point, z metres above sea level), and
-    `LevelFrame.position(x, y, z)` turns them into world positions, on the
-    sphere. `LevelFrame.orientation(position, toward)` gives a level
+    `BodyChart.position(x, y, z)` turns them into world positions, on the
+    sphere. `BodyChart.orientation(position, toward)` gives a level
     orientation facing a point.
   - Mission 3 and Free Flight start at (0, -4000, 1300) on the chart: 900 m
     over the coastal plain, facing north to the coast. Mission 3's waves,

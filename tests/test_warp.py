@@ -191,23 +191,14 @@ def test_scene_without_bodies_has_infinite_altitude():
     assert scene.warp_speed_mps((1e6, 0.0, 0.0)) == WARP_SPACE_SPEED_MPS
 
 
-def test_scene_altitude_is_above_the_nearest_ground():
-    """Measured from the nearest body's ground, in its planet frame."""
+def test_scene_altitude_is_the_worlds():
+    """WorldBuilder measures it from the nearest body's ground."""
     scene = Scene(game=MagicMock())
-    body = MagicMock()
-    body.position = np.array([0.0, 1000.0, 0.0])
-    body.radius = 600_000.0
-    body.terrain.query.height_at.return_value = 2000.0
     scene.world = MagicMock()
-    scene.world.bodies = [body]
-    scene.world.nearest.return_value = body
+    scene.world.altitude_at.return_value = 1234.0
 
-    altitude = scene.altitude_m((0.0, 1000.0, 700_000.0))
-
-    assert altitude == pytest.approx(700_000.0 - 600_000.0 - 2000.0)
-    relative = body.terrain.query.height_at.call_args.args[0]
-    np.testing.assert_allclose(relative, [0.0, 0.0, 700_000.0])
-    assert body.terrain.query.height_at.call_args.kwargs == {"generate": False}
+    assert scene.altitude_m((0.0, 1000.0, 700_000.0)) == 1234.0
+    scene.world.altitude_at.assert_called_once_with((0.0, 1000.0, 700_000.0))
 
 
 # ---------------------------

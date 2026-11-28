@@ -74,7 +74,7 @@ ALL_CLEAR_VICTORY_DELAY_S = 7
 # Positions are written on the chart of the home planet of the three-planets
 # world (x metres east, y metres north of its reference point, z metres above
 # sea level) and converted to world coordinates: the planet is not rotated, so
-# these are not the world's axes (see LevelFrame). The player starts south of
+# these are not the world's axes (see BodyChart). The player starts south of
 # the reference point, the convoy a few hundred metres ahead; the coast is
 # about 6 km north, the range to the south, the mesa 3.5 km east of the first
 # leg.
