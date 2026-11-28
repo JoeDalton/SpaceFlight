@@ -165,9 +165,10 @@ must be about 6 m apart to be told apart.
 every drawn level, so the level scripts never deal with it: one camera with a
 reversed, infinite projection (near at 1, infinity at 0) and a 32-bit float
 depth buffer, about 1e-7 of the distance at every range. It draws the view
-into a scene buffer of its own and presents it where `app.cam` drew: the
-window, or the render-scale / anti-aliasing pipeline's buffer (keeping its
-MSAA). `app.cam`'s region is switched off meanwhile.
+into a scene buffer of its own, at the world's render scale and with its MSAA
+(the graphics settings' `world.render`), and shows it in the window where
+`app.cam` drew, through WorldBuilder's post chain (a copy, FXAA, or FSR 1).
+`app.cam`'s region is switched off meanwhile.
 
 **Clip control.** `simulator.py` sets `gl-depth-zero-to-one #t` before the
 window opens (OpenGL's 0-1 depth keeps the float precision); not on macOS,
@@ -175,15 +176,13 @@ whose OpenGL has none: there the depth keeps about a 24-bit range's precision
 (far planets' depths may fight). The near plane stays at 1 m everywhere.
 
 **Lifecycle.**
-- The scene builds it in `build_upfront`, after the render-scale /
-  anti-aliasing pipeline, into whose buffer it presents. It is the loaded
-  world's (`GameWorld.depth`, from WorldBuilder's `load_world`), and the
+- The scene builds it in `build_upfront`. It is the loaded world's (`GameWorld.depth`, from WorldBuilder's `load_world`), and the
   scene hands its depth mode to the rear-view mirror.
 - Each frame, `follow_render_origin()` calls `scene.update_after_recenter()`:
   `GameWorld.update` gives the camera the world's far distance, and draws the
   world.
 - `exit()` has the scene remove it (`Scene.release_depth()`, which also gives
-  the mirror the standard depth back) before the render pipeline.
+  the mirror the standard depth back) first.
 - Headless (no window), `load_world` builds no depth camera
   (`GameWorld.depth` is None) and no sea: `build_upfront` then leaves the
   mirror as it is.

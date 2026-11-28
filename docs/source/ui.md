@@ -238,9 +238,22 @@ missile as the pause menu resumes the flight. Concrete contexts:
 
 `RearViewMirror` renders a backward-facing camera into an offscreen texture
 buffer shown as a small horizontally flipped card at the top of the screen.
-Its resolution scales with the `mirror_scale` graphics setting;
-`toggle_mirror()` (the `toggle_mirror` binding) deactivates the buffer as well
-as hiding the card, so a hidden mirror costs nothing to render.
+Its settings are the graphics settings' `mirror` section, shown in the menu's
+Mirror rows: its resolution (`scale`, a share of its card's size on screen:
+1 draws it at its screen pixels; `mirror_render_size`, following the window's
+height), MSAA, FXAA
+and FSR 1 (`GraphicsSettings.mirror_render_settings`, with the main view's
+FSR sharpness):
+- its buffer asks for its MSAA samples, with a float depth buffer for the
+  reversed depth;
+- with FSR 1 or FXAA, a WorldBuilder post chain ending in a texture
+  (`PostChain(output_size=...)`) upscales the buffer to the card's size on
+  screen (`mirror_screen_size`, following the window's height), and the card
+  shows that texture;
+- otherwise the card shows the buffer, stretched bilinearly.
+
+`toggle_mirror()` (the `toggle_mirror` binding) deactivates the buffer and the
+chain as well as hiding the card, so a hidden mirror costs nothing to render.
 
 ## `player_waypoints.py`
 

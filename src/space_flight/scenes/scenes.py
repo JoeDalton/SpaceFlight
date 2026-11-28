@@ -269,10 +269,9 @@ class Scene:
 
     def release_depth(self) -> None:
         """
-        Remove the scene's depth camera, if it has one. FlightState.exit
-        calls it before the render-scale / anti-aliasing pipeline goes: the
-        camera presents its view into that pipeline's buffer. The mirror goes
-        back to the standard depth.
+        Remove the scene's depth camera, if it has one, with its scene buffer
+        and post chain (render scale, anti-aliasing, FSR 1): FlightState.exit
+        calls it first. The mirror goes back to the standard depth.
         """
         if self.depth is not None:
             self.depth.destroy()

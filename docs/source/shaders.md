@@ -18,9 +18,9 @@ its [ocean](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/ocea
   (`hash`/`smoothNoise` and a variant `fbm`), from the same lineage as
   WorldBuilder's ocean shaders.
 - Shaders that sample an offscreen render target correct for Panda3D padding
-  it up to a power of two: the composite samples only the `texScale` fraction
-  of the scene texture (WorldBuilder's ocean does the same for its reflection,
-  with `uReflUVScale`). (The hyperspace shaders work from
+  it up to a power of two (WorldBuilder's ocean samples only the
+  `uReflUVScale` fraction of its reflection; the rear-view mirror's card
+  takes its texture's tex scale). (The hyperspace shaders work from
   `gl_FragCoord`/`iResolution` on plain render2d cards and don't need this.)
 - **Render space is not world space.** The render origin stays on the player
   (see [the floating render origin](game.md#the-floating-render-origin)), so
@@ -101,24 +101,12 @@ effect. The warp look lets the scene show through everywhere but the streaks.
 `into` and `outof` are adapted from one ShaderToy source and `inside` from
 another (MIT); the header comments carry the credits.
 
-## Render-scale / anti-aliasing pipeline shaders
+## Render scale, anti-aliasing and FSR 1
 
-Driven by
-[`GraphicsManager.begin_scene_render`](../../src/space_flight/global_architecture/graphics_manager.py)
-(see [global_architecture.md](global_architecture.md)) to composite the
-(possibly downscaled) offscreen 3D render onto the window. Both fragment
-shaders share the fullscreen-quad passthrough
-[`composite.vert`](../../src/space_flight/datafiles/shaders/composite.vert).
-
-- **[`blit.frag`](../../src/space_flight/datafiles/shaders/blit.frag)** (FXAA
-  off) samples the scene texture, scaled by `texScale`, and lets GPU texture
-  filtering do any upscaling.
-- **[`fxaa.frag`](../../src/space_flight/datafiles/shaders/fxaa.frag)** (FXAA
-  on) is a simplified port of Timothy Lottes' FXAA3: it estimates an edge
-  direction from the luma of the four diagonal neighbours, blends two taps
-  along it (`rgbA`) and two more further out (`rgbB`), and outputs `rgbB`
-  unless its luma leaves the local range (`lumaMin`/`lumaMax`), in which case
-  it falls back to `rgbA`.
+The game has no post-process shaders of its own any more: the view's way to
+the screen (render scale, MSAA, FXAA, FSR 1's EASU and RCAS) is WorldBuilder's
+(`world_builder.post`), drawn by the world's depth camera and by the rear-view
+mirror's chain.
 
 ## Shield shaders
 

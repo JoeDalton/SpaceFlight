@@ -68,16 +68,11 @@ class FlightState(BaseState):
 
     def enter(self):
         """
-        Enter the flight state: apply this session's graphics settings, build
-        the level, and run its reveal animation (skipped headless).
+        Enter the flight state: build the level, and run its reveal animation
+        (skipped headless). The graphics settings (render scale and
+        anti-aliasing among the world's) are applied by the scene's world as
+        it loads.
         """
-        if not self.headless:
-            # Apply the saved render-scale / anti-aliasing settings for this
-            # session (no-op when scale is 1.0 and AA is off). Done before any
-            # scene rendering so the offscreen buffer and reflection sizing are
-            # in place.
-            self.app.graphics_manager.begin_scene_render()
-
         # Initialize mandatory game elements (cheap; done up front).
         self.initialize_game_structure()
         self.flight_context = None
@@ -485,15 +480,9 @@ class FlightState(BaseState):
         if RECORD_GAME:
             self.record.save()
 
-        # Remove the depth camera first: it presents the view into the
-        # render-scale / AA pipeline's buffer when there is one.
+        # Remove the depth camera first, with its scene buffer and post chain:
+        # the app camera draws into the window again.
         self.scene.release_depth()
-
-        # Tear down the render-scale / AA pipeline, restoring direct-to-window
-        # rendering before the scene it was compositing is destroyed. There is
-        # no pipeline to tear down headless (it was never built).
-        if not self.headless:
-            self.app.graphics_manager.end_scene_render()
 
         # Remove HUD elements (may not exist if exiting before build finished)
         for name in ("hud", "aim_hud"):

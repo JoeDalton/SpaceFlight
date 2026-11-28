@@ -9,10 +9,31 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from panda3d.core import NodePath, PerspectiveLens
+from panda3d.core import FrameBufferProperties, NodePath, PerspectiveLens, Texture
+from world_builder.post import FSR1, RenderSettings
 
 from space_flight import CAMERA_FAR_M
-from space_flight.ui.rear_view_mirror import RearViewMirror
+from space_flight.ui import rear_view_mirror
+from space_flight.ui.rear_view_mirror import RearViewMirror, mirror_screen_size
+
+
+def _app(lens=None, render: RenderSettings | None = None) -> SimpleNamespace:
+    """A stand-in app: a mock window (real framebuffer properties), the
+    graphics settings with the mirror's *render* settings."""
+    win = MagicMock()
+    win.getFbProperties.return_value = FrameBufferProperties()
+    win.getYSize.return_value = 1440
+    render = render or RenderSettings()
+    return SimpleNamespace(
+        camLens=lens or PerspectiveLens(),
+        win=win,
+        graphicsEngine=MagicMock(),
+        taskMgr=MagicMock(),
+        graphics_settings=SimpleNamespace(
+            config={"mirror": {"scale": 0.5}},
+            mirror_render_settings=lambda: render,
+        ),
+    )
 
 
 def test_mirror_sees_the_whole_range_whatever_the_main_lens(spaceflight_app):
@@ -20,11 +41,7 @@ def test_mirror_sees_the_whole_range_whatever_the_main_lens(spaceflight_app):
     mirror copies it: the mirror still reaches the camera's whole range."""
     lens = PerspectiveLens()
     lens.set_near_far(1.0, 2000.0 * 1.02)
-    app = SimpleNamespace(
-        camLens=lens,
-        win=MagicMock(),
-        graphics_settings=SimpleNamespace(config={"render": {"mirror_scale": 0.5}}),
-    )
+    app = _app(lens)
     mirror = RearViewMirror(SimpleNamespace(app=app), player_node=NodePath("ship"))
     try:
         mirror_lens = mirror.mirror_cam.get_lens()
@@ -46,11 +63,7 @@ def test_the_mirror_follows_the_views_depth_mode(spaceflight_app):
     from panda3d.core import BoundingSphere, BoundingVolume, DepthTestAttrib, Point3
     from world_builder.depth import DEPTH_REVERSED_01, DEPTH_STANDARD
 
-    app = SimpleNamespace(
-        camLens=PerspectiveLens(),
-        win=MagicMock(),
-        graphics_settings=SimpleNamespace(config={"render": {"mirror_scale": 0.5}}),
-    )
+    app = _app()
     mirror = RearViewMirror(SimpleNamespace(app=app), player_node=NodePath("ship"))
     try:
         node, lens = mirror.mirror_cam, mirror.mirror_cam.get_lens()
@@ -72,3 +85,81 @@ def test_the_mirror_follows_the_views_depth_mode(spaceflight_app):
     finally:
         mirror.mirror_card.remove_node()
         mirror.mirror_np.remove_node()
+
+
+def test_the_mirror_card_size_follows_the_window_height():
+    """The card is 0.3 of aspect2d's 2 units high, twice as wide."""
+    assert mirror_screen_size(1440) == (432, 216)
+    assert mirror_screen_size(900) == (270, 135)
+
+
+@pytest.mark.parametrize(
+    "render,chained",
+    [
+        (RenderSettings(), False),
+        (RenderSettings(msaa=4), False),
+        (RenderSettings(fxaa=True), True),
+        (RenderSettings(upscaler=FSR1, msaa=4), True),
+    ],
+)
+def test_the_mirror_takes_its_render_settings(
+    spaceflight_app, monkeypatch, render, chained
+):
+    """The buffer asks for the mirror's samples (its section of the graphics
+    settings), with float depth;
+    FSR 1 or FXAA upscale it to the card's size on screen through a post
+    chain ending in a texture, which the card shows; else the card shows
+    the buffer. Hiding the mirror stops the chain; clean removes it."""
+    chains = []
+
+    class FakeChain:
+        def __init__(self, engine, window, source, settings, size, **kwargs):
+            self.args = (source, settings, size, kwargs)
+            self.texture = Texture("chain")
+            self.active = []
+            self.destroyed = False
+            chains.append(self)
+
+        def set_active(self, active):
+            self.active.append(active)
+
+        def destroy(self):
+            self.destroyed = True
+
+    monkeypatch.setattr(rear_view_mirror, "PostChain", FakeChain)
+    app = _app(render=render)
+    mirror = RearViewMirror(SimpleNamespace(app=app), player_node=NodePath("ship"))
+    _pipe, _name, _sort, props, window, *_ = app.graphicsEngine.makeOutput.call_args[0]
+    # Half the card's 432 x 216 on screen at 1440 px (mirror scale 0.5)
+    assert (window.get_x_size(), window.get_y_size()) == (216, 108)
+    buffer = app.graphicsEngine.makeOutput.return_value
+    texture = buffer.addRenderTexture.call_args[0][0]
+    assert props.get_float_depth() and props.get_multisamples() == render.msaa
+    assert len(chains) == int(chained)
+    if chained:
+        chain = chains[0]
+        source, settings, size, kwargs = chain.args
+        assert source is texture and settings == render and size == (216, 108)
+        assert kwargs["output_size"] == (432, 216)
+        assert mirror.card_texture is chain.texture
+        mirror.toggle_mirror()
+        assert chain.active == [False]
+    else:
+        assert mirror.card_texture is texture
+    mirror.clean()
+    assert not chained or chains[0].destroyed
+
+
+def test_the_mirror_buffer_follows_the_window_height(spaceflight_app):
+    """A resized window: the buffer keeps its share of the card's new size
+    on screen."""
+    app = _app()
+    mirror = RearViewMirror(SimpleNamespace(app=app), player_node=NodePath("ship"))
+    try:
+        app.win.getYSize.return_value = 900
+        mirror._follow(MagicMock())
+        buffer = app.graphicsEngine.makeOutput.return_value
+        buffer.setSize.assert_called_with(136, 68)  # half of 270 x 135, rounded
+        assert rear_view_mirror.mirror_render_size(900, 1.0) == (270, 135)
+    finally:
+        mirror.clean()

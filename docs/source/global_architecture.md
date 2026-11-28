@@ -18,7 +18,8 @@ the per-class API is in the [code reference](apidocs/index.rst).
 - **`AssetManager`** caches expensive resources (models, textures, sounds)
   app-wide by path.
 - **`GraphicsSettings`** / **`GraphicsManager`** own *how* the scene is
-  rendered (window mode, render scale, anti-aliasing); `game/` owns *what* is
+  rendered (window mode; the render scale and anti-aliasing are the world's
+  settings); `game/` owns *what* is
   rendered.
 - **`GameplaySettings`** owns the difficulty: a preset, or custom values for
   auto-aim, shot deviation and damage, read when a level is built.
@@ -149,8 +150,7 @@ read-only `datafiles/default_configuration/default_graphics.yaml`
 reads `configuration/bindings.yaml` alone, and
 `datafiles/default_configuration/default_bindings.yaml` is only read by the
 input settings menu's reset-to-defaults. `sanitise()` then clamps every field to something the renderer can act on (valid display mode,
-minimum window size, render scale in `[0.25, 1.0]`, valid MSAA sample count,
-...), so a malformed or hand-edited file degrades to defaults instead of
+minimum window size, mirror resolution in `[0.25, 1.0]`, ...), so a malformed or hand-edited file degrades to defaults instead of
 crashing. `save()` re-sanitises and writes the user file.
 
 The `world` section is WorldBuilder's: its quality settings for the terrain,
@@ -163,6 +163,29 @@ names none of these knobs (see
 Older files' `clouds.quality` and `render.reflection_scale` are carried into it
 on load (`_migrate_legacy`).
 
+Render scale, anti-aliasing and upscaling are WorldBuilder's too: the `world`
+section's `render` knobs (`scale`, `msaa`, `fxaa`, `upscaler` bilinear or
+FSR 1, `sharpness`). The world's depth camera draws the view at the render
+size, with the samples, and shows it through WorldBuilder's post chain (see
+[WorldBuilder's render pipeline page](https://github.com/JoeDalton/WorldBuilder/blob/main/docs/source/render_pipeline.md)).
+Older files' `render.scale` and `antialiasing` are carried into it
+(`_migrate_render`); a knob the `world` section already sets keeps its value
+there. The graphics menu shows them first:
+- **Display:** the mode, then WorldBuilder's display knobs (the frame cap).
+- **Render:**
+  - the render scale, as a drop-down over WorldBuilder's `SCALE_PRESETS`
+    (Native, AMD's FSR 1 modes, Ultra Performance 33%; a saved scale that
+    matches none is shown as Custom);
+  - the upscaler, as an FSR 1 checkbox;
+  - the other knobs as WorldBuilder describes them.
+
+The `mirror` section is the rear-view mirror's own: its resolution (`scale`,
+a share of its card's size on screen, the same preset drop-down), `msaa`,
+`fxaa` and `fsr`, shown in the menu after the view's
+(`GraphicsSettings.mirror_render_settings` hands them to WorldBuilder's post
+chain, with the view's FSR sharpness). Older files' `render.mirror_scale` is
+carried into its `scale`.
+
 Not every setting goes through `GraphicsManager`: the setting belongs to the
 thing that acts on it. Scenes build their WorldBuilder objects with
 `graphics_settings.world_settings().settings_for(...)`.
@@ -174,24 +197,11 @@ thing that acts on it. Scenes build their WorldBuilder objects with
   the real one with the saved fullscreen/windowed size (once, from
   `SplashState.exit`); `apply_window_settings()` re-applies them to the open
   window at runtime (graphics settings menu, on save).
-- **Render scale / anti-aliasing** — `begin_scene_render()` (once per level
-  load, from `FlightState.enter`) is a no-op at scale 1.0 with no AA.
-  Otherwise it builds a `FilterManager` pipeline that renders the 3D scene
-  into an offscreen buffer of `window * scale` pixels (with MSAA if
-  requested) and composites it to the window through a fullscreen quad
-  shader (plain blit, or FXAA). Only the 3D scene goes through the buffer:
-  2D layers (HUD, menus) stay at native resolution, so lowering render scale
-  never blurs UI text. Changes therefore apply on the next level load.
-  `_update_pipeline_uniforms` refreshes a power-of-two padding correction
-  every frame, since the GSG may pad the offscreen texture and the real
-  scale is only known after the first render. `get_render_size()` lets
-  other resolution-dependent buffers (e.g. the ocean reflection) size off
-  the internal render resolution rather than the window. `end_scene_render()`
-  tears the pipeline down; `begin_scene_render()` calls it first, so
-  rebuilding is idempotent. It first removes the pipeline buffers' display
-  regions: `FilterManager.cleanup` leaves them on the camera, and the next
-  level's depth camera would take the dead one for the camera's output, which
-  left the view black.
+- **Render scale / anti-aliasing** are not its: the world loads with them
+  (the `render` section above), on each level load. Only the 3D view goes
+  through the scene buffer: the 2D layers (HUD, menus) are drawn into the
+  window at its resolution, so lowering the render scale never blurs UI
+  text.
 
 ## `gameplay_settings.py` — difficulty
 

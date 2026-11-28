@@ -173,8 +173,19 @@ def test_graphics_world_preset_rebuild_refreshes_navigator_rows(entered):
 
 
 @pytest.mark.parametrize("entered", [GraphicsSettingsMenuState], indirect=True)
-def test_graphics_discrete_sliders_step_one_stop(entered):
-    assert entered.sliders[("antialiasing", "msaa")].step == 1
+def test_graphics_render_and_mirror_widgets(entered):
+    """The view's and the mirror's MSAA are sliders over their stops, one stop
+    a step; the view's upscaler an FSR 1 checkbox; the mirror's FXAA and
+    FSR 1 checkboxes."""
+    assert entered.sliders[("world", "render", "msaa")].step == 1
+    assert ("world", "render", "upscaler") in entered.checkboxes
+    assert entered.sliders[("mirror", "msaa")].step == 1
+    assert ("mirror", "fxaa") in entered.checkboxes
+    assert ("mirror", "fsr") in entered.checkboxes
+    # The resolutions: drop-downs over the render scale presets
+    assert ("world", "render", "scale") in entered.drop_downs
+    assert ("mirror", "scale") in entered.drop_downs
+    assert ("world", "display", "frame_cap") in entered.sliders
 
 
 @pytest.mark.parametrize("entered", [LevelSelectionMenuState], indirect=True)

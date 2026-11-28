@@ -6,17 +6,14 @@ display:
   mode: fullscreen        # fullscreen | windowed
   windowed_size: [1600, 900]
 
-render:
-  # Internal 3D render resolution as a fraction of the window resolution.
-  # 1.0 = native; lower renders the 3D scene smaller and upscales it to the
-  # window (the HUD stays crisp). Useful on old hardware in fullscreen.
-  scale: 1.0
-  # Rear-view mirror resolution, as a multiple of its 128px base height.
-  mirror_scale: 0.5
-
-antialiasing:
-  msaa: 0                 # hardware multisampling: 0 | 2 | 4 | 8
-  fxaa: false             # post-process anti-aliasing (on/off)
+mirror:
+  # The rear-view mirror: its resolution, as a share of its size on screen
+  # (1 native, 0.33 to 1), and its anti-aliasing and upscaling to that size
+  # (FSR 1 takes the main view's sharpness, world.render).
+  scale: 0.5
+  msaa: 0                 # 0 | 2 | 4 | 8 | 16
+  fxaa: false
+  fsr: false
 
 compatibility:
   alternate_model_orientation: true
@@ -26,7 +23,8 @@ hud:
   fps_counter: true
 
 world:
-  # WorldBuilder's quality settings (terrain, air, sky, clouds, ocean): a preset
+  # WorldBuilder's quality settings (terrain, air, sky, clouds, ocean, and the
+  # render section: render scale, MSAA, FXAA, the FSR 1 upscaler): a preset
   # (low | mid | high | ultra) and the knobs that differ from it, by section, as
   # WorldSettings.to_dict() writes them. The knobs, their ranges and presets are
   # WorldBuilder's: see its docs/source/quality.md.
